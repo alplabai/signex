@@ -1,4 +1,27 @@
 //! Built-in themes for the Signex EDA application.
+//!
+//! # The one central theme source
+//!
+//! This module is the **single source of truth** for every colour in Signex.
+//! [`ThemeId`] selects a theme; [`ThemeTokens`] holds the UI-chrome palette
+//! (backgrounds, text, accent, panels, status colours) and [`CanvasColors`]
+//! holds the drawing palette (wire, junction, body, pad, silk, …). Nothing
+//! else defines colours — every surface *consumes* these tokens:
+//!
+//! - `signex-widgets` (`theme_ext.rs`) bridges tokens into per-widget iced
+//!   [`Style`](https://docs.rs/iced/0.14/iced/widget/container/struct.Style.html)
+//!   values — the iced 0.14 Catalog route. iced's own `Theme`/`Palette` is
+//!   therefore just *one consumer* of these tokens, not a second source.
+//! - `signex-renderer` / the `signex-gfx` wgpu path read the same tokens for
+//!   the GPU/canvas draw colours.
+//! - `signex-output` reads them for SVG / PDF export.
+//! - `signex-app` and `chrome-catalog` read them for the shell UI.
+//!
+//! This crate has **zero `iced` / `wgpu` dependency** on purpose (ADR: separate
+//! types from rendering): because the tokens live in the domain layer, the
+//! non-iced surfaces (GPU shader, export) can share them, so the wgpu PCB
+//! renderer and the SVG/PDF export stay in lock-step with the iced UI. A
+//! re-skin is one edit to [`ThemeId`]'s token tables; every surface follows.
 
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +54,28 @@ impl Color {
             255
         };
         Self { r, g, b, a }
+    }
+
+    /// Parse exactly `#RRGGBB` or `#RRGGBBAA`; `None` for anything else.
+    /// Unlike [`Color::from_hex`] it never indexes past a short string and
+    /// never reads a bad digit as zero, so it is safe on file input.
+    pub fn parse_hex(hex: &str) -> Option<Self> {
+        let digits = hex.strip_prefix('#')?;
+        if !matches!(digits.len(), 6 | 8) || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let channel = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
+        Some(Self {
+            r: channel(0)?,
+            g: channel(2)?,
+            b: channel(4)?,
+            a: if digits.len() == 8 { channel(6)? } else { 255 },
+        })
+    }
+
+    /// `#RRGGBBAA`, lower-case; the inverse of [`Color::parse_hex`].
+    pub fn to_hex(self) -> String {
+        format!("#{:02x}{:02x}{:02x}{:02x}", self.r, self.g, self.b, self.a)
     }
 }
 
@@ -66,9 +111,6 @@ impl ThemeId {
         ThemeId::SolarizedLight,
         ThemeId::Nord,
     ];
-
-    #[deprecated = "Use ThemeId::BUILTINS; ThemeId::ALL now includes Custom"]
-    pub const ALL: &[ThemeId] = Self::BUILTINS;
 
     pub fn label(self) -> &'static str {
         match self {
@@ -142,6 +184,14 @@ pub struct CanvasColors {
     pub hier_label: Color,
     pub no_connect: Color,
     pub power: Color,
+    /// ERC violation marker, error severity.
+    pub erc_error: Color,
+    /// ERC violation marker, warning severity.
+    pub erc_warning: Color,
+    /// DRC violation marker, error severity.
+    pub drc_error: Color,
+    /// DRC violation marker, warning severity.
+    pub drc_warning: Color,
     pub selection: Color,
     pub bus: Color,
     pub grid: Color,
@@ -190,6 +240,10 @@ const CATPPUCCIN_MOCHA_CANVAS: CanvasColors = CanvasColors {
     hier_label: c(0xFA, 0xB3, 0x87),
     no_connect: c(0xF3, 0x8B, 0xA8),
     power: c(0xF3, 0x8B, 0xA8),
+    erc_error: c(0xF3, 0x8B, 0xA8),
+    erc_warning: c(0xF3, 0x8B, 0xA8),
+    drc_error: c(0xF3, 0x8B, 0xA8),
+    drc_warning: c(0xF3, 0x8B, 0xA8),
     selection: c(0xF5, 0xE0, 0xDC),
     bus: c(0x89, 0xDC, 0xEB),
     grid: c(0x45, 0x47, 0x5A),
@@ -230,6 +284,10 @@ const VSCODE_DARK_CANVAS: CanvasColors = CanvasColors {
     hier_label: c(0xFF, 0x8C, 0x00),
     no_connect: c(0xF4, 0x44, 0x47),
     power: c(0xF4, 0x44, 0x47),
+    erc_error: c(0xF4, 0x44, 0x47),
+    erc_warning: c(0xF4, 0x44, 0x47),
+    drc_error: c(0xF4, 0x44, 0x47),
+    drc_warning: c(0xF4, 0x44, 0x47),
     selection: c(0xFF, 0xFF, 0xFF),
     bus: c(0x9C, 0xDC, 0xFE),
     grid: c(0x3C, 0x3C, 0x3C),
@@ -273,10 +331,14 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     hier_label: c(0x80, 0x00, 0x00), // Altium maroon hierarchical port outline/text
     no_connect: c(0x80, 0x00, 0x00), // Dark red X marks
     power: c(0x80, 0x00, 0x00),      // Dark red power ports (VCC/GND)
-    selection: c(0x00, 0x78, 0xD4),  // Windows blue selection highlight
-    bus: c(0x00, 0x00, 0x80),        // Navy blue bus (rendered thicker)
-    grid: c(0xC0, 0xC0, 0xC0),       // Light gray grid dots/lines
-    cursor: c(0x00, 0x00, 0x00),     // Black cursor crosshair
+    erc_error: c(0x80, 0x00, 0x00),
+    erc_warning: c(0x80, 0x00, 0x00),
+    drc_error: c(0x80, 0x00, 0x00),
+    drc_warning: c(0x80, 0x00, 0x00),
+    selection: c(0x00, 0x78, 0xD4), // Windows blue selection highlight
+    bus: c(0x00, 0x00, 0x80),       // Navy blue bus (rendered thicker)
+    grid: c(0xC0, 0xC0, 0xC0),      // Light gray grid dots/lines
+    cursor: c(0x00, 0x00, 0x00),    // Black cursor crosshair
 };
 
 // ===== Alp Lab =====
@@ -339,6 +401,10 @@ const GITHUB_DARK_CANVAS: CanvasColors = CanvasColors {
     hier_label: c(0xFE, 0xA5, 0x5F),
     no_connect: c(0xFF, 0x7B, 0x72),
     power: c(0xFF, 0x7B, 0x72),
+    erc_error: c(0xFF, 0x7B, 0x72),
+    erc_warning: c(0xFF, 0x7B, 0x72),
+    drc_error: c(0xFF, 0x7B, 0x72),
+    drc_warning: c(0xFF, 0x7B, 0x72),
     selection: c(0xFF, 0xFF, 0xFF),
     bus: c(0x79, 0xC0, 0xFF),
     grid: c(0x30, 0x36, 0x3D),
@@ -379,6 +445,10 @@ const SOLARIZED_LIGHT_CANVAS: CanvasColors = CanvasColors {
     hier_label: c(0xCB, 0x4B, 0x16),
     no_connect: c(0xDC, 0x32, 0x2F),
     power: c(0xDC, 0x32, 0x2F),
+    erc_error: c(0xDC, 0x32, 0x2F),
+    erc_warning: c(0xDC, 0x32, 0x2F),
+    drc_error: c(0xDC, 0x32, 0x2F),
+    drc_warning: c(0xDC, 0x32, 0x2F),
     selection: c(0x00, 0x2B, 0x36),
     bus: c(0x6C, 0x71, 0xC4),
     grid: c(0x93, 0xA1, 0xA1),
@@ -419,6 +489,10 @@ const NORD_CANVAS: CanvasColors = CanvasColors {
     hier_label: c(0xD0, 0x87, 0x70),
     no_connect: c(0xBF, 0x61, 0x6A),
     power: c(0xBF, 0x61, 0x6A),
+    erc_error: c(0xBF, 0x61, 0x6A),
+    erc_warning: c(0xBF, 0x61, 0x6A),
+    drc_error: c(0xBF, 0x61, 0x6A),
+    drc_warning: c(0xBF, 0x61, 0x6A),
     selection: c(0xEC, 0xEF, 0xF4),
     bus: c(0x81, 0xA1, 0xC1),
     grid: c(0x4C, 0x56, 0x6A),
@@ -454,5 +528,40 @@ pub fn canvas_colors(id: ThemeId) -> CanvasColors {
         ThemeId::SolarizedLight => SOLARIZED_LIGHT_CANVAS,
         ThemeId::Nord => NORD_CANVAS,
         ThemeId::Custom => SIGNEX_CANVAS, // caller must use CustomThemeFile directly
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_builtin_defines_marker_slots_matching_todays_look() {
+        for &id in ThemeId::BUILTINS {
+            let c = canvas_colors(id);
+            assert_eq!(c.erc_error, c.no_connect, "{id:?}");
+            assert_eq!(c.erc_warning, c.power, "{id:?}");
+            assert_eq!(c.drc_error, c.erc_error, "{id:?}");
+            assert_eq!(c.drc_warning, c.erc_warning, "{id:?}");
+            assert_eq!(c.erc_error.a, 0xFF, "{id:?}");
+        }
+    }
+
+    #[test]
+    fn custom_theme_round_trips_marker_slots() {
+        let mut canvas = canvas_colors(ThemeId::Signex);
+        canvas.erc_error = Color::new(1, 2, 3, 255);
+        canvas.drc_warning = Color::new(9, 8, 7, 255);
+        let file = CustomThemeFile {
+            name: "t".into(),
+            tokens: theme_tokens(ThemeId::Signex),
+            canvas,
+        };
+        let json = serde_json::to_string(&file).unwrap();
+        for key in ["erc_error", "erc_warning", "drc_error", "drc_warning"] {
+            assert!(json.contains(key), "{key} missing from export");
+        }
+        let back: CustomThemeFile = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.canvas, canvas);
     }
 }

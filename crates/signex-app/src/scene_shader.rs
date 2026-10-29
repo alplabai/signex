@@ -1,0 +1,730 @@
+//! Generic GPU render path for any `signex_gfx::scene::Scene`.
+//!
+//! CLEAN ROOM DECLARATION
+//! This module was written without reference to GPL-licensed software.
+//! Sources: iced/wgpu public docs, IPC-2612-1, IEEE 315, IEC 60617.
+//!
+//! Bridges the `signex_gfx` render pipelines into iced's `shader` widget so a
+//! `Scene` draws on the GPU instead of being tessellated into a
+//! `canvas::Frame` on the CPU. The pipelines are primitive-agnostic — they are
+//! driven purely by a `Scene` plus a screen-space pan/zoom transform — so every
+//! editor surface can share this one renderer.
+//!
+//! Provenance: the PCB path landed in #308. A second, near-identical copy of
+//! this module (`schematic_shader`, from #169 PR 2) sat unmounted beside it
+//! until #625 folded it in here; the two had already drifted apart on upload
+//! skipping, overlay compositing, draw order and error reporting.
+//!
+//! Mounted by: [`crate::pcb_canvas`] (the PCB editor), via `app/view/mod.rs`.
+//! The schematic is mounted by [`crate::canvas::gpu_mount`]; the Symbol
+//! Editor is not mounted yet — see #642.
+//!
+//! iced's shader `Primitive::draw` composites into the shared render pass over
+//! whatever was already drawn behind the widget (it never clears its own
+//! region), so the caller is responsible for painting the background + grid on
+//! a layer *below* this shader in a `stack!`.
+
+use std::marker::PhantomData;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use iced::widget::shader::{self, Viewport};
+use iced::{Rectangle, mouse};
+
+use signex_gfx::camera::{CameraGpu, CameraUniform};
+use signex_gfx::pipeline::arc::ArcPipeline;
+use signex_gfx::pipeline::circle::CirclePipeline;
+use signex_gfx::pipeline::line::LinePipeline;
+use signex_gfx::pipeline::ordered::{KindPipelines, OrderedPipeline};
+use signex_gfx::pipeline::polygon::PolygonPipeline;
+use signex_gfx::pipeline::text::GlyphonTextPipeline;
+use signex_gfx::primitive::text::TextSizePolicy;
+use signex_gfx::scene::{
+    DirtyFlags, GPU_SCENE_DRAW_ORDER, Scene, SceneBucket, TextUploadParams, UploadCulling,
+    UploadTracker, apply_dirty_uploads_with_culling,
+};
+use signex_gfx::wgpu;
+
+use crate::app::Message;
+use crate::scene_gpu_upload::{GpuUploadTarget, TextFrame, visible_world_rect};
+
+/// One editor surface that draws its `Scene` on the GPU.
+///
+/// This exists purely to give each surface its own pipeline slot. iced stores
+/// a primitive's pipeline in a map keyed by the **primitive's** `TypeId`
+/// (`iced_wgpu::primitive::Storage::store::<P, _>`, called from
+/// `BlackBox::<P>::prepare`), and that map lives in an
+/// `Arc<RwLock<primitive::Storage>>` on a cloned `Engine` — one map for the
+/// whole process, not one per window. So every widget emitting the same
+/// primitive type shares one instance-buffer set, one camera, and one
+/// resident-scene tracker.
+///
+/// Sharing does not corrupt a frame on its own: `Renderer::draw` runs
+/// `prepare` then `render` over one window's layers and `present` submits that
+/// encoder (`iced_wgpu::lib.rs`), so windows do not interleave — each uploads
+/// its own geometry immediately before drawing it.
+///
+/// What sharing *does* break is the generation cache. The resident-scene
+/// tracker skips an upload when this frame's generation equals the resident
+/// one, and two sources counting independently collide trivially — two
+/// freshly-opened documents are both at generation 0. The second source then
+/// skips its upload and draws the first's geometry.
+///
+/// Making [`ScenePrimitive`] generic over this trait means
+/// `ScenePrimitive<PcbSurface>` and a future `ScenePrimitive<SchematicSurface>`
+/// are distinct types, so each surface gets its own pipeline slot — its own
+/// buffers, camera and generation counter — and cannot collide with another
+/// surface.
+///
+/// **To add a surface:** declare a marker here, implement this trait, and mount
+/// `SceneShaderProgram::<YourSurface>::new(...)`. Do not reach for a second
+/// copy of this module — that is what #625 removed.
+///
+/// **Instances of one surface.** The type-level split separates *surfaces*,
+/// not *instances of one surface*. Every window's PCB canvas (one per undocked
+/// PCB tab since #494) emits `ScenePrimitive<PcbSurface>` and shares one slot.
+/// They cannot collide on the generation cache because `PcbCanvas` draws its
+/// generations from [`crate::scene_generation::next_scene_generation`], the
+/// one process-wide counter, so no two canvases ever hold the same value. A
+/// new per-window surface must draw from it too; the schematic's
+/// `ContentSceneCache` already does (#199).
+pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
+    /// Name used in this surface's one-shot text-failure warnings.
+    const LABEL: &'static str;
+
+    /// Readability limits on rendered text, in logical pixels. A view
+    /// decision, which is why it hangs off the surface rather than off the
+    /// `Scene` — the schematic and the Symbol Editor already disagree about
+    /// it while sharing the same scene shape.
+    const TEXT_SIZE: TextSizePolicy;
+
+    /// Thinnest a stroke may render, in logical pixels — the same floor this
+    /// surface's CPU replay applies, so zooming out thins geometry to the same
+    /// minimum on both paths instead of letting the GPU fade it away. Per
+    /// surface because the two disagree: the schematic clamps to 0.6 px
+    /// (`SCHEMATIC_RENDER_MIN_STROKE_PX`), the PCB to 0.5 px.
+    const MIN_STROKE_PX: f32;
+
+    /// Smallest a circle may render, in logical pixels. Both CPU replays use
+    /// 0.5 px today; it lives per surface anyway, because a value that is "the
+    /// same everywhere" written down in only one place is how the last
+    /// divergence started.
+    const MIN_RADIUS_PX: f32;
+}
+
+/// The PCB editor's scene surface.
+#[derive(Debug, Clone, Copy)]
+pub struct PcbSurface;
+
+impl SceneSurface for PcbSurface {
+    const LABEL: &'static str = "PCB";
+    /// PCB scenes carry no text today — `PcbCanvas::build_scene` never sets
+    /// `DirtyFlags::TEXT`. These bounds are the schematic's, so the day
+    /// footprint text does reach a `Scene` it starts out consistent with the
+    /// rest of the app rather than unclamped.
+    const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
+    /// Mirrors the PCB CPU replay's own clamps — `pcb_canvas::draw_lines` and
+    /// `draw_circles` both floor via `renderer_scene_canvas::MIN_STROKE_PX`.
+    const MIN_STROKE_PX: f32 = crate::renderer_scene_canvas::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
+}
+
+/// The schematic editor's scene surface.
+///
+/// Every value comes from the constants the schematic CPU replay already uses
+/// ([`crate::schematic_runtime::draw_built_scene`]), so the two paths cannot
+/// disagree about readability limits or stroke floors.
+#[derive(Debug, Clone, Copy)]
+pub struct SchematicSurface;
+
+impl SceneSurface for SchematicSurface {
+    const LABEL: &'static str = "schematic";
+    const TEXT_SIZE: TextSizePolicy = crate::schematic_runtime::SCHEMATIC_TEXT_SIZE;
+    const MIN_STROKE_PX: f32 = signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
+}
+
+/// The moving items of a schematic move-drag (#199).
+///
+/// A separate type from [`SchematicSurface`] because iced prepares every
+/// primitive of one `TypeId` in a window before rendering any of them, so two
+/// of the same type in one frame would overwrite each other's buffers. It
+/// carries the same constants, so a moved item is drawn exactly as it was.
+#[derive(Debug, Clone, Copy)]
+pub struct SchematicDragSurface;
+
+impl SceneSurface for SchematicDragSurface {
+    const LABEL: &'static str = "schematic drag";
+    const TEXT_SIZE: TextSizePolicy = SchematicSurface::TEXT_SIZE;
+    const MIN_STROKE_PX: f32 = SchematicSurface::MIN_STROKE_PX;
+    const MIN_RADIUS_PX: f32 = SchematicSurface::MIN_RADIUS_PX;
+}
+
+/// World coordinate (mm) at the render pass origin (top-left).
+///
+/// The screen mapping is `screen_px = world_mm * scale + offset_px` — the same
+/// mapping [`crate::schematic_runtime::ScreenTransform::world_to_screen`]
+/// applies — so the world point drawn at the top-left corner is
+/// `-offset / scale`. Returns the origin unchanged when the scale is
+/// degenerate.
+pub fn world_origin_mm(offset_px: [f32; 2], scale_px_per_mm: f32) -> [f32; 2] {
+    if scale_px_per_mm > 0.0 {
+        [
+            -offset_px[0] / scale_px_per_mm,
+            -offset_px[1] / scale_px_per_mm,
+        ]
+    } else {
+        [0.0, 0.0]
+    }
+}
+
+/// Report the first glyph-atlas failure of each kind and stay silent after.
+///
+/// A dropped frame of text beats panicking the render thread, but a swallowed
+/// failure that never reaches the Messages panel is not reporting either. This
+/// runs once per frame, so it must not log at frame rate.
+pub(crate) fn log_text_error_once(
+    flag: &AtomicBool,
+    surface: &str,
+    stage: &str,
+    error: impl std::fmt::Display,
+) {
+    if !flag.swap(true, Ordering::Relaxed) {
+        tracing::warn!(
+            target: "signex::gfx",
+            "{surface} GPU text {stage} failed ({error}); dropping this frame's text"
+        );
+    }
+}
+
+/// The set of `signex_gfx` pipelines plus the camera, created once by iced and
+/// reused across frames.
+///
+/// iced stores one of these per primitive type (see [`SceneSurface`]), so each
+/// surface gets its own buffers, camera and warn-once flags.
+pub struct ScenePipeline {
+    camera: CameraGpu,
+    line: LinePipeline,
+    circle: CirclePipeline,
+    arc: ArcPipeline,
+    polygon: PolygonPipeline,
+    /// Drawings in file paint order; reuses the four pipelines above (#1579).
+    ordered: OrderedPipeline,
+    /// Drawings placed above the circuit (#1583).
+    ordered_front: OrderedPipeline,
+    text: GlyphonTextPipeline,
+    /// What is resident in the instance buffers and the window it was culled
+    /// to. Decides, per frame, which categories re-upload: only those that
+    /// changed, and all of them again when the view leaves the culled window.
+    /// A pure pan/zoom inside the window moves ~64 bytes (the camera).
+    tracker: UploadTracker,
+    /// First-failure latches for the two glyph-atlas error paths. `AtomicBool`
+    /// rather than `bool` because `Primitive::draw` only borrows the pipeline
+    /// immutably, and iced requires a `Pipeline` to be `Send + Sync`.
+    text_upload_warned: AtomicBool,
+    text_draw_warned: AtomicBool,
+}
+
+impl shader::Pipeline for ScenePipeline {
+    fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
+        // The camera bind-group layout is shared by every instanced pipeline.
+        let camera = CameraGpu::new(device, CameraUniform::ortho([1.0, 1.0], [0.0, 0.0], 1.0));
+        let layout = camera.bind_group_layout();
+        Self {
+            line: LinePipeline::new(device, format, layout),
+            circle: CirclePipeline::new(device, format, layout),
+            arc: ArcPipeline::new(device, format, layout),
+            polygon: PolygonPipeline::new(device, format, layout),
+            ordered: OrderedPipeline::new(device),
+            ordered_front: OrderedPipeline::new(device),
+            text: GlyphonTextPipeline::new(device, queue, format),
+            camera,
+            tracker: UploadTracker::default(),
+            text_upload_warned: AtomicBool::new(false),
+            text_draw_warned: AtomicBool::new(false),
+        }
+    }
+
+    fn trim(&mut self) {
+        // CORRECTNESS-CRITICAL, not memory hygiene. iced calls this at the end
+        // of every frame and the trait's own body is a no-op
+        // (`iced_wgpu::primitive::Pipeline::trim`), so omitting this override
+        // is silently legal and silently wrong: `PrepareError::AtlasFull` is
+        // the one error `prepare` can hit below, and it is swallowed there on
+        // the grounds that the next frame retries. Without this call nothing
+        // ever releases atlas pages, so that failure never clears and text
+        // stays gone for the rest of the session (#599 / #609).
+        //
+        // The instance/vertex buffers are intentionally left resident — they
+        // only ever grow to the scene's high-water mark.
+        self.text.trim_atlas();
+    }
+}
+
+/// One frame's worth of scene geometry handed to the GPU. Cheap to build each
+/// frame — it is the same instance data the CPU path already produces.
+///
+/// `S` selects the pipeline slot; see [`SceneSurface`].
+#[derive(Debug)]
+pub struct ScenePrimitive<S: SceneSurface> {
+    /// Shared with the owning [`SceneShaderProgram`] and the source's scene
+    /// cache: building the primitive each frame is an `Arc` refcount bump, not
+    /// a deep copy of the geometry.
+    pub scene: Arc<Scene>,
+    /// Identity of `scene`'s geometry, used to skip redundant GPU uploads.
+    /// `Some(g)` comes from a cached source (the PCB `gpu_scene` cache) that
+    /// bumps `g` only when the geometry actually changes, so equal generations
+    /// across frames mean "same geometry, don't re-upload". `None` marks an
+    /// uncached source: the tracker compares its scene by value against the
+    /// resident one, so only categories that differ re-upload.
+    pub generation: Option<u64>,
+    /// Screen-space pan offset in logical pixels.
+    pub offset_px: [f32; 2],
+    /// Zoom in logical pixels per millimetre.
+    pub scale_px_per_mm: f32,
+    surface: PhantomData<S>,
+}
+
+impl<S: SceneSurface> ScenePrimitive<S> {
+    /// A primitive for a program that builds its scene inside
+    /// `shader::Program::draw` (the schematic, whose cull bounds only `draw`
+    /// knows) instead of holding one ready-made like [`SceneShaderProgram`].
+    pub fn new(
+        scene: Arc<Scene>,
+        generation: Option<u64>,
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+    ) -> Self {
+        Self {
+            scene,
+            generation,
+            offset_px,
+            scale_px_per_mm,
+            surface: PhantomData,
+        }
+    }
+}
+
+impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
+    type Pipeline = ScenePipeline;
+
+    fn prepare(
+        &self,
+        pipeline: &mut Self::Pipeline,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bounds: &Rectangle,
+        viewport: &Viewport,
+    ) {
+        // iced renders the shader pass in physical pixels; scale the logical
+        // transform by the surface's DPI factor so world→pixel matches the
+        // CPU canvas exactly.
+        let dpi = viewport.scale_factor();
+        let vp_px = [bounds.width * dpi, bounds.height * dpi];
+        let scale_px = self.scale_px_per_mm * dpi;
+
+        let offset_mm = world_origin_mm(self.offset_px, self.scale_px_per_mm);
+
+        // The camera changes on every pan/zoom frame, so always refresh it.
+        //
+        // The feature floors ride along so the shaders can keep thin geometry
+        // legible the way this surface's CPU replay does. They are declared in
+        // logical pixels and `scale_px` is physical, so they scale by DPI for
+        // the same reason `TEXT_SIZE` does — an unscaled floor would be half
+        // as thick on a HiDPI display as on a standard one.
+        pipeline.camera.update(
+            queue,
+            CameraUniform::ortho(vp_px, offset_mm, scale_px)
+                .with_min_feature_px(S::MIN_STROKE_PX * dpi, S::MIN_RADIUS_PX * dpi),
+        );
+
+        // Upload only what changed, and only what is near the view. The
+        // line/circle/arc/polygon instances live in *world* space and the
+        // camera ortho above applies pan/zoom on the GPU, so their buffers only
+        // need refreshing when the geometry changes or the view leaves the
+        // window they were culled to (visible area plus a margin). The tracker
+        // plans both; `apply_dirty_uploads_with_culling` executes it.
+        let visible = visible_world_rect(bounds, self.offset_px, self.scale_px_per_mm);
+        let plan = pipeline.tracker.plan(&self.scene, self.generation, visible);
+
+        // Text is NOT guarded: glyphon rasterises glyphs in screen-pixel space
+        // (`size_mm * scale_px_per_mm` plus the pan offset), so it must be
+        // re-prepared every frame that pan/zoom/viewport changes. The pan term
+        // is passed explicitly because glyphon works in screen space and, unlike
+        // the instanced primitives, does not go through the camera ortho.
+        //
+        // Prep can fail with `PrepareError::AtlasFull`. Swallowing it costs
+        // this frame's text and nothing else *because* `ScenePipeline::trim`
+        // releases unused atlas pages after every frame — delete that override
+        // and this swallow makes text loss permanent for the session instead.
+        // A panic here would take the render thread down.
+        //
+        // The font system is iced's own, not one of ours: shaping against a
+        // private `FontSystem` meant this pipeline never saw the faces the app
+        // loaded, so canvas text came out in a system fallback instead of the
+        // app's monospace face. Safe to take the write lock here — iced's own
+        // text prepare is a *sibling* of custom-primitive prepare in the layer
+        // loop, not a parent, so it holds no font-system lock while this runs.
+        //
+        // The policy's bounds are logical pixels, and `scale_px` is physical,
+        // so the bounds are scaled to match. Clamping physical sizes against
+        // logical bounds would shrink both thresholds by the DPI factor and
+        // silently disagree with the CPU replay on a HiDPI display.
+        // `(em * scale * dpi).clamp(min * dpi, max * dpi)` is exactly
+        // `(em * scale).clamp(min, max) * dpi`.
+        //
+        // `upload` stages axis-aligned items only — a glyph atlas cannot
+        // rotate (`TextItem::is_axis_aligned`). The PCB scene carries no text; the
+        // schematic's rotated items get their CPU pass from the overlay canvas
+        // in `crate::canvas::gpu_mount`.
+        let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
+        let ScenePipeline {
+            line,
+            circle,
+            arc,
+            polygon,
+            ordered,
+            ordered_front,
+            text,
+            text_upload_warned,
+            ..
+        } = pipeline;
+        let mut target = GpuUploadTarget {
+            device,
+            queue,
+            line,
+            circle,
+            arc,
+            polygon,
+            ordered,
+            ordered_front,
+            text,
+            text_frame: TextFrame {
+                size_policy: text_size,
+                offset_px: [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
+                warned: text_upload_warned,
+                surface_label: S::LABEL,
+            },
+        };
+        let text_params = TextUploadParams::new(scale_px, [vp_px[0] as u32, vp_px[1] as u32]);
+        // Geometry: dirty categories, culled to the tracker's window.
+        // Text: every frame (it is screen-space), never culled - the envelope
+        // is an estimate and a label anchored off-screen can still reach in.
+        // The target reports its own failures and cannot return one.
+        for (dirty, culling) in [
+            (plan.dirty, plan.culling),
+            (DirtyFlags::TEXT, UploadCulling::disabled()),
+        ] {
+            apply_dirty_uploads_with_culling(&self.scene, dirty, &mut target, text_params, culling)
+                .unwrap_or_else(|never| match never {});
+        }
+    }
+
+    fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
+        let camera = pipeline.camera.bind_group();
+        // Composite in the shared `GPU_SCENE_DRAW_ORDER` (drawings at the very
+        // back, then fills, then strokes, then pads, then text on top). The order lives in one const so it can be diffed
+        // against the CPU replays: both `pcb_canvas::draw_scene` and the
+        // schematic replay now draw their base buckets in this order (#645,
+        // #653), pinned by the `scene::order` parity tests. GPU parity stays
+        // unconfirmed on hardware.
+        for &bucket in GPU_SCENE_DRAW_ORDER {
+            match bucket {
+                SceneBucket::Polygons => pipeline.polygon.draw(render_pass, camera),
+                SceneBucket::Drawings => pipeline.ordered.draw_runs(
+                    render_pass,
+                    camera,
+                    &KindPipelines {
+                        line: &pipeline.line,
+                        circle: &pipeline.circle,
+                        arc: &pipeline.arc,
+                        polygon: &pipeline.polygon,
+                    },
+                ),
+                SceneBucket::DrawingsFront => pipeline.ordered_front.draw_runs(
+                    render_pass,
+                    camera,
+                    &KindPipelines {
+                        line: &pipeline.line,
+                        circle: &pipeline.circle,
+                        arc: &pipeline.arc,
+                        polygon: &pipeline.polygon,
+                    },
+                ),
+                SceneBucket::Lines => pipeline.line.draw(render_pass, camera),
+                SceneBucket::Arcs => pipeline.arc.draw(render_pass, camera),
+                SceneBucket::Circles => pipeline.circle.draw(render_pass, camera),
+                SceneBucket::TopPolygons => pipeline.polygon.draw_top(render_pass, camera),
+                SceneBucket::Texts => {
+                    // Same rationale as the `upload` in `prepare`: a failed
+                    // text draw loses text for one frame, not the render pass.
+                    if let Err(error) = pipeline.text.draw(render_pass) {
+                        log_text_error_once(&pipeline.text_draw_warned, S::LABEL, "draw", error);
+                    }
+                }
+                // Not composited here — overlays get their own pass below
+                // (always after every base bucket). The ERC buckets are
+                // schematic-only AND currently unpopulated by any production
+                // path: `SchematicRenderer::build_scene` fills them only under
+                // `DirtyFlags::OVERLAY`, and the one production caller that
+                // passes that flag (`schematic_runtime::overlay::draw_erc_markers`)
+                // routes its markers through `OverlayInputs` instead. Schematic
+                // ERC marks and PCB DRC marks are both overlay geometry, so the
+                // overlay pass below already carries them.
+                //
+                // Handled for exhaustiveness so adding a Scene bucket forces a
+                // decision here. Note this does NOT fire when a new *surface*
+                // is mounted — that path needs its own review.
+                SceneBucket::OverlayLines
+                | SceneBucket::OverlayCircles
+                | SceneBucket::OverlayPolygons
+                | SceneBucket::ErcMarkerLines
+                | SceneBucket::ErcMarkerCircles
+                | SceneBucket::ErcMarkerPolygons => {}
+            }
+        }
+
+        // Overlay pass: strictly after every base bucket above, so overlay
+        // content (active-layer zone highlight, selection highlight, DRC
+        // markers, ratsnest) always renders on top — matching the CPU
+        // `pcb_canvas::draw_scene` overlay pass, which draws
+        // OverlayLines/OverlayCircles/OverlayPolygons last. Order within the
+        // pass mirrors the CPU's (lines, then circles, then polygon fills +
+        // strokes on top).
+        pipeline.line.draw_overlay(render_pass, camera);
+        pipeline.circle.draw_overlay(render_pass, camera);
+        pipeline.polygon.draw_overlay(render_pass, camera);
+
+        true
+    }
+}
+
+/// The `shader::Program` mounted when a view routes its `Scene` through the
+/// GPU. Holds the built `Scene` and the active pan/zoom; pointer handling
+/// stays on the CPU `canvas` layer stacked beneath this shader, so `update`
+/// is the default no-op and never captures — events fall through to the
+/// canvas below.
+pub struct SceneShaderProgram<S: SceneSurface> {
+    scene: Arc<Scene>,
+    generation: Option<u64>,
+    offset_px: [f32; 2],
+    scale_px_per_mm: f32,
+    surface: PhantomData<S>,
+}
+
+impl<S: SceneSurface> SceneShaderProgram<S> {
+    /// Build from an already-tessellated `Scene` and the current screen-space
+    /// transform (`offset_px` = pan in logical pixels, `scale_px_per_mm` =
+    /// zoom in logical pixels per millimetre). `generation` identifies the
+    /// geometry so the pipeline can skip redundant GPU uploads on pan/zoom:
+    /// `Some(g)` from a cached source that bumps `g` only on real geometry
+    /// changes, or `None` for an uncached source, compared by value against the resident scene.
+    pub fn new(
+        scene: Arc<Scene>,
+        generation: Option<u64>,
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+    ) -> Self {
+        Self {
+            scene,
+            generation,
+            offset_px,
+            scale_px_per_mm,
+            surface: PhantomData,
+        }
+    }
+}
+
+impl<S: SceneSurface> shader::Program<Message> for SceneShaderProgram<S> {
+    type State = ();
+    type Primitive = ScenePrimitive<S>;
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        _cursor: mouse::Cursor,
+        _bounds: Rectangle,
+    ) -> Self::Primitive {
+        ScenePrimitive {
+            scene: Arc::clone(&self.scene),
+            generation: self.generation,
+            offset_px: self.offset_px,
+            scale_px_per_mm: self.scale_px_per_mm,
+            surface: PhantomData,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::widget::shader::Program;
+    use signex_gfx::primitive::line::LineSegment;
+
+    /// This module's own source, embedded at compile time. Building a
+    /// [`ScenePipeline`] needs a live `wgpu::Device`, so the `trim`
+    /// override below cannot be exercised at runtime here — this scans
+    /// for it instead. It pins that the override exists, not that it
+    /// works; the behaviour it guards is glyphon's.
+    ///
+    /// Ported from `schematic_shader.rs` by #625, where it guarded the
+    /// *unmounted* copy while this — the mounted one — had no guard at all.
+    const SRC: &str = include_str!("scene_shader.rs");
+
+    /// The `impl shader::Pipeline for ScenePipeline` block alone.
+    /// The impl's own closing brace is the first `}` at column 0 after
+    /// the opener; every method inside it closes at an indent.
+    fn pipeline_impl_block() -> &'static str {
+        let start = SRC
+            .find("impl shader::Pipeline for ScenePipeline {")
+            .expect("the shader::Pipeline impl moved — update this guard");
+        let rest = &SRC[start..];
+        let end = rest
+            .find("\n}\n")
+            .expect("the shader::Pipeline impl has no column-0 closing brace");
+        &rest[..end]
+    }
+
+    /// `PrepareError::AtlasFull` is the only thing `upload` can fail
+    /// with, and `prepare` discards it. That is a one-frame loss only
+    /// while something releases atlas pages between frames — the
+    /// trait's own `trim` is a no-op, so without this override the
+    /// atlas never drains and every label stays gone for the rest of
+    /// the session (#599).
+    #[test]
+    fn the_pipeline_overrides_trim_so_a_full_glyph_atlas_can_recover() {
+        let block = pipeline_impl_block();
+        assert!(
+            block.contains("fn trim(&mut self)"),
+            "ScenePipeline must override shader::Pipeline::trim"
+        );
+        assert!(
+            block.contains("self.text.trim_atlas();"),
+            "the trim override must release glyph-atlas pages"
+        );
+    }
+
+    #[test]
+    fn world_origin_is_negative_offset_over_scale() {
+        // At 4 px/mm with the view panned 80px right / 40px down, the top-left
+        // corner shows world (-20mm, -10mm).
+        let origin = world_origin_mm([80.0, 40.0], 4.0);
+        assert_eq!(origin, [-20.0, -10.0]);
+    }
+
+    #[test]
+    fn world_origin_handles_degenerate_scale() {
+        assert_eq!(world_origin_mm([12.0, 34.0], 0.0), [0.0, 0.0]);
+    }
+
+    /// The mapping this mirrors is `ScreenTransform::world_to_screen`
+    /// (`screen_px = world_mm * scale + offset_px`), so a surface feeding this
+    /// program from a `ScreenTransform` passes `offset_x` / `offset_y` as
+    /// `offset_px` and `scale` as `scale_px_per_mm`. Ported from
+    /// `schematic_shader`'s round-trip test (#625) — that file held the only
+    /// check tying the two together.
+    #[test]
+    fn world_origin_matches_the_screen_transform_mapping() {
+        let (offset_x, offset_y, scale) = (80.0_f32, 40.0_f32, 4.0_f32);
+        let transform = crate::schematic_runtime::ScreenTransform {
+            offset_x,
+            offset_y,
+            scale,
+        };
+        // The world point that lands on the widget's top-left pixel.
+        let origin = world_origin_mm([offset_x, offset_y], scale);
+        let back = transform.world_to_screen((origin[0] as f64, origin[1] as f64));
+        assert!(back.x.abs() < 1e-3, "origin must map to screen x = 0");
+        assert!(back.y.abs() < 1e-3, "origin must map to screen y = 0");
+    }
+
+    #[test]
+    fn primitive_carries_the_scene_and_camera() {
+        let mut scene = Scene::default();
+        scene.lines.push(LineSegment {
+            p0: [0.0, 0.0],
+            p1: [1.0, 1.0],
+            width: 0.1,
+            color: [1.0, 1.0, 1.0, 1.0],
+            style: 0,
+            _pad: 0,
+        });
+
+        let program =
+            SceneShaderProgram::<PcbSurface>::new(Arc::new(scene), Some(7), [5.0, 6.0], 3.0);
+        let primitive = program.draw(
+            &(),
+            iced::mouse::Cursor::Unavailable,
+            iced::Rectangle::default(),
+        );
+
+        assert_eq!(primitive.scene.lines.len(), 1);
+        assert_eq!(primitive.generation, Some(7));
+        assert_eq!(primitive.offset_px, [5.0, 6.0]);
+        assert_eq!(primitive.scale_px_per_mm, 3.0);
+    }
+
+    /// The whole point of the [`SceneSurface`] parameter: iced keys a stored
+    /// pipeline by the primitive's `TypeId`, so two surfaces sharing one would
+    /// share its resident-scene tracker and skip an upload whenever their
+    /// independent counters happened to match. Pins that adding a marker
+    /// actually produces a distinct type.
+    #[test]
+    fn each_surface_gets_its_own_primitive_type() {
+        #[derive(Debug, Clone, Copy)]
+        struct OtherSurface;
+        impl SceneSurface for OtherSurface {
+            const LABEL: &'static str = "other";
+            const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(1.0, 128.0);
+            const MIN_STROKE_PX: f32 = 0.5;
+            const MIN_RADIUS_PX: f32 = 0.5;
+        }
+
+        let ids = [
+            std::any::TypeId::of::<ScenePrimitive<PcbSurface>>(),
+            std::any::TypeId::of::<ScenePrimitive<SchematicSurface>>(),
+            std::any::TypeId::of::<ScenePrimitive<SchematicDragSurface>>(),
+            std::any::TypeId::of::<ScenePrimitive<OtherSurface>>(),
+        ];
+        for (i, a) in ids.iter().enumerate() {
+            for b in &ids[i + 1..] {
+                assert_ne!(
+                    a, b,
+                    "two surfaces sharing a TypeId would share one pipeline slot, \
+                     and with it the generation cache that decides whether to upload"
+                );
+            }
+        }
+    }
+
+    /// The schematic surface must clamp exactly as the schematic CPU replay
+    /// does; both read the same constants, and this pins that they still do.
+    #[test]
+    fn the_drag_surface_carries_the_schematic_constants() {
+        assert_eq!(SchematicDragSurface::TEXT_SIZE, SchematicSurface::TEXT_SIZE);
+        assert_eq!(
+            SchematicDragSurface::MIN_STROKE_PX,
+            SchematicSurface::MIN_STROKE_PX
+        );
+        assert_eq!(
+            SchematicDragSurface::MIN_RADIUS_PX,
+            SchematicSurface::MIN_RADIUS_PX
+        );
+    }
+
+    #[test]
+    fn schematic_surface_matches_the_cpu_replay_constants() {
+        assert_eq!(
+            SchematicSurface::TEXT_SIZE,
+            crate::schematic_runtime::SCHEMATIC_TEXT_SIZE
+        );
+        assert_eq!(
+            SchematicSurface::MIN_STROKE_PX,
+            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX
+        );
+        assert_eq!(
+            SchematicSurface::MIN_RADIUS_PX,
+            crate::renderer_scene_canvas::MIN_RADIUS_PX
+        );
+    }
+}

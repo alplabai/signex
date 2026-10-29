@@ -21,12 +21,15 @@ use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 use crate::icons as ic;
 use crate::library::editor::footprint::state::{
-    FpActiveBarMenu, PadsTool, SelectionFilterKind, SketchTool, SnapSubTab, SnappingMode,
+    FpActiveBarMenu, PadsTool, SelectionFilterKind, SketchTool, SnappingMode,
 };
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::SnapOptionFlag;
 
 use super::state::FootprintEditorState;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Convenience: route a `FootprintEditorMsg` to the editor at `path`.
 fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
@@ -41,7 +44,10 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
 /// row is wired to a real message (Break Track was the last, #372).
 /// Removing the variant is out of #372's scope, so the helper stays for
 /// future not-yet-implemented rows rather than orphaning the variant.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "kept for future not-yet-implemented dropdown rows rather than orphaning ActiveBarStub"
+)]
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
 }
@@ -138,6 +144,7 @@ fn sketch_create_entries(
             SketchTool::TangentArc,
             ic::icon_shape_arc(tid),
         ),
+        row("Edge Arc", SketchTool::EdgeArc, ic::icon_shape_arc(tid)),
     ]
 }
 
@@ -251,7 +258,7 @@ fn filter_entries(
     // minimal capture affordance. Task 6 — no rename UI yet; captured
     // presets get a default `Filter {n}` name (see filter_presets.rs).
     let mut top_row = iced::widget::Row::new()
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .push(all_btn);
     for (idx, preset) in footprint_presets.iter().enumerate() {
@@ -287,7 +294,7 @@ fn filter_entries(
     //   row 2: 5 chips (3D Bodies / Keepouts / Tracks / Arcs / Pads)
     //   row 3: 5 chips (Vias / Regions / Fills / Texts / Other)
     let layout = column![
-        container(top_row).padding([4, 8]),
+        container(top_row).padding([SP.s, SP.m]),
         container(
             column![
                 row![
@@ -297,7 +304,7 @@ fn filter_entries(
                     make_chip("Arcs", K::Arcs),
                     make_chip("Pads", K::Pads),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
                 row![
                     make_chip("Vias", K::Vias),
@@ -306,12 +313,12 @@ fn filter_entries(
                     make_chip("Texts", K::Texts),
                     make_chip("Other", K::Other),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             ]
-            .spacing(4),
+            .spacing(SP.s),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     ]
     .spacing(0)
     .width(Length::Shrink);
@@ -320,7 +327,6 @@ fn filter_entries(
 }
 
 fn snap_entries(state: &FootprintEditorState, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
-    let _ = SnapSubTab::Grids; // silence unused-import lint when nothing references it
     let opts = state.snap_options;
     let mk_mode = |label: &'static str, mode: SnappingMode| -> DropdownItem<LibraryMessage> {
         DropdownItem::new(

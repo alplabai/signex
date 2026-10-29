@@ -1,13 +1,33 @@
 //! Open-tree-document + tree-path resolution for the project-navigation dock.
-//!
-//! Extracted verbatim from the project-navigation dock handlers
-//! (`handlers/dock/project_navigation`); pure code motion, zero
-//! behaviour change.
 
 use super::*;
 use anyhow::{Context, Result};
+use iced::Task;
+
+use crate::app::document_read::ReadJob;
+
+/// The registered library whose resolved `.snxlib` path is `key` (a library
+/// row's tree key). Never falls back to the file name: two libraries may
+/// share one (#742).
+fn library_path_for_key(
+    data: &signex_types::project::ProjectData,
+    key: &str,
+) -> Option<std::path::PathBuf> {
+    data.libraries
+        .iter()
+        .map(|entry| data.resolve_library_path(entry))
+        .find(|path| path.to_string_lossy() == key)
+}
 
 impl Signex {
+    /// Tab title for a document: its file stem, so `sub/Power.snxsch` reads
+    /// `Power`, the same as `rekey_open_document` titles it after a rename.
+    fn document_title(path: &std::path::Path) -> String {
+        path.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
     /// Resolve a project-tree path (indices) to the file path on disk
     /// for the leaf node at that position. Multi-root aware: the first
     /// index picks which project's directory to resolve against, so a
@@ -33,14 +53,7 @@ impl Signex {
         // `entry.path.file_name()` still works on orphan rows.
         let raw_label = canonical_tree_label(&node.label);
         if raw_label.ends_with(".snxlib") {
-            let entry = project.data.libraries.iter().find(|e| {
-                e.path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .map(|n| n == raw_label)
-                    .unwrap_or(false)
-            })?;
-            return Some(project.data.resolve_library_path(entry));
+            return library_path_for_key(&project.data, &node.key);
         }
         let dir = project.path.parent()?;
         // HI-5: refuse to feed `dir.join(raw_label)` if `raw_label` is
@@ -65,11 +78,11 @@ impl Signex {
         Some(dir.join(raw_label))
     }
 
-    pub(super) fn open_project_tree_document(
+    pub(crate) fn open_project_tree_document(
         &mut self,
         tree_path: &[usize],
         filename: String,
-    ) -> Result<()> {
+    ) -> Result<Task<Message>> {
         // F24 — strip the "  (missing)" suffix `build_project_tree`
         // appends to orphan rows so filename-matching downstream
         // still resolves the correct entry.
@@ -109,41 +122,40 @@ impl Signex {
         // path because schematics / pcbs / primitives have always
         // lived inside the project directory.
         let file_path: std::path::PathBuf = if filename.ends_with(".snxlib") {
-            let entry = loaded
-                .data
-                .libraries
-                .iter()
-                .find(|entry| {
-                    entry
-                        .path
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|n| n == filename)
-                        .unwrap_or(false)
-                })
+            // By the row's key (the library's resolved path), so two
+            // libraries sharing a file name stay distinct (#742).
+            let key = signex_widgets::tree_view::get_node(
+                self.document_state.panel_ctx.project_tree.as_slice(),
+                tree_path,
+            )
+            .map(|node| node.key.as_str());
+            key.and_then(|key| library_path_for_key(&loaded.data, key))
                 .with_context(|| {
                     format!(
                         "library {} not registered on project {}",
                         filename,
                         loaded.path.display()
                     )
-                })?;
-            loaded.data.resolve_library_path(entry)
+                })?
         } else {
             project_dir.join(&filename)
         };
+        // One document per file: a spelling of the path a tab already holds
+        // reuses that tab (#1149).
+        let file_path = self.resolve_held_spelling_now(file_path);
+
+        // A rename or delete still moving this file would leave the new tab
+        // on a path that is about to vanish (#859).
+        self.refuse_start_while_path_op(&file_path, "opened")?;
 
         // F23 — orphan `.snxlib` entries (registered on the project but
         // missing on disk) still flow through to the Library Browser
         // tab so the user sees a "Library not mounted" message and
         // can pick Remove from Project to clean up. Other extensions
-        // still error early because they have no recovery surface.
-        if !file_path.exists() {
-            if filename.ends_with(".snxlib") {
-                let _ = self.handle_open_library_browser(file_path);
-                return Ok(());
-            }
-            anyhow::bail!("project tree file does not exist: {}", file_path.display());
+        // are checked for existence by their read job (#859) because
+        // they have no recovery surface.
+        if filename.ends_with(".snxlib") && !file_path.exists() {
+            return Ok(self.handle_open_library_browser(file_path));
         }
 
         if let Some(index) = self
@@ -157,39 +169,29 @@ impl Signex {
                 self.document_state.active_tab = index;
                 self.sync_active_tab();
             }
-            return Ok(());
+            return Ok(Task::none());
         }
 
+        // The file read + parse of a schematic / PCB runs on a worker; the
+        // tab is installed by `handle_document_read_finished` (#859).
         if filename.ends_with(".snxsch") {
-            let title = filename.trim_end_matches(".snxsch").to_string();
+            let title = Self::document_title(&file_path);
             // If we parked an engine for this file (closed while dirty),
             // restore it instead of reparsing — Altium parity. Re-parsing
             // would silently discard the user's in-memory edits, which is
-            // exactly what `dirty_paths` was built to prevent.
+            // exactly what the dirty mark exists to prevent.
             if self.document_state.engines.contains_key(&file_path)
-                && self.document_state.dirty_paths.contains(&file_path)
+                && self.document_state.is_document_dirty(&file_path)
             {
                 self.attach_parked_schematic_tab(file_path, title);
-                return Ok(());
+                return Ok(Task::none());
             }
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read schematic {}", file_path.display()))?;
-            let schematic = signex_types::format::SnxSchematic::parse(&text)
-                .with_context(|| format!("parse schematic {}", file_path.display()))?
-                .sheet;
-            self.open_schematic_tab(file_path, title, schematic);
-            return Ok(());
+            return Ok(self.begin_document_read(file_path, ReadJob::TreeSchematic { title }));
         }
 
         if filename.ends_with(".snxpcb") {
-            let text = std::fs::read_to_string(&file_path)
-                .with_context(|| format!("read pcb {}", file_path.display()))?;
-            let board = signex_types::format::SnxPcb::parse(&text)
-                .with_context(|| format!("parse pcb {}", file_path.display()))?
-                .board;
-            let title = filename.trim_end_matches(".snxpcb").to_string();
-            self.open_pcb_tab(file_path, title, board);
-            return Ok(());
+            let title = Self::document_title(&file_path);
+            return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
         }
 
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
@@ -197,8 +199,7 @@ impl Signex {
         // `OpenPrimitiveEditor` path used by the Library panel
         // right-click handles project-tree double-clicks too.
         if filename.ends_with(".snxsym") || filename.ends_with(".snxfpt") {
-            let _ = self.handle_open_primitive(file_path);
-            return Ok(());
+            return Ok(self.handle_open_primitive_from(file_path, true));
         }
 
         // `.snxlib/` is a directory package, not a document. Open it
@@ -206,11 +207,7 @@ impl Signex {
         // browser is the primary surface for working with library rows
         // (table grid + symbol/footprint preview).
         if filename.ends_with(".snxlib") {
-            // The browser handler returns a Task; in this synchronous
-            // path we can drop it because mount + open are all
-            // immediate-side-effecting (no async file dialogs etc.).
-            let _ = self.handle_open_library_browser(file_path);
-            return Ok(());
+            return Ok(self.handle_open_library_browser(file_path));
         }
 
         anyhow::bail!("unsupported project tree document: {filename}")
@@ -222,5 +219,269 @@ impl Signex {
 /// filename matching against `entry.path.file_name()` still works.
 /// Returns the original `&str` when no suffix is present (zero-copy).
 fn canonical_tree_label(label: &str) -> &str {
-    label.trim_end_matches("  (missing)")
+    label
+        .trim_end_matches("  (missing)")
+        .trim_end_matches("  (unreadable)")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::Signex;
+
+    /// Regression (#99 part 1): `open_project_tree_document` used to
+    /// return `Result<()>` and the `.snxsym` / `.snxlib` branches
+    /// discarded the `Task` from `handle_open_primitive` /
+    /// `handle_open_library_browser` via `let _ = ...`. The signature
+    /// now carries the `Task` out — the explicit `Task<Message>`
+    /// annotation below is a compile-time tripwire: this test stops
+    /// compiling (rather than merely failing) if that return type is
+    /// ever swallowed back down to `Result<()>`.
+    ///
+    /// A Task-*value* assertion isn't meaningful here: every callee on
+    /// this path returns `Task::none()` unconditionally today (async
+    /// `.snxlib` mounting lands in part 2 of #99), so the propagated
+    /// and dropped cases are runtime-indistinguishable until then.
+    #[test]
+    fn open_project_tree_document_snxsym_carries_the_task_out() {
+        let (mut app, _bootstrap_task) = Signex::new();
+
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        // Content doesn't need to parse — `handle_open_primitive`
+        // returns `Task::none()` on a parse failure too, and this test
+        // only needs the file to exist so the tree-document lookup
+        // doesn't bail with "does not exist".
+        std::fs::write(dir.path().join("Comp.snxsym"), b"").unwrap();
+
+        // Named binding, not `drop(..)` (walks past the #577 / #627 gate) and
+        // not an assertion: what the project-open Task carries is not what
+        // this test is about.
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+        assert_eq!(
+            app.document_state.projects.len(),
+            1,
+            "project must have loaded before resolving a tree document against it"
+        );
+
+        let result: anyhow::Result<iced::Task<Message>> =
+            app.open_project_tree_document(&[0], "Comp.snxsym".to_string());
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+    }
+
+    /// #1149 — the project tree resolves `dir/Top.snxsch`; a tab that holds
+    /// the same file as `dir/sub/../Top.snxsch` is activated, not duplicated.
+    #[test]
+    fn project_tree_open_under_another_spelling_reuses_the_tab() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet_file = dir.path().join("Top.snxsch");
+        std::fs::write(&sheet_file, b"").unwrap();
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let held = dir.path().join("sub").join("..").join("Top.snxsch");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "Top".to_string(),
+            path: held.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "Other".to_string(),
+            path: dir.path().join("Other.snxsch"),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 1;
+
+        let result = app.open_project_tree_document(&[0], "Top.snxsch".to_string());
+
+        assert!(result.is_ok(), "expected Ok(Task), got {result:?}");
+        assert_eq!(app.document_state.tabs.len(), 2);
+        assert_eq!(app.document_state.active_tab, 0, "the held tab is focused");
+        assert_eq!(app.document_state.tabs[0].path, held);
+    }
+
+    /// #1208 — a sheet opened from the project tree must be checked for an
+    /// earlier run's recovery copy like File > Open: until the check
+    /// resolves, autosave may not write over that copy.
+    #[test]
+    fn a_sheet_opened_from_the_project_tree_holds_autosave_back_until_its_recovery_check() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::now_v7(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        std::fs::write(dir.path().join("Top.snxsch"), text).unwrap();
+        app.document_state
+            .autosave
+            .set_dir(Some(dir.path().join("recovery")));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+
+        // The read runs off the UI thread: the tab appears only when its
+        // completion reaches `update`, and that same update hands back the
+        // recovery check.
+        let task = app
+            .open_project_tree_document(&[0], "Top.snxsch".to_string())
+            .expect("expected Ok(Task)");
+        let mut recovery_checks = Vec::new();
+        for message in collect_outputs(task) {
+            recovery_checks.push(app.update(message));
+        }
+        let opened = app
+            .document_state
+            .tabs
+            .last()
+            .expect("a tab opened")
+            .path
+            .clone();
+        let stamp = crate::autosave::DocStamp {
+            revision: 1,
+            net_color_revision: 0,
+        };
+        assert!(
+            !app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave must wait for the recovery check of a freshly opened sheet"
+        );
+
+        // Once the recovery check has resolved (nothing to recover here),
+        // autosave may write again.
+        for task in recovery_checks {
+            settle(&mut app, task);
+        }
+        assert!(
+            app.document_state.autosave.needs_write(&opened, stamp),
+            "autosave resumes after the recovery check resolves"
+        );
+    }
+
+    /// The messages `task` emits, without applying them.
+    fn collect_outputs(task: iced::Task<Message>) -> Vec<Message> {
+        use futures::StreamExt;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+            out
+        })
+    }
+
+    /// Run `task` and feed every message it emits back through `update`.
+    fn settle(app: &mut Signex, task: iced::Task<Message>) {
+        use futures::StreamExt;
+        let mut pending = vec![task];
+        while let Some(task) = pending.pop() {
+            let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+                continue;
+            };
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let messages = runtime.block_on(async {
+                let mut out = Vec::new();
+                while let Some(action) = stream.next().await {
+                    if let iced_runtime::Action::Output(message) = action {
+                        out.push(message);
+                    }
+                }
+                out
+            });
+            pending.extend(messages.into_iter().map(|message| app.update(message)));
+        }
+    }
+
+    /// #1208 end to end: double-clicking a sheet in the project tree shows
+    /// the recovery prompt for an earlier run's copy, like File > Open.
+    #[test]
+    fn double_clicking_a_sheet_in_the_project_tree_offers_its_recovery_copy() {
+        use signex_widgets::tree_view::{TreeMsg, TreeNode, key_of};
+
+        let (mut app, _bootstrap_task) = Signex::new();
+        let dir = tempfile::tempdir().unwrap();
+        let project_path = dir.path().join("proj.snxprj");
+        std::fs::write(&project_path, b"").unwrap();
+        let sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::now_v7(),
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let text = signex_engine::Engine::new(sheet)
+            .unwrap()
+            .serialize_with_net_colors(&app.ui_state.wire_color_overrides)
+            .unwrap();
+        let file = dir.path().join("Top.snxsch");
+        std::fs::write(&file, &text).unwrap();
+        let recovery = dir.path().join("recovery");
+        crate::autosave::sidecar::write(&recovery, &file, b"edits the file lacks").unwrap();
+        app.document_state.autosave.set_dir(Some(recovery));
+        let _opened_task: iced::Task<Message> = app.handle_document_file_opened(Some(project_path));
+        app.document_state.projects[0]
+            .data
+            .sheets
+            .push(signex_types::project::SheetEntry {
+                name: "Top.snxsch".to_string(),
+                filename: "Top.snxsch".to_string(),
+                symbols_count: 0,
+                wires_count: 0,
+                labels_count: 0,
+                unknown: Default::default(),
+            });
+        app.refresh_panel_ctx();
+        fn find(nodes: &[TreeNode], label: &str, path: &mut Vec<usize>) -> bool {
+            for (index, node) in nodes.iter().enumerate() {
+                path.push(index);
+                if node.label == label || find(&node.children, label, path) {
+                    return true;
+                }
+                path.pop();
+            }
+            false
+        }
+        let mut row = Vec::new();
+        let tree = &app.document_state.panel_ctx.project_tree;
+        assert!(find(tree, "Top.snxsch", &mut row), "the sheet has a row");
+        let key = key_of(tree, &row).expect("row");
+
+        for click in 0..2 {
+            if click == 1 {
+                // Settling the first click's tasks takes wall time that
+                // grows under load, so pin the memo to a future instant:
+                // `duration_since` saturates to zero, keeping the second
+                // click inside the double-click window deterministically.
+                let memo = app.interaction_state.last_tree_click.as_mut();
+                memo.expect("first click memoed").1 =
+                    std::time::Instant::now() + std::time::Duration::from_secs(3600);
+            }
+            let task = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::Tree(TreeMsg::Select(key.clone())),
+            )));
+            settle(&mut app, task);
+        }
+
+        assert_eq!(app.document_state.tabs.len(), 1, "the sheet opened");
+        let offer = app.document_state.autosave.current_offer();
+        assert!(
+            offer.is_some_and(|offer| offer.path == app.document_state.tabs[0].path),
+            "the earlier copy must be offered: {offer:?}"
+        );
+    }
 }

@@ -1,7 +1,13 @@
-use iced::widget::{canvas, column, container, row, text_input};
+use iced::widget::{canvas, column, container, row, shader, stack, text_input};
 use iced::{Element, Length};
 
+/// Detached-modal native window title text.
+pub(crate) mod detached_title;
 pub(crate) mod dialogs;
+/// Overlay identity + paint order — shared with the Esc ladder in
+/// `app/bootstrap/subscription.rs`, hence `pub(crate)` and not a child
+/// of the private `overlays` module.
+pub(crate) mod overlay_id;
 pub(crate) mod translate;
 
 mod chrome;
@@ -12,6 +18,10 @@ mod pdf_preview;
 mod print_preview;
 
 use super::*;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 // ── Submenu chevron — single source of truth ─────────────────────────
 //
@@ -29,16 +39,11 @@ pub(crate) const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
 /// Narrowest the chrome search bar shrinks to before it starts
 /// overlapping the menu row. Still wide enough for a few query words.
 pub(crate) const CHROME_SEARCH_BAR_MIN_WIDTH: f32 = 160.0;
-/// One chrome control button (min / max / close) width — see
-/// `chrome_btn` in `view_main_window_chrome`.
-pub(crate) const CHROME_CONTROL_BTN_W: f32 = 46.0;
-/// Total controls strip width — three buttons.
-pub(crate) const CHROME_CONTROLS_W: f32 = CHROME_CONTROL_BTN_W * 3.0;
 /// Minimum left padding between the menu bar's right edge and the
 /// chrome search bar's left edge.
 pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 /// Minimum right padding between the chrome search bar's right edge
-/// and the window-controls strip.
+/// and the trailing window controls.
 pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 
 /// `(x, width)` of the chrome strip's search bar for a window `window_w`
@@ -50,13 +55,21 @@ pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 /// row and the window controls — that gap is off-centre because the menu
 /// row is much wider than the three control buttons. To stay centred
 /// without overlapping either side, both sides reserve the same width:
-/// whichever of the two is wider. Whatever is left over is the bar,
+/// whichever of the two is wider. `leading_w` / `trailing_w` are the widths
+/// the window controls take at the strip's left / right edge (the menu row
+/// starts after the leading ones). Whatever is left over is the bar,
 /// clamped to `[CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH]`,
 /// so it shrinks as the window narrows and never grows past its design
-/// width on a wide monitor.
-pub(crate) fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
-    let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
-    let side = menu_end.max(CHROME_CONTROLS_W + CHROME_SEARCH_RIGHT_GAP);
+/// width on a wide monitor. `menu_w` is the in-window menu row's width, 0
+/// when the system menu bar carries the menus.
+pub(crate) fn chrome_search_bar_geometry(
+    window_w: f32,
+    leading_w: f32,
+    trailing_w: f32,
+    menu_w: f32,
+) -> (f32, f32) {
+    let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
+    let side = menu_end.max(trailing_w + CHROME_SEARCH_RIGHT_GAP);
     let width = (window_w - 2.0 * side).clamp(CHROME_SEARCH_BAR_MIN_WIDTH, CHROME_SEARCH_BAR_WIDTH);
     // Once the window is too narrow to centre a `MIN_WIDTH` bar, centring
     // would slide it under the menu items. Below that threshold it gives
@@ -66,41 +79,9 @@ pub(crate) fn chrome_search_bar_geometry(window_w: f32) -> (f32, f32) {
     (x, width)
 }
 
-#[cfg(test)]
-mod chrome_geometry_tests {
-    use super::*;
-
-    /// The bar is centred on the window, shrinks monotonically as the
-    /// window narrows, and never runs off the right edge or under the
-    /// menu items.
-    #[test]
-    fn search_bar_stays_centred_and_clamped() {
-        let menu_end = crate::menu_bar::approx_menu_bar_width() + CHROME_SEARCH_LEFT_GAP;
-        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
-            let (x, w) = chrome_search_bar_geometry(window_w);
-            assert!(
-                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
-                "bar width {w} out of range at {window_w}"
-            );
-            assert!(
-                x >= menu_end,
-                "bar slid under the menu at {window_w}: x={x}"
-            );
-            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
-            // Centred whenever the window is wide enough for it.
-            if window_w - 2.0 * menu_end >= CHROME_SEARCH_BAR_MIN_WIDTH {
-                assert!(
-                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
-                    "bar off window centre at {window_w}: x={x} w={w}"
-                );
-            }
-        }
-        // Narrowing the window never widens the bar.
-        let (_, wide) = chrome_search_bar_geometry(1920.0);
-        let (_, narrow) = chrome_search_bar_geometry(1100.0);
-        assert!(narrow <= wide, "bar grew as the window shrank");
-    }
-}
+/// Pointer travel (px) before a tab press counts as a drag, for both the
+/// grab cursor and the drag ghost.
+const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -110,18 +91,32 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
-                super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
+                super::state::WindowKind::DetachedModal(modal) => {
+                    // The body fills the whole window on the dialog surface.
+                    iced::widget::container(self.view_detached_modal(window_id, *modal))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(crate::styles::modal_card(
+                            &self.document_state.panel_ctx.tokens,
+                        ))
+                        .into()
+                }
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the
                 // only difference between main and undocked is the OS
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let panel = crate::panels::view_panel(*kind, &self.document_state.panel_ctx)
-                        .map(crate::dock::DockMessage::Panel)
-                        .map(Message::Dock);
+                    let ctx = &self.document_state.panel_ctx;
+                    let panel = if *kind == crate::panels::PanelKind::Components {
+                        crate::panels::components_panel::view(&self.library, ctx, &ctx.tokens)
+                            .map(crate::dock::DockMessage::Library)
+                    } else {
+                        crate::panels::view_panel(*kind, ctx).map(crate::dock::DockMessage::Panel)
+                    }
+                    .map(Message::Dock);
                     iced::widget::container(iced::widget::scrollable(panel))
-                        .padding(8)
+                        .padding(SP.m)
                         .into()
                 }
                 // Detached Component Preview window — render the same
@@ -185,8 +180,8 @@ impl Signex {
             is_last: true,
             accent_position: AccentPosition::Bottom,
         };
-        let inner =
-            container(row![text(title.to_string()).size(11).color(text_c)]).padding([4, 10]);
+        let inner = container(row![text(title.to_string()).size(TS.body).color(text_c)])
+            .padding([SP.s, 10.0]);
         let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
@@ -198,44 +193,33 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        // Context-aware menu: each leaf gates on whether its action
-        // makes sense in the current app state. `has_schematic` /
-        // `has_selection` drive most entries; undo / redo consult
-        // the engine's history so they grey out when empty.
-        // v0.14.2: surface the active tab's primitive-editor kind to
-        // the menu so File ▸ Save / Save As enable themselves for
-        // `.snxsym` and `.snxfpt` standalone editor tabs.
-        let active_tab_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
-        let has_symbol_editor =
-            matches!(active_tab_kind, Some(crate::app::TabKind::SymbolEditor(_)));
-        let has_footprint_editor = matches!(
-            active_tab_kind,
-            Some(crate::app::TabKind::FootprintEditor(_))
-        );
-
+        // Context-aware menu: rows keyed on a command id grey through
+        // `command::is_enabled`, from this window's `CommandContext` —
+        // the same predicate the keyboard path dispatches by (#368).
         let menu_ctx = crate::menu_bar::MenuContext {
-            has_schematic: self.has_active_schematic(),
-            has_pcb: self.has_active_pcb(),
+            commands: self.command_context(Some(window_id)),
             has_project: document.active_project.is_some(),
-            has_selection: !interaction.canvas_for_window(window_id).selected.is_empty(),
-            can_undo: document
-                .engine_for_window(window_id, ui)
-                .map(|e| e.can_undo())
-                .unwrap_or(false),
-            can_redo: document
-                .engine_for_window(window_id, ui)
-                .map(|e| e.can_redo())
-                .unwrap_or(false),
-            has_symbol_editor,
-            has_footprint_editor,
             // Secondary windows (detached modal, undocked tab) borrow
             // the main window's scale. Good enough until per-window
             // scale tracking lands — it's only wrong if the user drags
             // a secondary window onto a monitor with a different DPI.
-            scale_factor: ui.main_window_scale,
-            active_keymap: Some(ui.active_keymap.clone()),
+            scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
+            active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
+            recent_projects: ui.recent_projects.entries(),
+            open_panels: self.open_panels(),
         };
-        let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
+        let undocked = ui.main_window_id != Some(window_id);
+        let menu_row = || {
+            menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(move |msg| match msg {
+                MenuMessage::Undo | MenuMessage::Redo if undocked => {
+                    Message::Ui(UiMsg::MenuInWindow {
+                        window: window_id,
+                        msg,
+                    })
+                }
+                msg => Message::Menu(msg),
+            })
+        };
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
         let right_has_panels = document.dock.has_panels(PanelPosition::Right);
@@ -281,6 +265,12 @@ impl Signex {
             ui.bottom_height,
         );
 
+        let altium_import_name = document.altium_import_running.as_ref().map(|run| {
+            run.input
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| run.input.display().to_string())
+        });
         let status = status_bar::view(
             ui.cursor_x,
             ui.cursor_y,
@@ -293,6 +283,8 @@ impl Signex {
             &interaction.canvas_for_window(window_id).selected,
             &document.panel_ctx.tokens,
             document.inflight_git_commits.len(),
+            altium_import_name.as_deref(),
+            self.status_activity(window_id).as_deref(),
         )
         .map(|req| Message::Ui(UiMsg::StatusBar(req)));
 
@@ -314,10 +306,14 @@ impl Signex {
         // min/max/close in a single 36 px row. Undocked tab windows keep
         // their OS chrome and use the plain styled strip.
         let top_chrome: Element<'_, Message> = if is_main_window {
-            self.view_main_window_chrome(menu_row, &document.panel_ctx.tokens)
+            // The system menu bar replaces the in-window row on macOS.
+            let row = (!self.native_menu.hides_in_window_menu()).then(menu_row);
+            self.view_main_window_chrome(row, &document.panel_ctx.tokens)
         } else {
-            menu_bar::wrap_plain(menu_row, &document.panel_ctx.tokens)
+            menu_bar::wrap_plain(menu_row(), &document.panel_ctx.tokens)
         };
+        // Native macOS decorations resize the window themselves.
+        let has_resize_edges = is_main_window && !self.window_controls_layout().is_native();
         let mut main = column![top_chrome];
         let visible_paths: std::collections::HashSet<std::path::PathBuf> = if is_main_window {
             document
@@ -353,37 +349,38 @@ impl Signex {
             // switch armed the drag state and flipped the
             // cursor to Grabbing instantaneously, plus flashed
             // the drag ghost.
-            const DRAG_THRESHOLD_PX: f32 = 6.0;
             let dragging = ui.tab_dragging.and_then(|(idx, ox, oy)| {
                 let (mx, my) = interaction.last_mouse_pos;
                 let dx = mx - ox;
                 let dy = my - oy;
-                if dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX {
+                if dx * dx + dy * dy > TAB_DRAG_THRESHOLD_PX * TAB_DRAG_THRESHOLD_PX {
                     Some(idx)
                 } else {
                     None
                 }
             });
+            let dirty_paths = tab_bar::dirty_tab_paths(
+                &document.tabs,
+                document.dirty_document_paths(),
+                &self.library,
+            );
+            let read_only_paths = tab_bar::read_only_tab_paths(&document.tabs, &document.engines);
             main = main.push(
                 tab_bar::view(
                     &document.tabs,
                     document.active_tab,
                     dragging,
                     &visible_paths,
+                    &dirty_paths,
+                    &read_only_paths,
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
             );
         } else {
-            // Empty placeholder strip with the same metrics as
-            // tab_bar::view: 2 px outer padding + 22 px tall inner
-            // pill = 26 px total. Without this the chrome jumps
-            // when the first tab opens.
-            let placeholder = container(iced::widget::Space::new())
-                .width(Length::Fill)
-                .height(26)
-                .style(crate::styles::toolbar_strip(&document.panel_ctx.tokens));
-            main = main.push(placeholder);
+            // Same height as the tab strip (`tab_bar::TAB_STRIP_HEIGHT`), so
+            // the chrome does not jump when the first tab opens.
+            main = main.push(tab_bar::placeholder(&document.panel_ctx.tokens));
         }
         let main = main
             .push(center_row)
@@ -400,137 +397,91 @@ impl Signex {
         // correct.
         let main: Element<'_, Message> = main.into();
 
-        // v0.13 — `has_active_bar` is now true for ANY editor tab
-        // that mounts an active bar (schematic / footprint /
-        // symbol library) so the layers Stack mounts and the bar
-        // layer fires from `view_main_for` regardless of editor
-        // kind.
-        let active_tab_kind_any = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .map(|t| &t.kind);
-        let has_footprint_bar = matches!(
-            active_tab_kind_any,
-            Some(crate::app::TabKind::FootprintEditor(_))
-        );
-        let has_symbol_bar = matches!(
-            active_tab_kind_any,
-            Some(crate::app::TabKind::SymbolEditor(_))
-        );
-        let has_active_bar = self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
-        let dragging_tab = ui.tab_dragging.is_some();
-        let needs_overlay = has_active_bar
-            || interaction.editing_text.is_some()
-            || interaction.context_menu.is_some()
-            || interaction.project_tree_context_menu.is_some()
-            || interaction.tab_context_menu.is_some()
-            || interaction.active_bar_menu.is_some()
-            || interaction.canvas.placement_paused
-            || self
-                .document_state
-                .tabs
-                .get(self.document_state.active_tab)
-                .and_then(|tab| tab.kind.as_footprint_editor())
-                .and_then(|path| self.document_state.footprint_editors.get(path))
-                .map(|ed| {
-                    ed.state.placement_paused
-                        || ed.state.active_bar_menu.is_some()
-                        || ed.state.move_by_modal.is_some()
-                        || ed.state.align_modal.is_some()
-                })
-                .unwrap_or(false)
-            || ui.panel_list_open
-            || ui.find_replace.open
-            || ui.preferences_open
-            || ui.keyboard_shortcuts_open
-            || ui.first_run_tour_open
-            || ui.rename_dialog.is_some()
-            || ui.remove_dialog.is_some()
-            || ui.project_close_confirm.is_some()
-            || ui.app_quit_confirm.is_some()
-            || ui.project_options.is_some()
-            || ui.enable_version_control.is_some()
-            || ui.grid_properties.is_some()
-            || ui.selection_filter_custom.is_some()
-            || interaction.grid_picker.is_some()
-            || document.bom_preview.is_some()
-            || ui.annotate_dialog_open
-            || ui.annotate_reset_confirm
-            || ui.erc_dialog_open
-            || !document.dock.floating.is_empty()
-            || dragging_tab
-            || ui.net_color_custom.show
-            // Library-side modals (New Component, Place Component picker,
-            // Pick Symbol/Footprint primitive picker) can be triggered
-            // from non-canvas contexts — e.g. the Library Browser tab's
-            // Add Component button. Without these flags the overlay
-            // Stack would never be built and the modal layer in
-            // collect_overlays would silently no-op.
-            || self.library.new_component.is_some()
-            || self.library.picker.is_some()
-            || self.library.primitive_picker.is_some()
-            || self.library.close_library_confirm.is_some()
-            || self.library.document_options.is_some()
-            || self.library.recovery.is_some()
-            || self.library.create_options.is_some()
-            || self.library.library_updates.is_some()
-            || self
-                .library
-                .library_browsers
-                .values()
-                .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some())
-            || ui.command_palette.open
-            // Hover tooltip — needs the overlay stack to render even
-            // when no other modal is open; otherwise `view_hover_tooltip`
-            // produces an Element that's silently dropped on every
-            // frame the user hovers a symbol over a bare canvas.
-            // Mirrors the needs_overlay-predicate-gates-modal pattern.
-            || (interaction.hover_symbol_uuid.is_some()
-                && interaction
-                    .hover_started_at
-                    .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(700)));
-
-        if needs_overlay {
-            let mut overlays = self.collect_overlays();
-            // Tab drag ghost: only renders once the cursor has
-            // travelled past the same 6 px threshold the cursor
-            // gating uses (`tab_bar::view`). Mirrors that gate
-            // here so press-without-move keeps the ghost off.
-            if let Some((tab_idx, ox, oy)) = ui.tab_dragging
-                && let Some(tab) = document.tabs.get(tab_idx)
-            {
-                const DRAG_GHOST_THRESHOLD_PX: f32 = 6.0;
-                let (mx, my) = interaction.last_mouse_pos;
-                let dx = mx - ox;
-                let dy = my - oy;
-                if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
-                    overlays.push(self.view_tab_drag_ghost(&tab.title));
-                }
+        // No open-predicate here on purpose. Every overlay builder owns
+        // its own "am I open?" guard and returns no layers when closed
+        // (see `overlay_id::extend_overlay`), so the layer list is the
+        // single answer to "is anything painted". A hand-written copy of
+        // those guards drifted — ErrorNotice, NetlistIncompletePrompt and
+        // PrintPreview were missing, so they only painted on an editor tab
+        // (#114). A new overlay needs a builder guard and an `OverlayId`,
+        // nothing else.
+        // A confirm dialog in its own window locks this one: a layer eats the
+        // pointer and a click raises that dialog. It sits above the non-modal
+        // chrome (menus, Active Bar, text edit, panels) and below the dialogs,
+        // so nothing can be edited through it and an in-window dialog that
+        // opens meanwhile (quit confirm, a notice) can still be answered.
+        let lock = self
+            .locking_confirm_window()
+            .is_some()
+            .then(|| self.locked_window_layer());
+        let mut overlays = self.collect_overlays(lock);
+        // Tab drag ghost: only renders once the cursor has travelled past
+        // the same 6 px threshold the cursor gating uses
+        // (`tab_bar::view`). Mirrors that gate here so press-without-move
+        // keeps the ghost off.
+        if let Some((tab_idx, ox, oy)) = ui.tab_dragging
+            && let Some(tab) = document.tabs.get(tab_idx)
+        {
+            let (mx, my) = interaction.last_mouse_pos;
+            let dx = mx - ox;
+            let dy = my - oy;
+            if dx * dx + dy * dy > TAB_DRAG_THRESHOLD_PX * TAB_DRAG_THRESHOLD_PX {
+                overlays.push(self.view_tab_drag_ghost(&tab.title));
             }
+        }
+        if !overlays.is_empty() {
             let mut stack = iced::widget::Stack::new().push(main);
             // Resize edges sit above the content but below functional
             // overlays (Active Bar, menus, modals) so the 6 px border
             // strip doesn't eat clicks on those.
-            if is_main_window {
+            if has_resize_edges {
                 stack = stack.push(Self::resize_edges_overlay());
             }
             for overlay in overlays {
                 stack = stack.push(overlay);
             }
             stack.into()
-        } else if is_main_window {
+        } else if has_resize_edges {
             iced::widget::Stack::new()
                 .push(main)
                 .push(Self::resize_edges_overlay())
                 .into()
         } else {
-            main.into()
+            main
         }
+    }
+
+    /// Full-window layer that takes every pointer event while a detached
+    /// confirm dialog locks the window; pressing it raises that dialog.
+    fn locked_window_layer(&self) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let hint = iced::widget::container(
+            iced::widget::text("A dialog is open: click to show it, Esc to cancel")
+                .size(12)
+                .color(crate::styles::ti(tokens.text_secondary)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        // A light dim, so a locked window reads as locked at a glance.
+        .style(|_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                0.0, 0.0, 0.0, 0.22,
+            ))),
+            ..Default::default()
+        });
+        iced::widget::opaque(
+            iced::widget::mouse_area(hint)
+                .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
+        )
     }
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let is_main = self.ui_state.main_window_id == Some(window_id);
+        if let Some(project_id) = self.project_tab_in_window(is_main) {
+            return self.view_project_tab(project_id);
+        }
 
         // When the active tab is a Component Preview, render the
         // editor inside the main window's content pane. The same
@@ -554,10 +505,10 @@ impl Signex {
                 container(
                     column![
                         iced::widget::text("Component Editor — state not yet loaded")
-                            .size(13)
+                            .size(TS.title)
                             .color(crate::styles::ti(tokens.text_secondary)),
                     ]
-                    .spacing(4)
+                    .spacing(SP.s)
                     .align_x(iced::Alignment::Center),
                 )
                 .center(Length::Fill)
@@ -588,9 +539,8 @@ impl Signex {
                     .containing_library(path)
                     .map(|lib| lib.display)
                     .unwrap_or_default();
-                let theme_id = self.ui_state.theme_id;
                 return crate::library::editor::standalone::view_symbol(
-                    editor, panel_ctx, display, theme_id, path,
+                    editor, panel_ctx, display, path,
                 )
                 .map(Message::Library);
             }
@@ -599,12 +549,8 @@ impl Signex {
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 let theme_id = self.ui_state.theme_id;
-                let custom_presets = &self.interaction_state.custom_filter_presets;
                 return crate::library::editor::standalone::view_footprint(
-                    editor,
-                    tokens,
-                    theme_id,
-                    custom_presets,
+                    editor, tokens, theme_id,
                 )
                 .map(Message::Library);
             }
@@ -623,7 +569,7 @@ impl Signex {
                     // renderable rather than crashing.
                     return container(
                         iced::widget::text("Library Browser — state not yet loaded")
-                            .size(13)
+                            .size(TS.title)
                             .color(crate::styles::ti(tokens.text_secondary)),
                     )
                     .center(Length::Fill)
@@ -650,12 +596,23 @@ impl Signex {
             // per-window canvas receives the mutation. Keyboard
             // shortcuts that synthesize `Message::CanvasEvent` keep
             // targeting the main canvas unchanged.
-            let base: Element<'_, Message> =
-                canvas(self.interaction_state.canvas_for_window(window_id))
+            // #631 — the canvas Program is built here, per frame, from a
+            // borrow of the window's `CanvasSlot` plus settings read
+            // straight off `UiState`. It no longer owns copies of them.
+            let slot = self.interaction_state.canvas_for_window(window_id);
+            let prefs = crate::canvas::CanvasViewPrefs {
+                placement: self.placement_ghost_for_window(window_id),
+                ..self.canvas_view_prefs()
+            };
+            let base: Element<'_, Message> = if crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED {
+                crate::canvas::gpu_mount::view(slot, prefs)
+            } else {
+                canvas(crate::canvas::SchematicCanvas::new(slot, prefs))
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .into();
-            if is_main {
+                    .into()
+            };
+            let base = if is_main {
                 base
             } else {
                 base.map(move |msg| match msg {
@@ -664,46 +621,81 @@ impl Signex {
                     }
                     other => other,
                 })
-            }
-        } else if self.has_active_pcb() {
-            canvas(&self.interaction_state.pcb_canvas)
+            };
+            // A sheet from a newer Signex is read-only: say so on the canvas
+            // (#1402), in the main and in undocked windows alike.
+            let read_only = self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| engine.document().is_read_only());
+            // Always a two-layer stack, so the widget tree keeps its shape
+            // when a tab switch changes the read-only state.
+            let badge: Element<'_, Message> = if read_only {
+                overlays::read_only_badge::read_only_badge(&self.document_state.panel_ctx.tokens)
+            } else {
+                iced::widget::Space::new().into()
+            };
+            stack![base, badge].into()
+        } else if self.pcb_for_window(window_id).is_some() {
+            // Each window reads its own PCB canvas, and an undocked
+            // window's events carry its id, as for the schematic (#494).
+            let pcb_canvas = self.interaction_state.pcb_canvas_for_window(window_id);
+            let base: Element<'_, Message> = canvas(pcb_canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
-        } else {
-            // Distinguish "nothing loaded at all" from "project loaded,
-            // but no document picked yet" — the second case is what
-            // the user sees right after opening a .standard_pro before
-            // clicking any node in the project tree.
-            let (title, hint) = if self.document_state.active_project.is_some() {
-                (
-                    "No document selected",
-                    "Choose a schematic or PCB from the project tree".to_string(),
-                )
+                .into();
+            let base = if is_main {
+                base
             } else {
-                let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
-                (
-                    "No document open",
-                    format!("Open a project with File > Open or {open_shortcut}"),
-                )
+                base.map(move |msg| match msg {
+                    Message::CanvasEvent(event) => {
+                        Message::CanvasEventInWindow { window_id, event }
+                    }
+                    other => other,
+                })
             };
-            container(
-                column![
-                    iced::widget::text(title).size(14).color(crate::styles::ti(
-                        self.document_state.panel_ctx.tokens.text_secondary
-                    )),
-                    iced::widget::text(hint).size(11).color(crate::styles::ti(
-                        self.document_state.panel_ctx.tokens.text_secondary
-                    )),
-                ]
-                .spacing(8)
-                .align_x(iced::Alignment::Center),
-            )
-            .center(Length::Fill)
-            .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
-            ))
-            .into()
+            if pcb_canvas.gpu_render {
+                // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
+                // the opaque background + grid and owns pan/zoom/cursor/fit;
+                // the shader draws the board content on top, compositing over
+                // the grid. The shader's `update` is a no-op that never
+                // captures, so pointer events fall through to the canvas below.
+                let scene = pcb_canvas.gpu_scene().unwrap_or_default();
+                // Read the generation after `gpu_scene()` so it matches the
+                // geometry just returned; it lets the shader skip re-uploading
+                // unchanged geometry on pan/zoom.
+                let generation = pcb_canvas.scene_generation();
+                let (offset_x, offset_y, scale) = pcb_canvas.live_camera();
+                // `PcbSurface` selects this surface's pipeline slot — iced keys
+                // a stored pipeline by the primitive's TypeId, process-wide, so
+                // every surface needs its own marker (see `scene_shader`).
+                let content_shader = shader(crate::scene_shader::SceneShaderProgram::<
+                    crate::scene_shader::PcbSurface,
+                >::new(
+                    scene, Some(generation), [offset_x, offset_y], scale
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill);
+                stack![base, content_shader].into()
+            } else {
+                base
+            }
+        } else {
+            // "Nothing loaded" gets the actionable start screen; "project
+            // loaded, no document picked" keeps its own quieter hint.
+            use crate::start_screen::{self, Surface};
+            let tokens = &self.document_state.panel_ctx.tokens;
+            match Surface::select(self.document_state.active_project.is_some()) {
+                Surface::ProjectHint => start_screen::hint_view(tokens),
+                Surface::Start => {
+                    let open_shortcut = self.keymap_shortcut_label("open_document");
+                    start_screen::view(
+                        tokens,
+                        &open_shortcut,
+                        self.ui_state.recent_projects.entries(),
+                    )
+                }
+            }
         }
     }
 
@@ -711,74 +703,109 @@ impl Signex {
     ///
     /// Pure assembler: each overlay's guard + widget tree lives in a
     /// dedicated `*_overlay` builder (see the `overlays` module and its
-    /// `bars` / `modals` submodules). Call ORDER here is
-    /// load-bearing — overlays stack visually in push order, so the
-    /// sequence below reproduces the original inline push order exactly.
-    /// `has_blocking_modal` short-circuits the tool/menu overlays just as
-    /// the inline code did once a blocking modal owns the stack.
-    fn collect_overlays(&self) -> Vec<Element<'_, Message>> {
+    /// `bars` / `modals` submodules), and the order they stack in lives
+    /// in [`overlay_id::PAINT_ORDER`] — walked FORWARD here, so later
+    /// entries paint on top of earlier ones.
+    ///
+    /// That same array is walked BACKWARD by the Esc ladder
+    /// (`app/bootstrap/subscription.rs`), which is the whole point of
+    /// #535: "Esc closes the topmost overlay" stops being a rule two
+    /// files must obey by hand — in opposite directions — and becomes
+    /// one list read from both ends.
+    ///
+    /// [`overlay_id::visible`] applies the blocking-modal cutoff, which
+    /// is why this loop has no early return of its own.
+    fn collect_overlays<'a>(
+        &'a self,
+        mut lock: Option<Element<'a, Message>>,
+    ) -> Vec<Element<'a, Message>> {
         let mut layers = Vec::new();
-
-        // Pre-blocking overlays: export-error, print/BOM preview, and
-        // the custom net-colour picker.
-        layers.extend(self.export_error_overlay());
-        layers.extend(self.netlist_incomplete_prompt_overlay());
-        layers.extend(self.print_preview_overlay());
-        layers.extend(self.bom_preview_overlay());
-        layers.extend(self.net_color_custom_overlay());
-
-        // Blocking modals must own the overlay stack — stop here so no
-        // tool/menu overlay paints above them.
-        if self.has_blocking_modal() {
-            return layers;
+        for id in overlay_id::visible(self.has_blocking_modal()) {
+            // The lock layer goes in where the dialogs start.
+            if *id == overlay_id::OverlayId::Preferences
+                && let Some(layer) = lock.take()
+            {
+                layers.push(layer);
+            }
+            let first_new = layers.len();
+            self.extend_overlay(&mut layers, *id);
+            // #562 — stop the wheel here rather than let it reach the
+            // canvas. Applied per overlay id, not per builder: most
+            // builders wrap their card in neither `wrap_modal` nor
+            // `dismiss_layer` (Preferences renders its body directly), so
+            // a guard placed in those two helpers alone missed them.
+            // Every overlay passes through this loop exactly once.
+            //
+            // `mouse_area` captures the wheel only where the cursor is
+            // over the wrapped element, and only wheel events — clicks
+            // still fall through exactly as before, which matters for the
+            // overlays that deliberately leave the canvas its right-press
+            // pan (see `dismiss_layer`).
+            if overlay_id::swallows_scroll(*id) {
+                for layer in &mut layers[first_new..] {
+                    let inner = std::mem::replace(layer, iced::widget::Space::new().into());
+                    *layer = iced::widget::mouse_area(inner)
+                        .on_scroll(|_| Message::noop())
+                        .into();
+                }
+            }
         }
-
-        // Editor-surface chrome: pause card, active bars (schematic /
-        // footprint / symbol), and the in-canvas text-edit input.
-        layers.extend(self.placement_paused_overlay());
-        layers.extend(self.schematic_active_bar_overlay());
-        layers.extend(self.footprint_active_bar_overlay());
-        layers.extend(self.footprint_context_menu_overlay());
-        layers.extend(self.footprint_move_by_overlay());
-        layers.extend(self.footprint_align_overlay());
-        layers.extend(self.symbol_editor_active_bar_overlay());
-        layers.extend(self.symbol_context_menu_overlay());
-        layers.extend(self.text_edit_overlay());
-
-        // Right-click menus, grid picker, panel list, dock drag zones,
-        // and floating panels.
-        layers.extend(self.active_bar_menu_overlay());
-        layers.extend(self.context_menu_overlay());
-        layers.extend(self.tab_context_menu_overlay());
-        layers.extend(self.project_tree_context_menu_overlay());
-        layers.extend(self.grid_picker_overlay());
-        layers.extend(self.panel_list_overlay());
-        layers.extend(self.dock_drag_zone_overlay());
-        layers.extend(self.floating_panels_overlay());
-
-        // Dialogs + library modals.
-        layers.extend(self.preferences_overlay());
-        layers.extend(self.find_replace_overlay());
-        layers.extend(self.keyboard_shortcuts_overlay());
-        layers.extend(self.first_run_tour_overlay());
-        layers.extend(self.simple_dialogs_overlay());
-        layers.extend(self.detachable_dialogs_overlay());
-        layers.extend(self.library_picker_overlay());
-        layers.extend(self.new_component_overlay());
-        layers.extend(self.edit_row_modal_overlay());
-        layers.extend(self.delete_confirm_overlay());
-        layers.extend(self.primitive_picker_overlay());
-        layers.extend(self.document_options_overlay());
-        layers.extend(self.create_options_overlay());
-        layers.extend(self.close_library_confirm_overlay());
-        layers.extend(self.library_recovery_overlay());
-
-        // Command palette dropdown, hover tooltip, and library-updates
-        // modal — painted last so they sit above every other layer.
-        layers.extend(self.command_palette_overlay());
-        layers.extend(self.view_hover_tooltip());
-        layers.extend(self.library_updates_overlay());
-
+        // A blocking modal cut the walk short before the dialogs: the lock
+        // goes under what is left.
+        if let Some(layer) = lock {
+            layers.insert(0, layer);
+        }
         layers
+    }
+}
+
+#[cfg(test)]
+mod overlay_paint_tests;
+
+#[cfg(test)]
+mod chrome_geometry_tests {
+    use super::*;
+
+    /// The bar is centred on the window, shrinks monotonically as the
+    /// window narrows, and never runs off the right edge or under the
+    /// menu items.
+    #[test]
+    fn search_bar_stays_centred_and_clamped() {
+        // Windows-style: nothing leading, 138 px of controls trailing.
+        let in_window = crate::menu_bar::approx_menu_bar_width();
+        search_bar_invariants(0.0, 138.0, in_window);
+        // Native macOS lights: room leading, nothing trailing.
+        search_bar_invariants(78.0, 0.0, in_window);
+        // Round buttons on both sides.
+        search_bar_invariants(56.0, 40.0, in_window);
+        // The system menu bar carries the menus: nothing to clear.
+        search_bar_invariants(78.0, 0.0, 0.0);
+    }
+
+    fn search_bar_invariants(leading_w: f32, trailing_w: f32, menu_w: f32) {
+        let menu_end = leading_w + menu_w + CHROME_SEARCH_LEFT_GAP;
+        for window_w in [1000.0_f32, 1280.0, 1440.0, 1920.0, 3840.0] {
+            let (x, w) = chrome_search_bar_geometry(window_w, leading_w, trailing_w, menu_w);
+            assert!(
+                (CHROME_SEARCH_BAR_MIN_WIDTH..=CHROME_SEARCH_BAR_WIDTH).contains(&w),
+                "bar width {w} out of range at {window_w}"
+            );
+            assert!(
+                x >= menu_end,
+                "bar slid under the menu at {window_w}: x={x}"
+            );
+            assert!(x + w <= window_w, "bar overflows the window at {window_w}");
+            // Centred whenever the window is wide enough for it.
+            if window_w - 2.0 * menu_end >= CHROME_SEARCH_BAR_MIN_WIDTH {
+                assert!(
+                    (x + w / 2.0 - window_w / 2.0).abs() < 0.01,
+                    "bar off window centre at {window_w}: x={x} w={w}"
+                );
+            }
+        }
+        // Narrowing the window never widens the bar.
+        let (_, wide) = chrome_search_bar_geometry(1920.0, leading_w, trailing_w, menu_w);
+        let (_, narrow) = chrome_search_bar_geometry(1100.0, leading_w, trailing_w, menu_w);
+        assert!(narrow <= wide, "bar grew as the window shrank");
     }
 }

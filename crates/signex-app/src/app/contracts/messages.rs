@@ -27,10 +27,10 @@ pub enum WindowMsg {
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
     /// OS-level close request (native close button, Alt+F4, taskbar
-    /// close) for a window. In `iced::daemon` mode windows do NOT
-    /// auto-close on this event, so the app decides what to do: the
-    /// main window routes through the unsaved-changes guard
-    /// (`CloseMainWindow`); every other window closes directly.
+    /// close) for a window. Windows do not auto-close on it, because every
+    /// `window::open` sets `exit_on_close_request: false`; the app decides.
+    /// The main window goes through the unsaved-changes guard, a detached
+    /// modal through its own close path, any other window closes directly.
     WindowCloseRequested(iced::window::Id),
     /// Pop a modal out of the main window into its own OS window. Altium
     /// triggers this when the user drags the modal's title bar past the
@@ -68,11 +68,6 @@ pub enum WindowMsg {
         kind: crate::panels::PanelKind,
         id: iced::window::Id,
     },
-    /// User pressed on the borderless modal's header — start an OS-level
-    /// window drag for the window hosting this modal. Lets the user move
-    /// the detached modal even though `decorations: false` removed the
-    /// native title bar.
-    StartDetachedWindowDrag(crate::app::state::ModalId),
     /// User pressed on empty chrome (menu-bar row outside buttons) — start
     /// an OS-level window drag for the main borderless window. The chrome
     /// is the replacement for the OS title bar.
@@ -82,19 +77,29 @@ pub enum WindowMsg {
     /// direction. Replaces the WS_THICKFRAME edges we lose when
     /// decorations are disabled.
     StartMainWindowResize(iced::window::Direction),
-    /// User pressed one of the 6 px edge strips around a borderless
-    /// detached modal window — ask the OS to start a resize drag in
-    /// that direction. Same trick as the main window; without this
-    /// the modals couldn't be resized because `decorations: false`
-    /// strips the OS chrome.
-    StartDetachedModalResize {
-        modal: crate::app::state::ModalId,
-        direction: iced::window::Direction,
-    },
     /// Custom min/max/close buttons in the borderless main-window chrome.
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The locked main window (or an undocked tab) was clicked while a
+    /// confirm dialog in its own window is open: raise that dialog.
+    LockedWindowClicked,
+    /// A window gained keyboard focus.
+    WindowFocused(iced::window::Id),
+    /// A window lost keyboard focus.
+    WindowUnfocused(iced::window::Id),
+    /// A row of the macOS system menu bar was chosen; carries the row's
+    /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
+    NativeMenuItemActivated(String),
+    /// The Linux startup probe finished: the buttons the desktop lists, or
+    /// `None` when it could not be read, or the probe's failure reason.
+    ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),
+    /// The main window's mode (windowed / fullscreen) was read, after a
+    /// resize or a deferred re-query; fullscreen hides the macOS traffic-light inset.
+    MainWindowModeRead(iced::window::Mode),
+    /// The monitor size was read after a resize; together with the mode it
+    /// tells a real fullscreen window from winit's stale flag mid-exit.
+    MainWindowMonitorSizeRead(Option<iced::Size>),
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under
@@ -103,8 +108,8 @@ pub enum WindowMsg {
 #[derive(Debug, Clone)]
 pub enum CommandPaletteMsg {
     /// Open the command palette dropdown and focus the chrome-strip
-    /// search bar. Bound to Ctrl+Shift+P. Idempotent — already-open
-    /// keeps state, just refocuses the input.
+    /// search bar. Bound to Ctrl+Shift+P. Already open: the highlighted
+    /// row resets to 0 and the input is refocused with its text selected.
     Open,
     /// Close the dropdown without executing. Bound to Esc and to
     /// click-outside. Leaves the chrome-strip input visible (it's the
@@ -115,7 +120,7 @@ pub enum CommandPaletteMsg {
     /// selected row to 0 because the result list reorders on every
     /// keystroke.
     QueryChanged(String),
-    /// Move the highlighted row by `delta` (clamped to result count).
+    /// Move the highlighted row by `delta` (wraps around at both ends).
     /// Wired to ArrowUp / ArrowDown when the palette is open.
     MoveSelection(i32),
     /// Click on a specific row in the dropdown — sets selected_index
@@ -124,6 +129,14 @@ pub enum CommandPaletteMsg {
     /// Execute the currently selected entry. Wired to Enter and to
     /// `text_input::on_submit`.
     ExecuteSelected,
+    /// The project search index finished building off-thread. `generation`
+    /// is the request it answers; an older one is dropped.
+    IndexBuilt {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
+        >,
+    },
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
@@ -134,6 +147,23 @@ pub enum TextEditMsg {
     Changed(String),
     /// Commit the in-place edit back to the engine (Enter / blur).
     Submit,
+    /// A command (F2, V, U, F) asked to edit a field in place; the target
+    /// is the object under the cursor, else the single selection.
+    Requested(TextEditTarget),
+}
+
+/// Which text a field-edit command asks for (#1670).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextEditTarget {
+    /// A part's value (`edit_value`).
+    Value,
+    /// A part's designator (`edit_reference_designator`).
+    Designator,
+    /// A part's footprint (`edit_footprint_field`).
+    FootprintField,
+    /// Whatever text the object has: a label, a text note, or a part's
+    /// designator (`edit_text_in_place`).
+    Text,
 }
 
 /// Overlay / modal-chrome message family (ADR-0001 D3). Namespaced
@@ -142,8 +172,11 @@ pub enum TextEditMsg {
 pub enum OverlayMsg {
     /// Toggle the "＋ panel" dropdown in the right dock header.
     TogglePanelList,
-    /// Open (dock) a panel of the given kind in the right column.
+    /// Open (dock) a panel of the given kind into the dock.
     OpenPanel(crate::panels::PanelKind),
+    /// A panel shortcut: open the panel, close it when it is open and in
+    /// front, or bring it forward when it is open but hidden.
+    PanelToggled(crate::panels::PanelKind),
     /// Open the Find modal (replace row hidden).
     OpenFind,
     /// Open the Find/Replace modal with the replace row visible.
@@ -151,10 +184,35 @@ pub enum OverlayMsg {
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
+    /// Close the Help ▸ About Signex dialog — close chrome ✕ and Esc.
+    CloseAbout,
+    /// About dialog ▸ Copy version info — puts the plain-text version
+    /// block on the clipboard.
+    CopyAboutInfo,
+    /// Open an external page (About dialog's licence link) in the default
+    /// browser.
+    OpenLink(crate::about::ExternalLink),
+    /// The default browser could not be launched for an external link;
+    /// carries the reason for the shared error card.
+    LinkOpenFailed(String),
+    /// Open the Tools > Passive Network Calculator modal — fired by the
+    /// Tools menu entry. Re-invoking while it is already open is a no-op.
+    OpenPassiveCalculator,
+    /// Close the Tools > Passive Network Calculator modal - fired by
+    /// the close chrome X.
+    ClosePassiveCalculator,
     /// Dismiss the first-run tour card and persist the flag so it
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.
     DismissFirstRunTour,
+    /// Dismiss the shared error card (`DocumentState::error_notice`).
+    /// Fired by its OK button, its click-outside backdrop, and Esc.
+    ///
+    /// Lived on `ExportMsg` as `DismissError` until #532. The card was
+    /// never export-only — the project-close path raised it too — and a
+    /// message named for one caller is how it ended up showing "Export
+    /// Failed" over a failed save.
+    DismissErrorNotice,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {
@@ -183,8 +241,32 @@ pub enum OverlayMsg {
 /// their own top-level `Message::CanvasEvent(…)` variants.
 #[derive(Debug, Clone)]
 pub enum UiMsg {
+    /// Nothing to do. Produced by widgets / tasks that must emit a
+    /// `Message` but carry no event.
+    Noop,
+    /// A background `prefs.json` write finished (#1351). A failed write has
+    /// already logged its error; this republishes the Messages panel so the
+    /// record shows now rather than at the next unrelated message.
+    PrefWriteFinished,
+    /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
+    /// the command against that window's document, as its shortcut does
+    /// (#1550); every other menu row still arrives as `Message::Menu`.
+    MenuInWindow {
+        window: iced::window::Id,
+        msg: MenuMessage,
+    },
+    /// Async result of a per-file Git history load issued by the
+    /// right-dock History panel. `generation` is the value of
+    /// `DocumentState.history.generation` when the load was kicked off;
+    /// the handler discards stale results whose generation no longer
+    /// matches (the user has switched tabs since). `path` is the file
+    /// the load targeted, for diagnostic logging only.
+    HistoryLoaded {
+        generation: u32,
+        path: std::path::PathBuf,
+        result: Result<crate::panels::history::HistoryLoad, String>,
+    },
     /// Switch the active colour theme and persist the preference.
-    #[allow(dead_code)]
     ThemeChanged(ThemeId),
     /// Cycle the display unit (mm / mil / inch).
     UnitCycled,
@@ -192,6 +274,8 @@ pub enum UiMsg {
     GridToggle,
     /// Clear the active canvas background cache (grid density change).
     GridCycle,
+    /// The reverse of [`UiMsg::GridCycle`]: step to the previous grid preset.
+    GridCycleBackward,
     /// v0.18.10 — open the Altium-style grid picker popup at the
     /// current `last_mouse_pos`. Footprint editor only (today);
     /// other contexts fall through to no-op.
@@ -222,7 +306,40 @@ pub enum UiMsg {
     /// `UiState::keymap_pending_sequence` and resolved here in `update`
     /// (where `&mut self` is available), which keeps the chord buffer
     /// out of a process-global static.
-    KeymapStroke(crate::keymap::KeyStroke),
+    KeymapStroke {
+        /// Which window produced the stroke (#559). Shortcut contexts
+        /// resolve against it rather than against the main window's
+        /// active tab, and a multi-stroke chord is dropped when the
+        /// window changes mid-sequence.
+        ///
+        /// `None` for a synthesised stroke that names no window, which
+        /// resolves as the main window does.
+        window: Option<iced::window::Id>,
+        stroke: crate::keymap::KeyStroke,
+    },
+    /// The chord timeout elapsed for a complete shortcut that was waiting
+    /// on a longer chord (#1378). `generation` names the wait it belongs to.
+    KeymapChordTimedOut { generation: u64 },
+    /// A pointer press or a window focus change abandoned a pending chord
+    /// (#1378).
+    KeymapChordCancelled,
+    /// The background scan of installed font families finished (#510). Text
+    /// whose document names a family redraws with it, and open documents
+    /// are checked for families this machine lacks.
+    InstalledFontsScanned,
+    /// The background resolution of the canvas's net-class styles finished
+    /// (#1042). Applied only if no newer refresh has started since.
+    NetClassStylesResolved(
+        std::sync::Arc<
+            Result<
+                crate::app::state::net_class_styles::ResolvedStyles,
+                crate::app::state::net_class_styles::ResolveFailed,
+            >,
+        >,
+    ),
+    /// Cross-sheet net navigation family (#1270-#1272): partner jumps, sheet
+    /// history, net highlight and the hover insight.
+    NetNav(super::net_nav::NetNavMsg),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -245,7 +362,6 @@ pub enum MoveSelectionMsg {
 /// BOM-preview modal message family (ADR-0001 D3). Namespaced under
 /// `Message::BomPreview` and routed to `dispatch_bom_preview_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum BomPreviewMsg {
     /// User changed BOM grouping (Grouped / Ungrouped / Flat).
     SetGrouping(signex_output::BomGrouping),
@@ -291,6 +407,8 @@ pub enum BomPreviewMsg {
     /// User clicked a Properties-sidebar tab (General / Columns) in
     /// the BOM preview modal.
     SetSidebarTab(crate::app::state::BomSidebarTab),
+    /// User toggled one validation rule in the Rules tab.
+    SetRule(signex_output::BomRule, bool),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     Export,
@@ -301,10 +419,31 @@ pub enum BomPreviewMsg {
 /// Print-preview modal message family (ADR-0001 D3). Namespaced under
 /// `Message::PrintPreview` and routed to `dispatch_print_preview_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrintPreviewMsg {
     /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
     Requested,
+    /// A background rasterisation finished: the layout of every page plus
+    /// the pixels of the first one(s) shown. `generation` identifies the
+    /// request; a result older than the newest request is discarded.
+    Rasterized {
+        generation: u64,
+        outline: std::sync::Arc<Vec<signex_output::PreviewPageInfo>>,
+        /// `(position in outline, page)`.
+        pages: std::sync::Arc<Vec<(usize, signex_output::PreviewPage)>>,
+    },
+    /// Pages the user navigated to finished rasterising, for the layout of
+    /// `generation`. Dropped when a newer request has begun.
+    PagesRasterized {
+        generation: u64,
+        /// `(position in outline, page)`.
+        pages: std::sync::Arc<Vec<(usize, signex_output::PreviewPage)>>,
+    },
+    /// The background rasterisation for `generation` died (the render
+    /// panicked). Reported as a failure, not as an empty page range (#1092).
+    RasterFailed {
+        generation: u64,
+        reason: String,
+    },
     /// User selected a page in the print preview thumbnail list.
     SelectPage(usize),
     /// User changed preview colour mode.
@@ -317,8 +456,20 @@ pub enum PrintPreviewMsg {
     SetPageRangeSpecific,
     /// User edited the specific page input in preview.
     SetSpecificPageInput(String),
-    /// User toggled "Fit to Page" in the unified PDF preview modal.
-    SetFitToPage(bool),
+    /// User picked a page size (a named size, or `Custom`).
+    SetPageSize(signex_output::PageSize),
+    /// User picked portrait or landscape.
+    SetOrientation(signex_output::Orientation),
+    /// User edited the Custom page width (mm).
+    SetCustomWidth(String),
+    /// User edited the Custom page height (mm).
+    SetCustomHeight(String),
+    /// User edited one margin (mm).
+    SetMargin(signex_output::MarginEdge, String),
+    /// User picked Fit to Page / 1:1 / Percent.
+    SetScaleMode(signex_output::PdfScaleMode),
+    /// User edited the scale percentage.
+    SetScalePercent(String),
     /// User toggled "Include Title Block" in the unified PDF preview modal.
     SetIncludeTitleBlock(bool),
     /// Mouse wheel scrolled over the preview image. Carries the
@@ -341,7 +492,7 @@ pub enum PrintPreviewMsg {
     /// User released the pan drag — clears `panning`.
     PanFinished,
     /// User toggled a project file in the Settings → Files list.
-    ToggleFile(std::path::PathBuf),
+    ToggleFile(crate::app::state::PageKey),
     /// Select all project files in the Settings → Files list.
     SelectAllFiles,
     /// Deselect all project files (effectively "no override —
@@ -356,6 +507,7 @@ pub enum PrintPreviewMsg {
     SetPhysicalSheetNumber(bool),
     SetPhysicalDocumentNumber(bool),
     SetIncludeNoErcMarkers(bool),
+    SetIncludeNoConnectMarkers(bool),
     SetIncludeParameterSets(bool),
     SetIncludeProbes(bool),
     SetIncludeBlankets(bool),
@@ -376,7 +528,6 @@ pub enum PrintPreviewMsg {
 /// under `Message::GridProperties` and routed to
 /// `dispatch_grid_properties_message`.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum GridPropertiesMsg {
     /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.
@@ -385,19 +536,12 @@ pub enum GridPropertiesMsg {
     /// Esc). Discards in-flight edits.
     Close,
     /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step X field. Strings are validated on Apply, not per
-    /// keystroke, so partial input doesn't fight the user.
-    SetStepX(String),
-    /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step Y field.
-    SetStepY(String),
-    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
-    /// When linked, editing Step X mirrors into Step Y.
-    ToggleLink,
+    /// Step field (one value for both axes). Strings are validated on
+    /// Apply, not per keystroke, so partial input doesn't fight the user.
+    SetStep(String),
     /// v0.18.11 — Grid Properties modal: Apply button. Validates +
     /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// (and Y if/when separate axes ship). v0.18.19: also commits
-    /// fine/coarse display + multiplier.
+    /// and commits fine/coarse display + multiplier.
     Apply,
     /// v0.18.19 — Grid Properties modal: Fine grid display style.
     SetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
@@ -405,4 +549,46 @@ pub enum GridPropertiesMsg {
     SetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
+}
+
+/// Keyboard-input message family (ADR-0001 D3). Routed to
+/// `dispatch_input_message`.
+#[derive(Debug, Clone)]
+pub enum InputMsg {
+    /// Esc-key tool cancel routed through the dispatcher. In a footprint
+    /// editor it fires `FootprintToolEscape`; otherwise it falls back to
+    /// the schematic `Tool::Select` reset.
+    EscapePressed {
+        /// Which OS window the key was pressed in (#547).
+        ///
+        /// `keyboard::listen()` drops this, so every Esc used to look
+        /// identical no matter which window produced it, and an Esc
+        /// typed into a detached modal's own window reset the MAIN
+        /// window's canvas tool. The subscription now goes through
+        /// `event::listen_with`, which hands the window id to its filter.
+        ///
+        /// `None` means the Esc was synthesised rather than typed — the
+        /// `cancel_current_tool` command id arriving from the palette or
+        /// a keymap binding (`app/command/bridge.rs`). It resolves
+        /// exactly as a main-window Esc does.
+        window: Option<iced::window::Id>,
+    },
+    /// A keyboard event no widget wanted, with the window it landed in
+    /// (#557 phase 1).
+    ///
+    /// The keyboard subscription is a pure transport: it filters
+    /// `Status::Ignored` keyboard events and forwards them unexamined.
+    /// Which app-level consumer owns the event is decided in
+    /// `app/dispatch/input.rs` against live state.
+    KeyInput {
+        window: iced::window::Id,
+        event: iced::keyboard::Event,
+    },
+    /// Footprint editor mode switch (`1` / `2` / `3`). The dispatcher
+    /// sets the mode only when the active tab is a footprint editor, so
+    /// the keys don't steal text input on other tabs.
+    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// The "recompute courtyard outline" command (palette, #1473). Acts on
+    /// the active footprint editor tab; a no-op on any other tab.
+    FootprintCourtyardOutlineRequested,
 }

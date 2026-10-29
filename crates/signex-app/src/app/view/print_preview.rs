@@ -6,16 +6,19 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Export-error modal — plain "something went wrong, here's the
     /// message" dialog with an OK button. Sits on top of the print-preview
     /// overlay when both would otherwise render; dismiss_layer handles
     /// click-outside-to-close.
-    pub(super) fn view_export_error(&self) -> Element<'_, Message> {
+    pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, row, text};
-        let msg = match &self.document_state.export_error {
-            Some(m) => m.clone(),
-            None => return iced::widget::Space::new().into(),
+        let Some(notice) = self.document_state.error_notice.as_ref() else {
+            return iced::widget::Space::new().into();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -24,9 +27,9 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let err_red = iced::Color::from_rgb(0.85, 0.25, 0.25);
 
-        let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
+        let ok_btn = button(text("OK").size(TS.label).color(iced::Color::WHITE))
             .padding([6, 20])
-            .on_press(Message::Export(ExportMsg::DismissError))
+            .on_press(Message::Overlay(OverlayMsg::DismissErrorNotice))
             .style(
                 move |_: &iced::Theme, _status| iced::widget::button::Style {
                     background: Some(err_red.into()),
@@ -43,31 +46,49 @@ impl Signex {
             row![
                 text("\u{26A0}").size(24).color(err_red),
                 iced::widget::Space::new().width(10),
-                text("Export Failed").size(14).color(text_c),
+                text(notice.title.clone()).size(TS.heading).color(text_c),
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
-            text(msg).size(12).color(text_c),
+            container(iced::widget::scrollable(
+                text(notice.detail.clone()).size(TS.label).color(text_c)
+            ))
+            .max_height(200),
             iced::widget::Space::new().height(12),
             row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
         ]
         .padding(20);
 
         let card = container(body)
-            .max_width(480)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(panel_bg.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(8.0),
+            .max_width(
+                if self.modal_detached(crate::app::state::ModalId::ErrorNotice) {
+                    f32::INFINITY
+                } else {
+                    480.0
                 },
-                shadow: iced::Shadow {
-                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
-                },
-                ..container::Style::default()
+            )
+            .style(move |theme: &iced::Theme| {
+                if crate::styles::is_dialog_window(theme) {
+                    // Flat in its own window: no second frame.
+                    return container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    };
+                }
+                container::Style {
+                    background: Some(panel_bg.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(8.0),
+                    },
+                    shadow: iced::Shadow {
+                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                        offset: iced::Vector::new(0.0, 4.0),
+                        blur_radius: 16.0,
+                    },
+                    ..container::Style::default()
+                }
             });
 
         container(card)
@@ -75,12 +96,23 @@ impl Signex {
             .height(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
+            .style(move |theme: &iced::Theme| {
+                // In its own window the dialog fills the window surface.
+                if crate::styles::is_dialog_window(theme) {
+                    container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    }
+                } else {
+                    container::Style::default()
+                }
+            })
             .into()
     }
 
     /// #431 — netlist-incomplete "Export anyway (incomplete)?" prompt.
     ///
-    /// Same card idiom as [`Self::view_export_error`] (theme-token panel /
+    /// Same card idiom as [`Self::view_error_notice`] (theme-token panel /
     /// text / border; the sibling modal's severity glyph), but it leads with
     /// the refusal explanation — unchanged severity, this is a fab deliverable
     /// — and offers TWO actions: write the partial `.net` anyway (with the
@@ -104,10 +136,10 @@ impl Signex {
         // Loud, deliberate action — mirrors the export-error OK button's red.
         let export_anyway = button(
             text("Export anyway (incomplete)")
-                .size(12)
+                .size(TS.label)
                 .color(iced::Color::WHITE),
         )
-        .padding([6, 16])
+        .padding([6.0, SP.xl])
         .on_press(Message::Export(ExportMsg::NetlistExportAnyway))
         .style(
             move |_: &iced::Theme, _status| iced::widget::button::Style {
@@ -122,7 +154,7 @@ impl Signex {
         );
 
         // Neutral default — themed panel background + border, no accent.
-        let cancel = button(text("Cancel").size(12).color(text_c))
+        let cancel = button(text("Cancel").size(TS.label).color(text_c))
             .padding([6, 20])
             .on_press(Message::Export(ExportMsg::NetlistCancelIncomplete))
             .style(
@@ -138,15 +170,15 @@ impl Signex {
                 },
             );
 
-        // The omitted pages, one line each — the same detail the exported
-        // file's INCOMPLETE header will carry.
+        // The omitted pages, one line each — the same detail the
+        // warning logged on export will carry.
         let detail = prompt.messages.join("\n");
 
         let body = column![
             row![
                 text("\u{26A0}").size(24).color(warn),
                 iced::widget::Space::new().width(10),
-                text("Netlist is incomplete").size(14).color(text_c),
+                text("Netlist is incomplete").size(TS.heading).color(text_c),
             ]
             .align_y(iced::Alignment::Center),
             iced::widget::Space::new().height(8),
@@ -154,13 +186,16 @@ impl Signex {
                 "The project netlist does not cover the whole project. Exporting it \
                  would produce a file missing components and carrying the wrong net \
                  names wherever nets merge through a page that is not in it — and a \
-                 PCB import cannot tell. You can export it anyway: the file will be \
-                 marked INCOMPLETE in its header and will list the omitted pages."
+                 PCB import cannot tell. You can export it anyway: the file stays \
+                 a valid netlist, and the omitted pages are reported in the Messages panel."
             )
-            .size(12)
+            .size(TS.label)
             .color(text_c),
             iced::widget::Space::new().height(8),
-            text(detail).size(11).color(text_muted),
+            container(iced::widget::scrollable(
+                text(detail).size(TS.body).color(text_muted)
+            ))
+            .max_height(120),
             iced::widget::Space::new().height(14),
             row![
                 iced::widget::Space::new().width(Length::Fill),
@@ -173,20 +208,35 @@ impl Signex {
         .padding(20);
 
         let card = container(body)
-            .max_width(520)
-            .style(move |_: &iced::Theme| container::Style {
-                background: Some(panel_bg.into()),
-                border: iced::Border {
-                    color: border_c,
-                    width: 1.0,
-                    radius: iced::border::Radius::from(8.0),
+            .max_width(
+                if self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt) {
+                    f32::INFINITY
+                } else {
+                    520.0
                 },
-                shadow: iced::Shadow {
-                    color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
-                    offset: iced::Vector::new(0.0, 4.0),
-                    blur_radius: 16.0,
-                },
-                ..container::Style::default()
+            )
+            .style(move |theme: &iced::Theme| {
+                if crate::styles::is_dialog_window(theme) {
+                    // Flat in its own window: no second frame.
+                    return container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    };
+                }
+                container::Style {
+                    background: Some(panel_bg.into()),
+                    border: iced::Border {
+                        color: border_c,
+                        width: 1.0,
+                        radius: iced::border::Radius::from(8.0),
+                    },
+                    shadow: iced::Shadow {
+                        color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
+                        offset: iced::Vector::new(0.0, 4.0),
+                        blur_radius: 16.0,
+                    },
+                    ..container::Style::default()
+                }
             });
 
         container(card)
@@ -194,6 +244,17 @@ impl Signex {
             .height(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
+            .style(move |theme: &iced::Theme| {
+                // In its own window the dialog fills the window surface.
+                if crate::styles::is_dialog_window(theme) {
+                    container::Style {
+                        background: Some(panel_bg.into()),
+                        ..container::Style::default()
+                    }
+                } else {
+                    container::Style::default()
+                }
+            })
             .into()
     }
 
@@ -217,6 +278,15 @@ impl Signex {
             body,
             offset,
             self.ui_state.window_size,
+            self.pdf_modal_size(),
+        )
+    }
+
+    /// The in-window export modal at its design size, capped to the window
+    /// (#1227).
+    pub(in crate::app::view) fn pdf_modal_size(&self) -> (f32, f32) {
+        crate::app::view::dialogs::fit_modal_size(
+            self.ui_state.window_size,
             (Self::PDF_MODAL_W, Self::PDF_MODAL_H),
         )
     }
@@ -231,7 +301,7 @@ impl Signex {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{
             MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
-            detached_header, draggable_header,
+            draggable_header, os_title_bar_slot,
         };
         use iced::widget::{Space, button, column, container, row, text};
         let theme_id = self.ui_state.theme_id;
@@ -272,7 +342,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, ModalId::PrintPreview)
+            os_title_bar_slot()
         };
 
         // Tab strip — Preview | Settings.
@@ -285,7 +355,7 @@ impl Signex {
         };
 
         // Footer — page count + Export PDF.
-        let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
+        let export_btn = button(text("Export PDF").size(TS.label).color(iced::Color::WHITE))
             .padding([6, 14])
             .on_press(Message::PrintPreview(PrintPreviewMsg::Export))
             .style(
@@ -302,23 +372,30 @@ impl Signex {
         let footer_caption = if preview.pages.is_empty() {
             "No files selected for export".to_string()
         } else {
-            format!("{} page(s) — preview at 96 DPI", preview.pages.len())
+            format!("{} page(s)", preview.pages.len())
         };
         let footer = container(
             row![
-                text(footer_caption).size(11).color(text_muted),
+                text(footer_caption).size(TS.body).color(text_muted),
                 Space::new().width(Length::Fill),
                 export_btn,
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center),
         )
         .padding([10, 14]);
 
+        // Detached: the OS window owns the size, so fill it.
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.pdf_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![header, tab_strip, body, footer]
-                .width(Self::PDF_MODAL_W)
-                .height(Self::PDF_MODAL_H),
+                .width(modal_w)
+                .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

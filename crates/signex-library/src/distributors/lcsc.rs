@@ -43,7 +43,7 @@ pub struct LcscAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
 }
 
 impl LcscAdapter {
@@ -53,10 +53,7 @@ impl LcscAdapter {
             base_url: LCSC_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -66,10 +63,7 @@ impl LcscAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -77,16 +71,7 @@ impl LcscAdapter {
     /// call. Records the current instant on exit so subsequent calls are
     /// rate-limited consistently across threads.
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < THROTTLE_INTERVAL {
-                drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
-            }
-        }
-        *guard = Some(Instant::now());
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     /// Helper exposed for tests: how many ms since the last recorded request,
@@ -106,6 +91,7 @@ impl LcscAdapter {
         self.polite_wait();
         let resp = self
             .http
+            .get()?
             .get(url)
             .send()
             .map_err(|e| DistributorError::Network(e.to_string()))?;
@@ -155,7 +141,7 @@ impl DistributorAdapter for LcscAdapter {
         //   https://www.lcsc.com/product-detail/Resistors_YAGEO-RC0805FR-0710KL_C17414.html
         // We extract the trailing `_C<digits>` slug and search by it.
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("lcsc.com") {
+        if !super::host_in_domain(host, "lcsc.com") {
             return Ok(None);
         }
         let path = url.path();
@@ -171,13 +157,17 @@ impl DistributorAdapter for LcscAdapter {
         if token.is_empty() {
             return Ok(None);
         }
-        let mut hits = self.search_by_keyword(token)?;
-        Ok(hits.pop())
+        let hits = self.search_by_keyword(token)?;
+        Ok(super::price::pick_url_hit(
+            hits,
+            token,
+            &["lcsc_product_code"],
+        ))
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         if let Some(cache) = &self.cache
-            && let Ok(Some(hit)) = cache.get(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL)
+            && let Some(hit) = cache.get_or_warn(LCSC_PROVIDER_KEY, mpn, DEFAULT_TTL)
         {
             return Ok(vec![hit]);
         }
@@ -197,12 +187,11 @@ impl DistributorAdapter for LcscAdapter {
 
     fn refresh_pricing(
         &self,
-        part: &DistributorPart,
+        _part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
-        // Re-query the same MPN; the response carries pricing.
-        let mut hits = self.search_by_keyword(&part.mpn)?;
-        let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
-        fresh.pricing.ok_or(DistributorError::NotFound)
+        // The product list response has no price fields, so there is
+        // nothing to refresh from; say so instead of reporting "not found".
+        Err(super::price::pricing_unavailable(LCSC_NAME))
     }
 }
 
@@ -333,5 +322,13 @@ mod tests {
         let a = LcscAdapter::with_base_url("http://unused.invalid", None);
         assert_eq!(a.name(), "LCSC");
         assert_eq!(a.source(), DistributorSource::Lcsc);
+    }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = LcscAdapter::with_base_url("http://unused.invalid", None);
+        let url = Url::parse("https://evillcsc.com/product-detail/X_C17414.html").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
 }

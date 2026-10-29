@@ -28,9 +28,9 @@ If applicable, add screenshots.
 
 **Project file**
 If the bug involves a specific design, attach a minimal native Signex
-`.snxsch` / `.snxpcb` that reproduces it. (Signex is KiCad-free — please
-don't attach `.kicad_*` files; KiCad round-trip issues belong in
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import).)
+`.snxsch` / `.snxpcb` that reproduces it. (Signex does not read or write GPL-based EDA tool formats — please
+don't attach files from GPL-based EDA tools; round-trip issues with those formats belong in the
+[import companion repository](https://github.com/alplabai/signex-kicad-import).)
 
 **Severity**
 Does this lose data or crash the app? If so, say so — we'll tag it

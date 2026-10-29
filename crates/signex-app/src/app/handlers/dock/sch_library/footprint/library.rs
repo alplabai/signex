@@ -15,13 +15,13 @@ impl Signex {
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_open_sibling(
         &mut self,
         sibling_path: &std::path::Path,
-    ) -> bool {
+    ) -> Task<Message> {
         // v0.14.2 — open the sibling .snxfpt as a new tab
         // (or activate an existing tab if it's already open)
         // via the existing primitive-open flow.
-        let _ = self.handle_open_primitive(sibling_path.to_path_buf());
+        let task = self.handle_open_primitive(sibling_path.to_path_buf());
         self.refresh_panel_ctx();
-        true
+        task
     }
 
     // v0.18.8 — Footprint Library panel internal-row select.
@@ -82,28 +82,43 @@ impl Signex {
             if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                 let last = editor.file.footprints.len();
                 if last > 1 && *idx < last {
+                    // The delete is its own undo step (#760): snapshot the
+                    // whole envelope first so Undo restores the deleted
+                    // footprint and leaves the previous edit alone.
+                    editor.push_history();
                     editor.file.footprints.remove(*idx);
-                    // Clamp `active_idx` so the canvas keeps
-                    // pointing at a valid sibling.
-                    if editor.active_idx >= editor.file.footprints.len() {
+                    editor.file.updated = chrono::Utc::now();
+                    // A sibling before the active one shifted it down a
+                    // slot: follow it. Otherwise clamp into range.
+                    let active_moved = *idx <= editor.active_idx;
+                    editor.clear_edit_coalescing();
+                    if *idx < editor.active_idx {
+                        editor.active_idx -= 1;
+                    } else if editor.active_idx >= editor.file.footprints.len() {
                         editor.active_idx = editor.file.footprints.len().saturating_sub(1);
                     }
-                    // Re-derive canvas-side state from the
-                    // (possibly different) active primitive.
-                    editor.state =
-                        crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-                            editor.primitive(),
-                        );
+                    // Re-derive canvas-side state only when the active
+                    // primitive actually changed.
+                    if active_moved {
+                        editor.state =
+                            crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
+                                editor.primitive(),
+                            );
+                    }
                     editor.panel_selected_idx = None;
                     editor.canvas_cache.clear();
-                    editor.dirty = true;
-                    self.document_state.dirty_paths.insert(path.clone());
+                    self.document_state.mark_document_dirty(&path);
                 } else if last == 1 {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        "Footprint Library: refused to delete the last footprint in the envelope",
-                    );
+                    crate::diagnostics::log_warning(format!(
+                        "{}: refused to delete the last footprint in the file",
+                        path.display()
+                    ));
+                } else if last > 1 {
+                    crate::diagnostics::log_warning(format!(
+                        "{}: footprint delete index {} is out of range ({last} footprints)",
+                        path.display(),
+                        *idx
+                    ));
                 }
             }
             self.refresh_panel_ctx();
@@ -131,5 +146,22 @@ impl Signex {
             self.refresh_panel_ctx();
         }
         follow
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression (#99 part 1): this method used to return `bool` and
+    /// discard `handle_open_primitive`'s `Task` via `let _ = ...`. This
+    /// is a pure compile-time tripwire — the assignment only type-checks
+    /// if the signature stays `fn(&mut Signex, &Path) -> Task<Message>`;
+    /// it stops compiling (not merely failing) if that regresses back to
+    /// `bool`. No runtime setup needed, so no `Signex::new()` / tempdir.
+    #[test]
+    fn open_sibling_returns_the_primitive_open_task() {
+        const _: fn(&mut Signex, &std::path::Path) -> Task<Message> =
+            Signex::handle_fp_library_open_sibling;
     }
 }

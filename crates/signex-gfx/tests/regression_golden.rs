@@ -1,3 +1,4 @@
+// Own process: builds a wgpu device; two in one process SIGSEGV on lavapipe, #889.
 //! Phase 6 regression and golden fixtures for renderer hardening.
 //!
 //! CLEAN ROOM DECLARATION
@@ -13,6 +14,7 @@ use signex_gfx::debug_pass::{
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{
@@ -90,6 +92,9 @@ struct MockUploadTarget {
     uploaded_circles: usize,
     uploaded_arcs: usize,
     uploaded_polygons: usize,
+    uploaded_top_polygons: usize,
+    uploaded_drawings: usize,
+    uploaded_drawings_front: usize,
     uploaded_texts: usize,
     uploaded_overlay_lines: usize,
     uploaded_overlay_circles: usize,
@@ -120,6 +125,19 @@ impl SceneUploadTarget for MockUploadTarget {
     fn upload_polygons(&mut self, polygons: &[GpuPolygon]) {
         self.uploaded_polygons = polygons.len();
         self.calls.polygon_uploads += 1;
+    }
+
+    fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
+        self.uploaded_top_polygons = polygons.len();
+    }
+
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings = drawings.len();
+        self.calls.drawing_uploads += 1;
+    }
+
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings_front = drawings.len();
     }
 
     fn upload_texts(
@@ -244,12 +262,14 @@ fn build_upload_fixture_scene() -> Scene {
     });
 
     scene.polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]],
         fill_color: [0.2, 0.2, 0.8, 1.0],
         stroke_color: None,
         stroke_width: 0.0,
     });
     scene.polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[150.0, 150.0], [151.0, 150.0], [150.5, 151.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -266,6 +286,7 @@ fn build_upload_fixture_scene() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
     scene.texts.push(TextItem {
         content: "FAR_TEXT".to_string(),
@@ -277,6 +298,7 @@ fn build_upload_fixture_scene() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
 
     scene.overlay_lines.push(LineSegment {
@@ -310,12 +332,14 @@ fn build_upload_fixture_scene() -> Scene {
     });
 
     scene.overlay_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [3.0, 2.0], [2.5, 3.0]],
         fill_color: [0.4, 0.6, 1.0, 0.3],
         stroke_color: Some([0.4, 0.6, 1.0, 1.0]),
         stroke_width: 0.1,
     });
     scene.overlay_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[190.0, 190.0], [191.0, 190.0], [190.5, 191.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -353,12 +377,14 @@ fn build_upload_fixture_scene() -> Scene {
     });
 
     scene.erc_marker_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[4.8, 4.7], [5.2, 4.7], [5.0, 5.2]],
         fill_color: [0.95, 0.35, 0.35, 0.3],
         stroke_color: Some([0.95, 0.35, 0.35, 1.0]),
         stroke_width: 0.1,
     });
     scene.erc_marker_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[220.0, 220.0], [221.0, 220.0], [220.5, 221.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,

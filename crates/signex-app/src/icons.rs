@@ -55,19 +55,50 @@ fn accent_hex(theme: ThemeId) -> String {
 /// Swap the sentinel hex for the theme accent and hand the bytes to
 /// iced. When the theme accent already equals the sentinel (Signex
 /// default) the canonical bytes go straight through — no allocation.
-fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
+fn tinted_handle(path: &'static str, canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
+    // Memoised per (icon, theme): the icon constructors run every frame
+    // from the active bar, dropdowns, dock and chrome, and the rebuild
+    // below allocates and hashes the bytes. The key is the address of
+    // the asset's `$path` literal (exact: one entry per declared icon),
+    // not the bytes' address, which the compiler may merge for identical
+    // files.
+    let key = (path, theme);
+    if let Some(handle) = HANDLE_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
+        return handle;
+    }
+    let handle = build_tinted_handle(canonical, theme);
+    HANDLE_CACHE.with(|cache| cache.borrow_mut().insert(key, handle.clone()));
+    handle
+}
+
+thread_local! {
+    /// Built handles keyed by (asset path, theme).
+    /// Bounded by icon count × theme count, so it never needs eviction.
+    /// Correct only while a theme's accent is fixed at runtime; if icons
+    /// are ever tinted from a user-editable custom theme, key on the
+    /// accent instead of the `ThemeId`.
+    static HANDLE_CACHE: std::cell::RefCell<
+        std::collections::HashMap<(&'static str, ThemeId), svg::Handle>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+fn build_tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
     let accent = accent_hex(theme);
     if accent == ACCENT_SENTINEL {
         return svg::Handle::from_memory(canonical);
     }
-    // SVGs are tiny (100–400 bytes each) and always valid UTF-8, so
-    // the `from_utf8` path is a few hundred cycles per miss. iced
-    // hashes the resulting bytes and reuses its texture, so this only
-    // actually runs on the first render after a theme switch.
+    // SVGs are tiny (100–400 bytes each) and always valid UTF-8; the
+    // result is cached by `tinted_handle`, so this runs once per
+    // (icon, theme) pair.
     let tinted = std::str::from_utf8(canonical)
         .unwrap_or("")
         .replace(ACCENT_SENTINEL, &accent);
     svg::Handle::from_memory(tinted.into_bytes())
+}
+
+#[cfg(test)]
+fn handle_cache_len() -> usize {
+    HANDLE_CACHE.with(|cache| cache.borrow().len())
 }
 
 /// Emit a `pub fn <name>(ThemeId) -> svg::Handle` that resolves to the
@@ -76,8 +107,8 @@ fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
 macro_rules! canonical_icon {
     ($name:ident, $path:literal) => {
         pub fn $name(theme: ThemeId) -> svg::Handle {
-            const BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
-            tinted_handle(BYTES, theme)
+            static BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
+            tinted_handle($path, BYTES, theme)
         }
     };
 }
@@ -168,6 +199,7 @@ canonical_icon!(
     "dropdown/net_color_clear_all.svg"
 );
 canonical_icon!(icon_dd_net_color_custom, "dropdown/net_color_custom.svg");
+canonical_icon!(icon_dd_junction, "dropdown/junction.svg");
 canonical_icon!(icon_dd_net_label, "dropdown/net_label.svg");
 canonical_icon!(icon_dd_no_erc, "dropdown/no_erc.svg");
 canonical_icon!(icon_dd_note, "dropdown/note.svg");
@@ -281,3 +313,49 @@ canonical_icon!(icon_justify_r, "justify/r.svg");
 canonical_icon!(icon_justify_t, "justify/t.svg");
 canonical_icon!(icon_justify_tl, "justify/tl.svg");
 canonical_icon!(icon_justify_tr, "justify/tr.svg");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Repeated calls for the same (icon, theme) reuse one cache entry and
+    /// return an identical handle; a different theme adds at most one more.
+    #[test]
+    fn tinted_handles_are_memoised_per_icon_and_theme() {
+        let before = handle_cache_len();
+        let first = icon_justify_tl(ThemeId::CatppuccinMocha);
+        let after_first = handle_cache_len();
+        assert!(after_first <= before + 1);
+        for _ in 0..5 {
+            assert_eq!(icon_justify_tl(ThemeId::CatppuccinMocha), first);
+        }
+        assert_eq!(handle_cache_len(), after_first);
+        let other = icon_justify_tl(ThemeId::VsCodeDark);
+        assert!(handle_cache_len() <= after_first + 1);
+        assert_eq!(icon_justify_tl(ThemeId::VsCodeDark), other);
+    }
+
+    /// The memoised handle equals a freshly built one (behaviour unchanged).
+    #[test]
+    fn memoised_handle_matches_fresh_build() {
+        static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
+        let theme = ThemeId::CatppuccinMocha;
+        assert_eq!(
+            tinted_handle("justify/tr.svg", BYTES, theme),
+            build_tinted_handle(BYTES, theme)
+        );
+    }
+
+    /// Two paths with identical bytes (merged by the compiler) still get
+    /// separate, correct entries because the key is the path.
+    #[test]
+    fn identical_bytes_under_distinct_paths_do_not_collide() {
+        static BYTES: &[u8] = include_bytes!("../assets/icons/justify/tr.svg");
+        let theme = ThemeId::CatppuccinMocha;
+        let before = handle_cache_len();
+        let a = tinted_handle("test/identical_a.svg", BYTES, theme);
+        let b = tinted_handle("test/identical_b.svg", BYTES, theme);
+        assert_eq!(handle_cache_len(), before + 2);
+        assert_eq!(a, b);
+    }
+}

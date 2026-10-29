@@ -5,68 +5,81 @@ use super::super::super::*;
 impl Signex {
     pub(super) fn handle_menu_panel_command(&mut self, msg: &MenuMessage) -> Option<Task<Message>> {
         match msg {
+            // Each of these used to name its own dock region, and the
+            // regions disagreed with both the boot layout and the
+            // status-bar panel list — which is how one kind ended up
+            // docked twice. `show_panel` owns the placement now (#641).
             MenuMessage::OpenProjectsPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Left,
-                    crate::panels::PanelKind::Projects,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Projects))
             }
             MenuMessage::OpenComponentsPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Left,
-                    crate::panels::PanelKind::Components,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Components))
             }
             MenuMessage::OpenNavigatorPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Right,
-                    crate::panels::PanelKind::Navigator,
-                );
-                Some(Task::none())
+                Some(self.show_panel(crate::panels::PanelKind::Navigator))
             }
             MenuMessage::OpenPropertiesPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Right,
-                    crate::panels::PanelKind::Properties,
-                );
+                let task = self.show_panel(crate::panels::PanelKind::Properties);
+                self.interaction_state.context_menu = None;
+                Some(task)
+            }
+            MenuMessage::OpenProjectOptions => {
+                let active = self.document_state.active_document_project().map(|p| p.id);
+                let index = active
+                    .and_then(|id| self.document_state.projects.iter().position(|p| p.id == id));
+                match index {
+                    Some(index) => self.open_project_tab(index),
+                    // Reported in Messages instead of a silent no-op.
+                    None => crate::diagnostics::log_warning(
+                        "Project Options: no project is open for the active document",
+                    ),
+                }
                 self.interaction_state.context_menu = None;
                 Some(Task::none())
             }
-            MenuMessage::OpenErcPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Bottom,
-                    crate::panels::PanelKind::Erc,
-                );
-                Some(Task::none())
-            }
+            MenuMessage::OpenErcPanel => Some(self.show_panel(crate::panels::PanelKind::Erc)),
             MenuMessage::OpenMessagesPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Bottom,
-                    crate::panels::PanelKind::Messages,
-                );
+                Some(self.show_panel(crate::panels::PanelKind::Messages))
+            }
+            MenuMessage::OpenSignalPanel => Some(self.show_panel(crate::panels::PanelKind::Signal)),
+            MenuMessage::AscendToParentSheet => {
+                self.ascend_to_parent_sheet();
                 Some(Task::none())
             }
-            MenuMessage::OpenSignalPanel => {
-                self.document_state.dock.add_panel(
-                    crate::dock::PanelPosition::Bottom,
-                    crate::panels::PanelKind::Signal,
-                );
-                Some(Task::none())
-            }
+            MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
+            MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),
+            MenuMessage::PreviousDocumentTab => Some(self.step_document_tab(false)),
+            MenuMessage::PreviousSheet => Some(self.step_schematic_sheet(false)),
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
+            }
+            MenuMessage::OpenPassiveCalculator => {
+                Some(self.update(Message::Overlay(OverlayMsg::OpenPassiveCalculator)))
             }
             MenuMessage::OpenKeyboardShortcuts => {
                 // Single-flag toggle — opening the modal is enough; the
                 // close path goes through
                 // `Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)`.
                 self.ui_state.keyboard_shortcuts_open = true;
+                self.ui_state.refresh_shortcut_sections();
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
                 Some(Task::none())
             }
+            MenuMessage::OpenAbout => {
+                self.ui_state.about_open = true;
+                self.interaction_state.context_menu = None;
+                self.ui_state.panel_list_open = false;
+                Some(Task::none())
+            }
+            MenuMessage::OpenDocumentation => Some(crate::about::open_link(
+                crate::about::ExternalLink::Documentation,
+                |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
+            )),
+            MenuMessage::ReportIssue => Some(crate::about::open_link(
+                crate::about::ExternalLink::IssueTracker,
+                |detail| Message::Overlay(OverlayMsg::LinkOpenFailed(detail)),
+            )),
             _ => None,
         }
     }

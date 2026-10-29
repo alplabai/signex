@@ -5,6 +5,14 @@ use signex_types::schematic::{
 
 use super::Engine;
 
+/// Row keys of [`SelectionDetails::info`] that callers look up by name.
+pub mod info_keys {
+    /// A symbol's designator (`Symbol::reference`).
+    pub const REFERENCE: &str = "Reference";
+    /// The text of a text item; on a designator field, the designator.
+    pub const TEXT: &str = "Text";
+}
+
 // ---------------------------------------------------------------------------
 // Selection data types
 // ---------------------------------------------------------------------------
@@ -53,34 +61,37 @@ impl Engine {
         let mut clipboard = ClipboardSelection::default();
 
         for item in items {
-            match item.kind {
-                SelectedKind::Wire => {
+            let Some(slot) = clipboard_slot(item.kind) else {
+                continue;
+            };
+            match slot {
+                ClipboardSlot::Wire => {
                     if let Some(wire) = self.document.wires.iter().find(|w| w.uuid == item.uuid) {
                         clipboard.wires.push(wire.clone());
                     }
                 }
-                SelectedKind::Bus => {
+                ClipboardSlot::Bus => {
                     if let Some(bus) = self.document.buses.iter().find(|b| b.uuid == item.uuid) {
                         clipboard.buses.push(bus.clone());
                     }
                 }
-                SelectedKind::Label => {
+                ClipboardSlot::Label => {
                     if let Some(label) = self.document.labels.iter().find(|l| l.uuid == item.uuid) {
                         clipboard.labels.push(label.clone());
                     }
                 }
-                SelectedKind::Symbol => {
+                ClipboardSlot::Symbol => {
                     if let Some(symbol) = self.document.symbols.iter().find(|s| s.uuid == item.uuid)
                     {
                         clipboard.symbols.push(symbol.clone());
                     }
                 }
-                SelectedKind::Junction => {
+                ClipboardSlot::Junction => {
                     if let Some(j) = self.document.junctions.iter().find(|j| j.uuid == item.uuid) {
                         clipboard.junctions.push(j.clone());
                     }
                 }
-                SelectedKind::NoConnect => {
+                ClipboardSlot::NoConnect => {
                     if let Some(nc) = self
                         .document
                         .no_connects
@@ -90,7 +101,7 @@ impl Engine {
                         clipboard.no_connects.push(nc.clone());
                     }
                 }
-                SelectedKind::TextNote => {
+                ClipboardSlot::TextNote => {
                     if let Some(tn) = self
                         .document
                         .text_notes
@@ -100,7 +111,6 @@ impl Engine {
                         clipboard.text_notes.push(tn.clone());
                     }
                 }
-                _ => {}
             }
         }
 
@@ -136,6 +146,12 @@ impl Engine {
                     .iter()
                     .find(|nc| nc.uuid == item.uuid)
                     .map(|nc| (nc.position.x, nc.position.y)),
+                SelectedKind::NoErcDirective => self
+                    .document
+                    .no_erc_directives
+                    .iter()
+                    .find(|d| d.uuid == item.uuid)
+                    .map(|d| (d.position.x, d.position.y)),
                 SelectedKind::TextNote => self
                     .document
                     .text_notes
@@ -208,7 +224,7 @@ impl Engine {
                     "Symbol"
                 };
                 info.push(("Type".into(), type_label.into()));
-                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push(("Value".into(), symbol.value.clone()));
                 if let Some(lib_sym) = self.document.lib_symbols.get(&symbol.lib_id)
                     && !lib_sym.description.is_empty()
@@ -278,6 +294,9 @@ impl Engine {
                         (label.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &label.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(label.justify).into(),
@@ -307,6 +326,18 @@ impl Engine {
                     format!("{:.2}, {:.2}", no_connect.position.x, no_connect.position.y),
                 ));
             }
+            SelectedKind::NoErcDirective => {
+                let directive = self
+                    .document
+                    .no_erc_directives
+                    .iter()
+                    .find(|d| d.uuid == item.uuid)?;
+                info.push(("Type".into(), "No ERC Directive".into()));
+                info.push((
+                    "Position".into(),
+                    format!("{:.2}, {:.2}", directive.position.x, directive.position.y),
+                ));
+            }
             SelectedKind::TextNote => {
                 let text_note = self
                     .document
@@ -327,6 +358,9 @@ impl Engine {
                         (text_note.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &text_note.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(text_note.justify_h).into(),
@@ -369,7 +403,7 @@ impl Engine {
                 info.push(("Sheet".into(), sheet_name));
                 info.push(("Sheet File".into(), sheet_file));
                 info.push(("Name".into(), sheet_pin.name.clone()));
-                info.push(("Direction".into(), format!("{:?}", sheet_pin.direction)));
+                info.push(("Direction".into(), sheet_pin.direction.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2}", sheet_pin.position.x, sheet_pin.position.y),
@@ -484,8 +518,8 @@ impl Engine {
                 let symbol = self.document.symbols.iter().find(|s| s.uuid == item.uuid)?;
                 let ref_text = symbol.ref_text.as_ref()?;
                 info.push(("Type".into(), "Reference Field".into()));
-                info.push(("Text".into(), symbol.reference.clone()));
-                info.push(("Reference".into(), symbol.reference.clone()));
+                info.push((info_keys::TEXT.into(), symbol.reference.clone()));
+                info.push((info_keys::REFERENCE.into(), symbol.reference.clone()));
                 info.push((
                     "Position".into(),
                     format!("{:.2}, {:.2} mm", ref_text.position.x, ref_text.position.y),
@@ -499,6 +533,9 @@ impl Engine {
                         (ref_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &ref_text.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(ref_text.justify_h).into(),
@@ -543,6 +580,9 @@ impl Engine {
                         (value_text.font_size.max(0.0) / SCHEMATIC_PT_TO_MM).round() as i32
                     ),
                 ));
+                if let Some(family) = &value_text.font_family {
+                    info.push(("Font Family".into(), family.clone()));
+                }
                 info.push((
                     "Horizontal Justification".into(),
                     h_align_label(value_text.justify_h).into(),
@@ -567,6 +607,12 @@ impl Engine {
             }
         }
 
+        // A symbol lists its own `Locked` row above; the other lockable kinds
+        // list theirs here (#1573), for the Properties "Locked" checkbox.
+        if let Some(locked) = self.item_locked(item) {
+            info.push(("Locked".into(), if locked { "Yes" } else { "No" }.into()));
+        }
+
         Some(SelectionDetails {
             selected_uuid: item.uuid,
             selected_kind: item.kind,
@@ -579,19 +625,44 @@ impl Engine {
 // Cut = copy + delete, but the two must agree on what they carry
 // ---------------------------------------------------------------------------
 
-/// Kinds `collect_selection_clipboard` (above) captures. Single source of
-/// truth for `partition_cuttable` — keep this in sync with that match.
+/// Which `ClipboardSelection` field a kind is copied into by
+/// `collect_selection_clipboard` (above). The match is exhaustive over
+/// `SelectedKind` (no `_` arm), so a new variant is a compile error here
+/// until it's classified — this is the one place that decides what
+/// clipboard-based Copy/Cut/Paste can carry; `clipboard_can_carry` and
+/// `collect_selection_clipboard` both derive from it instead of keeping
+/// their own list.
+enum ClipboardSlot {
+    Wire,
+    Bus,
+    Label,
+    Symbol,
+    Junction,
+    NoConnect,
+    TextNote,
+}
+
+fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
+    match kind {
+        SelectedKind::Wire => Some(ClipboardSlot::Wire),
+        SelectedKind::Bus => Some(ClipboardSlot::Bus),
+        SelectedKind::Label => Some(ClipboardSlot::Label),
+        SelectedKind::Symbol => Some(ClipboardSlot::Symbol),
+        SelectedKind::Junction => Some(ClipboardSlot::Junction),
+        SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
+        SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
+        SelectedKind::NoErcDirective
+        | SelectedKind::BusEntry
+        | SelectedKind::SheetPin
+        | SelectedKind::ChildSheet
+        | SelectedKind::Drawing
+        | SelectedKind::SymbolRefField
+        | SelectedKind::SymbolValField => None,
+    }
+}
+
 fn clipboard_can_carry(kind: SelectedKind) -> bool {
-    matches!(
-        kind,
-        SelectedKind::Wire
-            | SelectedKind::Bus
-            | SelectedKind::Label
-            | SelectedKind::Symbol
-            | SelectedKind::Junction
-            | SelectedKind::NoConnect
-            | SelectedKind::TextNote
-    )
+    clipboard_slot(kind).is_some()
 }
 
 /// Splits a selection into the subset Cut can safely copy-then-delete and
@@ -606,4 +677,88 @@ pub fn partition_cuttable(items: &[SelectedItem]) -> (Vec<SelectedItem>, Vec<Sel
         .iter()
         .copied()
         .partition(|item| clipboard_can_carry(item.kind))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipboard_can_carry_matches_the_documented_seven_kinds() {
+        // #465: `clipboard_can_carry` and `collect_selection_clipboard` both
+        // derive from `clipboard_slot`'s single exhaustive match, so this
+        // pins down which kinds that match currently classifies as
+        // carryable rather than trusting two independently-maintained lists.
+        let carryable: Vec<SelectedKind> = [
+            SelectedKind::Symbol,
+            SelectedKind::Wire,
+            SelectedKind::Bus,
+            SelectedKind::BusEntry,
+            SelectedKind::Junction,
+            SelectedKind::NoConnect,
+            SelectedKind::Label,
+            SelectedKind::SheetPin,
+            SelectedKind::TextNote,
+            SelectedKind::ChildSheet,
+            SelectedKind::Drawing,
+            SelectedKind::SymbolRefField,
+            SelectedKind::SymbolValField,
+        ]
+        .into_iter()
+        .filter(|k| clipboard_can_carry(*k))
+        .collect();
+
+        assert_eq!(
+            carryable,
+            vec![
+                SelectedKind::Symbol,
+                SelectedKind::Wire,
+                SelectedKind::Bus,
+                SelectedKind::Junction,
+                SelectedKind::NoConnect,
+                SelectedKind::Label,
+                SelectedKind::TextNote,
+            ]
+        );
+    }
+
+    #[test]
+    fn sheet_pin_direction_is_shown_without_debug_quoting() {
+        use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, SheetPin};
+        let pin_uuid = uuid::Uuid::now_v7();
+        let sheet = SchematicSheet {
+            child_sheets: vec![ChildSheet {
+                uuid: uuid::Uuid::now_v7(),
+                name: "Child".into(),
+                filename: "child.snxsch".into(),
+                position: Point::new(0.0, 0.0),
+                size: (10.0, 10.0),
+                stroke_width: 0.0,
+                fill: FillType::None,
+                stroke_color: None,
+                fill_color: None,
+                fields_autoplaced: false,
+                pins: vec![SheetPin {
+                    uuid: pin_uuid,
+                    name: "IN".into(),
+                    direction: "input".into(),
+                    position: Point::new(0.0, 5.0),
+                    rotation: 0.0,
+                    auto_generated: false,
+                    user_moved: false,
+                }],
+                instances: Vec::new(),
+            }],
+            ..Default::default()
+        };
+        let engine = Engine::new(sheet).expect("engine");
+        let details = engine
+            .describe_single_selection(&[SelectedItem::new(pin_uuid, SelectedKind::SheetPin)])
+            .expect("details");
+        let direction = details
+            .info
+            .iter()
+            .find(|(k, _)| k == "Direction")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(direction, Some("input"));
+    }
 }

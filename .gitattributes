@@ -10,3 +10,6 @@
 *.step binary
 *.wrl binary
 *.png binary
+
+# Native-format fixture corpus: byte-for-byte goldens, never converted.
+crates/signex-types/tests/corpus/** text eol=lf

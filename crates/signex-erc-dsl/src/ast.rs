@@ -1,6 +1,8 @@
 //! Abstract syntax tree produced by the DSL parser.
 //! These types are purely structural — no validation or compilation done yet.
 
+use crate::error::Span;
+
 // ---------------------------------------------------------------------------
 // Top-level rule declaration
 // ---------------------------------------------------------------------------
@@ -8,6 +10,8 @@
 #[derive(Debug, Clone)]
 pub struct RuleAst {
     pub id: String,
+    /// Byte span of the rule id in the DSL source.
+    pub span: Span,
     pub applicability: ApplicabilityAst,
     pub target: TargetKind,
     pub scope: ScopeKind,
@@ -75,7 +79,7 @@ pub enum ExprAst {
     Or(Box<ExprAst>, Box<ExprAst>),
     Not(Box<ExprAst>),
     /// `name(arg, …)` — built-in predicate helper.
-    /// Examples: `has_driver()`, `has_pin_kind(OpenDrain)`.
+    /// Examples: `has_driver()`, `has_pin_kind(OpenCollector)`.
     HelperCall {
         name: String,
         args: Vec<LiteralAst>,
@@ -88,7 +92,9 @@ pub enum ExprAst {
         value: LiteralAst,
     },
     /// `object.field matches "pattern"`.
-    /// Example: `net.name matches "^I2C_"`.
+    /// Example: `net.name matches "^I2C_"`. `net.names` is every name the net
+    /// carries (the winner plus its aliases) and matches when ANY of them does:
+    /// `net.names matches "^I2C_"`, `net.names == "SDA"`.
     FieldMatches {
         field: FieldExprAst,
         pattern: String,
@@ -101,7 +107,7 @@ pub enum ExprAst {
 
 #[derive(Debug, Clone)]
 pub enum FieldExprAst {
-    /// `pin.kind`, `net.name`, `net.class`.
+    /// `pin.kind`, `net.name`, `net.names`, `net.class`.
     Access { object: String, field: String },
     /// `component.attr("class")`.
     MethodCall {

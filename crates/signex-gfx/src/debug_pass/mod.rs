@@ -9,13 +9,28 @@ use crate::pipeline::arc::ArcPipeline;
 use crate::pipeline::circle::CirclePipeline;
 use crate::pipeline::grid::{GridLodFactors, GridPipeline, lod_fade_factors};
 use crate::pipeline::line::LinePipeline;
+#[cfg(test)]
+use crate::pipeline::ordered::{KindPipelines, OrderedPipeline};
 use crate::pipeline::polygon::PolygonPipeline;
 use crate::pipeline::text::GlyphonTextPipeline;
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+#[cfg(test)]
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
-use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+use crate::primitive::text::{TextHAlign, TextItem, TextSizePolicy, TextVAlign};
+
+/// Text sizing for the headless smoke passes. Wide on purpose: these verify
+/// rasterization, not typography, so a readability clamp would hide the very
+/// size the pass is exercising.
+pub(crate) const DEBUG_TEXT_POLICY: TextSizePolicy = TextSizePolicy::new(1.0, 512.0);
+
+/// Family the smoke passes ask for. The golden text scene loads the bundled
+/// Iosevka faces, so it resolves to them; passes that load no faces resolve
+/// through the system fallback, which is fine because they assert that glyphs
+/// rasterize at all, not which ones.
+pub(crate) const DEBUG_TEXT_FAMILY: &str = "Iosevka";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SmokePassReport {
@@ -168,6 +183,286 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
         line_instances: line_pipeline.instance_count(),
         circle_instances: circle_pipeline.instance_count(),
     })
+}
+
+/// Render one dashed [`LineSegment`] and read back the framebuffer's red
+/// channel at a handful of x pixels along the line's centre row. Proves
+/// `line.wgsl` actually honours `LineSegment::STYLE_DASHED` on the GPU
+/// (rather than just in the Rust-side `is_dashed()` predicate `order.rs`
+/// pins): a solid white line over a black clear reads bright everywhere,
+/// while a real dash pattern reads bright only where the shader's dash math
+/// says it should. Returns the sampled red-channel bytes (0-255) at the given
+/// world-mm x offsets along the line.
+///
+/// Geometry is chosen so the shader's dash math (`dash_mm = 8 * mm_per_px`,
+/// `gap_mm = 5 * mm_per_px`) lands on exact pixel boundaries at
+/// `scale_px_per_mm = 4.0` (`mm_per_px = 0.25`): an 8px dash then a 5px gap,
+/// repeating every 13px — independent of zoom, since `dash_mm *
+/// scale_px_per_mm` always collapses back to the literal `8`.
+///
+/// `cfg(test)` (unlike the other smoke-pass helpers above, which are `pub`
+/// for `tests/regression_golden.rs` to call as a separate crate): this one
+/// has no caller outside `debug_pass::tests`.
+#[cfg(test)]
+async fn run_line_readback_smoke_pass(
+    line: LineSegment,
+    min_stroke_px: f32,
+    sample_x_px: &[u32],
+) -> Result<Vec<u8>, String> {
+    let samples = row_samples(sample_x_px);
+    run_readback_smoke_pass(ReadbackGeometry::Line(line), min_stroke_px, &samples).await
+}
+
+/// The same single-row readback as [`run_line_readback_smoke_pass`], through
+/// the polygon pipeline — so `polygon.wgsl`'s stroke floor is proven by pixels
+/// too, not only by the vertex data it is fed.
+#[cfg(test)]
+async fn run_polygon_readback_smoke_pass(
+    polygon: GpuPolygon,
+    min_stroke_px: f32,
+    sample_x_px: &[u32],
+) -> Result<Vec<u8>, String> {
+    let samples = row_samples(sample_x_px);
+    run_readback_smoke_pass(ReadbackGeometry::Polygon(polygon), min_stroke_px, &samples).await
+}
+
+/// Square target for [`ReadbackGeometry::Arc`], at [`ARC_READBACK_SCALE`]
+/// px/mm. `ARC_READBACK_PX * 4` bytes is a multiple of
+/// `wgpu::COPY_BYTES_PER_ROW_ALIGNMENT`, so rows need no padding.
+#[cfg(test)]
+pub(super) const ARC_READBACK_PX: u32 = 64;
+#[cfg(test)]
+pub(super) const ARC_READBACK_SCALE: f32 = 4.0;
+
+/// Row sampled by the line and polygon wrappers in their 128x8 target.
+#[cfg(test)]
+const LINE_ROW: u32 = 4;
+
+#[cfg(test)]
+fn row_samples(sample_x_px: &[u32]) -> Vec<(u32, u32)> {
+    sample_x_px.iter().map(|&x| (x, LINE_ROW)).collect()
+}
+
+/// The arc readback: the red channel at arbitrary `(x, y)` pixels of a
+/// [`ARC_READBACK_PX`] square target. The camera origin is world (0, 0) at the
+/// top-left pixel, so pixel `(x, y)` is world `(x, y) / ARC_READBACK_SCALE` mm
+/// and world +Y runs down the rows.
+#[cfg(test)]
+async fn run_arc_readback_smoke_pass(arc: Arc, samples: &[(u32, u32)]) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::Arc(arc), 0.0, samples).await
+}
+
+/// A polygon read back from a square target, at arbitrary pixels, for the
+/// strokes that need a 2-D look (joins, gaps).
+#[cfg(test)]
+async fn run_polygon_square_readback_smoke_pass(
+    polygon: GpuPolygon,
+    samples: &[(u32, u32)],
+) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::PolygonSquare(polygon), 0.0, samples).await
+}
+
+/// Mixed-kind drawings read back, in list order, from the square target of
+/// [`run_polygon_square_readback_smoke_pass`] (#1579).
+#[cfg(test)]
+async fn run_ordered_readback_smoke_pass(
+    items: Vec<OrderedItem>,
+    samples: &[(u32, u32)],
+) -> Result<Vec<u8>, String> {
+    run_readback_smoke_pass(ReadbackGeometry::Ordered(items), 0.0, samples).await
+}
+
+/// Edge length and scale of the target of
+/// [`run_polygon_square_readback_smoke_pass`]: pixel `(x, y)` is world
+/// `(x, y) / POLYGON_SQUARE_SCALE` mm.
+#[cfg(test)]
+pub(super) const POLYGON_SQUARE_PX: u32 = 64;
+#[cfg(test)]
+pub(super) const POLYGON_SQUARE_SCALE: f32 = 4.0;
+
+#[cfg(test)]
+enum ReadbackGeometry {
+    Line(LineSegment),
+    Polygon(GpuPolygon),
+    PolygonSquare(GpuPolygon),
+    Arc(Arc),
+    Ordered(Vec<OrderedItem>),
+}
+
+#[cfg(test)]
+impl ReadbackGeometry {
+    /// Target `(width, height, px_per_mm)`; width * 4 must be a multiple of 256.
+    fn target(&self) -> (u32, u32, f32) {
+        match self {
+            Self::Line(_) | Self::Polygon(_) => (128, 8, 4.0),
+            Self::Ordered(_) | Self::PolygonSquare(_) => {
+                (POLYGON_SQUARE_PX, POLYGON_SQUARE_PX, POLYGON_SQUARE_SCALE)
+            }
+            Self::Arc(_) => (ARC_READBACK_PX, ARC_READBACK_PX, ARC_READBACK_SCALE),
+        }
+    }
+}
+
+#[cfg(test)]
+async fn run_readback_smoke_pass(
+    geometry: ReadbackGeometry,
+    min_stroke_px: f32,
+    samples: &[(u32, u32)],
+) -> Result<Vec<u8>, String> {
+    let instance = wgpu::Instance::default();
+
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })
+        .await
+        .map_err(|err| format!("failed to acquire adapter: {err}"))?;
+
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_dash_readback_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
+        .await
+        .map_err(|err| format!("failed to acquire device: {err}"))?;
+
+    let target_format = wgpu::TextureFormat::Bgra8Unorm;
+    let (width, height, scale_px_per_mm) = geometry.target();
+    let camera = CameraUniform::ortho([width as f32, height as f32], [0.0, 0.0], scale_px_per_mm)
+        .with_min_feature_px(min_stroke_px, 0.0);
+    let camera_gpu = CameraGpu::new(&device, camera);
+
+    let mut line_pipeline =
+        LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut polygon_pipeline =
+        PolygonPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut arc_pipeline = ArcPipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let circle_pipeline =
+        CirclePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut ordered_pipeline = OrderedPipeline::new(&device);
+
+    match geometry {
+        ReadbackGeometry::Ordered(items) => ordered_pipeline.upload(&device, &queue, &items),
+        ReadbackGeometry::Line(line) => line_pipeline.upload(&device, &queue, &[line]),
+        ReadbackGeometry::Polygon(polygon) | ReadbackGeometry::PolygonSquare(polygon) => {
+            polygon_pipeline.upload(&device, &queue, &[polygon]);
+        }
+        ReadbackGeometry::Arc(arc) => arc_pipeline.upload(&device, &queue, &[arc]),
+    }
+
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("signex_gfx_dash_readback_target"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: target_format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("signex_gfx_dash_readback_encoder"),
+    });
+    {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("signex_gfx_dash_readback_render_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &target_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        // Only the uploaded pipeline has anything to draw; the other is empty.
+        line_pipeline.draw(&mut pass, camera_gpu.bind_group());
+        polygon_pipeline.draw(&mut pass, camera_gpu.bind_group());
+        arc_pipeline.draw(&mut pass, camera_gpu.bind_group());
+        ordered_pipeline.draw_runs(
+            &mut pass,
+            camera_gpu.bind_group(),
+            &KindPipelines {
+                line: &line_pipeline,
+                circle: &circle_pipeline,
+                arc: &arc_pipeline,
+                polygon: &polygon_pipeline,
+            },
+        );
+    }
+
+    // Bgra8Unorm is 4 bytes/pixel; every target width keeps `width * 4` a
+    // multiple of wgpu::COPY_BYTES_PER_ROW_ALIGNMENT (256), so no row padding.
+    let bytes_per_row = width * 4;
+    assert_eq!(bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT, 0);
+    let buffer_size = (bytes_per_row * height) as wgpu::BufferAddress;
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("signex_gfx_dash_readback_buffer"),
+        size: buffer_size,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &target,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: Some(height),
+            },
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    queue.submit(Some(encoder.finish()));
+
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |result| {
+        result.expect("readback buffer map failed");
+    });
+    let _ = device.poll(wgpu::PollType::wait_indefinitely());
+
+    let samples = {
+        let data = slice.get_mapped_range();
+        samples
+            .iter()
+            .map(|&(x, y)| {
+                assert!(x < width && y < height, "sample ({x}, {y}) outside target");
+                let offset = (y * bytes_per_row + x * 4) as usize;
+                // Bgra8Unorm byte order is [B, G, R, A]; red is byte index 2.
+                data[offset + 2]
+            })
+            .collect::<Vec<u8>>()
+    };
+    readback.unmap();
+
+    Ok(samples)
 }
 
 async fn run_arc_smoke_pass_with(scale_px_per_mm: f32, arcs: &[Arc]) -> Result<u32, String> {
@@ -343,6 +638,7 @@ async fn run_polygon_smoke_pass_with(
 
 pub async fn run_polygon_smoke_pass() -> Result<u32, String> {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
         fill_color: [0.2, 0.7, 0.9, 1.0],
         stroke_color: None,
@@ -466,8 +762,23 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
     let target_format = wgpu::TextureFormat::Bgra8Unorm;
     let mut text_pipeline = GlyphonTextPipeline::new(&device, &queue, target_format);
 
+    // Headless harness: there is no app font system to borrow, so it owns
+    // one. The policy is deliberately wide — these passes verify
+    // rasterization, not typography, and a clamp would hide the size under
+    // test.
+    let mut font_system = cryoglyph::FontSystem::new();
     text_pipeline
-        .upload(&device, &queue, texts, scale_px_per_mm, [128, 128])
+        .upload(
+            &device,
+            &queue,
+            &mut font_system,
+            texts,
+            scale_px_per_mm,
+            DEBUG_TEXT_POLICY,
+            DEBUG_TEXT_FAMILY,
+            [128, 128],
+            [0.0, 0.0],
+        )
         .map_err(|err| format!("failed to prepare text: {err}"))?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -530,6 +841,7 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
             rotation: 0.0,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
         TextItem {
             content: "VIN".to_string(),
@@ -541,6 +853,7 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
             rotation: 0.2,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Top,
+            family: None,
         },
     ];
 
@@ -548,9 +861,11 @@ pub async fn run_text_smoke_pass() -> Result<u32, String> {
 }
 
 mod composite;
+mod golden;
 #[cfg(test)]
 mod tests;
 
 pub use composite::{
     run_grid_overlay_text_composite_smoke_pass, run_text_geometry_composite_smoke_pass,
 };
+pub use golden::{GOLDEN_SIZE_PX, GoldenFrame, GoldenScene, render_golden_scene};

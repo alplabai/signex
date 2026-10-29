@@ -1,5 +1,5 @@
 //! Sketch-mode Active Bar — floating toolbar over the footprint
-//! canvas when the editor is in [`EditorMode::Sketch`].
+//! canvas when the editor is in [`EditorMode::Sketch`](crate::library::editor::footprint::state::EditorMode::Sketch).
 //!
 //! Mirrors the Fusion 360 sketch toolbar layout, including its
 //! grouping: the geometry tools collapse into two dropdown triggers
@@ -34,26 +34,28 @@
 //! canvas (Stack overlay layer) so it doesn't steal vertical space
 //! from the drawing area.
 
-use std::path::PathBuf;
-
 use iced::widget::{Space, container, text, text_input};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::icons;
 use crate::library::editor::footprint::state::{FpActiveBarMenu, SketchTool};
 use crate::library::messages::{
     FootprintEditorMsg, LibraryMessage, PrimitiveEdit, SketchConstraintTag,
 };
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Build the Active Bar items for the given editor state. Theme is
 /// pulled from `editor.path` → `themes::current_id()` lookup at the
 /// caller's site (same pattern as the SchLib editor).
 pub fn items<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
@@ -195,8 +197,6 @@ pub fn items<'a>(
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
     let dim_input = build_dimension_input(editor, tokens);
 
-    let _ = tokens;
-
     // Bar shape: Select | Create ▾ Modify ▾ | <constraints the current
     // selection permits> | DimInput | Linetype. The two group triggers
     // replace what used to be twelve always-visible tool buttons; the
@@ -208,17 +208,9 @@ pub fn items<'a>(
     // Create / Modify dropdown panels. Reordering them without updating
     // that function puts the panels under the wrong button;
     // `sketch_group_triggers_sit_where_the_offsets_say` pins it.
-    let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
-
-    // Section 1: Select
-    items.push(mk_tool(
-        "Select",
-        SketchTool::Select,
-        ActiveBarIcon::Svg(icons::icon_select(theme_id)),
-    ));
-    items.push(ActiveBarItem::Separator);
-
-    // Section 2 + 3: the Create / Modify group triggers.
+    //
+    // Sections 1-3 are unconditional, so they seed the vector directly:
+    // Select, a separator, then the Create / Modify group triggers.
     // v0.14 — Place Point is absent from Create by design. Intersections
     // snap automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
     // SnapKind::Intersection) and the Line/Rect/Circle/Arc tools
@@ -226,16 +218,24 @@ pub fn items<'a>(
     // was clutter in the footprint context. The SketchTool::Point
     // variant + dispatch stay (constraints + pad auto-mint reference
     // Points internally).
-    items.push(mk_group(
-        FpActiveBarMenu::SketchCreate,
-        "Create — Line / Rectangle / Rounded Rectangle / Circle / Arc / Tangent Arc",
-        icons::icon_sk_create(theme_id),
-    ));
-    items.push(mk_group(
-        FpActiveBarMenu::SketchModify,
-        "Modify — Fillet / Trim / Mirror / Offset / Patterns / Make Pad from Profile",
-        icons::icon_sk_modify(theme_id),
-    ));
+    let mut items: Vec<ActiveBarItem<LibraryMessage>> = vec![
+        mk_tool(
+            "Select",
+            SketchTool::Select,
+            ActiveBarIcon::Svg(icons::icon_select(theme_id)),
+        ),
+        ActiveBarItem::Separator,
+        mk_group(
+            FpActiveBarMenu::SketchCreate,
+            "Create — Line / Rectangle / Rounded Rectangle / Circle / Arc / Tangent Arc",
+            icons::icon_sk_create(theme_id),
+        ),
+        mk_group(
+            FpActiveBarMenu::SketchModify,
+            "Modify — Fillet / Trim / Mirror / Offset / Patterns / Make Pad from Profile",
+            icons::icon_sk_modify(theme_id),
+        ),
+    ];
 
     // Section 4: Constrain — only the buttons whose precondition is
     // met by the current selection are rendered (mk_constraint
@@ -363,7 +363,7 @@ pub fn items<'a>(
 /// Convenience wrapper — build items + render via
 /// [`signex_widgets::active_bar::view`].
 pub fn view<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -383,7 +383,12 @@ fn sketch_tool_icon(
         SketchTool::Rectangle => icons::icon_shape_rect(theme_id),
         SketchTool::RoundedRectangle => icons::icon_sk_rounded_rect(theme_id),
         SketchTool::Circle => icons::icon_shape_circle(theme_id),
-        SketchTool::Arc | SketchTool::TangentArc => icons::icon_shape_arc(theme_id),
+        // #467 — Edge Arc isn't in a group's tool list (no dropdown row
+        // yet, see the issue's menu-content note), so this arm only
+        // keeps the icon match exhaustive; it shares the Arc glyph.
+        SketchTool::Arc | SketchTool::EdgeArc | SketchTool::TangentArc => {
+            icons::icon_shape_arc(theme_id)
+        }
         SketchTool::Fillet => icons::icon_sk_fillet(theme_id),
         SketchTool::Trim => icons::icon_sk_trim(theme_id),
         SketchTool::Mirror => icons::icon_sk_mirror(theme_id),
@@ -401,7 +406,7 @@ fn sketch_tool_icon(
 
 /// Compute the per-tag enable state from the current selection slots.
 /// Returns a fixed-length array indexed by [`tag_index`].
-fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 19] {
+fn constraint_enable_matrix(editor: &FootprintDocument) -> [bool; 19] {
     use signex_sketch::entity::EntityKind;
     let primary = editor.state.selected_sketch;
     let secondary = editor.state.selected_sketch_secondary;
@@ -527,21 +532,23 @@ pub(crate) const DIM_INPUT_W: f32 = 92.0;
 /// Build the inline dimension `text_input` slot. Sized to read like
 /// the rest of the bar (matches the BTN_SIZE vertical rhythm).
 fn build_dimension_input<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'static, LibraryMessage> {
     let path = editor.path.clone();
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
+    let input_bg = crate::styles::tokens::input_bg(tokens);
+    let selection = crate::styles::tokens::selection_tint(tokens);
     let value: String = editor.state.dimension_input.clone();
 
     let input = text_input("0.0", &value)
-        .size(11)
-        .padding(2)
+        .size(TS.body)
+        .padding(SP.xs)
         .width(Length::Fixed(58.0))
         .style(move |_: &Theme, _| iced::widget::text_input::Style {
-            background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
+            background: iced::Background::Color(input_bg),
             border: Border {
                 width: 1.0,
                 radius: 2.0.into(),
@@ -550,7 +557,7 @@ fn build_dimension_input<'a>(
             icon: iced::Color::TRANSPARENT,
             placeholder: muted,
             value: text_c,
-            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+            selection,
         })
         .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
@@ -559,13 +566,13 @@ fn build_dimension_input<'a>(
 
     container(
         iced::widget::row![
-            text("mm").size(10).color(muted),
+            text("mm").size(TS.caption).color(muted),
             Space::new().width(Length::Fixed(4.0)),
             input,
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .width(Length::Fixed(DIM_INPUT_W))
     .style(move |_: &Theme| iced::widget::container::Style {
         background: None,

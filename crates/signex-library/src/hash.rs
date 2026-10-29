@@ -9,17 +9,15 @@
 //! would defeat the "did the technical content actually change?" question
 //! the hash answers.
 //!
-//! Per `v0.9-refactor-2-plan.md` §6 step 1.6, this replaces the older
-//! `hash_revision_content`. The pattern (canonical JSON over a `Serialize`
-//! view) is identical; only the input type changed from `Revision` to
-//! `ComponentRow`.
+//! The pattern is canonical JSON over a `Serialize` view of `ComponentRow`.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::adapter::LibraryError;
-use crate::component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
+use crate::alternate_symbol::AlternateSymbol;
+use crate::component::{ComponentRow, DatasheetDoc, DatasheetRef, PinPadOverride, PlmReserved};
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
@@ -39,12 +37,27 @@ struct CanonView<'a> {
     class: &'a ComponentClass,
     state: &'a LifecycleState,
     datasheet: &'a DatasheetRef,
+    // Skipped while empty so rows from before #1231 keep their hash.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    datasheet_label: &'a str,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    more_datasheets: &'a [DatasheetDoc],
+    // Skipped while empty so a row without one keeps its hash.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    description: &'a str,
     symbol_ref: &'a PrimitiveRef,
     footprint_ref: Option<&'a PrimitiveRef>,
+    // Skipped while empty so rows from before #1234 keep their hash.
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    alternate_footprints: &'a [crate::footprint_binding::FootprintBinding],
     sim_ref: Option<&'a PrimitiveRef>,
     pin_map_overrides: &'a [PinPadOverride],
     primary_mpn: &'a ManufacturerPart,
     alternates: &'a [ManufacturerPart],
+    // Omitted when empty so rows without alternate symbols keep their
+    // pre-existing hash.
+    #[serde(skip_serializing_if = "<[AlternateSymbol]>::is_empty")]
+    alternate_symbols: &'a [AlternateSymbol],
     supply: &'a [DistributorListing],
     parameters: &'a ParamMap,
     plm: &'a PlmReserved,
@@ -58,12 +71,17 @@ impl<'a> CanonView<'a> {
             class: &row.class,
             state: &row.state,
             datasheet: &row.datasheet,
+            datasheet_label: &row.datasheet_label,
+            more_datasheets: &row.more_datasheets,
+            description: &row.description,
             symbol_ref: &row.symbol_ref,
             footprint_ref: row.footprint_ref.as_ref(),
+            alternate_footprints: &row.alternate_footprints,
             sim_ref: row.sim_ref.as_ref(),
             pin_map_overrides: &row.pin_map_overrides,
             primary_mpn: &row.primary_mpn,
             alternates: &row.alternates,
+            alternate_symbols: &row.alternate_symbols,
             supply: &row.supply,
             parameters: &row.parameters,
             plm: &row.plm,
@@ -110,17 +128,17 @@ pub fn hash_row_content(row: &ComponentRow) -> Result<[u8; 32], LibraryError> {
 
 /// Reject any `ParamValue::Number` / `ParamValue::Measurement` whose float
 /// payload is not finite (`NaN`, `Infinity`, `-Infinity`).
-fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
+pub(crate) fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryError> {
     for (key, value) in params {
         match value {
             ParamValue::Number(n) if !n.is_finite() => {
-                return Err(LibraryError::Backend(format!(
-                    "parameter {key:?} is non-finite ({n}); content hash refuses NaN / Infinity"
+                return Err(LibraryError::InvalidData(format!(
+                    "parameter {key:?} is non-finite ({n}); refused: NaN / Infinity cannot be stored"
                 )));
             }
             ParamValue::Measurement { value: n, .. } if !n.is_finite() => {
-                return Err(LibraryError::Backend(format!(
-                    "parameter {key:?} measurement value is non-finite ({n}); content hash refuses NaN / Infinity"
+                return Err(LibraryError::InvalidData(format!(
+                    "parameter {key:?} measurement value is non-finite ({n}); refused: NaN / Infinity cannot be stored"
                 )));
             }
             _ => {}
@@ -143,9 +161,14 @@ mod tests {
             internal_pn: InternalPn::new("R10K"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
+            alternate_symbols: Vec::new(),
             footprint_ref: None,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
@@ -161,7 +184,58 @@ mod tests {
             created: t,
             updated: t,
             content_hash: [0u8; 32],
+            server_revision: None,
         }
+    }
+
+    /// Pins the canonical encoding: a row without alternate symbols must
+    /// keep the hash stored before that field existed.
+    #[test]
+    fn hash_of_row_without_alternate_symbols_is_stable() {
+        let h = hash_row_content(&fixture_row()).unwrap();
+        let hex: String = h.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(
+            hex,
+            "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    /// A row holding a legacy prefixed measurement hashes exactly as it
+    /// did before the quantity core: reading it through `as_quantity`
+    /// never rewrites or re-encodes the stored value.
+    #[test]
+    fn hash_of_untouched_legacy_measurement_row_is_stable() {
+        let mut row = fixture_row();
+        row.parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value: 4.7,
+                unit: "kΩ".into(),
+            },
+        );
+        let before = hex(&hash_row_content(&row).unwrap());
+        assert_eq!(
+            row.parameters["value"].as_quantity().unwrap().base(),
+            4700.0
+        );
+        let _ = row.parameters["value"].display();
+        assert_eq!(hex(&hash_row_content(&row).unwrap()), before);
+        assert_eq!(
+            before,
+            "0061c8e28d45c7338940261e03b1e1fc17b216178dbfeaa0ed1158a3b8d26db6"
+        );
+    }
+
+    #[test]
+    fn hash_changes_when_alternate_symbol_added() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.alternate_symbols.push(AlternateSymbol::new(
+            PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
+            "0.0.1",
+            "IEC",
+        ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
     }
 
     #[test]
@@ -171,6 +245,56 @@ mod tests {
             hash_row_content(&row).unwrap(),
             hash_row_content(&row).unwrap()
         );
+    }
+
+    /// Pinned: the document fields added in #1231 are left out of the
+    /// canonical view while empty, so a row without them keeps the hash
+    /// it had before.
+    #[test]
+    fn hash_of_a_row_without_extra_documents_is_unchanged() {
+        assert_eq!(
+            hex(&hash_row_content(&fixture_row()).unwrap()),
+            "d8cc43c86aa2c893a5371ba6aa1969184a3a71306d14c8907debdc374f62a174"
+        );
+    }
+
+    #[test]
+    fn hash_changes_when_documents_change() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.datasheet_label = "TI".into();
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        let mut c = fixture_row();
+        c.more_datasheets.push(crate::component::DatasheetDoc::new(
+            "Errata",
+            DatasheetRef::url("e.pdf"),
+        ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&c).unwrap());
+    }
+
+    #[test]
+    fn hash_changes_with_description_and_ignores_empty() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.description = "100 nF".into();
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+        b.description.clear();
+        assert_eq!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+    }
+
+    #[test]
+    fn hash_changes_when_alternate_footprints_change() {
+        let a = fixture_row();
+        let mut b = fixture_row();
+        b.alternate_footprints
+            .push(crate::footprint_binding::FootprintBinding::new(
+                PrimitiveRef::new(Uuid::from_u128(7), Uuid::from_u128(8)),
+            ));
+        assert_ne!(hash_row_content(&a).unwrap(), hash_row_content(&b).unwrap());
+    }
+
+    fn hex(bytes: &[u8; 32]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 
     #[test]
@@ -234,7 +358,7 @@ mod tests {
     }
 
     /// `serde_json` cannot encode `NaN` / `±Infinity`. The hash function
-    /// surfaces that as `LibraryError::Backend` instead of panicking.
+    /// surfaces that as `LibraryError::InvalidData` instead of panicking.
     #[test]
     fn hash_returns_backend_error_on_non_finite_float() {
         use crate::param::ParamValue;
@@ -242,12 +366,12 @@ mod tests {
         row.parameters
             .insert("bad".into(), ParamValue::Number(f64::NAN));
         let err = hash_row_content(&row).unwrap_err();
-        assert!(matches!(err, LibraryError::Backend(_)), "got {err:?}");
+        assert!(matches!(err, LibraryError::InvalidData(_)), "got {err:?}");
 
         let mut row = fixture_row();
         row.parameters
             .insert("bad".into(), ParamValue::Number(f64::INFINITY));
         let err = hash_row_content(&row).unwrap_err();
-        assert!(matches!(err, LibraryError::Backend(_)), "got {err:?}");
+        assert!(matches!(err, LibraryError::InvalidData(_)), "got {err:?}");
     }
 }

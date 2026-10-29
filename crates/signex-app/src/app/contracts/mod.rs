@@ -16,13 +16,12 @@ pub enum DragTarget {
     LeftPanel,
     RightPanel,
     BottomPanel,
-    ComponentsSplit,
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum Message {
     Menu(MenuMessage),
+    PassiveCalculator(signex_widgets::passive_calculator::CalculatorMessage),
     Tool(ToolMessage),
     /// Tab-bar message carrying the id of the window whose tab bar emitted
     /// it. Lets the handler distinguish main-window tab reorder/select
@@ -34,13 +33,21 @@ pub enum Message {
         msg: TabMessage,
     },
     Dock(DockMessage),
+    /// Debounced dock-layout persistence loop (#692), routed to
+    /// `dispatch_dock_layout_message`.
+    DockLayout(crate::dock::DockLayoutMsg),
+    /// Debounced search-box persistence loop (#859), routed to
+    /// `dispatch_search_prefs_message`.
+    SearchPrefs(crate::persist::SearchPrefsMsg),
+    /// Opt-in autosave loop (#104), routed to `dispatch_autosave_message`.
+    Autosave(crate::autosave::AutosaveMsg),
     /// UI / chrome message family (ADR-0001 D3). Theme, unit + grid
     /// toggles, the grid picker, layout drag, window resize, and the
     /// status-bar request enum. Routed to `dispatch_ui_message`.
     Ui(UiMsg),
     CanvasEvent(CanvasEvent),
     /// Canvas event stamped with the window that produced it. The
-    /// dispatch layer swaps the window's `SchematicCanvas` into the
+    /// dispatch layer swaps the window's `CanvasSlot` into the
     /// main canvas slot for the duration of the handler so the
     /// hundreds of `active_canvas_mut()` call sites read and write the
     /// right canvas transparently. Keyboard-generated canvas events
@@ -63,6 +70,9 @@ pub enum Message {
     /// `Message::Edit` and routed to `dispatch_edit_message`.
     Edit(EditMsg),
     Selection(SelectionRequest),
+    /// Keyboard-input family (ADR-0001 D3): Esc, unclaimed keys, and the
+    /// footprint-editor mode shortcut. Routed to `dispatch_input_message`.
+    Input(InputMsg),
     /// Overlay / modal-chrome message family (ADR-0001 D3). Panel-list
     /// toggle, panel open, find/replace open, keyboard-shortcuts and
     /// first-run-tour dismiss, modal drag, canvas focus-at, auto-focus
@@ -112,17 +122,6 @@ pub enum Message {
     /// Parameter Manager dialog family (ADR-0001 D3). Bulk parameter
     /// editor. Routed to `dispatch_parameter_manager_message`.
     ParameterManager(ParameterManagerMsg),
-    /// Cycle Altium's rubber-band selection mode
-    /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
-    CycleSelectionMode,
-    /// Close the in-flight lasso polygon (Enter key). Commits the
-    /// selection if >= 3 vertices, otherwise cancels.
-    LassoCommit,
-    /// Apply an edit to a placed SchDrawing. Dispatched from the
-    /// post-placement Properties panel (Line / Rect / Circle / Arc /
-    /// Polygon editable rows). Engine replaces the stored drawing by
-    /// uuid with full undo.
-    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
     /// Export subsystem message family — namespaced (ADR-0001 D3).
     /// PDF / netlist / BOM export lifecycle plus the export-error
     /// modal dismiss. Routed to `dispatch_export_message`.
@@ -133,7 +132,7 @@ pub enum Message {
     /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
     /// `dispatch_print_preview_message`.
     PrintPreview(PrintPreviewMsg),
-    /// v0.9 Library subsystem message — folded under one variant so
+    /// Library subsystem message — folded under one variant so
     /// the dispatcher can route to `library_dispatch::handle` in one
     /// shot. See `crate::library::LibraryMessage` for the inner
     /// shape.
@@ -142,39 +141,45 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
-    /// Async result of a per-file Git history load issued by the
-    /// right-dock History panel. `generation` is the value of
-    /// `DocumentState.history.generation` at the time the load was
-    /// kicked off; the handler discards stale results whose
-    /// generation no longer matches the current counter (the user
-    /// has switched tabs since). `path` is the file the load
-    /// targeted, surfaced for diagnostic logging only — the
-    /// generation token is the authoritative staleness check.
-    HistoryLoaded {
-        generation: u32,
-        path: std::path::PathBuf,
-        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
-    },
-    /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
-    /// Routed from the global `1` / `2` / `3` key handler in
-    /// `bootstrap.rs::subscription`. The dispatcher checks whether
-    /// the active tab is a footprint editor; if yes, sets the mode;
-    /// otherwise no-op so the keys don't steal text input on other
-    /// tabs.
-    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
-    /// v0.15 — Esc-key tool cancel routed through the dispatcher.
-    /// If the active tab is a footprint editor, fires
-    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
-    /// tool_pending); otherwise falls back to the schematic
-    /// `Tool::Select` reset.
-    EscapePressed,
-    Noop,
+}
+
+impl Message {
+    /// The do-nothing message: widgets and async tasks that must produce
+    /// a `Message` but have nothing to say.
+    pub fn noop() -> Self {
+        Message::Ui(UiMsg::Noop)
+    }
 }
 
 mod dialogs;
 mod messages;
+mod net_nav;
 mod state;
 
 pub use dialogs::*;
 pub use messages::*;
+pub use net_nav::NetNavMsg;
 pub use state::*;
+
+#[cfg(test)]
+mod tests {
+    /// ADR-0001 D3: the root `Message` stays a thin router over namespaced
+    /// sub-enums. A new flat leaf must join a family instead.
+    #[test]
+    fn root_message_stays_namespaced() {
+        let src = include_str!("mod.rs");
+        let start = src.find("pub enum Message {").expect("Message enum");
+        let body = &src[start..];
+        let end = body.find("\n}\n").expect("enum end");
+        let variants = body[..end]
+            .lines()
+            .filter(|l| {
+                l.starts_with("    ") && l[4..].starts_with(|c: char| c.is_ascii_uppercase())
+            })
+            .count();
+        assert!(
+            variants <= 40,
+            "root Message has {variants} variants (max 40)"
+        );
+    }
+}

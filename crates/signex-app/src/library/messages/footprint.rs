@@ -5,12 +5,11 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum FootprintEditorMsg {
     // ── Footprint ──────────────────────────────────────────
     /// v0.18.7 — switch which footprint inside the multi-footprint
     /// `.snxfpt` envelope is being edited. Wraps `active_idx` on the
-    /// `FootprintEditorState` wrapper. The dispatcher refreshes the
+    /// `FootprintDocument` wrapper. The dispatcher refreshes the
     /// canvas pad list + camera fit on switch.
     SelectActiveIdx(usize),
 
@@ -343,7 +342,7 @@ pub enum FootprintEditorMsg {
     AlignPads(crate::library::editor::footprint::state::AlignOp),
 
     /// #370 — Active-bar Align ▸ "Align…". Opens the per-axis Align
-    /// dialog ([`FootprintEditorState::align_modal`]). Composes the
+    /// dialog ([`FootprintEditorState::align_modal`](crate::library::editor::footprint::state::FootprintEditorState::align_modal)). Composes the
     /// existing [`AlignOp`](crate::library::editor::footprint::state::AlignOp)
     /// variants; adds no new geometry.
     AlignOpen,
@@ -465,6 +464,17 @@ pub enum FootprintEditorMsg {
     SketchResizeRoundPad {
         pad_idx: usize,
         diameter_mm: f64,
+    },
+
+    /// #1047 — a drag solve finished off the UI thread. Applied only if
+    /// `generation` is still the editor's current one, i.e. no edit has
+    /// moved the sketch since the snapshot it solved was taken; a stale
+    /// answer changes nothing.
+    SketchSolved {
+        instance: uuid::Uuid,
+        generation: u64,
+        footprint_idx: usize,
+        outcome: std::sync::Arc<crate::library::editor::footprint::sketch_solve_task::SolveOutcome>,
     },
 
     /// v0.27 — pick the rubber-band selection mode (Inside /

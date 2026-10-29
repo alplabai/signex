@@ -6,7 +6,16 @@ struct Camera {
     view_proj: mat4x4<f32>,
     viewport: vec2<f32>,
     mm_per_px: f32,
-    _pad: f32,
+    // Screen-space legibility floors, in pixels; 0.0 disables. Mirrors
+    // `CameraUniform` — the two layouts must agree byte for byte.
+    min_stroke_px: f32,
+    min_radius_px: f32,
+    // Three scalars, not a vec3: a `vec3<f32>` carries 16-byte alignment in
+    // WGSL, which would push the struct to 112 bytes and mismatch the
+    // 96-byte `CameraUniform`. wgpu rejects the bind group outright.
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 @group(0) @binding(0)
@@ -27,7 +36,14 @@ struct VertexOut {
     @location(2) p1: vec2<f32>,
     @location(3) half_width: f32,
     @location(4) color: vec4<f32>,
+    @location(5) @interpolate(flat) style: u32,
 };
+
+// Low `style` bit selects the dash pattern — mirrors `LineSegment::STYLE_DASHED`
+// (`crates/signex-gfx/src/primitive/line.rs`).
+const STYLE_DASHED: u32 = 1u;
+// Bit 1 selects the dotted pattern - mirrors `LineSegment::STYLE_DOTTED`.
+const STYLE_DOTTED: u32 = 2u;
 
 fn sdf_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
     let pa = p - a;
@@ -43,7 +59,13 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: LineInstance) -> VertexOut {
     let dir_len = max(length(dir_raw), 0.000001);
     let dir = dir_raw / dir_len;
     let normal = vec2<f32>(-dir.y, dir.x);
-    let hw = inst.width * 0.5;
+    // Legibility floor, matching what the CPU replays apply in screen space: a
+    // stroke never renders thinner than `min_stroke_px` pixels, so hairlines
+    // stay visible zoomed out instead of fading to sub-pixel coverage.
+    // `mm_per_px` converts that pixel floor into the world units this instance
+    // is expressed in. `0.0` leaves the width untouched.
+    let min_width = camera.min_stroke_px * camera.mm_per_px;
+    let hw = max(inst.width, min_width) * 0.5;
     let ext = dir * hw;
 
     let c0 = inst.p0 - ext + normal * hw;
@@ -80,6 +102,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: LineInstance) -> VertexOut {
     out.p1 = inst.p1;
     out.half_width = hw;
     out.color = inst.color;
+    out.style = inst.style;
     return out;
 }
 
@@ -87,6 +110,32 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: LineInstance) -> VertexOut {
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     let edge_soft = camera.mm_per_px * 0.4;
     let d = sdf_segment(input.world_pos, input.p0, input.p1);
-    let alpha = 1.0 - smoothstep(input.half_width - edge_soft, input.half_width + edge_soft, d);
+    var alpha = 1.0 - smoothstep(input.half_width - edge_soft, input.half_width + edge_soft, d);
+
+    // Mark/gap lengths in screen px, mirroring `LineSegment::pattern_px`
+    // (dashed wins over dotted). Converted to world mm via `camera.mm_per_px`
+    // so the pattern reads the same at any zoom, matching the CPU replay.
+    // The literals are pinned to `LineSegment::DASH_PX` and friends by
+    // `the_shader_pattern_literals_match_the_constants`.
+    var mark_px = 0.0;
+    var gap_px = 0.0;
+    if ((input.style & STYLE_DASHED) != 0u) {
+        mark_px = 8.0;
+        gap_px = 5.0;
+    } else if ((input.style & STYLE_DOTTED) != 0u) {
+        mark_px = 2.0;
+        gap_px = 4.0;
+    }
+    if (mark_px > 0.0) {
+        let dir = normalize(input.p1 - input.p0);
+        let along_mm = dot(input.world_pos - input.p0, dir);
+        let dash_mm = mark_px * camera.mm_per_px;
+        let period_mm = (mark_px + gap_px) * camera.mm_per_px;
+        let pos_in_period = along_mm - period_mm * floor(along_mm / period_mm);
+        if (pos_in_period > dash_mm) {
+            alpha = 0.0;
+        }
+    }
+
     return vec4<f32>(input.color.rgb, input.color.a * alpha);
 }

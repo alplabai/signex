@@ -4,14 +4,21 @@ use iced::widget::{Column, container, row, text};
 use iced::{Color, Element, Length};
 
 use super::super::{
-    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, PanelMsg, color_field,
+    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, NumericDraft,
+    NumericFieldKey, PanelMsg, color_field, numeric_input,
 };
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Per-shape numeric Properties rows for a placed graphic (corners /
 /// endpoints / centre + radius / arc angles / text + stroke).
 pub(super) fn view_graphic_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     g: &'a GraphicSummary,
+    draft: Option<&NumericDraft>,
     muted: Color,
     border_c: Color,
     fill_picker: Option<crate::app::GraphicFillPicker>,
@@ -23,26 +30,22 @@ pub(super) fn view_graphic_selection<'a>(
             container(
                 row![
                     text(label.to_string())
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    iced::widget::text_input("mm", &format!("{:.3}", value))
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| {
-                            let parsed = s.trim().parse::<f64>().unwrap_or(value);
-                            PanelMsg::SymEditorSetGraphicField {
-                                idx: g_idx,
-                                field,
-                                value: parsed,
-                            }
-                        })
-                        .width(Length::FillPortion(3)),
+                    numeric_input(
+                        "mm",
+                        NumericFieldKey::Graphic { idx: g_idx, field },
+                        value,
+                        draft,
+                    )
+                    .padding([SP.xs, SP.s])
+                    .size(TS.body),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([3, 8])
+            .padding([3.0, SP.m])
             .width(Length::Fill)
             .into()
         };
@@ -106,22 +109,22 @@ pub(super) fn view_graphic_selection<'a>(
             let content_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Content")
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted)
                         .width(Length::FillPortion(2)),
                     iced::widget::text_input("text", content.as_str())
-                        .padding([2, 4])
-                        .size(11)
+                        .padding([SP.xs, SP.s])
+                        .size(TS.body)
                         .on_input(move |s| PanelMsg::SymEditorSetGraphicText {
                             idx: g_idx,
                             value: s,
                         })
                         .width(Length::FillPortion(3)),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([3, 8])
+            .padding([3.0, SP.m])
             .width(Length::Fill)
             .into();
             col = col.push(content_row);
@@ -133,18 +136,18 @@ pub(super) fn view_graphic_selection<'a>(
             let vertices_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Vertices")
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted)
                         .width(Length::FillPortion(2)),
                     text(vertex_count.to_string())
-                        .size(11)
+                        .size(TS.body)
                         .color(muted)
                         .width(Length::FillPortion(3)),
                 ]
-                .spacing(4)
+                .spacing(SP.s)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([3, 8])
+            .padding([3.0, SP.m])
             .width(Length::Fill)
             .into();
             col = col.push(vertices_row);

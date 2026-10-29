@@ -25,9 +25,18 @@ pub(super) fn emit_wires(snapshot: &SchematicSnapshot, theme: &ResolvedTheme, sc
             p1: wire.p1,
             width: wire.width_mm,
             color: resolve_wire_color(wire, snapshot, theme),
-            style: 0,
+            style: line_style_bits(snapshot.wire_line_styles.get(&wire.id)),
             _pad: 0,
         });
+    }
+}
+
+/// The `LineSegment::style` bits for a net line style; absent means solid.
+fn line_style_bits(style: Option<&NetLineStyle>) -> u32 {
+    match style.copied().unwrap_or_default() {
+        NetLineStyle::Solid => 0,
+        NetLineStyle::Dashed => LineSegment::STYLE_DASHED,
+        NetLineStyle::Dotted => LineSegment::STYLE_DOTTED,
     }
 }
 
@@ -68,12 +77,22 @@ pub(super) fn emit_polygons(snapshot: &SchematicSnapshot, scene: &mut Scene) {
 
     for polygon in &snapshot.polygons {
         scene.polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: polygon.vertices.clone(),
             fill_color: polygon.fill_color,
             stroke_color: polygon.stroke_color,
             stroke_width: polygon.stroke_width_mm,
         });
     }
+}
+
+pub(super) fn emit_drawings(snapshot: &SchematicSnapshot, scene: &mut Scene) {
+    scene.drawings.clear();
+    scene.drawings.extend_from_slice(&snapshot.drawings);
+    scene.drawings_front.clear();
+    scene
+        .drawings_front
+        .extend_from_slice(&snapshot.drawings_front);
 }
 
 pub(super) fn emit_text_bucket(texts: &[TextInput], output: &mut Vec<TextItem>) {
@@ -85,6 +104,7 @@ pub(super) fn emit_text_bucket(texts: &[TextInput], output: &mut Vec<TextItem>) 
             color: text.color,
             bold: text.bold,
             italic: text.italic,
+            family: text.family.clone(),
             rotation: text.rotation_rad,
             h_align: to_text_h_align(text.h_align),
             v_align: to_text_v_align(text.v_align),
@@ -153,6 +173,7 @@ pub(super) fn emit_overlay_polygon_bucket(
 ) {
     for polygon in polygons {
         output.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: polygon.vertices.clone(),
             fill_color: polygon.fill_color,
             stroke_color: polygon.stroke_color,
@@ -280,6 +301,7 @@ pub(super) fn emit_erc_markers(
         ];
 
         scene.erc_marker_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: erc_marker_vertices(marker.severity, marker.center, marker.radius_mm),
             fill_color,
             stroke_color: Some(stroke_color),

@@ -11,10 +11,12 @@
 use std::path::Path;
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Element, Length};
 use sha2::{Digest, Sha256};
 use signex_library::{Footprint, StepAttachment};
 use signex_types::theme::ThemeTokens;
+
+use crate::styles::{Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
@@ -26,71 +28,57 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let attach_addr = address.clone();
-    let attach_btn =
-        button(container(text("Attach STEP…").size(11).color(iced::Color::WHITE)).padding([4, 12]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: attach_addr.library_path,
-                table: attach_addr.table.clone(),
-                row_id: attach_addr.row_id,
-                msg: EditorMsg::StepAttachDialog,
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let attach_btn = button(
+        container(
+            text("Attach STEP…")
+                .size(ts.body)
+                .color(crate::styles::tokens::on_accent(tokens)),
+        )
+        .padding([sp.s, sp.l]),
+    )
+    .on_press(LibraryMessage::EditorEvent {
+        library_path: attach_addr.library_path,
+        table: attach_addr.table.clone(),
+        row_id: attach_addr.row_id,
+        msg: EditorMsg::StepAttachDialog,
+    })
+    .style(crate::styles::accent_button(tokens));
 
     let body: Element<'a, LibraryMessage> = match fp.step_attachment.as_ref() {
         Some(att) => {
             let remove_addr = address.clone();
-            let remove_btn =
-                button(container(text("Remove").size(10).color(text_c)).padding([3, 8]))
-                    .on_press(LibraryMessage::EditorEvent {
-                        library_path: remove_addr.library_path,
-                        table: remove_addr.table.clone(),
-                        row_id: remove_addr.row_id,
-                        msg: EditorMsg::StepAttachRemove,
-                    })
-                    .style(move |_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        text_color: text_c,
-                        border: Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border,
-                        },
-                        ..iced::widget::button::Style::default()
-                    });
+            let remove_btn = button(
+                container(text("Remove").size(ts.caption).color(text_c)).padding([sp.xs, sp.m]),
+            )
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: remove_addr.library_path,
+                table: remove_addr.table.clone(),
+                row_id: remove_addr.row_id,
+                msg: EditorMsg::StepAttachRemove,
+            })
+            .style(crate::styles::outline_button(tokens));
             column![
                 row![
-                    text("STEP attachment").size(13).color(text_c),
+                    text("STEP attachment").size(ts.title).color(text_c),
                     Space::new().width(Length::Fill),
                     remove_btn,
                 ]
                 .align_y(iced::Alignment::Center),
-                Space::new().height(4),
+                Space::new().height(sp.s),
                 text(format!("File: {}", att.filename))
-                    .size(11)
+                    .size(ts.body)
                     .color(text_c),
                 text(format!(
                     "SHA-256: {}",
                     &att.content_hash[..16.min(att.content_hash.len())]
                 ))
-                .size(10)
+                .size(ts.caption)
                 .color(muted),
             ]
             .spacing(0)
@@ -98,14 +86,14 @@ pub fn view<'a>(
         }
         None => column![
             row![
-                text("STEP attachment").size(13).color(text_c),
+                text("STEP attachment").size(ts.title).color(text_c),
                 Space::new().width(Length::Fill),
                 attach_btn,
             ]
             .align_y(iced::Alignment::Center),
-            Space::new().height(4),
+            Space::new().height(sp.s),
             text("Attach a .step / .stp mech-CAD file. Stored content-hashed in step/.")
-                .size(10)
+                .size(ts.caption)
                 .color(muted),
         ]
         .spacing(0)
@@ -113,7 +101,7 @@ pub fn view<'a>(
     };
 
     container(body)
-        .padding(12)
+        .padding(sp.l)
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
         .into()
@@ -126,9 +114,17 @@ fn hash_hex(bytes: &[u8]) -> String {
     hasher.update(bytes);
     let result = hasher.finalize();
     let mut out = String::with_capacity(64);
+    // `write!` here would hand back a `fmt::Result` that cannot be `Err`
+    // — `String`'s `write_str` is infallible — leaving a discarded
+    // `Result` to explain at every read. Indexing a digit table has no
+    // `Result` to discard in the first place, and is what the output
+    // actually is: two lowercase hex chars per byte. The encoding is
+    // load-bearing (it names `step/<hash>.step` on disk), so it must
+    // stay byte-identical; `hash_hex_is_lowercase` pins it.
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     for byte in result.iter() {
-        use std::fmt::Write as _;
-        let _ = write!(&mut out, "{byte:02x}");
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
     }
     out
 }

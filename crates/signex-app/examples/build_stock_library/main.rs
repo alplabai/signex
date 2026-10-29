@@ -1,0 +1,643 @@
+//! Build the reference parametric footprints and the passive/discrete
+//! symbols that ship in `assets/stock-library/`, wrapped by
+//! `Stock.snxlib`.
+//!
+//! Run via:
+//!
+//! ```text
+//! cargo run --example build_stock_library -p signex-app
+//! ```
+//!
+//! Each footprint authors a single `BoardTopPlane`, parameterises the
+//! interesting dimensions through `SketchData::parameters`, and lays
+//! down one Point per pad with the per-pad delta carried on
+//! `offset_x_expr` / `offset_y_expr`. The generator then runs the same
+//! bake the footprint editor runs (`bake_pads`, `bake_silk`) so the file
+//! carries its pads and silkscreen for consumers that never open the editor.
+//!
+//! Apache-clean: industry-standard footprint dimensions (JEDEC
+//! SOIC-8 / QFN-16 / IPC-7351 0805 chip) only. No third-party EDA-tool
+//! source / file-format docs / wikis consulted.
+
+pub mod ids;
+pub mod manifest;
+pub mod rows;
+pub mod symbols;
+
+use std::error::Error;
+use std::path::Path;
+
+use chrono::{DateTime, TimeZone, Utc};
+use signex_library::primitive::footprint::{
+    Footprint, FootprintFile, FpGraphic, FpGraphicKind, Polygon,
+};
+use signex_sketch::SketchData;
+use signex_sketch::attr::{
+    DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern, SilkAttr,
+};
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_types::layer::SignexLayer;
+
+use ids::{STOCK_IDS, StockIds, StockKind};
+
+/// Fixed `created` / `updated` stamp for every stock footprint, so a
+/// regeneration never rewrites the files just because the clock moved.
+fn stock_timestamp() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 5, 4, 19, 1, 13)
+        .single()
+        .expect("constant stock timestamp is a valid UTC instant")
+}
+
+/// Next pinned sketch-entity id from the footprint's id table. The
+/// table is sized to the builder; running out is a programming error
+/// caught by the determinism test.
+fn next_id(ids: &mut impl Iterator<Item = SketchEntityId>) -> SketchEntityId {
+    ids.next()
+        .expect("stock id table lists one entity id per sketch entity")
+}
+
+/// Author the footprint named by one id-table row, then bake the sketch
+/// into `pads` and `silk_f` so a consumer that never opens the footprint
+/// editor (the only other place that bakes) still sees the pads and the
+/// polarity mark.
+fn build(ids: &StockIds) -> Footprint {
+    let mut fp = match ids.kind {
+        StockKind::Soic8 => build_soic8(ids),
+        StockKind::Qfn16 => build_qfn16(ids),
+        StockKind::Chip0805 => build_chip_0805(ids),
+        StockKind::Chip0805Polarised => build_chip_0805_polarised(ids),
+        StockKind::MountingHole3p2 => build_mounting_hole_3p2(ids),
+        StockKind::Fiducial1mm => build_fiducial_1mm(ids),
+    };
+    bake_sketch(&mut fp);
+    fp
+}
+
+/// The same bake the footprint editor runs on a solved sketch.
+fn bake_sketch(fp: &mut Footprint) {
+    let sketch = fp
+        .sketch
+        .as_ref()
+        .expect("every stock footprint is a sketch");
+    let resolved = signex_sketch::parameter::resolve(&sketch.parameters)
+        .expect("stock footprint parameters resolve");
+    let solved = signex_sketch::solver::Solver::default()
+        .solve(sketch, &resolved)
+        .expect("stock footprint sketch solves");
+    let mut warnings = Vec::new();
+    let (mut pads, mut silk_f, mut silk_b) = (Vec::new(), Vec::new(), Vec::new());
+    signex_bake::bake_pads(sketch, &solved, &resolved, &mut pads, &mut warnings)
+        .expect("stock pads bake");
+    signex_bake::bake_silk(sketch, &solved, &mut silk_f, &mut silk_b, &mut warnings)
+        .expect("stock silkscreen bakes");
+    assert!(warnings.is_empty(), "stock bake warnings: {warnings:?}");
+    fp.pads = pads;
+    fp.silk_f = silk_f;
+    fp.silk_b = silk_b;
+}
+
+/// One rendered stock file: its name, serialised text and pad count.
+pub struct RenderedStockFile {
+    pub file_name: String,
+    pub footprint_name: String,
+    pub pad_count: usize,
+    pub text: String,
+}
+
+/// Render every stock footprint to its `.snxfpt` text. Pure and
+/// deterministic: identity comes from [`ids::STOCK_IDS`] and
+/// [`stock_timestamp`], never from the clock or a fresh UUID.
+pub fn render_all() -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
+    let mut out = Vec::with_capacity(STOCK_IDS.len());
+    for row in STOCK_IDS {
+        let fp = build(row);
+        let pad_count = count_sketch_pads(&fp);
+        // v0.18.4 — emit TOML+TSV envelope (`snxfpt/1`). Pads land
+        // in the per-footprint `pads_tsv = '''…'''` literal multi-
+        // line block; the legacy JSON path was dropped.
+        let footprint_name = fp.name.clone();
+        let file = FootprintFile::with_identity(fp, row.file_uuid(), stock_timestamp());
+        out.push(RenderedStockFile {
+            file_name: row.file_name(),
+            footprint_name,
+            pad_count,
+            text: file.to_toml_string()?,
+        });
+    }
+    Ok(out)
+}
+
+/// Write the whole stock library under `root`: the `Stock.snxlib`
+/// manifest, the `symbols/` set and the footprints. Pure function of
+/// the id tables, so a rerun rewrites identical bytes. Never runs
+/// `git init`: the bundled tree is a plain directory inside the Signex
+/// repo.
+pub fn write_library(root: &Path) -> Result<Vec<RenderedStockFile>, Box<dyn Error>> {
+    let footprints = root.join("footprints");
+    std::fs::create_dir_all(&footprints)?;
+    let symbols_dir = root.join("symbols");
+    std::fs::create_dir_all(&symbols_dir)?;
+    for sym in symbols::render_all()? {
+        std::fs::write(symbols_dir.join(&sym.file_name), sym.text.as_bytes())?;
+    }
+    std::fs::write(
+        root.join(manifest::SNXLIB_FILE_NAME),
+        manifest::render_manifest()?.as_bytes(),
+    )?;
+    let rendered = render_all()?;
+    for file in &rendered {
+        std::fs::write(footprints.join(&file.file_name), file.text.as_bytes())?;
+    }
+    Ok(rendered)
+}
+
+#[allow(
+    dead_code,
+    reason = "the determinism test includes this file and never runs main"
+)]
+fn main() -> Result<(), Box<dyn Error>> {
+    let root = Path::new("assets/stock-library");
+    let rendered = write_library(root)?;
+    for file in &rendered {
+        println!(
+            "wrote {:<44} name={:<22} pads={}",
+            file.file_name, file.footprint_name, file.pad_count
+        );
+    }
+    for sym in symbols::render_all()? {
+        println!(
+            "wrote {:<44} name={:<22} pins={} designator={}",
+            sym.file_name, sym.symbol_name, sym.pin_count, sym.designator
+        );
+    }
+    println!(
+        "\n{} footprint(s) and {} written to {}",
+        rendered.len(),
+        manifest::SNXLIB_FILE_NAME,
+        root.display()
+    );
+    Ok(())
+}
+
+/// Count Points in `sketch.entities` carrying a `pad` attribute.
+fn count_sketch_pads(fp: &Footprint) -> usize {
+    fp.sketch
+        .as_ref()
+        .map(|s| {
+            s.entities
+                .iter()
+                .filter(|e| e.pad.is_some() && matches!(e.kind, EntityKind::Point { .. }))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// Helper: author one SMD Point with a `PadAttr`. Anchored at
+/// `(anchor_x, anchor_y)`, with optional per-pad relative offsets.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "14 arguments: an example builder that mirrors the stock-library row schema one field per parameter"
+)]
+fn smd_pad(
+    id: SketchEntityId,
+    plane: PlaneId,
+    anchor_x: f64,
+    anchor_y: f64,
+    number: &str,
+    size_x_expr: &str,
+    size_y_expr: &str,
+    offset_x_expr: Option<&str>,
+    offset_y_expr: Option<&str>,
+    rotation_expr: Option<&str>,
+    side: PadSide,
+    shape: PadShape,
+    mask_margin_expr: Option<&str>,
+    paste_margin_expr: Option<&str>,
+) -> Entity {
+    let mut e = Entity::new(
+        id,
+        plane,
+        EntityKind::Point {
+            x: anchor_x,
+            y: anchor_y,
+        },
+    );
+    e.pad = Some(PadAttr {
+        number: number.into(),
+        kind: PadKind::Smd,
+        side,
+        shape,
+        size_x_expr: size_x_expr.into(),
+        size_y_expr: size_y_expr.into(),
+        rotation_expr: rotation_expr.map(str::to_string),
+        offset_x_expr: offset_x_expr.map(str::to_string),
+        offset_y_expr: offset_y_expr.map(str::to_string),
+        drill: None,
+        mask_margin_expr: mask_margin_expr.map(str::to_string),
+        paste_margin_expr: paste_margin_expr.map(str::to_string),
+        paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
+    });
+    e
+}
+
+// ───────────────────── SOIC-8 ─────────────────────
+
+/// JEDEC SOIC-8: 1.27 mm pitch, body ≈ 3.9 × 4.9 mm, two rows of 4
+/// pads with 5.4 mm row-to-row centre spacing (IPC-7351 nominal).
+/// Pad copper 0.6 × 1.55 mm, mask margin 0.05 mm.
+fn build_soic8(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("SOIC-8", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
+    let mut sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    };
+
+    // Parameters: pitch, half-row spacing, pad size, body envelope.
+    sketch.parameters.insert("pad_pitch", "1.27mm");
+    sketch.parameters.insert("row_half", "2.7mm"); // 5.4 mm row-to-row → ±2.7 mm.
+    sketch.parameters.insert("pad_w", "1.55mm");
+    sketch.parameters.insert("pad_h", "0.6mm");
+    sketch.parameters.insert("body_w", "3.9mm");
+    sketch.parameters.insert("body_h", "4.9mm");
+
+    // Pin numbering: 1 (top-left), 2..4 down the left side, 5 bottom-right,
+    // 6..8 up the right side. Indices relative to row centre:
+    //   left  pads (1..4): y = +1.5, +0.5, -0.5, -1.5 × pad_pitch
+    //   right pads (5..8): y = -1.5, -0.5, +0.5, +1.5 × pad_pitch
+    let left = [(1.5_f64, "1"), (0.5, "2"), (-0.5, "3"), (-1.5, "4")];
+    let right = [(-1.5_f64, "5"), (-0.5, "6"), (0.5, "7"), (1.5, "8")];
+
+    for (idx, label) in left {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_w",
+            "pad_h",
+            Some("-row_half"),
+            Some(&format!("{idx} * pad_pitch")),
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+    for (idx, label) in right {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_w",
+            "pad_h",
+            Some("row_half"),
+            Some(&format!("{idx} * pad_pitch")),
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+
+    fp.sketch = Some(sketch);
+    fp
+}
+
+// ───────────────────── QFN-16 ─────────────────────
+
+/// QFN-16: 0.5 mm pitch, 4 pads per side around a 3 × 3 mm body.
+/// Side rows are at ±row_offset from origin; pad copper 0.3 × 0.6 mm
+/// (long axis radial). Pin 1 is the top-left of the west side
+/// (CCW numbering): W4..W1, S4..S1, E1..E4, N1..N4 → labelled 1..16.
+fn build_qfn16(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("QFN-16", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
+    let mut sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    };
+
+    sketch.parameters.insert("pad_pitch", "0.5mm");
+    sketch.parameters.insert("row_offset", "1.6mm"); // pad-centre offset from die centre
+    sketch.parameters.insert("pad_long", "0.6mm"); // radial length
+    sketch.parameters.insert("pad_short", "0.3mm"); // tangential width
+    sketch.parameters.insert("body_w", "3.0mm");
+    sketch.parameters.insert("body_h", "3.0mm");
+
+    // Numbering (CCW from top of west side):
+    //   1..4   = West side, y = +1.5, +0.5, -0.5, -1.5 × pitch (going down)
+    //   5..8   = South side, x = -1.5, -0.5, +0.5, +1.5 × pitch (going right)
+    //   9..12  = East side, y = -1.5, -0.5, +0.5, +1.5 × pitch (going up)
+    //  13..16  = North side, x = +1.5, +0.5, -0.5, -1.5 × pitch (going left)
+    // West row: long axis runs east-west → size_x = pad_long, size_y = pad_short.
+    let west = [(1.5_f64, "1"), (0.5, "2"), (-0.5, "3"), (-1.5, "4")];
+    for (idx, label) in west {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_long",
+            "pad_short",
+            Some("-row_offset"),
+            Some(&format!("{idx} * pad_pitch")),
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+    let south = [(-1.5_f64, "5"), (-0.5, "6"), (0.5, "7"), (1.5, "8")];
+    for (idx, label) in south {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_short",
+            "pad_long",
+            Some(&format!("{idx} * pad_pitch")),
+            Some("-row_offset"),
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+    let east = [(-1.5_f64, "9"), (-0.5, "10"), (0.5, "11"), (1.5, "12")];
+    for (idx, label) in east {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_long",
+            "pad_short",
+            Some("row_offset"),
+            Some(&format!("{idx} * pad_pitch")),
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+    let north = [(1.5_f64, "13"), (0.5, "14"), (-0.5, "15"), (-1.5, "16")];
+    for (idx, label) in north {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_short",
+            "pad_long",
+            Some(&format!("{idx} * pad_pitch")),
+            Some("row_offset"),
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+
+    fp.sketch = Some(sketch);
+    fp
+}
+
+// ───────────────────── Chip-0805 ─────────────────────
+
+/// Generic symmetric 0805 chip land (resistor, capacitor, inductor, fuse):
+/// 2 SMD pads, centre-to-centre 2.0 mm, pad copper 1.0 × 1.25 mm. Body sits
+/// between the pads (~2.0 × 1.25 mm). No polarity mark: either way round is
+/// electrically identical.
+fn build_chip_0805(ids: &StockIds) -> Footprint {
+    chip_0805(ids, "Chip-0805", false)
+}
+
+/// The same land as [`build_chip_0805`] with a cathode mark: pad 1 (left,
+/// x = -1.0 mm) is the cathode, matching pin 1 = cathode on the diode and
+/// LED symbols. Silkscreen is a 0.12 mm bar (the bake's default silkscreen stroke) across the outer end of pad 1
+/// at x = -1.7 mm (0.2 mm from the 1.5 mm copper edge, 0.14 mm after the stroke), y = ±0.7 mm,
+/// the courtyard is the rectangle ±1.9 × ±0.9 mm, which holds the copper
+/// plus the bar, and the fab layer carries the 2.0 × 1.25 mm body outline
+/// with a cathode line at x = -0.7 mm. The sketch is the source; the bake derives
+/// `silk_f` from it when the footprint is opened; the courtyard and the fab
+/// outline are written directly.
+fn build_chip_0805_polarised(ids: &StockIds) -> Footprint {
+    chip_0805(ids, "Chip-0805-Polarised", true)
+}
+
+fn chip_0805(ids: &StockIds, name: &str, polarised: bool) -> Footprint {
+    let mut fp = Footprint::with_identity(name, ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
+    let mut sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    };
+
+    sketch.parameters.insert("pad_spacing", "2.0mm"); // centre-to-centre
+    sketch.parameters.insert("pad_w", "1.0mm");
+    sketch.parameters.insert("pad_h", "1.25mm");
+    sketch.parameters.insert("body_w", "2.0mm");
+    sketch.parameters.insert("body_h", "1.25mm");
+
+    for (sign, label) in [(-0.5_f64, "1"), (0.5, "2")] {
+        let e = smd_pad(
+            next_id(&mut eids),
+            plane,
+            0.0,
+            0.0,
+            label,
+            "pad_w",
+            "pad_h",
+            Some(&format!("{sign} * pad_spacing")),
+            None,
+            None,
+            PadSide::Top,
+            PadShape::Rect,
+            Some("0.05mm"),
+            Some("0mm"),
+        );
+        sketch.entities.push(e);
+    }
+
+    if polarised {
+        // Cathode bar: the sketch is the source for the silkscreen line.
+        let mut point = |x: f64, y: f64| {
+            let id = next_id(&mut eids);
+            sketch
+                .entities
+                .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+            id
+        };
+        let (start, end) = (point(-1.7, -0.7), point(-1.7, 0.7));
+        let mut bar = Entity::new(next_id(&mut eids), plane, EntityKind::Line { start, end });
+        bar.silk = Some(SilkAttr {
+            layer: SignexLayer::TopSilk,
+        });
+        sketch.entities.push(bar);
+
+        // Courtyard and fab outline are plain footprint fields: the
+        // sketch courtyard tag (a unit struct) cannot be written as TOML.
+        fp.courtyard = Polygon::new(vec![[-1.9, -0.9], [1.9, -0.9], [1.9, 0.9], [-1.9, 0.9]]);
+        let fab = |kind| FpGraphic {
+            kind,
+            stroke_width: 0.1,
+            filled: false,
+        };
+        fp.fab_f = vec![
+            // Body outline, then the cathode line inside the pad-1 end.
+            fab(FpGraphicKind::Rectangle {
+                from: [-1.0, -0.625],
+                to: [1.0, 0.625],
+            }),
+            fab(FpGraphicKind::Line {
+                from: [-0.7, -0.625],
+                to: [-0.7, 0.625],
+            }),
+        ];
+    }
+
+    fp.sketch = Some(sketch);
+    fp
+}
+
+// ───────────────────── Mounting Hole 3.2 mm ─────────────────────
+
+/// Single non-plated through-hole at the origin. 3.2 mm drill
+/// (clearance for an M3 fastener). The "pad" copper is suppressed by
+/// using a copper-free annular zone equal to the pad size: we set the
+/// pad outer to 6.0 mm round but the kind=NptHole means the bake
+/// emits an unplated hole. Side=All (drill cuts both copper sides).
+fn build_mounting_hole_3p2(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity(
+        "MountingHole-3.2mm",
+        ids.footprint_uuid(),
+        stock_timestamp(),
+    );
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
+    let mut sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    };
+
+    sketch.parameters.insert("drill_dia", "3.2mm");
+    sketch.parameters.insert("clearance_dia", "6.0mm");
+
+    let mut e = Entity::new(
+        next_id(&mut eids),
+        plane,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    );
+    e.pad = Some(PadAttr {
+        number: "MH1".into(),
+        kind: PadKind::NptHole,
+        side: PadSide::All,
+        shape: PadShape::Round,
+        size_x_expr: "clearance_dia".into(),
+        size_y_expr: "clearance_dia".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: Some(DrillSpec {
+            diameter_expr: "drill_dia".into(),
+            slot_length_expr: None,
+            plated: false,
+        }),
+        mask_margin_expr: Some("0.05mm".into()),
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
+    });
+    sketch.entities.push(e);
+
+    fp.sketch = Some(sketch);
+    fp
+}
+
+// ───────────────────── Fiducial 1 mm ─────────────────────
+
+/// Single fiducial vision-alignment marker at the origin.
+/// 1 mm round copper, 2 mm mask opening (ring of bare substrate
+/// around the copper dot — required for camera contrast). No paste,
+/// no drill.
+fn build_fiducial_1mm(ids: &StockIds) -> Footprint {
+    let mut fp = Footprint::with_identity("Fiducial-1mm", ids.footprint_uuid(), stock_timestamp());
+    let plane = ids.plane_id();
+    let mut eids = ids.entity_ids();
+    let mut sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    };
+
+    sketch.parameters.insert("copper_dia", "1.0mm");
+    sketch.parameters.insert("mask_dia", "2.0mm");
+
+    // Mask margin = (mask_dia − copper_dia) / 2 = 0.5 mm.
+    let mut e = Entity::new(
+        next_id(&mut eids),
+        plane,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    );
+    e.pad = Some(PadAttr {
+        number: "FID1".into(),
+        kind: PadKind::Fiducial,
+        side: PadSide::Top,
+        shape: PadShape::Round,
+        size_x_expr: "copper_dia".into(),
+        size_y_expr: "copper_dia".into(),
+        rotation_expr: None,
+        offset_x_expr: None,
+        offset_y_expr: None,
+        drill: None,
+        mask_margin_expr: Some("0.5mm".into()),
+        paste_margin_expr: None,
+        paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
+    });
+    sketch.entities.push(e);
+
+    fp.sketch = Some(sketch);
+    fp
+}

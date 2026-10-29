@@ -17,7 +17,7 @@ impl Signex {
     /// Read-only sibling of [`active_footprint_editor_mut`].
     /// v0.18.11 — used by the Grid Properties modal open handler
     /// to seed the dialog buffers from the live snap step.
-    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintEditorState> {
+    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintDocument> {
         let path = self
             .document_state
             .tabs
@@ -31,7 +31,7 @@ impl Signex {
 
     pub(crate) fn active_footprint_editor_mut(
         &mut self,
-    ) -> Option<&mut crate::app::FootprintEditorState> {
+    ) -> Option<&mut crate::app::FootprintDocument> {
         let path = self
             .document_state
             .tabs
@@ -53,24 +53,22 @@ impl Signex {
     }
 
     pub(crate) fn fp_editor_set_next_pad_size_x(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if parsed > 0.0 {
-                    editor.state.next_pad_defaults.size_x_mm = parsed;
-                }
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
+            && parsed > 0.0
+        {
+            editor.state.next_pad_defaults.size_x_mm = parsed;
         }
         self.refresh_panel_ctx();
         true
     }
 
     pub(crate) fn fp_editor_set_next_pad_size_y(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if parsed > 0.0 {
-                    editor.state.next_pad_defaults.size_y_mm = parsed;
-                }
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
+            && parsed > 0.0
+        {
+            editor.state.next_pad_defaults.size_y_mm = parsed;
         }
         self.refresh_panel_ctx();
         true
@@ -88,10 +86,10 @@ impl Signex {
     }
 
     pub(crate) fn fp_editor_set_next_pad_rotation(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                editor.state.next_pad_defaults.rotation_deg = parsed;
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
+        {
+            editor.state.next_pad_defaults.rotation_deg = parsed;
         }
         self.refresh_panel_ctx();
         true
@@ -102,33 +100,37 @@ impl Signex {
         idx: usize,
         value: String,
     ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Ok(parsed) = value.trim().parse::<f64>() {
-                if editor.state.pads.get(idx).is_some() {
-                    editor.with_parts(|state, primitive| {
-                        use crate::library::editor::footprint::pad_to_sketch;
-                        let Some(pad) = state.pads.get_mut(idx) else {
-                            return;
-                        };
-                        pad.rotation_deg = parsed;
-                        // The pad FRAME moved, exactly as it does on
-                        // the active-bar Rotate arm — so the sidecar
-                        // is regenerated through its one owner, not
-                        // re-placed corner by corner. Moving only the
-                        // four bbox corners turns them into the new
-                        // frame and leaves a parametric shape's
-                        // anchors in the old one, which is a
-                        // self-crossing outline rather than a stale
-                        // one.
-                        if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
-                            pad_to_sketch::warn_profile_pad_untransformed("Rotate", &pad.number);
-                        }
-                        crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
-                    });
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
+        {
+            editor.record_edit(Some(("pad_rotation", idx as u128)), |editor| {
+                if editor.state.pads.get(idx).is_none() {
+                    return false;
                 }
-            }
+                editor.with_parts(|state, primitive| {
+                    use crate::library::editor::footprint::pad_to_sketch;
+                    let Some(pad) = state.pads.get_mut(idx) else {
+                        return;
+                    };
+                    pad.rotation_deg = parsed;
+                    // The pad FRAME moved, exactly as it does on
+                    // the active-bar Rotate arm — so the sidecar
+                    // is regenerated through its one owner, not
+                    // re-placed corner by corner. Moving only the
+                    // four bbox corners turns them into the new
+                    // frame and leaves a parametric shape's
+                    // anchors in the old one, which is a
+                    // self-crossing outline rather than a stale
+                    // one.
+                    if !pad_to_sketch::remint_pad_geometry(pad, primitive) {
+                        pad_to_sketch::warn_profile_pad_untransformed("Rotate", &pad.number);
+                    }
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.mark_dirty();
+                editor.canvas_cache.clear();
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -171,32 +173,21 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
-    /// v0.20 — Hole shape pick_list. Round / Slot. The picker is a
-    /// shortcut: Round clears slot_length; Slot defaults it to
-    /// 1.5× drill diameter (or 1mm if no drill yet).
-    pub(crate) fn fp_editor_set_next_pad_hole_shape_round(&mut self) {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.drill_slot_length_mm = None;
-        }
-        self.refresh_panel_ctx();
-    }
-    pub(crate) fn fp_editor_set_next_pad_hole_shape_slot(&mut self) {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            let default_slot = editor
-                .state
-                .next_pad_defaults
-                .drill_diameter_mm
-                .map(|d| d * 1.5)
-                .unwrap_or(1.0);
-            editor.state.next_pad_defaults.drill_slot_length_mm = Some(default_slot);
-        }
-        self.refresh_panel_ctx();
-    }
+    /// #599 — the three outcomes stay apart: empty clears, out of range
+    /// clamps to the nearest bound, unreadable text leaves the stored
+    /// default alone. Collapsing them into one `None` used to erase the
+    /// value and drop the key from the saved `.snxfpt`.
     pub(crate) fn fp_editor_set_next_pad_corner_radius_pct(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            let parsed = value.trim().parse::<f64>().ok();
-            editor.state.next_pad_defaults.stack.corner_radius_pct =
-                parsed.filter(|v| (0.0..=50.0).contains(v));
+        let edit = fp_parse_optional_number_in(
+            &value,
+            numeric_input::CORNER_RADIUS_PCT_MIN,
+            numeric_input::CORNER_RADIUS_PCT_MAX,
+        );
+        if let Some(stored) =
+            fp_resolve_optional_number("Corner radius %, new pad default", &value, edit)
+            && let Some(editor) = self.active_footprint_editor_mut()
+        {
+            editor.state.next_pad_defaults.stack.corner_radius_pct = stored;
         }
         self.refresh_panel_ctx();
         true
@@ -340,8 +331,27 @@ impl Signex {
     where
         F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
     {
+        self.with_selected_pad_field(idx, None, f)
+    }
+
+    /// [`Self::with_selected_pad`] for a text-input field: `field`
+    /// names it, so keystrokes into the same pad's same field share
+    /// one undo step instead of one per character.
+    pub(in crate::app::handlers::dock::sch_library) fn with_selected_pad_field<F>(
+        &mut self,
+        idx: usize,
+        field: Option<&'static str>,
+        f: F,
+    ) -> bool
+    where
+        F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
+    {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if editor.state.pads.get(idx).is_some() {
+            let key = field.map(|name| (name, idx as u128));
+            editor.record_edit(key, |editor| {
+                if editor.state.pads.get(idx).is_none() {
+                    return false;
+                }
                 editor.with_parts(|state, primitive| {
                     use crate::library::editor::footprint::pad_to_sketch;
                     let Some(pad) = state.pads.get_mut(idx) else {
@@ -376,9 +386,10 @@ impl Signex {
                     }
                     crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
                 });
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
-            }
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -398,16 +409,24 @@ impl Signex {
         F: FnOnce(&mut signex_sketch::attr::PadAttr),
     {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            let sketch = editor.primitive_mut().sketch.as_mut();
-            if let Some(sketch) = sketch {
-                if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) {
-                    if let Some(attr) = entity.pad.as_mut() {
-                        f(attr);
-                        editor.dirty = true;
-                        editor.canvas_cache.clear();
-                    }
-                }
-            }
+            editor.record_edit(None, |editor| {
+                let sketch = editor.primitive_mut().sketch.as_mut();
+                let Some(sketch) = sketch else {
+                    return false;
+                };
+                let Some(attr) = sketch
+                    .entities
+                    .iter_mut()
+                    .find(|e| e.id == id)
+                    .and_then(|e| e.pad.as_mut())
+                else {
+                    return false;
+                };
+                f(attr);
+                editor.mark_dirty();
+                editor.canvas_cache.clear();
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -417,7 +436,7 @@ impl Signex {
         idx: usize,
         value: String,
     ) -> bool {
-        self.with_selected_pad(idx, |pad| pad.number = value);
+        self.with_selected_pad_field(idx, Some("pad_number"), |pad| pad.number = value);
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_side(
@@ -444,7 +463,14 @@ impl Signex {
                 LayerId::new("B.Mask"),
             ],
         };
-        self.with_selected_pad(idx, |pad| pad.layers = layers);
+        let default_drill = self
+            .active_footprint_editor_mut()
+            .and_then(|editor| editor.state.next_pad_defaults.drill_diameter_mm)
+            .unwrap_or(crate::library::editor::footprint::state::DEFAULT_THROUGH_HOLE_DRILL_MM);
+        self.with_selected_pad(idx, |pad| {
+            pad.layers = layers;
+            pad.apply_side_drill(side, default_drill);
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_shape(
@@ -464,18 +490,18 @@ impl Signex {
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>() {
-            if parsed > 0.0 {
-                self.with_selected_pad(idx, |pad| pad.size_mm.0 = parsed);
-            }
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
+            && parsed > 0.0
+        {
+            self.with_selected_pad_field(idx, Some("pad_size_x"), |pad| pad.size_mm.0 = parsed);
         }
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) -> bool {
-        if let Ok(parsed) = value.trim().parse::<f64>() {
-            if parsed > 0.0 {
-                self.with_selected_pad(idx, |pad| pad.size_mm.1 = parsed);
-            }
+        if let Some(parsed) = crate::numeric_field::parse_field_f64(&value)
+            && parsed > 0.0
+        {
+            self.with_selected_pad_field(idx, Some("pad_size_y"), |pad| pad.size_mm.1 = parsed);
         }
         true
     }
@@ -485,31 +511,52 @@ impl Signex {
         value: String,
     ) -> bool {
         let parsed = fp_parse_optional_mm(&value);
-        self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = parsed);
+        self.with_selected_pad_field(idx, Some("pad_drill_diameter"), |pad| {
+            pad.drill_diameter_mm = parsed;
+            // A slot length belongs to a drill; with no drill it must
+            // not survive to resurface when a diameter is typed again.
+            if parsed.is_none() {
+                pad.passthrough.drill_slot_length_mm = None;
+            }
+        });
         true
     }
+    /// Slot length of the selected pad's drill; empty clears it back to
+    /// a round hole. Without a drill there is nothing to slot, so the
+    /// value is not stored on a drill-less pad.
     pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(
         &mut self,
         idx: usize,
-        _value: String,
+        value: String,
     ) -> bool {
-        // v0.20 placeholder — slot length not yet on EditorPad. Wired
-        // when `EditorPad` gains a separate `drill_slot_length_mm`.
-        let _ = idx;
-        self.refresh_panel_ctx();
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad_field(idx, Some("pad_drill_slot_length"), |pad| {
+            if pad.drill_diameter_mm.is_some() {
+                pad.passthrough.drill_slot_length_mm = parsed;
+            }
+        });
         true
     }
+    /// #599 — sibling of [`Self::fp_editor_set_next_pad_corner_radius_pct`];
+    /// an unreadable buffer is refused rather than written as `None`.
     pub(crate) fn fp_editor_set_selected_pad_corner_radius_pct(
         &mut self,
         idx: usize,
         value: String,
     ) -> bool {
-        let parsed = value
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|v| (0.0..=50.0).contains(v));
-        self.with_selected_pad(idx, |pad| pad.stack.corner_radius_pct = parsed);
+        let edit = fp_parse_optional_number_in(
+            &value,
+            numeric_input::CORNER_RADIUS_PCT_MIN,
+            numeric_input::CORNER_RADIUS_PCT_MAX,
+        );
+        match fp_resolve_optional_number("Corner radius %, selected pad", &value, edit) {
+            Some(stored) => {
+                self.with_selected_pad_field(idx, Some("pad_corner_radius"), |pad| {
+                    pad.stack.corner_radius_pct = stored
+                });
+            }
+            None => self.refresh_panel_ctx(),
+        }
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_template(
@@ -517,7 +564,7 @@ impl Signex {
         idx: usize,
         value: String,
     ) -> bool {
-        self.with_selected_pad(idx, |pad| pad.template = value);
+        self.with_selected_pad_field(idx, Some("pad_template"), |pad| pad.template = value);
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_template_library(
@@ -525,7 +572,9 @@ impl Signex {
         idx: usize,
         value: String,
     ) -> bool {
-        self.with_selected_pad(idx, |pad| pad.template_library = value);
+        self.with_selected_pad_field(idx, Some("pad_template_library"), |pad| {
+            pad.template_library = value
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_paste_margin_top(
@@ -534,7 +583,9 @@ impl Signex {
         value: String,
     ) -> bool {
         let parsed = fp_parse_optional_mm(&value);
-        self.with_selected_pad(idx, |pad| pad.stack.paste_margin_top = parsed);
+        self.with_selected_pad_field(idx, Some("pad_paste_margin_top"), |pad| {
+            pad.stack.paste_margin_top = parsed
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_paste_margin_bottom(
@@ -543,7 +594,9 @@ impl Signex {
         value: String,
     ) -> bool {
         let parsed = fp_parse_optional_mm(&value);
-        self.with_selected_pad(idx, |pad| pad.stack.paste_margin_bottom = parsed);
+        self.with_selected_pad_field(idx, Some("pad_paste_margin_bottom"), |pad| {
+            pad.stack.paste_margin_bottom = parsed
+        });
         true
     }
     pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_top(
@@ -568,7 +621,9 @@ impl Signex {
         value: String,
     ) -> bool {
         let parsed = fp_parse_optional_mm(&value);
-        self.with_selected_pad(idx, |pad| pad.stack.mask_margin_top = parsed);
+        self.with_selected_pad_field(idx, Some("pad_mask_margin_top"), |pad| {
+            pad.stack.mask_margin_top = parsed
+        });
         true
     }
     pub(crate) fn fp_editor_set_selected_pad_mask_margin_bottom(
@@ -577,7 +632,9 @@ impl Signex {
         value: String,
     ) -> bool {
         let parsed = fp_parse_optional_mm(&value);
-        self.with_selected_pad(idx, |pad| pad.stack.mask_margin_bottom = parsed);
+        self.with_selected_pad_field(idx, Some("pad_mask_margin_bottom"), |pad| {
+            pad.stack.mask_margin_bottom = parsed
+        });
         true
     }
     pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_top(
@@ -724,12 +781,18 @@ impl Signex {
         true
     }
 
+    /// #599 — an unreadable rotation leaves the stored default alone
+    /// instead of clearing it.
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_rotation(
         &mut self,
         v: &str,
     ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.hole_rotation_deg = v.trim().parse::<f64>().ok();
+        let edit = fp_parse_optional_number(v);
+        if let Some(stored) =
+            fp_resolve_optional_number("Hole rotation (°), new pad default", v, edit)
+            && let Some(editor) = self.active_footprint_editor_mut()
+        {
+            editor.state.next_pad_defaults.hole_rotation_deg = stored;
         }
         self.refresh_panel_ctx();
         true

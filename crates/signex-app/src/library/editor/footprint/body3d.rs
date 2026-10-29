@@ -16,6 +16,10 @@ use signex_widgets::theme_ext;
 use crate::library::messages::{EditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ShapePick(BodyShape);
 
@@ -42,7 +46,7 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
 
-    let header = text("Body 3D").size(13).color(text_c);
+    let header = text("Body 3D").size(TS.title).color(text_c);
 
     // Shape picker.
     let opts = [
@@ -61,7 +65,7 @@ pub fn view<'a>(
         }
     })
     .text_size(11)
-    .padding([4, 8]);
+    .padding([SP.s, SP.m]);
 
     // Numeric inputs — height_mm / offset_z_mm.
     let height_addr = address.clone();
@@ -74,7 +78,7 @@ pub fn view<'a>(
         }
     })
     .step(0.1_f32)
-    .padding(4)
+    .padding(SP.s)
     .width(Length::Fixed(96.0));
 
     let offset_addr = address.clone();
@@ -87,7 +91,7 @@ pub fn view<'a>(
         }
     })
     .step(0.1_f32)
-    .padding(4)
+    .padding(SP.s)
     .width(Length::Fixed(96.0));
 
     // Color rows — three swatch buttons + RGBA hex display.
@@ -127,7 +131,7 @@ pub fn view<'a>(
     .width(Length::Fill);
 
     container(body_col)
-        .padding(12)
+        .padding(SP.l)
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
         .into()
@@ -139,7 +143,7 @@ fn labeled_field<'a>(
     muted: iced::Color,
 ) -> Element<'a, LibraryMessage> {
     column![
-        text(label).size(10).color(muted),
+        text(label).size(TS.caption).color(muted),
         Space::new().height(2),
         field.into(),
     ]
@@ -162,7 +166,7 @@ fn color_row<'a>(
 ) -> Element<'a, LibraryMessage> {
     let border = theme_ext::border_color(tokens);
     let preview_color = iced::Color::from_rgba(rgba[0], rgba[1], rgba[2], 1.0);
-    let preview_swatch = container(text("").size(11))
+    let preview_swatch = container(text("").size(TS.body))
         .width(Length::Fixed(36.0))
         .height(Length::Fixed(20.0))
         .style(move |_: &Theme| iced::widget::container::Style {
@@ -193,25 +197,15 @@ fn color_row<'a>(
         EditorMsg::SetBodySideColor(next)
     };
 
-    let cycle_btn = button(container(text("Cycle").size(10).color(text_c)).padding([3, 8]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path,
-            table: address.table.clone(),
-            row_id: address.row_id,
-            msg,
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let cycle_btn =
+        button(container(text("Cycle").size(TS.caption).color(text_c)).padding([3.0, SP.m]))
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: address.library_path,
+                table: address.table.clone(),
+                row_id: address.row_id,
+                msg,
+            })
+            .style(crate::styles::outline_button(tokens));
 
     let hex = format!(
         "#{:02x}{:02x}{:02x}",
@@ -221,12 +215,12 @@ fn color_row<'a>(
     );
 
     column![
-        text(label).size(10).color(muted),
+        text(label).size(TS.caption).color(muted),
         Space::new().height(2),
         row![
             preview_swatch,
             Space::new().width(8),
-            text(hex).size(11).color(text_c),
+            text(hex).size(TS.body).color(text_c),
             Space::new().width(Length::Fill),
             cycle_btn,
         ]

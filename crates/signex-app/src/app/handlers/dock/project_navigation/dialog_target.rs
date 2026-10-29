@@ -1,0 +1,91 @@
+//! The project a Remove or Rename dialog was opened for, resolved by id at
+//! confirm time rather than by its position in the project list (#855).
+
+use super::*;
+
+impl Signex {
+    /// The current index path of the row `key` names. A project root row is
+    /// identified by its project id, so it resolves even before the tree is
+    /// built; any other row is looked up by key in the tree as it is now. A
+    /// row that no longer exists yields `None`, never its neighbour.
+    pub(super) fn resolve_tree_row(
+        &self,
+        key: &signex_widgets::tree_view::TreeKey,
+    ) -> Option<Vec<usize>> {
+        if let Some(path) = signex_widgets::tree_view::resolve_path(
+            self.document_state.panel_ctx.project_tree.as_slice(),
+            key,
+        ) {
+            return Some(path);
+        }
+        let [root] = key.as_slice() else { return None };
+        let idx = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id.to_string() == *root)?;
+        Some(vec![idx])
+    }
+
+    /// The id of the project that owns the tree row at `tree_path`.
+    pub(super) fn project_id_at_tree_path(
+        &self,
+        tree_path: &[usize],
+    ) -> Option<crate::app::state::ProjectId> {
+        let idx = *tree_path.first()?;
+        self.document_state.projects.get(idx).map(|p| p.id)
+    }
+
+    /// The index of the project that still lists the library `row` names, or
+    /// `None` — after a Messages-panel warning — when the project was closed
+    /// or the library was removed since the menu opened (#742).
+    pub(super) fn resolve_library_row(
+        &self,
+        row: &crate::app::LibraryRowRef,
+        action: &str,
+    ) -> Option<usize> {
+        let found = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == row.project_id)
+            .filter(|&i| {
+                let p = &self.document_state.projects[i];
+                p.data
+                    .libraries
+                    .iter()
+                    .any(|e| p.data.resolve_library_path(e) == row.root)
+                    || p.pending_libraries
+                        .values()
+                        .any(|spec| spec.lib_path == row.root)
+            });
+        if found.is_none() {
+            crate::diagnostics::log_warning(format!(
+                "{action} cancelled: library no longer in the project ({}).",
+                row.root.display()
+            ));
+        }
+        found
+    }
+
+    /// Re-point a dialog's `tree_path[0]` at the current index of the project
+    /// it was opened for, since projects may have been added or removed
+    /// meanwhile (#855). Returns `false` when that project is no longer open.
+    /// `None` (no captured project) leaves `tree_path` unchanged.
+    pub(super) fn repoint_dialog_tree_path(
+        &self,
+        project_id: Option<crate::app::state::ProjectId>,
+        tree_path: &mut [usize],
+    ) -> bool {
+        let Some(id) = project_id else {
+            return true;
+        };
+        let Some(idx) = self.document_state.projects.iter().position(|p| p.id == id) else {
+            return false;
+        };
+        if let Some(first) = tree_path.first_mut() {
+            *first = idx;
+        }
+        true
+    }
+}

@@ -2,7 +2,10 @@
 //!
 //! VS Code-style Ctrl+Shift+P entry. Three sources feed one flat catalog:
 //!
-//! 1. **Commands** — every menu action + every panel open.
+//! 1. **Commands** — every registry command the bridge can resolve
+//!    (#366), plus every panel open. Rows carry the command id, not a
+//!    `Message`, and show the binding the active keymap profile gives
+//!    them (#374).
 //! 2. **Symbols** — placed designators in the active project (zoom-to).
 //! 3. **Files** — sheets/PCB/libraries in every loaded project (open).
 //!
@@ -15,7 +18,7 @@ use std::sync::LazyLock;
 
 use iced::widget::Id;
 
-use crate::menu_bar::MenuMessage;
+use crate::keymap::{AppCommandId, metadata_for};
 use crate::panels::{ALL_PANELS, PanelKind};
 
 /// Stable widget id for the chrome-strip palette `text_input`. Used by
@@ -39,12 +42,66 @@ pub struct CommandPaletteState {
     /// Highlighted row in the result list (0-based, clamped to results
     /// at render time).
     pub selected_index: usize,
+    /// The top [`MAX_RESULTS`] ranked entries for `query`, refreshed in
+    /// `update` when the palette opens or the query changes, so `view` only
+    /// reads them instead of rebuilding and re-ranking the catalog per frame.
+    pub results: Vec<CommandEntry>,
+    /// How many catalog entries matched `query` (before the cap).
+    pub total_matches: usize,
+    /// [`catalog_stamp`] when `results` was last built; a different stamp
+    /// means the symbols or files behind the rows changed under the open
+    /// palette.
+    pub catalog_stamp: u64,
+    /// Project-wide designators and sheets, built off-thread (#1268).
+    pub index: Option<std::sync::Arc<super::palette_index::ProjectSearchIndex>>,
+    /// Bumped per index request; an older answer is dropped.
+    pub index_generation: u64,
+    /// The stamp an in-flight index build is for.
+    pub index_building: Option<u64>,
+    /// How many times a request cloned the open documents (test probe).
+    #[cfg(test)]
+    pub index_snapshots_taken: u32,
+}
+
+/// Hash of the live inputs [`build_catalog`] reads that change while the
+/// palette is open: the placed symbols, each project's file list, and the
+/// active editor kind / enablement facts that filter the command rows.
+pub fn catalog_stamp(app: &super::Signex) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    app.document_state.panel_ctx.placed_symbols.hash(&mut h);
+    // #1070 — which commands the command rows offer follows the active
+    // editor kind and the enablement facts, so a tab switch rebuilds.
+    app.shortcut_contexts(None).hash(&mut h);
+    app.command_context(None).hash(&mut h);
+    for project in &app.document_state.projects {
+        let d = &project.data;
+        (&d.dir, &d.name, &d.schematic_root, &d.pcb_file).hash(&mut h);
+        for sheet in &d.sheets {
+            sheet.filename.hash(&mut h);
+        }
+        for lib in &d.libraries {
+            lib.path.hash(&mut h);
+        }
+    }
+    // #1268 — the project-wide rows follow the index: its stamp, and whether
+    // it is still the current one.
+    let current = super::palette_index::index_stamp(&app.document_state);
+    app.ui_state
+        .command_palette
+        .index
+        .as_ref()
+        .map(|index| (index.stamp, index.stamp == current))
+        .hash(&mut h);
+    h.finish()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandSource {
     Command,
     Symbol,
+    Net,
+    Sheet,
     File,
 }
 
@@ -60,7 +117,11 @@ pub struct CommandEntry {
 
 #[derive(Debug, Clone)]
 pub enum CommandAction {
-    Menu(MenuMessage),
+    /// A registry command, named by its stable id (#366). The palette
+    /// does not know which `Message` this becomes — that is the point of
+    /// the registry, and the dispatcher resolves it through the same
+    /// bridge the keyboard uses.
+    Command(AppCommandId),
     Panel(PanelKind),
     OpenFile(PathBuf),
     /// Focus a placed symbol on the canvas by reference designator.
@@ -68,6 +129,15 @@ pub enum CommandAction {
     /// only it has the engine reference.
     FocusSymbol {
         reference: String,
+    },
+    /// Open `path` at `placement` and, when `select` names an item that is
+    /// still there, centre on where it is NOW and select it. The "search
+    /// everywhere" rows (#1268): a designator on any sheet, a net's terminal,
+    /// a sheet. Read-only navigation: nothing in any document changes.
+    Reveal {
+        path: PathBuf,
+        placement: Option<signex_types::schematic::InstancePath>,
+        select: Option<signex_types::schematic::SelectedItem>,
     },
 }
 
@@ -78,20 +148,63 @@ pub enum CommandAction {
 pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     let mut out = Vec::with_capacity(256);
 
-    // 1. Commands — menu actions.
-    for (label, msg) in menu_command_table() {
-        // v0.13.0 — footprint editor gated off; keep its create
-        // command out of the palette so there's no dead entry.
-        if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED
-            && matches!(msg, MenuMessage::AddLibraryFootprint)
+    // 1. Commands — straight from the registry (#366).
+    //
+    // Was a hand-kept 48-row `(label, MenuMessage)` table that named no
+    // command ids at all, so a command added to the catalog never
+    // appeared here and nothing failed. Now the catalog is the source,
+    // which is the epic's founding principle: menus, keybindings and the
+    // palette are consumers of one table.
+    //
+    // Filtered to ids the bridge can actually resolve. 71 catalog ids
+    // have no dispatch arm yet (see `app::command::bridge`), and a
+    // palette row that silently does nothing is worse than no row.
+    let contexts = app.shortcut_contexts(None);
+    let command_ctx = app.command_context(None);
+    for id in crate::keymap::all_command_ids() {
+        let Ok(command) = AppCommandId::new(id) else {
+            continue;
+        };
+        // Through `bridge::` rather than the `command::core_to_message`
+        // re-export: #367 (PR #504) narrows that re-export to private, and
+        // the two changes merge cleanly but would not compile together.
+        // The module path holds either way.
+        // `is_dispatchable`, not `core_to_message` (#619): this asks
+        // whether the row would do anything. Resolving through the
+        // dispatch entry point made building the palette report every
+        // unmapped id to the user, once per rebuild.
+        if !crate::app::command::bridge::is_dispatchable(&command) {
+            continue;
+        }
+        let Some(metadata) = metadata_for(&command) else {
+            continue;
+        };
+        // #1070 — only commands that can act where the user is: the
+        // editor context named by the command's catalog metadata must be
+        // live, and the same predicate
+        // that greys the menu row must say yes. Global commands carry no
+        // editor context and stay.
+        if !crate::keymap::offered_in(&command, &contexts)
+            || !crate::app::command::is_enabled(&command, &command_ctx)
         {
             continue;
         }
         out.push(CommandEntry {
             source: CommandSource::Command,
-            label: label.to_string(),
-            detail: String::new(),
-            action: CommandAction::Menu(msg.clone()),
+            // The descriptive `label`, not `menu_label`: the palette is
+            // the surface where the full phrasing helps ("Place wire",
+            // not "Wire"). That split is exactly why #281 added the
+            // second field.
+            label: metadata.label.to_string(),
+            // #374 — the binding from the ACTIVE profile, not the
+            // catalog's suggested `keybind`, because a profile always
+            // overrides the default.
+            detail: app
+                .ui_state
+                .active_keymap
+                .shortcut_label(&command)
+                .unwrap_or_default(),
+            action: CommandAction::Command(command),
         });
     }
 
@@ -105,19 +218,134 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
         });
     }
 
-    // 2. Symbols — placed designators in the active project.
-    for (reference, value, _footprint, _lib_id) in &app.document_state.panel_ctx.placed_symbols {
-        if reference.is_empty() {
-            continue;
+    // 2. Symbols — designators. With the project index: every placement of
+    //    every sheet of the active project, closed sheets included (#1268).
+    //    Before it arrives: the active sheet's symbols.
+    let project_dir = app
+        .document_state
+        .active_document_project()
+        .map(|p| p.dir().to_path_buf());
+    let shown = |path: &std::path::Path| -> String {
+        project_dir
+            .as_deref()
+            .and_then(|dir| path.strip_prefix(dir).ok())
+            .unwrap_or(path)
+            .display()
+            .to_string()
+    };
+    // An index of another project, or of documents that have since changed,
+    // is not shown: the active sheet's own rows stand in until a fresh one
+    // arrives.
+    let current = super::palette_index::index_stamp(&app.document_state);
+    let index = app
+        .ui_state
+        .command_palette
+        .index
+        .as_deref()
+        .filter(|index| index.stamp == current);
+    if let Some(index) = index {
+        for d in &index.designators {
+            let mut detail = vec![shown(&d.path)];
+            if !d.value.is_empty() {
+                detail.insert(0, d.value.clone());
+            }
+            if let Some(label) = &d.placement_label {
+                detail.push(label.clone());
+            }
+            out.push(CommandEntry {
+                source: CommandSource::Symbol,
+                label: d.designator.clone(),
+                detail: detail.join(" · "),
+                action: CommandAction::Reveal {
+                    path: d.path.clone(),
+                    placement: d.placement.clone(),
+                    select: Some(signex_types::schematic::SelectedItem::new(
+                        d.symbol,
+                        signex_types::schematic::SelectedKind::Symbol,
+                    )),
+                },
+            });
         }
-        out.push(CommandEntry {
-            source: CommandSource::Symbol,
-            label: reference.clone(),
-            detail: value.clone(),
-            action: CommandAction::FocusSymbol {
-                reference: reference.clone(),
-            },
-        });
+    } else {
+        for (reference, value, _footprint, _lib_id) in &app.document_state.panel_ctx.placed_symbols
+        {
+            if reference.is_empty() {
+                continue;
+            }
+            out.push(CommandEntry {
+                source: CommandSource::Symbol,
+                label: reference.clone(),
+                detail: value.clone(),
+                action: CommandAction::FocusSymbol {
+                    reference: reference.clone(),
+                },
+            });
+        }
+    }
+
+    // 2b. Nets — from the index, which derived them with the same project
+    //     build the export and net-class styling use. A row jumps to the first
+    //     terminal on a sheet the index can name. Sheets — every occurrence
+    //     of the hierarchy, including children no page list names; a sheet
+    //     placed more than once has a row per placement.
+    if let Some(index) = index {
+        for net in &index.nets {
+            let Some(target) = &net.target else {
+                continue;
+            };
+            out.push(CommandEntry {
+                source: CommandSource::Net,
+                label: net.name.clone(),
+                detail: format!(
+                    "{} terminal{}",
+                    net.terminals,
+                    if net.terminals == 1 { "" } else { "s" }
+                ),
+                action: CommandAction::Reveal {
+                    path: target.path.clone(),
+                    placement: Some(target.placement.clone()),
+                    select: Some(signex_types::schematic::SelectedItem::new(
+                        target.symbol,
+                        signex_types::schematic::SelectedKind::Symbol,
+                    )),
+                },
+            });
+        }
+        let pages: std::collections::HashSet<PathBuf> = app
+            .document_state
+            .projects
+            .iter()
+            .flat_map(|p| {
+                let dir = p.data.dir.clone();
+                p.data
+                    .schematic_root
+                    .iter()
+                    .chain(p.data.sheets.iter().map(|s| &s.filename))
+                    .map(move |f| std::path::Path::new(&dir).join(f))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let mut placed: std::collections::HashMap<&std::path::Path, usize> =
+            std::collections::HashMap::new();
+        for sheet in &index.sheets {
+            *placed.entry(sheet.path.as_path()).or_default() += 1;
+        }
+        for sheet in &index.sheets {
+            // A page placed once already has its File row.
+            if pages.contains(&sheet.path) && placed[sheet.path.as_path()] == 1 {
+                continue;
+            }
+            out.push(CommandEntry {
+                source: CommandSource::Sheet,
+                label: sheet.name.clone(),
+                detail: shown(&sheet.path),
+                action: CommandAction::Reveal {
+                    path: sheet.path.clone(),
+                    placement: Some(sheet.placement.clone()),
+                    select: None,
+                },
+            });
+        }
     }
 
     // 3. Files — every sheet, library, and PCB across loaded projects.
@@ -186,6 +414,8 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
                 let base = match entry.source {
                     CommandSource::Command => 100,
                     CommandSource::Symbol => 50,
+                    CommandSource::Net => 40,
+                    CommandSource::Sheet => 30,
                     CommandSource::File => 25,
                 };
                 (idx, base)
@@ -208,6 +438,8 @@ pub fn rank_results(catalog: &[CommandEntry], query: &str) -> Vec<(usize, i32)> 
                 let source_bonus = match entry.source {
                     CommandSource::Command => 5,
                     CommandSource::Symbol => 3,
+                    CommandSource::Net => 2,
+                    CommandSource::Sheet => 2,
                     CommandSource::File => 1,
                 };
                 (idx, score + source_bonus)
@@ -231,8 +463,12 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
         return Some(0);
     }
     let q: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
-    let t: Vec<char> = target.chars().flat_map(char::to_lowercase).collect();
-    let t_orig: Vec<char> = target.chars().collect();
+    // Lowercasing can expand one char into several; keep an original-case
+    // char per lowercased char so both vectors share indices.
+    let (t, t_orig): (Vec<char>, Vec<char>) = target
+        .chars()
+        .flat_map(|c| c.to_lowercase().map(move |l| (l, c)))
+        .unzip();
     if q.len() > t.len() {
         return None;
     }
@@ -292,75 +528,16 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
     Some(score)
 }
 
-/// User-facing label for every menu action that's worth surfacing in
-/// the palette. Order influences the empty-query default ranking via
-/// `rank_results`'s stable secondary sort on index — keep frequently-
-/// used items near the top. NoOp / passive headers are excluded.
-fn menu_command_table() -> &'static [(&'static str, MenuMessage)] {
-    &[
-        // File
-        ("New Project", MenuMessage::NewProject),
-        ("Open Project…", MenuMessage::OpenProject),
-        ("Save", MenuMessage::Save),
-        ("Save As…", MenuMessage::SaveAs),
-        ("Print Preview…", MenuMessage::PrintPreview),
-        ("Export PDF…", MenuMessage::ExportPdf),
-        ("Export Netlist…", MenuMessage::ExportNetlist),
-        ("Export Bill of Materials…", MenuMessage::ExportBom),
-        ("Open Library…", MenuMessage::LibraryOpenLibrary),
-        ("Place Component…", MenuMessage::LibraryPlaceComponent),
-        ("Add Component Library", MenuMessage::AddComponentLibrary),
-        ("Add New Component", MenuMessage::AddLibraryComponent),
-        ("Add New Symbol", MenuMessage::AddLibrarySymbol),
-        ("Add New Footprint", MenuMessage::AddLibraryFootprint),
-        // Edit
-        ("Undo", MenuMessage::Undo),
-        ("Redo", MenuMessage::Redo),
-        ("Cut", MenuMessage::Cut),
-        ("Copy", MenuMessage::Copy),
-        ("Paste", MenuMessage::Paste),
-        ("Paste Special", MenuMessage::SmartPaste),
-        ("Delete", MenuMessage::Delete),
-        ("Select All", MenuMessage::SelectAll),
-        ("Duplicate", MenuMessage::Duplicate),
-        ("Find…", MenuMessage::Find),
-        ("Find and Replace…", MenuMessage::Replace),
-        // View
-        ("Zoom In", MenuMessage::ZoomIn),
-        ("Zoom Out", MenuMessage::ZoomOut),
-        ("Zoom to Fit", MenuMessage::ZoomFit),
-        ("Toggle Grid", MenuMessage::ToggleGrid),
-        ("Cycle Grid Size", MenuMessage::CycleGrid),
-        // Place
-        ("Place Wire", MenuMessage::PlaceWire),
-        ("Place Bus", MenuMessage::PlaceBus),
-        ("Place Net Label", MenuMessage::PlaceLabel),
-        ("Place Component", MenuMessage::PlaceComponent),
-        // Design
-        ("Annotate Schematics", MenuMessage::Annotate),
-        ("Annotate Quietly", MenuMessage::AnnotateQuietly),
-        ("Reset Annotations", MenuMessage::AnnotateReset),
-        (
-            "Reset Duplicate Annotations",
-            MenuMessage::AnnotateResetDuplicates,
-        ),
-        ("Force Annotate All", MenuMessage::AnnotateForceAll),
-        ("Back-Annotate from PCB", MenuMessage::AnnotateBack),
-        ("Annotate Sheets", MenuMessage::AnnotateSheets),
-        ("Run ERC", MenuMessage::Erc),
-        ("Toggle Auto-Focus", MenuMessage::ToggleAutoFocus),
-        ("Generate BOM", MenuMessage::GenerateBom),
-        // Tools
-        ("Open Preferences", MenuMessage::OpenPreferences),
-        ("New Part", MenuMessage::ToolsNewPart),
-        ("Remove Part", MenuMessage::ToolsRemovePart),
-        ("Document Options", MenuMessage::ToolsDocumentOptions),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fuzzy_score_survives_lowercase_expansion() {
+        // U+0130 lowercases to two chars; indices must stay aligned.
+        assert!(fuzzy_score("ab", "\u{130}ab").is_some());
+        assert!(fuzzy_score("x", "\u{130}\u{130}\u{130}").is_none());
+    }
 
     #[test]
     fn empty_query_passes_all() {
@@ -368,10 +545,77 @@ mod tests {
             source: CommandSource::Command,
             label: "Open Preferences".into(),
             detail: String::new(),
-            action: CommandAction::Menu(MenuMessage::OpenPreferences),
+            action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
         }];
         let ranked = rank_results(&entries, "");
         assert_eq!(ranked.len(), 1);
+    }
+
+    /// #366 — every command row the palette offers must resolve through
+    /// the bridge. A row that dispatches nothing looks identical to one
+    /// that works, so this is the only thing standing between the user
+    /// and a menu of silent no-ops.
+    #[test]
+    fn every_palette_command_row_resolves_through_the_bridge() {
+        let (app, _task) = crate::app::Signex::new();
+        let dead: Vec<String> = build_catalog(&app)
+            .into_iter()
+            .filter_map(|entry| match entry.action {
+                // `bridge::` and not the `command::core_to_message`
+                // re-export, which #367 (PR #504) makes private — the
+                // same reason `build_catalog` above spells out the full
+                // path. Using the re-export here compiles today and
+                // stops compiling the moment #504 lands ahead of this
+                // branch in the merge order.
+                CommandAction::Command(command) => {
+                    (!crate::app::command::bridge::is_dispatchable(&command))
+                        .then(|| command.as_str().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            dead.is_empty(),
+            "the palette is offering command rows the bridge cannot \
+             resolve, which would silently do nothing when picked: {dead:?}"
+        );
+    }
+
+    /// #366 — the palette must actually be reading the catalog. A build
+    /// that produced zero command rows would pass the guard above
+    /// vacuously. The start screen is the narrowest context (#1070), so
+    /// the floor is what survives with no document open.
+    #[test]
+    fn the_palette_offers_command_rows_from_the_catalog() {
+        let (app, _task) = crate::app::Signex::new();
+        let commands = build_catalog(&app)
+            .into_iter()
+            .filter(|entry| matches!(entry.action, CommandAction::Command(_)))
+            .count();
+        assert!(
+            commands >= 10,
+            "only {commands} command rows — the catalog-driven source in \
+             build_catalog has stopped finding commands"
+        );
+    }
+
+    /// #374 — a command the active profile binds shows that binding as
+    /// its detail text.
+    #[test]
+    fn a_bound_command_row_shows_its_shortcut() {
+        let (app, _task) = crate::app::Signex::new();
+        let preferences = build_catalog(&app)
+            .into_iter()
+            .find(|entry| match &entry.action {
+                CommandAction::Command(command) => command.as_str() == "open_preferences",
+                _ => false,
+            })
+            .expect("`open_preferences` should be offered by the palette");
+        assert!(
+            !preferences.detail.is_empty(),
+            "`open_preferences` is bound in the default profile, so its palette row \
+             should carry the shortcut — detail was empty"
+        );
     }
 
     #[test]
@@ -412,13 +656,13 @@ mod tests {
                 source: CommandSource::Command,
                 label: "Preferences".into(),
                 detail: String::new(),
-                action: CommandAction::Menu(MenuMessage::OpenPreferences),
+                action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::Command,
                 label: "Save".into(),
                 detail: String::new(),
-                action: CommandAction::Menu(MenuMessage::Save),
+                action: CommandAction::Command(AppCommandId::new("save_document").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::File,

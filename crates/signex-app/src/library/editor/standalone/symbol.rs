@@ -6,15 +6,19 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
 
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     GraphicHandleMsg, LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 // ── Symbol ──────────────────────────────────────────────────────────
 
@@ -26,19 +30,18 @@ use crate::panels::PanelContext;
 /// sees the same Properties surface whether editing a schematic or
 /// a symbol library — single source of truth, no duplicated panes.
 pub fn view_symbol<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    theme_id: signex_types::theme::ThemeId,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
     // Active bar moved to the app-view layer (view_main_for) so it
     // shares the schematic's window-absolute coordinate system — see
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
-    // renders just toolbar + canvas; the bar is layered on top there.
-    let _ = theme_id;
+    // renders just toolbar + canvas; the bar is layered on top there,
+    // which is also where the theme id for its icons is resolved.
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
     let body = column![toolbar, canvas_widget]
@@ -67,10 +70,10 @@ pub fn view_symbol<'a>(
 /// status bar so a user editing a symbol library has the same
 /// metadata at the same place on screen.
 fn view_symbol_status<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
-    path: &'a std::path::PathBuf,
+    path: &'a std::path::Path,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
@@ -86,7 +89,7 @@ fn view_symbol_status<'a>(
     let pin_count = format!("{} pins", editor.primitive().pins.len());
     let tool_text = format!("Tool: {}", editor.tool.label());
 
-    let sep = || text("|").size(10).color(muted);
+    let sep = || text("|").size(TS.caption).color(muted);
 
     // Grid toggle button.
     let grid_vis_label = if display.grid_visible {
@@ -94,54 +97,68 @@ fn view_symbol_status<'a>(
     } else {
         "Grid: OFF"
     };
-    let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
-        .padding([2, 6])
+    let grid_toggle = button(text(grid_vis_label).size(TS.body).color(text_c))
+        .padding([SP.xs, 6.0])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
         })
         .style(symbol_tool_button_style(false, border));
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(text(grid_size_label).size(11).color(muted))
-        .padding([2, 6])
+    let grid_cycle = button(text(grid_size_label).size(TS.body).color(muted))
+        .padding([SP.xs, 6.0])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
         })
         .style(symbol_tool_button_style(false, border));
 
+    // A copy of a stock symbol can be made again from the editor (#813).
+    let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
+        crate::library::modal_chrome::secondary_btn(
+            "Copy Again",
+            LibraryMessage::StockCopy(
+                crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(path.to_path_buf()),
+            ),
+            tokens,
+        )
+    } else {
+        Space::new().into()
+    };
+
     container(
         row![
-            text(coord_text).size(11).color(text_c),
+            text(coord_text).size(TS.body).color(text_c),
             sep(),
-            text(zoom_text).size(11).color(muted),
+            text(zoom_text).size(TS.body).color(muted),
             sep(),
-            text(pin_count).size(11).color(muted),
+            text(pin_count).size(TS.body).color(muted),
             sep(),
-            text(tool_text).size(11).color(muted),
+            text(tool_text).size(TS.body).color(muted),
             sep(),
             grid_toggle,
             grid_cycle,
+            copy_again,
             Space::new().width(Length::Fill),
             match &editor.status_message {
                 Some(msg) => text(msg.clone())
-                    .size(10)
+                    .size(TS.caption)
                     .color(theme_ext::error_color(tokens)),
                 None => text(if editor.selected.is_some() {
                     "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
                 } else {
                     "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
                 })
-                .size(10)
+                .size(TS.caption)
                 .color(muted),
             },
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 12])
+    .padding([SP.s, SP.l])
     .style(crate::styles::status_bar(tokens))
     .width(Length::Fill)
     .into()
@@ -165,7 +182,7 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
 }
 
 fn view_symbol_toolbar<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
@@ -175,8 +192,8 @@ fn view_symbol_toolbar<'a>(
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
     let btn = |label: &'static str, msg: PrimitiveEdit| {
-        button(text(label).size(11).color(text_c))
-            .padding([4, 10])
+        button(text(label).size(TS.body).color(text_c))
+            .padding([SP.s, 10.0])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
                 msg,
@@ -187,21 +204,24 @@ fn view_symbol_toolbar<'a>(
     let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
     let active_part = editor.active_part;
 
-    let save_label = if editor.dirty { "Save *" } else { "Save" };
+    let save_label = if editor.is_dirty() { "Save *" } else { "Save" };
+    let body_controls = body_toolbar(editor, &path, text_c, border);
 
     container(
         row![
             btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
             Space::new().width(Length::Fill),
+            body_controls,
+            Space::new().width(12),
             btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
             text(format!("Part {active_part} / {max_part}"))
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
             Space::new().width(6),
-            // Add-unit (+) / remove-unit (−). Wire the existing
-            // NewPart / RemovePart messages; Phase B fixes their
-            // semantics (real delete + persistent empty unit).
+            // Add-unit (+) / remove-unit (−), wired to NewPart /
+            // RemovePart, which add a part and call `delete_unit`
+            // (real delete, refusing to remove the only part).
             btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
             btn(
                 "\u{2212}",
@@ -215,6 +235,54 @@ fn view_symbol_toolbar<'a>(
     )
     .padding([6, 10])
     .style(crate::styles::tab_bar_strip(tokens))
+    .into()
+}
+
+/// The De Morgan body controls: which body to show (Normal / Alternate) and
+/// whether the selection belongs to both bodies or only the shown one.
+fn body_toolbar<'a>(
+    editor: &SymbolDocument,
+    path: &std::path::Path,
+    text_c: iced::Color,
+    border: iced::Color,
+) -> Element<'a, LibraryMessage> {
+    use signex_types::schematic::BodyStyle;
+    let send = |msg: SymbolEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Symbol(msg),
+    };
+    let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
+        button(text(label).size(11).color(text_c))
+            .padding([4, 10])
+            .on_press(send(msg))
+            .style(symbol_tool_button_style(active, border))
+    };
+    let view = editor.view();
+    row![
+        text("Body").size(11).color(text_c),
+        button_for(
+            "Normal",
+            view.body == BodyStyle::Normal,
+            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Normal),
+        ),
+        button_for(
+            "Alternate",
+            view.body == BodyStyle::Alternate,
+            SymbolEditorMsg::BodyStyleSelected(BodyStyle::Alternate),
+        ),
+        button_for(
+            "Both bodies",
+            false,
+            SymbolEditorMsg::SelectionBodyAssigned(signex_library::BODY_COMMON),
+        ),
+        button_for(
+            "This body only",
+            false,
+            SymbolEditorMsg::SelectionBodyAssigned(view.body_tag()),
+        ),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
     .into()
 }
 
@@ -238,7 +306,7 @@ fn symbol_tool_button_style(
 }
 
 fn view_symbol_canvas<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
@@ -248,11 +316,12 @@ fn view_symbol_canvas<'a>(
         editor.selected.clone(),
         editor.tool,
         &editor.polygon_vertices,
-        editor.active_part,
+        editor.view(),
         editor.context_menu.is_some(),
         &editor.camera,
-        display.grid_size_mm as f64,
+        crate::canvas::grid::pitch_mm_exact(display.grid_size_mm),
         display.grid_visible,
+        panel_ctx.symbol_grid_style,
         display.pin_selection.allows_label_grab(),
         display.sheet_color.to_color(),
         crate::styles::ti(tokens.accent),
@@ -262,7 +331,9 @@ fn view_symbol_canvas<'a>(
             a: 0.18,
             ..crate::styles::ti(tokens.text_secondary)
         },
-    );
+    )
+    .with_selection_filter(editor.selection_filter)
+    .with_view_pending(editor.pending_view.is_some());
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -274,7 +345,7 @@ fn view_symbol_canvas<'a>(
     })
 }
 
-fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
+pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
     use sym_canvas::CanvasAction;
     match action {
         CanvasAction::AddPin { x, y } => SymbolEditorMsg::AddPin { x, y },
@@ -342,6 +413,15 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
         CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
         CanvasAction::Fit => SymbolEditorMsg::Fit,
+        CanvasAction::ViewportMeasured {
+            width,
+            height,
+            then,
+        } => SymbolEditorMsg::ViewportMeasured {
+            width,
+            height,
+            then: then.map(|action| Box::new(symbol_action_to_primitive_msg(*action))),
+        },
         CanvasAction::CursorAt { x_mm, y_mm } => SymbolEditorMsg::CursorAt { x_mm, y_mm },
         CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
         CanvasAction::Undo => SymbolEditorMsg::Undo,
@@ -352,6 +432,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
             target: symbol_context_target_to_msg(target),
         },
         CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
+        CanvasAction::LeaveTool => SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
     }
 }
 
@@ -364,6 +445,7 @@ fn symbol_context_target_to_msg(
         SymbolContextTarget::Empty => SymbolContextTargetMsg::Empty,
         SymbolContextTarget::Pin(idx) => SymbolContextTargetMsg::Pin(idx),
         SymbolContextTarget::Graphic(idx) => SymbolContextTargetMsg::Graphic(idx),
+        SymbolContextTarget::Field(key) => SymbolContextTargetMsg::Field(key),
     }
 }
 

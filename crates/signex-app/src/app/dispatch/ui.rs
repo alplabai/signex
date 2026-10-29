@@ -5,25 +5,56 @@ use super::super::*;
 impl Signex {
     pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
+            UiMsg::Noop => Task::none(),
+            UiMsg::PrefWriteFinished => {
+                self.sync_diagnostics_panel_ctx();
+                Task::none()
+            }
+            UiMsg::MenuInWindow { window, msg } => {
+                let command = match msg {
+                    MenuMessage::Undo => "undo",
+                    MenuMessage::Redo => "redo",
+                    other => return self.update(Message::Menu(other)),
+                };
+                match crate::keymap::AppCommandId::new(command) {
+                    Ok(id) => self.dispatch_command(
+                        &id,
+                        crate::app::command::CommandArgs::none(),
+                        Some(window),
+                    ),
+                    Err(_) => Task::none(),
+                }
+            }
+            UiMsg::HistoryLoaded {
+                generation,
+                path,
+                result,
+            } => self.apply_history_loaded(generation, path, result),
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
-                crate::fonts::write_theme_pref(id);
-                self.finish_update()
+                let save = crate::fonts::background_pref_write("theme", move || {
+                    crate::fonts::write_theme_pref(id)
+                });
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
-                self.handle_unit_cycle_request();
-                self.finish_update()
+                let save = self.handle_unit_cycle_request();
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().grid_visible =
-                    self.ui_state.grid_visible;
-                self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state.pcb_canvas.clear_bg_cache();
-                crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
-                self.finish_update()
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
+                for canvas in self.interaction_state.all_pcb_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
+                let visible = self.ui_state.grid_visible;
+                let save = crate::fonts::background_pref_write("grid_visible", move || {
+                    crate::fonts::write_grid_visible_pref(visible)
+                });
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::DragStart(target) => {
                 self.handle_layout_drag_started(target);
@@ -66,8 +97,12 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridCycle => {
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.finish_update()
+                let cycled = self.cycle_grid_size(true);
+                Task::batch([cycled, self.finish_update()])
+            }
+            UiMsg::GridCycleBackward => {
+                let cycled = self.cycle_grid_size(false);
+                Task::batch([cycled, self.finish_update()])
             }
             UiMsg::GridPickerOpen => {
                 // v0.18.10 — only mount the picker when the active
@@ -100,25 +135,27 @@ impl Signex {
             }
             UiMsg::GridPickerSelect(step_mm) => {
                 self.interaction_state.grid_picker = None;
-                if let Some(editor) = self.active_footprint_editor_mut() {
-                    if step_mm > 0.0 && step_mm.is_finite() {
-                        editor.state.snap_options.grid_step_mm = step_mm;
-                        // v0.18.21 — mirror onto active grid row.
-                        let idx = editor.state.active_grid_idx;
-                        if let Some(row) = editor.state.grids.get_mut(idx) {
-                            row.step_mm = step_mm;
-                        }
-                        editor.canvas_cache.clear();
+                if let Some(editor) = self.active_footprint_editor_mut()
+                    && step_mm > 0.0
+                    && step_mm.is_finite()
+                {
+                    editor.state.snap_options.grid_step_mm = step_mm;
+                    // v0.18.21 — mirror onto active grid row.
+                    let idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(idx) {
+                        row.step_mm = step_mm;
                     }
+                    editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
             UiMsg::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.active_canvas_mut().snap_enabled =
-                    self.ui_state.snap_enabled;
-                crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
+                let enabled = self.ui_state.snap_enabled;
+                let save = crate::fonts::background_pref_write("snap_enabled", move || {
+                    crate::fonts::write_snap_enabled_pref(enabled)
+                });
                 // v0.18.25.1 — mirror the global toggle into every open
                 // footprint editor so the .snxfpt snap chain (guides /
                 // grid / point-hit / angle) short-circuits in lockstep
@@ -128,7 +165,7 @@ impl Signex {
                     editor.state.global_snap_disabled = disabled;
                     editor.canvas_cache.clear();
                 }
-                self.finish_update()
+                Task::batch([save, self.finish_update()])
             }
             UiMsg::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(OverlayMsg::TogglePanelList)
@@ -136,12 +173,30 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
+            UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
+                self.handle_altium_import_cancel();
+                Task::none()
+            }
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
                 self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
                 self.finish_update()
             }
-            UiMsg::KeymapStroke(stroke) => self.resolve_keymap_stroke(stroke),
+            UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
+            UiMsg::KeymapChordTimedOut { generation } => self.resolve_chord_timeout(generation),
+            UiMsg::KeymapChordCancelled => {
+                self.cancel_pending_chord();
+                Task::none()
+            }
+            UiMsg::InstalledFontsScanned => {
+                self.handle_installed_fonts_scanned();
+                self.finish_update()
+            }
+            UiMsg::NetClassStylesResolved(result) => {
+                self.apply_net_class_styles(&result);
+                Task::none()
+            }
+            UiMsg::NetNav(msg) => self.dispatch_net_nav_message(msg),
         }
     }
 
@@ -242,11 +297,8 @@ impl Signex {
                 );
                 if let Some(opts) = editor_snap {
                     let step = opts.grid_step_mm;
-                    let s = format!("{step:.4}");
                     self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
-                        step_x_mm: s.clone(),
-                        step_y_mm: s,
-                        link_xy: true,
+                        step_mm: format!("{step:.4}"),
                         fine_display: opts.fine_grid_display,
                         coarse_display: opts.coarse_grid_display,
                         multiplier: opts.coarse_multiplier,
@@ -276,49 +328,34 @@ impl Signex {
                 self.ui_state.grid_properties = None;
                 self.finish_update()
             }
-            GridPropertiesMsg::SetStepX(value) => {
+            GridPropertiesMsg::SetStep(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.step_x_mm = value;
-                    if state.link_xy {
-                        state.step_y_mm = state.step_x_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
-            GridPropertiesMsg::SetStepY(value) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.step_y_mm = value;
-                    if state.link_xy {
-                        state.step_x_mm = state.step_y_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
-            GridPropertiesMsg::ToggleLink => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.link_xy = !state.link_xy;
-                    if state.link_xy {
-                        // Re-link mirrors X into Y so re-enabling
-                        // doesn't keep a desynced pair.
-                        state.step_y_mm = state.step_x_mm.clone();
-                    }
+                    state.step_mm = value;
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Apply => {
-                // Validate the X step (Y is taken from X for now —
-                // single-axis steps in `SnapOptions`; the Y field
-                // exists in the dialog for forward compatibility).
+                // `SnapOptions` stores one grid step for both axes, so the
+                // dialog has a single Step field.
                 let draft = self.ui_state.grid_properties.clone();
-                let parsed_x = draft
-                    .as_ref()
-                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                // A step that is not a finite number above zero is refused
+                // with its reason in the Messages panel; the previous
+                // value is kept and the dialog stays open so the user can
+                // correct it (#972).
+                let step = match draft.as_ref().map(|s| validated_grid_step(&s.step_mm)) {
+                    Some(Ok(step)) => Some(step),
+                    Some(Err(reason)) => {
+                        crate::diagnostics::log_warning(format!(
+                            "Grid step refused, previous value kept: {reason}"
+                        ));
+                        return self.finish_update();
+                    }
+                    None => None,
+                };
                 if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x {
-                        if step > 0.0 && step.is_finite() {
-                            opts.grid_step_mm = step;
-                        }
+                    if let Some(step) = step {
+                        opts.grid_step_mm = step;
                     }
                     opts.fine_grid_display = d.fine_display;
                     opts.coarse_grid_display = d.coarse_display;
@@ -371,12 +408,30 @@ impl Signex {
         window_id: iced::window::Id,
         event: crate::canvas::CanvasEvent,
     ) -> iced::Task<Message> {
+        self.run_in_window(window_id, false, |app| {
+            app.handle_canvas_interaction_event(event)
+        })
+    }
+
+    /// Run `handler` with `window_id`'s canvas and document swapped into
+    /// the main slots, as [`Self::handle_canvas_event_in_window`] describes.
+    ///
+    /// A PCB window always points `active_tab` at its tab. `retarget_tab`
+    /// does the same for a schematic window, for a handler that picks its
+    /// target by the active tab's kind (undo, #1546); a canvas event leaves
+    /// it alone, so a sheet it opens stays the main window's active tab.
+    pub(crate) fn run_in_window(
+        &mut self,
+        window_id: iced::window::Id,
+        retarget_tab: bool,
+        handler: impl FnOnce(&mut Self) -> iced::Task<Message>,
+    ) -> iced::Task<Message> {
         use crate::app::state::WindowKind;
         use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
         // Main window → run the handler directly on the legacy canvas.
         if self.ui_state.main_window_id == Some(window_id) {
-            return self.handle_canvas_interaction_event(event);
+            return handler(self);
         }
 
         // Unknown window (closed mid-queue, or never had a canvas) —
@@ -402,6 +457,17 @@ impl Signex {
             }
         };
 
+        // A PCB window whose tab has just been closed: a queued event
+        // would otherwise fall through to the main window's active board.
+        let pcb_tab = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == target_path);
+        if pcb_tab.is_none() && self.interaction_state.pcb_canvases.contains_key(&window_id) {
+            return iced::Task::none();
+        }
+
         // Swap the per-window canvas into the main slot and retarget
         // `active_path` so the handler's engine + canvas accesses hit
         // the window's tab.
@@ -411,17 +477,40 @@ impl Signex {
             .remove(&window_id)
             .expect("canvases entry checked above");
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
+        // A PCB window swaps its PCB canvas in the same way, and retargets
+        // `active_tab` too: the PCB handlers resolve the board through the
+        // active tab, not `active_path` (#494). The main window's tab is
+        // remembered by path, so it is found again even if the handler
+        // closed or reordered tabs.
+        let saved_active_tab = self.document_state.active_tab;
+        let saved_active_tab_path = self
+            .document_state
+            .tabs
+            .get(saved_active_tab)
+            .map(|tab| tab.path.clone());
+        let mut swapped_pcb =
+            pcb_tab.and_then(|_| self.interaction_state.pcb_canvases.remove(&window_id));
+        if let Some(pcb) = swapped_pcb.as_mut() {
+            std::mem::swap(&mut self.interaction_state.pcb_canvas, pcb);
+        }
+        let retargeted_tab = pcb_tab.filter(|_| retarget_tab || swapped_pcb.is_some());
+        if let Some(index) = retargeted_tab {
+            self.document_state.active_tab = index;
+        }
         let saved_active_path = self.document_state.active_path.take();
-        self.document_state.active_path = Some(target_path);
+        let revision_before = self
+            .document_state
+            .engines
+            .get(&target_path)
+            .map(signex_engine::Engine::revision);
+        self.document_state.active_path = Some(target_path.clone());
 
         // Run the handler. `AssertUnwindSafe` is needed because
         // `&mut self` isn't `UnwindSafe` by default — we're accepting
         // that a panicking handler may leave `self` in a partially
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
-        let task_result = catch_unwind(AssertUnwindSafe(|| {
-            self.handle_canvas_interaction_event(event)
-        }));
+        let task_result = catch_unwind(AssertUnwindSafe(|| handler(self)));
 
         // Always-run cleanup (runs on success, error return, or panic
         // via resume_unwind below): swap the canvases back and restore
@@ -432,11 +521,45 @@ impl Signex {
         self.interaction_state
             .canvases
             .insert(window_id, swapped_canvas);
+        if let Some(mut pcb) = swapped_pcb {
+            std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
+            self.interaction_state.pcb_canvases.insert(window_id, pcb);
+        }
+        if retargeted_tab.is_some() {
+            let tabs = &self.document_state.tabs;
+            self.document_state.active_tab = saved_active_tab_path
+                .and_then(|path| tabs.iter().position(|tab| tab.path == path))
+                // The main window's tab itself was closed: stay at its
+                // position, as closing a tab does.
+                .unwrap_or_else(|| saved_active_tab.min(tabs.len().saturating_sub(1)));
+        }
+        // The main slot's cache missed any edit made while the window's
+        // canvas was swapped in. Hover and other read-only events leave the
+        // revision alone and cost nothing here.
+        let revision_after = self
+            .document_state
+            .engines
+            .get(&target_path)
+            .map(signex_engine::Engine::revision);
+        let main_shows_target = saved_active_path.as_ref() == Some(&target_path);
         self.document_state.active_path = saved_active_path;
+        if main_shows_target && revision_before != revision_after {
+            self.refresh_main_canvas_from_engine(&target_path);
+        }
 
         match task_result {
             Ok(task) => task,
             Err(payload) => resume_unwind(payload),
         }
+    }
+}
+
+/// Parse a Grid Properties step field: it must be a finite number above
+/// zero. The error is the user-facing reason for the refusal.
+fn validated_grid_step(text: &str) -> Result<f64, String> {
+    match signex_types::numeric::parse_finite_f64(text) {
+        Ok(step) if step > 0.0 => Ok(step),
+        Ok(step) => Err(format!("{step} is not above zero")),
+        Err(err) => Err(err.to_string()),
     }
 }

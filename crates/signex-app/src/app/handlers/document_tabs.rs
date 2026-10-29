@@ -76,29 +76,102 @@ impl Signex {
                 }
                 Task::done(Message::ContextMenu(ContextMenuMsg::ShowTab(idx)))
             }
-            TabMessage::StartDrag(idx, x, y) => {
+            TabMessage::StartDrag(idx) => {
                 // Drag-to-reorder / drag-out-to-detach originates only
                 // from the main tab bar. The single-tab bar inside an
                 // undocked window has nothing to drag into.
                 if !is_main {
                     return Task::none();
                 }
-                // Seed last_mouse_pos as (x, y) = (0, 0) wasn't real;
-                // pull the live cursor from interaction_state so the
-                // next DragMove delivers a correct position check.
+                // Seed the drag anchor from the live cursor: the press
+                // message carries no position, so `last_mouse_pos` is the
+                // only real coordinate available for the next DragMove's
+                // threshold check.
                 let (mx, my) = self.interaction_state.last_mouse_pos;
-                let _ = (x, y);
                 self.ui_state.tab_dragging = Some((idx, mx, my));
                 Task::none()
             }
         }
     }
 
+    /// Activate the next (or previous) schematic tab, wrapping at the ends
+    /// and stepping over non-schematic tabs. A no-op unless a schematic tab
+    /// is active, and when it is the only one.
+    pub(crate) fn step_schematic_sheet(&mut self, forward: bool) -> Task<Message> {
+        let tabs = &self.document_state.tabs;
+        let sheets: Vec<usize> = tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| matches!(tab.kind, TabKind::Schematic))
+            .map(|(idx, _)| idx)
+            .collect();
+        let active = self.document_state.active_tab;
+        let Some(pos) = sheets.iter().position(|idx| *idx == active) else {
+            return Task::none();
+        };
+        let next = if forward {
+            sheets[(pos + 1) % sheets.len()]
+        } else {
+            sheets[(pos + sheets.len() - 1) % sheets.len()]
+        };
+        if next != active {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = next;
+            self.sync_active_tab();
+        }
+        Task::none()
+    }
+
+    /// Activate the next / previous document tab of any kind, wrapping.
+    pub(crate) fn step_document_tab(&mut self, forward: bool) -> Task<Message> {
+        let count = self.document_state.tabs.len();
+        let active = self.document_state.active_tab;
+        if count < 2 || active >= count {
+            return Task::none();
+        }
+        let next = if forward {
+            (active + 1) % count
+        } else {
+            (active + count - 1) % count
+        };
+        self.park_active_schematic_session();
+        self.document_state.active_tab = next;
+        self.sync_active_tab();
+        Task::none()
+    }
+
+    /// Close a tab and discard its in-flight draft. Callers that already
+    /// resolved unsaved work (Close Project / Remove / Discard All) rely on
+    /// this dropping the draft.
     pub(crate) fn close_tab_now(&mut self, idx: usize) -> Task<Message> {
+        self.close_tab(idx, false)
+    }
+
+    /// Close a tab the user asked to close, keeping a dirty symbol,
+    /// footprint or Component Preview draft alive in the background like a
+    /// dirty schematic engine (#110). Reopening the tab restores the draft;
+    /// Save All / Close Library still see it, so nothing is lost silently.
+    pub(crate) fn close_tab_parking_dirty(&mut self, idx: usize) -> Task<Message> {
+        self.close_tab(idx, true)
+    }
+
+    fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
         if idx >= self.document_state.tabs.len() {
+            tracing::warn!(
+                target: "signex::tabs",
+                idx,
+                len = self.document_state.tabs.len(),
+                "close tab: index out of range, ignored",
+            );
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
+        // A History restore still running for this document must not land in
+        // a tab reopened later, but its worker may still write the file, so
+        // the claim stays (and saves stay refused) until it reports (#859).
+        self.document_state
+            .pending_restores
+            .cancel_retaining(&closing_path);
         // Capture the tab kind before removal so the editor-state
         // cleanup below can run after the tab is dropped.
         let closing_kind = self.document_state.tabs[idx].kind.clone();
@@ -133,37 +206,79 @@ impl Signex {
             })
             .collect();
 
-        // Park dirty engines: when the file is in `dirty_paths`, keep its
+        // Park dirty engines: when the file is dirty, keep its
         // engine entry alive so reopening the tab restores the in-memory
         // edits. Drop the engine only when the file is clean.
-        if !self.document_state.dirty_paths.contains(&closing_path) {
-            self.document_state.engines.remove(&closing_path);
+        self.document_state.note_documents_changed();
+        if !self.document_state.is_document_dirty(&closing_path) {
+            self.forget_net_colors_of(&closing_path);
+            self.document_state.remove_engine(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
         }
+        // The part on the cursor was armed for this sheet.
+        if self
+            .interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| s.target_sheet == closing_path)
+        {
+            self.cancel_placement_session();
+        }
+        // A loose sheet's designator note is keyed by its own path; forget it
+        // so reopening the sheet says it again (a project's is forgotten on
+        // project close).
+        if self
+            .document_state
+            .document_project(&closing_path)
+            .is_none()
+        {
+            self.document_state
+                .instance_note_scopes
+                .remove(&closing_path);
+        }
 
-        // Drop the editor state when the tab is a Component Preview.
-        // The library subsystem has no dirty-park mechanism yet, so
-        // closing the tab discards the draft (matches the
-        // window-close behaviour).
+        // Drop the editor state when the tab is a Component Preview,
+        // unless the user asked to close a dirty one: that draft is parked
+        // (it stays in `library.editors`, where Save All / Close Library
+        // find it).
         if let crate::app::TabKind::ComponentEditor(ref ce) = closing_kind {
-            self.library
-                .editors
-                .remove(&crate::library::state::EditorAddress::new(
-                    ce.library_path.clone(),
-                    ce.table.clone(),
-                    ce.row_id,
-                ));
+            let address = crate::library::state::EditorAddress::new(
+                ce.library_path.clone(),
+                ce.table.clone(),
+                ce.row_id,
+            );
+            let parked = park_dirty
+                && self
+                    .library
+                    .editors
+                    .get(&address)
+                    .is_some_and(|editor| editor.dirty);
+            if !parked {
+                self.library.editors.remove(&address);
+            }
         }
         // Standalone primitive editor tabs — drop the per-tab editor
-        // state on close. Same shape as Component Preview cleanup
-        // (no dirty-park yet, so closing discards the in-flight draft).
-        if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind {
+        // state on close, unless the user asked to close a dirty one: that
+        // draft is parked with its dirty marker, so Save All can still
+        // write it. A dropped draft takes its marker with it: a stale
+        // mark with no editor behind it would make quit's Save All fail on
+        // a file nobody can save.
+        if let crate::app::TabKind::SymbolEditor(ref p)
+        | crate::app::TabKind::FootprintEditor(ref p) = closing_kind
+            && !(park_dirty && self.document_state.is_document_dirty(p))
+        {
+            self.warn_if_cascade_owed(p);
             self.document_state.symbol_editors.remove(p);
-        }
-        if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
             self.document_state.footprint_editors.remove(p);
+            self.document_state.mark_document_clean(p);
+        }
+        // A PCB has no parked draft, so its marker must not outlive the tab:
+        // Save All has no PCB branch and would fail on it.
+        // ponytail: valid only while a PCB can't be edited; park or prompt once it can.
+        if matches!(closing_kind, crate::app::TabKind::Pcb) {
+            self.document_state.mark_document_clean(&closing_path);
         }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI
@@ -172,21 +287,52 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
-        if self.document_state.active_tab >= self.document_state.tabs.len()
-            && self.document_state.active_tab > 0
-        {
+        self.document_state.tab_placements.forget(&closing_path);
+        // The remembered page setup is session memory for an open document;
+        // once no tab holds the path any more it has nothing to restore into.
+        // A dirty tab parked in the background comes back with its unsaved
+        // edits when reopened, so it gets its page setup back too.
+        let parked_dirty = park_dirty && self.document_state.is_document_dirty(&closing_path);
+        let no_tab_left = !self
+            .document_state
+            .tabs
+            .iter()
+            .any(|tab| tab.path == closing_path);
+        // Nothing of the document is left: its save failure or queued save
+        // must not name a later document at the same path.
+        if no_tab_left && !self.document_state.is_document_dirty(&closing_path) {
+            self.document_state
+                .document_saves
+                .forget_where(|p| p == closing_path);
+        }
+        if !parked_dirty && no_tab_left {
+            crate::app::state::forget_page_setup(
+                &mut self.document_state.page_setup_memory,
+                self.document_state.preview.as_mut(),
+                &closing_path,
+            );
+        }
+        // A tab left of the active one shifted it down a slot: follow it
+        // so focus stays on the same document.
+        // Removing the tail while active also clamps one slot down.
+        let active = self.document_state.active_tab;
+        if active > 0 && (idx < active || active >= self.document_state.tabs.len()) {
             self.document_state.active_tab -= 1;
         }
         self.sync_active_tab();
         // Refresh so the open-dot drops immediately on tab close. The
-        // dirty dot stays since `dirty_paths` is untouched.
+        // dirty dot stays since the dirty mark is untouched.
         self.refresh_panel_ctx();
 
-        if orphan_window_ids.is_empty() {
-            Task::none()
-        } else {
-            Task::batch(orphan_window_ids.into_iter().map(iced::window::close))
-        }
+        // A document that is gone (or was discarded before the close) has
+        // nothing left to recover, whether or not autosave is still on.
+        let sweep = self.autosave_sweep();
+        Task::batch(
+            orphan_window_ids
+                .into_iter()
+                .map(iced::window::close)
+                .chain(std::iter::once(sweep)),
+        )
     }
 
     pub(crate) fn handle_tab_context_action(
@@ -199,23 +345,22 @@ impl Signex {
         self.interaction_state.tab_context_menu = None;
 
         match action {
-            A::Close(idx) => self.close_tab_now(idx),
+            A::Close(idx) => self.close_tab_parking_dirty(idx),
             A::CloseAllOthers(keep_idx) => {
                 // Close every tab except `keep_idx`, descending so
                 // each `close_tab_now(i)` removes a tab without
                 // shifting the indices of tabs we haven't visited
                 // yet. The kept tab's index does shift as tabs
-                // below it close, but `close_tab_now`'s active-tab
-                // adjuster (`if active_tab >= len ... -= 1`) tracks
-                // the live position correctly without us needing
-                // to thread the kept path through this loop.
+                // below it close, but `close_tab_now` re-points
+                // `active_tab` at the same document after each
+                // removal, so no kept path is threaded through.
                 let mut indices: Vec<usize> = (0..self.document_state.tabs.len())
                     .filter(|&i| i != keep_idx)
                     .collect();
                 indices.sort_unstable_by(|a, b| b.cmp(a));
                 let mut tasks = Vec::with_capacity(indices.len());
                 for i in indices {
-                    tasks.push(self.close_tab_now(i));
+                    tasks.push(self.close_tab_parking_dirty(i));
                 }
                 if tasks.is_empty() {
                     Task::none()
@@ -224,9 +369,10 @@ impl Signex {
                 }
             }
             A::CloseAll => {
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
-                    tasks.push(self.close_tab_now(idx));
+                    tasks.push(self.close_tab_parking_dirty(idx));
                 }
                 if tasks.is_empty() {
                     Task::none()

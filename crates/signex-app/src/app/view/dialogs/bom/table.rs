@@ -8,24 +8,38 @@ use super::super::*;
 use iced::widget::{Row, Space, column, container, row, scrollable, text};
 use iced::{Background, Color, Element, Length, Theme};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
 /// First designator of a BOM row — the key the export pipeline orders rows by,
 /// so the preview's Designator sort matches the exported file exactly.
 fn first_reference(row: &signex_output::BomRow) -> &str {
     row.references.first().map(String::as_str).unwrap_or("")
 }
 
-/// Rendered text of one cell — also the sort key for the text columns.
+/// Rendered text of one cell — also the sort key for the text columns. The
+/// same text every export writer emits.
 fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> String {
+    signex_output::bom::cell_text(r, c)
+}
+
+/// Default on-screen width of a column, in px, until the user resizes it.
+pub(in crate::app) fn default_column_width(c: &signex_output::BomColumn) -> f32 {
     use signex_output::BomColumn;
     match c {
-        BomColumn::Name => r.name.clone(),
-        BomColumn::Description => r.description.clone(),
-        BomColumn::Designator | BomColumn::Reference => r.references.join(", "),
-        BomColumn::Value => r.value.clone(),
-        BomColumn::Footprint => r.footprint.clone(),
-        BomColumn::LibRef => r.lib_ref.clone(),
-        BomColumn::Qty => r.qty.to_string(),
-        BomColumn::Custom(key) => r.custom.get(key).cloned().unwrap_or_default(),
+        BomColumn::Name => 140.0,
+        BomColumn::Description => 220.0,
+        BomColumn::Designator | BomColumn::Reference => 220.0,
+        BomColumn::Value => 110.0,
+        BomColumn::Footprint => 140.0,
+        BomColumn::LibRef => 160.0,
+        BomColumn::Qty => 50.0,
+        BomColumn::Custom(_) => 120.0,
+        BomColumn::UnitPrice | BomColumn::BuyQty | BomColumn::ExtendedPrice | BomColumn::Stock => {
+            80.0
+        }
+        BomColumn::Currency => 70.0,
+        BomColumn::Distributor | BomColumn::PriceAge => 100.0,
     }
 }
 
@@ -36,8 +50,8 @@ fn column_value(c: &signex_output::BomColumn, r: &signex_output::BomRow) -> Stri
 /// natural order the export pipeline applies (`signex_bom::build_table`), so
 /// the modal and the CSV/HTML/XLSX the user exports next never disagree — a
 /// plain `str` compare here would show R1, R10, R2 over an export reading
-/// R1, R2, R10. Every other column sorts case-insensitively on its cell text.
-fn sorted_row_order(
+/// R1, R2, R10. Value sorts by parsed quantity ahead of its text; every other column sorts case-insensitively on its cell text.
+pub(in crate::app) fn sorted_row_order(
     rows: &[signex_output::BomRow],
     columns: &[signex_output::BomColumn],
     sort: Option<(usize, bool)>,
@@ -50,22 +64,68 @@ fn sorted_row_order(
     let Some(sort_col) = columns.get(sort_idx) else {
         return row_order;
     };
-    row_order.sort_by(|&a, &b| {
-        let (ra, rb) = (&rows[a], &rows[b]);
-        let cmp = match sort_col {
-            BomColumn::Qty => ra.qty.cmp(&rb.qty),
-            BomColumn::Designator | BomColumn::Reference => {
-                signex_types::designator::compare_references(
-                    first_reference(ra),
-                    first_reference(rb),
-                )
+    match sort_col {
+        // Numbers sort as numbers; a row without one (an unpriced row in a
+        // price column) sorts after every row that has one, either way.
+        BomColumn::Qty
+        | BomColumn::UnitPrice
+        | BomColumn::BuyQty
+        | BomColumn::ExtendedPrice
+        | BomColumn::Stock => row_order.sort_by(|&a, &b| {
+            let number = |i: usize| signex_output::bom::cell_number(&rows[i], sort_col);
+            match (number(a), number(b)) {
+                (Some(x), Some(y)) => {
+                    let cmp = x.total_cmp(&y);
+                    if asc { cmp } else { cmp.reverse() }
+                }
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
             }
-            _ => column_value(sort_col, ra)
-                .to_ascii_lowercase()
-                .cmp(&column_value(sort_col, rb).to_ascii_lowercase()),
-        };
-        if asc { cmp } else { cmp.reverse() }
-    });
+        }),
+        BomColumn::Designator | BomColumn::Reference => row_order.sort_by(|&a, &b| {
+            let cmp = signex_types::designator::compare_references(
+                first_reference(&rows[a]),
+                first_reference(&rows[b]),
+            );
+            if asc { cmp } else { cmp.reverse() }
+        }),
+        // Parsed values first, by (unit family, base value), then the rest
+        // as natural text. The parse is sort-only and nothing keeps it.
+        BomColumn::Value => {
+            let keys: Vec<(Option<signex_types::quantity::Quantity>, String)> = rows
+                .iter()
+                .map(|r| {
+                    let text = column_value(sort_col, r);
+                    let parsed = signex_types::quantity::sort_key_from_value_text(&text);
+                    (parsed, text.to_ascii_lowercase())
+                })
+                .collect();
+            row_order.sort_by(|&a, &b| {
+                let cmp = match (&keys[a].0, &keys[b].0) {
+                    (Some(x), Some(y)) => signex_types::quantity::compare_for_sort(x, y),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => {
+                        signex_types::designator::compare_references(&keys[a].1, &keys[b].1)
+                    }
+                };
+                if asc { cmp } else { cmp.reverse() }
+            });
+        }
+        // One lowercase key per row (O(n) allocations), not two per
+        // comparison. Stable, like `sort_by`, so ties keep rollup order.
+        _ => {
+            let keys: Vec<String> = rows
+                .iter()
+                .map(|r| column_value(sort_col, r).to_ascii_lowercase())
+                .collect();
+            row_order.sort_by(|&a, &b| {
+                let cmp = keys[a].cmp(&keys[b]);
+                if asc { cmp } else { cmp.reverse() }
+            });
+        }
+    }
     row_order
 }
 
@@ -86,18 +146,6 @@ impl Signex {
         // resolution: user override (set by the column-resize
         // handle drag) takes precedence; otherwise fall back to
         // the per-`BomColumn` default below.
-        let default_column_width = |c: &BomColumn| -> f32 {
-            match c {
-                BomColumn::Name => 140.0,
-                BomColumn::Description => 220.0,
-                BomColumn::Designator | BomColumn::Reference => 220.0,
-                BomColumn::Value => 110.0,
-                BomColumn::Footprint => 140.0,
-                BomColumn::LibRef => 160.0,
-                BomColumn::Qty => 50.0,
-                BomColumn::Custom(_) => 120.0,
-            }
-        };
         let column_width = |idx: usize, c: &BomColumn| -> f32 {
             preview
                 .column_widths
@@ -158,11 +206,6 @@ impl Signex {
                 ..container::Style::default()
             },
         ));
-        // Index of the last data column — the one that uses
-        // Length::Fill so the table eats any leftover horizontal
-        // space when the modal is wider than the sum of fixed
-        // column widths.
-        let last_data_col_idx = preview.options.columns.len().saturating_sub(1);
         // Only treat the press as a "real" drag once the cursor
         // has moved past 6 px from where it pressed — same
         // threshold the tab drag-ghost uses. A press-and-release
@@ -174,7 +217,6 @@ impl Signex {
             (Some(idx), Some(ox)) if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX => Some(idx),
             _ => None,
         };
-        let _ = preview.column_hover;
         for (idx, c) in preview.options.columns.iter().enumerate() {
             // Header bg is neutral by default. The only time a
             // column lights up is while the user is actively
@@ -194,9 +236,9 @@ impl Signex {
             // to the right via Space::Fill. Spreadsheet convention.
             let arrow = sort_arrow(idx).trim();
             let cell_content = row![
-                text(c.header().to_string()).size(11).color(text_c),
+                text(c.header().to_string()).size(TS.body).color(text_c),
                 Space::new().width(Length::Fill),
-                text(arrow.to_string()).size(11).color(text_c),
+                text(arrow.to_string()).size(TS.body).color(text_c),
             ]
             .align_y(iced::Alignment::Center);
             // All headers use Fixed widths — needed for the
@@ -206,7 +248,6 @@ impl Signex {
             // experiment killed horizontal scrolling because
             // Both-direction collapses Fill children to zero.
             let header_cell_width = Length::Fixed(column_width(idx, c));
-            let _ = last_data_col_idx;
             let cell = container(cell_content)
                 .width(header_cell_width)
                 .height(HEADER_ROW_H)
@@ -261,12 +302,18 @@ impl Signex {
             .width(Length::Fixed(table_width.max(100.0)))
             .into();
 
-        let row_order =
-            sorted_row_order(&preview.table.rows, &preview.options.columns, preview.sort);
+        // Display order is computed in `update` (`BomPreviewState::row_order`),
+        // never here.
+        let row_order = &preview.row_order;
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(preview.table.rows.len());
         for (visible_idx, &row_idx) in row_order.iter().enumerate() {
-            let r = &preview.table.rows[row_idx];
+            let Some(r) = preview.table.rows.get(row_idx) else {
+                // `row_order` is rebuilt with `table` in `update`; a stale
+                // index means that pairing broke - fail loudly in dev.
+                debug_assert!(false, "stale BOM row_order index {row_idx}");
+                continue;
+            };
             let alt_bg = if visible_idx % 2 == 0 {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.0)
             } else {
@@ -447,5 +494,48 @@ mod tests {
             sorted_row_order(&rows, &columns, Some((7, true))),
             vec![0, 1]
         );
+    }
+
+    /// Pins behaviour (not a bug repro): descending sort reverses the comparison, not the slice, so rows with
+    /// equal keys keep rollup order in both directions (and the cached
+    /// lowercase key makes "Alpha"/"alpha" equal).
+    #[test]
+    fn descending_sort_is_stable_for_equal_keys() {
+        let rows = vec![
+            row(&["R1"], 1, "Alpha"),
+            row(&["R2"], 1, "beta"),
+            row(&["R3"], 1, "alpha"),
+            row(&["R4"], 1, "BETA"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Value];
+
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, true))),
+            vec![0, 2, 1, 3]
+        );
+        assert_eq!(
+            sorted_row_order(&rows, &columns, Some((1, false))),
+            vec![1, 3, 0, 2]
+        );
+    }
+
+    /// Value sorts by quantity, not by text: `10k` after `2k` and `4k7`
+    /// between them, parsed values ahead of free text, `R2` before `R10`.
+    #[test]
+    fn value_column_sorts_by_quantity() {
+        let rows = vec![
+            row(&["R1"], 1, "10k"),
+            row(&["R2"], 1, "2k"),
+            row(&["R3"], 1, "DNP"),
+            row(&["R4"], 1, "4k7"),
+            row(&["C1"], 1, "1uF"),
+            row(&["C2"], 1, "100n"),
+        ];
+        let columns = vec![BomColumn::Designator, BomColumn::Value];
+        let asc = sorted_row_order(&rows, &columns, Some((1, true)));
+        // Ohm family (2k, 4k7, 10k), then farad (100n, 1uF), then text.
+        assert_eq!(asc, vec![1, 3, 0, 5, 4, 2]);
+        let desc = sorted_row_order(&rows, &columns, Some((1, false)));
+        assert_eq!(desc, vec![2, 4, 5, 0, 3, 1]);
     }
 }

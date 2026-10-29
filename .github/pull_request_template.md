@@ -20,8 +20,8 @@ from this source. Full list:
 [CONTRIBUTING.md](../CONTRIBUTING.md#license-compliance-for-contributions).
 Unsure about a source? [Ask in an issue](https://github.com/alplabai/signex/issues/new) —
 that's cheaper than finding out at review. If it *is* license-gated, add a line
-`License-gated sources: yes` and CI routes it to the GPL-3.0 companion repo
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import).
+`License-gated sources: yes` and CI routes it to the GPL-3.0
+[import companion repository](https://github.com/alplabai/signex-kicad-import).
 
 ## Labels
 
@@ -56,10 +56,22 @@ Hard CI gates (must pass to merge):
 - [ ] `cargo test --workspace` passes (**Test**)
 - [ ] `cargo deny check licenses` clean — no GPL transitive deps (**License audit**)
 - [ ] License-compliance question above is answered (**self-declaration**)
+- [ ] `cargo fmt --all -- --check` clean (**fmt · rustfmt**)
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+      is clean — since #539 **every** warning fails the **Check** job, not just
+      the deny-by-default ones. Fix the code; `#[expect(lint, reason = "…")]`
+      with a real reason is the escape hatch and has to survive review
+- [ ] No new or growing over-cap file (**no god-files**)
+- [ ] No discarded `iced::Task` (**no discarded tasks**)
+- [ ] Every `[workspace.lints.*]` entry still reaches the non-inheriting
+      members (**lint lockstep**)
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 
-- [ ] `cargo fmt --all` applied
-- [ ] `cargo clippy --workspace` reviewed
+- [ ] The issue was claimed before work started, and no other open PR covers
+      it ([Claiming an issue](../CONTRIBUTING.md#claiming-an-issue))
+- [ ] User-visible change? Added a fragment under `changelog.d/`
+      (`<number>.<section>.md`) instead of editing `CHANGELOG.md` (CI warns
+      on a direct edit)
 - [ ] New code has tests where appropriate
 - [ ] Milestone is set on this PR

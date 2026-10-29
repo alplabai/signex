@@ -7,8 +7,18 @@
 # tree or change compilation out from under us.
 #
 # IMPORTANT: dtolnay/rust-toolchain in CI does NOT read this file — it pins via
-# its `@<version>` ref. Keep `.github/workflows/ci.yml` (`dtolnay/rust-toolchain@1.97.0`)
-# in lockstep with `channel` below whenever you bump the toolchain.
+# its `@<version>` ref. Every `dtolnay/rust-toolchain@<version>` in .github/workflows/
+# must stay in lockstep with `channel` below whenever you bump the toolchain:
+#
+#   ci.yml (x4) · license-guard.yml (cargo-deny) · release.yml (cross-target build)
+#
+# `grep -rn 'rust-toolchain@' .github/` finds them all — that is the check, not this
+# list. A stray `@stable` is not cosmetic: rustup applies this file's channel to any
+# cargo run inside the repo, so the action installs targets/components onto the
+# toolchain it pinned while cargo executes on 1.97.0. That mismatch is what broke the
+# first v0.15.0 release build (`error[E0463]: can't find crate for 'core'` on
+# aarch64-pc-windows-msvc, PR #487) — the arm64 std landed on `stable` and 1.97.0
+# never got it. Only release.yml cross-compiles, so no PR-time gate catches it.
 [toolchain]
 channel = "1.97.0"
 components = ["rustfmt", "clippy"]

@@ -13,9 +13,8 @@
 //! tree; the empty `SimTabState` keeps the public surface stable
 //! for any sibling that imports it.
 
-/// Placeholder — superseded by `ComponentEditorState::sim_body` and
+/// Placeholder — superseded by `ComponentPreviewState::sim_body` and
 /// the SimModel primitive itself. Kept for backwards-compatible
 /// imports until WS-? deletes the module.
 #[derive(Debug, Default, Clone)]
-#[allow(dead_code)]
 pub struct SimTabState;

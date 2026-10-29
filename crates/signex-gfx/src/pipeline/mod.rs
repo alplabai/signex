@@ -7,6 +7,10 @@
 pub mod arc;
 pub mod circle;
 pub mod grid;
+pub(crate) mod growth;
 pub mod line;
+pub mod ordered;
 pub mod polygon;
 pub mod text;
+mod text_cache;
+pub mod text_measure;

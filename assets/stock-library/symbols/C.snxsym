@@ -1,0 +1,90 @@
+format = "snxsym/v1"
+file_uuid = "ca480ad0-f6a0-4798-a8e8-41d46082dbc0"
+display_name = "C"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "9b489446-5f4e-4f4f-a166-85c076b4ff18"
+name = "C"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+2	2	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "C?"
+comment = "*"
+description = "Capacitor, non-polarised."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    0.0,
+    1.27,
+]
+to = [
+    0.0,
+    0.508,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.524,
+    0.508,
+]
+to = [
+    1.524,
+    0.508,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.524,
+    -0.508,
+]
+to = [
+    1.524,
+    -0.508,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    0.0,
+    -0.508,
+]
+to = [
+    0.0,
+    -1.27,
+]
+
+[symbols.schematic_params]

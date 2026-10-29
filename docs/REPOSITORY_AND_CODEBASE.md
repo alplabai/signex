@@ -2,15 +2,16 @@
 
 > **Status:** Repository structure and implementation map.
 > **Audience:** Engineers, contributors, and maintainers working in this repo.
-> **Companion to:** `MASTER_PLAN.md`, `ARCHITECTURE.md`, `PRODUCT_AND_EDITIONS.md`,
-> `ROADMAP.md`.
+> **Companion to:** `ROADMAP.md` and `docs/architecture/`. The product plan
+> (thesis, editions) lives in the private `signex-internal` repo
+> (`docs/internal`, not in this checkout).
 
 This document explains how the Signex repository is organized today, how the
 codebase is expected to evolve, and how the single repository supports both the
 Community and Pro product lines.
 
-It is intentionally practical. `MASTER_PLAN.md` describes the product thesis.
-`ARCHITECTURE.md` describes the target system architecture. This document
+It is intentionally practical. The product plan describes the product thesis.
+The ADRs in `docs/architecture/` describe the target system architecture. This document
 describes where the code lives, what each part is responsible for, and how the
 repository should be kept coherent as the project grows.
 
@@ -46,15 +47,15 @@ This repository is responsible for:
 
 - The desktop application shell
 - Native `.snx*` file parsing and writing (`.snxsch`, `.snxpcb`, `.snxlib`,
-  `.snxsym`, `.snxfpt`, `.snxpro`, etc.)
+  `.snxsym`, `.snxfpt`, `.snxprj`, etc.)
 - Domain types and editor-facing data structures
 - Rendering and hit-testing
 - Reusable widgets used by the editor UI
 - Product documentation and planning documents
 
-KiCad import is **not** part of this repository. It lives in the separate
-GPL-3.0 companion repo `signex-kicad-import`, which provides one-way
-`KiCad → Signex` conversion only. See the v0.9 Apache-clean cutover and
+Import from GPL-based EDA tools is **not** part of this repository. It lives in the separate
+GPL-3.0 import companion repository, which provides one-way
+conversion to Signex only. See the v0.9 Apache-clean cutover and
 issue #62 for the rationale, plus `docs/audit/cleanroom-rewrite-2026-05-01.md`
 for the cleanroom-rewrite audit trail.
 
@@ -137,10 +138,10 @@ signex/
 ```
 
 > **v0.9 cutover note:** earlier revisions of this document listed
-> `crates/kicad-parser/` and `crates/kicad-writer/` here. Both crates were
+> two external-format parser and writer crates here. Both crates were
 > removed from the main workspace in v0.9 (Apr 2026) as part of the
-> Apache-clean cutover for issue #62, and one-way KiCad → Signex import
-> now lives in the separate GPL-3.0 companion repo `signex-kicad-import`.
+> Apache-clean cutover for issue #62, and one-way import from GPL-based EDA tools
+> now lives in the separate GPL-3.0 import companion repository.
 
 This is the correct direction for the current phase of the project: small,
 focused crates with clear boundaries.
@@ -169,12 +170,12 @@ or renderer-specific geometry logic.
 
 Inside `crates/signex-app/src/app/`, the app shell is now split by responsibility:
 
-- `state.rs` owns grouped application state for UI, document/session, and interaction concerns.
+- `state/` owns grouped application state for UI, document/session, and interaction concerns.
 - `view/` owns `Element` construction and overlay composition.
 - `handlers/` owns message-family handlers that are called from the main Iced update loop.
 - `dispatch/` is a thin routing layer that keeps the top-level `update()` entry point readable, with document and overlay dispatch families split into dedicated files.
 - `actions.rs` owns higher-level editor operations.
-- `runtime.rs` owns derived-state synchronization such as panel context and theme propagation.
+- `runtime/` owns derived-state synchronization such as panel context and theme propagation.
 
 This split exists to keep the Iced `update()` entry point aligned with MVU responsibilities without turning `app.rs` back into a catch-all file.
 
@@ -218,29 +219,29 @@ Responsibilities:
 This crate exists to keep `signex-app` from collapsing into a monolith of local
 widget implementations.
 
-### 5.5. Native `.snx*` parser/writer (in-tree, in-progress)
+### 5.5. Native `.snx*` codec (`signex-types`)
 
-The Signex S-expression-style parser and writer for the native canonical
-formats — `.snxsch`, `.snxpcb`, `.snxlib`, `.snxsym`, `.snxfpt`, `.snxpro` —
-currently lives inside `signex-engine` (and supporting helpers in
-`signex-types`). The medium-term direction (see Section 8) is to extract this
-into its own `signex-document` crate.
+The codec for the native canonical formats — `.snxsch`, `.snxpcb`, `.snxlib`,
+`.snxsym`, `.snxfpt`, `.snxprj` — lives in `crates/signex-types/src/format/`
+(TOML envelope plus TSV bulk blocks; `.snxprj` is JSON, see
+`docs/architecture/snxprj-format.md`). `signex-engine` consumes it but does not
+own it.
 
 Responsibilities:
 
-- reading the native S-expression-style `.snx*` formats
+- reading the native TOML+TSV `.snx*` formats
 - producing typed data that the rest of the editor can consume
 - writing in-memory structures back to disk with minimal output churn and
   round-trip stability
 - preserving unknown/forward-compatible nodes at the parse boundary
 
 > **Pre-v0.9 history:** earlier revisions of this document listed
-> `kicad-parser` and `kicad-writer` as Sections 5.5 and 5.6. Both crates
+> an external-format parser and writer as Sections 5.5 and 5.6. Both crates
 > were removed from this workspace in v0.9 as part of the Apache-clean
-> cutover for issue #62. KiCad I/O is now optional and lives in the
-> separate GPL-3.0 companion repo `signex-kicad-import` (one-way
-> KiCad → Signex import only). License Guard CI enforces that
-> `crates/` contains zero KiCad imports, dependencies, or shaped symbols.
+> cutover for issue #62. That I/O is now optional and lives in the
+> separate GPL-3.0 import companion repository (one-way
+> import only). License Guard CI enforces that
+> `crates/` contains zero imports, dependencies, or shaped symbols from GPL-based EDA tools.
 
 ---
 
@@ -251,9 +252,7 @@ engineering system.
 
 The current intent of the core documents is:
 
-- `MASTER_PLAN.md` — product thesis, scope, and priorities
-- `ARCHITECTURE.md` — target architectural rules and layering model
-- `PRODUCT_AND_EDITIONS.md` — edition split, packaging, pricing logic
+- `architecture/` — ADRs: target architectural rules and layering model
 - `ROADMAP.md` — sequencing and delivery plan
 - `UX_REFERENCE_ALTIUM.md` — UX benchmark and interaction reference
 - `REPOSITORY_AND_CODEBASE.md` — repository map and implementation boundaries
@@ -269,14 +268,14 @@ The repository is in an intermediate stage.
 
 The current workspace already has healthy separation at the crate level, but it
 has not yet reached the full target architecture described in
-`ARCHITECTURE.md`.
+the ADRs under `docs/architecture/`.
 
 In particular:
 
 - the current app crate still owns more editing flow than the long-term design
   should allow
-- native `.snx*` parser/writer responsibilities exist (currently inside
-  `signex-engine`), but the future raw-document and engine split is still ahead
+- the native `.snx*` codec lives in `signex-types`, but the future raw-document
+  and engine split is still ahead
 - some behavior is still organized around application update handlers rather
   than a dedicated engine crate
 
@@ -299,11 +298,11 @@ crate layout.
 The most likely additions are:
 
 - `signex-engine` — command execution, patching, undo/redo orchestration
-  *(landed; currently also hosts the native `.snx*` parser/writer)*
+  *(landed)*
 - `signex-model` — semantic model layer
 - `signex-document` — raw native `.snx*` document representation with node
-  identity and preservation of unknown constructs (extracted from
-  `signex-engine`; pre-v0.9 plan named this `kicad-document`)
+  identity and preservation of unknown constructs (would be extracted from
+  `signex-types/src/format`)
 - `signex-erc` — schematic rule check engine *(landed in v0.7)*
 - `signex-sketch` — 2D parametric sketch mode for footprint editor + PCB
   outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
@@ -336,7 +335,7 @@ Edition differences should be introduced behind deliberate seams, not by ad hoc
 ### 9.3. Keep docs aligned with code
 
 If the repository structure changes meaningfully, this document must be updated.
-If architecture direction changes, `ARCHITECTURE.md` must be updated first.
+If architecture direction changes, the relevant ADR in `docs/architecture/` must be updated first.
 
 ### 9.4. Preserve native `.snx*` round-trip stability as a repository-wide concern
 
@@ -345,11 +344,11 @@ writer, domain types, rendering assumptions, and editing behavior. Repository
 layout should continue to reflect that shared constraint.
 
 > **Pre-v0.9 framing:** earlier revisions of this section read "Preserve
-> KiCad compatibility as a repository-wide concern". After the v0.9
+> compatibility with a GPL-based EDA tool as a repository-wide concern". After the v0.9
 > Apache-clean cutover (issue #62), Signex's canonical formats are the
-> native `.snx*` family; KiCad I/O is optional and one-way via
-> `signex-kicad-import`, so the repo-wide constraint is now native
-> round-trip stability rather than KiCad compatibility.
+> native `.snx*` family; external-format I/O is optional and one-way via
+> the import companion repository, so the repo-wide constraint is now native
+> round-trip stability rather than external-tool compatibility.
 
 ---
 
@@ -362,7 +361,7 @@ Core commands:
 ```bash
 cargo build --workspace
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
 Contributors should be able to understand the codebase by moving from docs to
@@ -394,5 +393,5 @@ change rather than by silent drift.
 This repository is the shared engineering home of Signex: an Apache-clean
 EDA editor core with native `.snx*` formats and a clean path to both an
 Apache-2.0 Community edition and a commercial Pro edition from the same
-codebase. Optional one-way KiCad import lives in the separate GPL-3.0
-companion repo `signex-kicad-import`.
+codebase. Optional one-way import from GPL-based EDA tools lives in the separate GPL-3.0
+import companion repository.

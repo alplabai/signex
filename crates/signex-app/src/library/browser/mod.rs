@@ -1,27 +1,11 @@
 //! Library Browser tab — the main-window surface for working with
 //! library rows.
 //!
-//! Layout:
-//!
-//! ```text
-//! ┌─[ <name>.snxlib ]──────────────────────────────────────────┐
-//! │ [Resistors] [Capacitors] [Connectors] [+]   Search: [____] │  ← tab strip
-//! ├──────────────────────────────────────────┬─────────────────┤
-//! │ ┌──────┬────────┬──────┬─────┬─────┐     │  [ Preview  ]   │
-//! │ │ PN   │ Mfr    │ MPN  │ Val │ Pkg │     │  [   symbol  ]  │
-//! │ │ R10K │ Vishay │ CRC… │ 10k │0805 │  ←  │  ───────────── │
-//! │ │ R47K │ Yageo  │ RC0… │ 47k │0805 │     │  [ footprint ]  │
-//! │ └──────┴────────┴──────┴─────┴─────┘     │                 │
-//! │   Add Component  Delete Selected         │                 │
-//! └──────────────────────────────────────────┴─────────────────┘
-//! ```
-//!
-//! Phase 1 = read-only-plus-modal-edit semantics. The grid is rendered
-//! as `text` widgets; row click selects (drives the side preview pane);
-//! row double-click is reserved for the upcoming Edit Component Details
-//! modal (Phase 2). Add Component and Delete Selected are wired through
-//! the existing library messages; Delete fires immediately without a
-//! confirm modal until Phase 2 lands.
+//! Layout: a table sidebar on the left; on the right a header
+//! (search, lifecycle filter) above the row grid and its action row.
+//! Row click selects; row detail lives in the right-edge Properties
+//! panel. Add Component and Delete Selected are wired through the
+//! library messages.
 
 use std::collections::BTreeMap;
 
@@ -35,6 +19,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
+use super::range_filter::range_filter_bar;
 use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibrary};
 
 mod action_row;
@@ -42,20 +27,32 @@ mod columns;
 mod empty_state;
 mod grid;
 mod header;
-mod preview;
+mod keyed;
+mod price;
 mod sidebar;
+mod size_sensor;
+mod sort;
+mod uncommitted;
+mod view_cache;
+mod window;
 
 use action_row::view_action_row;
-use columns::{compare_cells, derive_columns, row_matches_filter};
 use empty_state::view_empty_state;
 use grid::view_grid;
 use header::view_header;
 use sidebar::view_table_sidebar;
+use uncommitted::view_uncommitted_banner;
+pub use view_cache::BrowserViewCache;
+use view_cache::active_table;
+pub use window::{GridScroll, grid_scroll_id, reveal_row_offset, visible_rows};
+pub(crate) use window::{OVERSCAN_ROWS, visible_range};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
-#[allow(dead_code)] // F15 (final): preview pane removed; constant retained for the moment in case the Properties panel needs the same width hint.
-const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
 /// lifecycle indicator dot (Stage 18). The header row uses an empty
@@ -85,13 +82,13 @@ pub fn view<'a>(
                         "Library not mounted: {}",
                         library_path.display()
                     ))
-                    .size(13)
+                    .size(TS.title)
                     .color(text_c),
                     Space::new().height(6),
                     text(
                         "Re-open the library through File ▸ Library ▸ Open Library… or via the project tree.",
                     )
-                    .size(11)
+                    .size(TS.body)
                     .color(muted),
                 ]
                 .spacing(0),
@@ -103,74 +100,88 @@ pub fn view<'a>(
         }
     };
 
+    // Read-only mount (the stock library): write affordances render
+    // disabled instead of failing on click.
+    let read_only = library_state.is_read_only(library_path);
+
     // Empty library — no tables yet. Show a centred CTA card.
     if lib.tables.is_empty() {
-        return view_empty_state(library_path, lib, tokens);
+        return column![
+            view_uncommitted_banner(library_path, library_state, tokens),
+            view_empty_state(library_path, lib, tokens, read_only),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
     }
 
     // Master-detail layout: left pane lists tables (vertical), right
     // pane = filters/search + grid + actions + preview. Mirrors a DB
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
-    let table_sidebar = view_table_sidebar(library_path, library_state, lib, browser, tokens);
-    let header = view_header(library_path, lib, browser, tokens);
+    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
+    let header = view_header(library_path, lib, browser, tokens, read_only);
 
     // Body — left grid, right preview pane.
-    let active_table = browser.active_table.as_deref().unwrap_or_else(|| {
-        // Fall back to first sorted table name when active_table is
-        // unset — matches the open-tab handler's seeding logic.
-        let mut names: Vec<&String> = lib.tables.keys().collect();
-        names.sort();
-        names.first().map(|s| s.as_str()).unwrap_or("")
-    });
-
+    let active_table = active_table(lib, browser);
     let rows: &[ComponentRow] = lib
         .tables
         .get(active_table)
         .map(|v| v.as_slice())
         .unwrap_or(&[]);
 
-    let needle = browser.search.trim().to_lowercase();
-    let lifecycle_filter = browser.lifecycle_filter;
-    let class_filter = browser.class_filter.as_deref();
-    let mut visible: Vec<&ComponentRow> = rows
-        .iter()
-        .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| class_filter.map_or(true, |cls| r.class.as_str() == cls))
-        .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
-        .collect();
-
-    let columns = derive_columns(
-        rows,
-        lib.library_id,
-        &library_state.template_registry,
-        active_table,
-    );
-
-    // Stage 8: apply the user's sort selection to the visible rows
-    // before grid rendering. The grid view is a pure projection of
-    // `visible`, so sorting here doesn't ripple into the render path.
-    if let Some(sort) = browser.sort_by.as_ref() {
-        if let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key) {
-            visible.sort_by(|a, b| {
-                let ca = column.kind.cell_value(a);
-                let cb = column.kind.cell_value(b);
-                let ord = compare_cells(&ca, &cb);
-                if sort.descending { ord.reverse() } else { ord }
-            });
+    // The filtered + sorted rows and the derived columns come from the
+    // cache `update` keeps current; a miss (a path that skipped the sync)
+    // recomputes for this frame only.
+    let rebuilt;
+    let cache = match browser.view_cache.as_ref().filter(|c| {
+        c.matches(
+            library_state.data_version,
+            library_state.clock,
+            active_table,
+            browser,
+        )
+    }) {
+        Some(cache) => cache,
+        None => {
+            rebuilt = BrowserViewCache::build(
+                lib,
+                &library_state.template_registry,
+                library_state.clock,
+                library_state.data_version,
+                browser,
+            );
+            &rebuilt
         }
-    }
+    };
+    let visible: Vec<&ComponentRow> = cache.visible.iter().filter_map(|&i| rows.get(i)).collect();
+    let prices = price::PriceView::with_main_currency(
+        &lib.pricing,
+        library_state.clock,
+        &cache.main_currency,
+    );
 
     let grid = view_grid(
         library_path,
         active_table,
         &visible,
-        &columns,
+        &cache.columns,
         browser,
+        grid::GridCaches {
+            dangling: &lib.dangling,
+            prices: &prices,
+        },
         tokens,
+        read_only,
     );
 
-    let actions = view_action_row(library_path, active_table, browser.selected_row, tokens);
+    let actions = view_action_row(
+        library_path,
+        active_table,
+        browser.selected_row,
+        tokens,
+        read_only,
+    );
 
     let left = container(
         column![grid, actions]
@@ -185,9 +196,6 @@ pub fn view<'a>(
     // and Pick Symbol / Pick Footprint live in the right-edge
     // Properties panel now (`view_library_row_properties`), so the
     // Library Browser tab body keeps the full width for the grid.
-    // `library_state` and `view_preview_pane` retained but unused
-    // here; remove in a follow-up cleanup pass once the Properties-
-    // panel approach is locked.
     //
     // The Row needs explicit `Length::Fill` width — the
     // `feedback_iced_layout.md` anti-pattern: a Fill child inside a
@@ -196,19 +204,38 @@ pub fn view<'a>(
     // (visible regression: "double-clicking the .snxlib opens
     // nothing"). The original three-child Row hid this because two
     // of the children were fixed-width.
-    let _ = library_state;
     let body = row![left].width(Length::Fill).height(Length::Fill);
 
-    let right = column![
-        header,
-        container(body)
-            .padding(8)
-            .width(Length::Fill)
-            .height(Length::Fill)
-    ]
-    .spacing(0)
-    .width(Length::Fill)
-    .height(Length::Fill);
+    // Range filters on the measurement columns (#1572, phase 4).
+    let range_bar = range_filter_bar(
+        &browser.range_filters,
+        &cache.filter_columns,
+        &cache.range_excluded,
+        tokens,
+        {
+            let library_path = library_path.to_path_buf();
+            move |msg| LibraryMessage::BrowserRangeFilter {
+                library_path: library_path.clone(),
+                msg,
+            }
+        },
+    )
+    .map(|bar| container(bar).padding([4, 10]));
+
+    let banner = view_uncommitted_banner(library_path, library_state, tokens);
+    let mut right = column![header, banner].spacing(0);
+    if let Some(bar) = range_bar {
+        right = right.push(bar);
+    }
+    let right = right
+        .push(
+            container(body)
+                .padding(SP.m)
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     let border_c = theme_ext::border_color(tokens);
     let separator = container(Space::new())

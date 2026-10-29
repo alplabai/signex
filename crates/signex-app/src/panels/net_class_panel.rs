@@ -1,0 +1,374 @@
+//! Properties panel — the project's net-class table (#1042).
+//!
+//! Pure view plus the message and state types it needs. Every edit is a
+//! [`NetClassMsg`] that the dock handler turns into a
+//! `signex_engine::NetClassCommand`; nothing here mutates the table.
+
+use super::*;
+use crate::styles::{Spacing, TypeScale};
+use signex_types::net_class::{NetClass, NetLineStyle, format_hex_color};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// A text field of the selected class. Edited as a draft and committed on
+/// Enter, so one edit is one undo step rather than one per keystroke.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetClassField {
+    Name,
+    Color,
+    Width,
+    Nets,
+    Patterns,
+}
+
+#[derive(Debug, Clone)]
+pub enum NetClassMsg {
+    Add,
+    RemoveSelected,
+    Select(usize),
+    Draft(NetClassField, String),
+    Commit(NetClassField),
+    SetLine(NetLineStyle),
+    /// Put `net` in `class` (and out of every other class's exact list), or
+    /// in no class for `None`, in `project`'s table. Sent from a selected net
+    /// label's Properties; `project` is the one that label's sheet belongs
+    /// to, which is not necessarily the active project.
+    AssignNet {
+        project: crate::app::ProjectId,
+        net: String,
+        class: Option<String>,
+    },
+    MoveUp,
+    MoveDown,
+    Undo,
+    Redo,
+}
+
+/// Text buffers for the selected class's fields.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NetClassDraft {
+    pub name: String,
+    pub color: String,
+    pub width: String,
+    pub nets: String,
+    pub patterns: String,
+}
+
+impl NetClassDraft {
+    pub fn from_class(class: &NetClass) -> Self {
+        Self {
+            name: class.name.clone(),
+            color: class.style.color.map(format_hex_color).unwrap_or_default(),
+            width: class
+                .style
+                .wire_width_mm
+                .map(|w| w.to_string())
+                .unwrap_or_default(),
+            nets: class.nets.join(", "),
+            patterns: class.patterns.join(", "),
+        }
+    }
+
+    pub fn field_mut(&mut self, field: NetClassField) -> &mut String {
+        match field {
+            NetClassField::Name => &mut self.name,
+            NetClassField::Color => &mut self.color,
+            NetClassField::Width => &mut self.width,
+            NetClassField::Nets => &mut self.nets,
+            NetClassField::Patterns => &mut self.patterns,
+        }
+    }
+}
+
+/// What the Net Classes section shows. `classes`, `can_undo` and `can_redo`
+/// are copied from the active project on every panel refresh; `selected`,
+/// `draft` and `notice` are the panel's own state and survive a refresh.
+#[derive(Debug, Clone, Default)]
+pub struct NetClassPanel {
+    /// A project is active, so there is a table to edit.
+    pub available: bool,
+    /// The project `selected` and `draft` belong to. When the active project
+    /// differs, both are reset so one project's edits never land on another.
+    pub project: Option<crate::app::ProjectId>,
+    pub classes: Vec<NetClass>,
+    pub selected: usize,
+    pub draft: NetClassDraft,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    /// Why the last edit was refused.
+    pub notice: Option<String>,
+    /// The net class picker of the selected net label, when its net is known.
+    pub label: Option<LabelClassPick>,
+}
+
+/// What a selected net label's Net Class picker needs: the project its sheet
+/// belongs to, the net the project netlist puts the label on, and that
+/// project's class table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabelClassPick {
+    pub project: crate::app::ProjectId,
+    /// The netlist's name for the label's net, which is what a class stores.
+    pub net: String,
+    pub classes: Vec<NetClass>,
+}
+
+/// One entry of a net label's Net Class picker. "No class" is its own variant,
+/// not a reserved string, so a class a loaded `.snxprj` happens to name
+/// `(none)` is still a class when picked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetClassChoice {
+    NoClass,
+    Class(String),
+}
+
+impl NetClassChoice {
+    /// The class to assign, or `None` to clear the assignment.
+    #[must_use]
+    pub fn into_class(self) -> Option<String> {
+        match self {
+            Self::NoClass => None,
+            Self::Class(name) => Some(name),
+        }
+    }
+}
+
+impl std::fmt::Display for NetClassChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoClass => f.write_str(signex_types::net_class::NO_CLASS_ENTRY),
+            // A class literally named like the clear entry is quoted, so the
+            // picker never shows two identical rows.
+            Self::Class(name) if name == signex_types::net_class::NO_CLASS_ENTRY => {
+                write!(f, "\"{name}\"")
+            }
+            Self::Class(name) => f.write_str(name),
+        }
+    }
+}
+
+/// The class `net` belongs to under the table's first-match rule, as the
+/// entry to show selected in a net label's Net Class picker.
+pub fn net_class_choice(classes: &[NetClass], net: &str) -> NetClassChoice {
+    signex_types::net_class::first_matching_class(classes, net)
+        .map_or(NetClassChoice::NoClass, |c| {
+            NetClassChoice::Class(c.name.clone())
+        })
+}
+
+/// Entries for a net label's Net Class picker: none, then every class.
+pub fn net_class_choices(classes: &[NetClass]) -> Vec<NetClassChoice> {
+    std::iter::once(NetClassChoice::NoClass)
+        .chain(
+            classes
+                .iter()
+                .map(|c| NetClassChoice::Class(c.name.clone())),
+        )
+        .collect()
+}
+
+pub fn view_net_classes_section<'a>(
+    ctx: &'a PanelContext,
+    palette: PanelPalette,
+) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
+    let panel = &ctx.net_classes;
+    collapsible_section(
+        "prop_net_classes",
+        "Net Classes",
+        &ctx.collapsed_sections,
+        primary,
+        border_c,
+        move || {
+            let mut c = Column::new().spacing(SP.s).width(Length::Fill);
+            if !panel.available {
+                return c.push(
+                    container(
+                        text("Open a project to define net classes.")
+                            .size(TS.body)
+                            .color(muted),
+                    )
+                    .padding([SP.s, SP.m]),
+                );
+            }
+            let wrap = |m: NetClassMsg| PanelMsg::NetClass(m);
+
+            let undo = iced::widget::button(text("Undo").size(TS.caption)).padding([3.0, SP.m]);
+            let redo = iced::widget::button(text("Redo").size(TS.caption)).padding([3.0, SP.m]);
+            let undo = if panel.can_undo {
+                undo.on_press(wrap(NetClassMsg::Undo))
+            } else {
+                undo
+            };
+            let redo = if panel.can_redo {
+                redo.on_press(wrap(NetClassMsg::Redo))
+            } else {
+                redo
+            };
+            c = c.push(
+                container(
+                    row![
+                        iced::widget::button(text("+ Add Class").size(TS.caption))
+                            .padding([3.0, SP.m])
+                            .on_press(wrap(NetClassMsg::Add)),
+                        undo,
+                        redo,
+                    ]
+                    .spacing(SP.s),
+                )
+                .padding([SP.s, SP.m]),
+            );
+            if panel.classes.is_empty() {
+                return c.push(
+                    container(
+                        text("No net classes. A net in no class draws as before.")
+                            .size(TS.body)
+                            .color(muted),
+                    )
+                    .padding([SP.s, SP.m]),
+                );
+            }
+
+            let selected = panel.selected.min(panel.classes.len() - 1);
+            let mut list = Column::new().spacing(SP.xs);
+            for (idx, class) in panel.classes.iter().enumerate() {
+                let btn = iced::widget::button(text(class.name.clone()).size(TS.body))
+                    .padding([SP.xs, SP.m])
+                    .width(Length::Fill)
+                    .on_press(wrap(NetClassMsg::Select(idx)));
+                list = list.push(if idx == selected {
+                    btn.style(iced::widget::button::primary)
+                } else {
+                    btn.style(iced::widget::button::secondary)
+                });
+            }
+            c = c.push(container(list).padding([SP.xs, SP.m]));
+            c = c.push(
+                container(
+                    text("The first matching class wins; reorder to change it.")
+                        .size(TS.caption)
+                        .color(muted),
+                )
+                .padding([0.0, SP.m]),
+            );
+            c = c.push(
+                container(
+                    row![
+                        iced::widget::button(text("Move Up").size(TS.caption))
+                            .padding([3.0, SP.m])
+                            .on_press_maybe((selected > 0).then(|| wrap(NetClassMsg::MoveUp))),
+                        iced::widget::button(text("Move Down").size(TS.caption))
+                            .padding([3.0, SP.m])
+                            .on_press_maybe(
+                                (selected + 1 < panel.classes.len())
+                                    .then(|| wrap(NetClassMsg::MoveDown))
+                            ),
+                        iced::widget::button(text("Delete").size(TS.caption))
+                            .padding([3.0, SP.m])
+                            .on_press(wrap(NetClassMsg::RemoveSelected)),
+                    ]
+                    .spacing(SP.s),
+                )
+                .padding([SP.s, SP.m]),
+            );
+
+            let field = |label: &str, hint: &str, f: NetClassField, value: &str| {
+                commit_row(label, hint, value, muted, f)
+            };
+            c = c.push(field(
+                "Name",
+                "Class name",
+                NetClassField::Name,
+                &panel.draft.name,
+            ));
+            c = c.push(field(
+                "Colour",
+                "#RRGGBB, empty = theme",
+                NetClassField::Color,
+                &panel.draft.color,
+            ));
+            c = c.push(field(
+                "Width (mm)",
+                "empty = wire's own",
+                NetClassField::Width,
+                &panel.draft.width,
+            ));
+            c = c.push(form_pick_row(
+                "Line",
+                NetLineStyle::ALL.to_vec(),
+                panel.classes[selected].style.line,
+                |l| PanelMsg::NetClass(NetClassMsg::SetLine(l)),
+                muted,
+            ));
+            c = c.push(field(
+                "Nets",
+                "GND, +3V3",
+                NetClassField::Nets,
+                &panel.draft.nets,
+            ));
+            c = c.push(field(
+                "Patterns",
+                "VCC*, ?SDA",
+                NetClassField::Patterns,
+                &panel.draft.patterns,
+            ));
+            if let Some(notice) = &panel.notice {
+                c = c.push(
+                    container(
+                        text(notice.clone())
+                            .size(TS.caption)
+                            .color(theme_ext::warning_color(&ctx.tokens)),
+                    )
+                    .padding([SP.xs, SP.m]),
+                );
+            }
+            c
+        },
+    )
+}
+
+/// Label | text input that edits a draft and commits on Enter.
+fn commit_row<'a>(
+    label: &str,
+    hint: &str,
+    value: &str,
+    label_c: Color,
+    field: NetClassField,
+) -> Element<'a, PanelMsg> {
+    container(
+        row![
+            widgets::property_label(label.to_string(), label_c),
+            iced::widget::text_input(hint, value)
+                .on_input(move |s| PanelMsg::NetClass(NetClassMsg::Draft(field, s)))
+                .on_submit(PanelMsg::NetClass(NetClassMsg::Commit(field)))
+                .size(TS.body)
+                .padding(SP.s)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetClassChoice;
+
+    #[test]
+    fn a_class_named_like_the_clear_entry_is_shown_distinctly() {
+        let clear = NetClassChoice::NoClass.to_string();
+        let lookalike = NetClassChoice::Class(clear.clone()).to_string();
+
+        assert_ne!(clear, lookalike);
+        assert_eq!(NetClassChoice::Class("Power".into()).to_string(), "Power");
+    }
+}

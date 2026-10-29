@@ -17,11 +17,16 @@ use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+mod load_repair;
+mod mount_style;
 mod pad;
+mod pad_columns;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
 
+pub use load_repair::LoadRepair;
+pub use mount_style::MountStyle;
 pub use pad::*;
 pub use serde_tsv::FootprintFileError;
 pub(crate) use serde_tsv::{pads_from_tsv, pads_to_tsv};
@@ -42,6 +47,18 @@ pub enum FpGraphicKind {
         center: [f64; 2],
         radius: f64,
     },
+    /// Circular arc about `center`.
+    ///
+    /// **Sweep convention:** the arc runs from `start_deg` to `end_deg` in
+    /// the direction of *increasing* angle (angles measured from +X with
+    /// `atan2(dy, dx)`; CCW in a y-up frame, which reads clockwise on the
+    /// y-down footprint canvas), wrapping through 360 when `start_deg > end_deg`.
+    /// So `300 -> 60` is the 120 degree arc through 0, not the 240 degree
+    /// one; `10 -> 80` is the 70 degree arc. Angles may be given outside
+    /// `[0, 360)` (the placement tool stores `atan2` output in
+    /// `(-180, 180]`). A sweep of 360 or more (`|end - start| >= 360`) is a
+    /// full circle and equal angles are a zero-length arc; see
+    /// [`FpGraphicKind::arc_sweep_deg`].
     Arc {
         center: [f64; 2],
         radius: f64,
@@ -63,6 +80,23 @@ pub enum FpGraphicKind {
     Polygon {
         vertices: Vec<[f64; 2]>,
     },
+}
+
+impl FpGraphicKind {
+    /// CCW sweep in degrees of an [`FpGraphicKind::Arc`], in `[0, 360]`.
+    ///
+    /// `0.0` for a degenerate zero-length arc, `360.0` for a full circle
+    /// (`|end - start| >= 360`), otherwise `(end - start).rem_euclid(360)`.
+    pub fn arc_sweep_deg(start_deg: f64, end_deg: f64) -> f64 {
+        let raw = (end_deg - start_deg).abs();
+        if raw < 1e-6 {
+            0.0
+        } else if raw >= 359.999 {
+            360.0
+        } else {
+            (end_deg - start_deg).rem_euclid(360.0)
+        }
+    }
 }
 
 /// One footprint silkscreen / fab graphic.
@@ -355,6 +389,12 @@ pub struct Footprint {
     /// preserve their literal pad-list authoring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sketch: Option<signex_sketch::SketchData>,
+    /// Changes [`Footprint::repair_stored_sketch`] made to the sketch when
+    /// this footprint was read from storage (arc ends moved, dangling
+    /// references removed). Transient: never
+    /// serialised. The editor that opens the footprint reports and clears it.
+    #[serde(skip)]
+    pub load_repairs: Vec<LoadRepair>,
     /// Copper pour / region polygons. v0.14+; fill generation is v0.15.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pours: Vec<FpPour>,
@@ -481,6 +521,10 @@ pub struct FootprintFile {
     /// panel header. Defaults to the file stem when empty.
     #[serde(default)]
     pub display_name: String,
+    /// The `file_uuid` of the stock file this one was copied from (#813);
+    /// see `SymbolFile::copied_from`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copied_from: Option<Uuid>,
     /// All footprints in this file. Order is the Footprint Library
     /// panel order.
     pub footprints: Vec<Footprint>,
@@ -490,9 +534,10 @@ pub struct FootprintFile {
 
 const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1";
 
-/// Stable column layout for the per-footprint `pads_tsv` block.
-/// Adding or reordering columns is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+/// Base column layout for the per-footprint `pads_tsv` block; these
+/// lead every header. Reordering them is a wire-format break — bump
+/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
     "kind",
@@ -527,6 +572,8 @@ struct FootprintFileWire {
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    copied_from: Option<Uuid>,
     created: DateTime<Utc>,
     updated: DateTime<Utc>,
     #[serde(default)]
@@ -600,14 +647,21 @@ impl FootprintFile {
     /// Build a new container holding a single footprint — what the
     /// `Add New ▸ Footprint Library` flow seeds.
     pub fn from_footprint(footprint: Footprint) -> Self {
-        let now = Utc::now();
+        Self::with_identity(footprint, Uuid::now_v7(), Utc::now())
+    }
+
+    /// Like [`FootprintFile::from_footprint`] but with caller-supplied
+    /// identity, so a generator can emit byte-identical files on every
+    /// run (the stock-library emitter pins both).
+    pub fn with_identity(footprint: Footprint, file_uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
         Self {
             format: default_footprint_format(),
-            file_uuid: Uuid::now_v7(),
+            file_uuid,
             display_name: footprint.name.clone(),
+            copied_from: None,
             footprints: vec![footprint],
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
         }
     }
 
@@ -624,14 +678,14 @@ impl FootprintFile {
     /// to [`FOOTPRINT_FILE_FORMAT_TOKEN`]; mismatched files surface
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
-        let wire: FootprintFileWire = toml::from_str(text)?;
+        let wire: FootprintFileWire = signex_types::numeric::parse_toml_finite(text)?;
         if wire.format != FOOTPRINT_FILE_FORMAT_TOKEN {
             return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
         }
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
-            footprints.push(Footprint {
+            let mut footprint = Footprint {
                 uuid: fw.uuid,
                 name: fw.name,
                 anchor: fw.anchor,
@@ -650,6 +704,7 @@ impl FootprintFile {
                 updated: fw.updated,
                 schema_version: fw.schema_version,
                 sketch: fw.sketch,
+                load_repairs: Vec::new(),
                 pours: fw.pours,
                 keepouts: fw.keepouts,
                 cutouts: fw.cutouts,
@@ -661,12 +716,15 @@ impl FootprintFile {
                 default_designator: fw.default_designator,
                 component_type: fw.component_type,
                 height_mm: fw.height_mm,
-            });
+            };
+            footprint.repair_stored_sketch();
+            footprints.push(footprint);
         }
         Ok(FootprintFile {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
+            copied_from: wire.copied_from,
             created: wire.created,
             updated: wire.updated,
             footprints,
@@ -717,10 +775,18 @@ impl FootprintFile {
             format: self.format.clone(),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
+            copied_from: self.copied_from,
             created: self.created,
             updated: self.updated,
             footprints: wire_footprints,
         };
+        // #828: graphics, pours and parameters are written by serde, and
+        // TOML spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(FootprintFileError::TomlSerialize)?
+        {
+            return Err(FootprintFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(FootprintFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");
@@ -743,9 +809,14 @@ impl FootprintFile {
 impl Footprint {
     /// Empty footprint with no pads — what the New Component flow seeds.
     pub fn empty(name: impl Into<String>) -> Self {
-        let now = Utc::now();
+        Self::with_identity(name, Uuid::now_v7(), Utc::now())
+    }
+
+    /// Empty footprint with a caller-supplied `uuid` and
+    /// `created`/`updated` timestamp instead of freshly minted ones.
+    pub fn with_identity(name: impl Into<String>, uuid: Uuid, timestamp: DateTime<Utc>) -> Self {
         Self {
-            uuid: Uuid::now_v7(),
+            uuid,
             name: name.into(),
             anchor: [0.0, 0.0],
             pads: Vec::new(),
@@ -759,10 +830,11 @@ impl Footprint {
             pcb_params: ParamMap::new(),
             version: default_footprint_version(),
             released: false,
-            created: now,
-            updated: now,
+            created: timestamp,
+            updated: timestamp,
             schema_version: FOOTPRINT_SCHEMA_VERSION,
             sketch: None,
+            load_repairs: Vec::new(),
             pours: Vec::new(),
             keepouts: Vec::new(),
             cutouts: Vec::new(),

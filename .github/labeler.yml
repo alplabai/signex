@@ -14,13 +14,13 @@
           - "crates/signex-app/src/library/editor/footprint/**"
           - "crates/signex-app/src/panels/footprint_editor_properties/**"
           - "crates/signex-app/tests/regression/library_*.rs"
-          - "crates/signex-app/tests/footprint_*.rs"
+          - "crates/signex-app/tests/**/footprint_*.rs"
 
 "area: symbol-editor":
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-app/src/library/editor/symbol/**"
-          - "crates/signex-app/tests/symbol_*.rs"
+          - "crates/signex-app/tests/**/symbol_*.rs"
 
 "area: library":
   - changed-files:
@@ -28,12 +28,12 @@
           - "crates/signex-library/**"
           - "crates/signex-library-server/**"
           - "crates/signex-app/src/library/*.rs"
-          - "crates/signex-app/tests/distributor_*.rs"
+          - "crates/signex-app/tests/**/distributor_*.rs"
 
 "area: schematic":
   - changed-files:
       - any-glob-to-any-file:
-          - "crates/signex-app/src/schematic_runtime.rs"
+          - "crates/signex-app/src/schematic_runtime/**"
           - "crates/signex-app/src/find_replace.rs"
           - "crates/signex-app/src/canvas/**"
 
@@ -46,7 +46,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-sketch/**"
-          - "crates/signex-app/tests/sketch_*.rs"
+          - "crates/signex-app/tests/**/sketch_*.rs"
           - "crates/signex-app/tests/regression/sketch_*.rs"
 
 "area: bake":
@@ -69,7 +69,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-output/**"
-          - "crates/signex-app/tests/export_*.rs"
+          - "crates/signex-app/tests/**/export_*.rs"
 
 "area: rendering":
   - changed-files:
@@ -93,6 +93,7 @@
   - changed-files:
       - any-glob-to-any-file:
           - "crates/signex-engine/**"
+          - "crates/signex-net/**"
 
 "area: widgets":
   - changed-files:
@@ -106,15 +107,16 @@
           - "crates/signex-app/src/app/**"
           - "crates/signex-app/src/app.rs"
           - "crates/signex-app/src/main.rs"
-          - "crates/signex-app/src/menu_bar.rs"
+          - "crates/signex-app/src/menu_bar/**"
           - "crates/signex-app/src/toolbar.rs"
-          - "crates/signex-app/src/active_bar.rs"
+          - "crates/signex-app/src/active_bar/**"
           - "crates/signex-app/src/tab_bar.rs"
           - "crates/signex-app/src/status_bar.rs"
           - "crates/signex-app/src/dock/**"
           - "crates/signex-app/src/chrome.rs"
-          - "crates/signex-app/src/preferences.rs"
-          - "crates/signex-app/src/undo.rs"
+          - "crates/signex-app/src/preferences/**"
+          - "crates/signex-app/src/panels/**"
+          - "crates/signex-app/src/keymap/**"
           # Catch-all so no signex-app test change lands untriaged. The
           # more specific globs above add their own area on top; a PR can
           # carry several.
@@ -127,7 +129,8 @@
           - "deny.toml"
           - "Cargo.toml"
           - "Cargo.lock"
-          - "rustfmt.toml"
+          - "rust-toolchain.toml"
+          - "fuzz/**"
 
 "area: docs":
   - changed-files:

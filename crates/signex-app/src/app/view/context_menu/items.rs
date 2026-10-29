@@ -2,7 +2,7 @@
 //! (`dd_kb`, `dd_msg`, `dd_disabled`, `save_entry`), the hover-driven
 //! submenu launcher (`submenu_launcher`, an owned `Custom` row), and the
 //! two `&self` lookups the menu builders need (`keymap_shortcut_label`,
-//! `library_node_path_from_tree`).
+//! `library_row_ref`).
 //!
 //! Data-to-view (#269): every context menu is a `Vec<DropdownEntry>` that
 //! the shared `signex_widgets::active_bar_dropdown` widget renders, so the
@@ -16,6 +16,10 @@ use super::*;
 use iced::widget::svg::Handle;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// A keyboard-command row: clicking it dispatches `action` through the
 /// context-menu message bridge. `shortcut` renders right-aligned (empty
@@ -68,23 +72,102 @@ pub(super) fn dd_disabled(
         shortcut: right.map(|s| s.to_string()),
         disabled: true,
         on_press: None,
+        tooltip: None,
+        command_id: None,
     })
 }
 
+/// Catalog menu text for `command_id`. An id missing from the catalog shows
+/// the bare id, which the catalog-agreement test turns into a failure.
+pub(super) fn command_text(command_id: &str) -> String {
+    crate::keymap::metadata_for_str(command_id)
+        .map_or(command_id, |meta| meta.menu_label())
+        .to_string()
+}
+
+/// A row that runs the catalog command `command_id`: its label is the
+/// command's menu text, so no surface keeps a private copy (#271).
+/// `shortcut` is the active keymap's hint for the same id (empty = none).
+pub(super) fn dd_cmd(
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+    message: Message,
+) -> DropdownEntry<Message> {
+    tag_command(
+        dd_msg(icon, &command_text(command_id), shortcut, message),
+        command_id,
+    )
+}
+
+/// [`dd_cmd`] dispatching `action` through the context-menu bridge.
+pub(super) fn dd_cmd_action(
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+    action: ContextAction,
+) -> DropdownEntry<Message> {
+    dd_cmd(
+        icon,
+        command_id,
+        shortcut,
+        Message::ContextMenu(ContextMenuMsg::Action(action)),
+    )
+}
+
+/// [`dd_cmd`] greyed because the command cannot run right now. The row
+/// keeps the command's `shortcut` hint in the right-hand column.
+pub(super) fn dd_cmd_disabled(
+    icon: Option<Handle>,
+    command_id: &'static str,
+    shortcut: &str,
+) -> DropdownEntry<Message> {
+    let right = (!shortcut.is_empty()).then_some(shortcut);
+    tag_command(
+        dd_disabled(icon, &command_text(command_id), right),
+        command_id,
+    )
+}
+
+pub(super) fn tag_command(
+    entry: DropdownEntry<Message>,
+    command_id: &'static str,
+) -> DropdownEntry<Message> {
+    match entry {
+        DropdownEntry::Item(item) => DropdownEntry::Item(item.command(command_id)),
+        other => other,
+    }
+}
+
+/// A greyed row for a feature that does not exist yet: the same passive
+/// row as [`dd_disabled`], plus the shared "planned" tooltip so the row
+/// reads as unbuilt rather than broken (#1251).
+pub(super) fn dd_planned(
+    icon: Option<Handle>,
+    label: &str,
+    right: Option<&str>,
+) -> DropdownEntry<Message> {
+    match dd_disabled(icon, label, right) {
+        DropdownEntry::Item(item) => {
+            DropdownEntry::Item(item.tooltip(crate::active_bar::PLANNED_TOOLTIP))
+        }
+        other => other,
+    }
+}
+
 /// Save row for the project-root menu — active only when a schematic tab
-/// is open or the project metadata is dirty. Altium's right-click menus
-/// don't surface keyboard shortcuts, so the shortcut column stays empty
-/// even though Ctrl+S still fires `MenuMessage::Save` globally.
-pub(super) fn save_entry(enabled: bool) -> DropdownEntry<Message> {
+/// is open or the project metadata is dirty. Label and `shortcut` come from
+/// the `save_document` command like every other surface.
+pub(super) fn save_entry(enabled: bool, shortcut: &str) -> DropdownEntry<Message> {
     if enabled {
-        dd_msg(
+        dd_cmd(
             None,
-            "Save",
-            "",
+            "save_document",
+            shortcut,
             Message::Menu(crate::menu_bar::MenuMessage::Save),
         )
     } else {
-        dd_disabled(None, "Save", None)
+        dd_cmd_disabled(None, "save_document", shortcut)
     }
 }
 
@@ -113,7 +196,7 @@ pub(super) fn submenu_launcher(
     let arrow_c = crate::styles::ti(tokens.text_secondary);
 
     let mut row = iced::widget::row![]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     match icon {
@@ -131,7 +214,7 @@ pub(super) fn submenu_launcher(
     row = row
         .push(
             iced::widget::text(label.to_string())
-                .size(13)
+                .size(TS.title)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None),
         )
@@ -144,7 +227,7 @@ pub(super) fn submenu_launcher(
 
     let btn = iced::widget::button(
         iced::widget::container(row)
-            .padding([5, 12])
+            .padding([5.0, SP.l])
             .width(Length::Fill),
     )
     .padding(0)
@@ -175,39 +258,29 @@ pub(super) fn submenu_launcher(
 }
 
 impl Signex {
-    /// Resolve the on-disk `.snxlib` path for a project-tree library
-    /// node click. The tree path under the `Libraries` group is
-    /// `[project_idx, libraries_branch_idx, library_idx]` — the
-    /// matching project's `LibraryNodeInfo[library_idx].root` carries
-    /// the absolute path. Returns `None` when the path doesn't sit at
-    /// a library leaf (defensive — `view_project_tree_context_menu`
-    /// already gates on the library role, but the icon-by-depth
-    /// detection there isn't strict enough to skip the lookup).
-    pub(super) fn library_node_path_from_tree(
-        &self,
-        tree_path: &[usize],
-    ) -> Option<std::path::PathBuf> {
+    /// Identity of the library leaf at `tree_path` (`[project_idx,
+    /// libraries_branch_idx, library_idx]`): the owning project's id plus
+    /// the leaf's key, which is the library's resolved `.snxlib` path.
+    /// `None` when the path doesn't sit at a library leaf.
+    pub(super) fn library_row_ref(&self, tree_path: &[usize]) -> Option<crate::app::LibraryRowRef> {
         let project_idx = *tree_path.first()?;
-        let library_idx = *tree_path.get(2)?;
-        self.document_state
-            .panel_ctx
-            .projects
-            .get(project_idx)?
-            .libraries
-            .get(library_idx)
-            .map(|lib| lib.root.clone())
+        let node = signex_widgets::tree_view::get_node(
+            self.document_state.panel_ctx.project_tree.as_slice(),
+            tree_path,
+        )?;
+        Some(crate::app::LibraryRowRef {
+            project_id: self.document_state.projects.get(project_idx)?.id,
+            root: std::path::PathBuf::from(&node.key),
+        })
     }
 
     /// Resolve a keymap command id to its display label under the active
-    /// profile, falling back to `fallback` when the command is unbound.
-    pub(in crate::app::view) fn keymap_shortcut_label(
-        &self,
-        command_id: &str,
-        fallback: &str,
-    ) -> String {
+    /// profile. A command the profile does not bind (or unbinds) has no
+    /// hint, which every caller renders as an empty label (#1378).
+    pub(in crate::app::view) fn keymap_shortcut_label(&self, command_id: &str) -> String {
         crate::keymap::AppCommandId::new(command_id)
             .ok()
             .and_then(|command| self.ui_state.active_keymap.shortcut_label(&command))
-            .unwrap_or_else(|| fallback.to_string())
+            .unwrap_or_default()
     }
 }

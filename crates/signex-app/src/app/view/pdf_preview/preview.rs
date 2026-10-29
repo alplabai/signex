@@ -4,6 +4,10 @@
 
 use super::super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
     /// rail on the left, pan/zoom viewport on the right.
@@ -28,12 +32,12 @@ impl Signex {
             let selected_text = iced::Color::WHITE;
             let default_bg = panel_bg;
             let default_text = text_c;
-            button(text(label).size(11).color(if selected {
+            button(text(label).size(TS.body).color(if selected {
                 selected_text
             } else {
                 default_text
             }))
-            .padding([4, 10])
+            .padding([SP.s, 10.0])
             .on_press(msg)
             .style(
                 move |_: &iced::Theme, _status| iced::widget::button::Style {
@@ -58,7 +62,7 @@ impl Signex {
         };
 
         let colour_controls = row![
-            text("Colour").size(11).color(text_muted),
+            text("Colour").size(TS.body).color(text_muted),
             mode_button(
                 "Color",
                 matches!(
@@ -90,11 +94,11 @@ impl Signex {
                 )),
             ),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center);
 
         let range_controls = row![
-            text("Pages").size(11).color(text_muted),
+            text("Pages").size(TS.body).color(text_muted),
             mode_button(
                 "All",
                 matches!(
@@ -120,7 +124,7 @@ impl Signex {
                 Message::PrintPreview(PrintPreviewMsg::SetPageRangeSpecific),
             ),
         ]
-        .spacing(8)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center);
 
         let specific_page_input: Element<'_, Message> = if matches!(
@@ -128,109 +132,85 @@ impl Signex {
             signex_output::PageRange::Specific(_)
         ) {
             row![
-                text("Page").size(11).color(text_muted),
+                text("Page").size(TS.body).color(text_muted),
                 text_input("1", &preview.specific_page_input)
                     .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
-                    .padding([4, 8])
-                    .size(12)
+                    .padding([SP.s, SP.m])
+                    .size(TS.label)
                     .width(80),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center)
             .into()
         } else {
             iced::widget::Space::new().height(0).into()
         };
 
-        let fit_to_page = matches!(
-            preview.pdf_options.scale,
-            signex_output::PdfScale::FitToPage
-        );
         let toggles_row = row![
-            text("Output").size(11).color(text_muted),
-            row![
-                checkbox(fit_to_page)
-                    .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetFitToPage(v))),
-                text("Fit to Page").size(11).color(text_c),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
+            text("Output").size(TS.body).color(text_muted),
             row![
                 checkbox(preview.pdf_options.include_title_block)
                     .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetIncludeTitleBlock(v))),
-                text("Title Block").size(11).color(text_c),
+                text("Title Block").size(TS.body).color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         ]
-        .spacing(12)
-        .align_y(iced::Alignment::Center);
-
-        let page_size_label = match &preview.pdf_options.page_size {
-            signex_output::PageSize::IsoA0 => "ISO A0",
-            signex_output::PageSize::IsoA1 => "ISO A1",
-            signex_output::PageSize::IsoA2 => "ISO A2",
-            signex_output::PageSize::IsoA3 => "ISO A3",
-            signex_output::PageSize::IsoA4 => "ISO A4",
-            signex_output::PageSize::IsoA5 => "ISO A5",
-            signex_output::PageSize::AnsiA => "ANSI A",
-            signex_output::PageSize::AnsiB => "ANSI B",
-            signex_output::PageSize::AnsiC => "ANSI C",
-            signex_output::PageSize::AnsiD => "ANSI D",
-            signex_output::PageSize::AnsiE => "ANSI E",
-            signex_output::PageSize::UsLetter => "US Letter",
-            signex_output::PageSize::UsLegal => "US Legal",
-            signex_output::PageSize::Custom { .. } => "Custom",
-        };
-        let orientation_label = match preview.pdf_options.orientation {
-            signex_output::Orientation::Portrait => "Portrait",
-            signex_output::Orientation::Landscape => "Landscape",
-        };
-        let summary_row = row![
-            text("Sheet").size(11).color(text_muted),
-            text(format!("{} • {}", page_size_label, orientation_label))
-                .size(11)
-                .color(text_c),
-        ]
-        .spacing(8)
+        .spacing(SP.l)
         .align_y(iced::Alignment::Center);
 
         let toolbar = container(
-            row![
-                summary_row,
-                Space::new().width(16),
-                colour_controls,
-                Space::new().width(12),
-                range_controls,
-                specific_page_input,
-                Space::new().width(Length::Fill),
-                toggles_row,
+            column![
+                row![
+                    colour_controls,
+                    Space::new().width(12),
+                    range_controls,
+                    specific_page_input,
+                    Space::new().width(Length::Fill),
+                    toggles_row,
+                ]
+                .align_y(iced::Alignment::Center),
+                self.view_pdf_page_controls(preview),
+                self.view_pdf_page_setup_notice(preview),
             ]
-            .align_y(iced::Alignment::Center),
+            .spacing(6),
         )
-        .padding([8, 14]);
+        .padding([SP.m, 14.0]);
 
         // Thumb rail.
-        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(4).padding(8);
+        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(SP.s).padding(SP.m);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
-            let thumb = image(preview.page_handles[i].clone())
-                .content_fit(iced::ContentFit::Contain)
-                .width(120)
-                .height(85);
+            // A page not drawn yet shows an empty frame: it is rasterised when
+            // the user navigates to it.
+            let thumb: Element<'_, Message> = match page.handle() {
+                Some(handle) => image(handle.clone())
+                    .content_fit(iced::ContentFit::Contain)
+                    .width(120)
+                    .height(85)
+                    .into(),
+                None => container(Space::new())
+                    .width(120)
+                    .height(85)
+                    .style(move |_: &iced::Theme| container::Style {
+                        background: Some(iced::Color::WHITE.into()),
+                        ..container::Style::default()
+                    })
+                    .into(),
+            };
             let card_bg = if selected { hover_c } else { panel_bg };
             let card_border = if selected { accent_c } else { border_c };
             let card = container(
                 column![
                     thumb,
                     text(format!("Page {}", page.page_number))
-                        .size(10)
+                        .size(TS.caption)
                         .color(text_c)
                 ]
-                .spacing(2)
+                .spacing(SP.xs)
                 .align_x(iced::Alignment::Center),
             )
-            .padding(4)
+            .padding(SP.s)
             .width(132)
             .style(move |_: &iced::Theme| container::Style {
                 background: Some(card_bg.into()),
@@ -252,9 +232,11 @@ impl Signex {
         // scrollbars, just drag-to-pan + wheel-zoom.
         let viewport: Element<'_, Message> = if preview.pages.is_empty() {
             container(
-                text("No files selected — toggle files in Settings → Files.")
-                    .size(12)
-                    .color(text_muted),
+                text(preview.range_note.clone().unwrap_or_else(|| {
+                    "No files selected — toggle files in Settings → Files.".to_string()
+                }))
+                .size(TS.label)
+                .color(text_muted),
             )
             .center_x(Length::Fill)
             .center_y(Length::Fill)
@@ -276,18 +258,19 @@ impl Signex {
             // At zoom ≤ 1 we want the page to fill the viewport
             // preserving aspect; above 1× we render at exact scaled
             // pixels and let the user pan around.
-            let img_el: Element<'_, Message> = if zoom <= 1.0 {
-                image(preview.page_handles[preview.selected].clone())
+            // Until the selected page is drawn the viewport stays blank white.
+            let img_el: Element<'_, Message> = match selected_page.handle() {
+                None => Space::new().width(Length::Fill).height(Length::Fill).into(),
+                Some(handle) if zoom <= 1.0 => image(handle.clone())
                     .content_fit(iced::ContentFit::Contain)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .into()
-            } else {
-                image(preview.page_handles[preview.selected].clone())
+                    .into(),
+                Some(handle) => image(handle.clone())
                     .content_fit(iced::ContentFit::Fill)
                     .width(Length::Fixed(scaled_w))
                     .height(Length::Fixed(scaled_h))
-                    .into()
+                    .into(),
             };
             // Position the image at the pan offset. Below 1× the pan
             // is forced to (0, 0) (see the zoom handler) so the
@@ -336,18 +319,18 @@ impl Signex {
 
         let zoom = preview.zoom;
         let page_caption = if preview.pages.is_empty() {
-            text("—".to_string()).size(11).color(text_muted)
+            text("—".to_string()).size(TS.body).color(text_muted)
         } else {
             let selected_page = &preview.pages[preview.selected];
             text(format!(
                 "Page {} of {} — {}×{} px · {:.0}%",
                 selected_page.page_number,
-                preview.pages.len(),
+                selected_page.sheet_count,
                 selected_page.width_px,
                 selected_page.height_px,
                 zoom * 100.0,
             ))
-            .size(11)
+            .size(TS.body)
             .color(text_muted)
         };
 

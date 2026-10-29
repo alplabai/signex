@@ -8,6 +8,7 @@
 //! shared `SymEditor` mutators live here so every concern shares one
 //! implementation.
 
+mod body;
 mod camera;
 mod context_menu;
 mod history;
@@ -18,6 +19,7 @@ mod selection;
 mod transform;
 mod ui;
 
+use body::apply_symbol_body;
 use camera::apply_symbol_camera;
 use context_menu::apply_symbol_context_menu;
 use history::apply_symbol_history;
@@ -33,17 +35,13 @@ use crate::library::messages::{
     SymbolRotatePivotMsg,
 };
 
-type SymEditor = crate::app::SymbolEditorState;
+type SymEditor = crate::app::SymbolDocument;
 
 /// Push a full snapshot onto the undo stack; clear the redo stack.
 /// Capped at 100 entries — oldest entry is evicted when the cap is hit.
 fn push_undo(editor: &mut SymEditor) {
-    let snapshot = editor.primitive().clone();
-    editor.undo_snapshots.push(snapshot);
-    if editor.undo_snapshots.len() > 100 {
-        editor.undo_snapshots.remove(0);
-    }
-    editor.redo_snapshots.clear();
+    let snapshot = editor.snapshot();
+    editor.commit_history(snapshot);
 }
 
 /// Record the first event of a drag gesture.
@@ -57,11 +55,11 @@ fn begin_drag_if_needed(editor: &mut SymEditor) {
 
 /// Mark the symbol as dirty and invalidate the canvas cache.
 fn mark_dirty(editor: &mut SymEditor) {
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }
 
-/// `SymbolEditorState::status_message`'s contract is "cleared on the
+/// `SymbolDocument::status_message`'s contract is "cleared on the
 /// next successful action" — enforced centrally here, once, rather
 /// than at every individual mutation's success point. Clears for
 /// every message that represents an attempted document/selection
@@ -111,19 +109,20 @@ fn push_graphic(
     stroke_width: f64,
 ) {
     push_undo(editor);
-    // Phase C2: new shapes scope to the active unit so they only draw
-    // on that sub-part, mirroring the render/hit-test visibility filter.
+    // Phase C2: new shapes scope to the active unit and body so they only
+    // draw on that sub-part and body, mirroring the render/hit-test visibility filter.
     // Legacy shared part-0 geometry from older files still draws on
     // every unit.
-    let active_part = editor.active_part;
+    let view = editor.view();
     editor
         .primitive_mut()
         .graphics
         .push(signex_library::SymbolGraphic {
+            body_style: view.body_tag(),
             kind,
             stroke_width,
             fill: None,
-            part_number: active_part,
+            part_number: view.part,
         });
     mark_dirty(editor);
 }
@@ -278,10 +277,32 @@ pub(super) fn normalize_arc_commit_deg(start_deg: f64, end_deg: f64) -> (f64, f6
 /// `pub(crate)` so unit tests in sibling modules can drive the editor
 /// through the same code path the dispatcher uses.
 pub(crate) fn apply_symbol_primitive_edit(
-    editor: &mut crate::app::SymbolEditorState,
+    editor: &mut crate::app::SymbolDocument,
     msg: SymbolEditorMsg,
 ) {
     use crate::library::editor::symbol::state::SymbolSelection;
+
+    // The measurement carries the event that triggered it: apply the
+    // view, then process that event as if it had arrived on its own.
+    if let SymbolEditorMsg::ViewportMeasured {
+        width,
+        height,
+        then,
+    } = msg
+    {
+        apply_symbol_camera(
+            editor,
+            SymbolEditorMsg::ViewportMeasured {
+                width,
+                height,
+                then: None,
+            },
+        );
+        if let Some(next) = then {
+            apply_symbol_primitive_edit(editor, *next);
+        }
+        return;
+    }
 
     clear_stale_status_message(editor, &msg);
 
@@ -298,13 +319,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Graphics placement ───────────────────────────────────
         SymbolEditorMsg::AddPin { x, y } => {
             push_undo(editor);
-            let active_part = editor.active_part;
-            let idx = crate::library::editor::symbol::state::add_pin(
-                editor.primitive_mut(),
-                x,
-                y,
-                active_part,
-            );
+            let view = editor.view();
+            let idx =
+                crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y, view);
             editor.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
         }
@@ -411,6 +428,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Transform ────────────────────────────────────────────
         SymbolEditorMsg::RotateSelected { .. }
         | SymbolEditorMsg::DeleteSelected
+        | SymbolEditorMsg::AlignSelectedToGrid
         | SymbolEditorMsg::SetPinNumber { .. }
         | SymbolEditorMsg::SetPinName { .. } => apply_symbol_transform(editor, msg),
 
@@ -418,6 +436,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         SymbolEditorMsg::Pan { .. }
         | SymbolEditorMsg::Zoom { .. }
         | SymbolEditorMsg::Fit
+        | SymbolEditorMsg::ViewportMeasured { .. }
         | SymbolEditorMsg::CursorAt { .. } => apply_symbol_camera(editor, msg),
 
         // ── Display settings intercepted upstream; no-op here ────
@@ -431,6 +450,11 @@ pub(crate) fn apply_symbol_primitive_edit(
         | SymbolEditorMsg::NextPart
         | SymbolEditorMsg::NewPart
         | SymbolEditorMsg::RemovePart => apply_symbol_parts(editor, msg),
+
+        // ── De Morgan body selection / assignment ────────────────
+        SymbolEditorMsg::BodyStyleSelected(_) | SymbolEditorMsg::SelectionBodyAssigned(_) => {
+            apply_symbol_body(editor, msg)
+        }
 
         // ── Undo / redo / drag-commit ────────────────────────────
         SymbolEditorMsg::Undo | SymbolEditorMsg::Redo | SymbolEditorMsg::DragCommit => {
@@ -463,6 +487,7 @@ fn context_target_msg_to_state(
         SymbolContextTargetMsg::Empty => SymbolContextTarget::Empty,
         SymbolContextTargetMsg::Pin(idx) => SymbolContextTarget::Pin(idx),
         SymbolContextTargetMsg::Graphic(idx) => SymbolContextTarget::Graphic(idx),
+        SymbolContextTargetMsg::Field(key) => SymbolContextTarget::Field(key),
     }
 }
 
@@ -606,7 +631,7 @@ mod tests {
     /// mutating message — here `DeleteSelected` on an empty
     /// selection, itself a no-op — so it never lingers past the
     /// action it described. Contract lives on
-    /// `SymbolEditorState::status_message`'s doc comment.
+    /// `SymbolDocument::status_message`'s doc comment.
     #[test]
     fn stale_status_message_clears_on_next_mutating_message() {
         let mut editor = new_editor();

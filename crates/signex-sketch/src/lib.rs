@@ -8,14 +8,14 @@
 //! Public surface:
 //! - [`SketchData`] — top-level sketch container
 //! - [`Solver`] — Newton-LM constraint solver
-//! - [`bake`] — sketch → footprint primitive bake
 //!
 //! See `docs/internal/SKETCH_MODE_v0.13_PLAN.md` for the
 //! release plan.
 
+pub mod arc_snap;
 pub mod array;
 pub mod attr;
-pub mod bake;
+pub mod baked_kinds;
 pub mod constraint;
 pub mod entity;
 pub mod error;
@@ -29,6 +29,7 @@ pub mod solver;
 pub mod split;
 pub mod unit;
 
+pub use arc_snap::snap_arc_ends_onto_circles;
 pub use attr::LinkedRadius;
 pub use error::{SketchError, SolveError};
 pub use sketch::SketchData;

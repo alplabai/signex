@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
-    LifecycleState, PrimitiveRef, SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
+    SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -23,17 +23,20 @@ use super::state::PreviewTab;
 // at `ComponentPreviewState`. The original `ComponentId` was a
 // `uuid::Uuid` newtype; `Version` was a `u32` revision counter. Both
 // fold away once the row tier ships everywhere.
-#[allow(dead_code)]
 pub type ComponentId = Uuid;
-#[allow(dead_code)]
 pub type Version = u32;
 
+mod datasheet;
 mod library_message;
-pub use library_message::LibraryMessage;
+mod placed_part;
+mod range_filter;
+pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
+pub use library_message::{LibraryMessage, ResolvedPlacement, ResolvedSymbolChoice};
+pub use placed_part::{PlacedPartAction, PlacedPartMsg, PlacedPartTarget};
+pub use range_filter::{RangeBound, RangeFilterMsg};
 
 /// User choice from the close-library confirmation modal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum CloseLibraryChoice {
     SaveAll,
     DiscardAll,
@@ -46,7 +49,6 @@ pub enum CloseLibraryChoice {
 /// them, but they no longer dispatch through the Component Preview
 /// tab.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum EditorMsg {
     /// User clicked a Preview tab pill (Preview / Parameters / Supply /
     /// Datasheet / Simulation).
@@ -54,7 +56,7 @@ pub enum EditorMsg {
     /// Save the current row to the table — calls
     /// `adapter.update_row(&table, &row, "edit message")`.
     SaveDraft,
-    /// Same as [`SaveDraft`] for the Component Preview surface — kept
+    /// Same as [`Self::SaveDraft`] for the Component Preview surface — kept
     /// distinct so future Commit semantics (lifecycle promotion etc.)
     /// can layer in without renaming the SaveDraft message.
     Commit,
@@ -69,17 +71,17 @@ pub enum EditorMsg {
     OpenWhereUsedTab,
     /// User dismissed the preview tab (Close X or Ctrl+W).
     CloseEditor,
+    /// User pressed "Reload saved version": asks to replace the working copy
+    /// with the stored row (confirms first when there are unsaved edits).
+    ReloadRequested,
+    /// User confirmed discarding the working copy for the stored row.
+    ReloadConfirmed,
+    /// User kept their working copy instead of reloading.
+    ReloadCancelled,
 
     // ── Datasheet tab ────────────────────────────────────────
-    /// Switch the datasheet picker between URL / Pinned PDF modes.
-    DatasheetSetMode(crate::library::editor::datasheet_picker::DatasheetMode),
-    /// Live edit of the URL field on the Datasheet tab.
-    DatasheetSetUrl(String),
-    /// Open the Pinned-PDF upload dialog.
-    DatasheetUploadDialog,
-    /// Async result of the Pinned-PDF upload — `Some((bytes, filename))`
-    /// on pick, `None` on cancel.
-    DatasheetUploadResult(Option<(Vec<u8>, String)>),
+    /// An edit of the row's document list (#1231).
+    Datasheet(DatasheetMsg),
 
     // ── Component-level setters ─────────────────────────────
     /// Set the row's lifecycle state from the Preview tab header.
@@ -96,7 +98,7 @@ pub enum EditorMsg {
     /// Toolbar — drop every entry in `Revision::pin_map_overrides`.
     /// Equivalent to `PinMapAutoMatchByNumber` for the v0.9 algorithm.
     PinMapClearOverrides,
-    /// Click "[Override]" on a row — expands the inline editor for
+    /// Click "\[Override\]" on a row — expands the inline editor for
     /// that pin's row. Carries the symbol pin number.
     PinMapOpenOverrideEdit(String),
     /// Live edit of the override pad-number text input. The dispatcher
@@ -118,6 +120,20 @@ pub enum EditorMsg {
     /// entry from `Revision::pin_map_overrides`.
     PinMapRemoveOverride {
         pin: String,
+    },
+    /// The alternate symbol at `idx` was removed from the row (#1230).
+    AlternateSymbolRemoved {
+        idx: usize,
+    },
+    /// The alternate symbol at `idx` was relabelled.
+    AlternateSymbolRelabeled {
+        idx: usize,
+        label: String,
+    },
+    /// The alternate symbol at `from` was moved to position `to`.
+    AlternateSymbolMoved {
+        from: usize,
+        to: usize,
     },
     /// Fire-and-forget save of the active symbol primitive — typically
     /// chained off SaveDraft via the dispatcher. Boxed so the
@@ -222,7 +238,7 @@ pub enum EditorMsg {
         value: String,
     },
     /// Live-update the per-row edit buffer for a `ParamValue::Number`
-    /// row. The buffer lives on `ComponentEditorState.params_edit_buf`;
+    /// row. The buffer lives on `ComponentPreviewState.params_edit_buf`;
     /// the value is committed via `ParamCommitNumber`.
     ParamSetNumberBuf {
         name: String,
@@ -237,9 +253,26 @@ pub enum EditorMsg {
     ParamSetMeasurementBuf {
         name: String,
         buf: String,
+        /// The class-template slot behind the row, if any.
+        slot: Option<signex_library::ParamSlot>,
     },
     /// Commit the live buffer for a `ParamValue::Measurement` row.
     ParamCommitMeasurement {
+        name: String,
+        unit: String,
+    },
+    /// The user picked an SI prefix for a `ParamValue::Measurement` row.
+    /// `unit` is the slot's unit token; the pick commits the buffered
+    /// number (or the stored one) in that prefix.
+    ParamPrefixPicked {
+        name: String,
+        unit: String,
+        prefix: signex_types::quantity::SiPrefix,
+        slot: Option<signex_library::ParamSlot>,
+    },
+    /// The user picked a unit for a custom measurement row (a template
+    /// slot fixes its own unit). `unit` is the unit's canonical token.
+    ParamUnitPicked {
         name: String,
         unit: String,
     },
@@ -252,9 +285,11 @@ pub enum EditorMsg {
     ParamRemove {
         name: String,
     },
-    /// Add a custom parameter row with an empty value of the chosen kind.
+    /// Live edit of the "Add custom parameter" name input.
+    ParamNewNameChanged(String),
+    /// Add a custom parameter row, named by the "Add custom parameter"
+    /// input, with an empty value of the chosen kind.
     ParamAddCustom {
-        name: String,
         kind: ParamKindMsg,
     },
     // ── Simulation tab ────────────────────────────────────────
@@ -283,7 +318,6 @@ pub enum EditorMsg {
 /// Pure-data alias for `ParamKind` so messages don't depend on
 /// `signex_library::ParamKind` at the message layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum ParamKindMsg {
     Text,
     Number,
@@ -296,7 +330,6 @@ pub enum ParamKindMsg {
 /// canvas's own `SymbolTool` so messages don't depend on the canvas
 /// module type tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SymbolToolMsg {
     Select,
     AddPin,
@@ -311,8 +344,10 @@ pub enum SymbolToolMsg {
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
 /// resolves these against the editor's primary + secondary
 /// selection slots into the matching `ConstraintKind` and emits the
-/// SketchEdit. Tags that don't apply to the current selection are
-/// no-ops in the dispatcher.
+/// SketchEdit. A tag that doesn't apply to the current selection, or
+/// whose dimension field cannot be read as a number, adds no constraint
+/// and is reported to the Messages panel and the sketch warning list
+/// (#599) — it is never a silent no-op.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SketchConstraintTag {
     /// 1 Point selected → fix it in place.
@@ -453,7 +488,6 @@ impl std::fmt::Display for RoleTag {
 /// Selection target on the Symbol canvas — pure-data version of
 /// `editor::symbol::state::SymbolSelection`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SymbolSelectionMsg {
     Pin(usize),
     FieldReference,
@@ -474,7 +508,6 @@ pub enum SymbolSelectionMsg {
 /// Symbol field key — pure-data alias of
 /// `editor::symbol::state::FieldKey`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum FieldKeyMsg {
     Reference,
     Value,
@@ -485,7 +518,6 @@ pub enum FieldKeyMsg {
 /// `SymbolEditorMsg::MoveGraphicHandle` so the dispatcher
 /// knows which handle of which graphic the canvas is dragging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum GraphicHandleMsg {
     /// Rectangle corner — `0=TL, 1=TR, 2=BR, 3=BL` (Standard y-up).
     RectCorner(u8),
@@ -508,7 +540,6 @@ pub enum GraphicHandleMsg {
 
 /// Pivot mode for Symbol-graphic rotate operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum SymbolRotatePivotMsg {
     /// Legacy orbit around world origin `(0, 0)`.
     WorldOrigin,
@@ -524,6 +555,7 @@ pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
     Graphic(usize),
+    Field(crate::library::editor::symbol::state::FieldKey),
 }
 
 /// Which context-menu submenu is accordion-expanded — pure-data alias
@@ -545,7 +577,6 @@ pub use symbol::SymbolEditorMsg;
 /// dispatch (`handle_primitive_editor_event`) routes each surface to the
 /// matching editor state per the active tab's [`crate::app::TabKind`].
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrimitiveEdit {
     /// Footprint canvas editing.
     Footprint(FootprintEditorMsg),
@@ -558,18 +589,20 @@ pub enum PrimitiveEdit {
 
 /// Picker modal interaction sub-message tree.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PickerMsg {
+    /// Left-dock library panel search box edited.
+    PanelSearchChanged(String),
     FilterChanged(String),
-    SelectComponent(ComponentSummary),
+    SelectComponent(uuid::Uuid),
     PlaceSelected,
+    /// A range filter on a parameter column of the picker's list.
+    RangeFilter(RangeFilterMsg),
 }
 
 /// Edit Component Details modal sub-message tree — keeps
 /// `LibraryMessage` digestible by grouping all the per-field setters
 /// under a single sub-enum.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum BrowserEditMsg {
     SetInternalPn(String),
     SetClass(ComponentClass),
@@ -577,6 +610,7 @@ pub enum BrowserEditMsg {
     SetDatasheetUrl(String),
     SetManufacturer(String),
     SetMpn(String),
+    SetDescription(String),
     /// Live edit of a parameter row's value or unit. The dispatcher
     /// keeps the buffer keyed by `key`; commit happens on
     /// `BrowserEditMsg::CommitParam`.
@@ -584,9 +618,16 @@ pub enum BrowserEditMsg {
         key: String,
         value: String,
     },
+    /// The user picked a unit for a parameter row: its canonical token,
+    /// or an empty string for no unit. Applied to the draft at once.
     SetParamUnit {
         key: String,
         unit: String,
+    },
+    /// The user picked an SI prefix for a measurement row's number.
+    ParamPrefixPicked {
+        key: String,
+        prefix: signex_types::quantity::SiPrefix,
     },
     /// Commit the live param buffer for `key` to the draft.
     CommitParam {
@@ -612,14 +653,21 @@ pub enum BrowserEditMsg {
     Save,
     /// Dismiss the modal without saving.
     Cancel,
+    /// User pressed "Reload saved version" after a stale-row refusal.
+    ReloadRequested,
+    /// User confirmed replacing the draft with the stored row.
+    ReloadConfirmed,
+    /// User kept the draft.
+    ReloadCancelled,
 }
 
 /// Primitive picker modal sub-messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PrimitivePickerMsg {
     /// Live update of the filter text input.
     SetFilter(String),
+    /// The list scrolled to this offset (pixels from the top).
+    Scrolled(f32),
     /// Commit a picked `PrimitiveRef` — applies to the picker's
     /// configured target.
     Pick(PrimitiveRef),
@@ -634,7 +682,6 @@ pub enum PrimitivePickerMsg {
 
 /// Settings → Library → Distributor APIs panel messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum SettingsMsg {
     DigiKeyConnect,
     DigiKeyCancel,
@@ -648,6 +695,9 @@ pub enum SettingsMsg {
         connected_label: Option<String>,
         error: Option<String>,
     },
+    /// Outcome of the background keyring delete of a token that a
+    /// cancelled DigiKey flow stored before the cancel landed.
+    DigiKeyStaleTokenRemoved(Result<(), String>),
     MouserApiKeyChanged(String),
     MouserTest,
     MouserTestResult(Result<(), String>),

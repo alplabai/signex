@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use signex_library::{ComponentClass, PrimitiveKind, RowId, UseSite};
+use signex_library::{PrimitiveKind, RowId, UseSite};
 
 use super::super::state::{EditorAddress, PrimitivePickerTarget};
 use super::{
@@ -11,9 +11,8 @@ use super::{
     SettingsMsg,
 };
 
-/// Top-level library message — folded into [`Message::Library`].
+/// Top-level library message — folded into [`Message::Library`](crate::app::Message::Library).
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum LibraryMessage {
     /// File ▸ Library ▸ Open Library… — runs `rfd::AsyncFileDialog`
     /// on the directory level and lands in [`LibraryMessage::OpenLibraryAt`].
@@ -86,43 +85,26 @@ pub enum LibraryMessage {
     /// refreshes the cached library file enumeration so the project
     /// tree shows the new node, and opens the file as a primitive
     /// editor tab.
-    AddLibrarySymbolFilePicked(PathBuf),
+    AddLibrarySymbolFilePicked {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+    },
     /// F34 — Save-As dialog confirmed for a new footprint library
     /// file (`.snxfpt`). Writes an empty `Footprint` to the picked
     /// path, refreshes the cached library file enumeration, and
     /// opens the file as a primitive editor tab.
-    AddLibraryFootprintFilePicked(PathBuf),
-    /// Dismiss the New Component modal without creating anything.
-    CloseNewComponent,
-    /// Live-edit of the New Component modal's "Internal PN" field.
-    NewComponentSetInternalPn(String),
-    /// User picked a target library in the modal — index into
-    /// `LibraryState.open_libraries`.
-    NewComponentSetLibrary(usize),
-    /// User picked a class in the modal pick_list.
-    NewComponentSetClass(ComponentClass),
-    /// User picked a target table (filename stem) in the modal
-    /// pick_list. Rows live inside category tables, so the modal
-    /// needs the user to pick a destination table — populated from
-    /// `manifest().tables()` plus the default `<class>s` slot when
-    /// the manifest declares no overrides.
-    NewComponentSetTable(String),
-    /// User picked the "+ New Table…" sentinel in the Table dropdown
-    /// (or hit the "+ New Table" button) — opens the inline create
-    /// form on `NewComponentState.creating_table`.
-    NewComponentBeginCreateTable,
-    /// Live-edit of the new-table name field.
-    NewComponentSetNewTableName(String),
-    /// Cancel the inline create-table form without writing anything.
-    NewComponentCancelCreateTable,
-    /// Confirm — calls `create_empty_table` on the active library's
-    /// adapter, refreshes the components cache, switches the modal's
-    /// `table` selection to the freshly-minted name.
-    NewComponentConfirmCreateTable,
-    /// Toggle the Advanced ▾ disclosure on the New Component modal —
-    /// shows / hides the Table picker + `+ New Table…` so the basic
-    /// form stays clean for first-time users.
-    NewComponentToggleAdvanced,
+    AddLibraryFootprintFilePicked {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+    },
+    /// The off-thread write behind `AddLibrary{Symbol,Footprint}FilePicked`
+    /// finished; on success the file is registered on `project_id` (the
+    /// project the dialog was opened for) and opened as a primitive tab.
+    AddLibraryFileWritten {
+        project_id: crate::app::ProjectId,
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     /// Library Browser tab strip → "+ Add Table". Flips the
     /// browser into add-table mode where the strip's right edge
     /// shows a name input + Confirm/Cancel.
@@ -156,6 +138,16 @@ pub enum LibraryMessage {
     BrowserDismissDeleteError {
         library_path: PathBuf,
     },
+    /// "Commit now" on the uncommitted-changes banner: retry the git commit
+    /// of everything the library saved without one (#858).
+    BrowserCommitPending {
+        library_path: PathBuf,
+    },
+    /// The off-thread "Commit now" finished.
+    BrowserCommitPendingDone {
+        library_path: PathBuf,
+        result: Result<signex_library::CommitOutcome, String>,
+    },
     /// Sidebar `✎` rename button — flip the matching row into edit
     /// mode (text input replaces label).
     BrowserBeginRenameTable {
@@ -176,65 +168,7 @@ pub enum LibraryMessage {
     BrowserConfirmRenameTable {
         library_path: PathBuf,
     },
-    /// Sidebar `+ Class` — opens the inline create form on
-    /// `LibraryBrowserState.adding_class`.
-    BrowserBeginAddClass {
-        library_path: PathBuf,
-    },
-    BrowserSetNewClassKey {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserSetNewClassLabel {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserCancelAddClass {
-        library_path: PathBuf,
-    },
-    /// Append the new class to the library's `[[classes]]` block via
-    /// `update_library_classes` and refresh.
-    BrowserConfirmAddClass {
-        library_path: PathBuf,
-    },
-    /// Per-row `×` delete — drops the matching class from the
-    /// library's `[[classes]]` block. Components referencing the
-    /// class by key keep their stored class string; the dropdown
-    /// just stops surfacing it.
-    BrowserDeleteClass {
-        library_path: PathBuf,
-        key: String,
-    },
-    /// Sidebar `✎` rename for a class row — flips the matching row
-    /// into edit mode (key + label inputs).
-    BrowserBeginRenameClass {
-        library_path: PathBuf,
-        key: String,
-    },
-    BrowserSetRenameClassKey {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserSetRenameClassLabel {
-        library_path: PathBuf,
-        value: String,
-    },
-    BrowserCancelRenameClass {
-        library_path: PathBuf,
-    },
-    /// Confirm — writes the renamed class via `update_library_classes`.
-    BrowserConfirmRenameClass {
-        library_path: PathBuf,
-    },
-    /// Live-edit of the modal's "Category" field.
-    NewComponentSetCategory(String),
-    /// Submit the New Component modal — creates the draft, persists,
-    /// opens the editor on the new component.
-    NewComponentSubmit,
     // ─────────────────────────────────────────────────────────────────
-    /// Toggle the Library left-dock panel's library tree node at
-    /// `path` (path relative to the open libraries list).
-    ToggleLibraryTreeNode(usize),
     /// Open a Component Preview tab for the row identified by
     /// `(library_path, table, row_id)`.
     OpenComponentRow {
@@ -273,6 +207,42 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
+    /// Completion of the off-thread read behind `PlaceLibraryComponent`.
+    /// `target_sheet` is the sheet that was active when the gesture
+    /// started; the handler refuses to arm anywhere else, and `arm_epoch`
+    /// (the placement epoch then) lets it ignore a read the user cancelled.
+    LibraryComponentResolved {
+        target_sheet: PathBuf,
+        arm_epoch: u64,
+        library_path: PathBuf,
+        result: Result<Box<ResolvedPlacement>, String>,
+    },
+    /// The off-thread designator scan of a project finished; `generation`
+    /// is the request it answers, an older one is dropped.
+    DesignatorsScanned {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::designator_scan::DesignatorScan>, String>,
+        >,
+    },
+    /// Completion of the off-thread read behind a placed symbol's switch
+    /// to another drawing of its row (#1230). `target_sheet` is the sheet
+    /// that was active when the switch started.
+    SymbolChoiceResolved {
+        target_sheet: PathBuf,
+        /// The engine instance that held the sheet when the switch started;
+        /// a re-opened document is a different instance.
+        engine_instance: u64,
+        symbol_id: uuid::Uuid,
+        /// Request number among the switches of `symbol_id`.
+        request: u64,
+        /// The drawing's name in the row ("IEC"), for messages.
+        label: String,
+        result: Result<Box<ResolvedSymbolChoice>, String>,
+    },
+    /// An action on the selected placed part: Open Datasheet, Edit Symbol,
+    /// Change Component (#1301, #1262, #1260), and their follow-ups.
+    PlacedPart(super::PlacedPartMsg),
     /// Internal trace-only signal: a Component Preview tab was
     /// opened for the given address. Fired alongside
     /// `OpenComponentRow` so downstream observers can attach to a
@@ -285,7 +255,7 @@ pub enum LibraryMessage {
     /// Inner-message envelope for events fired from a standalone
     /// primitive editor tab (`.snxsym` / `.snxfpt`). Keyed by file
     /// path so the dispatcher can locate the matching
-    /// `SymbolEditorState` / `FootprintEditorState` in
+    /// `SymbolDocument` / `FootprintDocument` in
     /// `DocumentState.symbol_editors` / `footprint_editors`. Mirrors
     /// the `EditorEvent` shape used for Component Preview tabs but
     /// with a path identity instead of `(library_path, table, row_id)`.
@@ -299,6 +269,32 @@ pub enum LibraryMessage {
     /// `TabKind::LibraryBrowser(path)` tab (or activates the existing
     /// one when the path is already open).
     OpenLibraryBrowser(PathBuf),
+    /// A `.snxlib` mount prepared off the UI thread has finished — issue
+    /// #99 part 2c. Produced by
+    /// `library::mount::prepare_mount_off_thread`, handled in
+    /// `app/dispatch/library/mod.rs`.
+    ///
+    /// Carries only the path plus a one-shot cell. What happens next —
+    /// open a Library Browser tab, or stay silent — is deliberately
+    /// *not* in this message: the handler reads the intent from
+    /// `LibraryState::pending_mounts`, because a second request for the
+    /// same path can have upgraded it while this preparation was in
+    /// flight. A cell whose path is no longer pending was cancelled by
+    /// `close_library` and is discarded.
+    MountFinished {
+        path: PathBuf,
+        prepared: crate::library::mount::PreparedMountCell,
+    },
+    /// A library write that `update` handed to a worker (#893) is over.
+    WriteFinished(Box<crate::library::writes::WriteDone>),
+    /// An off-thread library refresh (#1374) has read the library. Applied
+    /// only while `generation` is still the latest for `path`; a result
+    /// superseded by a newer refresh, or for a closed library, is dropped.
+    RefreshFinished {
+        path: PathBuf,
+        generation: u64,
+        snapshot: crate::library::refresh::RefreshSnapshotCell,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {
@@ -309,6 +305,11 @@ pub enum LibraryMessage {
     BrowserSearchChanged {
         library_path: PathBuf,
         value: String,
+    },
+    /// A range filter on a parameter column of this Library Browser tab.
+    BrowserRangeFilter {
+        library_path: PathBuf,
+        msg: super::RangeFilterMsg,
     },
     /// Column-header click — toggles sort direction on the matching
     /// key, or sets ascending sort if a different column is clicked.
@@ -326,6 +327,18 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
+    },
+    /// The browser grid's scrollable moved. Carries the scroll offset the
+    /// grid windows its rows from.
+    BrowserGridScrolled {
+        library_path: PathBuf,
+        offset_y: f32,
+    },
+    /// The browser grid was laid out at a new height (a resize, including
+    /// one the scrollable does not report because the rows now fit).
+    BrowserGridResized {
+        library_path: PathBuf,
+        viewport_h: f32,
     },
     /// User clicked the Add Component button (inside the empty-state
     /// CTA, the action row, or the "+" tab). Pre-sets the New
@@ -363,7 +376,7 @@ pub enum LibraryMessage {
     },
     /// Inner-message envelope for primitive picker events.
     PrimitivePicker(PrimitivePickerMsg),
-    /// Double-click on a row in the browser grid → opens the Edit
+    /// "Edit Details" on the selected browser row → opens the Edit
     /// Component Details modal. Loads the row from the cached tables
     /// and seeds `EditRowModalState.draft`.
     BrowserOpenEditModal {
@@ -415,17 +428,6 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         key: String,
     },
-    /// Right-click on a Library Browser row → "Refresh Pricing".
-    /// Stage 18 stub — real distributor adapter wiring lands later.
-    BrowserRefreshPricing {
-        library_path: PathBuf,
-        table: String,
-        row_id: RowId,
-    },
-    /// Library node right-click → "Refresh All Pricing".
-    /// Stage 18 stub — touches every row in every cached table once
-    /// the per-row stub is fleshed out.
-    LibraryRefreshAllPricing(PathBuf),
     // ── Tools ▸ Document Options modal ──────────────────────────────
     /// Tools menu fired Document Options for the library at
     /// `library_path`. Opens the modal pre-filled with the library's
@@ -450,6 +452,12 @@ pub enum LibraryMessage {
     RecoveryLibraryMissing(super::super::recovery::LibraryMissingChoice),
     RecoveryLibraryMissingLocateResult(Option<PathBuf>),
     RecoveryGitMissing(super::super::recovery::GitMissingChoice),
+    /// The off-thread git re-init of a library whose `.git` is missing
+    /// finished (#893).
+    GitReinitFinished {
+        path: PathBuf,
+        result: Result<(), String>,
+    },
     RecoveryBrokenBinding(super::super::recovery::BrokenBindingChoice),
 
     // ── Library Updates Available modal (Stage 16) ─────────────────────
@@ -466,7 +474,7 @@ pub enum LibraryMessage {
     /// updates to the schematic engine + dirty-mark + close modal.
     LibraryUpdatesApply,
     /// User clicked Skip All — close the modal and record the path on
-    /// `skipped_updates_for` so the status bar can flag it persistently.
+    /// `skipped_updates_for` (not rendered anywhere yet).
     LibraryUpdatesSkipAll,
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
@@ -498,26 +506,77 @@ pub enum LibraryMessage {
     /// Promote an Installed library to Global — moves the path from
     /// the session-scoped Vec to the persisted TOML file. No-op when
     /// the path isn't currently Installed.
-    #[allow(dead_code)]
     ComponentsPanelPromoteToGlobal(PathBuf),
-    /// "Manage…" button on the Global section header — opens the
-    /// global libraries management dialog. Stage 9 stub: logs and
-    /// no-ops so the wiring path is observable.
-    #[allow(dead_code)]
-    ComponentsPanelManageGlobal,
-    /// "Add to Project" button on a Components Panel row — adds
-    /// the row's library to the active project's
-    /// `Project.libraries` list. Stage 9 stub.
-    #[allow(dead_code)]
-    ComponentsPanelAddToProject {
-        library_path: PathBuf,
-    },
     /// "Place into Schematic" button on a Components Panel row.
-    /// Stage 9 stub — full ghost-component drag is polish work.
-    #[allow(dead_code)]
+    /// Wired to the row's "Place" button (#1160); places on the active
+    /// schematic like the Place Component picker.
     ComponentsPanelPlace {
         library_path: PathBuf,
         table: String,
         row_id: RowId,
     },
+    /// The external-edit poll timer fired (#531). The handler starts the
+    /// off-thread `stat` of every mounted `.snxlib`.
+    ExternalEditsPollTicked,
+    /// The `stat` pass finished, or timed out (#827); see
+    /// [`crate::library::external_poll::PollOutcome`].
+    ExternalEditsPolled(crate::library::external_poll::PollOutcome),
+    /// The off-thread drift pass finished (#912): which embedded library
+    /// symbols differ from the mounted libraries' current ones.
+    DriftChecked(Box<crate::library::drift::DriftReport>),
+    /// The off-thread library read behind the Library Updates modal's Apply
+    /// finished; the update itself is applied from this result.
+    LibraryUpdateSymbolsRead(Box<crate::library::drift::SymbolsRead>),
+    /// The background Refresh All Pricing walk finished. `Err` is a failure
+    /// of the walk as a whole (library unreadable, write refused); per-row
+    /// failures are inside the report.
+    PricingRefreshFinished {
+        library_path: PathBuf,
+        outcome: std::sync::Arc<Result<signex_library::PricingRefreshReport, String>>,
+    },
+    /// The Copy to Library dialog, or the copy it started (#813).
+    StockCopy(crate::library::stock_copy::StockCopyMsg),
+}
+
+/// What the off-thread read of a library row hands back to `update`:
+/// everything needed to register the `LibSymbol` and place the part,
+/// with no further IO.
+#[derive(Debug, Clone)]
+pub struct ResolvedPlacement {
+    /// `"<library uuid>:<symbol uuid>"` — `LibSymbol.id` and `Symbol.lib_id`.
+    pub lib_id: String,
+    pub lib_symbol: signex_types::schematic::LibSymbol,
+    pub library_id: uuid::Uuid,
+    pub row_id: uuid::Uuid,
+    pub library_version: String,
+    pub internal_pn: String,
+    pub value: String,
+    /// The symbol is a power port: the placed instance is `is_power` and
+    /// `value` is its net name.
+    pub is_power: bool,
+    /// Reference prefix from the library symbol's designator (`U?` -> `U`):
+    /// the legacy prefix, used when the owning project follows no designator
+    /// standard or does not cover `class`.
+    pub prefix: String,
+    /// The row's component class key (`"diode"`, `"generic"`), for the
+    /// project's designator standard (#1232).
+    pub class: String,
+    /// The row's raw `designator_prefix` parameter, not yet validated: it
+    /// beats the standard's table entry for `class` (#1315).
+    pub prefix_override: Option<String>,
+    /// The part's primary datasheet link and identity fields (Manufacturer,
+    /// MPN and the row's parameters). A placement does not stamp them;
+    /// Change Component replaces the old part's with them. The footprint is
+    /// not among them: the row owns it through `row_id`, and a placed
+    /// symbol's footprint text stays empty as on a fresh placement.
+    pub datasheet: String,
+    pub fields: Vec<(String, String)>,
+}
+
+/// The drawing a placed symbol is switched to, read off-thread: the
+/// converted symbol and its `"<library uuid>:<symbol uuid>"` key.
+#[derive(Debug, Clone)]
+pub struct ResolvedSymbolChoice {
+    pub lib_id: String,
+    pub lib_symbol: signex_types::schematic::LibSymbol,
 }

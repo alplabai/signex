@@ -1,11 +1,14 @@
 //! Tests for single-sheet netlist building.
 use super::*;
 
+mod bus_members;
+mod index_equivalence;
+mod multiple_names;
+mod pin_contact_and_power;
 mod wire_order;
 use signex_types::schematic::{
     Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
 };
-use std::collections::HashMap;
 use uuid::Uuid;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -14,48 +17,29 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::nil(),
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
 fn junction(pos: Point) -> Junction {
     Junction {
-        uuid: Uuid::nil(),
         position: pos,
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     }
 }
 
 fn label(text: &str, pos: Point, ty: LabelType) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: pos,
@@ -65,6 +49,8 @@ fn label(text: &str, pos: Point, ty: LabelType) -> Label {
         font_size: 1.27,
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
+        locked: false,
     }
 }
 
@@ -119,34 +105,11 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str, pins: Vec<LibPin>) {
 /// `(origin.x + lx, origin.y - ly)`.
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
-        uuid: Uuid::nil(),
+        uuid: Uuid::now_v7(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),
-        value: String::new(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: origin,
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
 }
 
@@ -396,6 +359,39 @@ fn class_is_left_to_project_rules() {
 }
 
 #[test]
+fn net_class_follows_the_label_named_net_across_its_wires() {
+    // Two wires joined by a junction share one net named by its label; a
+    // class naming that net styles both wires, not just the labelled one.
+    let mut sheet = empty_sheet();
+    let (mut w1, mut w2) = (
+        wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+        wire(pt(10.0, 0.0), pt(20.0, 0.0)),
+    );
+    w1.uuid = Uuid::from_u128(1);
+    w2.uuid = Uuid::from_u128(2);
+    sheet.wires.push(w1);
+    sheet.wires.push(w2);
+    sheet.junctions.push(junction(pt(10.0, 0.0)));
+    sheet
+        .labels
+        .push(label("I2C_SDA", pt(0.0, 0.0), LabelType::Net));
+    add_lib(
+        &mut sheet,
+        "R",
+        vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+    );
+    place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+
+    let mut class = signex_types::net_class::NetClass::named("Bus");
+    class.patterns.push("I2C_*".into());
+    class.style.wire_width_mm = Some(0.5);
+    let styles = crate::element_class_styles(&build_netlist(&sheet), &[class]);
+
+    assert_eq!(styles[&Uuid::from_u128(1)].wire_width_mm, Some(0.5));
+    assert_eq!(styles[&Uuid::from_u128(2)].wire_width_mm, Some(0.5));
+}
+
+#[test]
 fn net_records_its_wire_and_junction_membership() {
     // D3.1: a net carries the wire + junction uuids it occupies — the
     // membership the net-flood highlights and the ratsnest reads.
@@ -408,8 +404,7 @@ fn net_records_its_wire_and_junction_membership() {
     sheet.junctions.push(Junction {
         uuid: jn,
         position: pt(5.0, 0.0),
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     });
     add_lib(
         &mut sheet,
@@ -615,7 +610,7 @@ fn wire_id(a: Point, b: Point, id: Uuid) -> Wire {
         uuid: id,
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
@@ -635,6 +630,27 @@ fn flood_returns_only_the_clicked_net() {
 }
 
 #[test]
+fn net_extent_covers_only_the_anchored_net_and_its_bounds() {
+    let mut sheet = empty_sheet();
+    let a = Uuid::from_u128(1);
+    let b = Uuid::from_u128(2);
+    sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), a));
+    sheet
+        .wires
+        .push(wire_id(pt(10.0, 0.0), pt(10.0, 5.0), Uuid::from_u128(3)));
+    sheet.wires.push(wire_id(pt(50.0, 0.0), pt(60.0, 0.0), b));
+    let lab = label("SIG", pt(0.0, 0.0), LabelType::Net);
+    let lab_id = lab.uuid;
+    sheet.labels.push(lab);
+
+    let extent = net_extent_at(&sheet, &pt(0.0, 0.0));
+    assert_eq!(extent.wires.len(), 2);
+    assert!(!extent.wires.contains(&b));
+    assert_eq!(extent.labels, vec![lab_id]);
+    assert_eq!(extent.bounds, Some([0.0, 0.0, 10.0, 5.0]));
+}
+
+#[test]
 fn flood_follows_a_t_junction_and_paints_the_dot() {
     // Horizontal wire (0,0)-(10,0); a vertical wire ends on its interior
     // at (5,0); a junction dot ties them. Clicking the horizontal wire
@@ -649,8 +665,7 @@ fn flood_follows_a_t_junction_and_paints_the_dot() {
     sheet.junctions.push(Junction {
         uuid: j,
         position: pt(5.0, 0.0),
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     });
 
     let mut flood = flood_net_elements(&sheet, h).expect("clicked wire exists");
@@ -787,4 +802,13 @@ fn terminals_order_designators_and_pins_naturally() {
             ("U1", "10"),
         ]
     );
+}
+
+#[test]
+fn pt_key_buckets_at_one_micron() {
+    // Regression for #113 item 1: the key is a 1 µm round, so 0.4 µm folds
+    // into the origin bucket while 0.6 µm and a full 1 µm do not.
+    assert_eq!(pt_key(&pt(0.0004, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0006, 0.0)), pt_key(&pt(0.0, 0.0)));
+    assert_ne!(pt_key(&pt(0.0, 0.001)), pt_key(&pt(0.0, 0.0)));
 }

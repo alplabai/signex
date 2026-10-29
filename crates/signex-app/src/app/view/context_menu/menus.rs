@@ -13,20 +13,66 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg, submenu_launcher};
+use super::items::{
+    dd_cmd, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_msg, dd_planned, submenu_launcher,
+};
 use crate::icons as ic;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
-/// Keyboard-shortcut hints for the canvas menu, resolved from the active
-/// keymap profile (with the historic Altium defaults as fallbacks) before
-/// the pure builder runs.
-pub(super) struct CanvasShortcuts {
-    pub find: String,
-    pub cut: String,
-    pub copy: String,
-    pub paste: String,
-    pub smart_paste: String,
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
+/// Command ids whose keyboard hint the canvas menu shows.
+pub(super) const CANVAS_SHORTCUT_IDS: &[&str] = &[
+    "find",
+    "find_similar_objects",
+    "cut",
+    "copy",
+    "paste",
+    "smart_paste",
+    "rotate_counterclockwise",
+    "mirror_x",
+    "mirror_y",
+    "delete_selection",
+    "open_child_sheet",
+    "create_sheet_from_sheet_symbol",
+    "sync_sheet_pins",
+    "open_preferences",
+    "open_datasheet",
+    "edit_selected_symbol_in_symbol_editor",
+    "edit_selected_object_properties",
+    "change_component",
+    "open_project_options",
+];
+
+/// Keyboard-shortcut hints for the canvas menu, keyed by command id and
+/// resolved from the active keymap profile (empty when the profile does not
+/// bind the command) before the pure builder runs.
+#[derive(Debug, Clone, Default)]
+pub(super) struct CanvasShortcuts(std::collections::HashMap<&'static str, String>);
+
+impl CanvasShortcuts {
+    /// Hints for every id in [`CANVAS_SHORTCUT_IDS`], looked up with `label_of`.
+    pub(super) fn resolve(label_of: impl Fn(&str) -> String) -> Self {
+        Self(
+            CANVAS_SHORTCUT_IDS
+                .iter()
+                .map(|id| (*id, label_of(id)))
+                .collect(),
+        )
+    }
+
+    /// The hint for `command_id`; empty when unbound.
+    pub(super) fn of(&self, command_id: &str) -> &str {
+        self.0.get(command_id).map_or("", String::as_str)
+    }
+
+    #[cfg(test)]
+    pub(super) fn set(&mut self, command_id: &'static str, hint: &str) {
+        self.0.insert(command_id, hint.to_string());
+    }
 }
 
 impl Signex {
@@ -79,8 +125,8 @@ impl Signex {
             let row_label = *label;
             let row_step = *step_mm;
             let btn = button(
-                container(text(row_label).size(11).color(lbl_color))
-                    .padding([4, 12])
+                container(text(row_label).size(TS.body).color(lbl_color))
+                    .padding([SP.s, SP.l])
                     .width(iced::Length::Fill),
             )
             .padding(0)
@@ -104,7 +150,7 @@ impl Signex {
         }
 
         container(col)
-            .padding(4)
+            .padding(SP.s)
             .style(move |_: &iced::Theme| iced::widget::container::Style {
                 background: Some(iced::Background::Color(panel_bg)),
                 border: iced::Border {
@@ -122,30 +168,27 @@ impl Signex {
     pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
         let tid = self.ui_state.theme_id;
         let canvas = self.interaction_state.active_canvas();
-        let has_selection = !canvas.selected.is_empty();
-        let child_sheet_selected = canvas
-            .selected
-            .iter()
-            .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
-        let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile, falling
-        // back to the historic Altium defaults when a command is unbound.
-        let sc = CanvasShortcuts {
-            find: self.keymap_shortcut_label("find", "Ctrl+F"),
-            cut: self.keymap_shortcut_label("cut", "Ctrl+X"),
-            copy: self.keymap_shortcut_label("copy", "Ctrl+C"),
-            paste: self.keymap_shortcut_label("paste", "Ctrl+V"),
-            smart_paste: self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V"),
+        let selection = CanvasSelection {
+            has_selection: !canvas.selected.is_empty(),
+            child_sheet_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
+            drawing_selected: !self.selected_drawing_ids().is_empty(),
+            placed_part_selected: self.has_placed_part_selected(),
         };
+        let active_submenu = self.interaction_state.context_submenu;
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
+        let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
         let tokens = &self.document_state.panel_ctx.tokens;
-        let entries = canvas_menu_entries(
-            tid,
-            tokens,
-            has_selection,
-            child_sheet_selected,
-            active_submenu,
-            &sc,
-        );
+        // The project row's tree key, the same one the project tree's own
+        // menu sends, so the action follows the project if rows reorder.
+        let project_key = self
+            .document_state
+            .active_document_project()
+            .map(|p| vec![p.id.to_string()]);
+        let entries = canvas_menu_entries(tid, tokens, selection, active_submenu, project_key, &sc);
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
 
@@ -170,39 +213,57 @@ impl Signex {
             &tab.title,
             ctx.tab_idx,
             self.document_state.tabs.len(),
-            already_undocked,
+            // A Project tab stays docked (#1202): an undocked window would
+            // take the main window's shortcuts.
+            already_undocked || tab.kind.as_project().is_some(),
         );
         let tokens = &self.document_state.panel_ctx.tokens;
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
 }
 
+/// What the canvas right-click landed on, for [`canvas_menu_entries`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct CanvasSelection {
+    pub(super) has_selection: bool,
+    pub(super) child_sheet_selected: bool,
+    pub(super) drawing_selected: bool,
+    /// One non-power symbol: the placed-part actions apply (#1260).
+    pub(super) placed_part_selected: bool,
+}
+
 /// Pure canvas-menu data builder. Rows and their enable state are derived
 /// only from the passed selection flags + shortcut hints, so the menu's
 /// shape is unit-testable without a window.
-#[allow(clippy::vec_init_then_push)]
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
     tokens: &ThemeTokens,
-    has_selection: bool,
-    child_sheet_selected: bool,
+    selection: CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
+    project_key: Option<signex_widgets::tree_view::TreeKey>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
+    let CanvasSelection {
+        has_selection,
+        child_sheet_selected,
+        drawing_selected,
+        placed_part_selected,
+    } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
-    v.push(dd_disabled(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_find_similar(tid)),
-        "Find Similar Objects...",
-        None,
+        "find_similar_objects",
+        sc.of("find_similar_objects"),
+        ContextAction::FindSimilar,
     ));
-    v.push(dd_msg(
+    v.push(dd_cmd(
         Some(ic::icon_chrome_search(tid)),
-        "Find Text...",
-        &sc.find,
+        "find",
+        sc.of("find"),
         Message::Overlay(OverlayMsg::OpenFind),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_clear_filter(tid)),
         "Clear Filter",
         Some("Shift+C"),
@@ -215,19 +276,19 @@ pub(super) fn canvas_menu_entries(
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "Part Actions",
         Some(SUBMENU_ARROW),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_sheet_actions(tid)),
         "Sheet Actions",
         Some(SUBMENU_ARROW),
     ));
 
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_references(tid)),
             "References",
             Some(SUBMENU_ARROW),
@@ -239,12 +300,21 @@ pub(super) fn canvas_menu_entries(
             ContextSubmenu::Align,
             active_submenu == Some(ContextSubmenu::Align),
         ));
-        v.push(dd_disabled(
+        if drawing_selected {
+            v.push(submenu_launcher(
+                tokens,
+                Some(ic::icon_dd_align_menu(tid)),
+                "Arrange",
+                ContextSubmenu::Arrange,
+                active_submenu == Some(ContextSubmenu::Arrange),
+            ));
+        }
+        v.push(dd_planned(
             Some(ic::icon_dd_unions(tid)),
             "Unions",
             Some(SUBMENU_ARROW),
         ));
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_snippets(tid)),
             "Snippets",
             Some(SUBMENU_ARROW),
@@ -252,99 +322,140 @@ pub(super) fn canvas_menu_entries(
     }
 
     if child_sheet_selected {
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_open_child_sheet(tid)),
-            "Open Child Sheet",
-            "Enter",
+            "open_child_sheet",
+            sc.of("open_child_sheet"),
             ContextAction::OpenChildSheet,
+        ));
+        v.push(dd_cmd_action(
+            None,
+            "create_sheet_from_sheet_symbol",
+            sc.of("create_sheet_from_sheet_symbol"),
+            ContextAction::CreateChildSheet,
+        ));
+        v.push(dd_cmd_action(
+            None,
+            "sync_sheet_pins",
+            sc.of("sync_sheet_pins"),
+            ContextAction::SyncSheetPins,
         ));
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_cross_probe(tid)),
         "Cross Probe",
         None,
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_cut(tid)),
-        "Cut",
-        &sc.cut,
+        "cut",
+        sc.of("cut"),
         ContextAction::Cut,
     ));
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_copy(tid)),
-        "Copy",
-        &sc.copy,
+        "copy",
+        sc.of("copy"),
         ContextAction::Copy,
     ));
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_paste(tid)),
-        "Paste",
-        &sc.paste,
+        "paste",
+        sc.of("paste"),
         ContextAction::Paste,
     ));
-    v.push(dd_kb(
+    v.push(dd_cmd_action(
         Some(ic::icon_dd_smart_paste(tid)),
-        "Paste Special",
-        &sc.smart_paste,
+        "smart_paste",
+        sc.of("smart_paste"),
         ContextAction::SmartPaste,
     ));
     v.push(DropdownEntry::Separator);
 
     if has_selection {
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_rotate(tid)),
-            "Rotate",
-            "Space",
+            "rotate_counterclockwise",
+            sc.of("rotate_counterclockwise"),
             ContextAction::RotateSelected,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_flip_x(tid)),
-            "Mirror X",
-            "X",
+            "mirror_x",
+            sc.of("mirror_x"),
             ContextAction::MirrorX,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_flip_y(tid)),
-            "Mirror Y",
-            "Y",
+            "mirror_y",
+            sc.of("mirror_y"),
             ContextAction::MirrorY,
         ));
-        v.push(dd_kb(
+        v.push(dd_cmd_action(
             Some(ic::icon_dd_delete(tid)),
-            "Delete",
-            "Del",
+            "delete_selection",
+            sc.of("delete_selection"),
             ContextAction::Delete,
         ));
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_comment(tid)),
         "Comment...",
         None,
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_pin_mapping(tid)),
         "Pin Mapping...",
         None,
     ));
-    v.push(dd_disabled(
-        Some(ic::icon_dd_project_options(tid)),
-        "Project Options...",
-        None,
-    ));
-    v.push(dd_msg(
+    // The project that owns the active sheet, addressed by its tree key the
+    // way the project tree's own menu addresses it. No project: greyed, no
+    // tooltip (the feature exists, there is just nothing to open it for).
+    v.push(match project_key {
+        Some(key) => dd_cmd(
+            Some(ic::icon_dd_project_options(tid)),
+            "open_project_options",
+            sc.of("open_project_options"),
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenProjectOptions(key),
+            )),
+        ),
+        None => dd_cmd_disabled(
+            Some(ic::icon_dd_project_options(tid)),
+            "open_project_options",
+            sc.of("open_project_options"),
+        ),
+    });
+    v.push(dd_cmd(
         Some(ic::icon_dd_preferences(tid)),
-        "Preferences...",
-        "",
+        "open_preferences",
+        sc.of("open_preferences"),
         Message::Preferences(PreferencesMsg::Open),
     ));
 
+    if placed_part_selected {
+        use crate::library::PlacedPartAction as A;
+        // The placed-part actions, all catalog commands.
+        for (command_id, action) in [
+            ("open_datasheet", A::OpenDatasheet),
+            ("edit_selected_symbol_in_symbol_editor", A::EditSymbol),
+            ("change_component", A::ChangeComponent),
+        ] {
+            v.push(dd_cmd_action(
+                None,
+                command_id,
+                sc.of(command_id),
+                ContextAction::PlacedPart(action),
+            ));
+        }
+    }
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_supplier_links(tid)),
             "Supplier Links...",
             None,
@@ -352,10 +463,10 @@ pub(super) fn canvas_menu_entries(
         // Properties → ensure the Properties panel is visible; it already
         // tracks the current selection, so it populates with the
         // right-clicked item's fields once shown.
-        v.push(dd_msg(
+        v.push(dd_cmd(
             Some(ic::icon_dd_properties(tid)),
-            "Properties...",
-            "F11",
+            "edit_selected_object_properties",
+            sc.of("edit_selected_object_properties"),
             Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
         ));
     }
@@ -366,12 +477,13 @@ pub(super) fn canvas_menu_entries(
 /// Pure tab-menu data builder. The per-tab "Close [title]" row carries the
 /// live tab title; the bulk-close rows are gated on whether they'd be
 /// no-ops (single tab open → no "others" to close); "Open In New Window"
-/// greys out when the tab already lives in its own OS window.
+/// greys out when the tab cannot be undocked: it already lives in its own
+/// OS window, or it is a Project tab.
 pub(super) fn tab_menu_entries(
     title: &str,
     tab_idx: usize,
     total_tabs: usize,
-    already_undocked: bool,
+    undock_unavailable: bool,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::app::TabContextAction as A;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(5);
@@ -399,7 +511,7 @@ pub(super) fn tab_menu_entries(
         Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAll)),
     ));
     v.push(DropdownEntry::Separator);
-    v.push(if already_undocked {
+    v.push(if undock_unavailable {
         dd_disabled(None, "Open In New Window", None)
     } else {
         dd_msg(

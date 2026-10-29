@@ -17,7 +17,7 @@
 //! `primitive_to_rows` reverse index is rebuilt by adapters via
 //! `iter_rows()` — see [`Self::rebuild_from_rows`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
@@ -73,6 +73,13 @@ pub struct WhereUsedIndex {
     /// [`Self::rebuild_from_rows`]. Used by the
     /// "where-is-this-symbol-used" editor surfaces.
     primitive_to_rows: HashMap<PrimitiveRef, Vec<RowId>>,
+    /// Inverse of `primitive_to_rows`: the primitives each row links, so
+    /// replacing one row touches only its own links, not every bucket.
+    row_to_primitives: HashMap<RowId, Vec<PrimitiveRef>>,
+    /// `row_id` → the `(project, sheet)` pairs that hold at least one
+    /// instance of it, so [`Self::where_used`] visits only those sheets
+    /// instead of scanning every indexed project.
+    row_to_sheets: HashMap<RowId, HashSet<(PathBuf, PathBuf)>>,
     /// `Cell<()>` is `!Sync`, which propagates through `PhantomData`. No
     /// runtime cost; the field is zero-sized.
     _not_sync: PhantomData<std::cell::Cell<()>>,
@@ -100,12 +107,35 @@ impl WhereUsedIndex {
             .collect();
 
         let project_map = self.by_project.entry(project.to_path_buf()).or_default();
-        if entries.is_empty() {
+        let previous: Option<Vec<Entry>> = if entries.is_empty() {
             // Empty refs ⇒ sheet contains no library rows: still erase any
             // previous entries so the (project, sheet) bucket reflects truth.
-            project_map.remove(sheet);
+            project_map.remove(sheet)
         } else {
-            project_map.insert(sheet.to_path_buf(), entries);
+            for entry in &entries {
+                self.row_to_sheets
+                    .entry(entry.row_id)
+                    .or_default()
+                    .insert((project.to_path_buf(), sheet.to_path_buf()));
+            }
+            let kept: HashSet<RowId> = entries.iter().map(|e| e.row_id).collect();
+            project_map.insert(sheet.to_path_buf(), entries).map(|old| {
+                old.into_iter()
+                    .filter(|e| !kept.contains(&e.row_id))
+                    .collect()
+            })
+        };
+        for entry in previous.unwrap_or_default() {
+            self.forget_sheet_row(entry.row_id, project, sheet);
+        }
+    }
+
+    fn forget_sheet_row(&mut self, row_id: RowId, project: &Path, sheet: &Path) {
+        if let Some(sheets) = self.row_to_sheets.get_mut(&row_id) {
+            sheets.remove(&(project.to_path_buf(), sheet.to_path_buf()));
+            if sheets.is_empty() {
+                self.row_to_sheets.remove(&row_id);
+            }
         }
     }
 
@@ -113,7 +143,14 @@ impl WhereUsedIndex {
     ///
     /// No-op if the project is not currently indexed.
     pub fn drop_project(&mut self, project: &Path) {
-        self.by_project.remove(project);
+        let Some(sheets) = self.by_project.remove(project) else {
+            return;
+        };
+        for (sheet, entries) in sheets {
+            for entry in entries {
+                self.forget_sheet_row(entry.row_id, project, &sheet);
+            }
+        }
     }
 
     /// Rebuild the `primitive_to_rows` reverse index from a row scan
@@ -126,6 +163,7 @@ impl WhereUsedIndex {
     /// that the consumer hasn't otherwise tracked through `ingest_row`.
     pub fn rebuild_from_rows(&mut self, rows: &[(String, ComponentRow)]) {
         self.primitive_to_rows.clear();
+        self.row_to_primitives.clear();
         for (_table, row) in rows {
             self.add_primitive_links(row);
         }
@@ -138,24 +176,36 @@ impl WhereUsedIndex {
     pub fn ingest_row(&mut self, row: &ComponentRow) {
         let row_id = RowId::from_uuid(row.row_id);
         // Drop any prior entries pointing back to this row id.
-        for sites in self.primitive_to_rows.values_mut() {
-            sites.retain(|id| *id != row_id);
+        for target in self.row_to_primitives.remove(&row_id).unwrap_or_default() {
+            if let Some(rows) = self.primitive_to_rows.get_mut(&target) {
+                rows.retain(|id| *id != row_id);
+                if rows.is_empty() {
+                    self.primitive_to_rows.remove(&target);
+                }
+            }
         }
-        self.primitive_to_rows.retain(|_, sites| !sites.is_empty());
         self.add_primitive_links(row);
     }
 
     fn add_primitive_links(&mut self, row: &ComponentRow) {
         let row_id = RowId::from_uuid(row.row_id);
-        self.primitive_to_rows
-            .entry(row.symbol_ref)
-            .or_default()
-            .push(row_id);
-        if let Some(fp) = row.footprint_ref {
-            self.primitive_to_rows.entry(fp).or_default().push(row_id);
-        }
-        if let Some(sm) = row.sim_ref {
-            self.primitive_to_rows.entry(sm).or_default().push(row_id);
+        // An alternate symbol or footprint is a use of that primitive too.
+        let symbols = std::iter::once(row.symbol_ref)
+            .chain(row.alternate_symbols.iter().map(|a| a.symbol_ref));
+        let footprints = row
+            .footprint_ref
+            .into_iter()
+            .chain(row.alternate_footprints.iter().map(|a| a.footprint));
+        let targets = symbols.chain(footprints).chain(row.sim_ref);
+        for target in targets {
+            let rows = self.primitive_to_rows.entry(target).or_default();
+            if !rows.contains(&row_id) {
+                rows.push(row_id);
+                self.row_to_primitives
+                    .entry(row_id)
+                    .or_default()
+                    .push(target);
+            }
         }
     }
 
@@ -172,18 +222,23 @@ impl WhereUsedIndex {
     /// unspecified — callers should sort if they need determinism.
     pub fn where_used(&self, row_id: RowId) -> Vec<UseSite> {
         let mut sites = Vec::new();
-        for (project_path, sheets) in &self.by_project {
-            for (sheet_path, entries) in sheets {
-                for entry in entries {
-                    if entry.row_id != row_id {
-                        continue;
-                    }
-                    sites.push(UseSite {
-                        project_path: project_path.clone(),
-                        sheet_path: sheet_path.clone(),
-                        instance_id: entry.instance_id.clone(),
-                    });
-                }
+        let Some(sheets) = self.row_to_sheets.get(&row_id) else {
+            return sites;
+        };
+        for (project_path, sheet_path) in sheets {
+            let Some(entries) = self
+                .by_project
+                .get(project_path)
+                .and_then(|project| project.get(sheet_path))
+            else {
+                continue;
+            };
+            for entry in entries.iter().filter(|e| e.row_id == row_id) {
+                sites.push(UseSite {
+                    project_path: project_path.clone(),
+                    sheet_path: sheet_path.clone(),
+                    instance_id: entry.instance_id.clone(),
+                });
             }
         }
         sites
@@ -193,6 +248,7 @@ impl WhereUsedIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::alternate_symbol::AlternateSymbol;
     use crate::component::{DatasheetRef, PinPadOverride, PlmReserved};
     use crate::identity::{ComponentClass, InternalPn};
     use crate::lifecycle::LifecycleState;
@@ -213,9 +269,14 @@ mod tests {
             internal_pn: InternalPn::new("R_TEST"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::url(""),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Released,
             symbol_ref: symbol,
+            alternate_symbols: Vec::new(),
             footprint_ref: footprint,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::<PinPadOverride>::new(),
             primary_mpn: ManufacturerPart::draft("Acme", "A"),
@@ -231,6 +292,7 @@ mod tests {
             created: t,
             updated: t,
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
@@ -256,9 +318,9 @@ mod tests {
 
     #[test]
     fn rows_for_primitive_returns_referencing_row() {
-        let lib = Uuid::new_v4();
-        let sym_ref = PrimitiveRef::new(lib, Uuid::new_v4());
-        let fpt_ref = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let sym_ref = PrimitiveRef::new(lib, Uuid::now_v7());
+        let fpt_ref = PrimitiveRef::new(lib, Uuid::now_v7());
         let row = fixture_row(sym_ref, Some(fpt_ref));
         let row_id = RowId::from_uuid(row.row_id);
 
@@ -266,15 +328,56 @@ mod tests {
         idx.ingest_row(&row);
         assert_eq!(idx.rows_for_primitive(&sym_ref), &[row_id]);
         assert_eq!(idx.rows_for_primitive(&fpt_ref), &[row_id]);
-        let unknown = PrimitiveRef::new(lib, Uuid::new_v4());
+        let unknown = PrimitiveRef::new(lib, Uuid::now_v7());
         assert!(idx.rows_for_primitive(&unknown).is_empty());
     }
 
     #[test]
+    fn alternate_symbol_counts_as_a_use_of_that_symbol() {
+        let lib = Uuid::now_v7();
+        let default_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let alt_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let mut row = fixture_row(default_sym, None);
+        row.alternate_symbols
+            .push(AlternateSymbol::new(alt_sym, "0.0.1", "IEC"));
+        let row_id = RowId::from_uuid(row.row_id);
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_row(&row);
+        assert_eq!(idx.rows_for_primitive(&alt_sym), &[row_id]);
+        assert_eq!(idx.rows_for_primitive(&default_sym), &[row_id]);
+
+        row.alternate_symbols.clear();
+        idx.ingest_row(&row);
+        assert!(idx.rows_for_primitive(&alt_sym).is_empty());
+    }
+
+    #[test]
+    fn alternate_footprint_counts_as_a_use_of_that_footprint() {
+        let lib = Uuid::now_v7();
+        let sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let default_fp = PrimitiveRef::new(lib, Uuid::now_v7());
+        let alt_fp = PrimitiveRef::new(lib, Uuid::now_v7());
+        let mut row = fixture_row(sym, Some(default_fp));
+        row.alternate_footprints
+            .push(crate::footprint_binding::FootprintBinding::new(alt_fp));
+        let row_id = RowId::from_uuid(row.row_id);
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_row(&row);
+        assert_eq!(idx.rows_for_primitive(&alt_fp), &[row_id]);
+        assert_eq!(idx.rows_for_primitive(&default_fp), &[row_id]);
+
+        row.alternate_footprints.clear();
+        idx.ingest_row(&row);
+        assert!(idx.rows_for_primitive(&alt_fp).is_empty());
+    }
+
+    #[test]
     fn rebuild_from_rows_replaces_state() {
-        let lib = Uuid::new_v4();
-        let old_sym = PrimitiveRef::new(lib, Uuid::new_v4());
-        let new_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let old_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let new_sym = PrimitiveRef::new(lib, Uuid::now_v7());
 
         let mut idx = WhereUsedIndex::new();
         let row_a = fixture_row(old_sym, None);
@@ -296,9 +399,9 @@ mod tests {
 
     #[test]
     fn ingest_row_replaces_prior_primitive_links() {
-        let lib = Uuid::new_v4();
-        let old_sym = PrimitiveRef::new(lib, Uuid::new_v4());
-        let new_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let old_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let new_sym = PrimitiveRef::new(lib, Uuid::now_v7());
 
         let mut row = fixture_row(old_sym, None);
         let mut idx = WhereUsedIndex::new();
@@ -311,5 +414,63 @@ mod tests {
         idx.ingest_row(&row);
         assert!(idx.rows_for_primitive(&old_sym).is_empty());
         assert_eq!(idx.rows_for_primitive(&new_sym), &[row_id]);
+    }
+
+    #[test]
+    fn reingesting_a_sheet_moves_a_row_between_sheets() {
+        let project = PathBuf::from("/p.snxprj");
+        let (sheet_a, sheet_b) = (PathBuf::from("/p/a.snxsch"), PathBuf::from("/p/b.snxsch"));
+        let (kept, moved) = (RowId::new(), RowId::new());
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_sheet(
+            &project,
+            &sheet_a,
+            &[(kept, "R1".into()), (moved, "R2".into())],
+        );
+        idx.ingest_sheet(&project, &sheet_a, &[(kept, "R1".into())]);
+        idx.ingest_sheet(&project, &sheet_b, &[(moved, "R9".into())]);
+
+        assert_eq!(idx.where_used(kept).len(), 1);
+        let sites = idx.where_used(moved);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].sheet_path, sheet_b);
+        assert_eq!(sites[0].instance_id, "R9");
+    }
+
+    #[test]
+    fn a_row_used_twice_on_one_sheet_reports_both_instances() {
+        let (project, sheet) = (PathBuf::from("/p.snxprj"), PathBuf::from("/p/a.snxsch"));
+        let row_id = RowId::new();
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_sheet(
+            &project,
+            &sheet,
+            &[(row_id, "R1".into()), (row_id, "R2".into())],
+        );
+        let mut ids: Vec<String> = idx
+            .where_used(row_id)
+            .into_iter()
+            .map(|s| s.instance_id)
+            .collect();
+        ids.sort();
+        assert_eq!(ids, ["R1", "R2"]);
+    }
+
+    #[test]
+    fn dropping_a_project_forgets_only_its_sites() {
+        let (p1, p2) = (PathBuf::from("/1.snxprj"), PathBuf::from("/2.snxprj"));
+        let sheet = PathBuf::from("/s.snxsch");
+        let row_id = RowId::new();
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_sheet(&p1, &sheet, &[(row_id, "R1".into())]);
+        idx.ingest_sheet(&p2, &sheet, &[(row_id, "R1".into())]);
+
+        idx.drop_project(&p1);
+        let sites = idx.where_used(row_id);
+        assert_eq!(sites.len(), 1);
+        assert_eq!(sites[0].project_path, p2);
+        idx.drop_project(&p2);
+        assert!(idx.where_used(row_id).is_empty());
     }
 }

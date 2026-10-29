@@ -21,6 +21,7 @@ use crate::library::editor::footprint::state::FootprintEditorState;
 ///   (cursor will become the start endpoint).
 /// - **Arc tool, after click 2** → ghost arc from start through the
 ///   cursor angle, around the centre.
+///
 /// v0.27 — Fusion-style dimension pill chrome. Centred at
 /// `centre` (screen coords), draws a soft grey rounded-look
 /// rectangle behind a centred white label. Used by the live
@@ -95,6 +96,15 @@ fn placement_field_buf(
         .map(|p| p.buffer.as_str())
 }
 
+/// Read a typed placement buffer for the live preview. A non-finite or
+/// overflowing buffer (`nan`, `inf`, `1e999`) reads as "not typed", so the
+/// preview falls back to the cursor instead of drawing a non-finite point.
+/// Pure on purpose: this runs every frame, so the refusal is reported
+/// where the value is committed, not here.
+fn typed_dimension(buf: Option<&str>) -> Option<f64> {
+    buf.and_then(|b| signex_types::numeric::parse_finite_f64(b).ok())
+}
+
 pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_preview(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
@@ -122,15 +132,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
     }
 
     let resolve_point = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some((x, y)) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some((x, y));
-            }
+            )
+        {
+            return Some((x, y));
         }
         sketch
             .entities
@@ -186,10 +196,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             // will commit.
             let len_buf = placement_field_buf(state, PlacementInputKind::LineLength);
             let ang_buf = placement_field_buf(state, PlacementInputKind::LineAngle);
-            let typed_len = len_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
-            let typed_ang = ang_buf.and_then(|b| b.parse::<f64>().ok());
+            let typed_len = typed_dimension(len_buf).filter(|v| *v > 0.0);
+            let typed_ang = typed_dimension(ang_buf);
             // Cursor-relative azimuth + distance (world space) — the
             // fallback when a field hasn't been typed. Mirrors the
             // second-click commit arm in dispatch/library.rs so the
@@ -259,12 +267,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             };
             let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
             let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
-            let typed_w = w_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
-            let typed_h = h_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
+            let typed_w = typed_dimension(w_buf).filter(|v| *v > 0.0);
+            let typed_h = typed_dimension(h_buf).filter(|v| *v > 0.0);
             let sx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sy = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
             let ex = typed_w.map(|w| first_world.0 + sx * w).unwrap_or(cursor.0);
@@ -320,12 +324,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
             let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
             let rr_buf = placement_field_buf(state, PlacementInputKind::RRectRadius);
-            let typed_w = w_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
-            let typed_h = h_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .filter(|v| *v > 0.0);
+            let typed_w = typed_dimension(w_buf).filter(|v| *v > 0.0);
+            let typed_h = typed_dimension(h_buf).filter(|v| *v > 0.0);
             let sgnx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sgny = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
             let cx_corner = typed_w
@@ -342,9 +342,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let half_h = (y1 - y0) / 2.0;
             // Corner radius: typed RRectRadius wins, then the legacy
             // dimension_input text, else 0.5 mm (matches the commit).
-            let r_input = rr_buf
-                .and_then(|b| b.parse::<f64>().ok())
-                .or_else(|| state.dimension_input.trim().parse::<f64>().ok())
+            let r_input = typed_dimension(rr_buf)
+                .or_else(|| typed_dimension(Some(state.dimension_input.trim())))
                 .unwrap_or(0.5);
             let r_max = half_w.min(half_h).max(0.05);
             let r = r_input.clamp(0.05, r_max);
@@ -550,6 +549,79 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
             draw_dim_pill(frame, label, &format!("{:.1} deg", sweep_deg));
         }
+        // #467 — Edge Arc, start placed. Cursor previews where `end`
+        // will land; a plain dashed segment, since there's no
+        // radius/sweep to show until the third "point on arc" click
+        // supplies it.
+        ToolPending::EdgeArcStart { start } => {
+            let Some(s_world) = resolve_point(start) else {
+                return;
+            };
+            let s_screen = cstate.world_to_screen(s_world);
+            dashed(frame, s_screen, cursor_screen);
+        }
+        // #467 — Edge Arc, start + end placed. Cursor previews the
+        // third "point on arc" pick — mirror the dispatcher's
+        // circumcircle geometry (#461/#483) so the ghost arc matches
+        // exactly what a click would commit. Falls back to the plain
+        // start-end chord while the cursor sits on the collinear line
+        // (no solvable circle yet).
+        ToolPending::EdgeArcEnd { start, end } => {
+            let (Some(s_world), Some(e_world)) = (resolve_point(start), resolve_point(end)) else {
+                return;
+            };
+            use signex_types::schematic::{Point as SchPoint, circumcircle};
+            match circumcircle(
+                SchPoint::new(s_world.0, s_world.1),
+                SchPoint::new(cursor.0, cursor.1),
+                SchPoint::new(e_world.0, e_world.1),
+            ) {
+                Some((cx, cy, r)) => {
+                    use signex_sketch::geom::{Sign, orient2d};
+                    let sweep_ccw = match orient2d(s_world.into(), cursor.into(), e_world.into()) {
+                        Sign::Negative => false,
+                        Sign::Positive | Sign::Zero => true,
+                    };
+                    let c_screen = cstate.world_to_screen((cx, cy));
+                    let r_screen = (r as f32) * cstate.scale;
+                    let start_angle = (s_world.1 - cy).atan2(s_world.0 - cx) as f32;
+                    let end_angle = (e_world.1 - cy).atan2(e_world.0 - cx) as f32;
+                    let mut delta = end_angle - start_angle;
+                    if sweep_ccw {
+                        while delta < 0.0 {
+                            delta += std::f32::consts::TAU;
+                        }
+                    } else {
+                        while delta > 0.0 {
+                            delta -= std::f32::consts::TAU;
+                        }
+                    }
+                    let segments = 32;
+                    for i in (0..segments).step_by(2) {
+                        let t0 = i as f32 / segments as f32;
+                        let t1 = (i + 1) as f32 / segments as f32;
+                        let a0 = start_angle + delta * t0;
+                        let a1 = start_angle + delta * t1;
+                        let q0 = Point::new(
+                            c_screen.x + r_screen * a0.cos(),
+                            c_screen.y + r_screen * a0.sin(),
+                        );
+                        let q1 = Point::new(
+                            c_screen.x + r_screen * a1.cos(),
+                            c_screen.y + r_screen * a1.sin(),
+                        );
+                        frame.stroke(&Path::line(q0, q1), stroke);
+                    }
+                    let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
+                    draw_dim_pill(frame, label, &format!("r {:.3} mm", r));
+                }
+                None => {
+                    let s_screen = cstate.world_to_screen(s_world);
+                    let e_screen = cstate.world_to_screen(e_world);
+                    dashed(frame, s_screen, e_screen);
+                }
+            }
+        }
         // v0.23 — Polar centre re-pick has no preview shape; the
         // cursor PIP at the top of this match is the only visual cue.
         ToolPending::RepickPolarCenter { .. } => {}
@@ -723,5 +795,28 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
             size: iced::Pixels(13.0),
             ..canvas::Text::default()
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::typed_dimension;
+
+    /// #828 -- a typed length / angle / radius buffer that is not a finite
+    /// number must read as "not typed" so the preview never draws a
+    /// non-finite point.
+    #[test]
+    fn non_finite_buffers_read_as_not_typed() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
+            assert_eq!(typed_dimension(Some(bad)), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn finite_buffers_still_read() {
+        assert_eq!(typed_dimension(Some("2.5")), Some(2.5));
+        assert_eq!(typed_dimension(Some(" 3 ")), Some(3.0));
+        assert_eq!(typed_dimension(Some("1.")), Some(1.0));
+        assert_eq!(typed_dimension(None), None);
     }
 }

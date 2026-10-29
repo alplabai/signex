@@ -10,8 +10,34 @@ impl Signex {
             DragTarget::LeftPanel => self.ui_state.left_width,
             DragTarget::RightPanel => self.ui_state.right_width,
             DragTarget::BottomPanel => self.ui_state.bottom_height,
-            DragTarget::ComponentsSplit => self.document_state.panel_ctx.components_split,
         };
+    }
+
+    /// True while any pointer-driven drag that `handle_layout_drag_moved` or
+    /// the auto-detach checks act on is in flight (panel splitter, modal,
+    /// document tab, dock tab, floating panel, BOM column resize, PDF pan).
+    /// When false a cursor move only needs to refresh `last_mouse_pos`.
+    pub fn is_layout_drag_active(&self) -> bool {
+        self.interaction_state.dragging.is_some()
+            || self.ui_state.modal_dragging.is_some()
+            || self.ui_state.tab_dragging.is_some()
+            || self.document_state.dock.tab_drag.is_some()
+            || self
+                .document_state
+                .dock
+                .floating
+                .iter()
+                .any(|fp| fp.dragging)
+            || self
+                .document_state
+                .bom_preview
+                .as_ref()
+                .is_some_and(|p| p.column_resize.is_some())
+            || self
+                .document_state
+                .preview
+                .as_ref()
+                .is_some_and(|p| p.panning.is_some())
     }
 
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
@@ -51,7 +77,7 @@ impl Signex {
         if let Some(target) = self.interaction_state.dragging {
             let pos = match target {
                 DragTarget::LeftPanel | DragTarget::RightPanel => x,
-                DragTarget::BottomPanel | DragTarget::ComponentsSplit => y,
+                DragTarget::BottomPanel => y,
             };
             if self.interaction_state.drag_start_pos.is_none() {
                 self.interaction_state.drag_start_pos = Some(pos);
@@ -71,10 +97,6 @@ impl Signex {
                         self.ui_state.bottom_height,
                         (self.interaction_state.drag_start_size - delta).clamp(60.0, 400.0),
                     ),
-                    DragTarget::ComponentsSplit => (
-                        self.document_state.panel_ctx.components_split,
-                        (self.interaction_state.drag_start_size + delta).clamp(80.0, 600.0),
-                    ),
                 };
                 let new_val = new_val.round();
                 if (current - new_val).abs() >= 1.0 {
@@ -82,9 +104,6 @@ impl Signex {
                         DragTarget::LeftPanel => self.ui_state.left_width = new_val,
                         DragTarget::RightPanel => self.ui_state.right_width = new_val,
                         DragTarget::BottomPanel => self.ui_state.bottom_height = new_val,
-                        DragTarget::ComponentsSplit => {
-                            self.document_state.panel_ctx.components_split = new_val
-                        }
                     }
                 }
             }

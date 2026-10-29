@@ -73,6 +73,25 @@ impl<'a> SubstitutionContext<'a> {
                 String::new()
             }),
             "VERSION" => Some(self.signex_version.to_string()),
+            "PROJECT_NAME" => Some(
+                m.custom_fields
+                    .get("project_name")
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
+            "DRAWNBY" => Some(m.custom_fields.get("drawn_by").cloned().unwrap_or_default()),
+            "CHECKEDBY" => Some(
+                m.custom_fields
+                    .get("checked_by")
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
+            "APPROVEDBY" => Some(
+                m.custom_fields
+                    .get("approved_by")
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
             other => m.custom_fields.get(other).cloned(),
         }
     }
@@ -85,13 +104,15 @@ pub fn resolve(input: &str, ctx: &SubstitutionContext<'_>) -> String {
     let mut out = String::with_capacity(input.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-            if let Some((token, end)) = scan_token(bytes, i + 2) {
-                let value = ctx.lookup(token).unwrap_or_default();
-                out.push_str(&value);
-                i = end + 1;
-                continue;
-            }
+        if bytes[i] == b'$'
+            && i + 1 < bytes.len()
+            && bytes[i + 1] == b'{'
+            && let Some((token, end)) = scan_token(bytes, i + 2)
+        {
+            let value = ctx.lookup(token).unwrap_or_default();
+            out.push_str(&value);
+            i = end + 1;
+            continue;
         }
         out.push(input[i..].chars().next().unwrap());
         i += input[i..].chars().next().unwrap().len_utf8();
@@ -154,6 +175,30 @@ mod tests {
         m.custom_fields
             .insert("lower_case_field".into(), "ok".into());
         m
+    }
+
+    /// #1080 — the title block's sign-off and document-number fields resolve
+    /// from the keys the sheet stores them under.
+    #[test]
+    fn sign_off_and_document_number_tokens_resolve() {
+        let mut m = metadata();
+        for (k, v) in [
+            ("drawn_by", "A. Engineer"),
+            ("checked_by", "B. Reviewer"),
+            ("approved_by", "C. Lead"),
+            ("document_number", "DOC-0042"),
+        ] {
+            m.custom_fields.insert(k.into(), v.into());
+        }
+        assert_eq!(
+            resolve(
+                "${DRAWNBY}/${CHECKEDBY}/${APPROVEDBY}/${DOCUMENTNUMBER}",
+                &ctx(&m)
+            ),
+            "A. Engineer/B. Reviewer/C. Lead/DOC-0042"
+        );
+        // Unset fields are empty, never the literal token.
+        assert_eq!(resolve("${DRAWNBY}", &ctx(&metadata())), "");
     }
 
     fn ctx<'a>(m: &'a ProjectMetadata) -> SubstitutionContext<'a> {
@@ -303,5 +348,96 @@ mod tests {
         assert_eq!(resolve("${DOCUMENTNUMBER}", &c), "DOC-42");
         c.physical_document_number = false;
         assert_eq!(resolve("${DOCUMENTNUMBER}", &c), "");
+    }
+}
+
+#[cfg(test)]
+mod special_string_tests {
+    use super::*;
+    use std::collections::{BTreeMap, HashMap};
+
+    fn project() -> ProjectMetadata {
+        let params = BTreeMap::from([
+            ("title".to_string(), "Project title".to_string()),
+            ("company".to_string(), "Acme".to_string()),
+            ("drawn_by".to_string(), "A. Engineer".to_string()),
+            ("Voltage".to_string(), "24 V".to_string()),
+        ]);
+        let mut m = ProjectMetadata::from_values(&params);
+        m.project_parameters = Some(params);
+        m.custom_fields
+            .insert("project_name".to_string(), "Oscar".to_string());
+        m
+    }
+
+    fn resolve_on(m: &ProjectMetadata, text: &str) -> String {
+        resolve(
+            text,
+            &SubstitutionContext {
+                metadata: m,
+                filename: "power.snxsch".into(),
+                sheet_name: "power".into(),
+                sheet_number: 2,
+                sheet_count: 5,
+                signex_version: "1.0.0",
+                variant: None,
+                physical_structure: false,
+                physical_sheet_number: true,
+                physical_document_number: true,
+            },
+        )
+    }
+
+    #[test]
+    fn a_sheet_inherits_the_project_values() {
+        let sheet = project().for_sheet(&HashMap::new());
+        assert_eq!(
+            resolve_on(
+                &sheet,
+                "${TITLE}|${COMPANY}|${DRAWNBY}|${Voltage}|${PROJECT_NAME}"
+            ),
+            "Project title|Acme|A. Engineer|24 V|Oscar"
+        );
+    }
+
+    #[test]
+    fn a_sheet_value_overrides_and_an_empty_one_falls_back() {
+        let over = HashMap::from([
+            ("title".to_string(), "Power".to_string()),
+            ("company".to_string(), String::new()),
+        ]);
+        let sheet = project().for_sheet(&over);
+        assert_eq!(resolve_on(&sheet, "${TITLE}|${COMPANY}"), "Power|Acme");
+        // Another sheet does not see this one's override.
+        let other = project().for_sheet(&HashMap::new());
+        assert_eq!(resolve_on(&other, "${TITLE}"), "Project title");
+    }
+
+    #[test]
+    fn every_token_resolves_from_the_one_resolver() {
+        let sheet = project().for_sheet(&HashMap::from([
+            ("rev".to_string(), "C".to_string()),
+            ("date".to_string(), "2026-10-28".to_string()),
+            ("document_number".to_string(), "DOC-7".to_string()),
+        ]));
+        assert_eq!(
+            resolve_on(
+                &sheet,
+                "${PROJECT_NAME} ${TITLE} ${REVISION} ${REV} ${DATE} ${SHEETNUMBER}/${SHEETCOUNT} ${DOCUMENTNUMBER}"
+            ),
+            "Oscar Project title C C 2026-10-28 2/5 DOC-7"
+        );
+    }
+
+    #[test]
+    fn metadata_built_by_hand_is_its_own_base() {
+        let m = ProjectMetadata {
+            title: "Hand".into(),
+            ..ProjectMetadata::default()
+        };
+        assert_eq!(
+            resolve_on(&m.for_sheet(&HashMap::new()), "${TITLE}"),
+            "Hand"
+        );
     }
 }

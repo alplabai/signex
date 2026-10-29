@@ -152,6 +152,12 @@ pub fn check_projection_alignment(
     Ok(())
 }
 
+/// Number of tile rows needed to lay `count` tiles out in `columns` columns
+/// (ceiling division, at least one row).
+fn tile_rows(count: usize, columns: usize) -> usize {
+    count.div_ceil(columns.max(1)).max(1)
+}
+
 /// Emit one overlay polygon per staged opaque primitive into `scene.overlay_polygons`.
 ///
 /// Ordering boundary: this function writes to `scene.overlay_polygons` only.
@@ -181,7 +187,7 @@ pub fn emit_projection_pass(
 
     let columns = config.tile_columns.max(1);
     let count = model.mesh_staging.opaque_primitives.len();
-    let rows = (count + columns - 1).max(1);
+    let rows = tile_rows(count, columns);
     let tile_w = (proj_w / columns as f32).max(0.01);
     let tile_h = (proj_h / rows as f32).max(0.01);
 
@@ -199,6 +205,7 @@ pub fn emit_projection_pass(
         let y = proj_min_y + row * tile_h;
 
         scene.overlay_polygons.push(GpuPolygon {
+            holes: Vec::new(),
             vertices: rect_vertices([x, y], tile_w, tile_h),
             fill_color: fill_base,
             stroke_color: Some(stroke_color),
@@ -207,4 +214,19 @@ pub fn emit_projection_pass(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tile_rows_tests {
+    use super::tile_rows;
+
+    #[test]
+    fn rows_are_ceiling_division_of_count_by_columns() {
+        assert_eq!(tile_rows(0, 4), 1);
+        assert_eq!(tile_rows(4, 4), 1);
+        assert_eq!(tile_rows(5, 4), 2);
+        assert_eq!(tile_rows(8, 4), 2);
+        assert_eq!(tile_rows(12, 3), 4);
+        assert_eq!(tile_rows(7, 0), 7);
+    }
 }

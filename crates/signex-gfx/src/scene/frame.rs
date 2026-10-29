@@ -7,6 +7,7 @@
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::TextItem;
 
@@ -19,6 +20,20 @@ pub struct Scene {
     pub circles: Vec<Circle>,
     pub arcs: Vec<Arc>,
     pub polygons: Vec<GpuPolygon>,
+    /// Polygons that composite ABOVE the stroke buckets (lines, arcs,
+    /// circles) but below text and every overlay. Covered by
+    /// [`DirtyFlags::POLYGONS`] and culled/uploaded with [`Self::polygons`].
+    /// The PCB emitter puts pads here so a pad lands on top of the traces
+    /// and vias that run into it; zone pours stay in `polygons`, under them.
+    pub top_polygons: Vec<GpuPolygon>,
+    /// Drawings in file paint order, mixed kinds, drawn as per-kind runs that
+    /// keep that order (#1579). The backmost bucket: under `polygons` and
+    /// every stroke bucket. Covered by [`DirtyFlags::DRAWINGS`].
+    pub drawings: Vec<OrderedItem>,
+    /// Drawings placed above the circuit (#1583): the same ordered runs as
+    /// [`Self::drawings`], but composited after every circuit bucket and
+    /// before text. Covered by [`DirtyFlags::DRAWINGS`].
+    pub drawings_front: Vec<OrderedItem>,
     pub texts: Vec<TextItem>,
     pub overlay_lines: Vec<LineSegment>,
     pub overlay_circles: Vec<Circle>,
@@ -35,6 +50,9 @@ impl Scene {
         self.circles.clear();
         self.arcs.clear();
         self.polygons.clear();
+        self.top_polygons.clear();
+        self.drawings.clear();
+        self.drawings_front.clear();
         self.texts.clear();
         self.overlay_lines.clear();
         self.overlay_circles.clear();
@@ -45,11 +63,46 @@ impl Scene {
         self.dirty = DirtyFlags::ALL;
     }
 
+    /// Which geometry categories differ from `prev`, as dirty flags.
+    ///
+    /// Compares primitive buckets by value, which is far cheaper than
+    /// re-uploading them. Colours are part of each primitive, so a theme change
+    /// shows up here as the buckets whose colours moved. Text is not compared
+    /// (it is re-prepared every frame) and neither are the grid and theme-only
+    /// flags, which carry no geometry.
+    pub fn changed_geometry_since(&self, prev: &Scene) -> DirtyFlags {
+        let mut changed = DirtyFlags::empty();
+        changed.set(DirtyFlags::LINES, self.lines != prev.lines);
+        changed.set(DirtyFlags::CIRCLES, self.circles != prev.circles);
+        changed.set(DirtyFlags::ARCS, self.arcs != prev.arcs);
+        changed.set(
+            DirtyFlags::POLYGONS,
+            self.polygons != prev.polygons || self.top_polygons != prev.top_polygons,
+        );
+        changed.set(
+            DirtyFlags::DRAWINGS,
+            self.drawings != prev.drawings || self.drawings_front != prev.drawings_front,
+        );
+        changed.set(
+            DirtyFlags::OVERLAY,
+            self.overlay_lines != prev.overlay_lines
+                || self.overlay_circles != prev.overlay_circles
+                || self.overlay_polygons != prev.overlay_polygons
+                || self.erc_marker_lines != prev.erc_marker_lines
+                || self.erc_marker_circles != prev.erc_marker_circles
+                || self.erc_marker_polygons != prev.erc_marker_polygons,
+        );
+        changed
+    }
+
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
             && self.circles.is_empty()
             && self.arcs.is_empty()
             && self.polygons.is_empty()
+            && self.top_polygons.is_empty()
+            && self.drawings.is_empty()
+            && self.drawings_front.is_empty()
             && self.texts.is_empty()
             && self.overlay_lines.is_empty()
             && self.overlay_circles.is_empty()

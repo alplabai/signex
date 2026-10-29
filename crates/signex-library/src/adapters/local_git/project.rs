@@ -39,6 +39,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::adapter::{HistoryEntry, LibraryError};
+use crate::git_identity::identity_for_repo;
 
 /// Project-scoped git adapter.
 ///
@@ -73,6 +74,13 @@ impl LocalGitProjectAdapter {
         }
         let dot_git = project_root.join(".git");
         if !dot_git.exists() {
+            // A copied project with no `.git` on the Desktop must not turn
+            // the Desktop into a repository on the next save (#1205).
+            if let Some(reason) =
+                crate::vcs_target_guard::system_version_control_refusal(&project_root, None)
+            {
+                return Err(LibraryError::VersionControlRefused(reason));
+            }
             git2::Repository::init(&project_root)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
         } else {
@@ -89,26 +97,73 @@ impl LocalGitProjectAdapter {
 
     /// Commit a single file with the supplied message. `rel_path` is
     /// relative to the project root and uses forward slashes.
-    /// Returns the commit OID on success.
+    /// Returns the commit OID on success, or `None` when the staged tree
+    /// matches HEAD's (an unchanged save), in which case no commit is
+    /// made (#149).
     ///
     /// Uses an unborn-HEAD-tolerant parent-commit lookup so the very
     /// first commit on a fresh `git init` succeeds without the
     /// caller needing to handle that edge case.
-    pub fn commit_path(&self, rel_path: &Path, message: &str) -> Result<git2::Oid, LibraryError> {
+    pub fn commit_path(
+        &self,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(None, rel_path, None, message)
+    }
+
+    /// Like [`Self::commit_path`], but commits exactly `content` as the file
+    /// `rel_path` instead of reading the working tree. A save that knows the
+    /// bytes it wrote uses this so a later edit to the file (an external
+    /// editor, a History restore) cannot change what the commit records. A
+    /// `filter=lfs` path stores `content` as an LFS object and commits its
+    /// pointer, as [`Self::commit_path`] does for the file.
+    pub fn commit_path_with_bytes(
+        &self,
+        rel_path: &Path,
+        content: &[u8],
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(None, rel_path, Some(content), message)
+    }
+
+    /// Commit `rel_path` and drop `removed_rel_path` from the tree and the
+    /// index in the same commit, so a file moved from `removed_rel_path`
+    /// to `rel_path` is recorded as a rename and leaves no unstaged
+    /// deletion behind. Both paths are project-relative. `None` when the
+    /// resulting tree matches HEAD's.
+    pub fn commit_rename(
+        &self,
+        removed_rel_path: &Path,
+        rel_path: &Path,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
+        self.commit_staged(Some(removed_rel_path), rel_path, None, message)
+    }
+
+    fn commit_staged(
+        &self,
+        removed_rel_path: Option<&Path>,
+        rel_path: &Path,
+        content: Option<&[u8]>,
+        message: &str,
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         // v0.23 — reject obviously dangerous `rel_path`. Internal
         // callers strip-prefix from absolute paths so this guards
         // against future callers that forget. Both absolute paths
         // and `..` components could land git2 outside the project
         // root, breaking the repo invariants.
-        if rel_path.is_absolute()
-            || rel_path
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-        {
-            return Err(LibraryError::Backend(format!(
-                "rel_path must be project-relative without `..`: {}",
-                rel_path.display()
-            )));
+        for path in std::iter::once(rel_path).chain(removed_rel_path) {
+            if path.is_absolute()
+                || path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(LibraryError::Backend(format!(
+                    "rel_path must be project-relative without `..`: {}",
+                    path.display()
+                )));
+            }
         }
         // Poison errors are recovered with `into_inner` because the
         // mutex protects only `.git/index.lock` ordering — a panic
@@ -122,51 +177,40 @@ impl LocalGitProjectAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_path(rel_path)
-            .map_err(|e| LibraryError::Backend(format!("git add: {e}")))?;
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+        // One commit at a time per repository, across adapters and
+        // processes (#893): `git_lock` only covers this instance.
+        let _commit_lock = super::commit_lock::lock_repo_for_commit(repo.path()).map_err(|e| {
+            LibraryError::Backend(format!("git commit {}: {e}", rel_path.display()))
+        })?;
 
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         let final_message = if message.is_empty() {
             format!("save {}", rel_path.display())
         } else {
             message.to_string()
         };
-        let oid = repo
-            .commit(Some("HEAD"), &sig, &sig, &final_message, &tree, &parents)
-            .map_err(|e| LibraryError::Backend(format!("git commit: {e}")))?;
-        Ok(oid)
+        super::helpers::retry_on_git_lock(repo.path(), || {
+            super::helpers::stage_and_commit(
+                &repo,
+                removed_rel_path.as_slice(),
+                rel_path,
+                content,
+                &sig,
+                &final_message,
+            )
+        })
+        .map_err(|e| LibraryError::Backend(format!("git commit {}: {e}", rel_path.display())))
     }
 
     /// Commit an externally-edited file (user opened the file in a
     /// text editor and saved). Wraps [`commit_path`] with a
     /// reasonable default message when the caller doesn't have
-    /// context.
+    /// context. `None` means the staged tree matched HEAD's and nothing
+    /// was committed.
     pub fn commit_external_change(
         &self,
         abs_path: &Path,
         message: &str,
-    ) -> Result<git2::Oid, LibraryError> {
+    ) -> Result<Option<git2::Oid>, LibraryError> {
         let rel = abs_path.strip_prefix(&self.project_root).map_err(|_| {
             LibraryError::Backend(format!(
                 "commit_external_change: {} is not under {}",
@@ -200,39 +244,9 @@ impl LocalGitProjectAdapter {
         }
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        // Fresh `git init` with no commits — head() reports either
-        // `UnbornBranch` (the branch ref doesn't yet exist) OR
-        // `NotFound` (no `refs/heads/*` at all). Both are legitimate
-        // "no history" cases, not errors.
-        match repo.head() {
-            Ok(_) => {}
-            Err(e)
-                if matches!(
-                    e.code(),
-                    git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
-                ) =>
-            {
-                return Ok(Vec::new());
-            }
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        }
-        let mut walk = repo
-            .revwalk()
-            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-        match walk.push_head() {
-            Ok(()) => {}
-            Err(e)
-                if matches!(
-                    e.code(),
-                    git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
-                ) =>
-            {
-                return Ok(Vec::new());
-            }
-            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-        }
+        let Some(walk) = crate::git_history::head_walk(&repo)? else {
+            return Ok(Vec::new());
+        };
 
         let rel_str = rel_path.to_string_lossy().replace('\\', "/");
         let mut entries: Vec<HistoryEntry> = Vec::new();
@@ -243,12 +257,10 @@ impl LocalGitProjectAdapter {
         // pathological hangs; if more matches exist they'll surface
         // on a subsequent call with a higher `limit`.
         let max_visited = limit.saturating_mul(10).max(limit);
-        let mut visited = 0usize;
-        for oid_res in walk {
+        for (visited, oid_res) in walk.enumerate() {
             if entries.len() >= limit || visited >= max_visited {
                 break;
             }
-            visited += 1;
             let oid =
                 oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
             let commit = repo
@@ -267,14 +279,25 @@ impl LocalGitProjectAdapter {
         Ok(entries)
     }
 
-    /// Restore `rel_path` to the state captured by `commit_oid`.
+    /// Restore `rel_path` to the state captured by `commit_oid`, and return
+    /// the bytes written. A caller that commits the restore passes them to
+    /// [`Self::commit_path_with_bytes`], so the commit records the revision
+    /// that was restored even if the file is edited again before it runs.
     /// Atomic write — staging file + rename, working tree stays
-    /// consistent if the rename fails.
+    /// consistent if the rename fails. A file inside one of the project's
+    /// libraries is written under that library's write lock, so another
+    /// Signex process saving into it cannot interleave with the restore
+    /// (#906).
     ///
-    /// Does NOT create a new commit — that's the app layer's call
-    /// (it'll observe the dirty file on next save and commit through
-    /// [`commit_path`] with a "Restore from <sha>" message).
-    pub fn restore_at(&self, rel_path: &Path, commit_oid: git2::Oid) -> Result<(), LibraryError> {
+    /// Does NOT create a new commit — that's the app layer's call, and it
+    /// differs per kind: a schematic is left dirty and commits on the next
+    /// Save; a PCB, footprint or symbol commits "Restore X" through
+    /// [`commit_path`] at once.
+    pub fn restore_at(
+        &self,
+        rel_path: &Path,
+        commit_oid: git2::Oid,
+    ) -> Result<Vec<u8>, LibraryError> {
         let repo = git2::Repository::open(&self.project_root)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let commit = repo
@@ -296,9 +319,19 @@ impl LocalGitProjectAdapter {
         let content = blob.content();
 
         let abs = self.project_root.join(rel_path);
-        signex_types::atomic_io::atomic_write(&abs, content)
-            .map_err(|e| LibraryError::Backend(format!("atomic write {}: {e}", abs.display())))?;
-        Ok(())
+        let library = super::enclosing_library_file(&abs)
+            .filter(|library| library.starts_with(&self.project_root));
+        match library {
+            Some(library) => {
+                super::rewrite_file_under_library_lock(&library, &abs, &mut |_| {
+                    Ok(Some(content.to_vec()))
+                })?;
+            }
+            None => signex_types::atomic_io::atomic_write(&abs, content).map_err(|e| {
+                LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
+            })?,
+        }
+        Ok(content.to_vec())
     }
 
     /// Project root that this adapter manages.
@@ -311,62 +344,31 @@ impl LocalGitProjectAdapter {
     /// callers (notably `signex-app`) that don't depend on `git2`
     /// directly and just have the short/full SHA string from the
     /// History panel widget.
-    pub fn restore_at_from_sha(&self, rel_path: &Path, sha: &str) -> Result<(), LibraryError> {
+    pub fn restore_at_from_sha(&self, rel_path: &Path, sha: &str) -> Result<Vec<u8>, LibraryError> {
         let oid = git2::Oid::from_str(sha)
             .map_err(|e| LibraryError::Backend(format!("invalid sha `{sha}`: {e}")))?;
         self.restore_at(rel_path, oid)
     }
 
-    /// Write the project's `.gitattributes` file with the v0.22 spec:
+    /// Bring the project's `.gitattributes` up to the v0.22 spec as a
+    /// Signex-managed block:
     /// - `text eol=lf` for every `.snx*` extension so git stays
     ///   line-ending stable across Windows / macOS / Linux
     ///   collaborators.
     /// - `binary` for `.step` / `.wrl` / `.png` / `.pdf` so git
     ///   doesn't try to diff or merge them.
-    /// - `filter=lfs diff=lfs merge=lfs -text` for everything under
-    ///   `assets/3d-models/**` when `use_lfs` is on. Skipped when
-    ///   off — the user can opt in later via the migration modal.
+    /// - When `use_lfs` is on, `filter=lfs` for the 3D model extensions,
+    ///   `assets/3d-models/**` and the raster assets (`assets/*.png`, ...).
     ///
-    /// **Destructive — overwrites any existing `.gitattributes`
-    /// without merging.** Callers (today: the Enable Version Control
-    /// modal in `app/handlers/dock/project_navigation.rs`) gate this
-    /// behind explicit user action. Manual edits between Enable VC
-    /// invocations are clobbered. Future v0.x can read+merge if
-    /// the user demands it; today's contract is "Enable VC rewrites
-    /// the file from scratch".
+    /// An existing file is merged, not replaced: only the lines between the
+    /// managed markers change, every other byte is the user's. Duplicate or
+    /// unbalanced markers return an error and leave the file untouched.
     ///
     /// The file is staged + committed by the migration flow's
     /// initial-commit step; callers don't need a separate commit.
     pub fn write_gitattributes(&self, use_lfs: bool) -> Result<(), LibraryError> {
-        let path = self.project_root.join(".gitattributes");
-        let mut text = String::new();
-        text.push_str("# Generated by Signex when version control was enabled for this project.\n");
-        text.push_str(
-            "# Re-running \"Enable Version Control\" rewrites this file from scratch —\n",
-        );
-        text.push_str("# manual edits will be lost. Hand-edit only if you're not planning to\n");
-        text.push_str("# re-run the modal.\n\n");
-        text.push_str(
-            "# Native Signex formats are line-based UTF-8 — keep LF endings everywhere\n",
-        );
-        text.push_str("# so cross-platform collaborators don't churn the diff with CRLF flips.\n");
-        for ext in [
-            "snxsch", "snxpcb", "snxprj", "snxmat", "snxnet", "snxbom", "snxout", "snxsym",
-            "snxfpt", "snxlib", "snxmod",
-        ] {
-            text.push_str(&format!("*.{ext}\ttext eol=lf\n"));
-        }
-        text.push_str("\n# Binary attachments — git shouldn't diff or merge them.\n");
-        for ext in ["step", "stp", "wrl", "iges", "png", "jpg", "jpeg", "pdf"] {
-            text.push_str(&format!("*.{ext}\tbinary\n"));
-        }
-        if use_lfs {
-            text.push_str("\n# 3D models opt-in via Git LFS so the working tree doesn't bloat.\n");
-            text.push_str("assets/3d-models/**\tfilter=lfs diff=lfs merge=lfs -text\n");
-        }
-        signex_types::atomic_io::atomic_write(&path, text.as_bytes())
-            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
-        Ok(())
+        signex_types::project_vcs_files::ensure_gitattributes(&self.project_root, use_lfs)
+            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))
     }
 }
 
@@ -433,103 +435,10 @@ fn commit_diff_stats_for_path(
 }
 
 fn history_entry_from_commit(commit: &git2::Commit<'_>, stats: CommitPathStats) -> HistoryEntry {
-    use chrono::TimeZone;
-    let author = commit.author();
-    let when = author.when();
-    let time = chrono::Utc
-        .timestamp_opt(when.seconds(), 0)
-        .single()
-        .unwrap_or_else(chrono::Utc::now);
-    let full = commit.message().unwrap_or_default();
-    let (subject, body) = match full.find('\n') {
-        Some(i) => {
-            let s = &full[..i];
-            let rest = full[i + 1..].trim_start_matches('\n').to_string();
-            (s.to_string(), rest)
-        }
-        None => (full.to_string(), String::new()),
-    };
-    let parent_shas: Vec<String> = commit.parent_ids().map(|o| o.to_string()).collect();
     HistoryEntry {
-        sha: commit.id().to_string(),
-        author_name: author.name().unwrap_or("").to_string(),
-        author_email: author.email().unwrap_or("").to_string(),
-        time,
-        subject,
-        body,
-        parent_shas,
         files_changed: stats.files_changed,
         additions: stats.additions,
         deletions: stats.deletions,
+        ..HistoryEntry::from_commit(commit)
     }
-}
-
-/// Resolve the user identity for a commit. Walks a chain of sources
-/// so the user's real name lands on the commit even when the OS
-/// distribution didn't pre-populate `~/.gitconfig`:
-///
-/// 1. Repo-local `user.name` / `user.email` (the standard git path).
-/// 2. Process env vars `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` and
-///    `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` — git's own
-///    fallback hierarchy, which Signex honours so CI / scripted
-///    flows don't need to mutate `~/.gitconfig`.
-/// 3. POSIX-style env hints `USER` / `EMAIL` for the convenience case
-///    of "developer hasn't configured git yet but their shell knows
-///    their identity". Email derives a synthetic local-host address
-///    when `EMAIL` is unset (`<user>@<hostname>`).
-///
-/// Returns `Err(LibraryError::Backend("git identity not configured…"))`
-/// when none of the above resolves a name. Durable project rule:
-/// commits must carry the user's identity — never a generic
-/// "Signex Project" / "Signex bot" fallback. Surfaces through the
-/// async commit pipeline as a `Message::ProjectGitCommitDone` error
-/// the user can act on.
-fn identity_for_repo(repo: &git2::Repository) -> Result<(String, String), LibraryError> {
-    let cfg = repo.config().ok();
-    // Layer 1 — git config.
-    let cfg_name = cfg
-        .as_ref()
-        .and_then(|c| c.get_string("user.name").ok())
-        .filter(|s| !s.trim().is_empty());
-    let cfg_email = cfg
-        .as_ref()
-        .and_then(|c| c.get_string("user.email").ok())
-        .filter(|s| !s.trim().is_empty());
-
-    // Layer 2 — git's own env-var fallback.
-    let env_name = std::env::var("GIT_AUTHOR_NAME")
-        .ok()
-        .or_else(|| std::env::var("GIT_COMMITTER_NAME").ok())
-        .filter(|s| !s.trim().is_empty());
-    let env_email = std::env::var("GIT_AUTHOR_EMAIL")
-        .ok()
-        .or_else(|| std::env::var("GIT_COMMITTER_EMAIL").ok())
-        .filter(|s| !s.trim().is_empty());
-
-    // Layer 3 — POSIX-style USER/EMAIL hint for the bare-shell case.
-    let posix_name = std::env::var("USER")
-        .ok()
-        .or_else(|| std::env::var("USERNAME").ok())
-        .filter(|s| !s.trim().is_empty());
-    let posix_email = std::env::var("EMAIL").ok().filter(|s| !s.trim().is_empty());
-
-    let name = cfg_name.or(env_name).or(posix_name).ok_or_else(|| {
-        LibraryError::Backend(
-            "git identity not configured — set user.name via \
-             `git config --global user.name \"…\"` (or set GIT_AUTHOR_NAME). \
-             Signex won't author commits with a generic identity."
-                .to_string(),
-        )
-    })?;
-    let email = cfg_email.or(env_email).or(posix_email).unwrap_or_else(|| {
-        // Synthetic `<user>@<hostname>` lands the commit author in
-        // git log without leaking a fake organisation domain. Users
-        // who care can set `user.email` properly; we just don't
-        // BLOCK the commit on its absence.
-        let host = std::env::var("HOSTNAME")
-            .or_else(|_| std::env::var("COMPUTERNAME"))
-            .unwrap_or_else(|_| "localhost".to_string());
-        format!("{}@{}", name, host)
-    });
-    Ok((name, email))
 }

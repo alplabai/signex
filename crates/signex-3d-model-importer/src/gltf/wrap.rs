@@ -1,9 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use base64::Engine;
 use serde_json::{Value, json};
 
 use crate::error::{ImportWarning, ModelImportError};
+use crate::read::ReadBudget;
 
 pub struct GltfWrapResult {
     pub json_bytes: Vec<u8>,
@@ -20,21 +21,30 @@ pub struct GltfWrapResult {
 /// `bufferViews[*].buffer`/`byteOffset` accordingly.
 pub fn wrap_gltf(
     source: &str,
-    source_path: &PathBuf,
+    source_path: &Path,
     converter_version: &str,
+) -> Result<GltfWrapResult, ModelImportError> {
+    let mut budget = ReadBudget::new(crate::read::MAX_READ_BYTES);
+    wrap_gltf_with_budget(source, source_path, converter_version, &mut budget)
+}
+
+/// [`wrap_gltf`] with an explicit allowance for the external buffer and image
+/// bytes it may read in total.
+fn wrap_gltf_with_budget(
+    source: &str,
+    source_path: &Path,
+    converter_version: &str,
+    budget: &mut ReadBudget,
 ) -> Result<GltfWrapResult, ModelImportError> {
     let mut root: Value =
         serde_json::from_str(source).map_err(|err| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("JSON parse failed: {err}"),
         })?;
 
     validate_asset_version(&root, source_path)?;
 
-    let base_dir = source_path
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
+    let base_dir = model_base_dir(source_path);
 
     let mut warnings = Vec::new();
 
@@ -50,13 +60,13 @@ pub fn wrap_gltf(
     for (index, buffer) in original_buffers.iter().enumerate() {
         align4(&mut merged_bin, 0u8);
         let offset = merged_bin.len();
-        let payload = read_buffer_payload(source_path, &base_dir, index, buffer)?;
+        let payload = read_buffer_payload(source_path, &base_dir, index, buffer, budget)?;
         merged_bin.extend_from_slice(&payload);
         buffer_offsets.push(offset);
     }
 
     rewrite_buffer_views(&mut root, &buffer_offsets, source_path)?;
-    embed_image_uris(&mut root, &base_dir, &mut warnings);
+    embed_image_uris(&mut root, &base_dir, source_path, &mut warnings, budget)?;
     rewrite_asset_extras(&mut root, source_path, converter_version);
 
     root["buffers"] = json!([{ "byteLength": merged_bin.len() }]);
@@ -85,7 +95,7 @@ pub fn wrap_gltf(
 
     let json_bytes =
         serde_json::to_vec(&root).map_err(|err| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("JSON serialization failed: {err}"),
         })?;
 
@@ -98,19 +108,19 @@ pub fn wrap_gltf(
     })
 }
 
-fn validate_asset_version(root: &Value, source_path: &PathBuf) -> Result<(), ModelImportError> {
+fn validate_asset_version(root: &Value, source_path: &Path) -> Result<(), ModelImportError> {
     let version = root
         .get("asset")
         .and_then(|asset| asset.get("version"))
         .and_then(Value::as_str)
         .ok_or_else(|| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: "missing asset.version".to_owned(),
         })?;
 
     if !version.starts_with('2') {
         return Err(ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("unsupported asset.version {version}; expected 2.x"),
         });
     }
@@ -119,10 +129,11 @@ fn validate_asset_version(root: &Value, source_path: &PathBuf) -> Result<(), Mod
 }
 
 fn read_buffer_payload(
-    source_path: &PathBuf,
+    source_path: &Path,
     base_dir: &Path,
     index: usize,
     buffer: &Value,
+    budget: &mut ReadBudget,
 ) -> Result<Vec<u8>, ModelImportError> {
     let uri = buffer
         .get("uri")
@@ -135,25 +146,32 @@ fn read_buffer_payload(
 
     if uri.starts_with("data:") {
         return decode_data_uri(uri).ok_or_else(|| ModelImportError::GltfParseFailed {
-            path: source_path.clone(),
+            path: source_path.to_path_buf(),
             reason: format!("buffers[{index}] has invalid data URI"),
         });
     }
 
-    let buffer_path = base_dir.join(uri);
-    std::fs::read(&buffer_path).map_err(|err| ModelImportError::GltfParseFailed {
-        path: source_path.clone(),
-        reason: format!(
-            "buffers[{index}] missing external resource {:?}: {err}",
-            buffer_path
-        ),
-    })
+    let buffer_path = resolve_external_uri(base_dir, uri).map_err(|reason| {
+        ModelImportError::GltfParseFailed {
+            path: source_path.to_path_buf(),
+            reason: format!("buffers[{index}] {reason}"),
+        }
+    })?;
+    budget
+        .read(&buffer_path)
+        .map_err(|err| ModelImportError::GltfParseFailed {
+            path: source_path.to_path_buf(),
+            reason: format!(
+                "buffers[{index}] external resource {:?} unreadable: {err}",
+                buffer_path
+            ),
+        })
 }
 
 fn rewrite_buffer_views(
     root: &mut Value,
     buffer_offsets: &[usize],
-    source_path: &PathBuf,
+    source_path: &Path,
 ) -> Result<(), ModelImportError> {
     let Some(buffer_views) = root.get_mut("bufferViews").and_then(Value::as_array_mut) else {
         return Ok(());
@@ -170,7 +188,7 @@ fn rewrite_buffer_views(
             .get(old_buffer_index)
             .copied()
             .ok_or_else(|| ModelImportError::GltfParseFailed {
-                path: source_path.clone(),
+                path: source_path.to_path_buf(),
                 reason: format!(
                     "bufferViews[{index}] references missing buffer index {old_buffer_index}"
                 ),
@@ -189,12 +207,18 @@ fn rewrite_buffer_views(
     Ok(())
 }
 
-fn embed_image_uris(root: &mut Value, base_dir: &Path, warnings: &mut Vec<ImportWarning>) {
+fn embed_image_uris(
+    root: &mut Value,
+    base_dir: &Path,
+    source_path: &Path,
+    warnings: &mut Vec<ImportWarning>,
+    budget: &mut ReadBudget,
+) -> Result<(), ModelImportError> {
     let Some(images) = root.get_mut("images").and_then(Value::as_array_mut) else {
-        return;
+        return Ok(());
     };
 
-    for image in images {
+    for (index, image) in images.iter_mut().enumerate() {
         let Some(uri) = image
             .get("uri")
             .and_then(Value::as_str)
@@ -207,15 +231,109 @@ fn embed_image_uris(root: &mut Value, base_dir: &Path, warnings: &mut Vec<Import
             continue;
         }
 
-        let image_path = base_dir.join(&uri);
-        match std::fs::read(&image_path) {
+        let image_path = resolve_external_uri(base_dir, &uri).map_err(|reason| {
+            ModelImportError::GltfParseFailed {
+                path: source_path.to_path_buf(),
+                reason: format!("images[{index}] {reason}"),
+            }
+        })?;
+        match budget.read(&image_path) {
             Ok(bytes) => {
                 let mime = guess_mime_type(&image_path);
                 let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
                 image["uri"] = Value::String(format!("data:{mime};base64,{encoded}"));
             }
-            Err(_) => warnings.push(ImportWarning::TextureMissing { uri }),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                warnings.push(ImportWarning::TextureMissing { uri });
+            }
+            Err(err) => warnings.push(ImportWarning::TextureUnreadable {
+                uri,
+                reason: err.to_string(),
+            }),
         }
+    }
+    Ok(())
+}
+
+/// Resolve a glTF external resource `uri` against `base_dir`, refusing
+/// anything that could read outside it (#112).
+///
+/// Rejects a scheme or drive prefix (`file:`, `C:`), absolute paths (leading
+/// `/` or `\`), any `..` component, and any path that, once symlinks are
+/// resolved, lands outside the canonical `base_dir`. A resource that does not
+/// exist is returned as-is so the caller reports it as missing, not as an
+/// escape.
+pub(super) fn resolve_external_uri(base_dir: &Path, raw_uri: &str) -> Result<PathBuf, String> {
+    let reject = |why: &str| Err(format!("uri {raw_uri:?} rejected: {why}"));
+    // Decode first so `%2e%2e` or `%3A` cannot slip past the checks below (#708).
+    let Some(decoded) = percent_decode(raw_uri) else {
+        return reject("is not valid UTF-8 once percent-decoded");
+    };
+    let uri = decoded.as_str();
+
+    if uri.contains('\0') {
+        return reject("contains a NUL byte");
+    }
+    if uri.contains(':') {
+        return reject("has a scheme or drive prefix");
+    }
+    if uri.starts_with('/') || uri.starts_with('\\') {
+        return reject("is an absolute path");
+    }
+    let rel = Path::new(uri);
+    for component in rel.components() {
+        match component {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir => return reject("contains '..'"),
+            Component::RootDir | Component::Prefix(_) => return reject("is an absolute path"),
+        }
+    }
+    if uri.split(['/', '\\']).any(|part| part == "..") {
+        return reject("contains '..'");
+    }
+
+    let joined = base_dir.join(rel);
+    let Ok(canonical) = joined.canonicalize() else {
+        // Not on disk: nothing to leak. Let the read fail as "missing".
+        return Ok(joined);
+    };
+    let canonical_base = base_dir
+        .canonicalize()
+        .map_err(|e| format!("base directory unreadable: {e}"))?;
+    if !canonical.starts_with(&canonical_base) {
+        return reject("resolves outside the model directory");
+    }
+    Ok(canonical)
+}
+
+/// Decode `%XX` escapes. A `%` not followed by two hex digits stays literal.
+/// `None` when the decoded bytes are not UTF-8.
+fn percent_decode(uri: &str) -> Option<String> {
+    let bytes = uri.as_bytes();
+    let hex = |i: usize| bytes.get(i).and_then(|&b| (b as char).to_digit(16));
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let (Some(h), Some(l)) = (hex(i + 1), hex(i + 2))
+        {
+            out.push((h * 16 + l) as u8);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// Directory external resources resolve against. A bare relative path such as
+/// `m.gltf` has an empty parent, which cannot be canonicalized, so it means the
+/// current directory.
+pub(super) fn model_base_dir(source_path: &Path) -> PathBuf {
+    match source_path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
+        _ => PathBuf::from("."),
     }
 }
 
@@ -269,7 +387,7 @@ fn guess_mime_type(path: &Path) -> &'static str {
 }
 
 fn align4(bytes: &mut Vec<u8>, fill: u8) {
-    while bytes.len() % 4 != 0 {
+    while !bytes.len().is_multiple_of(4) {
         bytes.push(fill);
     }
 }
@@ -289,5 +407,43 @@ mod tests {
     fn decode_data_uri_non_base64_is_none() {
         let uri = "data:text/plain,abc";
         assert!(decode_data_uri(uri).is_none());
+    }
+
+    #[test]
+    fn percent_escapes_decode_before_the_traversal_check() {
+        let base = Path::new(".");
+        let ok = resolve_external_uri(base, "my%20tex.png").unwrap();
+        assert!(ok.ends_with("my tex.png"));
+        assert!(resolve_external_uri(base, "%2e%2e/secret.bin").is_err());
+        assert!(resolve_external_uri(base, "%2E%2E%2Fsecret.bin").is_err());
+        assert!(resolve_external_uri(base, "C%3A/x").is_err());
+        assert!(resolve_external_uri(base, "a%00b").is_err());
+        assert!(resolve_external_uri(base, "%ff").is_err());
+        assert!(resolve_external_uri(base, "100%").is_ok());
+    }
+
+    #[test]
+    fn buffers_sharing_one_file_are_charged_against_one_budget() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("big.bin"), [0u8; 100]).unwrap();
+        let gltf = r#"{"asset":{"version":"2.0"},"buffers":[
+            {"byteLength":100,"uri":"big.bin"},{"byteLength":100,"uri":"big.bin"}]}"#;
+        let path = dir.path().join("m.gltf");
+        let wrap = |total| wrap_gltf_with_budget(gltf, &path, "t", &mut ReadBudget::new(total));
+        assert!(wrap(150).is_err(), "200 combined bytes exceed a 150 budget");
+        assert_eq!(wrap(200).unwrap().bin_bytes.len(), 200);
+    }
+
+    #[test]
+    fn bare_relative_source_path_uses_current_dir_as_base() {
+        let base = model_base_dir(Path::new("m.gltf"));
+        assert_eq!(base, PathBuf::from("."));
+        // The base must be canonicalizable and resolve a sibling resource.
+        assert!(base.canonicalize().is_ok());
+        assert!(resolve_external_uri(&base, "m.bin").is_ok());
+        assert_eq!(
+            model_base_dir(Path::new("dir/m.gltf")),
+            PathBuf::from("dir")
+        );
     }
 }

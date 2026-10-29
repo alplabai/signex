@@ -2,23 +2,22 @@
 //! centre point, sweeping `sweep_angle_expr` total degrees, with
 //! optional per-instance depopulation.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
 use crate::pad::bake_one_pad;
 
 use super::numbering::derive_pad_number;
-use super::numbering::strip_eq_prefix;
+use crate::eval_util::strip_eq_prefix;
 
 /// v0.22 Phase B4 — bake `ArrayKind::Polar`. Walks `i in 0..count`,
 /// per-instance position is the source rotated by
@@ -28,7 +27,10 @@ use super::numbering::strip_eq_prefix;
 /// v0.22 Phase B5 — optional `depopulation` works the same as Grid:
 /// `mask_expr` is evaluated per `(i, j=0)` and `false` skips the
 /// instance without breaking the parametric chain.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "11 arguments: polar-array placement takes the whole geometry + numbering spec at once"
+)]
 pub(super) fn bake_polar(
     source: SketchEntityId,
     center: SketchEntityId,
@@ -85,14 +87,14 @@ pub(super) fn bake_polar(
 
     let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
     let sweep_ast = parse(strip_eq_prefix(sweep_angle_expr)).map_err(SketchError::Expr)?;
-    let setup_ctx = EvalContext {
+    let mut ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count = eval(&count_ast, &setup_ctx)
-        .map_err(SketchError::Expr)?
-        .value
-        .round() as i64;
+    let Some(count) = super::eval_count("polar", "count_expr", source, &count_ast, &ctx, warnings)?
+    else {
+        return Ok(());
+    };
     if count <= 0 {
         warnings.push(format!(
             "polar array source {source}: count={count} — array skipped"
@@ -100,11 +102,14 @@ pub(super) fn bake_polar(
         return Ok(());
     }
     let count = count as usize;
+    if !super::within_instance_cap("polar", source, Some(count), warnings) {
+        return Ok(());
+    }
 
     // Sweep angle is an Altium-style degrees-or-radians value via the
     // expression's unit family. We expect rad here (the parser
     // resolves `deg` → rad). On unit error, surface and skip.
-    let sweep_q = eval(&sweep_ast, &setup_ctx).map_err(SketchError::Expr)?;
+    let sweep_q = eval(&sweep_ast, &ctx).map_err(SketchError::Expr)?;
     let sweep_rad = match sweep_q.unit.family() {
         signex_sketch::unit::UnitFamily::Angle => sweep_q.value,
         _ => {
@@ -148,11 +153,8 @@ pub(super) fn bake_polar(
         // second axis isn't meaningful for Polar). Defaults to keep
         // on eval failure (warned, never silently dropped).
         if let Some(ast) = mask_ast.as_ref() {
-            let mask_ctx = EvalContext {
-                params: params_ast.clone(),
-                array_index: Some((i, 0)),
-            };
-            match eval(ast, &mask_ctx) {
+            ctx.array_index = Some((i, 0));
+            match eval(ast, &ctx) {
                 Ok(q) => {
                     if q.value.abs() < 1e-9 {
                         continue;
@@ -175,13 +177,13 @@ pub(super) fn bake_polar(
         let extra_dx = rx - sx;
         let extra_dy = ry - sy;
 
-        let pad_number = derive_pad_number(numbering, i, params_ast, warnings, source);
+        let pad_number = derive_pad_number(numbering, i, &mut ctx, warnings, source);
+        ctx.array_index = Some((i, 0));
 
         let pad = bake_one_pad(
             source,
             pad_attr,
-            params_ast,
-            Some((i, 0)),
+            &ctx,
             extra_dx,
             extra_dy,
             Some(pad_number),

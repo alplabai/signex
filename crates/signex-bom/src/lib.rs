@@ -3,6 +3,12 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod pricing;
+pub use pricing::{
+    BomPrice, MPN_FIELDS, PriceBook, PriceQuote, apply_prices, library_row_key, mpn_key,
+    price_totals, round_cents,
+};
+
 /// Input context for BOM generation.
 #[derive(Debug, Clone)]
 pub struct BomContext {
@@ -22,16 +28,50 @@ pub struct BomComponent {
     pub dnp: bool,
     pub in_bom: bool,
     pub on_board: bool,
-    /// Variant override for fitted state.
-    /// `None` means fallback to base schematic flags.
+    /// Fitted state set by the active variant's own override for this part.
+    /// `None` means the variant does not override it.
     pub variant_fitted: Option<bool>,
+    /// Fitted state from the part's own base fields (`Fitted`, `DNP`, ...),
+    /// used when the variant does not override it.
+    pub base_fitted: Option<bool>,
     pub custom: BTreeMap<String, String>,
+    /// Fields on which the units of one multi-unit part carry different
+    /// non-empty values. Empty for a single-unit part. The BOM keeps the first
+    /// unit's value; [`BomRule::UnitFieldConflict`] reports each field here.
+    pub unit_conflicts: Vec<String>,
+    /// The library row the part was placed from ([`library_row_key`]), when
+    /// the symbol records one. Not part of the grouping: it only says where
+    /// a line's cached price comes from.
+    pub library_row: Option<String>,
 }
 
 impl BomComponent {
+    /// Whether this component passes the DNP filter. Only the active
+    /// variant's fitted override lets a DNP part through; base fields do not.
+    /// The other BOM inclusion filters still apply.
+    pub fn passes_dnp_filter(&self, include_dnp: bool) -> bool {
+        include_dnp || !self.dnp || self.variant_fitted == Some(true)
+    }
+
+    /// The fitted state, which drives `fitted_qty` and purchasing: never for
+    /// a part left out of the BOM or off the board (even with an explicit
+    /// fitted field), otherwise the variant override, else the base fields,
+    /// else "fitted unless the part is marked DNP". It is only a quantity;
+    /// which parts are listed is decided by [`BomEngineOptions::admits`].
     pub fn is_fitted(&self) -> bool {
-        self.variant_fitted
-            .unwrap_or(!self.dnp && self.in_bom && self.on_board)
+        self.in_bom
+            && self.on_board
+            && self
+                .variant_fitted
+                .or(self.base_fitted)
+                .unwrap_or(!self.dnp)
+    }
+
+    /// Whether a variant override or base field explicitly marks the part as
+    /// not fitted (as opposed to only the `dnp` flag, which `include_dnp`
+    /// governs).
+    fn is_explicitly_not_fitted(&self) -> bool {
+        self.variant_fitted.or(self.base_fitted) == Some(false)
     }
 }
 
@@ -46,7 +86,8 @@ pub struct BomMetadata {
 /// How to group components in the BOM.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum BomGrouping {
-    /// Group by value + footprint and collapse references.
+    /// Group identical parts (same value, footprint, MPN and fields) and
+    /// collapse references.
     Grouped,
     /// One row per component in natural component order.
     Ungrouped,
@@ -62,6 +103,20 @@ pub struct BomEngineOptions {
     pub include_not_fitted: bool,
     pub include_excluded_from_bom: bool,
     pub include_not_on_board: bool,
+}
+
+impl BomEngineOptions {
+    /// Whether `component` is listed. Each exclusion is gated by its own
+    /// flag: `dnp` by `include_dnp` (a variant override of "fitted" lets a DNP
+    /// part through), an explicit not-fitted state by `include_not_fitted`,
+    /// `in_bom == false` by `include_excluded_from_bom` and
+    /// `on_board == false` by `include_not_on_board`.
+    pub fn admits(&self, component: &BomComponent) -> bool {
+        component.passes_dnp_filter(self.include_dnp)
+            && (self.include_not_fitted || !component.is_explicitly_not_fitted())
+            && (self.include_excluded_from_bom || component.in_bom)
+            && (self.include_not_on_board || component.on_board)
+    }
 }
 
 impl Default for BomEngineOptions {
@@ -83,15 +138,19 @@ pub enum BomRule {
     MissingMpn,
     DuplicateDesignator,
     EmptyOrZeroQty,
+    /// The units of one multi-unit part disagree on a field's value.
+    UnitFieldConflict,
 }
 
 /// Rule-level on/off switches for BOM validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BomRuleOptions {
     pub missing_footprint: bool,
     pub missing_mpn: bool,
     pub duplicate_designator: bool,
     pub empty_or_zero_qty: bool,
+    pub unit_field_conflict: bool,
 }
 
 impl Default for BomRuleOptions {
@@ -101,6 +160,7 @@ impl Default for BomRuleOptions {
             missing_mpn: true,
             duplicate_designator: true,
             empty_or_zero_qty: true,
+            unit_field_conflict: true,
         }
     }
 }
@@ -112,6 +172,40 @@ impl BomRuleOptions {
             BomRule::MissingMpn => self.missing_mpn,
             BomRule::DuplicateDesignator => self.duplicate_designator,
             BomRule::EmptyOrZeroQty => self.empty_or_zero_qty,
+            BomRule::UnitFieldConflict => self.unit_field_conflict,
+        }
+    }
+
+    /// Turn one rule on or off.
+    pub fn set_enabled(&mut self, rule: BomRule, enabled: bool) {
+        match rule {
+            BomRule::MissingFootprint => self.missing_footprint = enabled,
+            BomRule::MissingMpn => self.missing_mpn = enabled,
+            BomRule::DuplicateDesignator => self.duplicate_designator = enabled,
+            BomRule::EmptyOrZeroQty => self.empty_or_zero_qty = enabled,
+            BomRule::UnitFieldConflict => self.unit_field_conflict = enabled,
+        }
+    }
+}
+
+impl BomRule {
+    /// Every rule, in the order the UI lists them.
+    pub const ALL: [BomRule; 5] = [
+        BomRule::MissingFootprint,
+        BomRule::MissingMpn,
+        BomRule::DuplicateDesignator,
+        BomRule::EmptyOrZeroQty,
+        BomRule::UnitFieldConflict,
+    ];
+
+    /// Short user-facing rule name.
+    pub fn label(self) -> &'static str {
+        match self {
+            BomRule::MissingFootprint => "Missing footprint",
+            BomRule::MissingMpn => "Missing MPN",
+            BomRule::DuplicateDesignator => "Duplicate designator",
+            BomRule::EmptyOrZeroQty => "Empty or zero quantity",
+            BomRule::UnitFieldConflict => "Conflicting unit fields",
         }
     }
 }
@@ -156,6 +250,31 @@ impl BomValidationReport {
     pub fn has_errors(&self) -> bool {
         self.error_count() > 0
     }
+
+    /// Compact one-line summary, e.g. `2 errors, 5 warnings`; `None` when
+    /// the report has no issues.
+    pub fn summary(&self) -> Option<String> {
+        if self.issues.is_empty() {
+            return None;
+        }
+        let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+        let infos = self
+            .issues
+            .iter()
+            .filter(|i| i.severity == BomIssueSeverity::Info)
+            .count();
+        let mut parts = Vec::new();
+        if self.error_count() > 0 {
+            parts.push(plural(self.error_count(), "error"));
+        }
+        if self.warning_count() > 0 {
+            parts.push(plural(self.warning_count(), "warning"));
+        }
+        if infos > 0 {
+            parts.push(plural(infos, "note"));
+        }
+        Some(parts.join(", "))
+    }
 }
 
 /// A single row in the generated BOM table.
@@ -171,6 +290,14 @@ pub struct BomRow {
     pub lib_ref: String,
     pub description: String,
     pub custom: BTreeMap<String, String>,
+    /// The library row the line's parts were placed from, when every one of
+    /// them records the same row; otherwise `None` and the line is priced by
+    /// MPN.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_row: Option<String>,
+    /// The cached price, once [`apply_prices`] has run and found one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<BomPrice>,
 }
 
 /// Generated BOM table.
@@ -184,15 +311,54 @@ fn first_reference(row: &BomRow) -> &str {
     row.references.first().map(String::as_str).unwrap_or("")
 }
 
+/// Identity of a purchasable part. Parts merge into one grouped row only
+/// when every field matches; `custom` carries MPN, manufacturer and the
+/// rest, so a differing field keeps the parts on separate rows. A field
+/// whose value is empty or whitespace counts as absent.
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct GroupKey {
+    name: String,
+    value: String,
+    footprint: String,
+    lib_ref: String,
+    description: String,
+    custom: BTreeMap<String, String>,
+}
+
+impl GroupKey {
+    fn of(component: &BomComponent) -> Self {
+        Self {
+            name: component.name.clone(),
+            value: component.value.clone(),
+            footprint: component.footprint.clone(),
+            lib_ref: component.lib_ref.clone(),
+            description: component.description.clone(),
+            custom: component
+                .custom
+                .iter()
+                .filter(|(_, value)| !value.trim().is_empty())
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        }
+    }
+}
+
+/// The library row shared by every part of a line, or `None` when they
+/// record none or differ (#1023).
+fn shared_library_row(components: &[&BomComponent]) -> Option<String> {
+    let (first, rest) = components.split_first()?;
+    let row = first.library_row.as_ref()?;
+    rest.iter()
+        .all(|c| c.library_row.as_ref() == Some(row))
+        .then(|| row.clone())
+}
+
 /// Build a BOM table from a normalized BOM context.
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
     let mut components = ctx
         .components
         .iter()
-        .filter(|component| opts.include_dnp || !component.dnp)
-        .filter(|component| opts.include_not_fitted || component.is_fitted())
-        .filter(|component| opts.include_excluded_from_bom || component.in_bom)
-        .filter(|component| opts.include_not_on_board || component.on_board)
+        .filter(|component| opts.admits(component))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -200,24 +366,26 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
 
     let rows = match opts.grouping {
         BomGrouping::Grouped => {
-            let mut grouped: HashMap<(String, String, String, String), Vec<&BomComponent>> =
-                HashMap::new();
+            let mut grouped: HashMap<GroupKey, Vec<&BomComponent>> = HashMap::new();
 
             for component in &components {
                 grouped
-                    .entry((
-                        component.name.clone(),
-                        component.value.clone(),
-                        component.footprint.clone(),
-                        component.lib_ref.clone(),
-                    ))
+                    .entry(GroupKey::of(component))
                     .or_default()
                     .push(component);
             }
 
             let mut rows = grouped
                 .into_iter()
-                .map(|((name, value, footprint, lib_ref), grouped_components)| {
+                .map(|(key, grouped_components)| {
+                    let GroupKey {
+                        name,
+                        value,
+                        footprint,
+                        lib_ref,
+                        description,
+                        custom,
+                    } = key;
                     let references = grouped_components
                         .iter()
                         .map(|component| component.reference.clone())
@@ -228,16 +396,6 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         .filter(|component| component.is_fitted())
                         .count() as u32;
                     let qty = grouped_components.len() as u32;
-
-                    let description = grouped_components
-                        .first()
-                        .map(|component| component.description.clone())
-                        .unwrap_or_default();
-
-                    let custom = grouped_components
-                        .first()
-                        .map(|component| component.custom.clone())
-                        .unwrap_or_default();
 
                     BomRow {
                         references,
@@ -250,6 +408,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                         lib_ref,
                         description,
                         custom,
+                        library_row: shared_library_row(&grouped_components),
+                        price: None,
                     }
                 })
                 .collect::<Vec<_>>();
@@ -271,6 +431,8 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
                     lib_ref: component.lib_ref.clone(),
                     description: component.description.clone(),
                     custom: component.custom.clone(),
+                    library_row: component.library_row.clone(),
+                    price: None,
                 })
                 .collect::<Vec<_>>();
 
@@ -322,13 +484,28 @@ pub fn validate_table(
     }
 
     if options.is_enabled(BomRule::MissingMpn) {
-        const MPN_KEYS: &[&str] = &["MPN", "Manufacturer Part Number", "Part Number"];
         for component in &ctx.components {
-            if !has_populated_field(component, MPN_KEYS) {
+            if !has_populated_field(component, &MPN_FIELDS) {
                 issues.push(BomValidationIssue {
                     rule: BomRule::MissingMpn,
                     severity: BomIssueSeverity::Warning,
                     message: format!("Component {} is missing MPN", component.reference),
+                    references: vec![component.reference.clone()],
+                });
+            }
+        }
+    }
+
+    if options.is_enabled(BomRule::UnitFieldConflict) {
+        for component in &ctx.components {
+            for field in &component.unit_conflicts {
+                issues.push(BomValidationIssue {
+                    rule: BomRule::UnitFieldConflict,
+                    severity: BomIssueSeverity::Warning,
+                    message: format!(
+                        "Units of {} carry differing values for {field}; the BOM uses the first unit's value (or lists the part if any unit includes it)",
+                        component.reference
+                    ),
                     references: vec![component.reference.clone()],
                 });
             }
@@ -385,8 +562,35 @@ mod tests {
             in_bom: true,
             on_board: true,
             variant_fitted: None,
+            base_fitted: None,
             custom: BTreeMap::new(),
+            unit_conflicts: Vec::new(),
+            library_row: None,
         }
+    }
+
+    /// #1023 — the library row a part was placed from does not split a line
+    /// (it is not a visible column); a line keeps a row only when every part
+    /// on it shares that row, and is priced by MPN otherwise.
+    #[test]
+    fn library_rows_do_not_split_lines_and_a_line_keeps_only_a_shared_row() {
+        let mut a = component("R1", "10k", "R_0603");
+        let mut b = component("R2", "10k", "R_0603");
+        let mut c = component("R3", "22k", "R_0603");
+        let mut d = component("R4", "22k", "R_0603");
+        a.library_row = Some("lib/row-a".into());
+        b.library_row = Some("lib/row-b".into());
+        c.library_row = Some("lib/row-c".into());
+        d.library_row = Some("lib/row-c".into());
+        let ctx = BomContext {
+            components: vec![a, b, c, d],
+            metadata: BomMetadata::default(),
+        };
+        let table = build_table(&ctx, &BomEngineOptions::default());
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2"]);
+        assert_eq!(table.rows[0].library_row, None, "two rows: price by MPN");
+        assert_eq!(table.rows[1].library_row.as_deref(), Some("lib/row-c"));
     }
 
     #[test]
@@ -411,6 +615,77 @@ mod tests {
         assert_eq!(table.rows[1].qty, 2);
         assert_eq!(table.rows[1].fitted_qty, 2);
         assert_eq!(table.rows[1].not_fitted_qty, 0);
+    }
+
+    #[test]
+    fn parts_with_different_mpns_stay_separate_rows() {
+        let part = |reference: &str, mpn: &str, desc: &str| {
+            let mut c = component(reference, "10k", "R_0603");
+            c.description = desc.to_string();
+            c.custom.insert("MPN".to_string(), mpn.to_string());
+            c
+        };
+        let ctx = BomContext {
+            components: vec![
+                part("R1", "RC0603FR-0710KL", "1%"),
+                part("R2", "ERA-3AEB103V", "0.1%"),
+                part("R3", "RC0603FR-0710KL", "1%"),
+            ],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].references, vec!["R1", "R3"]);
+        assert_eq!(table.rows[0].custom["MPN"], "RC0603FR-0710KL");
+        assert_eq!(table.rows[1].references, vec!["R2"]);
+        assert_eq!(table.rows[1].custom["MPN"], "ERA-3AEB103V");
+        assert_eq!(table.rows[1].description, "0.1%");
+    }
+
+    #[test]
+    fn identical_parts_with_mpn_and_manufacturer_merge() {
+        let part = |reference: &str| {
+            let mut c = component(reference, "10k", "R_0603");
+            c.custom
+                .insert("MPN".to_string(), "RC0603FR-0710KL".to_string());
+            c.custom
+                .insert("Manufacturer".to_string(), "Yageo".to_string());
+            c
+        };
+        let ctx = BomContext {
+            components: vec![part("R1"), part("R2")],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2"]);
+    }
+
+    #[test]
+    fn empty_or_whitespace_field_equals_absent_field() {
+        let mut empty = component("R1", "10k", "R_0603");
+        empty.custom.insert("MPN".to_string(), "X1".to_string());
+        empty.custom.insert("Tolerance".to_string(), String::new());
+        let mut blank = component("R2", "10k", "R_0603");
+        blank.custom.insert("MPN".to_string(), "X1".to_string());
+        blank
+            .custom
+            .insert("Tolerance".to_string(), "  ".to_string());
+        let mut missing = component("R3", "10k", "R_0603");
+        missing.custom.insert("MPN".to_string(), "X1".to_string());
+        let ctx = BomContext {
+            components: vec![empty, blank, missing],
+            metadata: BomMetadata::default(),
+        };
+
+        let table = build_table(&ctx, &BomEngineOptions::default());
+
+        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows[0].references, vec!["R1", "R2", "R3"]);
     }
 
     #[test]
@@ -525,6 +800,155 @@ mod tests {
     }
 
     #[test]
+    fn variant_fitting_respects_bom_inclusion_options() {
+        let ctx = BomContext {
+            components: [
+                ("R1", false, None),
+                ("R2", true, None),
+                ("R3", false, Some(false)),
+                ("R4", true, Some(false)),
+                ("R5", false, Some(true)),
+                ("R6", true, Some(true)),
+            ]
+            .into_iter()
+            .map(|(reference, dnp, variant_fitted)| BomComponent {
+                dnp,
+                variant_fitted,
+                ..component(reference, "10k", "R_0603")
+            })
+            .collect(),
+            metadata: BomMetadata::default(),
+        };
+
+        for (include_dnp, include_not_fitted, expected_refs, not_fitted_qty) in [
+            (false, false, vec!["R1", "R5", "R6"], 0),
+            (true, false, vec!["R1", "R2", "R5", "R6"], 1),
+            (false, true, vec!["R1", "R3", "R5", "R6"], 1),
+            (true, true, vec!["R1", "R2", "R3", "R4", "R5", "R6"], 3),
+        ] {
+            for grouping in [
+                BomGrouping::Grouped,
+                BomGrouping::Ungrouped,
+                BomGrouping::Flat,
+            ] {
+                let opts = BomEngineOptions {
+                    grouping,
+                    include_dnp,
+                    include_not_fitted,
+                    ..BomEngineOptions::default()
+                };
+                let table = build_table(&ctx, &opts);
+                let references = table
+                    .rows
+                    .iter()
+                    .flat_map(|row| row.references.iter().map(String::as_str))
+                    .collect::<Vec<_>>();
+                assert_eq!(references, expected_refs, "{opts:?}");
+                let expected_rows = if grouping == BomGrouping::Grouped {
+                    1
+                } else {
+                    expected_refs.len()
+                };
+                assert_eq!(table.rows.len(), expected_rows);
+                assert_eq!(
+                    table.rows.iter().map(|row| row.qty).sum::<u32>(),
+                    3 + not_fitted_qty
+                );
+                assert_eq!(table.rows.iter().map(|row| row.fitted_qty).sum::<u32>(), 3);
+                assert_eq!(
+                    table.rows.iter().map(|row| row.not_fitted_qty).sum::<u32>(),
+                    not_fitted_qty
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn include_dnp_alone_lists_dnp_parts() {
+        let mut dnp = component("R2", "10k", "R_0603");
+        dnp.dnp = true;
+        let ctx = BomContext {
+            components: vec![component("R1", "10k", "R_0603"), dnp],
+            metadata: BomMetadata::default(),
+        };
+        let table = build_table(
+            &ctx,
+            &BomEngineOptions {
+                grouping: BomGrouping::Flat,
+                include_dnp: true,
+                ..BomEngineOptions::default()
+            },
+        );
+        let rows = table
+            .rows
+            .iter()
+            .map(|row| {
+                (
+                    row.references[0].as_str(),
+                    row.fitted_qty,
+                    row.not_fitted_qty,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rows, vec![("R1", 1, 0), ("R2", 0, 1)]);
+    }
+
+    #[test]
+    fn only_the_variant_override_bypasses_dnp() {
+        let dnp = |variant_fitted, base_fitted| BomComponent {
+            dnp: true,
+            variant_fitted,
+            base_fitted,
+            ..component("R5", "10k", "R_0603")
+        };
+        assert!(dnp(Some(true), None).passes_dnp_filter(false));
+        assert!(dnp(Some(true), Some(false)).passes_dnp_filter(false));
+        assert!(!dnp(None, Some(true)).passes_dnp_filter(false));
+        assert!(!dnp(Some(false), Some(true)).passes_dnp_filter(false));
+
+        // The fitted state itself still takes the variant, then the base fields.
+        assert!(dnp(None, Some(true)).is_fitted());
+        assert!(!dnp(Some(false), Some(true)).is_fitted());
+        assert!(!dnp(None, None).is_fitted());
+    }
+
+    #[test]
+    fn variant_fitting_preserves_bom_and_board_exclusions() {
+        for (in_bom, on_board) in [(false, true), (true, false), (false, false)] {
+            let ctx = BomContext {
+                components: vec![BomComponent {
+                    dnp: true,
+                    variant_fitted: Some(true),
+                    in_bom,
+                    on_board,
+                    ..component("R5", "10k", "R_0603")
+                }],
+                metadata: BomMetadata::default(),
+            };
+            assert!(
+                build_table(&ctx, &BomEngineOptions::default())
+                    .rows
+                    .is_empty()
+            );
+
+            let table = build_table(
+                &ctx,
+                &BomEngineOptions {
+                    include_excluded_from_bom: !in_bom,
+                    include_not_on_board: !on_board,
+                    ..BomEngineOptions::default()
+                },
+            );
+            assert_eq!(table.rows.len(), 1);
+            assert_eq!(table.rows[0].references, vec!["R5"]);
+            // Listed, but never fitted (so never purchased) despite the
+            // explicit variant override.
+            assert_eq!(table.rows[0].fitted_qty, 0);
+            assert_eq!(table.rows[0].not_fitted_qty, 1);
+        }
+    }
+
+    #[test]
     fn can_include_excluded_from_bom_and_not_on_board() {
         let mut excluded = component("U1", "MCU", "QFN32");
         excluded.in_bom = false;
@@ -597,5 +1021,34 @@ mod tests {
                 .iter()
                 .any(|issue| issue.rule == BomRule::MissingFootprint)
         );
+    }
+
+    #[test]
+    fn set_enabled_round_trips_every_rule() {
+        let mut opts = BomRuleOptions::default();
+        for rule in BomRule::ALL {
+            assert!(opts.is_enabled(rule));
+            opts.set_enabled(rule, false);
+            assert!(!opts.is_enabled(rule));
+        }
+    }
+
+    #[test]
+    fn summary_counts_by_severity() {
+        let issue = |severity| BomValidationIssue {
+            rule: BomRule::MissingMpn,
+            severity,
+            message: String::new(),
+            references: Vec::new(),
+        };
+        assert_eq!(BomValidationReport::default().summary(), None);
+        let report = BomValidationReport {
+            issues: vec![
+                issue(BomIssueSeverity::Error),
+                issue(BomIssueSeverity::Error),
+                issue(BomIssueSeverity::Warning),
+            ],
+        };
+        assert_eq!(report.summary().as_deref(), Some("2 errors, 1 warning"));
     }
 }

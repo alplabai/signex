@@ -2,6 +2,7 @@
 
 use super::helpers::*;
 use super::*;
+use crate::adapter::UncommittedChanges;
 
 impl LibraryAdapter for LocalGitAdapter {
     fn manifest(&self) -> &Manifest {
@@ -27,9 +28,37 @@ impl LibraryAdapter for LocalGitAdapter {
         Some(&self.file_path)
     }
 
+    fn relocate_library_file(&mut self, new_file: &Path) -> Result<(), LibraryError> {
+        Self::validate_file_path(new_file)?;
+        let new_root = parent_dir(new_file)?;
+        if new_root == self.root_dir {
+            // Record the rename in the library's own history before the
+            // adapter moves, so a failed commit leaves it on the old path.
+            let old_rel = self.snxlib_rel_path()?;
+            let new_rel = file_name_str(new_file)?;
+            // The file is already renamed on disk, so a failed commit must
+            // not leave the adapter on the old path: the rename stays
+            // pending and the next commit records it (#858).
+            self.commit_change(
+                Some(&old_rel),
+                &new_rel,
+                "",
+                &format!("rename {old_rel} to {new_rel}"),
+            );
+        }
+        let moved_root = new_root != self.root_dir;
+        self.root_dir = new_root;
+        self.file_path = new_file.to_path_buf();
+        if moved_root {
+            self.reset_uncommitted_for_new_root();
+        }
+        Ok(())
+    }
+
     // ── Tables ─────────────────────────────────────────────────────────────
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        self.refresh_for_read();
         let guard = self
             .library_file
             .read()
@@ -45,16 +74,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if new_trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        if new_trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {new_trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(&new_trimmed)?;
         if old_owned == new_trimmed {
             return Ok(());
         }
@@ -72,8 +92,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         "table {new_owned:?} already exists"
                     )));
                 }
-                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
-                lf.tables.insert(new_owned, entry);
+                // Through the file, so the table keeps its unknown keys (#1435).
+                lf.rename_table(&old_owned, &new_owned);
                 Ok(())
             },
             msg,
@@ -114,11 +134,8 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn library_classes(&self) -> Vec<crate::library_file::ClassEntry> {
-        let guard = match self.library_file.read() {
-            Ok(g) => g,
-            Err(_) => return Vec::new(),
-        };
-        guard.manifest.classes.clone()
+        self.refresh_for_read();
+        classes_or_report(&self.library_file, &self.file_path)
     }
 
     fn update_library_classes(
@@ -164,14 +181,12 @@ impl LibraryAdapter for LocalGitAdapter {
     fn remove_library_class(&self, key: &str, msg: &str) -> Result<(), LibraryError> {
         let owned_key = key.to_string();
         let fallback = format!("remove class {owned_key}");
-        self.mutate_library_file(
+        self.mutate_library_file_if_changed(
             move |lf| {
                 let before = lf.manifest.classes.len();
                 lf.manifest.classes.retain(|c| c.key != owned_key);
-                // Never error when the key is missing — keeps the
-                // UI's "× delete" idempotent.
-                let _ = before;
-                Ok(())
+                // Absent key: no error (idempotent `×`), no write, no commit.
+                Ok(lf.manifest.classes.len() != before)
             },
             msg,
             &fallback,
@@ -201,12 +216,8 @@ impl LibraryAdapter for LocalGitAdapter {
                         new_entry.key
                     )));
                 }
-                for c in lf.manifest.classes.iter_mut() {
-                    if c.key == owned_old {
-                        *c = new_entry.clone();
-                        break;
-                    }
-                }
+                // Through the file, so the class keeps its unknown keys (#1435).
+                lf.rename_class(&owned_old, new_entry.clone());
                 Ok(())
             },
             msg,
@@ -219,20 +230,7 @@ impl LibraryAdapter for LocalGitAdapter {
         if trimmed.is_empty() {
             return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        // Reject the same characters we reject elsewhere for filenames /
-        // identifiers — keeps round-trips through the TOML key safe and
-        // avoids surprising the user with a name they can't see in
-        // their file browser.
-        if trimmed.chars().any(|c| {
-            matches!(
-                c,
-                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
-            )
-        }) {
-            return Err(LibraryError::Backend(format!(
-                "table name {trimmed:?} contains illegal characters"
-            )));
-        }
+        check_table_name(trimmed)?;
         let owned = trimmed.to_string();
         let fallback = format!("create empty table {owned}");
         self.mutate_library_file(
@@ -248,6 +246,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
+                        pricing: Default::default(),
                     },
                 );
                 Ok(())
@@ -272,11 +271,7 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
-        let target = row_id.as_uuid();
-        self.snapshot_table(table)?
-            .into_iter()
-            .find(|r| r.row_id == target)
-            .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
+        self.read_component_row(table, row_id)
     }
 
     /// Linear scan across every table — O(total rows). Acceptable at
@@ -295,9 +290,16 @@ impl LibraryAdapter for LocalGitAdapter {
         let table_owned = table.to_string();
         let row_id = row.row_id;
         let lib_row = component_to_library_row(&row)?;
+        let new_row_id = row_id.to_string();
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("insert row {row_id} into {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
+                if !lf.tables.contains_key(&table_owned) {
+                    check_table_name(&table_owned)?;
+                }
+                check_insert_unique(lf, &new_row_id, &new_pn)?;
                 let entry = lf
                     .tables
                     .entry(table_owned.clone())
@@ -305,55 +307,97 @@ impl LibraryAdapter for LocalGitAdapter {
                         columns: legacy_columns(),
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
+                        pricing: Default::default(),
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
-                entry.rows.push(lib_row);
-                Ok(())
+                declare_alternate_symbols_column(&mut entry.columns, &lib_row);
+                entry.rows.push(Arc::new(lib_row));
+                Ok(RowChange::Wrote(entry.rows.len() - 1))
             },
+            &[],
             msg,
             &fallback,
         )
     }
 
-    fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
+    fn update_row(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+    ) -> Result<Option<u64>, LibraryError> {
+        self.update_row_with_assets(table, row, msg, &[])
+    }
+
+    fn update_row_with_assets(
+        &self,
+        table: &str,
+        row: ComponentRow,
+        msg: &str,
+        asset_rel_paths: &[String],
+    ) -> Result<Option<u64>, LibraryError> {
+        self.check_datasheet_assets(asset_rel_paths)?;
         let table_owned = table.to_string();
         let row_id = row.row_id;
+        let base = row.server_revision;
         let lib_row = component_to_library_row(&row)?;
+        let new_base = row_base(&lib_row);
+        let new_pn = row.internal_pn.to_string();
         let fallback = format!("update row {row_id} in {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
+                check_pn_change(lf, &table_owned, &row_id.to_string(), &new_pn)?;
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 let row_id_s = row_id.to_string();
-                let target = entry.rows.iter_mut().find(|r| {
-                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_s.as_str())
-                });
-                match target {
-                    Some(slot) => {
-                        *slot = lib_row;
-                        Ok(())
-                    }
-                    None => Err(LibraryError::NotFound(format!(
-                        "row {row_id} in table {table_owned}"
-                    ))),
-                }
+                let index = entry
+                    .rows
+                    .iter()
+                    .position(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str)
+                            == Some(row_id_s.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {row_id} in table {table_owned}"))
+                    })?;
+                // Checked against the row as it is on disk now (the write
+                // path just re-read it), not a cache.
+                check_row_base(&entry.rows[index], base)?;
+                declare_alternate_symbols_column(&mut entry.columns, &lib_row);
+                entry.rows[index] = Arc::new(lib_row);
+                Ok(RowChange::Wrote(index))
             },
+            asset_rel_paths,
             msg,
             &fallback,
-        )
+        )?;
+        Ok(Some(new_base))
     }
 
-    fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
+    fn delete_row(
+        &self,
+        table: &str,
+        row_id: RowId,
+        base_revision: Option<u64>,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
         let table_owned = table.to_string();
         let fallback = format!("delete row {row_id} from {table_owned}");
-        self.mutate_library_file(
-            move |lf| {
+        self.save_row_edit(
+            table,
+            |lf| {
                 let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
                     LibraryError::NotFound(format!("table {table_owned} not in library"))
                 })?;
                 let target = row_id.as_uuid().to_string();
+                if let Some(stored) = entry.rows.iter().find(|r| {
+                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                }) {
+                    check_row_base(stored, base_revision)?;
+                }
                 let before = entry.rows.len();
                 entry.rows.retain(|r| {
                     r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str())
@@ -363,28 +407,89 @@ impl LibraryAdapter for LocalGitAdapter {
                         "row {row_id} in table {table_owned}"
                     )));
                 }
-                Ok(())
+                // A deleted row's cached prices go with it.
+                entry.pricing.remove(&target);
+                Ok(RowChange::Removed(target))
             },
+            &[],
             msg,
             &fallback,
         )
     }
 
+    fn table_pricing(
+        &self,
+        table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, crate::pricing::RowPricing>, LibraryError> {
+        self.refresh_for_read();
+        let guard = self
+            .library_file
+            .read()
+            .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        let Some(entry) = guard.tables.get(table) else {
+            return Ok(Default::default());
+        };
+        Ok(entry
+            .pricing
+            .iter()
+            .filter_map(|(id, p)| Uuid::parse_str(id).ok().map(|id| (id, p.clone())))
+            .collect())
+    }
+
+    fn store_pricing(
+        &self,
+        updates: Vec<crate::pricing::PricingUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
+        msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        let mut outcome = crate::pricing::StoreOutcome::default();
+        let fallback = format!("refresh pricing for {} rows", updates.len());
+        // Every update is checked against the row as it is under the write
+        // lock, after the reload, so a fetch that raced an edit cannot
+        // attach a price to a SKU the row no longer has.
+        self.mutate_library_file_if_changed(
+            |lf| {
+                // Last chance to stop: the lock is held, the write is next.
+                if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(false);
+                }
+                for update in updates {
+                    match apply_pricing_update(lf, &update) {
+                        Ok(()) => outcome.stored += 1,
+                        Err(reason) => outcome.dropped.push(crate::pricing::DroppedUpdate {
+                            table: update.table,
+                            row_id: update.row_id,
+                            distributor: update.distributor,
+                            reason,
+                        }),
+                    }
+                }
+                Ok(outcome.stored > 0)
+            },
+            msg,
+            &fallback,
+        )?;
+        Ok(outcome)
+    }
+
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        for (_, file) in self.scan_symbol_files()? {
-            if let Some(sym) = file.get_symbol(uuid) {
-                return Ok(sym.clone());
-            }
+        if let Some((_, file)) = self.locate_symbol_file(uuid)?
+            && let Some(sym) = file.get_symbol(uuid)
+        {
+            return Ok(sym.clone());
+        }
+        if let Some(err) = self.symbol_lookup_undetermined(uuid) {
+            return Err(err);
         }
         Err(LibraryError::NotFound(format!("symbol {uuid}")))
     }
 
     fn get_footprint(&self, uuid: Uuid) -> Result<Footprint, LibraryError> {
-        self.read_primitive::<Footprint>(PrimitiveKind::Footprint, uuid)
+        self.read_footprint(uuid)
     }
 
     fn get_sim(&self, uuid: Uuid) -> Result<SimModel, LibraryError> {
-        self.read_primitive::<SimModel>(PrimitiveKind::Sim, uuid)
+        self.read_sim(uuid)
     }
 
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
@@ -404,7 +509,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
         let uuid = fp.uuid;
         let new_version = fp.version.clone();
-        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)?;
+        self.write_footprint(&fp, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_footprint_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -413,7 +518,7 @@ impl LibraryAdapter for LocalGitAdapter {
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
         let uuid = sm.uuid;
         let new_version = sm.version.clone();
-        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)?;
+        self.write_sim(&sm, message)?;
         let mode = self.manifest_synth.workflow.mode;
         let _report = crate::cascade::cascade_after_sim_save(self, uuid, &new_version, mode)?;
         Ok(())
@@ -435,19 +540,145 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(out)
     }
 
+    fn symbol_listing_is_partial(&self) -> bool {
+        !self.symbol_file_problems().is_empty()
+    }
+
     fn list_footprints(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitive_summaries::<Footprint>(PrimitiveKind::Footprint, |f| &f.name)
+        self.list_primitive_summaries(PrimitiveKind::Footprint)
     }
 
     fn list_sims(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        self.list_primitive_summaries::<SimModel>(PrimitiveKind::Sim, |s| &s.name)
+        self.list_primitive_summaries(PrimitiveKind::Sim)
+    }
+
+    fn bind_row_primitive_version(
+        &self,
+        table: &str,
+        row_id: RowId,
+        save: &crate::cascade::PrimitiveSave,
+        message: &str,
+    ) -> Result<bool, LibraryError> {
+        let table_owned = table.to_string();
+        let target = row_id.as_uuid().to_string();
+        let fallback = format!("bind row {row_id} in {table} to v{}", save.version);
+        let mut changed = false;
+        // The row is found and rewritten under the write lock, after the
+        // reload, so a field another writer changed since the caller read
+        // the row is kept.
+        self.save_row_edit(
+            table,
+            |lf| {
+                let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
+                    LibraryError::NotFound(format!("table {table_owned} not in library"))
+                })?;
+                validate_legacy_header(&table_owned, &entry.columns)?;
+                let index = entry
+                    .rows
+                    .iter()
+                    .position(|r| {
+                        r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str())
+                    })
+                    .ok_or_else(|| {
+                        LibraryError::NotFound(format!("row {target} in table {table_owned}"))
+                    })?;
+                let mut row = library_row_to_component(&entry.rows[index])?;
+                if !crate::cascade::needs_bump(&row, save) {
+                    return Ok(RowChange::None);
+                }
+                crate::cascade::apply_cascade_bump(&mut row, save);
+                entry.rows[index] = Arc::new(component_to_library_row(&row)?);
+                changed = true;
+                Ok(RowChange::Wrote(index))
+            },
+            &[],
+            message,
+            &fallback,
+        )?;
+        Ok(changed)
+    }
+
+    /// The whole batch in one `.snxlib` write and one commit. A target
+    /// that is missing or unreadable is that target's `Err` and the rest
+    /// still land; a failed write or commit refuses the whole batch. The
+    /// commit message is built from the rows the edit changed.
+    fn update_rows(
+        &self,
+        targets: &[(String, RowId)],
+        edit: &mut crate::adapter::RowEdit<'_>,
+        message: &crate::adapter::RowsMessage<'_>,
+    ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
+        let outcomes = std::cell::RefCell::new(Vec::with_capacity(targets.len()));
+        let fallback = format!("update {} rows", targets.len());
+        self.mutate_library_file_deferred(
+            |lf| {
+                // Rows are found and edited under the write lock, after the
+                // reload, so a field another writer changed since the
+                // caller's scan is kept.
+                let mut any = false;
+                let mut done = outcomes.borrow_mut();
+                for (table, row_id) in targets {
+                    let outcome = edit_one_row(lf, table, *row_id, edit);
+                    any |= matches!(outcome, Ok(true));
+                    done.push((*row_id, outcome));
+                }
+                Ok(any)
+            },
+            &[],
+            &|| {
+                let changed: Vec<RowId> = outcomes
+                    .borrow()
+                    .iter()
+                    .filter(|(_, o)| matches!(o, Ok(true)))
+                    .map(|(id, _)| *id)
+                    .collect();
+                message(&changed)
+            },
+            &fallback,
+        )?;
+        Ok(outcomes.into_inner())
     }
 
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root_dir.clone())
     }
 
-    fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {
+    fn rewrite_file_locked(
+        &self,
+        abs_path: &Path,
+        commit_message: &str,
+        rewrite: &mut crate::adapter::FileRewrite<'_>,
+    ) -> Result<bool, LibraryError> {
+        if !abs_path.starts_with(&self.root_dir) {
+            return Err(LibraryError::Backend(format!(
+                "rewrite_file_locked: {} is not under {}",
+                abs_path.display(),
+                self.root_dir.display(),
+            )));
+        }
+        let _write_lock = self.lock_for_write()?;
+        let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
+        // The file is written: its commit, failed or not, is reported by
+        // the adapter (see `uncommitted`) and never undoes the write.
+        if written {
+            self.commit_external_change(abs_path, commit_message)?;
+        }
+        Ok(written)
+    }
+
+    fn uncommitted_changes(&self) -> Option<UncommittedChanges> {
+        self.pending_changes()
+    }
+
+    fn commit_pending(&self, message: &str) -> Result<CommitOutcome, LibraryError> {
+        Ok(self.commit_pending_changes(message))
+    }
+
+    fn commit_external_change(
+        &self,
+        abs_path: &Path,
+        message: &str,
+    ) -> Result<CommitOutcome, LibraryError> {
         let rel_path = abs_path
             .strip_prefix(&self.root_dir)
             .map_err(|_| {
@@ -460,13 +691,13 @@ impl LibraryAdapter for LocalGitAdapter {
             .to_string_lossy()
             .replace('\\', "/");
         let fallback = format!("save {rel_path}");
-        self.commit_path(&rel_path, message, &fallback)
+        Ok(self.commit_path(&rel_path, message, &fallback))
     }
 
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
         // Stage 17 scaffold: walk the repo's commit graph newest-first
         // and keep commits whose tree differs from at least one parent
-        // at `primitive_path`. Mirrors `git log --follow --max-count 50
+        // at `primitive_path`. Mirrors `git log --max-count 50
         // -- <path>` semantics (per `v0.9-snxlib-as-file-plan.md` §3
         // "Performance"), minus the rename-follow heuristic — git2
         // doesn't expose `--follow` directly so a future stage layers
@@ -499,44 +730,55 @@ impl LibraryAdapter for LocalGitAdapter {
         }
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-
-        let mut walk = repo
-            .revwalk()
-            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-        // Topological + time so that on equal-second timestamps (the
-        // common case in tests + back-to-back saves on Windows where
-        // git2 stamps to one-second precision) child commits still
-        // come before parents — matches `git log`'s default visual
-        // order.
-        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-
-        // Unborn HEAD (fresh repo, no commits yet) is a legitimate
-        // "no history" answer rather than an error — the editor
-        // should render an empty list, not a red banner.
-        match walk.push_head() {
-            Ok(()) => {}
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(Vec::new()),
-            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-        }
-
-        let mut entries: Vec<HistoryEntry> = Vec::new();
-        for oid_res in walk {
-            if entries.len() >= MAX_ENTRIES {
-                break;
-            }
-            let oid =
-                oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
-            let commit = repo
-                .find_commit(oid)
-                .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
-
-            if !commit_touches_path(&repo, &commit, &rel_str)? {
-                continue;
-            }
-
-            entries.push(commit_to_history_entry(&commit));
-        }
-        Ok(entries)
+        crate::git_history::path_history(&repo, &rel_str, MAX_ENTRIES)
     }
+}
+
+/// Refuse a table name that is empty or holds a character a file browser
+/// or the `.snxlib` table header cannot carry; shared by every table
+/// write so a bad name fails the same way everywhere.
+fn check_table_name(name: &str) -> Result<(), LibraryError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(LibraryError::Backend("table name cannot be empty".into()));
+    }
+    if trimmed.chars().any(|c| {
+        matches!(
+            c,
+            '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+        )
+    }) {
+        return Err(LibraryError::Backend(format!(
+            "table name {trimmed:?} contains illegal characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Edit one row of an open library file for `update_rows`: `Ok(true)` when
+/// the edit changed it and the row was replaced, `Ok(false)` when it left
+/// the row alone.
+fn edit_one_row(
+    lf: &mut LibraryFile,
+    table: &str,
+    row_id: RowId,
+    edit: &mut crate::adapter::RowEdit<'_>,
+) -> Result<bool, LibraryError> {
+    let target = row_id.as_uuid().to_string();
+    let entry = lf
+        .tables
+        .get_mut(table)
+        .ok_or_else(|| LibraryError::NotFound(format!("table {table} not in library")))?;
+    validate_legacy_header(table, &entry.columns)?;
+    let index = entry
+        .rows
+        .iter()
+        .position(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str()))
+        .ok_or_else(|| LibraryError::NotFound(format!("row {target} in table {table}")))?;
+    let mut row = library_row_to_component(&entry.rows[index])?;
+    if !edit(&mut row) {
+        return Ok(false);
+    }
+    entry.rows[index] = Arc::new(component_to_library_row(&row)?);
+    Ok(true)
 }

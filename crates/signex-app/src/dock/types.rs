@@ -20,17 +20,6 @@ pub enum DockMessage {
     TabDragStart(PanelPosition, usize),
     /// Mouse released on a tab — if no undock happened, treat as click → select.
     TabClick(PanelPosition, usize),
-    /// Reorder tabs within a dock region. `from` is the dragged tab's
-    /// original index, `to` is the index of the tab it was released
-    /// on. Currently produced by the internal TabClick handler — not
-    /// emitted directly by the UI yet (left available for a future
-    /// pointer-tracking drop indicator).
-    #[allow(dead_code)]
-    ReorderTab {
-        pos: PanelPosition,
-        from: usize,
-        to: usize,
-    },
     /// Scroll tabs left/right when they overflow the panel width.
     TabScroll(PanelPosition, i32),
     /// Pointer entered a dock tab — feeds the hover highlight on
@@ -45,7 +34,6 @@ pub enum DockMessage {
     /// hover away and leave the highlight stuck off.
     TabHoverExit(PanelPosition, usize),
     /// Move a floating panel by delta.
-    #[allow(dead_code)]
     MoveFloating(usize, f32, f32),
     /// Start dragging a floating panel.
     StartDragFloating(usize),
@@ -60,6 +48,19 @@ pub enum DockMessage {
     /// when the Library panel is active inside a dock region. The
     /// dispatcher unwraps this back into `Message::Library(_)`.
     Library(crate::library::LibraryMessage),
+}
+
+/// Where a panel kind currently lives inside the dock.
+///
+/// A kind is expected to occupy at most one of these — see
+/// `DockArea::locate`. Detached OS windows are a fourth home the dock
+/// cannot see; `Signex::show_panel` checks `ui_state.windows` for those.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PanelSite {
+    /// Docked as a tab: which region, and its index within it.
+    Docked(PanelPosition, usize),
+    /// Floating over the main window, by index into `DockArea::floating`.
+    Floating(usize),
 }
 
 /// A panel floating as an overlay window.

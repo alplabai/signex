@@ -1,13 +1,25 @@
 //! Symbol-editor + SCH-library-panel state mutators — the helper
 //! methods behind the `SchLibrary*` and `SymEditor*` dock-panel
 //! messages. Each resolves the active `.snxsym` tab, mutates its
-//! `SymbolEditorState`, marks the tab dirty, and clears the canvas
+//! `SymbolDocument`, marks the tab dirty, and clears the canvas
 //! cache; the dispatcher in `mod.rs` routes the panel messages here.
 //!
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
 
 use super::*;
+
+/// Guard a typed Properties value: `nan` / `inf` never reaches geometry.
+/// A refusal is reported to the Messages panel and the edit is dropped.
+pub(super) fn finite_or_refuse(value: f64, what: &str) -> bool {
+    if value.is_finite() {
+        return true;
+    }
+    crate::diagnostics::log_warning(format!(
+        "{what} edit refused: {value} is not a finite number"
+    ));
+    false
+}
 
 impl Signex {
     /// Resolve the active `.snxsym` tab → its containing `.snxlib`,
@@ -40,69 +52,101 @@ impl Signex {
         true
     }
 
+    /// Run `edit` on the active Symbol editor as one recorded undo step
+    /// (coalesced per `key`, see `SymbolDocument::record_edit`), then
+    /// run the standard dirty / refresh cycle. `edit` returns whether it
+    /// changed anything. Silently no-ops when no Symbol editor is active,
+    /// so callers need no match of their own.
+    fn sym_editor_record_edit(
+        &mut self,
+        key: Option<crate::app::documents::FieldEditKey>,
+        edit: impl FnOnce(&mut crate::app::SymbolDocument) -> bool,
+    ) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        let applied = editor.record_edit(key, |editor| {
+            let before = editor.primitive().clone();
+            if !edit(editor) {
+                return false;
+            }
+            // An edit that left the symbol as it was (the same value typed
+            // again, or a keystroke that was refused) is not an edit: no
+            // undo step, no dirty flag.
+            if *editor.primitive() == before {
+                return false;
+            }
+            editor.mark_dirty();
+            editor.canvas_cache.clear();
+            true
+        });
+        if applied {
+            self.mark_active_symbol_tab_dirty();
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+
     /// Helper — apply a closure to the pin at `pin_idx` on the active
-    /// Symbol editor and run the standard dirty/refresh cycle. Returns
-    /// silently when no Symbol editor is active or the index is out of
-    /// range so callers don't have to gate the call with their own
-    /// match.
-    pub(super) fn sym_editor_mutate_pin<F>(&mut self, pin_idx: usize, mutator: F) -> bool
+    /// Symbol editor as one undo step. Returns silently when no Symbol
+    /// editor is active or the index is out of range.
+    pub(super) fn sym_editor_mutate_pin<F>(
+        &mut self,
+        pin_idx: usize,
+        key: Option<&'static str>,
+        mutator: F,
+    ) -> bool
     where
         F: FnOnce(&mut signex_library::SymbolPin),
     {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) else {
-            return true;
-        };
-        mutator(pin);
-        editor.dirty = true;
-        editor.canvas_cache.clear();
-        self.mark_active_symbol_tab_dirty();
-        self.refresh_panel_ctx();
-        true
+        self.sym_editor_record_edit(key.map(|k| (k, pin_idx as u128)), |editor| {
+            let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) else {
+                return false;
+            };
+            mutator(pin);
+            true
+        })
     }
 
-    /// Helper — apply a closure to the active symbol (`Symbol`) on
-    /// the active Symbol editor. Used by Properties Component
-    /// section edits (designator / comment / description / type /
-    /// mirrored). Runs the standard dirty/refresh cycle. No-op when
-    /// no Symbol editor is the active tab.
-    pub(super) fn sym_editor_mutate_symbol<F>(&mut self, mutator: F) -> bool
+    /// Helper — apply a closure to the active symbol (`Symbol`) as one
+    /// undo step. Used by Properties Component section edits
+    /// (designator / comment / description / type / mirrored).
+    pub(super) fn sym_editor_mutate_symbol<F>(
+        &mut self,
+        key: Option<&'static str>,
+        mutator: F,
+    ) -> bool
     where
         F: FnOnce(&mut signex_library::Symbol),
     {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        mutator(editor.primitive_mut());
-        editor.dirty = true;
-        editor.canvas_cache.clear();
-        self.mark_active_symbol_tab_dirty();
-        self.refresh_panel_ctx();
-        true
+        self.sym_editor_record_edit(key.map(|k| (k, 0)), |editor| {
+            mutator(editor.primitive_mut());
+            true
+        })
     }
 
     /// Helper — apply a closure to the graphic at `idx` on the active
-    /// Symbol editor. Sibling of [`sym_editor_mutate_pin`] for
-    /// per-shape Properties edits. Silently returns when no Symbol
-    /// editor is active or the index is out of range.
-    pub(super) fn sym_editor_mutate_graphic<F>(&mut self, idx: usize, mutator: F) -> bool
+    /// Symbol editor as one undo step. Sibling of
+    /// [`sym_editor_mutate_pin`] for per-shape Properties edits. Silently
+    /// returns when no Symbol editor is active or the index is out of
+    /// range. `key` is the field edited; it is scoped to `idx` here.
+    pub(super) fn sym_editor_mutate_graphic<F>(
+        &mut self,
+        idx: usize,
+        key: Option<(&'static str, u128)>,
+        mutator: F,
+    ) -> bool
     where
         F: FnOnce(&mut signex_library::SymbolGraphic),
     {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        let Some(g) = editor.primitive_mut().graphics.get_mut(idx) else {
-            return true;
-        };
-        mutator(g);
-        editor.dirty = true;
-        editor.canvas_cache.clear();
-        self.mark_active_symbol_tab_dirty();
-        self.refresh_panel_ctx();
-        true
+        let key = key.map(|(name, field)| (name, ((idx as u128) << 8) | field));
+        self.sym_editor_record_edit(key, |editor| {
+            let Some(g) = editor.primitive_mut().graphics.get_mut(idx) else {
+                return false;
+            };
+            mutator(g);
+            true
+        })
     }
 
     // ── Graphic-fill colour picker (transient UI state) ─────────────
@@ -163,24 +207,14 @@ impl Signex {
         idx: usize,
         color: Option<[u8; 4]>,
     ) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        let mut applied = false;
-        if let Some(g) = editor.primitive_mut().graphics.get_mut(idx) {
+        self.sym_editor_record_edit(None, |editor| {
+            editor.graphic_fill_picker = None;
+            let Some(g) = editor.primitive_mut().graphics.get_mut(idx) else {
+                return false;
+            };
             g.fill = color;
-            applied = true;
-        }
-        editor.graphic_fill_picker = None;
-        if applied {
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
-        if applied {
-            self.mark_active_symbol_tab_dirty();
-        }
-        self.refresh_panel_ctx();
-        true
+            true
+        })
     }
 
     // ── Symbol-level local-colour pickers (transient UI state) ──────
@@ -243,23 +277,16 @@ impl Signex {
         slot: crate::app::LocalColorSlot,
         color: Option<[u8; 4]>,
     ) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        {
+        self.sym_editor_record_edit(None, |editor| {
+            editor.local_color_picker = None;
             let sym = editor.primitive_mut();
             match slot {
                 crate::app::LocalColorSlot::Fill => sym.local_fill_color = color,
                 crate::app::LocalColorSlot::Line => sym.local_line_color = color,
                 crate::app::LocalColorSlot::Pin => sym.local_pin_color = color,
             }
-        }
-        editor.local_color_picker = None;
-        editor.dirty = true;
-        editor.canvas_cache.clear();
-        self.mark_active_symbol_tab_dirty();
-        self.refresh_panel_ctx();
-        true
+            true
+        })
     }
 
     /// SCH Library panel: select a placed graphic so the right-dock
@@ -318,17 +345,7 @@ impl Signex {
         pin_idx: usize,
         value: signex_library::PinDirection,
     ) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            pin.electrical = value;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
-        }
-        true
+        self.sym_editor_mutate_pin(pin_idx, None, |pin| pin.electrical = value)
     }
 
     pub(super) fn sym_editor_set_pin_orientation(
@@ -336,102 +353,59 @@ impl Signex {
         pin_idx: usize,
         value: signex_library::PinOrientation,
     ) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            pin.orientation = value;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
-        }
-        true
+        self.sym_editor_mutate_pin(pin_idx, None, |pin| pin.orientation = value)
     }
 
     pub(super) fn sym_editor_set_pin_x(&mut self, pin_idx: usize, value: f64) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
+        if !finite_or_refuse(value, "Pin X") {
             return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            pin.position[0] = value;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
         }
-        true
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_x"), |pin| pin.position[0] = value)
     }
 
     pub(super) fn sym_editor_set_pin_y(&mut self, pin_idx: usize, value: f64) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
+        if !finite_or_refuse(value, "Pin Y") {
             return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            pin.position[1] = value;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
         }
-        true
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_y"), |pin| pin.position[1] = value)
     }
 
     pub(super) fn sym_editor_set_pin_number(&mut self, pin_idx: usize, value: String) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            pin.number = value;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
-        }
-        true
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_number"), |pin| pin.number = value)
     }
 
     pub(super) fn sym_editor_set_pin_name(&mut self, pin_idx: usize, value: String) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            pin.name = value;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
-        }
-        true
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_name"), |pin| pin.name = value)
     }
 
     pub(super) fn sym_editor_set_pin_length(&mut self, pin_idx: usize, value: f64) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
+        if !finite_or_refuse(value, "Pin length") {
             return true;
-        };
-        if let Some(pin) = editor.primitive_mut().pins.get_mut(pin_idx) {
-            // Clamp to a sane minimum so a user dragging through 0
-            // doesn't produce a degenerate stub. 0.1 mm matches the
-            // smallest grid step Altium allows for pins.
-            pin.length = value.max(0.1);
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-            self.mark_active_symbol_tab_dirty();
-            self.refresh_panel_ctx();
         }
-        true
+        // Clamp to a sane minimum so a user dragging through 0
+        // doesn't produce a degenerate stub. 0.1 mm matches the
+        // smallest grid step Altium allows for pins.
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_length"), |pin| {
+            pin.length = value.max(0.1)
+        })
+    }
+
+    pub(super) fn sym_editor_set_graphic_field(
+        &mut self,
+        idx: usize,
+        field: crate::panels::GraphicFieldId,
+        value: f64,
+    ) -> bool {
+        if !finite_or_refuse(value, "Graphic field") {
+            return true;
+        }
+        self.sym_editor_mutate_graphic(idx, Some(("graphic_field", field as u128)), |g| {
+            super::apply_graphic_field(g, field, value)
+        })
     }
 
     pub(super) fn sym_editor_set_symbol_name(&mut self, value: String) -> bool {
-        let Some(editor) = self.active_symbol_editor_mut() else {
-            return true;
-        };
-        editor.primitive_mut().name = value;
-        editor.dirty = true;
-        editor.canvas_cache.clear();
-        self.mark_active_symbol_tab_dirty();
-        self.refresh_panel_ctx();
-        true
+        self.sym_editor_mutate_symbol(Some("symbol_name"), |symbol| symbol.name = value)
     }
 
     fn mark_active_symbol_tab_dirty(&mut self) {
@@ -446,59 +420,39 @@ impl Signex {
         else {
             return;
         };
-        self.document_state.dirty_paths.insert(path.clone());
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
-        }
-    }
-
-    /// Reset per-symbol viewport state when the active symbol changes.
-    ///
-    /// Without this, a newly selected/created symbol can inherit stale
-    /// pan/zoom from the previous symbol and open at an unexpected scale.
-    fn reset_symbol_viewport(editor: &mut crate::app::SymbolEditorState) {
-        editor.reset_camera_origin_center();
-        editor.cursor_mm = None;
-        editor.canvas_cache.clear();
+        self.document_state.mark_document_dirty(&path);
     }
 
     pub(super) fn sch_library_select_symbol(&mut self, idx: usize) -> bool {
         let Some(editor) = self.active_symbol_editor_mut() else {
-            tracing::warn!(
-                target: "signex::library",
-                idx,
-                "SCH Library: select fired without an active Symbol editor"
+            crate::diagnostics::log_warning(
+                "SCH Library: select fired without an active Symbol editor",
             );
             return true;
         };
         if idx >= editor.file.symbols.len() {
-            tracing::warn!(
-                target: "signex::library",
-                idx,
-                len = editor.file.symbols.len(),
-                "SCH Library: select index out of range"
-            );
+            crate::diagnostics::log_warning(format!(
+                "{}: symbol select index {idx} is out of range ({} symbols)",
+                editor.path.display(),
+                editor.file.symbols.len()
+            ));
             return true;
         }
         if editor.active_idx == idx {
             return true;
         }
         editor.active_idx = idx;
-        editor.selected = None;
-        // Active part is per-editor but only meaningful for the
-        // currently-active symbol; switching symbols resets to part 1
-        // so the new symbol's pin filter starts in a sane state.
-        editor.active_part = 1;
-        Self::reset_symbol_viewport(editor);
+        // Switching symbols resets the unit, selection and viewport so
+        // the new symbol does not inherit the previous one's.
+        editor.reset_view_for_symbol_switch();
         self.refresh_panel_ctx();
         true
     }
 
     pub(super) fn sch_library_add_symbol(&mut self) -> bool {
         let Some(editor) = self.active_symbol_editor_mut() else {
-            tracing::warn!(
-                target: "signex::library",
-                "SCH Library: add fired without an active Symbol editor"
+            crate::diagnostics::log_warning(
+                "SCH Library: add fired without an active Symbol editor",
             );
             return true;
         };
@@ -520,74 +474,73 @@ impl Signex {
                 }
             }
         }
+        // The add is its own undo step (#760 review): snapshot the whole
+        // container first so Undo drops only the new symbol and leaves
+        // earlier edits to the other symbols alone.
+        let snapshot = editor.snapshot();
+        editor.commit_history(snapshot);
         let sym = signex_library::Symbol::empty(name);
         editor.file.symbols.push(sym);
         editor.file.updated = chrono::Utc::now();
         editor.active_idx = editor.file.symbols.len() - 1;
-        editor.active_part = 1;
-        editor.selected = None;
-        Self::reset_symbol_viewport(editor);
-        editor.dirty = true;
+        editor.reset_view_for_symbol_switch();
         let path = editor.path.clone();
-        self.document_state.dirty_paths.insert(path.clone());
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
-        }
+        self.document_state.mark_document_dirty(&path);
         self.refresh_panel_ctx();
         true
     }
 
     pub(super) fn sch_library_delete_symbol(&mut self, idx: usize) -> bool {
         let Some(editor) = self.active_symbol_editor_mut() else {
-            tracing::warn!(
-                target: "signex::library",
-                idx,
-                "SCH Library: delete fired without an active Symbol editor"
+            crate::diagnostics::log_warning(
+                "SCH Library: delete fired without an active Symbol editor",
             );
             return true;
         };
         if editor.file.symbols.len() <= 1 {
-            tracing::warn!(
-                target: "signex::library",
-                "SCH Library: refusing to delete the last symbol in the file"
-            );
+            crate::diagnostics::log_warning(format!(
+                "{}: refused to delete the last symbol in the file",
+                editor.path.display()
+            ));
             return true;
         }
         if idx >= editor.file.symbols.len() {
-            tracing::warn!(
-                target: "signex::library",
-                idx,
-                len = editor.file.symbols.len(),
-                "SCH Library: delete index out of range"
-            );
+            crate::diagnostics::log_warning(format!(
+                "{}: symbol delete index {idx} is out of range ({} symbols)",
+                editor.path.display(),
+                editor.file.symbols.len()
+            ));
             return true;
         }
+        // The delete is its own undo step (#760): snapshot the whole
+        // container first so Undo restores the deleted symbol and leaves
+        // the previous edit alone.
+        let snapshot = editor.snapshot();
+        editor.commit_history(snapshot);
         editor.file.symbols.remove(idx);
         editor.file.updated = chrono::Utc::now();
-        // Clamp active_idx into the new range — if the user deleted
-        // the active symbol or one before it, the next-best is the
-        // symbol that took its slot (or the last one if we removed
-        // the tail).
-        if editor.active_idx >= editor.file.symbols.len() {
+        // A sibling before the active one shifted it down a slot: follow
+        // it. Deleting the active symbol lands on the one that took its
+        // slot (or the last, when the tail went).
+        let active_moved = idx <= editor.active_idx;
+        if idx < editor.active_idx {
+            editor.active_idx -= 1;
+        } else if editor.active_idx >= editor.file.symbols.len() {
             editor.active_idx = editor.file.symbols.len() - 1;
         }
-        editor.active_part = 1;
-        editor.selected = None;
-        Self::reset_symbol_viewport(editor);
-        editor.dirty = true;
-        let path = editor.path.clone();
-        self.document_state.dirty_paths.insert(path.clone());
-        if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
-            tab.dirty = true;
+        if active_moved {
+            editor.reset_view_for_symbol_switch();
         }
+        let path = editor.path.clone();
+        self.document_state.mark_document_dirty(&path);
         self.refresh_panel_ctx();
         true
     }
 
-    /// Borrow-mut the active tab's `SymbolEditorState`, if the
+    /// Borrow-mut the active tab's `SymbolDocument`, if the
     /// active tab is a Symbol editor. Returns `None` for any other
     /// tab kind so the SCH Library handlers can exit fast.
-    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolEditorState> {
+    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolDocument> {
         let path = self
             .document_state
             .tabs

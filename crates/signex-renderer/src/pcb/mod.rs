@@ -44,6 +44,8 @@ pub struct ViaInput {
 pub struct PadInput {
     pub center: [f32; 2],
     pub size_mm: [f32; 2],
+    /// Counter-clockwise turn of the pad's own axes (the footprint's rotation).
+    pub rotation_deg: f32,
     pub shape: PadShape,
     pub pad_type: PadType,
 }
@@ -51,6 +53,8 @@ pub struct PadInput {
 #[derive(Clone, Debug)]
 pub struct ZonePolygonInput {
     pub vertices: Vec<[f32; 2]>,
+    /// Cut-outs inside `vertices`; each has at least 3 vertices.
+    pub holes: Vec<Vec<[f32; 2]>>,
     pub rule_area: bool,
     pub net: u32,
     pub priority: u32,
@@ -169,6 +173,10 @@ pub enum PcbAppEvent {
 const FAMILIES_TRACE_EDITED: &[PcbSliceFamily] =
     &[PcbSliceFamily::Traces, PcbSliceFamily::Ratsnest];
 const FAMILIES_VIA_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Vias, PcbSliceFamily::Traces];
+// Traces stay in the set on purpose: a pad edit (size, shape, net) changes
+// where attached trace ends terminate and how they are net-coloured, and
+// the table feeds real `DirtyFlags` (Traces -> LINES), not just an
+// is-empty check. Pads alone would leave stale trace lines on screen.
 const FAMILIES_PAD_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_ZONE_REFILLED: &[PcbSliceFamily] = &[PcbSliceFamily::Zones];
@@ -259,11 +267,14 @@ impl ViewRenderer for PcbRenderer {
 }
 
 #[cfg(test)]
+mod holes_tests;
+
+#[cfg(test)]
 mod tests {
     use super::{
         DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily, PcbSnapshot, RatsnestInput,
-        ZonePolygonInput, dirty_flags_for_event, dirty_flags_for_events, dirty_flags_for_families,
-        sort_zone_stack,
+        TraceInput, ViaInput, ZonePolygonInput, dirty_flags_for_event, dirty_flags_for_events,
+        dirty_flags_for_families, sort_zone_stack,
     };
     use crate::schematic::ViewRenderer;
     use crate::theme::ResolvedTheme;
@@ -412,6 +423,16 @@ mod tests {
     }
 
     #[test]
+    fn drc_markers_resolve_through_drc_slots() {
+        use signex_gfx::style::ColorSlot;
+        assert_eq!(super::emit::drc_slot(Severity::Error), ColorSlot::DrcError);
+        assert_eq!(
+            super::emit::drc_slot(Severity::Warning),
+            ColorSlot::DrcWarning
+        );
+    }
+
+    #[test]
     fn pcb_renderer_updates_each_family_with_matching_dirty_flag() {
         let board = sample_board();
         let snapshot = PcbSnapshot::from_board(&board);
@@ -431,8 +452,112 @@ mod tests {
         PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
         assert_eq!(scene.lines.len(), 1);
         assert_eq!(scene.circles.len(), 1);
-        assert_eq!(scene.polygons.len(), 4);
-        assert_eq!(scene.lines[0].style, 1);
+        assert_eq!(scene.polygons.len() + scene.top_polygons.len(), 4);
+    }
+
+    /// #679: a trace's net number must not leak into the line's dash bit.
+    #[test]
+    fn traces_draw_solid_on_every_net() {
+        let snapshot = PcbSnapshot {
+            traces: (0..4)
+                .map(|net| TraceInput {
+                    p0: [0.0, net as f32],
+                    p1: [5.0, net as f32],
+                    width_mm: 0.25,
+                    net,
+                })
+                .collect(),
+            ..PcbSnapshot::default()
+        };
+        let theme = ResolvedTheme::builtin_default();
+        let mut scene = Scene::default();
+
+        PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::LINES, &mut scene);
+
+        assert_eq!(scene.lines.len(), 4);
+        assert!(scene.lines.iter().all(|line| !line.is_dashed()));
+    }
+
+    /// #681: both renderers centre a ring's stroke on its radius, so the via's
+    /// copper must span exactly drill/2 ..= diameter/2.
+    #[test]
+    fn via_ring_spans_hole_edge_to_outer_edge() {
+        let theme = ResolvedTheme::builtin_default();
+        for (drill_mm, hole_edge) in [(0.3, 0.15), (0.0, 0.0)] {
+            let snapshot = PcbSnapshot {
+                vias: vec![ViaInput {
+                    center: [0.0, 0.0],
+                    diameter_mm: 0.6,
+                    drill_mm,
+                    net: 1,
+                }],
+                ..PcbSnapshot::default()
+            };
+            let mut scene = Scene::default();
+
+            PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::CIRCLES, &mut scene);
+
+            let ring = scene.circles[0];
+            assert!(!ring.is_filled(), "drill {drill_mm}");
+            let half_stroke = ring.stroke_width * 0.5;
+            assert!(
+                (ring.radius + half_stroke - 0.3).abs() < 1e-6,
+                "outer edge, drill {drill_mm}"
+            );
+            assert!(
+                (ring.radius - half_stroke - hole_edge).abs() < 1e-6,
+                "hole edge, drill {drill_mm}"
+            );
+        }
+    }
+
+    /// A drill at or above the via diameter leaves no annulus; the hole clamps
+    /// to the outer edge and the via draws as a filled disc of its diameter.
+    #[test]
+    fn via_without_annulus_draws_a_filled_disc() {
+        let theme = ResolvedTheme::builtin_default();
+        for drill_mm in [0.6, 0.8] {
+            let snapshot = PcbSnapshot {
+                vias: vec![ViaInput {
+                    center: [0.0, 0.0],
+                    diameter_mm: 0.6,
+                    drill_mm,
+                    net: 1,
+                }],
+                ..PcbSnapshot::default()
+            };
+            let mut scene = Scene::default();
+
+            PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::CIRCLES, &mut scene);
+
+            let disc = scene.circles[0];
+            assert!(disc.is_filled(), "drill {drill_mm}");
+            assert!((disc.radius - 0.3).abs() < 1e-6, "drill {drill_mm}");
+        }
+    }
+
+    /// Pads composite above traces, zones and rule areas below them, so they
+    /// must land in different buckets.
+    #[test]
+    fn pads_land_in_the_top_polygon_bucket_and_zones_do_not() {
+        let board = sample_board();
+        let snapshot = PcbSnapshot::from_board(&board);
+        let theme = ResolvedTheme::builtin_default();
+        let mut scene = Scene::default();
+
+        PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
+
+        assert!(!snapshot.pads.is_empty() && !snapshot.zones.is_empty());
+        assert_eq!(scene.top_polygons.len(), snapshot.pads.len());
+        assert_eq!(
+            scene.polygons.len(),
+            snapshot.zones.len() + snapshot.rule_areas.len(),
+            "zones and rule areas stay under the traces"
+        );
+
+        // A second pass replaces both buckets rather than appending.
+        PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
+        assert_eq!(scene.top_polygons.len(), snapshot.pads.len());
     }
 
     #[test]
@@ -493,6 +618,7 @@ mod tests {
     fn pcb_zone_sort_prefers_priority_then_connected_net_for_layer_top() {
         let mut zones = vec![
             ZonePolygonInput {
+                holes: Vec::new(),
                 vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
                 rule_area: false,
                 net: 3,
@@ -502,6 +628,7 @@ mod tests {
                 source_order: 2,
             },
             ZonePolygonInput {
+                holes: Vec::new(),
                 vertices: vec![[2.0, 0.0], [3.0, 0.0], [3.0, 1.0]],
                 rule_area: false,
                 net: 0,
@@ -511,6 +638,7 @@ mod tests {
                 source_order: 1,
             },
             ZonePolygonInput {
+                holes: Vec::new(),
                 vertices: vec![[4.0, 0.0], [5.0, 0.0], [5.0, 1.0]],
                 rule_area: false,
                 net: 5,

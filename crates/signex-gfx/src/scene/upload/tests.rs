@@ -6,6 +6,7 @@ use super::{
 use crate::primitive::arc::Arc;
 use crate::primitive::circle::Circle;
 use crate::primitive::line::LineSegment;
+use crate::primitive::ordered::OrderedItem;
 use crate::primitive::polygon::GpuPolygon;
 use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use crate::scene::{DirtyFlags, Scene};
@@ -19,6 +20,10 @@ struct MockUploadTarget {
     uploaded_circles: usize,
     uploaded_arcs: usize,
     uploaded_polygons: usize,
+    uploaded_top_polygons: usize,
+    uploaded_drawings: usize,
+    uploaded_drawings_front: usize,
+    uploaded_drawing_items: Vec<OrderedItem>,
     uploaded_texts: usize,
     uploaded_overlay_lines: usize,
     uploaded_overlay_circles: usize,
@@ -55,6 +60,20 @@ impl SceneUploadTarget for MockUploadTarget {
     fn upload_polygons(&mut self, _polygons: &[GpuPolygon]) {
         self.uploaded_polygons = _polygons.len();
         self.calls.polygon_uploads += 1;
+    }
+
+    fn upload_top_polygons(&mut self, polygons: &[GpuPolygon]) {
+        self.uploaded_top_polygons = polygons.len();
+    }
+
+    fn upload_drawings(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings = drawings.len();
+        self.uploaded_drawing_items = drawings.to_vec();
+        self.calls.drawing_uploads += 1;
+    }
+
+    fn upload_drawings_front(&mut self, drawings: &[OrderedItem]) {
+        self.uploaded_drawings_front = drawings.len();
     }
 
     fn upload_texts(
@@ -138,6 +157,7 @@ fn fixture_scene() -> Scene {
         _pad: [0.0; 3],
     });
     scene.polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]],
         fill_color: [0.2, 0.2, 0.8, 1.0],
         stroke_color: None,
@@ -153,6 +173,7 @@ fn fixture_scene() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
     scene.overlay_lines.push(LineSegment {
         p0: [3.0, 3.0],
@@ -169,6 +190,7 @@ fn fixture_scene() -> Scene {
         color: [0.2, 0.9, 0.9, 1.0],
     });
     scene.overlay_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[2.0, 2.0], [3.0, 2.0], [2.5, 3.0]],
         fill_color: [0.4, 0.6, 1.0, 0.3],
         stroke_color: Some([0.4, 0.6, 1.0, 1.0]),
@@ -189,6 +211,7 @@ fn fixture_scene() -> Scene {
         color: [0.95, 0.35, 0.35, 1.0],
     });
     scene.erc_marker_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[4.8, 4.7], [5.2, 4.7], [5.0, 5.2]],
         fill_color: [0.95, 0.35, 0.35, 0.3],
         stroke_color: Some([0.95, 0.35, 0.35, 1.0]),
@@ -225,6 +248,7 @@ fn fixture_scene_with_far_geometry() -> Scene {
         _pad: [0.0; 3],
     });
     scene.polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[150.0, 150.0], [151.0, 150.0], [150.5, 151.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -240,6 +264,7 @@ fn fixture_scene_with_far_geometry() -> Scene {
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     });
 
     scene.overlay_lines.push(LineSegment {
@@ -257,6 +282,7 @@ fn fixture_scene_with_far_geometry() -> Scene {
         color: [1.0, 0.0, 0.0, 1.0],
     });
     scene.overlay_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[190.0, 190.0], [191.0, 190.0], [190.5, 191.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -278,6 +304,7 @@ fn fixture_scene_with_far_geometry() -> Scene {
         color: [1.0, 0.0, 0.0, 1.0],
     });
     scene.erc_marker_polygons.push(GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[220.0, 220.0], [221.0, 220.0], [220.5, 221.0]],
         fill_color: [1.0, 0.0, 0.0, 1.0],
         stroke_color: None,
@@ -363,6 +390,7 @@ fn all_dirty_flags_trigger_each_category_once() {
     assert_eq!(counters.circle_uploads, 1);
     assert_eq!(counters.arc_uploads, 1);
     assert_eq!(counters.polygon_uploads, 1);
+    assert_eq!(counters.drawing_uploads, 1);
     assert_eq!(counters.text_uploads, 1);
     assert_eq!(counters.grid_refreshes, 1);
     assert_eq!(counters.overlay_line_uploads, 1);
@@ -372,7 +400,7 @@ fn all_dirty_flags_trigger_each_category_once() {
     assert_eq!(counters.erc_marker_circle_uploads, 1);
     assert_eq!(counters.erc_marker_polygon_uploads, 1);
     assert_eq!(counters.theme_refreshes, 1);
-    assert_eq!(counters.total_updates(), 13);
+    assert_eq!(counters.total_updates(), 14);
 }
 
 #[test]
@@ -503,4 +531,61 @@ fn theme_dirty_can_coexist_with_geometry_updates() {
     assert_eq!(counters.line_uploads, 1);
     assert_eq!(counters.total_updates(), 2);
     assert_eq!(target.uploaded_lines, 1);
+}
+
+/// Culling must drop what is off-screen without reordering what is left: the
+/// bucket's whole point is paint order (#1579).
+#[test]
+fn viewport_culling_keeps_drawings_in_list_order() {
+    let circle_at = |x: f32, stroke_width: f32| {
+        OrderedItem::Circle(Circle {
+            center: [x, 0.0],
+            radius: 0.5,
+            stroke_width,
+            color: [1.0; 4],
+        })
+    };
+    let line_at = |x: f32| {
+        OrderedItem::Line(LineSegment {
+            p0: [x, 0.0],
+            p1: [x + 1.0, 0.0],
+            width: 0.1,
+            color: [1.0; 4],
+            style: 0,
+            _pad: 0,
+        })
+    };
+    let scene = Scene {
+        drawings: vec![
+            circle_at(1.0, 0.0),
+            line_at(100.0),
+            circle_at(1.0, 0.2),
+            line_at(2.0),
+            circle_at(-100.0, 0.0),
+        ],
+        ..Scene::default()
+    };
+
+    let mut target = MockUploadTarget::default();
+    let counters = apply_dirty_uploads_with_culling(
+        &scene,
+        DirtyFlags::DRAWINGS,
+        &mut target,
+        TextUploadParams::default(),
+        UploadCulling::viewport(ViewportAabbMm::new([0.0, -2.0], [5.0, 2.0])),
+    )
+    .expect("no text to fail");
+
+    assert_eq!(counters.drawing_uploads, 1);
+    let kept: Vec<_> = target
+        .uploaded_drawing_items
+        .iter()
+        .map(|item| match item {
+            OrderedItem::Circle(c) if c.stroke_width == 0.0 => "fill",
+            OrderedItem::Circle(_) => "ring",
+            OrderedItem::Line(_) => "line",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(kept, ["fill", "ring", "line"]);
 }

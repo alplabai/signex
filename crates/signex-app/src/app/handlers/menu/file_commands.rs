@@ -19,25 +19,31 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::Opened(p)),
             )),
-            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
-            MenuMessage::SaveAs => Some(Task::perform(
+            MenuMessage::OpenRecentProject(path) => {
+                Some(self.handle_open_recent_project(path.clone()))
+            }
+            MenuMessage::ClearRecentProjects => Some(self.handle_clear_recent_projects()),
+            MenuMessage::ImportAltium => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
-                        .set_title("Save Schematic As")
-                        .add_filter("Signex Schematic", &["snxsch"])
-                        .save_file()
+                        .set_title("Import Altium Project")
+                        .add_filter("Altium Design", &["PrjPcb", "SchDoc", "PcbDoc"])
+                        .add_filter("Altium Library", &["SchLib", "PcbLib"])
+                        .add_filter("All files", &["*"])
+                        .pick_file()
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                |path| {
-                    path.map(|p| Message::File(FileMsg::SaveAs(p)))
-                        .unwrap_or(Message::Noop)
-                },
+                |p| Message::File(FileMsg::AltiumImportPicked(p)),
             )),
+            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
+            MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
             MenuMessage::NewProject => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
-                        .set_title("New Signex Project")
+                        .set_title(
+                            "New Signex Project (a folder named after the project is created)",
+                        )
                         .set_file_name("Untitled.snxprj")
                         .add_filter("Signex Project", &["snxprj"])
                         .save_file()
@@ -46,12 +52,11 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::NewProject(p)),
             )),
-            MenuMessage::PrintPreview => {
-                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
-            }
+            MenuMessage::OpenSampleProject => Some(self.handle_open_sample_project()),
             MenuMessage::ExportPdf => Some(self.update(Message::Export(ExportMsg::PdfOpenDialog))),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
+            MenuMessage::ExportErcReport => Some(self.handle_erc_report_requested()),
             MenuMessage::Exit => Some(self.update(Message::Window(WindowMsg::CloseMainWindow))),
             MenuMessage::LibraryOpenLibrary => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::OpenLibraryDialog,
@@ -59,9 +64,6 @@ impl Signex {
             MenuMessage::LibraryPlaceComponent => {
                 Some(self.update(Message::Library(crate::library::LibraryMessage::OpenPicker)))
             }
-            MenuMessage::LibraryNewComponent => Some(self.update(Message::Library(
-                crate::library::LibraryMessage::NewComponent,
-            ))),
             MenuMessage::AddComponentLibrary => {
                 let path = self.document_state.active_project.and_then(|id| {
                     self.document_state
@@ -180,15 +182,18 @@ impl Signex {
             .interaction_state
             .project_tree_context_menu
             .as_ref()
-            .and_then(|m| m.path.clone())
-        {
+            .and_then(|m| m.key.as_deref())
+            .and_then(|key| {
+                signex_widgets::tree_view::resolve_path(
+                    self.document_state.panel_ctx.project_tree.as_slice(),
+                    key,
+                )
+            }) {
             Some(p) if !p.is_empty() => p,
             _ => {
-                tracing::warn!(
-                    target: "signex::library",
-                    ?kind,
-                    "Add Library primitive: no project node in context menu state"
-                );
+                crate::diagnostics::log_warning(format!(
+                    "Add {kind:?} library: the project node the menu was opened on no longer exists"
+                ));
                 return Task::none();
             }
         };
@@ -217,168 +222,49 @@ impl Signex {
             }
         }
     }
-
-    /// Pick a path under `<root>/symbols/` that doesn't collide with
-    /// an existing file on disk OR an in-memory editor tab. Tries
-    /// `<base>.snxsym` first, then `<base>-2.snxsym`, `<base>-3`, etc.
-    fn unique_new_symbol_path(&self, root: &std::path::Path, base: &str) -> std::path::PathBuf {
-        let dir = root.join("symbols");
-        let mut name = format!("{base}.snxsym");
-        let mut path = dir.join(&name);
-        if !self.path_in_use(&path) {
-            return path;
-        }
-        for n in 2..=999 {
-            name = format!("{base}-{n}.snxsym");
-            path = dir.join(&name);
-            if !self.path_in_use(&path) {
-                return path;
-            }
-        }
-        // 999 collisions is silly — fall through with the last
-        // candidate; the user will see it overwrite something obvious.
-        path
-    }
-
-    /// Counterpart to `unique_new_symbol_path` for footprints.
-    fn unique_new_footprint_path(&self, root: &std::path::Path, base: &str) -> std::path::PathBuf {
-        let dir = root.join("footprints");
-        let mut name = format!("{base}.snxfpt");
-        let mut path = dir.join(&name);
-        if !self.path_in_use(&path) {
-            return path;
-        }
-        for n in 2..=999 {
-            name = format!("{base}-{n}.snxfpt");
-            path = dir.join(&name);
-            if !self.path_in_use(&path) {
-                return path;
-            }
-        }
-        path
-    }
-
-    fn path_in_use(&self, path: &std::path::Path) -> bool {
-        path.exists()
-            || self.document_state.symbol_editors.contains_key(path)
-            || self.document_state.footprint_editors.contains_key(path)
-    }
-
-    /// Open `file` as a new in-memory `.snxsym` editor tab at `path`.
-    /// The file does NOT exist on disk yet — `dirty` is set so the
-    /// next user-Save writes it via the standard `save_primitive_tab_at`
-    /// path (which `atomic_write`s, creating the parent dirs). Mirrors
-    /// the disk-loading branch of `handle_open_primitive` minus the
-    /// `std::fs::read` step.
-    fn handle_open_new_symbol_in_memory(
-        &mut self,
-        path: std::path::PathBuf,
-        file: signex_library::SymbolFile,
-    ) {
-        let title = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| {
-                if !file.display_name.is_empty() {
-                    file.display_name.clone()
-                } else {
-                    file.symbols[0].name.clone()
-                }
-            });
-        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-
-        let mut state = crate::app::SymbolEditorState::new(path.clone(), file);
-        state.dirty = true;
-        self.document_state
-            .symbol_editors
-            .insert(path.clone(), state);
-        // Track the dirty path so the project-close prompt picks it up
-        // alongside other unsaved tabs.
-        self.document_state.dirty_paths.insert(path.clone());
-
-        self.park_active_schematic_session();
-        self.document_state.tabs.push(crate::app::TabInfo {
-            title,
-            path: path.clone(),
-            cached_document: None,
-            dirty: true,
-            project_id,
-            kind: crate::app::TabKind::SymbolEditor(path),
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
-        self.document_state.active_path = None;
-        self.refresh_panel_ctx();
-    }
-
-    /// Footprint counterpart to `handle_open_new_symbol_in_memory`.
-    fn handle_open_new_footprint_in_memory(
-        &mut self,
-        path: std::path::PathBuf,
-        primitive: signex_library::Footprint,
-    ) {
-        let title = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| primitive.name.clone());
-        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-
-        // v0.18.6 — wrap into a FootprintFile envelope so the editor
-        // can save through the same multi-footprint path as the
-        // disk-loaded flow.
-        let file = signex_library::FootprintFile::from_footprint(primitive);
-        // HI-23: same snap-state seeding as the open-from-disk path.
-        let mut state = crate::app::FootprintEditorState::new(path.clone(), file)
-            .with_global_snap_disabled(!self.ui_state.snap_enabled);
-        state.dirty = true;
-        self.document_state
-            .footprint_editors
-            .insert(path.clone(), state);
-        self.document_state.dirty_paths.insert(path.clone());
-
-        self.park_active_schematic_session();
-        self.document_state.tabs.push(crate::app::TabInfo {
-            title,
-            path: path.clone(),
-            cached_document: None,
-            dirty: true,
-            project_id,
-            kind: crate::app::TabKind::FootprintEditor(path),
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
-        self.document_state.active_path = None;
-        self.refresh_panel_ctx();
-    }
 }
 
-/// Walk `<library_root>/symbols/*.snxsym` and return the path of the
-/// first file whose `SymbolFile` container holds the given symbol uuid.
-/// Used by `Add New ▸ Symbol` to discover where the adapter wrote the
-/// fresh symbol — the adapter slugifies `Symbol::name` so we can't
-/// predict the filename ahead of time. Returns `None` when no file
-/// owns the uuid (caller falls back to a best-guess path for the
-/// editor tab; the open-primitive flow will then error with a
-/// `tracing::warn` instead of crashing).
-fn find_symbol_file_for_uuid(
-    library_root: &std::path::Path,
-    uuid: uuid::Uuid,
-) -> Option<std::path::PathBuf> {
-    let dir = library_root.join("symbols");
-    let entries = std::fs::read_dir(&dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) != Some("snxsym") {
-            continue;
-        }
-        let bytes = match std::fs::read(&path) {
-            Ok(b) => b,
-            Err(_) => continue,
-        };
-        // v0.18.4 — auto-detect TOML vs legacy JSON.
-        if let Ok(file) = signex_library::SymbolFile::from_bytes(&bytes)
-            && file.symbols.iter().any(|s| s.uuid == uuid)
-        {
-            return Some(path);
+impl Signex {
+    /// Pick the Save As dialog by the active tab's document kind (#671).
+    /// Kinds without Save As log a message and open nothing.
+    fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {
+        let kind = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| tab.kind.clone());
+        match kind {
+            Some(TabKind::Schematic) => {
+                let from_path = self.active_tab_path().unwrap_or_default();
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Save Schematic As")
+                            .add_filter("Signex Schematic", &["snxsch"])
+                            .save_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    move |path| {
+                        path.map(|to_path| {
+                            Message::File(FileMsg::SaveAs {
+                                from_path: from_path.clone(),
+                                to_path,
+                            })
+                        })
+                        .unwrap_or(Message::noop())
+                    },
+                )
+            }
+            Some(TabKind::SymbolEditor(path)) | Some(TabKind::FootprintEditor(path)) => {
+                super::super::document_files::spawn_save_as_for_primitive(path)
+            }
+            _ => {
+                crate::diagnostics::log_warning(
+                    "[save-as] Save As is not supported for the active tab",
+                );
+                Task::none()
+            }
         }
     }
-    None
 }

@@ -30,6 +30,14 @@ pub enum DslError {
         target: String,
     },
 
+    #[error("duplicate rule id '{rule}' at {start}:{end}; rule ids must be unique")]
+    DuplicateRuleId {
+        rule: String,
+        /// Byte span of the second definition's id.
+        start: usize,
+        end: usize,
+    },
+
     #[error("rule '{rule}': unknown predicate '{predicate}'")]
     UnknownPredicate { rule: String, predicate: String },
 
@@ -47,6 +55,17 @@ pub enum DslError {
         expected: usize,
         got: usize,
     },
+
+    #[error("rule '{rule}': unknown pin kind '{value}'")]
+    UnknownPinKind { rule: String, value: String },
+
+    /// A construct the grammar accepts but the engine cannot honour yet.
+    /// Rejected rather than silently ignored, so a scoped rule never runs
+    /// everywhere without the author knowing (#835).
+    #[error(
+        "rule '{rule}': {feature} is not supported yet; remove it or the rule cannot be loaded"
+    )]
+    Unsupported { rule: String, feature: String },
 
     // ── Compiler errors ────────────────────────────────────────────────────
     #[error("rule '{rule}': invalid regex pattern '{pattern}': {source}")]

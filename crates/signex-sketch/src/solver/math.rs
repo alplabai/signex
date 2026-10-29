@@ -188,9 +188,9 @@ pub fn matmul_ata(a: &[Vec<f64>]) -> Vec<Vec<f64>> {
     for j in 0..n {
         for k in j..n {
             let mut sum = 0.0;
-            for i in 0..m {
-                debug_assert_eq!(a[i].len(), n, "matmul_ata: ragged matrix");
-                sum += a[i][j] * a[i][k];
+            for row in a {
+                debug_assert_eq!(row.len(), n, "matmul_ata: ragged matrix");
+                sum += row[j] * row[k];
             }
             gram[j][k] = sum;
             if j != k {
@@ -204,8 +204,8 @@ pub fn matmul_ata(a: &[Vec<f64>]) -> Vec<Vec<f64>> {
 /// In-place diagonal add: `A[i][i] += λ` for all `i`. Used by LM to
 /// damp the normal-equation matrix.
 pub fn add_diag(a: &mut [Vec<f64>], lambda: f64) {
-    for i in 0..a.len() {
-        a[i][i] += lambda;
+    for (i, row) in a.iter_mut().enumerate() {
+        row[i] += lambda;
     }
 }
 
@@ -325,9 +325,9 @@ mod tests {
             vec![3.0, -2.0, 1.0],
         ];
         let g = matmul_ata(&a);
-        for i in 0..3 {
-            for j in 0..3 {
-                assert!(approx_eq(g[i][j], g[j][i], EPS));
+        for (i, row) in g.iter().enumerate() {
+            for (j, &val) in row.iter().enumerate() {
+                assert!(approx_eq(val, g[j][i], EPS));
             }
         }
     }

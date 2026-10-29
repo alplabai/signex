@@ -1,39 +1,40 @@
 //! Settings → Library → Distributor APIs panel.
 //!
-//! Spec (v0.9-library-plan.md §14a.2):
-//!
-//! - DigiKey: OAuth2 PKCE — Phase 1 stubs the connect button.
-//! - Mouser: API key in keyring — Phase 1 takes the user's key in
-//!   memory + a Test button.
+//! - DigiKey: OAuth2 PKCE via the Connect button (see `digikey_oauth`);
+//!   client id/secret come from `SIGNEX_DIGIKEY_CLIENT_ID` /
+//!   `SIGNEX_DIGIKEY_CLIENT_SECRET`, tokens are kept in the keyring.
+//! - Mouser: API key field + a Test button; a verified key is saved to the keyring.
 //! - LCSC, JLCPCB: no key required.
-//! - Order-of-preference list — Phase 1 holds it in memory only.
+//! - Order-of-preference list — persisted to `distributors.toml`
+//!   (see `persistence`).
 
 use iced::widget::{Space, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
+
+use crate::styles::{HAIRLINE, Spacing, TypeScale};
 use signex_widgets::theme_ext;
 
 use super::super::messages::{LibraryMessage, SettingsMsg};
+use super::super::modal_chrome::{primary_btn, secondary_btn};
 use super::super::state::DistributorSettings;
 
 /// Render the Distributor APIs panel. Mounts inside the existing
 /// Preferences modal under a Library section.
-///
-/// Phase 1 ships this panel; Phase 2 wires it into the
-/// `crate::preferences` modal as a dedicated pref pane.
-#[allow(dead_code)]
 pub fn view<'a>(
     settings: &'a DistributorSettings,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    let ts = TypeScale::default();
+    let sp = Spacing::default();
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    let hover = crate::styles::ti(tokens.hover);
+    let hover_bg = crate::styles::tokens::hover_overlay(tokens);
 
     let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
-        text(title).size(11).color(muted).into()
+        text(title).size(ts.body).color(muted).into()
     };
 
     // ── DigiKey ──────────────────────────────────────────────
@@ -51,34 +52,34 @@ pub fn view<'a>(
         _ => "Not connected".to_string(),
     };
     let mut digikey_actions =
-        row![text(digikey_status).size(11).color(text_c)].align_y(iced::Alignment::Center);
+        row![text(digikey_status).size(ts.body).color(text_c)].align_y(iced::Alignment::Center);
     digikey_actions = digikey_actions.push(Space::new().width(Length::Fill));
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
             "Cancel",
             LibraryMessage::Settings(SettingsMsg::DigiKeyCancel),
-            text_c,
-            border,
+            tokens,
         ));
     } else {
         digikey_actions = digikey_actions.push(primary_btn(
             "Connect via OAuth",
             LibraryMessage::Settings(SettingsMsg::DigiKeyConnect),
+            tokens,
         ));
     }
     let digikey_section = column![
         section_title("DigiKey"),
-        Space::new().height(4),
+        Space::new().height(sp.s),
         digikey_actions,
-        Space::new().height(4),
+        Space::new().height(sp.s),
         text(
             "OAuth2 PKCE flow — opens your browser, then stores the refresh token in the OS \
              keyring. Set SIGNEX_DIGIKEY_CLIENT_ID + SIGNEX_DIGIKEY_CLIENT_SECRET first."
         )
-        .size(10)
+        .size(ts.caption)
         .color(muted),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
     // ── Mouser ──────────────────────────────────────────────
     // The text_input must be bound to the real `mouser_api_key_buf` —
@@ -93,92 +94,77 @@ pub fn view<'a>(
         .unwrap_or_else(|| "Not tested".to_string());
     let mouser_section = column![
         section_title("Mouser"),
-        Space::new().height(4),
+        Space::new().height(sp.s),
         row![
             text("API Key")
-                .size(11)
+                .size(ts.body)
                 .color(text_c)
                 .width(Length::Fixed(96.0)),
             text_input("Paste API key…", &settings.mouser_api_key_buf)
                 .secure(true)
                 .on_input(|s| LibraryMessage::Settings(SettingsMsg::MouserApiKeyChanged(s)))
-                .padding([4, 8])
-                .size(12),
-            Space::new().width(8),
-            primary_btn("Test", LibraryMessage::Settings(SettingsMsg::MouserTest)),
+                .padding([sp.s, sp.m])
+                .size(ts.label),
+            Space::new().width(sp.m),
+            primary_btn(
+                "Test",
+                LibraryMessage::Settings(SettingsMsg::MouserTest),
+                tokens
+            ),
         ]
         .align_y(iced::Alignment::Center),
-        Space::new().height(4),
-        text(mouser_test_status).size(10).color(muted),
+        Space::new().height(sp.s),
+        text(mouser_test_status).size(ts.caption).color(muted),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
     // ── LCSC + JLCPCB ──────────────────────────────────────
     let no_key_section = column![
         section_title("LCSC, JLCPCB"),
-        Space::new().height(4),
-        text("(no key required)").size(11).color(text_c),
+        Space::new().height(sp.s),
+        text("(no key required)").size(ts.body).color(text_c),
     ]
-    .spacing(2);
+    .spacing(sp.xs);
 
     // ── Preference order ───────────────────────────────────
-    let mut order_col =
-        column![section_title("Order of Preference"), Space::new().height(4)].spacing(2);
+    let mut order_col = column![
+        section_title("Order of Preference"),
+        Space::new().height(sp.s)
+    ]
+    .spacing(sp.xs);
     let len = settings.preferred_order.len();
     for (i, src) in settings.preferred_order.iter().enumerate() {
         let label = distributor_label(*src);
         let up_enabled = i > 0;
         let down_enabled = i + 1 < len;
-        let mut up_btn = button(container(text("▲").size(10).color(text_c)).padding([1, 6]))
-            .padding(0)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+        let mut up_btn =
+            button(container(text("▲").size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
+                .padding(0)
+                .style(crate::styles::outline_button(tokens));
         if up_enabled {
             up_btn = up_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceUp(*src)));
         }
-        let mut down_btn = button(container(text("▼").size(10).color(text_c)).padding([1, 6]))
-            .padding(0)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            });
+        let mut down_btn =
+            button(container(text("▼").size(ts.caption).color(text_c)).padding([sp.xs, sp.s]))
+                .padding(0)
+                .style(crate::styles::outline_button(tokens));
         if down_enabled {
             down_btn =
                 down_btn.on_press(LibraryMessage::Settings(SettingsMsg::PreferenceDown(*src)));
         }
         let row_widget = row![
             text(format!("{}.  {}", i + 1, label))
-                .size(11)
+                .size(ts.body)
                 .color(text_c)
                 .width(Length::Fill),
             up_btn,
-            Space::new().width(4),
+            Space::new().width(sp.s),
             down_btn,
         ]
-        .padding([3, 6])
+        .padding([sp.xs, sp.s])
         .align_y(iced::Alignment::Center);
         let bg_row = container(row_widget).style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                hover.r, hover.g, hover.b, 0.06,
-            ))),
+            background: Some(iced::Background::Color(hover_bg)),
             border: Border {
                 width: 1.0,
                 radius: 3.0.into(),
@@ -193,7 +179,7 @@ pub fn view<'a>(
             "Saved to <config_dir>/signex/distributors.toml. The first matching adapter is \
              tried first when you paste a distributor URL into the Supply tab.",
         )
-        .size(10)
+        .size(ts.caption)
         .color(muted),
     );
     // A failed save must be visible here and now — otherwise the reorder
@@ -201,8 +187,8 @@ pub fn view<'a>(
     if let Some(error) = settings.preferred_order_error.as_deref() {
         order_col = order_col.push(
             text(format!("Could not save the order: {error}"))
-                .size(10)
-                .color(iced::Color::from_rgb(0.90, 0.40, 0.40)),
+                .size(ts.caption)
+                .color(crate::styles::tokens::danger(tokens)),
         );
     }
 
@@ -216,15 +202,14 @@ pub fn view<'a>(
             divider(border),
             order_col,
         ]
-        .spacing(12)
+        .spacing(sp.l)
         .width(Length::Fill),
     )
-    .padding(14)
+    .padding(sp.l)
     .style(crate::styles::modal_card(tokens))
     .into()
 }
 
-#[allow(dead_code)]
 fn distributor_label(src: DistributorSource) -> &'static str {
     match src {
         DistributorSource::DigiKey => "DigiKey",
@@ -237,55 +222,11 @@ fn distributor_label(src: DistributorSource) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
-    container(Space::new().height(1).width(Length::Fill))
+    container(Space::new().height(HAIRLINE).width(Length::Fill))
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(color)),
             ..Default::default()
-        })
-        .into()
-}
-
-#[allow(dead_code)]
-fn primary_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
-    button(container(text(label.to_string()).size(11).color(iced::Color::WHITE)).padding([4, 12]))
-        .on_press(message)
-        .style(|_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgb(
-                0.00, 0.47, 0.84,
-            ))),
-            text_color: iced::Color::WHITE,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
-}
-
-#[allow(dead_code)]
-fn secondary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    text_c: iced::Color,
-    border: iced::Color,
-) -> Element<'a, LibraryMessage> {
-    button(container(text(label.to_string()).size(11).color(text_c)).padding([4, 12]))
-        .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
         })
         .into()
 }

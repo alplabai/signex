@@ -8,10 +8,14 @@ use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use crate::app::FootprintEditorState;
+use crate::app::FootprintDocument;
 use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 // ── Footprint ───────────────────────────────────────────────────────
 
@@ -23,10 +27,9 @@ use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, Pr
 /// view tree for them is reused via the Component Editor surface.
 /// Pure pad-layout standalone editing is what `.snxfpt` needs first.
 pub fn view_footprint<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
-    theme_id: signex_types::theme::ThemeId,
-    custom_filter_presets: &'a [crate::active_bar::CustomFilterPreset],
+    _theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -73,9 +76,8 @@ pub fn view_footprint<'a>(
     // the schematic's window-absolute coordinate system. The body
     // here renders just canvas + layers strip + footer; the bar
     // (and its dropdown overlay) is layered on top in
-    // `view_main_for`. `custom_filter_presets` is unused here now
-    // but kept on the signature for backwards compat with callers.
-    let _ = custom_filter_presets;
+    // `view_main_for`, which is where the Selection Filter presets
+    // are consumed — this view no longer takes them.
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
@@ -110,9 +112,12 @@ pub fn view_footprint<'a>(
 /// mode. Hosts the mode segmented control + Save button. Stays the
 /// same height across mode switches so the active bar's vertical
 /// position is constant.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_top_strip<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
@@ -130,7 +135,7 @@ fn view_footprint_top_strip<'a>(
             let label_color = if active { iced::Color::WHITE } else { text_c };
             button(
                 text(label)
-                    .size(11)
+                    .size(TS.body)
                     .color(label_color)
                     .align_x(iced::alignment::Horizontal::Center),
             )
@@ -159,7 +164,7 @@ fn view_footprint_top_strip<'a>(
 
     let mode = editor.state.mode;
     let mode_segments = row![
-        text("Mode").size(11).color(muted),
+        text("Mode").size(TS.body).color(muted),
         Space::new().width(6),
         mode_segment(
             "Pads",
@@ -173,16 +178,16 @@ fn view_footprint_top_strip<'a>(
         ),
         mode_segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d)),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .align_y(iced::Alignment::Center);
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
+            .size(TS.body)
             .color(text_c),
     )
-    .padding([5, 12])
+    .padding([5.0, SP.l])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -206,8 +211,8 @@ fn view_footprint_top_strip<'a>(
     } else {
         "Auto-fit Courtyard"
     };
-    let auto_fit_btn = button(text(auto_fit_label).size(11).color(text_c))
-        .padding([5, 12])
+    let auto_fit_btn = button(text(auto_fit_label).size(TS.body).color(text_c))
+        .padding([5.0, SP.l])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
@@ -224,14 +229,28 @@ fn view_footprint_top_strip<'a>(
             ..iced::widget::button::Style::default()
         });
 
+    // A copy of a stock footprint can be made again from the editor (#813).
+    let copy_again: Element<'a, LibraryMessage> = if editor.file.copied_from.is_some() {
+        crate::library::modal_chrome::secondary_btn(
+            "Copy Again",
+            LibraryMessage::StockCopy(
+                crate::library::stock_copy::StockCopyMsg::CopyAgainRequested(editor.path.clone()),
+            ),
+            tokens,
+        )
+    } else {
+        Space::new().into()
+    };
+
     let row_widget = row![
         mode_segments,
         Space::new().width(Length::Fill),
+        copy_again,
         auto_fit_btn,
         Space::new().width(8),
         save_btn,
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center);
 
     container(row_widget)
@@ -249,7 +268,7 @@ fn view_footprint_top_strip<'a>(
 /// editor; moving them below the canvas keeps the top compact and
 /// matches Altium's bottom-of-canvas layer tab pattern.
 fn view_footprint_layers_strip<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -258,8 +277,8 @@ fn view_footprint_layers_strip<'a>(
 
     let layers = editor.state.layer_visibility;
 
-    let mut row_widget = row![text("Layers").size(10).color(muted)]
-        .spacing(4)
+    let mut row_widget = row![text("Layers").size(TS.caption).color(muted)]
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center);
 
     for layer in FpLayer::ORDER {
@@ -270,7 +289,7 @@ fn view_footprint_layers_strip<'a>(
         let layer_standard = layer.standard_name().to_string();
         let pill = button(
             row![
-                container(text("").size(10))
+                container(text("").size(TS.caption))
                     .width(Length::Fixed(8.0))
                     .height(Length::Fixed(8.0))
                     .style(move |_: &Theme| iced::widget::container::Style {
@@ -282,7 +301,7 @@ fn view_footprint_layers_strip<'a>(
                         },
                         ..iced::widget::container::Style::default()
                     }),
-                text(layer.label()).size(10).color(label_color),
+                text(layer.label()).size(TS.caption).color(label_color),
             ]
             .spacing(5)
             .align_y(iced::Alignment::Center),
@@ -324,15 +343,18 @@ fn view_footprint_layers_strip<'a>(
                 .scroller_width(0),
         )),
     )
-    .padding([4, 10])
+    .padding([SP.s, 10.0])
     .width(Length::Fill)
     .style(crate::styles::tab_bar_strip(tokens))
     .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_sketch_toolbar<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
@@ -344,13 +366,13 @@ fn view_footprint_sketch_toolbar<'a>(
     let exit_path = editor.path.clone();
     let exit_btn = button(
         row![
-            text("\u{2715}").size(11).color(text_c),
+            text("\u{2715}").size(TS.body).color(text_c),
             Space::new().width(4),
-            text("Exit Sketch").size(11).color(text_c),
+            text("Exit Sketch").size(TS.body).color(text_c),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 10])
+    .padding([SP.s, 10.0])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: exit_path,
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(EditorMode::Normal)),
@@ -369,11 +391,11 @@ fn view_footprint_sketch_toolbar<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
+            .size(TS.body)
             .color(text_c),
     )
-    .padding([4, 10])
+    .padding([SP.s, 10.0])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -391,15 +413,17 @@ fn view_footprint_sketch_toolbar<'a>(
     });
 
     let row_widget = row![
-        text("Sketch").size(13).color(text_c),
-        text("·").size(13).color(muted),
-        text("authoring parametric geometry").size(11).color(muted),
+        text("Sketch").size(TS.title).color(text_c),
+        text("·").size(TS.title).color(muted),
+        text("authoring parametric geometry")
+            .size(TS.body)
+            .color(muted),
         Space::new().width(Length::Fill),
         save_btn,
         Space::new().width(8),
         exit_btn,
     ]
-    .spacing(8)
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center);
 
     container(row_widget)
@@ -408,9 +432,12 @@ fn view_footprint_sketch_toolbar<'a>(
         .into()
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "standalone footprint chrome superseded by the Active Bar; kept for one migration cycle"
+)]
 fn view_footprint_toolbar<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -420,7 +447,7 @@ fn view_footprint_toolbar<'a>(
     let layers = editor.state.layer_visibility;
     let auto_fit_on = editor.state.auto_fit_courtyard;
 
-    let mut row_widget = row![text("Layers:").size(11).color(muted)]
+    let mut row_widget = row![text("Layers:").size(TS.body).color(muted)]
         .spacing(6)
         .align_y(iced::Alignment::Center);
 
@@ -432,7 +459,7 @@ fn view_footprint_toolbar<'a>(
         let layer_standard = layer.standard_name().to_string();
         let pill = button(
             row![
-                container(text("").size(11))
+                container(text("").size(TS.body))
                     .width(Length::Fixed(8.0))
                     .height(Length::Fixed(8.0))
                     .style(move |_: &Theme| iced::widget::container::Style {
@@ -444,12 +471,12 @@ fn view_footprint_toolbar<'a>(
                         },
                         ..iced::widget::container::Style::default()
                     }),
-                text(layer.label()).size(11).color(label_color),
+                text(layer.label()).size(TS.body).color(label_color),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
         )
-        .padding([3, 8])
+        .padding([3.0, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: toggle_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
@@ -484,8 +511,8 @@ fn view_footprint_toolbar<'a>(
     } else {
         "Auto-fit Courtyard"
     };
-    let auto_fit_btn = button(text(auto_fit_label).size(11).color(text_c))
-        .padding([3, 8])
+    let auto_fit_btn = button(text(auto_fit_label).size(TS.body).color(text_c))
+        .padding([3.0, SP.m])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
@@ -504,11 +531,11 @@ fn view_footprint_toolbar<'a>(
 
     let save_path = editor.path.clone();
     let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
+        text(if editor.is_dirty() { "Save *" } else { "Save" })
+            .size(TS.body)
             .color(text_c),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
         msg: PrimitiveEdit::Save,
@@ -534,8 +561,8 @@ fn view_footprint_toolbar<'a>(
                      active: bool| {
         let path = editor.path.clone();
         let label_color = if active { text_c } else { muted };
-        button(text(label).size(11).color(label_color))
-            .padding([3, 8])
+        button(text(label).size(TS.body).color(label_color))
+            .padding([3.0, SP.m])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
@@ -560,7 +587,7 @@ fn view_footprint_toolbar<'a>(
     };
     let mode = editor.state.mode;
     let mode_row = row![
-        text("Mode:").size(11).color(muted),
+        text("Mode:").size(TS.body).color(muted),
         mode_pill(
             "Normal",
             crate::library::editor::footprint::state::EditorMode::Normal,
@@ -586,7 +613,7 @@ fn view_footprint_toolbar<'a>(
             ),
         ),
     ]
-    .spacing(4)
+    .spacing(SP.s)
     .align_y(iced::Alignment::Center);
 
     row_widget = row_widget
@@ -604,7 +631,7 @@ fn view_footprint_toolbar<'a>(
 }
 
 fn view_footprint_canvas<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
     bg: iced::Color,
     grid: iced::Color,
@@ -632,6 +659,7 @@ fn view_footprint_canvas<'a>(
         sketch: editor.primitive().sketch.as_ref(),
         silk_f: editor.primitive().silk_f.as_slice(),
         silk_b: editor.primitive().silk_b.as_slice(),
+        zoom_step: editor.zoom_step,
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)
@@ -695,7 +723,7 @@ fn translate_footprint_canvas_msg(msg: LibraryMessage, path: &Path) -> LibraryMe
 }
 
 fn view_footprint_footer<'a>(
-    editor: &'a FootprintEditorState,
+    editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -721,13 +749,13 @@ fn view_footprint_footer<'a>(
 
     container(
         row![
-            text(cursor_label).size(11).color(muted),
+            text(cursor_label).size(TS.body).color(muted),
             Space::new().width(20),
-            text(selected_label).size(11).color(text_c),
+            text(selected_label).size(TS.body).color(text_c),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 12])
+    .padding([6.0, SP.l])
     .style(crate::styles::modal_footer_strip(tokens))
     .width(Length::Fill)
     .into()

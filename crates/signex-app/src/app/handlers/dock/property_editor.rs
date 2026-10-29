@@ -1,20 +1,26 @@
 use super::super::super::*;
 
 impl Signex {
+    /// The symbol `uuid` in the active schematic, if any.
+    fn active_symbol(&self, uuid: uuid::Uuid) -> Option<&signex_types::schematic::Symbol> {
+        self.document_state
+            .active_engine()?
+            .document()
+            .symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+    }
+
     pub(super) fn handle_dock_property_editor_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
     ) -> bool {
         match panel_msg {
             crate::panels::PanelMsg::EditSymbolDesignator(uuid, new_value) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateText {
-                        target: signex_engine::TextTarget::SymbolReference(*uuid),
-                        value: new_value.clone(),
-                    },
-                    true,
-                    true,
-                );
+                // On a tab opened through a placement, this edits that
+                // placement's designator (#1151).
+                let commands = self.designator_edit_commands(*uuid, new_value.clone());
+                self.apply_engine_commands(commands, true, true);
             }
             crate::panels::PanelMsg::EditSymbolValue(uuid, new_value) => {
                 self.apply_engine_command(
@@ -44,6 +50,7 @@ impl Signex {
                             signex_types::schematic::SelectedKind::Symbol,
                         )],
                         axis: signex_engine::MirrorAxis::Vertical,
+                        keep_wires: self.ui_state.move_keeps_wires,
                     },
                     true,
                     true,
@@ -57,14 +64,63 @@ impl Signex {
                             signex_types::schematic::SelectedKind::Symbol,
                         )],
                         axis: signex_engine::MirrorAxis::Horizontal,
+                        keep_wires: self.ui_state.move_keeps_wires,
                     },
                     true,
                     true,
                 );
             }
-            crate::panels::PanelMsg::ToggleSymbolLocked(uuid)
-            | crate::panels::PanelMsg::ToggleSymbolDnp(uuid) => {
-                let _ = uuid;
+            crate::panels::PanelMsg::ToggleSymbolLocked(uuid) => {
+                if let Some(locked) = self.active_symbol(*uuid).map(|s| s.locked) {
+                    self.apply_engine_command(
+                        signex_engine::Command::SetSymbolLocked {
+                            symbol_id: *uuid,
+                            locked: !locked,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
+            crate::panels::PanelMsg::ToggleItemLocked(item) => {
+                let locked = self
+                    .document_state
+                    .active_engine()
+                    .and_then(|engine| engine.item_locked(item));
+                if let Some(locked) = locked {
+                    self.apply_engine_command(
+                        signex_engine::Command::SetItemLocked {
+                            item: *item,
+                            locked: !locked,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
+            crate::panels::PanelMsg::ToggleSymbolDnp(uuid) => {
+                if let Some(dnp) = self.active_symbol(*uuid).map(|s| s.dnp) {
+                    self.apply_engine_command(
+                        signex_engine::Command::SetSymbolDnp {
+                            symbol_id: *uuid,
+                            dnp: !dnp,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
+            crate::panels::PanelMsg::SymbolBodyStylePicked(uuid, body_style) => {
+                // A refusal (a wired pin would move) is logged by the
+                // gateway, so it reaches the Messages panel.
+                self.apply_engine_command(
+                    signex_engine::Command::SetSymbolBodyStyle {
+                        symbol_id: *uuid,
+                        body_style: *body_style,
+                    },
+                    true,
+                    true,
+                );
             }
             crate::panels::PanelMsg::EditSymbolRotation(uuid, deg) => {
                 self.apply_engine_command(
@@ -81,19 +137,8 @@ impl Signex {
                 new_lib_id,
                 rotation_degrees,
             } => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateSymbolLibId {
-                        symbol_id: *symbol_id,
-                        lib_id: new_lib_id.clone(),
-                    },
-                    true,
-                    false,
-                );
-                self.apply_engine_command(
-                    signex_engine::Command::SetSymbolRotation {
-                        symbol_id: *symbol_id,
-                        rotation_degrees: *rotation_degrees,
-                    },
+                self.apply_engine_commands(
+                    signex_engine::restyle_power_port(*symbol_id, new_lib_id, *rotation_degrees),
                     true,
                     true,
                 );
@@ -120,28 +165,45 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditLabelText(uuid, new_text) => {
-                // Users type `/` in the Properties panel; persist the Standard
-                // escape token so the stored schematic round-trips cleanly.
-                let stored = crate::schematic_runtime::text::escape_for_standard(new_text);
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::Label(*uuid),
-                        value: stored,
+                        value: new_text.to_string(),
                     },
                     true,
                     true,
                 );
             }
             crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                let stored = crate::schematic_runtime::text::escape_for_standard(new_text);
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::TextNote(*uuid),
-                        value: stored,
+                        value: new_text.to_string(),
                     },
                     true,
                     true,
                 );
+            }
+            crate::panels::PanelMsg::EditTextFontFamily(target, family) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetTextFontFamily {
+                        target: *target,
+                        font_family: family.clone(),
+                    },
+                    true,
+                    true,
+                );
+                self.report_missing_fonts_for_active_document();
+            }
+            crate::panels::PanelMsg::SetDocumentFontFamily(family) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetDocumentFontFamily {
+                        font_family: family.clone(),
+                    },
+                    true,
+                    true,
+                );
+                self.report_missing_fonts_for_active_document();
             }
             crate::panels::PanelMsg::EditLabelJustifyH(uuid, h) => {
                 self.apply_engine_command(
@@ -272,7 +334,7 @@ impl Signex {
                     .panel_ctx
                     .child_sheet_stroke_width_buf
                     .as_ref()
-                    .and_then(|s| s.trim().parse::<f64>().ok());
+                    .and_then(|s| crate::numeric_field::parse_field_f64(s));
                 self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
                 if let Some(width) = parsed
                     && width >= 0.0
@@ -288,6 +350,18 @@ impl Signex {
                         true,
                     );
                 }
+            }
+            crate::panels::PanelMsg::ChildSheetNameTyping(uuid, text) => {
+                self.type_child_sheet_name(*uuid, text);
+            }
+            crate::panels::PanelMsg::ChildSheetFileTyping(uuid, text) => {
+                self.type_child_sheet_file(*uuid, text);
+            }
+            crate::panels::PanelMsg::CommitChildSheetName(uuid) => {
+                self.commit_child_sheet_name(*uuid);
+            }
+            crate::panels::PanelMsg::CommitChildSheetFile(uuid) => {
+                self.commit_child_sheet_file(*uuid);
             }
             crate::panels::PanelMsg::ResetChildSheetStyle(uuid) => {
                 self.document_state.panel_ctx.child_sheet_border_picker_open = false;

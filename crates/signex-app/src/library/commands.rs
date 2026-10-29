@@ -6,29 +6,52 @@
 //! returns a `Result`; non-fatal errors surface via `tracing::warn!`
 //! with structured fields, matching the rest of the codebase.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, FORMAT_TOKEN, InternalPn,
-    LibraryError, LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap,
-    PlmReserved, PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig,
-    hash_row_content,
+    ComponentClass, ComponentRow, DatasheetRef, FORMAT_TOKEN, InternalPn, LibraryError,
+    LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap, PlmReserved,
+    PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig, hash_row_content,
 };
 // Legacy `Manifest` / `LibraryMeta` / `LibraryMode` imports were retired
 // when `LocalGitAdapter::init` switched to the new `SnxlibManifest`
 // shape. The remaining sub-stages (Stage 13 workflow mode, Stage 14
 // versioning) will introduce richer manifest fields; keeping the
 // imports tight here keeps the v0.9-snxlib-as-file refactor auditable.
-use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
+use signex_types::project::{LibraryEntry, ProjectData};
 use uuid::Uuid;
 
 use super::state::LibraryState;
+use crate::app::CaseFold;
+use crate::app::library_entry::library_entry_location;
 
-/// Open a `*.snxlib/` and refresh its component list.
+/// Open a `*.snxlib/` and, when it was already mounted, refresh its
+/// component list.
+///
+/// The refresh is warm-path only — the same split #528 made in
+/// `auto_mount_project_libraries`, applied here to the interactive path
+/// (#530). Not a micro-optimisation: the duplicate scan measured
+/// **128.653 ms** for a medium library (500 symbols + 500 footprints) and
+/// **540.508 ms** for a large one (2000 + 2000), and every manual "open a
+/// library" gesture paid it.
+///
+/// COLD (not yet mounted): [`LibraryState::open_library`] has just run
+/// `reload_tables` → `reload_primitives`, priming all five caches off the
+/// exact adapter calls a refresh would repeat. Refreshing here recomputes
+/// identical values.
+///
+/// WARM (already mounted): `open_library` early-returns at
+/// `state/methods.rs:83-85` and never reaches `reload_tables`, so this
+/// refresh is the *only* thing that rescans. Dropping it unconditionally
+/// would leave an already-mounted library showing a stale snapshot —
+/// which is why this is a guard and not a deletion. Reachable from every
+/// caller: `self.library` is app-global, so re-opening an
+/// already-mounted library lands here.
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
+    let already_open = state.library_at(&root).is_some();
     state.open_library(root.clone())?;
-    if let Err(e) = state.refresh_components(&root) {
+    if already_open && let Err(e) = state.refresh_components(&root) {
         tracing::warn!(target: "signex::library", path = %root.display(), error = %e, "refresh_components failed; UI starts with empty list");
     }
     Ok(())
@@ -56,11 +79,60 @@ pub struct PendingLibrarySpec {
     pub display_name: String,
 }
 
+/// Names Windows refuses as a file stem regardless of extension.
+const RESERVED_STEMS: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Shared pre-flight for a new `.snxlib` path: extension, portable
+/// non-empty stem, and the target must not already exist. Rejecting
+/// here beats a confusing adapter-init error later.
+pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
+    let ext_ok = lib_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"));
+    if !ext_ok {
+        return Err(LibraryError::Conflict(format!(
+            "library path must end with `.snxlib`: {}",
+            lib_path.display()
+        )));
+    }
+    let stem = lib_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if stem.is_empty() {
+        return Err(LibraryError::Conflict(
+            "library name (filename stem) is empty".to_string(),
+        ));
+    }
+    if stem.chars().any(|c| {
+        c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+    }) || stem.ends_with(['.', ' '])
+        || RESERVED_STEMS
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(stem.split('.').next().unwrap_or(stem)))
+    {
+        return Err(LibraryError::Conflict(format!(
+            "library name {stem:?} is not a portable file name"
+        )));
+    }
+    if lib_path.exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already exists",
+            lib_path.display()
+        )));
+    }
+    Ok(())
+}
+
 /// Register a library creation request without touching disk.
 ///
-/// Validates the target path the same way `create_library_at` does
-/// (extension must be `.snxlib`, stem non-empty + portable, target
-/// must not already exist), pre-mints a `library_id`, and stashes a
+/// Validates via `validate_new_library_path` (extension must be
+/// `.snxlib`, stem non-empty and portable, target must not exist),
+/// pre-mints a `library_id`, and stashes a
 /// [`PendingLibrarySpec`] under that id on the caller-provided
 /// pending map. The actual `.snxlib` directory + manifest +
 /// optional `git init` happen at project-save time via
@@ -75,41 +147,12 @@ pub fn register_pending_library(
     enable_git: bool,
     use_lfs: bool,
 ) -> Result<(Uuid, PendingLibrarySpec), LibraryError> {
-    let ext_ok = lib_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxlib"))
-        .unwrap_or(false);
-    if !ext_ok {
-        return Err(LibraryError::Conflict(format!(
-            "library path must end with `.snxlib`: {}",
-            lib_path.display()
-        )));
-    }
+    validate_new_library_path(&lib_path)?;
     let stem = lib_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_default();
-    if stem.is_empty() {
-        return Err(LibraryError::Conflict(
-            "library name (filename stem) is empty".to_string(),
-        ));
-    }
-    if stem
-        .chars()
-        .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-    {
-        return Err(LibraryError::Conflict(format!(
-            "library name {stem:?} contains illegal path characters"
-        )));
-    }
-    if lib_path.exists() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already exists",
-            lib_path.display()
-        )));
-    }
+        .unwrap_or_default()
+        .to_string();
 
     let library_id = Uuid::now_v7();
     let spec = PendingLibrarySpec {
@@ -141,6 +184,7 @@ pub fn materialize_pending_library(
     project: &mut ProjectData,
     library_id: Uuid,
     spec: &PendingLibrarySpec,
+    fold: CaseFold,
 ) -> Result<(), LibraryError> {
     if spec.lib_path.exists() {
         return Err(LibraryError::Conflict(format!(
@@ -149,26 +193,11 @@ pub fn materialize_pending_library(
         )));
     }
 
-    let stem = spec.display_name.clone();
-    let seed_classes: Vec<signex_library::ClassEntry> = crate::fonts::read_component_classes_pref()
-        .into_iter()
-        .map(|e| signex_library::ClassEntry {
-            key: e.key,
-            label: e.label,
-        })
-        .collect();
-    let manifest = SnxlibManifest {
-        format: FORMAT_TOKEN.into(),
+    let manifest = seed_manifest(
         library_id,
-        library: LibrarySection {
-            name: stem,
-            description: None,
-        },
-        mode: Default::default(),
-        workflow: WorkflowConfig::default(),
-        users: UsersConfig::default(),
-        classes: seed_classes,
-    };
+        spec.display_name.clone(),
+        &state.new_library_defaults,
+    );
     let _adapter = LocalGitAdapter::init(
         &spec.lib_path,
         manifest,
@@ -178,20 +207,20 @@ pub fn materialize_pending_library(
         },
     )?;
 
-    let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-        && let Ok(rel) = spec.lib_path.strip_prefix(&project_dir)
-    {
-        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-    } else {
-        (spec.lib_path.clone(), LibraryEntryKind::Shared)
-    };
-    project.libraries.push(LibraryEntry {
-        path: entry_path,
-        kind: entry_kind,
-        library_id: Some(library_id),
-    });
+    register_library_entry(project, &spec.lib_path, library_id, fold);
 
+    // No `refresh_components` chaser here (#530). This mount is
+    // provably cold and the library is provably empty, so a refresh
+    // could only recompute what `open_library` just cached:
+    //
+    // - `spec.lib_path` was rejected above if it existed on disk, and
+    //   `LocalGitAdapter::init` created it moments ago. A path that did
+    //   not exist cannot have been mounted, because mounting requires
+    //   `LocalGitAdapter::open` on an existing path — so the warm branch
+    //   that keeps the refresh alive in `open_library` is unreachable.
+    // - The library `init` writes has zero rows and no `symbols/` /
+    //   `footprints/` / `sims/` entries, so every cache it primes is
+    //   empty by construction.
     if let Err(e) = state.open_library(spec.lib_path.clone()) {
         tracing::warn!(
             target: "signex::library",
@@ -199,16 +228,78 @@ pub fn materialize_pending_library(
             error = %e,
             "freshly-materialised library failed initial open — entry registered, retry from tree"
         );
-    } else if let Err(e) = state.refresh_components(&spec.lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %spec.lib_path.display(),
-            error = %e,
-            "freshly-materialised library failed initial refresh"
-        );
     }
 
     Ok(())
+}
+
+/// Create a library on its own at `lib_path`, not attached to any project:
+/// plain files, no version control. Used by the stock-copy flow, which
+/// writes straight to the library the user asked for (#813). Refuses a
+/// path that is not a new, portable `.snxlib`.
+pub(crate) fn create_library_file(
+    lib_path: &Path,
+    defaults: &super::state::NewLibraryDefaults,
+) -> Result<(), LibraryError> {
+    validate_new_library_path(lib_path)?;
+    let stem = lib_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let manifest = seed_manifest(Uuid::now_v7(), stem, defaults);
+    LocalGitAdapter::init(lib_path, manifest, LibraryInitOptions::default())?;
+    Ok(())
+}
+
+/// Manifest for a brand-new library. The class registry is seeded from
+/// the user's `prefs.json::component_classes` so a fresh library starts
+/// with their preferred taxonomy (editable per-library afterwards);
+/// mode/workflow/users stay at their defaults.
+pub(crate) fn seed_manifest(
+    library_id: Uuid,
+    name: String,
+    defaults: &super::state::NewLibraryDefaults,
+) -> SnxlibManifest {
+    let classes = defaults
+        .component_classes
+        .iter()
+        .cloned()
+        .map(|e| signex_library::ClassEntry {
+            key: e.key,
+            label: e.label,
+        })
+        .collect();
+    SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id,
+        library: LibrarySection {
+            name,
+            description: None,
+        },
+        mode: Default::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes,
+    }
+}
+
+/// Register `lib_path` on the project as ProjectLocal or Shared
+/// (decided by `library_entry_location`).
+fn register_library_entry(
+    project: &mut ProjectData,
+    lib_path: &Path,
+    library_id: Uuid,
+    fold: CaseFold,
+) {
+    let project_dir = PathBuf::from(&project.dir);
+    let (path, kind) = library_entry_location(&project_dir, lib_path, fold);
+    project.libraries.push(LibraryEntry {
+        path,
+        kind,
+        library_id: Some(library_id),
+        unknown: Default::default(),
+    });
 }
 
 /// Create a fresh `.snxlib/` library at `lib_path`. The directory's
@@ -227,82 +318,23 @@ pub fn materialize_pending_library(
 /// Options" modal that pops up after the Save-As dialog; non-UI
 /// callers (tests, fixtures) pass `false` to stay independent of a
 /// local `git lfs` install.
-#[allow(clippy::too_many_arguments)]
 pub fn create_library_at(
     state: &mut LibraryState,
     project: &mut ProjectData,
     lib_path: PathBuf,
     enable_git: bool,
     use_lfs: bool,
+    fold: CaseFold,
 ) -> Result<Uuid, LibraryError> {
-    // Library directories must use the `.snxlib` extension so the
-    // library detector elsewhere (ancestor walk, dock open dialog,
-    // adapter resolution) can identify them. Reject anything else
-    // up-front rather than failing later with a confusing
-    // adapter-init error.
-    let ext_ok = lib_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("snxlib"))
-        .unwrap_or(false);
-    if !ext_ok {
-        return Err(LibraryError::Conflict(format!(
-            "library path must end with `.snxlib`: {}",
-            lib_path.display()
-        )));
-    }
+    validate_new_library_path(&lib_path)?;
     let stem = lib_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_default();
-    if stem.is_empty() {
-        return Err(LibraryError::Conflict(
-            "library name (filename stem) is empty".to_string(),
-        ));
-    }
-    if stem
-        .chars()
-        .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-    {
-        return Err(LibraryError::Conflict(format!(
-            "library name {stem:?} contains illegal path characters"
-        )));
-    }
-    if lib_path.exists() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already exists",
-            lib_path.display()
-        )));
-    }
+        .unwrap_or_default()
+        .to_string();
 
     let library_id = Uuid::now_v7();
-    // Seed the per-library class registry from the user's
-    // `prefs.json::component_classes` so freshly-created libraries
-    // start with the user's preferred taxonomy. The user can edit
-    // the registry per-library afterwards via the Library
-    // Properties pane (which then writes back to this `.snxlib`).
-    let seed_classes: Vec<signex_library::ClassEntry> = crate::fonts::read_component_classes_pref()
-        .into_iter()
-        .map(|e| signex_library::ClassEntry {
-            key: e.key,
-            label: e.label,
-        })
-        .collect();
-    let manifest = SnxlibManifest {
-        format: FORMAT_TOKEN.into(),
-        library_id,
-        library: LibrarySection {
-            name: stem.clone(),
-            description: None,
-        },
-        // Mode/workflow/users default — Stage 13 will surface the
-        // workflow-mode picker (Personal / Team) at create time.
-        mode: Default::default(),
-        workflow: WorkflowConfig::default(),
-        users: UsersConfig::default(),
-        classes: seed_classes,
-    };
+    let manifest = seed_manifest(library_id, stem, &state.new_library_defaults);
 
     // LFS opt-in (Stage 11): the "Library Options" modal that pops up
     // after the New Library Save-As dialog feeds `use_lfs` here. The
@@ -329,24 +361,20 @@ pub fn create_library_at(
     // with the file already on disk but no LibraryEntry — so the
     // tree never showed the new library and the user had to delete
     // the orphan folder manually.
-    let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
-        && let Ok(rel) = lib_path.strip_prefix(&project_dir)
-    {
-        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-    } else {
-        (lib_path.clone(), LibraryEntryKind::Shared)
-    };
+    register_library_entry(project, &lib_path, library_id, fold);
 
-    project.libraries.push(LibraryEntry {
-        path: entry_path,
-        kind: entry_kind,
-        library_id: Some(library_id),
-    });
-
-    // Best-effort runtime mount + initial component-cache refresh.
-    // Errors here downgrade to warnings so the entry stays
-    // registered and the user can retry from the tree later.
+    // Best-effort runtime mount. Errors here downgrade to warnings so
+    // the entry stays registered and the user can retry from the tree
+    // later.
+    //
+    // No `refresh_components` chaser (#530) — same proof as
+    // `materialize_pending_library`: `lib_path` was rejected above if it
+    // existed, `LocalGitAdapter::init` created it moments ago, and a path
+    // that did not exist cannot already be mounted. So the mount is
+    // provably cold (the warm branch in `open_library` is unreachable)
+    // and the library is provably empty (zero rows, no primitive files).
+    // A refresh could only recompute the empty caches `open_library` just
+    // primed.
     if let Err(e) = state.open_library(lib_path.clone()) {
         tracing::warn!(
             target: "signex::library",
@@ -354,52 +382,57 @@ pub fn create_library_at(
             error = %e,
             "freshly-created library failed initial open — entry registered, retry from tree"
         );
-    } else if let Err(e) = state.refresh_components(&lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %lib_path.display(),
-            error = %e,
-            "freshly-created library failed initial refresh"
-        );
     }
 
     Ok(library_id)
 }
 
-/// Convenience wrapper — create a project-local library named
-/// `<name>` under `<project.dir>/<name>.snxlib`. Keeps the legacy
-/// call sites that don't go through the Save-As dialog working
-/// (currently none — all new code goes through `create_library_at`,
-/// which lets the user pick the location).
-#[allow(dead_code)]
-pub fn create_library(
-    state: &mut LibraryState,
-    project: &mut ProjectData,
-    name: &str,
-) -> Result<Uuid, LibraryError> {
-    let trimmed = name.trim().to_string();
-    if trimmed.is_empty() {
-        return Err(LibraryError::Conflict("library name is empty".to_string()));
-    }
-    let project_dir = PathBuf::from(&project.dir);
-    if project_dir.as_os_str().is_empty() {
-        return Err(LibraryError::Conflict(
-            "project has no directory on disk yet".to_string(),
-        ));
-    }
-    let lib_path = project_dir.join(format!("{trimmed}.snxlib"));
-    // Legacy convenience wrapper — defaults LFS off so existing
-    // callers don't change behaviour. UI flows go through the
-    // "Library Options" modal which carries `use_lfs` explicitly.
-    create_library_at(state, project, lib_path, false, false)
+/// What one `auto_mount_project_libraries` pass decided — issue #99
+/// part 2c.
+///
+/// Two numbers instead of one count, because a cold mount is no longer
+/// finished when this function returns: it has only been *recorded*. A
+/// single `mounted: usize` would have claimed work that has not happened
+/// yet. Total libraries handled is `refreshed + pending.len()`.
+#[derive(Debug, Default, Clone)]
+pub struct AutoMountOutcome {
+    /// Already-mounted libraries refreshed synchronously (the warm path).
+    pub refreshed: usize,
+    /// `.snxlib` paths recorded as pending mounts. The caller must spawn
+    /// one `mount::prepare_mount_off_thread` per path; each lands as a
+    /// `LibraryMessage::MountFinished`.
+    pub pending: Vec<PathBuf>,
 }
 
 /// Auto-mount every library referenced by `project.libraries`. Called
 /// once when a project loads. Failures are logged and skipped — a
 /// missing or corrupt library shouldn't block the rest of the project
 /// from opening.
-pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectData) -> usize {
-    let mut mounted = 0usize;
+///
+/// **Cold mounts are prepared off the UI thread** (#99 part 2c): this
+/// function records them and returns their paths, and the caller fans
+/// them out. Six libraries then parse in parallel instead of serially
+/// inside `update()` — the measured cost was 826.229 ms after #528, about
+/// 50 dropped frames, and a single mount already crosses one 60 Hz frame
+/// at ~58 symbols + 58 footprints.
+///
+/// The `refresh_components` chaser still runs on the warm path **only**.
+/// On the cold path the caches are primed by `mount::prepare_mount`
+/// (off-thread) exactly as [`LibraryState::open_library`] primed them
+/// inline before, so re-running it would be the same pure duplicate work
+/// #528 removed: it roughly doubled every project open, costing a
+/// six-medium-library project 795.7 ms of its 1 622.571 ms mount.
+/// `tests/integration/library_open_cache.rs` pins both halves — that the cold path
+/// primes everything, and that the warm path still rescans the primitive
+/// directories.
+pub fn auto_mount_project_libraries(
+    state: &mut LibraryState,
+    project: &ProjectData,
+) -> AutoMountOutcome {
+    use super::mount::{MountIntent, MountRequest};
+
+    let mut refreshed = 0usize;
+    let mut pending: Vec<PathBuf> = Vec::new();
     for entry in &project.libraries {
         let resolved = project.resolve_library_path(entry);
         // Standalone `.snxsym` / `.snxfpt` files are tracked on
@@ -415,57 +448,108 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
         if !is_snxlib {
             continue;
         }
-        match state.open_library(resolved.clone()) {
-            Ok(()) => {
+        // Cold vs warm mount — do NOT collapse this into an
+        // unconditional refresh, and do NOT delete the refresh outright.
+        //
+        // COLD (not yet mounted): `open_library` has just primed all
+        // five caches — `tables` + `cached_components` via
+        // `reload_tables`, then `cached_symbols` / `cached_footprints` /
+        // `cached_sims` via `reload_primitives` — off exactly the
+        // adapter calls a refresh would repeat. Skipping it here is
+        // where the whole #99 win lives.
+        //
+        // WARM (already mounted): `open_library` early-returns `Ok(())`
+        // at `state/methods.rs:83-85` and never reaches
+        // `reload_tables`, so the refresh below is the only thing that
+        // rescans. It is reachable in normal use — `self.library` is
+        // app-global, not per-project (see
+        // `app/handlers/document_files/open.rs:209`), so a second
+        // project referencing an already-mounted `.snxlib` lands here.
+        //
+        // What the warm refresh actually buys, precisely: `list_symbols`
+        // / `list_footprints` / `list_sims` walk `symbols/` /
+        // `footprints/` / `sims/` on every call, so it DOES pick up
+        // primitive files another process wrote. It does NOT pick up
+        // rows added to the `.snxlib` itself — `LocalGitAdapter` parses
+        // that once at `open()` into `RwLock<LibraryFile>`
+        // (`adapters/local_git/mod.rs:88-92`) and `list_tables` /
+        // `read_table` serve from that in-memory copy. Seeing external
+        // row edits needs a re-opened adapter, which only
+        // `app/handlers/document_files/history.rs:259` does today.
+        // COLD vs WARM, decided by `request_mount` rather than by a
+        // `library_at` probe here (#99 part 2c). `AlreadyMounted` is the
+        // warm path and keeps its synchronous refresh — that refresh is
+        // the only thing that rescans `symbols/` / `footprints/` /
+        // `sims/`, so dropping it would lose primitive files another
+        // process wrote (#528's `library_open_cache.rs` pins this).
+        //
+        // `Spawn` is the cold path and no longer mounts here: the caller
+        // fans the returned paths out through
+        // `mount::prepare_mount_off_thread`, so six libraries prepare in
+        // parallel off the UI thread instead of serially inside
+        // `update()`.
+        match state.request_mount(&resolved, MountIntent::Silent) {
+            MountRequest::AlreadyMounted => {
                 if let Err(e) = state.refresh_components(&resolved) {
                     tracing::warn!(
                         target: "signex::library",
                         path = %resolved.display(),
                         error = %e,
-                        "auto-mount: refresh_components failed"
+                        "auto-mount: refresh of already-mounted library failed; cache may be stale"
                     );
                 }
-                mounted += 1;
+                refreshed += 1;
             }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %resolved.display(),
-                    error = %e,
-                    "auto-mount: open_library failed; skipping"
-                );
-            }
+            // Another request for this path is already in flight — a
+            // second project referencing the same `.snxlib`, or a user
+            // double-click that beat the project open. Its completion
+            // mounts the library once; recording it twice would spawn a
+            // duplicate preparation.
+            MountRequest::InFlight => {}
+            MountRequest::Spawn => pending.push(resolved),
         }
     }
-    mounted
+    AutoMountOutcome { refreshed, pending }
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // New Component create-flow (components are TSV rows in the DBLib model)
 // ─────────────────────────────────────────────────────────────────────
 
-/// Create a new component **row**:
+/// A draft component row, built and ready to be inserted.
+pub struct NewComponentRow {
+    /// The `.snxlib` of the library the row goes into.
+    pub library_root: std::path::PathBuf,
+    pub table: String,
+    pub row_id: RowId,
+    pub row: ComponentRow,
+    pub commit_message: String,
+    /// "symbol" / "footprint" the row has nothing bound for.
+    pub unbound: Vec<&'static str>,
+}
+
+/// Build a new component **row** (no IO):
 ///
 /// 1. Builds a [`ComponentRow`] with the user-supplied PN / class and
 ///    sentinel `Uuid::nil()` symbol/footprint refs (the primitive
 ///    binding is the user's explicit choice — picked from existing
 ///    `.snxsym` / `.snxfpt` files post-creation, never auto-minted).
 /// 2. Computes the canonical content hash via [`hash_row_content`].
-/// 3. Inserts the row into the chosen table via `adapter.insert_row`.
 ///
-/// Returns the new row's `RowId` so the caller can open it as a
-/// Component Preview tab via `LibraryMessage::OpenComponentRow`. The
-/// preview's "Pick Symbol / Pick Footprint" affordance (Phase 2) lets
-/// the user bind the primitives.
-pub fn create_component_row(
-    state: &mut LibraryState,
+/// The caller inserts it with `adapter.insert_row` on a worker (#893) and
+/// opens the row as a Component Preview tab via
+/// `LibraryMessage::OpenComponentRow` once that has landed. The preview's
+/// "Pick Symbol / Pick Footprint" affordance lets the user bind the
+/// primitives.
+pub fn build_component_row(
+    state: &LibraryState,
     library_idx: usize,
     table: &str,
     internal_pn: &str,
     class: ComponentClass,
     symbol_ref: Option<PrimitiveRef>,
     footprint_ref: Option<PrimitiveRef>,
-) -> Result<RowId, LibraryError> {
+) -> Result<NewComponentRow, LibraryError> {
     // Inline-add flow (Library Browser "+ Component" button): the row
     // is minted with an empty internal_pn so the user can fill it in
     // via the table's inline cell editor. Lifecycle promotion to
@@ -487,24 +571,29 @@ pub fn create_component_row(
     let library_root = library.root.clone();
     let library_id = library.library_id;
 
-    // Component creation does NOT mint new primitive files. Symbol +
-    // footprint are either picked through the Pick Symbol / Pick
-    // Footprint affordances inside the New Component modal, or bound
-    // later via the Component Preview tab. When the user submits with
-    // unbound refs, the row starts with sentinel `Uuid::nil()` and the
-    // Component Preview surfaces an "Unbound — pick a symbol" prompt.
+    // Component creation does NOT mint new primitive files: that would
+    // write `.snxsym` / `.snxfpt` without an explicit user action. A row
+    // created without refs starts with the sentinel `Uuid::nil()`; the
+    // browser grid, Properties panel and Component Preview show it as
+    // "No symbol bound" / "No footprint bound" with a Pick action, and
+    // the creation is reported once to the Messages panel below.
 
     let row_id = RowId::new();
     let now = chrono::Utc::now();
     let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
     let mut row = ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: row_id.as_uuid(),
         internal_pn: InternalPn::new(internal_pn),
         class,
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        description: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: resolved_symbol,
         footprint_ref,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("", ""),
@@ -523,64 +612,62 @@ pub fn create_component_row(
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     };
     row.content_hash = hash_row_content(&row)?;
-
-    let commit_msg = format!("new component: {internal_pn}");
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    adapter.insert_row(table, row, &commit_msg)?;
-
-    if let Err(e) = state.refresh_components(&library_root) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %library_root.display(),
-            error = %e,
-            "post-create refresh failed; panel may be stale until next refresh"
-        );
+    let mut unbound: Vec<&'static str> = Vec::new();
+    if row.is_symbol_unbound() {
+        unbound.push("symbol");
+    }
+    if row.is_footprint_unbound() {
+        unbound.push("footprint");
     }
 
-    Ok(row_id)
+    Ok(NewComponentRow {
+        library_root,
+        table: table.to_string(),
+        row_id,
+        row,
+        commit_message: format!("new component: {internal_pn}"),
+        unbound,
+    })
 }
 
-/// Re-run a query against every open library — picker filter helper.
-pub fn list_components_filtered(
-    state: &LibraryState,
-    text_filter: &str,
-) -> Vec<(PathBuf, ComponentSummary)> {
-    let needle = text_filter.trim().to_lowercase();
-    state
-        .all_components()
-        .into_iter()
-        .filter(|(_path, summary)| {
-            if needle.is_empty() {
-                return true;
-            }
-            summary
-                .internal_pn
-                .as_str()
-                .to_lowercase()
-                .contains(&needle)
-                || summary.mpn.to_lowercase().contains(&needle)
-                || summary.description.to_lowercase().contains(&needle)
-        })
-        .collect()
-}
-
-/// Stub: emit `tracing::info!` with the use-site coordinates the
-/// Where-Used handler hands back.
-pub fn jump_to_use_site(site: &signex_library::UseSite) {
-    // `UseSite::version_pinned` is gone in the DBLib model — past
-    // versions of a row are read from `git log` (LocalGit) or the
-    // audit trail (Database) rather than carried inline. The handler
-    // surfaces just the project / sheet / instance triple now.
-    tracing::info!(
+/// Tell the Messages panel that a freshly created row has nothing bound.
+pub(crate) fn report_unbound_row(internal_pn: &str, unbound: &[String]) {
+    if unbound.is_empty() {
+        return;
+    }
+    let name = if internal_pn.is_empty() {
+        "(unnamed row)"
+    } else {
+        internal_pn
+    };
+    tracing::warn!(
         target: "signex::library",
-        project = %site.project_path.display(),
-        sheet = %site.sheet_path.display(),
-        instance = %site.instance_id,
-        "jump-to-use-site requested (phase-2 follow-up)"
+        "New component {name} has no {} bound. Use Pick Symbol / Pick Footprint in the library browser or Properties panel.",
+        unbound.join(" and no "),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_library_path_rejects_unportable_names() {
+        for bad in [
+            "CON.snxlib",
+            "nul.snxlib",
+            "con.x.snxlib",
+            "a..snxlib",
+            "x .snxlib",
+            "a?b.snxlib",
+            "lib.txt",
+            ".snxlib",
+        ] {
+            assert!(validate_new_library_path(Path::new(bad)).is_err(), "{bad}");
+        }
+        assert!(validate_new_library_path(Path::new("ok-lib.snxlib")).is_ok());
+    }
 }

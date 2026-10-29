@@ -1,0 +1,96 @@
+format = "snxsym/v2"
+file_uuid = "86ed58c6-db77-432b-85b1-09065d17e744"
+display_name = "D_Schottky"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols]]
+uuid = "3b71eb69-67e4-434a-9b74-ded23c704b68"
+name = "D_Schottky"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+2	A	Passive	0	3.81	Down	2.54					true	false	None	None	None	None	false	false	1
+1	K	Passive	0	-3.81	Up	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "D?"
+comment = "*"
+description = "Schottky diode; pin 1 cathode, pin 2 anode."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "polygon"
+vertices = [
+    [
+    -1.27,
+    1.27,
+],
+    [
+    1.27,
+    1.27,
+],
+    [
+    0.0,
+    -1.27,
+],
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.27,
+]
+to = [
+    1.27,
+    -1.27,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    -1.27,
+    -1.27,
+]
+to = [
+    -1.27,
+    -0.762,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "line"
+from = [
+    1.27,
+    -1.27,
+]
+to = [
+    1.27,
+    -1.778,
+]
+
+[symbols.schematic_params]

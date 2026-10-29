@@ -16,6 +16,9 @@
 //! - **`param_<key>`** f64  INDEXED | STORED | FAST  (one per well-known
 //!   numeric parameter key — see [`NUMERIC_PARAM_KEYS`]; supports `RangeQuery`)
 //!
+//! Measurement parameters are indexed in base units (`indexed_number`), so
+//! facet bounds are base-unit numbers.
+//!
 //! Tantivy 0.22 does **not** support range queries on JSON-field subpaths via
 //! the QueryParser, so each numeric parameter key gets its own typed f64
 //! column in the schema. Adding a new numeric param key requires extending
@@ -189,7 +192,12 @@ pub struct TantivySearchIndex {
     index: Index,
     fields: SchemaFields,
     reader: IndexReader,
-    writer: Mutex<IndexWriter>,
+    /// `None` only after `Drop` has taken the writer to wind it down.
+    writer: Mutex<Option<IndexWriter>>,
+    /// Ops staged since the last successful commit, so a commit that fails on a
+    /// transient sharing violation can restart the writer and replay them
+    /// instead of silently losing the rows. Lock order: `writer`, then `pending`.
+    pending: Mutex<Vec<(Term, TantivyDocument)>>,
 }
 
 impl TantivySearchIndex {
@@ -231,7 +239,8 @@ impl TantivySearchIndex {
             index,
             fields,
             reader,
-            writer: Mutex::new(writer),
+            writer: Mutex::new(Some(writer)),
+            pending: Mutex::new(Vec::new()),
         })
     }
 
@@ -272,7 +281,15 @@ impl TantivySearchIndex {
         Self::open(path)
     }
 
-    fn writer(&self) -> Result<MutexGuard<'_, IndexWriter>, TantivyIndexError> {
+    fn pending_ops(
+        &self,
+    ) -> Result<MutexGuard<'_, Vec<(Term, TantivyDocument)>>, TantivyIndexError> {
+        self.pending
+            .lock()
+            .map_err(|_| TantivyIndexError::Internal("pending-ops mutex poisoned".into()))
+    }
+
+    fn writer(&self) -> Result<MutexGuard<'_, Option<IndexWriter>>, TantivyIndexError> {
         // M8: a poisoned mutex is an internal failure, not a malformed query —
         // route it through `Internal` so operator dashboards can distinguish
         // user errors from process-level corruption.
@@ -294,12 +311,13 @@ impl TantivySearchIndex {
     /// repeatedly. Caller must `commit()` to make changes visible to
     /// subsequent queries.
     pub fn add_or_update(&self, row: &ComponentRow) -> Result<(), TantivyIndexError> {
-        let writer = self.writer()?;
+        let guard = self.writer()?;
+        let writer = guard.as_ref().ok_or_else(writer_closed)?;
 
         // Delete any existing doc with this row_id; harmless on first insert.
         let uuid_str = row.row_id.to_string();
         let term = Term::from_field_text(self.fields.uuid, &uuid_str);
-        writer.delete_term(term);
+        writer.delete_term(term.clone());
 
         // The row carries its own `class` (resistor / capacitor / …); we
         // surface that as the `category` facet so existing UI code that
@@ -335,11 +353,7 @@ impl TantivySearchIndex {
                 continue;
             }
             if let Some(field) = self.fields.numeric_params.get(k) {
-                let n = match v {
-                    ParamValue::Number(n) => Some(*n),
-                    ParamValue::Measurement { value, .. } => Some(*value),
-                    _ => None,
-                };
+                let n = indexed_number(v);
                 if let Some(n) = n {
                     doc.add_f64(*field, n);
                     continue;
@@ -350,7 +364,9 @@ impl TantivySearchIndex {
                 ParamValue::Text(s) => OwnedValue::Str(s.clone()),
                 ParamValue::Number(n) => OwnedValue::F64(*n),
                 ParamValue::Bool(b) => OwnedValue::Bool(*b),
-                ParamValue::Measurement { value, .. } => OwnedValue::F64(*value),
+                ParamValue::Measurement { value, .. } => {
+                    OwnedValue::F64(indexed_number(v).unwrap_or(*value))
+                }
             };
             json_blob.insert(k.clone(), owned);
         }
@@ -358,14 +374,33 @@ impl TantivySearchIndex {
             doc.add_object(self.fields.parameters, json_blob);
         }
 
-        writer.add_document(doc)?;
+        writer.add_document(doc.clone())?;
+        self.pending_ops()?.push((term, doc));
         Ok(())
     }
 
     /// Flush pending writes; required before queries see new docs.
     pub fn commit(&self) -> Result<(), TantivyIndexError> {
-        let mut writer = self.writer()?;
-        writer.commit()?;
+        let mut guard = self.writer()?;
+        let writer = guard.as_mut().ok_or_else(writer_closed)?;
+        // On Windows a segment file can fail to open for write with a transient
+        // sharing violation (leftover handles, antivirus). Tantivy surfaces it
+        // at commit and drops that batch with it, so restart the writer, replay
+        // the staged ops, and retry a few times with a short backoff.
+        let mut attempt = 0;
+        while let Err(e) = writer.commit() {
+            attempt += 1;
+            if attempt > COMMIT_RETRIES || !is_transient_sharing_violation(&e) {
+                return Err(e.into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10 * attempt as u64));
+            writer.rollback()?;
+            for (term, doc) in self.pending_ops()?.iter() {
+                writer.delete_term(term.clone());
+                writer.add_document(doc.clone())?;
+            }
+        }
+        self.pending_ops()?.clear();
         // Pick up the new commit immediately.
         self.reader.reload()?;
         Ok(())
@@ -379,12 +414,7 @@ impl TantivySearchIndex {
             // the tokenizer + parser into pathological work. Anything
             // beyond the limit is silently truncated; component MPNs and
             // descriptions are shorter than 1 KiB in practice.
-            const MAX_QUERY_TEXT_BYTES: usize = 1_000;
-            let bounded = if text.len() > MAX_QUERY_TEXT_BYTES {
-                &text[..MAX_QUERY_TEXT_BYTES]
-            } else {
-                text.as_str()
-            };
+            let bounded = bound_query_text(text);
             let trimmed = bounded.trim();
             if !trimmed.is_empty() {
                 let parser = QueryParser::for_index(
@@ -398,7 +428,22 @@ impl TantivySearchIndex {
                 );
                 match parser.parse_query(trimmed) {
                     Ok(parsed) => clauses.push((Occur::Must, parsed)),
-                    Err(_) => clauses.push((Occur::Must, Box::new(AllQuery))),
+                    Err(e) => {
+                        // Real part numbers are full of Tantivy
+                        // operators — `LM358+`, `74HC00/SO(1%)`,
+                        // `R-0603-10k`, a half-typed quote. Falling
+                        // back to `AllQuery` handed the user the whole
+                        // library dressed up as matches; falling back
+                        // to the same text as a literal phrase keeps
+                        // the search a search.
+                        tracing::warn!(
+                            target: "signex::search",
+                            error = %e,
+                            query = %trimmed,
+                            "search text is not valid query syntax; matching it as a literal phrase instead"
+                        );
+                        clauses.push((Occur::Must, literal_phrase_query(&parser, trimmed)?));
+                    }
                 }
             }
         }
@@ -504,24 +549,22 @@ impl TantivySearchIndex {
         facet: &Facet,
     ) -> Result<Box<dyn Query>, TantivyIndexError> {
         let n = parse_f64(facet)?;
+        let at = || Term::from_field_f64(field, n);
         match facet.op {
             FacetOp::Eq => {
                 // f64 equality via a single-value [n, n] inclusive range to
                 // avoid bit-pattern comparison surprises with `TermQuery`.
-                Ok(Box::new(RangeQuery::new_f64_bounds(
-                    self.field_name_owned(field),
-                    Bound::Included(n),
-                    Bound::Included(n),
+                Ok(Box::new(RangeQuery::new(
+                    Bound::Included(at()),
+                    Bound::Included(at()),
                 )))
             }
-            FacetOp::Lt => Ok(Box::new(RangeQuery::new_f64_bounds(
-                self.field_name_owned(field),
+            FacetOp::Lt => Ok(Box::new(RangeQuery::new(
                 Bound::Unbounded,
-                Bound::Excluded(n),
+                Bound::Excluded(at()),
             ))),
-            FacetOp::Gt => Ok(Box::new(RangeQuery::new_f64_bounds(
-                self.field_name_owned(field),
-                Bound::Excluded(n),
+            FacetOp::Gt => Ok(Box::new(RangeQuery::new(
+                Bound::Excluded(at()),
                 Bound::Unbounded,
             ))),
             FacetOp::Contains => Err(TantivyIndexError::InvalidFacetValue {
@@ -570,21 +613,12 @@ impl TantivySearchIndex {
             })
     }
 
-    fn field_name_owned(&self, field: Field) -> String {
-        self.index.schema().get_field_name(field).to_string()
-    }
-
     fn doc_to_summary(&self, doc: &TantivyDocument) -> Option<ComponentSummary> {
         let row_id =
             read_text(doc, self.fields.uuid).and_then(|s| uuid::Uuid::parse_str(&s).ok())?;
         let internal_pn = read_text(doc, self.fields.internal_pn).unwrap_or_default();
         let mpn = read_text(doc, self.fields.mpn).unwrap_or_default();
         let description = read_text(doc, self.fields.description).unwrap_or_default();
-        // `head_major` / `head_minor` are written as zeros in the
-        // DBLib row model; the unused binding below silences the
-        // unused-helper warning until a future schema rebuild drops
-        // those columns and the helper with them.
-        let _ = read_u64;
         let state_raw = read_text(doc, self.fields.state).unwrap_or_default();
         let state = parse_lifecycle_token(&state_raw).unwrap_or(LifecycleState::Released);
 
@@ -595,6 +629,26 @@ impl TantivySearchIndex {
             state,
             description,
         })
+    }
+}
+
+impl Drop for TantivySearchIndex {
+    /// Wind the writer down before the index and its directory handle go away.
+    /// Dropping an `IndexWriter` does not join its merge threads, so on Windows
+    /// they could still hold index files open when the same path is reopened
+    /// (e.g. after a library remount), failing the next commit with
+    /// `ERROR_ACCESS_DENIED` (#1593). Uncommitted docs are discarded, as before.
+    fn drop(&mut self) {
+        let slot = match self.writer.get_mut() {
+            Ok(slot) => slot,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if let Some(mut writer) = slot.take() {
+            let _ = writer.rollback();
+            if let Err(e) = writer.wait_merging_threads() {
+                tracing::warn!(target: "signex::search", error = %e, "merge threads did not finish cleanly on close");
+            }
+        }
     }
 }
 
@@ -625,7 +679,7 @@ impl SearchIndex for TantivySearchIndex {
                 // index-error → empty-result outcome is distinguishable
                 // from a legitimate "no matches" outcome.
                 tracing::warn!(
-                    target = "signex::search",
+                    target: "signex::search",
                     error = %e,
                     "search build_query failed; returning empty result set"
                 );
@@ -633,11 +687,11 @@ impl SearchIndex for TantivySearchIndex {
             }
         };
 
-        let top = match searcher.search(&query, &TopDocs::with_limit(limit)) {
+        let top = match searcher.search(&query, &TopDocs::with_limit(limit).order_by_score()) {
             Ok(t) => t,
             Err(e) => {
                 tracing::warn!(
-                    target = "signex::search",
+                    target: "signex::search",
                     error = %e,
                     "tantivy search failed; returning empty result set"
                 );
@@ -645,16 +699,108 @@ impl SearchIndex for TantivySearchIndex {
             }
         };
 
-        top.into_iter()
-            .filter_map(|(_score, addr)| {
-                let doc: TantivyDocument = searcher.doc(addr).ok()?;
-                self.doc_to_summary(&doc)
-            })
-            .collect()
+        // A per-document read failure used to vanish inside a
+        // `filter_map`, so a stale or partly corrupt index returned
+        // fewer rows than it matched with no signal at all: specific
+        // parts disappear from results while their neighbours come
+        // back normally, and the user concludes the part is not in the
+        // library and re-creates it.
+        let matched = top.len();
+        let (docs, unreadable) =
+            split_readable_docs(top.into_iter().map(|(_score, addr)| searcher.doc(addr)));
+        if let Some(first_error) = &unreadable.first_error {
+            tracing::warn!(
+                target: "signex::search",
+                unreadable = unreadable.count,
+                matched,
+                error = %first_error,
+                "some matching documents could not be read back; results are incomplete and the index may need rebuilding"
+            );
+        }
+
+        docs.iter().filter_map(|d| self.doc_to_summary(d)).collect()
     }
 }
 
+/// Tally of search hits whose stored document could not be read back
+/// out of the index.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct UnreadableHits {
+    /// How many hits were dropped.
+    count: usize,
+    /// The first failure's rendered error — enough to diagnose, without
+    /// one log line per dropped row.
+    first_error: Option<String>,
+}
+
+/// Split a batch of stored-document reads into the documents that came
+/// back and a tally of the ones that failed.
+fn split_readable_docs<I>(reads: I) -> (Vec<TantivyDocument>, UnreadableHits)
+where
+    I: IntoIterator<Item = Result<TantivyDocument, TantivyError>>,
+{
+    let mut docs = Vec::new();
+    let mut unreadable = UnreadableHits::default();
+    for read in reads {
+        match read {
+            Ok(doc) => docs.push(doc),
+            Err(e) => {
+                unreadable.count += 1;
+                if unreadable.first_error.is_none() {
+                    unreadable.first_error = Some(e.to_string());
+                }
+            }
+        }
+    }
+    (docs, unreadable)
+}
+
 // ── helpers ────────────────────────────────────────────────────────────
+
+/// Extra commit attempts after a transient Windows sharing violation.
+const COMMIT_RETRIES: usize = 5;
+
+fn writer_closed() -> TantivyIndexError {
+    TantivyIndexError::Internal("index writer already closed".into())
+}
+
+/// Windows `ERROR_ACCESS_DENIED` (5) / `ERROR_SHARING_VIOLATION` (32) surfaced
+/// as an I/O error. Always false off Windows, where these are real errors.
+fn is_transient_sharing_violation(e: &TantivyError) -> bool {
+    use tantivy::directory::error::OpenWriteError;
+    if !cfg!(windows) {
+        return false;
+    }
+    let io = match e {
+        TantivyError::IoError(io) => io,
+        TantivyError::OpenWriteError(OpenWriteError::IoError { io_error, .. }) => io_error,
+        _ => return false,
+    };
+    io.kind() == std::io::ErrorKind::PermissionDenied || matches!(io.raw_os_error(), Some(5 | 32))
+}
+
+/// Re-parse `text` as a quoted phrase over the same default fields, so
+/// query-syntax characters inside a part number are matched as text
+/// rather than interpreted as operators.
+///
+/// Quoting is the escape: `"` and `\` are the only characters Tantivy
+/// still reads specially inside a phrase, and blanking them leaves the
+/// surrounding tokens intact. When even the quoted form will not parse
+/// — text that tokenises to nothing, for instance — this errors rather
+/// than widening the query, because `query()` turns an error into an
+/// honest empty result and a widened query into a false one.
+fn literal_phrase_query(
+    parser: &QueryParser,
+    text: &str,
+) -> Result<Box<dyn Query>, TantivyIndexError> {
+    let escaped: String = text
+        .chars()
+        .map(|c| if c == '"' || c == '\\' { ' ' } else { c })
+        .collect();
+    parser
+        .parse_query(&format!("\"{escaped}\""))
+        .map_err(|e| TantivyIndexError::InvalidQuery(format!("{text:?} could not be matched: {e}")))
+}
 
 fn parse_f64(facet: &Facet) -> Result<f64, TantivyIndexError> {
     facet
@@ -688,12 +834,101 @@ fn parse_lifecycle_token(s: &str) -> Option<LifecycleState> {
     })
 }
 
+/// The number a parameter is indexed and compared as. A measurement is
+/// indexed in base units, so facet bounds are base-unit numbers and a
+/// legacy `{4.7, "kΩ"}` is found at 4700 like `{4700, "ohm"}` (#1572).
+fn indexed_number(v: &ParamValue) -> Option<f64> {
+    match v {
+        ParamValue::Number(n) => Some(*n),
+        ParamValue::Measurement { .. } => v.as_quantity().map(|q| q.base()),
+        _ => None,
+    }
+}
+
 fn read_text(doc: &TantivyDocument, field: Field) -> Option<String> {
     doc.get_first(field)
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
 }
 
-fn read_u64(doc: &TantivyDocument, field: Field) -> Option<u64> {
-    doc.get_first(field).and_then(|v| v.as_u64())
+/// Longest query text handed to the parser, in bytes.
+const MAX_QUERY_TEXT_BYTES: usize = 1_000;
+
+/// Truncate `text` to at most [`MAX_QUERY_TEXT_BYTES`] bytes, cutting at a
+/// char boundary so a multi-byte character straddling the limit cannot panic.
+fn bound_query_text(text: &str) -> &str {
+    &text[..text.floor_char_boundary(MAX_QUERY_TEXT_BYTES)]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read_error(what: &str) -> TantivyError {
+        TantivyError::InvalidArgument(what.to_string())
+    }
+
+    #[test]
+    fn measurements_are_indexed_in_base_units() {
+        let legacy = ParamValue::Measurement {
+            value: 4.7,
+            unit: "kΩ".into(),
+        };
+        let canonical = ParamValue::Measurement {
+            value: 4700.0,
+            unit: "ohm".into(),
+        };
+        assert_eq!(indexed_number(&legacy), Some(4700.0));
+        assert_eq!(indexed_number(&canonical), Some(4700.0));
+        assert_eq!(indexed_number(&ParamValue::Text("4.7k".into())), None);
+    }
+
+    #[test]
+    fn a_clean_batch_keeps_every_document_and_tallies_nothing() {
+        let reads = vec![
+            Ok(TantivyDocument::default()),
+            Ok(TantivyDocument::default()),
+        ];
+        let (docs, unreadable) = split_readable_docs(reads);
+        assert_eq!(docs.len(), 2);
+        assert_eq!(unreadable, UnreadableHits::default());
+        assert_eq!(unreadable.first_error, None, "nothing to report");
+    }
+
+    /// The dropped rows are the whole finding: without a tally the
+    /// caller cannot tell "1 part matched" from "3 matched and 2 could
+    /// not be read", and the user concludes the missing parts are not
+    /// in the library and re-creates them.
+    #[test]
+    fn unreadable_documents_are_counted_and_the_first_error_survives() {
+        let reads = vec![
+            Ok(TantivyDocument::default()),
+            Err(read_error("store read on segment 3")),
+            Err(read_error("store read on segment 4")),
+        ];
+        let (docs, unreadable) = split_readable_docs(reads);
+        assert_eq!(docs.len(), 1, "readable hits still come back");
+        assert_eq!(unreadable.count, 2);
+        let reported = unreadable.first_error.expect("a report to log");
+        assert!(
+            reported.contains("store read on segment 3"),
+            "the tally lost the diagnosis: {reported}"
+        );
+    }
+
+    #[test]
+    fn query_text_cut_inside_a_multibyte_char_does_not_panic() {
+        // 999 ASCII bytes then 2-byte chars: byte 1000 is mid-character.
+        for ch in ['µ', 'ç', '😀'] {
+            let text = format!("{}{}", "a".repeat(999), ch.to_string().repeat(10));
+            let bounded = bound_query_text(&text);
+            assert!(bounded.len() <= MAX_QUERY_TEXT_BYTES);
+            assert!(text.starts_with(bounded));
+        }
+        let text = format!("{}µµµ", "a".repeat(999));
+        assert!(!text.is_char_boundary(MAX_QUERY_TEXT_BYTES));
+        assert_eq!(bound_query_text(&text).len(), 999);
+        let short = "µ";
+        assert_eq!(bound_query_text(short), short);
+    }
 }

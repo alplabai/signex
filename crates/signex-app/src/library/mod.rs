@@ -1,37 +1,66 @@
-//! `signex-app`'s library subsystem (DBLib model — v0.9-refactor-2).
+//! `signex-app`'s library subsystem (DBLib model).
 //!
 //! Wires the [`signex_library`] crate (data + adapters) into the iced
 //! UI. Components are TSV rows under `<lib>/tables/<category>.tsv`,
 //! addressed by [`crate::library::state::EditorAddress`]. This module
 //! owns:
 //!
-//! * the **left-dock Library panel** — open libraries with inline
-//!   per-table row grids (see `panel.rs`);
-//! * the **Place Component picker modal** (`picker.rs`);
-//! * the **Component Preview tab** (`editor/`) — read-only Symbol +
-//!   Footprint render plus 5 tabs (Preview / Parameters / Supply /
-//!   Datasheet / Simulation). Symbol / Footprint editing happens via
-//!   the standalone `.snxsym` / `.snxfpt` document tabs;
+//! * the **left-dock Library panel** (`panel.rs`) — a flat list of
+//!   open libraries, each opening its Library Browser tab;
+//! * the **Library Browser** (`browser/`) and the **Place Component
+//!   picker modal** (`picker.rs`, `place.rs`);
+//! * the **Component Preview tab** (`component_preview/`, `editor/`) —
+//!   Symbol + Footprint render plus Preview / Parameters / Supply /
+//!   Datasheet / Simulation tabs; primitive editing happens in the
+//!   standalone `.snxsym` / `.snxfpt` document tabs;
+//! * **mounting** (`mount.rs`, off-thread), **drift / update**
+//!   (`drift.rs`, `updates_dialog.rs`), **dangling-reference** checks
+//!   (`dangling.rs`), **pricing** (`pricing.rs`, `bom_prices.rs`),
+//!   external-change polling (`external_poll.rs`) and **recovery**
+//!   (`recovery.rs`);
 //! * the **Distributor APIs settings** panel
 //!   (`settings/distributor_apis.rs`).
 
+pub mod bom_prices;
 pub mod browser;
 pub mod close_prompt;
 pub mod commands;
 pub mod component_preview;
 pub mod create_options;
+pub mod dangling;
 pub mod document_options;
+pub mod drift;
 pub mod edit_row_modal;
+mod edit_row_params;
 pub mod editor;
+pub mod external_poll;
 pub mod messages;
-pub mod new_component;
+pub(crate) mod modal_chrome;
+pub mod mount;
 pub mod panel;
 pub mod picker;
+pub mod place;
+pub mod placed_part;
+pub(crate) mod prefix_picker;
+pub mod preview_refresh;
+pub mod pricing;
 pub mod primitive_picker;
+pub mod range_filter;
 pub mod recovery;
+pub mod refresh;
+pub mod reprefix_lookup;
+pub mod resolve;
+pub mod row_documents;
 pub mod settings;
 pub mod state;
+pub mod stock_copy;
+#[cfg(test)]
+pub(crate) mod test_adapters;
+pub(crate) mod unit_picker;
 pub mod updates_dialog;
+#[cfg(test)]
+mod view_purity_tests;
+pub mod writes;
 
 // Re-export the heavily-used types so callers don't have to know
 // the internal module layout. `LibraryMessage` is folded into the
@@ -39,13 +68,22 @@ pub mod updates_dialog;
 // `Signex`. The remaining sub-types are used widely enough across
 // the app crate to warrant a flat re-export, even where the only
 // current consumer is the dispatcher (Phase 2 widens the surface).
-#[allow(unused_imports)]
 pub use messages::{
-    BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg,
+    BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PlacedPartAction, PlacedPartMsg,
+    PrimitivePickerMsg, SettingsMsg,
 };
-#[allow(unused_imports)]
 pub use state::{
-    ComponentEditorState, ComponentPreviewState, ComponentsMountSource, ComponentsPanelState,
-    DeleteConfirmState, EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary,
+    ComponentPreviewState, ComponentsMountSource, ComponentsPanelState, DeleteConfirmState,
+    EditRowModalState, LibraryBrowserState, LibraryState, NewLibraryDefaults, OpenLibrary,
     PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };
+
+/// A dialog card's length: `px` in the main window, the whole window in the
+/// dialog's own window (the window is the frame; docs/DETACHED_MODALS.md).
+pub(crate) fn card_len(windowed: bool, px: f32) -> iced::Length {
+    if windowed {
+        iced::Length::Fill
+    } else {
+        iced::Length::Fixed(px)
+    }
+}

@@ -1,9 +1,8 @@
 //! Library Browser grid-interaction handlers — active-table / row
-//! selection, search, sort, per-cell edit buffers, the lifecycle and
-//! class filters, and the distributor pricing-refresh stubs.
+//! selection, search, sort, per-cell edit buffers, the lifecycle
+//! and class filters.
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
 
@@ -15,8 +14,25 @@ impl Signex {
         table: String,
     ) -> Task<Message> {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            if state.active_table.as_deref() != Some(table.as_str()) {
+                // The filters name the old table's columns.
+                state.range_filters = Default::default();
+            }
             state.active_table = Some(table);
             state.selected_row = None;
+        }
+        Task::none()
+    }
+
+    /// A range filter on a parameter column of a Library Browser tab. The
+    /// caches resync in `finish_update`.
+    pub(in crate::app::dispatch::library) fn handle_browser_range_filter(
+        &mut self,
+        library_path: std::path::PathBuf,
+        msg: crate::library::messages::RangeFilterMsg,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.range_filters.apply(msg);
         }
         Task::none()
     }
@@ -30,12 +46,10 @@ impl Signex {
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.search = value.clone();
         }
-        // Write-through so reopening this library next session
-        // restores the same filter — UX_IMPROVEMENTS §1.1.
-        // Per-path scoping prevents two libraries from
-        // sharing the same search term.
-        crate::fonts::write_library_browser_search(&library_path, &value);
-        Task::none()
+        // Persisted debounced and off-thread so reopening this library
+        // next session restores the same filter (#859). Per-path scoping
+        // prevents two libraries from sharing the same search term.
+        self.persist_library_search_soon(&library_path, &value)
     }
 
     /// Column-header click — toggles sort direction on the matching key.
@@ -67,6 +81,60 @@ impl Signex {
         Task::none()
     }
 
+    /// The grid's scrollable reported a new offset.
+    pub(in crate::app::dispatch::library) fn handle_browser_grid_scrolled(
+        &mut self,
+        library_path: std::path::PathBuf,
+        offset_y: f32,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.grid_scroll.offset_y = offset_y;
+        }
+        Task::none()
+    }
+
+    /// The grid was laid out at a new height.
+    pub(in crate::app::dispatch::library) fn handle_browser_grid_resized(
+        &mut self,
+        library_path: std::path::PathBuf,
+        viewport_h: f32,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            state.grid_scroll.viewport_h = viewport_h;
+        }
+        Task::none()
+    }
+
+    /// Scroll the grid so the selected row is in view; a no-op when it
+    /// already is, or is not in the filtered list. The selection can move
+    /// without a click (a freshly added row), so it may be outside the
+    /// window the grid builds.
+    pub(in crate::app::dispatch::library) fn reveal_selected_browser_row(
+        &mut self,
+        library_path: &std::path::Path,
+    ) -> Task<Message> {
+        // Bring the filtered rows up to date: the row set just changed.
+        self.library.sync_view_caches();
+        let Some(index) = self.library.browser_row_position_of_selection(library_path) else {
+            return Task::none();
+        };
+        let Some(state) = self.library.library_browsers.get_mut(library_path) else {
+            return Task::none();
+        };
+        let Some(offset_y) = crate::library::browser::reveal_row_offset(index, state.grid_scroll)
+        else {
+            return Task::none();
+        };
+        state.grid_scroll.offset_y = offset_y;
+        iced::widget::operation::scroll_to(
+            crate::library::browser::grid_scroll_id(library_path),
+            iced::widget::scrollable::AbsoluteOffset {
+                x: None,
+                y: Some(offset_y),
+            },
+        )
+    }
+
     /// User dismissed the delete confirm modal without deleting.
     pub(in crate::app::dispatch::library) fn handle_browser_delete_row_cancel(
         &mut self,
@@ -87,6 +155,9 @@ impl Signex {
         column: String,
         value: String,
     ) -> Task<Message> {
+        if self.refuse_read_only_write(&library_path) {
+            return Task::none();
+        }
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
             state.cell_edit.insert((row_id, column), value);
         }
@@ -138,47 +209,6 @@ impl Signex {
             // is filtered out.
             state.selected_row = None;
         }
-        Task::none()
-    }
-
-    /// Right-click on a Library Browser row → "Refresh Pricing".
-    /// Stage 18 stub.
-    pub(in crate::app::dispatch::library) fn handle_browser_refresh_pricing(
-        &mut self,
-        library_path: std::path::PathBuf,
-        table: String,
-        row_id: RowId,
-    ) -> Task<Message> {
-        // Stage 18 stub — the real adapter dispatch lands once
-        // `signex_library::DistributorAdapter::refresh_pricing`
-        // gets a row-binding loop. For now we log so the wiring
-        // path is observable when the user clicks the menu item.
-        tracing::info!(
-            target: "signex::library",
-            path = %library_path.display(),
-            table = %table,
-            row = %row_id,
-            "TODO: distributor refresh wiring (BrowserRefreshPricing)"
-        );
-        Task::none()
-    }
-
-    /// Library node right-click → "Refresh All Pricing". Stage 18 stub.
-    pub(in crate::app::dispatch::library) fn handle_library_refresh_all_pricing(
-        &mut self,
-        library_path: std::path::PathBuf,
-    ) -> Task<Message> {
-        let count = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.total_rows())
-            .unwrap_or(0);
-        tracing::info!(
-            target: "signex::library",
-            path = %library_path.display(),
-            rows = count,
-            "TODO: distributor refresh wiring (LibraryRefreshAllPricing)"
-        );
         Task::none()
     }
 }

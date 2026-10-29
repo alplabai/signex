@@ -18,6 +18,12 @@ impl Signex {
             log::warn!("BOM preview: no active schematic");
             return Task::none();
         }
+        // Pin the preview to the document it is built for; Export writes
+        // this one even after a tab switch (#852).
+        let Some(source) = self.document_state.active_path.clone() else {
+            crate::diagnostics::log_warning("BOM preview: no active document to export");
+            return Task::none();
+        };
         let active_variant = self
             .document_state
             .active_document_project()
@@ -36,9 +42,10 @@ impl Signex {
             },
             ..BomOptions::default()
         };
-        let Some(table) = self.rebuild_bom_table(&opts) else {
-            self.document_state.export_error =
-                Some("Cannot build BOM: no active schematic.".to_string());
+        let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                "Cannot build BOM: no active schematic.".to_string(),
+            ));
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -49,9 +56,14 @@ impl Signex {
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
+        let row_order =
+            crate::app::view::dialogs::sorted_row_order(&table.rows, &opts.columns, default_sort);
         self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
+            row_order,
+            source,
             options: opts,
             table,
+            validation_report,
             variants,
             sort: default_sort,
             column_drag: None,
@@ -89,6 +101,26 @@ impl Signex {
             preview.options.include_not_fitted = include;
         }
         self.rerollup_bom_preview();
+    }
+
+    /// Turn one validation rule on or off and re-validate. Rule flags do not
+    /// change the rolled-up table, so no re-rollup happens.
+    pub(crate) fn handle_bom_preview_set_rule(
+        &mut self,
+        rule: signex_output::BomRule,
+        enabled: bool,
+    ) {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+            return;
+        };
+        preview.options.rule_options.set_enabled(rule, enabled);
+        let opts = preview.options.clone();
+        let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
+            return;
+        };
+        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+            preview.validation_report = signex_output::bom::validate(&ctx, &opts, &preview.table);
+        }
     }
 
     /// Flip a column's presence in `BomOptions.columns`. Removing a
@@ -151,47 +183,55 @@ impl Signex {
     pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
-            if let Some(src) = preview.column_drag.take() {
-                if src != dest
-                    && src < preview.options.columns.len()
-                    && dest < preview.options.columns.len()
-                {
-                    let col = preview.options.columns.remove(src);
-                    let insert_at = if src < dest { dest } else { dest };
-                    let insert_at = insert_at.min(preview.options.columns.len());
-                    preview.options.columns.insert(insert_at, col);
-                    // Sort spec follows the moved column. If the
-                    // sort was on a different column, indices may
-                    // have shifted under it.
-                    if let Some((sort_idx, asc)) = preview.sort {
-                        let new_idx = if sort_idx == src {
-                            insert_at
-                        } else if src < sort_idx && insert_at >= sort_idx {
-                            sort_idx - 1
-                        } else if src > sort_idx && insert_at <= sort_idx {
-                            sort_idx + 1
-                        } else {
-                            sort_idx
-                        };
-                        preview.sort = Some((new_idx, asc));
-                    }
+            if let Some(src) = preview.column_drag.take()
+                && src != dest
+                && src < preview.options.columns.len()
+                && dest < preview.options.columns.len()
+            {
+                let col = preview.options.columns.remove(src);
+                // The dropped column takes the slot of the header it was
+                // released on, in both directions (#592): `dest` is that
+                // header's index in the pre-removal list, and inserting
+                // the column back at `dest` puts it exactly there.
+                //   - dragging right (src < dest): the columns between
+                //     shift one left, so the target header ends up just
+                //     before the dropped column.
+                //   - dragging left (src > dest): they shift one right, so
+                //     the target header ends up just after it.
+                // (`dest - 1` would instead insert *before* the target when
+                // dragging right, the convention for a drop line drawn
+                // between headers, which this header-drop UI has no use for.)
+                let insert_at = dest.min(preview.options.columns.len());
+                preview.options.columns.insert(insert_at, col);
+                // Sort spec follows the moved column. If the
+                // sort was on a different column, indices may
+                // have shifted under it.
+                if let Some((sort_idx, asc)) = preview.sort {
+                    let new_idx = if sort_idx == src {
+                        insert_at
+                    } else if src < sort_idx && insert_at >= sort_idx {
+                        sort_idx - 1
+                    } else if src > sort_idx && insert_at <= sort_idx {
+                        sort_idx + 1
+                    } else {
+                        sort_idx
+                    };
+                    preview.sort = Some((new_idx, asc));
                 }
             }
         }
     }
 
-    /// User clicked Export inside the BOM preview modal — stash the
-    /// live options on the document, kick off the file dialog, and
-    /// finish in `handle_export_bom_finished`. Mirrors the
-    /// PrintPreview → Export PDF pattern; without `pending_bom_options`
-    /// the finish handler would fall back to defaults and the user's
-    /// column / grouping / variant picks would silently disappear
-    /// between modal-close and file-write.
+    /// User clicked Export inside the BOM preview modal — capture the live
+    /// options and the preview's source document, kick off the file dialog,
+    /// and finish in `handle_export_bom_finished`. Mirrors the
+    /// PrintPreview → Export PDF pattern.
     pub(crate) fn handle_bom_preview_export(&mut self) -> Option<Task<Message>> {
         let Some(preview) = self.document_state.bom_preview.as_ref() else {
             return Some(Task::none());
         };
         let options = preview.options.clone();
+        let source = preview.source.clone();
         let (default_name, format_filter) = match options.format {
             BomFormat::Csv => ("bom.csv", ("CSV (.csv)", &["csv"][..])),
             BomFormat::Xlsx => ("bom.xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
@@ -202,11 +242,10 @@ impl Signex {
         let filter_label_owned = filter_label.to_string();
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
-        // Stash the live options + dismiss the preview state. The
-        // detached preview window also needs to close so the OS
-        // window doesn't linger after Export — same shape as
-        // `handle_print_preview_export`.
-        self.document_state.pending_bom_options = Some(options);
+        // The options and source ride inside `BomFinished`, so a second
+        // Export click gets its own copy (#852). Dismiss the preview; the
+        // detached preview window also needs to close so the OS window
+        // doesn't linger after Export.
         self.document_state.bom_preview = None;
         let close_window = self.close_detached_modal(crate::app::state::ModalId::BomPreview);
 
@@ -221,12 +260,12 @@ impl Signex {
                     .await
                     .map(|file| file.path().to_path_buf())
             },
-            |path| {
-                if let Some(path) = path {
-                    Message::Export(ExportMsg::BomFinished(Ok(path)))
-                } else {
-                    Message::Noop
-                }
+            move |path| {
+                Message::Export(ExportMsg::BomFinished {
+                    source,
+                    options: Box::new(options),
+                    result: path.ok_or_else(|| "cancelled".to_string()),
+                })
             },
         );
         Some(Task::batch([close_window, dialog]))
@@ -244,9 +283,17 @@ impl Signex {
     /// Build (or rebuild) the BomTable from the current document
     /// state and the supplied options. Returns `None` when there's
     /// no active schematic to roll up.
-    fn rebuild_bom_table(&self, opts: &BomOptions) -> Option<signex_output::BomTable> {
-        let ctx = super::build_export_context(&self.document_state)?;
-        Some(signex_output::bom::rollup(&ctx, opts))
+    fn rebuild_bom_table(
+        &self,
+        opts: &BomOptions,
+    ) -> Option<(signex_output::BomTable, signex_output::BomValidationReport)> {
+        let mut ctx = super::build_bom_export_context(&self.document_state)?;
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
+        let opts = BomOptions {
+            price_book: crate::library::bom_prices::price_book(&self.library),
+            ..opts.clone()
+        };
+        Some(signex_output::bom::rollup_with_validation(&ctx, &opts))
     }
 
     fn rerollup_bom_preview(&mut self) {
@@ -258,37 +305,42 @@ impl Signex {
         else {
             return;
         };
-        if let Some(table) = self.rebuild_bom_table(&opts)
+        if let Some((table, report)) = self.rebuild_bom_table(&opts)
             && let Some(preview) = self.document_state.bom_preview.as_mut()
         {
             preview.table = table;
+            preview.validation_report = report;
         }
     }
 
     pub(crate) fn handle_export_bom_finished(
         &mut self,
+        source: PathBuf,
+        mut opts: BomOptions,
         result: Result<PathBuf, String>,
     ) -> Task<Message> {
         let save_path = match result {
             Ok(p) => p,
             Err(e) => {
-                // Cancelled — drop any pending options so the next
-                // open of the modal starts fresh.
-                self.document_state.pending_bom_options = None;
-                log::info!("BOM export cancelled: {e}");
+                log::info!("BOM export not written: {e}");
                 return Task::none();
             }
         };
 
-        let (ctx, issues) = match super::build_export_scope(&self.document_state) {
-            Some(c) => c,
-            None => {
-                self.document_state.pending_bom_options = None;
-                self.document_state.export_error =
-                    Some("Cannot export BOM: no active schematic.".to_string());
-                return Task::none();
-            }
-        };
+        let (mut ctx, issues) =
+            match super::build_bom_export_scope_for_source(&self.document_state, &source) {
+                Some(c) => c,
+                None => {
+                    let reason = format!(
+                        "Cannot export BOM: the source document {} is no longer open.",
+                        source.display()
+                    );
+                    crate::diagnostics::log_warning(reason.clone());
+                    self.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::export(reason));
+                    return Task::none();
+                }
+            };
         // A BOM is a machine-and-procurement-consumed deliverable, not the
         // print-preview intermediate `rebuild_bom_table` renders — so unlike
         // that path it must not stay silent. A cross-dir child-filename
@@ -296,70 +348,75 @@ impl Signex {
         // *wrong* subtree — wrong parts, wrong quantities. Surface it loudly,
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
-        super::log_stitch_issues(&self.document_state, &ctx, &issues);
+        super::log_stitch_issues(&source, &ctx, &issues);
+        crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
+        // A project whose hierarchy could not be derived falls back to the
+        // printed pages only, so child-sheet parts would be missing. Say so in
+        // BOM terms; the netlist warning does not tell a BOM user that.
+        if self.document_state.document_project(&source).is_some() && ctx.netlist_sheets.is_empty()
+        {
+            crate::diagnostics::log_warning(
+                "BOM: project hierarchy could not be derived - parts on child sheets are not included",
+            );
+        }
 
-        // Honour the user's picks from the BOM preview modal when
-        // present. The pending slot is populated by
-        // `handle_bom_preview_export`; falling back here covers any
-        // hypothetical future caller (none today) that drives the
-        // export message directly without going through the preview.
-        let format_from_path = BomFormat::from_output_path(&save_path);
-        let opts = match self.document_state.pending_bom_options.take() {
-            Some(mut user_opts) => {
-                // Picker filter sets a default extension; the user
-                // may rename the file in the dialog. Trust the
-                // saved-as extension over the picker's intent.
-                user_opts.format = format_from_path;
-                user_opts
-            }
-            None => {
-                let active_variant = self
-                    .document_state
-                    .active_document_project()
-                    .and_then(|p| p.data.active_variant.clone())
-                    .unwrap_or_else(|| "Base".to_string());
-                BomOptions {
-                    columns: vec![
-                        BomColumn::Name,
-                        BomColumn::Description,
-                        BomColumn::Designator,
-                        BomColumn::Footprint,
-                        BomColumn::LibRef,
-                        BomColumn::Qty,
-                    ],
-                    grouping: BomGrouping::Grouped,
-                    format: format_from_path,
-                    include_dnp: false,
-                    include_not_fitted: false,
-                    active_variant: if active_variant.eq_ignore_ascii_case("Base") {
-                        None
-                    } else {
-                        Some(active_variant)
-                    },
-                    rule_options: Default::default(),
-                }
-            }
-        };
+        // Picker filter sets a default extension; the user may rename the
+        // file in the dialog. Trust the saved-as extension over the
+        // picker's intent.
+        opts.format = BomFormat::from_output_path(&save_path);
+        opts.price_book = crate::library::bom_prices::price_book(&self.library);
 
         match BomExporter.export(&ctx, &opts) {
-            Ok(output) => match std::fs::write(&save_path, &output.bytes) {
-                Ok(()) => log::info!(
+            Ok(output) => {
+                let success_log = format!(
                     "Wrote {} ({} bytes)",
                     save_path.display(),
                     output.bytes.len(),
-                ),
-                Err(e) => {
-                    self.document_state.export_error = Some(format!(
-                        "Could not write BOM to {}:\n{e}",
-                        save_path.display(),
-                    ));
-                }
-            },
+                );
+                // Advisory, not a gate: the file is written; tell the
+                // user what validation found instead of dropping it.
+                let advisory = bom_validation_notice(&output.validation_report, &save_path);
+                return self.write_export(
+                    save_path,
+                    output.bytes,
+                    "BOM",
+                    success_log,
+                    advisory,
+                    Vec::new(),
+                );
+            }
             Err(e) => {
-                self.document_state.export_error = Some(format!("BOM export failed: {e}"));
+                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+                    format!("BOM export failed: {e}"),
+                ));
             }
         }
 
         Task::none()
     }
+}
+
+/// Summary card shown after a BOM export whose validation found issues;
+/// `None` when the report is empty.
+fn bom_validation_notice(
+    report: &signex_output::BomValidationReport,
+    saved: &std::path::Path,
+) -> Option<crate::app::state::ErrorNotice> {
+    let summary = report.summary()?;
+    let mut detail = format!("Wrote {} with {summary}.", saved.display());
+    for issue in report.issues.iter().take(8) {
+        detail.push_str(&format!(
+            "
+- {}",
+            issue.message
+        ));
+    }
+    if report.issues.len() > 8 {
+        detail.push_str(&format!(
+            "
+... and {} more",
+            report.issues.len() - 8
+        ));
+    }
+    Some(crate::app::state::ErrorNotice::export_advisory(detail))
 }

@@ -25,6 +25,10 @@ pub struct FootprintEditorPanelContext {
     /// Number of free DoF the most recent solve reported, plus
     /// elapsed_ms. `None` if no solve has run yet.
     pub last_solve: Option<FootprintSolveSummary>,
+    /// The constraints the last rejected edit conflicted with. The sketch
+    /// is back at its last good solve; these rows say why the edit did not
+    /// stick. Empty after any edit or solve that succeeds.
+    pub rejected_conflicts: Vec<RejectedConflictSummary>,
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
     pub selected_pad: Option<FootprintPadSummary>,
@@ -65,6 +69,12 @@ pub struct FootprintEditorPanelContext {
     /// v0.16.2 — solver warnings from the most recent solve + bake.
     /// Drives the Properties panel's "Solve warnings" section.
     pub solve_warnings: Vec<String>,
+    /// #1073 — `Some(n)` while the open-time offer to restore paste and
+    /// thermal relief on `n` pre-#1052 sketch pads is still pending.
+    pub legacy_pad_stack_offer: Option<usize>,
+    /// #1073 — numbers of the SMD pads whose copper side has paste
+    /// disabled (no stencil opening).
+    pub paste_disabled_smd_pads: Vec<String>,
     /// v0.16.2 — sketch-entity ID of the primary selection. Wired
     /// through so the Properties panel's Role pick_list can emit
     /// `FootprintSketchSetRole` with the right id.
@@ -358,7 +368,7 @@ impl std::fmt::Display for NumberingSchemeKindUi {
     }
 }
 
-/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`].
+/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`](crate::panels::PanelMsg::FpEditorEditArrayParam).
 /// Each variant maps to a single text-input on one [`ArrayKindSummary`]
 /// branch; the handler uses the variant to disambiguate the target
 /// field when mutating the array in place.
@@ -469,9 +479,22 @@ pub struct FootprintSolveSummary {
     /// v0.22 Phase E3+E4 — per-over-constraint summary so the
     /// Properties panel can list the conflicts and the user can
     /// click each to focus the canvas on the offending geometry.
-    /// Sorted descending by `residual_magnitude` so the worst
-    /// offender is first. Empty when `over_constraint_count == 0`.
+    /// Rows whose residual could not be evaluated come first, then
+    /// descending by `residual_magnitude` so the worst offender
+    /// leads. Empty when `over_constraint_count == 0`.
     pub over_constraints: Vec<OverConstraintSummary>,
+    /// #1649 — consistent constraints that restate earlier ones, in
+    /// constraint order. Same row shape as `over_constraints`; the residual
+    /// is ~0 and not shown.
+    pub redundant_constraints: Vec<OverConstraintSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RejectedConflictSummary {
+    pub constraint_id: signex_sketch::id::ConstraintId,
+    pub kind_label: &'static str,
+    /// The entity a click selects; `None` when the revert removed it.
+    pub focus_entity_id: Option<signex_sketch::id::SketchEntityId>,
 }
 
 #[derive(Debug, Clone)]
@@ -488,7 +511,14 @@ pub struct OverConstraintSummary {
     /// below `Solver::tolerance` for satisfiable constraints; values
     /// above `RANK_TOL` indicate the constraint couldn't be met
     /// alongside the others.
-    pub residual_magnitude: f64,
+    ///
+    /// GH #599 — `None` when the residual could not be evaluated at
+    /// all (a target expression that no longer resolves against the
+    /// solve's parameters). It is deliberately not `0.0`: zero is
+    /// what a perfectly satisfied constraint reports, so the panel
+    /// would present the conflict as the thing least worth looking
+    /// at. Unevaluable rows sort first.
+    pub residual_magnitude: Option<f64>,
     /// First Point entity the constraint touches. Click → select
     /// this Point so the canvas pans and the constraint icon
     /// rendered in red sits in view. `None` for constraints with
@@ -515,6 +545,8 @@ pub struct FootprintPadSummary {
     pub shape: signex_library::PadShape,
     pub kind: signex_library::PadKind,
     pub drill_diameter_mm: Option<f64>,
+    /// Oval-slot length of the drill; `None` = round hole.
+    pub drill_slot_length_mm: Option<f64>,
     pub stack: crate::library::editor::footprint::state::PadStackUi,
     pub feature_top: signex_sketch::attr::PadFeature,
     pub feature_bottom: signex_sketch::attr::PadFeature,

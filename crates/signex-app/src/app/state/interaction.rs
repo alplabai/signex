@@ -1,7 +1,7 @@
 //! Canvas interaction state — active tool, per-window canvases, drag /
 //! context-menu / text-edit sub-state. Split from `app/state.rs`.
 
-use crate::canvas::SchematicCanvas;
+use crate::canvas::CanvasSlot;
 use crate::pcb_canvas::PcbCanvas;
 
 use super::super::{ContextMenuState, DragTarget, DrawMode, TextEditState, Tool};
@@ -9,23 +9,29 @@ use super::super::{ContextMenuState, DragTarget, DrawMode, TextEditState, Tool};
 pub struct InteractionState {
     pub current_tool: Tool,
     /// The main-window schematic canvas. Every non-main window carries
-    /// its own `SchematicCanvas` inside `canvases`, keyed by that
+    /// its own `CanvasSlot` inside `canvases`, keyed by that
     /// window's `iced::window::Id`. The event-dispatch layer swaps a
     /// per-window canvas into this slot while handling an event so the
     /// hundreds of `active_canvas_mut()` call sites don't need to know
     /// about per-window routing.
-    pub canvas: SchematicCanvas,
+    pub canvas: CanvasSlot,
     /// Extra schematic canvases owned by non-main windows (undocked
     /// tabs). Populated on `Message::Window(WindowMsg::UndockedTabOpened)`; drained on
     /// `Message::Window(WindowMsg::SecondaryWindowClosed)`. Reads go through
     /// `canvas_for_window`; writes happen via the dispatch swap trick.
-    pub canvases: std::collections::HashMap<iced::window::Id, SchematicCanvas>,
+    pub canvases: std::collections::HashMap<iced::window::Id, CanvasSlot>,
+    /// The main-window PCB canvas. Like `canvas`, the event-dispatch layer
+    /// swaps an undocked window's entry from `pcb_canvases` into this slot
+    /// while it handles that window's event.
     pub pcb_canvas: PcbCanvas,
+    /// PCB canvases owned by undocked PCB tab windows, so each window keeps
+    /// its own camera, viewport and caches (#494). Populated and drained
+    /// alongside `canvases`. Reads go through `pcb_canvas_for_window`.
+    pub pcb_canvases: std::collections::HashMap<iced::window::Id, PcbCanvas>,
     pub dragging: Option<DragTarget>,
     pub drag_start_pos: Option<f32>,
     pub drag_start_size: f32,
     pub tab_drag_origin: Option<(f32, f32)>,
-    pub undo_stack: crate::undo::UndoStack,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
     /// 3-click arc placement buffer. Holds the first two clicks
@@ -37,13 +43,14 @@ pub struct InteractionState {
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,
-    pub clipboard_wires: Vec<signex_types::schematic::Wire>,
-    pub clipboard_buses: Vec<signex_types::schematic::Bus>,
-    pub clipboard_labels: Vec<signex_types::schematic::Label>,
-    pub clipboard_symbols: Vec<signex_types::schematic::Symbol>,
-    pub clipboard_junctions: Vec<signex_types::schematic::Junction>,
-    pub clipboard_no_connects: Vec<signex_types::schematic::NoConnect>,
-    pub clipboard_text_notes: Vec<signex_types::schematic::TextNote>,
+    /// The last Copy or Cut: the items with the library bodies they use,
+    /// anchored at the grid-snapped centre they were copied from.
+    pub clipboard: Option<signex_engine::CopiedSelection>,
+    /// The system-clipboard text that stands for `clipboard`: what this
+    /// window last wrote for it, or the foreign fragment it adopted. A paste
+    /// that reads the same text keeps `clipboard` as it is instead of
+    /// parsing it back (which would re-anchor it to the current grid).
+    pub clipboard_text: Option<String>,
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
@@ -60,7 +67,7 @@ pub struct InteractionState {
     pub grid_picker: Option<crate::app::GridPickerState>,
     /// Document-tab right-click menu state. Anchored at the right-click
     /// coordinates inside the tab strip; carries the index of the
-    /// clicked tab so per-tab actions ("Close [filename]") resolve
+    /// clicked tab so per-tab actions ("Close \[filename\]") resolve
     /// against the correct entry. Mutually exclusive with
     /// `context_menu` and `project_tree_context_menu` — opening one
     /// dismisses the others.
@@ -94,7 +101,7 @@ pub struct InteractionState {
     /// Iced's `button` widget consumes mouse events before iced 0.14
     /// surfaces a built-in `on_double_click` for them, so we time the
     /// clicks ourselves at the app layer.
-    pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
+    pub last_tree_click: Option<(signex_widgets::tree_view::TreeKey, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
@@ -116,7 +123,23 @@ pub struct InteractionState {
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
+    /// A library part attached to the cursor, waiting for its click.
+    pub placement: Option<super::PlacementSession>,
+    /// The last label or text note placed, for "Repeat last item" (#1253).
+    pub last_placement: Option<super::LastPlacement>,
+    /// Designator numbers for pasted parts (Next free), seeded when a paste
+    /// starts.
+    pub paste_counters: Option<super::PasteCounters>,
+    /// Token for library reads. Every pick takes a new value and carries it,
+    /// so only the LATEST pick may arm a session; Esc, a right-click and any
+    /// tool change bump it too, so a read that finishes after a cancel arms
+    /// nothing. Arming itself leaves it alone.
+    pub placement_epoch: u64,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
+    /// Orientation and size of the next bus entry (Space / Shift+Space / X / Y
+    /// while the Bus Entry tool is armed). The signs are the orientation; see
+    /// `signex_types::schematic::BusEntry`.
+    pub bus_entry_size: (f64, f64),
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).
@@ -134,25 +157,43 @@ pub struct InteractionState {
 }
 
 impl InteractionState {
-    pub fn active_canvas(&self) -> &SchematicCanvas {
+    pub fn active_canvas(&self) -> &CanvasSlot {
         &self.canvas
     }
 
-    pub fn active_canvas_mut(&mut self) -> &mut SchematicCanvas {
+    pub fn active_canvas_mut(&mut self) -> &mut CanvasSlot {
         &mut self.canvas
     }
 
-    /// Per-window canvas lookup. Returns the per-window `SchematicCanvas`
+    /// Per-window canvas lookup. Returns the per-window `CanvasSlot`
     /// if one is registered (undocked windows), otherwise the main
     /// window's shared canvas. Writes from canvas events still go
     /// through the main-canvas slot; see the dispatch swap trick in
     /// `dispatch::ui::handle_canvas_event_in_window`.
-    pub fn canvas_for_window(&self, window_id: iced::window::Id) -> &SchematicCanvas {
+    pub fn canvas_for_window(&self, window_id: iced::window::Id) -> &CanvasSlot {
         self.canvases.get(&window_id).unwrap_or(&self.canvas)
     }
 
-    #[allow(dead_code)]
-    pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut SchematicCanvas {
+    /// Per-window PCB canvas lookup, falling back to the main window's.
+    pub fn pcb_canvas_for_window(&self, window_id: iced::window::Id) -> &PcbCanvas {
+        self.pcb_canvases
+            .get(&window_id)
+            .unwrap_or(&self.pcb_canvas)
+    }
+
+    /// The main schematic canvas plus every undocked window's own slot, so
+    /// an app-wide appearance change cannot leave a detached window stale.
+    pub fn all_schematic_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {
+        std::iter::once(&mut self.canvas).chain(self.canvases.values_mut())
+    }
+
+    /// Every PCB canvas, main window first. App-wide settings (theme, grid,
+    /// the GPU-render flag) go to all of them.
+    pub fn all_pcb_canvases_mut(&mut self) -> impl Iterator<Item = &mut PcbCanvas> {
+        std::iter::once(&mut self.pcb_canvas).chain(self.pcb_canvases.values_mut())
+    }
+
+    pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut CanvasSlot {
         // `get_mut` returns `Option<&mut V>`. Match rather than
         // `contains_key` + `get_mut().unwrap()` to avoid the double
         // lookup and the unwrap.

@@ -1,239 +1,117 @@
 //! Symbol emitters — library body graphics and pins.
 //!
-//! Emits each placed symbol's `LibSymbol` body graphics and its pins
-//! (stubs, names, numbers), plus the world-space transform and field
-//! style helpers those emitters rely on.
-//!
-//! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
-//! motion, zero behaviour change.
+//! Body graphics and pin stubs come from the shared `lower_placed_symbol`
+//! lowering, the same list the canvas draws. Pin names and numbers are
+//! SVG-only for now and are placed here.
 
-use super::geometry::{arc_path_commands, circle_path, rect_path};
+use super::geometry::{arc_path_commands, circle_path};
+use super::labels::{halign_to_svg, valign_to_svg};
 use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
-    FillType, Graphic, HAlign, LibSymbol, Pin, Point, Symbol, TextProp, VAlign,
+    FillType, LibSymbol, Pin, Point, Symbol, SymbolPrimitive, SymbolTransform, instance_pins,
+    lower_placed_symbol,
 };
 use std::collections::HashMap;
 
+/// Emit one `SvgElement` per primitive of the symbol's shared lowering
+/// (`lower_placed_symbol`): body graphics and pin stubs. The canvas draws the same
+/// list, so the two cannot disagree on angle, mirror, unit or visibility.
 pub(super) fn push_symbol_lib_graphics(
     out: &mut Vec<SvgElement>,
     sym: &Symbol,
-    lib: &LibSymbol,
+    lib: Option<&LibSymbol>,
     xform: &PageTransform,
     palette: &SchematicPalette,
 ) {
-    for lg in &lib.graphics {
-        if lg.unit != 0 && lg.unit != sym.unit {
-            continue;
-        }
-        if lg.body_style != 0 && lg.body_style != 1 {
-            continue;
-        }
-
-        match &lg.graphic {
-            Graphic::Polyline {
+    let px = |p: &Point| pt(xform.x(p.x), xform.px_y(p.y));
+    let style = |width: f64, fill: FillType| SvgStyle {
+        stroke_rgb: Some(palette.symbol_stroke),
+        fill_rgb: fill_to_rgb(fill, palette.symbol_stroke, palette.symbol_fill),
+        stroke_width: (width.max(0.15) * xform.mm_to_unit) as f32,
+    };
+    for primitive in lower_placed_symbol(lib, sym) {
+        match primitive {
+            SymbolPrimitive::Path {
                 points,
+                closed,
                 width,
                 fill,
             } => {
-                if points.len() < 2 {
-                    continue;
-                }
                 let mut cmds = Vec::with_capacity(points.len() + 1);
-                let (x0, y0) = symbol_world_point(sym, &points[0]);
-                cmds.push(SvgPathCommand::MoveTo(pt(xform.x(x0), xform.px_y(y0))));
-                for p in &points[1..] {
-                    let (wx, wy) = symbol_world_point(sym, p);
-                    cmds.push(SvgPathCommand::LineTo(pt(xform.x(wx), xform.px_y(wy))));
+                for (i, p) in points.iter().enumerate() {
+                    cmds.push(if i == 0 {
+                        SvgPathCommand::MoveTo(px(p))
+                    } else {
+                        SvgPathCommand::LineTo(px(p))
+                    });
                 }
-                if points.len() > 2 {
-                    let first = &points[0];
-                    let last = &points[points.len() - 1];
-                    if (first.x - last.x).abs() < 0.001 && (first.y - last.y).abs() < 0.001 {
-                        cmds.push(SvgPathCommand::Close);
-                    }
+                if closed {
+                    cmds.push(SvgPathCommand::Close);
                 }
                 out.push(SvgElement::Path {
                     commands: cmds,
-                    style: SvgStyle {
-                        stroke_rgb: Some(palette.symbol_stroke),
-                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
-                        stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
-                    },
+                    style: style(width, fill),
                 });
             }
-            Graphic::Rectangle {
-                start,
-                end,
-                width,
-                fill,
-            } => {
-                let corners = [
-                    Point::new(start.x, start.y),
-                    Point::new(end.x, start.y),
-                    Point::new(end.x, end.y),
-                    Point::new(start.x, end.y),
-                ];
-                let mut cmds = Vec::with_capacity(5);
-                let (wx0, wy0) = symbol_world_point(sym, &corners[0]);
-                cmds.push(SvgPathCommand::MoveTo(pt(xform.x(wx0), xform.px_y(wy0))));
-                for c in &corners[1..] {
-                    let (wx, wy) = symbol_world_point(sym, c);
-                    cmds.push(SvgPathCommand::LineTo(pt(xform.x(wx), xform.px_y(wy))));
-                }
-                cmds.push(SvgPathCommand::Close);
-                out.push(SvgElement::Path {
-                    commands: cmds,
-                    style: SvgStyle {
-                        stroke_rgb: Some(palette.symbol_stroke),
-                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
-                        stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
-                    },
-                });
-            }
-            Graphic::Circle {
+            SymbolPrimitive::Circle {
                 center,
                 radius,
                 width,
                 fill,
-            } => {
-                let (wcx, wcy) = symbol_world_point(sym, center);
-                let r = (*radius * xform.mm_to_unit) as f32;
-                out.push(circle_path(
-                    xform.x(wcx),
-                    xform.px_y(wcy),
-                    r,
-                    SvgStyle {
-                        stroke_rgb: Some(palette.symbol_stroke),
-                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
-                        stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
-                    },
-                ));
-            }
-            Graphic::Arc {
+            } => out.push(circle_path(
+                xform.x(center.x),
+                xform.px_y(center.y),
+                (radius * xform.mm_to_unit) as f32,
+                style(width, fill),
+            )),
+            SymbolPrimitive::Arc {
                 start,
                 mid,
                 end,
                 width,
                 fill,
             } => {
-                let (sx, sy) = symbol_world_point(sym, start);
-                let (mx, my) = symbol_world_point(sym, mid);
-                let (ex, ey) = symbol_world_point(sym, end);
-                let mut cmds = arc_path_commands(
-                    pt(xform.x(sx), xform.px_y(sy)),
-                    pt(xform.x(mx), xform.px_y(my)),
-                    pt(xform.x(ex), xform.px_y(ey)),
-                );
+                let mut cmds = arc_path_commands(px(&start), px(&mid), px(&end));
                 if matches!(fill, FillType::Outline | FillType::Background) {
                     cmds.push(SvgPathCommand::Close);
                 }
                 out.push(SvgElement::Path {
                     commands: cmds,
-                    style: SvgStyle {
-                        stroke_rgb: Some(palette.symbol_stroke),
-                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
-                        stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
-                    },
+                    style: style(width, fill),
                 });
             }
-            Graphic::Bezier {
-                points,
-                width,
-                fill,
-            } => {
-                if points.len() != 4 {
-                    continue;
-                }
-                let (p0x, p0y) = symbol_world_point(sym, &points[0]);
-                let (c1x, c1y) = symbol_world_point(sym, &points[1]);
-                let (c2x, c2y) = symbol_world_point(sym, &points[2]);
-                let (p3x, p3y) = symbol_world_point(sym, &points[3]);
-                out.push(SvgElement::Path {
-                    commands: vec![
-                        SvgPathCommand::MoveTo(pt(xform.x(p0x), xform.px_y(p0y))),
-                        SvgPathCommand::CubicTo(
-                            pt(xform.x(c1x), xform.px_y(c1y)),
-                            pt(xform.x(c2x), xform.px_y(c2y)),
-                            pt(xform.x(p3x), xform.px_y(p3y)),
-                        ),
-                    ],
-                    style: SvgStyle {
-                        stroke_rgb: Some(palette.symbol_stroke),
-                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
-                        stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
-                    },
-                });
-            }
-            Graphic::Text {
+            SymbolPrimitive::Text {
                 text,
                 position,
-                rotation,
-                font_size,
-                ..
-            } => {
-                let (wx, wy) = symbol_world_point(sym, position);
-                out.push(SvgElement::Text {
-                    x: xform.x(wx),
-                    y: xform.px_y(wy),
-                    font_alias: "F1",
-                    size_pt: if *font_size > 0.0 {
-                        (*font_size * xform.mm_to_unit) as f32
-                    } else {
-                        8.0
-                    },
-                    align: SvgTextAlign::Left,
-                    v_align: SvgTextVAlign::Top,
-                    rotation_deg: *rotation as f32,
-                    fill_rgb: (0.15, 0.15, 0.15),
-                    text: normalize_standard_text(text),
-                });
-            }
-            Graphic::TextBox {
-                text,
-                position,
+                rotation_deg,
                 size,
-                font_size,
-                width,
-                fill,
-                ..
-            } => {
-                let (wx0, wy0) = symbol_world_point(sym, position);
-                let (wx1, wy1) =
-                    symbol_world_point(sym, &Point::new(position.x + size.x, position.y + size.y));
-                let x1 = xform.x(wx0).min(xform.x(wx1));
-                let y1 = xform.px_y(wy0).min(xform.px_y(wy1));
-                let x2 = xform.x(wx0).max(xform.x(wx1));
-                let y2 = xform.px_y(wy0).max(xform.px_y(wy1));
-                out.push(rect_path(
-                    x1,
-                    y1,
-                    x2 - x1,
-                    y2 - y1,
-                    SvgStyle {
-                        stroke_rgb: Some(palette.symbol_stroke),
-                        fill_rgb: fill_to_rgb(*fill, palette.symbol_stroke, palette.symbol_fill),
-                        stroke_width: ((*width).max(0.15) * xform.mm_to_unit) as f32,
-                    },
-                ));
-                out.push(SvgElement::Text {
-                    x: x1 + 2.0,
-                    y: y1 + 2.0,
-                    font_alias: "F1",
-                    size_pt: if *font_size > 0.0 {
-                        (*font_size * xform.mm_to_unit) as f32
-                    } else {
-                        8.0
-                    },
-                    align: SvgTextAlign::Left,
-                    v_align: SvgTextVAlign::Top,
-                    rotation_deg: 0.0,
-                    fill_rgb: (0.15, 0.15, 0.15),
-                    text: normalize_standard_text(text),
-                });
-            }
+                h_align,
+                v_align,
+            } => out.push(SvgElement::Text {
+                x: xform.x(position.x),
+                y: xform.px_y(position.y),
+                font_alias: "F1",
+                size_pt: (size * xform.mm_to_unit) as f32,
+                align: halign_to_svg(h_align),
+                v_align: valign_to_svg(v_align),
+                rotation_deg: rotation_deg as f32,
+                fill_rgb: (0.15, 0.15, 0.15),
+                text: normalize_standard_text(&text),
+            }),
+            SymbolPrimitive::Pin { tip, body } => out.push(SvgElement::Path {
+                commands: vec![
+                    SvgPathCommand::MoveTo(px(&tip)),
+                    SvgPathCommand::LineTo(px(&body)),
+                ],
+                style: SvgStyle {
+                    stroke_rgb: Some(palette.pin),
+                    fill_rgb: None,
+                    stroke_width: (0.15 * xform.mm_to_unit) as f32,
+                },
+            }),
         }
     }
 }
@@ -247,14 +125,7 @@ pub(super) fn push_symbol_pins(
     pin_net_names: Option<&HashMap<String, String>>,
     palette: &SchematicPalette,
 ) {
-    for lp in &lib.pins {
-        if lp.unit != 0 && lp.unit != sym.unit {
-            continue;
-        }
-        if lp.body_style != 0 && lp.body_style != 1 {
-            continue;
-        }
-
+    for lp in instance_pins(lib, sym) {
         let pin = &lp.pin;
         if !pin.visible {
             continue;
@@ -274,18 +145,6 @@ pub(super) fn push_symbol_pins(
 
         let (wx1, wy1) = symbol_world_point(sym, &pin.position);
         let (wx2, wy2) = symbol_world_point(sym, &body_end);
-
-        out.push(SvgElement::Path {
-            commands: vec![
-                SvgPathCommand::MoveTo(pt(xform.x(wx1), xform.px_y(wy1))),
-                SvgPathCommand::LineTo(pt(xform.x(wx2), xform.px_y(wy2))),
-            ],
-            style: SvgStyle {
-                stroke_rgb: Some(palette.pin),
-                fill_rgb: None,
-                stroke_width: (0.15 * xform.mm_to_unit) as f32,
-            },
-        });
 
         // Direction vector in world/schematic space (for text placement).
         let (wdx, wdy) = {
@@ -401,30 +260,12 @@ pub(super) fn push_symbol_pins(
 }
 
 fn pin_direction(pin: &Pin) -> (f64, f64) {
-    let deg = ((pin.rotation % 360.0) + 360.0) % 360.0;
-    match deg as i32 {
-        0 => (1.0, 0.0),
-        90 => (0.0, 1.0),
-        180 => (-1.0, 0.0),
-        270 => (0.0, -1.0),
-        _ => {
-            let rad = deg.to_radians();
-            (rad.cos(), rad.sin())
-        }
-    }
+    signex_types::schematic::pin_direction(pin.rotation)
 }
 
 fn symbol_world_point(sym: &Symbol, local: &Point) -> (f64, f64) {
-    let x = local.x;
-    let y = -local.y;
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let rx = x * cos - y * sin;
-    let ry = x * sin + y * cos;
-    let rx = if sym.mirror_y { -rx } else { rx };
-    let ry = if sym.mirror_x { -ry } else { ry };
-    (rx + sym.position.x, ry + sym.position.y)
+    let p = SymbolTransform::from_symbol(sym).apply(*local);
+    (p.x, p.y)
 }
 
 pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
@@ -443,38 +284,6 @@ pub(super) fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
     vars
 }
 
-pub(super) fn field_effective_style(prop: &TextProp, sym: &Symbol) -> (f64, HAlign, VAlign) {
-    let total = (sym.rotation + prop.rotation).rem_euclid(360.0);
-    let (draw_rot, fold_h, fold_v) = match total.round() as i32 {
-        0 => (0.0, false, false),
-        90 => (90.0, false, false),
-        180 => (0.0, true, false),
-        270 => (90.0, false, true),
-        _ => (total, false, false),
-    };
-
-    let flip_h = fold_h ^ sym.mirror_y;
-    let flip_v = fold_v ^ sym.mirror_x;
-
-    let h = if flip_h {
-        match prop.justify_h {
-            HAlign::Left => HAlign::Right,
-            HAlign::Center => HAlign::Center,
-            HAlign::Right => HAlign::Left,
-        }
-    } else {
-        prop.justify_h
-    };
-
-    let v = if flip_v {
-        match prop.justify_v {
-            VAlign::Top => VAlign::Bottom,
-            VAlign::Center => VAlign::Center,
-            VAlign::Bottom => VAlign::Top,
-        }
-    } else {
-        prop.justify_v
-    };
-
-    (draw_rot, h, v)
-}
+#[cfg(test)]
+#[path = "symbols_tests.rs"]
+mod tests;

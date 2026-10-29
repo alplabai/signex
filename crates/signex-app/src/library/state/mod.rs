@@ -1,8 +1,7 @@
 //! In-memory state for the Library subsystem (DBLib model).
 //!
-//! Owned by [`crate::app::Signex::library`]. In the v0.9-refactor-2
-//! model, components are rows inside per-category TSV tables under
-//! `<lib>/tables/<category>.tsv`, addressed by
+//! Owned by [`crate::app::Signex::library`]. Components are rows inside per-category TSV
+//! tables under `<lib>/tables/<category>.tsv`, addressed by
 //! `(library_path, table, row_id)`. The main pieces:
 //!
 //! * `set` — `signex_library::LibrarySet`, the cross-library resolver
@@ -21,8 +20,6 @@
 //!   stable identity, not the window id.
 //! * `picker` — component picker modal state (used by schematic
 //!   placement; flattens across every open library).
-//! * `new_component` — modal state for the "New Row" flow
-//!   (library + table + class + InternalPN).
 //! * `template_registry` — bundled + per-library parameter templates,
 //!   resolved at component-class lookup time.
 
@@ -31,9 +28,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, PrimitiveSummary,
-    RowId, SimModel, Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
+    ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter, LibraryError,
+    LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveSummary, RowId, SimModel, Symbol,
+    TemplateRegistry, UseSite, WhereUsedIndex,
 };
 use signex_types::coord::Unit;
 
@@ -77,14 +74,16 @@ impl EditorAddress {
 ///
 /// Mirrors plan §6 "Lifecycle, tagging, distributors": rows tagged
 /// `Released`/`InReview`/`Draft` count as "active" for filtering, while
-/// `Deprecated` rows are tinted yellow when shown and `Obsolete` rows
-/// are hidden by default. Stage 18 surfaces these as a single dropdown
-/// pill in the browser header so users can pivot the visible row set
-/// without touching every row's lifecycle field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// `Deprecated` and `Obsolete` rows are both hidden by default
+/// (`Deprecated` rows are tinted yellow once `IncludeDeprecated` shows
+/// them). Stage 18 surfaces these as a single dropdown pill in the
+/// browser header so users can pivot the visible row set without
+/// touching every row's lifecycle field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum LifecycleFilter {
-    /// Default — show `Released` / `InReview` / `Draft` and tint
-    /// `Deprecated`. Hides `Obsolete`.
+    /// Default — show `Released` / `InReview` / `Draft`. Hides
+    /// `Deprecated` and `Obsolete`.
+    #[default]
     ActiveAndPreferred,
     /// Show only `Released` (the "preferred for new designs" subset
     /// once admins promote rows out of `Draft`).
@@ -118,10 +117,10 @@ impl LifecycleFilter {
     ];
 
     /// Whether a row in `state` should render under this filter.
-    /// Deprecated rows render in the default filter but render tinted
-    /// (see `lifecycle_dot_color`). `LifecycleState` is
-    /// `#[non_exhaustive]` so the match falls through to the default
-    /// (active-but-not-preferred) bucket for any future variant.
+    /// Deprecated rows are hidden by default and render tinted when
+    /// `IncludeDeprecated` shows them (see `lifecycle_dot_color`).
+    /// `LifecycleState` is `#[non_exhaustive]`, so any future variant
+    /// falls through to hidden.
     pub fn allows(self, state: signex_library::LifecycleState) -> bool {
         use signex_library::LifecycleState as L;
         match (self, state) {
@@ -134,15 +133,8 @@ impl LifecycleFilter {
             ) => true,
             (Self::IncludeDeprecated, L::Deprecated) => true,
             (Self::ActiveAndPreferred, L::Deprecated) => false,
-            (_, L::Obsolete) => false,
             _ => false,
         }
-    }
-}
-
-impl Default for LifecycleFilter {
-    fn default() -> Self {
-        Self::ActiveAndPreferred
     }
 }
 
@@ -177,6 +169,10 @@ pub struct LibraryBrowserState {
     /// clicking a class row in the left sidebar — clicking the
     /// same row twice clears the filter.
     pub class_filter: Option<String>,
+    /// Range filters on this tab's measurement columns, by parameter key
+    /// (#1572). Cleared when the active table changes: the columns are
+    /// the table's.
+    pub range_filters: crate::library::range_filter::RangeFilters,
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
@@ -225,24 +221,16 @@ pub struct LibraryBrowserState {
     /// Most recent rename error (e.g. duplicate target name).
     /// Surfaces inline next to the rename input.
     pub rename_error: Option<String>,
-    /// In-flight `+ Class` form — `Some` while the user is typing
-    /// a new class key + label. Confirm dispatches
-    /// `update_library_classes` with the appended row.
-    pub adding_class: Option<NewClassDraft>,
-    /// In-flight class rename — `(original_key, key_buffer, label_buffer)`.
-    pub renaming_class: Option<(String, String, String)>,
-    /// Most recent class-edit error (validation, duplicate key, etc).
-    pub class_error: Option<String>,
-}
-
-/// `+ Class` inline form state — separate key + label inputs since
-/// the canonical class identifier (`key`) is distinct from the
-/// human-readable display label.
-#[derive(Debug, Clone, Default)]
-pub struct NewClassDraft {
-    pub key: String,
-    pub label: String,
-    pub error: Option<String>,
+    /// The rename in `renaming_table` is being written (#893); a second
+    /// confirm waits for the result.
+    pub rename_saving: bool,
+    /// Filtered, sorted rows and derived columns of the active table (#1374),
+    /// kept current by `LibraryState::sync_view_caches`; `view` reads it
+    /// instead of recomputing every frame.
+    pub view_cache: Option<super::browser::BrowserViewCache>,
+    /// Where the grid is scrolled to, as reported by its scrollable. The
+    /// grid builds only the rows in this window (#1355).
+    pub grid_scroll: super::browser::GridScroll,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -262,6 +250,7 @@ impl LibraryBrowserState {
             search: String::new(),
             lifecycle_filter: LifecycleFilter::default(),
             class_filter: None,
+            range_filters: Default::default(),
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,
@@ -270,9 +259,9 @@ impl LibraryBrowserState {
             delete_error: None,
             renaming_table: None,
             rename_error: None,
-            adding_class: None,
-            renaming_class: None,
-            class_error: None,
+            rename_saving: false,
+            view_cache: None,
+            grid_scroll: super::browser::GridScroll::default(),
         }
     }
 
@@ -312,30 +301,80 @@ pub struct EditRowModalState {
     /// by parameter name. Mirrors the `params_edit_buf` pattern used
     /// in the Component Preview tab.
     pub param_buf: HashMap<String, (String, String)>,
+    /// The SI prefix shown next to a measurement's number, by parameter
+    /// name. Seeded with the prefix the stored value displays; a
+    /// parameter without an entry (or with a unit that takes no prefix)
+    /// has none.
+    pub param_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
     /// Live edit buffer for the comma-separated tags row (Stage 18).
     /// Persisted to `parameters["tags"]` as `ParamValue::Text` on Save.
     /// Seeded from the existing `parameters["tags"]` value at modal open.
     pub tags_buf: String,
     /// Inline error text — surfaced if the save fails.
     pub error: Option<String>,
+    /// A neutral one-line notice (not a refusal), e.g. that a unit change
+    /// reinterprets the value. Cleared by the next commit.
+    pub note: Option<String>,
+    /// The last save was refused because the row changed on the server.
+    pub stale_base: bool,
+    /// "Reload saved version" awaits the user's confirmation to discard the
+    /// draft.
+    pub reload_confirming: bool,
+    /// The primary datasheet and its label as the modal opened. The modal
+    /// shows no label, so the label is kept only while the primary still
+    /// points where it did (#1231).
+    pub opened_primary: (signex_library::DatasheetRef, String),
+    /// The copy being written by a Save that has not finished (#893): the
+    /// modal stays open meanwhile, and the result closes it only if the
+    /// draft still equals this.
+    pub saving: Option<SavingSnapshot>,
+}
+
+/// What the Edit Component Details modal held when Save was pressed.
+#[derive(Debug, Clone)]
+pub struct SavingSnapshot {
+    pub draft: ComponentRow,
+    pub tags_buf: String,
+    pub param_buf: HashMap<String, (String, String)>,
 }
 
 impl EditRowModalState {
+    /// The prefix a stored measurement opens with in the picker; `None`
+    /// for anything that is not a measurement in a known unit.
+    pub fn param_prefix_seed(
+        v: &signex_library::ParamValue,
+    ) -> Option<signex_types::quantity::SiPrefix> {
+        v.measurement_parts().map(|p| p.prefix)
+    }
+
+    /// The `(value, unit)` edit-buffer text a stored parameter opens with.
+    /// A measurement in a known unit opens as the number the picker's
+    /// prefix applies to and the canonical unit token (`4.7`, `ohm` for a
+    /// legacy `{4.7, "kΩ"}`); an unknown unit keeps its raw text.
+    pub fn param_buf_entry(v: &signex_library::ParamValue) -> (String, String) {
+        if let Some(parts) = v.measurement_parts() {
+            return (parts.mantissa, parts.unit.token().to_string());
+        }
+        match v {
+            signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
+            signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
+            signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
+            signex_library::ParamValue::Measurement { value, unit } => {
+                (value.to_string(), unit.clone())
+            }
+        }
+    }
+
     pub fn new(address: EditorAddress, draft: ComponentRow) -> Self {
         let param_buf: HashMap<String, (String, String)> = draft
             .parameters
             .iter()
-            .map(|(k, v)| {
-                let (val, unit) = match v {
-                    signex_library::ParamValue::Text(s) => (s.clone(), String::new()),
-                    signex_library::ParamValue::Number(n) => (n.to_string(), String::new()),
-                    signex_library::ParamValue::Bool(b) => (b.to_string(), String::new()),
-                    signex_library::ParamValue::Measurement { value, unit } => {
-                        (value.to_string(), unit.clone())
-                    }
-                };
-                (k.clone(), (val, unit))
-            })
+            .map(|(k, v)| (k.clone(), Self::param_buf_entry(v)))
+            .collect();
+        let param_prefix = draft
+            .parameters
+            .iter()
+            .filter_map(|(k, v)| Some((k.clone(), Self::param_prefix_seed(v)?)))
             .collect();
         // Seed the tags buffer from `parameters["tags"]` if present;
         // tags live as a free-form `ParamValue::Text` keyed by "tags"
@@ -345,12 +384,19 @@ impl EditRowModalState {
             Some(other) => other.display(),
             None => String::new(),
         };
+        let opened_primary = (draft.datasheet.clone(), draft.datasheet_label.clone());
         Self {
             address,
             draft,
             param_buf,
+            param_prefix,
             tags_buf,
             error: None,
+            note: None,
+            stale_base: false,
+            reload_confirming: false,
+            opened_primary,
+            saving: None,
         }
     }
 }
@@ -369,6 +415,9 @@ pub struct PrimitivePickerState {
     /// Inline error, e.g. when filesystem-picked file isn't inside a
     /// `.snxlib`.
     pub error: Option<String>,
+    /// Scroll offset of the list, in pixels, as last reported by its
+    /// scrollable; drives which rows get built.
+    pub scroll_y: f32,
 }
 
 /// Where the picker should write the picked `PrimitiveRef`.
@@ -377,9 +426,6 @@ pub enum PrimitivePickerTarget {
     /// The user picks for an open Component Preview tab — apply +
     /// save the row.
     PreviewRow(EditorAddress),
-    /// The user picks while filling out the New Component modal — apply
-    /// to `NewComponentState.symbol_ref` / `.footprint_ref`.
-    NewComponentForm,
     /// The user picks while editing a row in the Library Browser
     /// grid's Edit Component Details modal (Deliverable B).
     EditRowModal(EditorAddress),
@@ -388,12 +434,34 @@ pub enum PrimitivePickerTarget {
     /// F15 (2026-05-03): row binding lives next to the row, not in a
     /// separate Component Preview tab or modal.
     BrowserRow(EditorAddress),
+    /// The user picks a symbol to add as an alternate of the row open in a
+    /// Component Preview tab (#1230).
+    PreviewAlternate(EditorAddress),
+}
+
+impl PrimitivePickerTarget {
+    /// Directory of the library whose row this pick writes.
+    pub fn library_path(&self) -> Option<&std::path::Path> {
+        match self {
+            Self::PreviewRow(a)
+            | Self::EditRowModal(a)
+            | Self::BrowserRow(a)
+            | Self::PreviewAlternate(a) => Some(a.library_path.as_path()),
+        }
+    }
 }
 
 /// Top-level Library subsystem state. Stored on
 /// [`crate::app::Signex`] as a single field so the dispatcher can
 /// borrow it independently of the rest of `DocumentState`.
 pub struct LibraryState {
+    /// Shows a datasheet in the platform's viewer. A field so a test can
+    /// record what would open instead of launching a browser (#1301).
+    pub datasheet_opener: crate::library::placed_part::OpenDatasheet,
+    /// Embedded-vs-library symbol drift per open sheet (#912).
+    pub drift: super::drift::DriftState,
+    /// Latest switch request per placed symbol (#1230).
+    pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in
     /// the v0.9 refactor: editors load primitives by `PrimitiveRef`
     /// without knowing which `*.snxlib/` they came from.
@@ -414,25 +482,26 @@ pub struct LibraryState {
     pub picker: Option<PickerState>,
     /// Distributor APIs settings panel state.
     pub settings: DistributorSettings,
-    /// True while the Library left-dock panel's expanded library node
-    /// at index `i` is open.
-    pub expanded: Vec<bool>,
     /// Library left-dock search box buffer.
     pub panel_search: String,
-    /// "New Component" modal state — `None` while closed.
-    pub new_component: Option<NewComponentState>,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
+    /// `(label, reason)` of each Save-All row whose off-thread datasheet
+    /// store or commit failed, keyed by `(batch id, row)`, until that Save
+    /// All settles and reports it. Another Save All never touches them.
+    pub batch_row_failures: HashMap<(u64, EditorAddress), (String, String)>,
     /// Bundled + per-library parameter templates. Reference-counted
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this
     /// registry; this struct owns the field.
-    #[allow(dead_code)]
     pub template_registry: Arc<TemplateRegistry>,
     /// Per-browser-tab state, keyed by `.snxlib` root path. One entry
     /// per `TabKind::LibraryBrowser(path)` tab in the main window's
     /// tab bar; insert on tab open, drop on tab close.
     pub library_browsers: HashMap<PathBuf, LibraryBrowserState>,
+    /// The library whose browser tab was showing at the last update, so a
+    /// switch to another tab can be told apart from a repeat of the same one.
+    pub shown_browser: Option<PathBuf>,
     /// Primitive picker modal state — `None` while closed. Opened from
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.
@@ -459,10 +528,12 @@ pub struct LibraryState {
     /// Personal-mode schematic opens auto-apply silently and never
     /// build this state.
     pub library_updates: Option<super::updates_dialog::LibraryUpdatesState>,
-    /// Set of schematic paths the user explicitly skipped updates on
-    /// — drives the persistent "Library Updates" status-bar indicator.
-    /// Cleared on apply / re-scan / close-tab.
-    #[allow(dead_code)]
+    /// Updates modals for other sheets, waiting for the open one to close
+    /// (one modal at a time). Promoted by `show_next_queued_updates`.
+    pub queued_library_updates: Vec<super::updates_dialog::LibraryUpdatesState>,
+    /// Set of schematic paths the user explicitly skipped updates on.
+    /// Nothing renders this set yet (no status-bar indicator). Cleared
+    /// on apply / re-scan / close-tab.
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
     /// Session-scoped "Installed" libraries — opened via the
     /// Components Panel's "+ Add Library…" button (Stage 9 of
@@ -475,10 +546,104 @@ pub struct LibraryState {
     /// every app start (Stage 9 mount-source 3). The on-disk schema
     /// lives in `panels::components_panel::global_prefs`.
     pub global_libraries: Vec<crate::panels::components_panel::global_prefs::GlobalLibraryEntry>,
+    /// Mounted path of the bundled stock library; `None` when it was not
+    /// found or failed to mount. Set once at bootstrap.
+    pub stock_library: Option<PathBuf>,
+    /// Where the bundled stock library was resolved, mounted or not. A
+    /// stock library that fails to open is never mounted, so only this
+    /// field lets the open-failure recovery flows recognise it (#814).
+    pub stock_library_root: Option<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
     pub components_panel: ComponentsPanelState,
+    /// `.snxlib` mounts currently being prepared off the UI thread —
+    /// issue #99 part 2c. Keyed by the `.snxlib` file path, valued by
+    /// why the mount was asked for.
+    ///
+    /// Three jobs in one map, which is why it is an intent map and not
+    /// the `HashSet<PathBuf>` that `DocumentState.pending_opens` uses
+    /// for schematic/PCB opens:
+    ///
+    /// - **In-flight marker.** A path present here must not be spawned
+    ///   again, or two adapters race to mount it.
+    /// - **Intent, re-read at completion.** A project auto-mount and a
+    ///   user double-click can request the same path concurrently; the
+    ///   intent is upgraded in place (`Silent` → `OpenBrowserTab`) and
+    ///   the completion handler reads it from *here*, never from a value
+    ///   captured at spawn time.
+    /// - **Cancellation tombstone.** `close_library` removes the entry,
+    ///   so a completion whose path is gone discards its payload instead
+    ///   of resurrecting a library the user just closed.
+    ///
+    /// Path-keyed rather than generation-counted on purpose: two
+    /// concurrent mounts of *different* libraries are both legitimate,
+    /// so a single counter would cancel the wrong one.
+    pub pending_mounts: HashMap<PathBuf, super::mount::MountIntent>,
+    /// Libraries holding saved changes that no git commit has yet (#858).
+    pub uncommitted: uncommitted::UncommittedState,
+    /// An external-edit `stat` pass is running off-thread (#531); a tick
+    /// that lands meanwhile is dropped rather than stacked behind it.
+    pub external_poll_in_flight: bool,
+    /// Set while a poll's blocking `stat` pass runs, including one that
+    /// outlived [`crate::library::external_poll::POLL_TIMEOUT`]. No new pass
+    /// starts behind it, so a hung network mount cannot pile up threads.
+    ///
+    /// The one piece of Model state written off the UI thread: after a
+    /// timeout no message is pending to clear it, and a hung `stat` may never
+    /// return to send one, so `update` reads the blocking thread's own
+    /// drop-guarded flag instead (#869 review).
+    pub external_poll_stat_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// A stall was reported and the poll has not completed since, so the
+    /// warning is not repeated every tick (#827).
+    pub external_poll_stall_reported: bool,
+    /// A failed pass was reported and the poll has not completed since, so
+    /// a pass that fails every tick logs once, not every 2 s (#869 review).
+    pub external_poll_failure_reported: bool,
+    /// The Refresh All Pricing walk in progress, if any. One at a time: a
+    /// second request is refused with a Messages-panel line.
+    pub pricing_refresh: Option<super::pricing::PricingRefreshRun>,
+    /// The write order of each library (#893): library mutations run on
+    /// workers, one library at a time, in the order the user made them.
+    pub writes: super::writes::LibraryWrites,
+    /// Libraries whose close waits for their writes to finish.
+    pub closing: std::collections::HashSet<PathBuf>,
+    /// "Now" as `view` may use it, for the age of cached prices. `view` is
+    /// pure and cannot ask the clock, so `update` sets this on the poll tick
+    /// and whenever a library's caches are refreshed.
+    pub clock: chrono::DateTime<chrono::Utc>,
+    /// Latest refresh generation per library root (#1374). An off-thread
+    /// refresh result applies only while its generation is still the one
+    /// recorded here; a newer request, a synchronous refresh or closing
+    /// the library supersedes it.
+    pub refresh_generations: HashMap<PathBuf, u64>,
+    /// Source of refresh generations — never reused, so a result from a
+    /// closed library cannot match a later mount of the same path.
+    pub refresh_generation_counter: u64,
+    /// Off-thread reads started and not yet reported: generation -> the
+    /// library root it reads. Keyed by generation (unique, never reused) so
+    /// a late report removes only its own read, whatever happened to the
+    /// path since (relocated, or closed and mounted again).
+    pub refresh_in_flight: HashMap<u64, PathBuf>,
+    /// Follow-ups of refreshes that have not landed yet, per library root.
+    pub pending_follow_ups: HashMap<PathBuf, Vec<super::refresh::RefreshFollowUp>>,
+    /// Bumped whenever an open library's rows, prices or the set of open
+    /// libraries changes. Caches derived from them (the picker list, the
+    /// browser grid) rebuild when it moves — see `touch_data`.
+    pub data_version: u64,
+    /// Preference-backed defaults for a library opened or created from now
+    /// on; `Save Preferences` updates it, so no reader goes back to disk.
+    pub new_library_defaults: NewLibraryDefaults,
+    /// The open Copy to Library dialog (#813): a stock symbol or footprint
+    /// was asked for and no usable target library is remembered.
+    pub stock_copy: Option<super::stock_copy::StockCopyState>,
+    /// The library the user chose to receive stock copies, remembered in
+    /// `prefs.json`. May name a library that is no longer mounted; it is
+    /// checked with [`LibraryState::usable_stock_copy_target`] on use.
+    pub stock_copy_target: Option<PathBuf>,
+    /// Stock files whose copy is being written, so a second open of the
+    /// same file does not start a second copy.
+    pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -495,6 +660,9 @@ pub enum ComponentsMountSource {
     /// Persisted across app launches via
     /// `<config_dir>/signex/global_libraries.toml`.
     Global,
+    /// The library bundled with the install; resolved and mounted at
+    /// bootstrap, never recorded in `global_libraries.toml`.
+    Stock,
 }
 
 impl ComponentsMountSource {
@@ -503,6 +671,7 @@ impl ComponentsMountSource {
             Self::Project => "Project",
             Self::Installed => "Installed",
             Self::Global => "Global",
+            Self::Stock => "Stock",
         }
     }
 
@@ -514,15 +683,17 @@ impl ComponentsMountSource {
             Self::Project => "project",
             Self::Installed => "installed",
             Self::Global => "global",
+            Self::Stock => "stock",
         }
     }
 
-    /// Every section in stable display order — Project on top,
-    /// Installed in the middle, Global last.
+    /// Every section in stable display order — Project, Installed,
+    /// Global, then Stock last.
     pub const ORDER: &'static [ComponentsMountSource] = &[
         ComponentsMountSource::Project,
         ComponentsMountSource::Installed,
         ComponentsMountSource::Global,
+        ComponentsMountSource::Stock,
     ];
 }
 
@@ -532,16 +703,21 @@ impl ComponentsMountSource {
 #[derive(Debug, Clone, Default)]
 pub struct ComponentsPanelState {
     /// `true` while the named section is collapsed. Sections are
-    /// `"project"`, `"installed"`, `"global"`.
+    /// `"project"`, `"installed"`, `"global"` (stock has its own
+    /// `collapsed_stock`).
     pub collapsed_project: bool,
     pub collapsed_installed: bool,
     pub collapsed_global: bool,
+    pub collapsed_stock: bool,
     /// Substring filter applied to mpn / manufacturer / internal_pn
     /// / library name. Empty = show everything. Stage 9 uses a
     /// case-insensitive `contains` match across all three fields;
     /// the rich `mpn:LM317 lifecycle:preferred` syntax (plan §5) is
     /// a follow-up.
     pub filter: String,
+    /// Searchable row list the panel draws; kept current by
+    /// `LibraryState::sync_view_caches` (#1353).
+    pub rows: PanelRows,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -586,9 +762,34 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod methods;
+mod new_library_defaults;
+mod panel_rows;
+#[cfg(test)]
+mod panel_rows_tests;
+mod picker_cache;
+#[cfg(test)]
+mod picker_cache_tests;
+mod placed_part;
 mod preview;
+mod refresh;
+#[cfg(test)]
+mod refresh_tests;
+mod relocate;
+mod stock_copy;
+mod symbol_choice;
+mod table_scan;
 #[cfg(test)]
 mod tests;
+mod uncommitted;
+mod under_folder;
 
 pub use methods::*;
+pub use new_library_defaults::NewLibraryDefaults;
+pub use panel_rows::PanelRows;
+pub use picker_cache::{PickerEntry, PickerRows};
+pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
+pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
+pub use relocate::rebase_path;
+pub use symbol_choice::SymbolChoiceRequests;
+pub use uncommitted::{CommitNowReport, UncommittedState};

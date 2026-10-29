@@ -22,7 +22,7 @@
 //! 5. the loose page set is sorted, not `HashMap`-ordered.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet};
 use uuid::Uuid;
@@ -50,25 +50,10 @@ fn child_ref(filename: &str) -> ChildSheet {
 
 fn schematic(children: &[&str]) -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::new_v4(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
-        paper_size: String::new(),
+        uuid: Uuid::now_v7(),
         root_sheet_page: String::new(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
         child_sheets: children.iter().map(|f| child_ref(f)).collect(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
@@ -86,13 +71,14 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
     let mut sheet = schematic(children);
     let origin = Point::new(0.0, 0.0);
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: origin,
         end: Point::new(10.0, 0.0),
-        stroke_width: 0.0,
+        ..Default::default()
     });
     sheet.labels.push(Label {
-        uuid: Uuid::new_v4(),
+        unknown_columns: Default::default(),
+        uuid: Uuid::now_v7(),
         text: net_name.to_string(),
         position: origin,
         rotation: 0.0,
@@ -101,6 +87,8 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         font_size: 1.27,
         justify: HAlign::default(),
         justify_v: VAlign::default(),
+        font_family: None,
+        locked: false,
     });
     sheet.lib_symbols.insert(
         "Device:R".to_string(),
@@ -140,34 +128,11 @@ pub(crate) fn sheet_with_net(reference: &str, net_name: &str, children: &[&str])
         },
     );
     sheet.symbols.push(Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "Device:R".to_string(),
         reference: reference.to_string(),
-        value: String::new(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: origin,
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
     sheet
 }
@@ -203,6 +168,7 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
         id,
         path: PathBuf::from(dir).join("ProjectA.snxprj"),
         data: ProjectData {
+            description: None,
             name: "ProjectA".to_string(),
             dir: dir.to_string(),
             schematic_root: listed.first().map(|f| (*f).to_string()),
@@ -215,14 +181,23 @@ pub(crate) fn app_workspace(dir: &str, listed: &[&str]) -> Signex {
                     symbols_count: 0,
                     wires_count: 0,
                     labels_count: 0,
+                    unknown: Default::default(),
                 })
                 .collect(),
             variant_definitions: Vec::new(),
             active_variant: None,
             libraries: Vec::new(),
             enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
+            annotation: None,
+            parameters: Default::default(),
+            unknown: Default::default(),
         },
         pending_libraries: HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+        case_decided: false,
     });
     // The sticky pointer every one of these regressions is about.
     app.document_state.active_project = Some(id);
@@ -234,13 +209,13 @@ fn workspace(dir: &str, listed: &[&str]) -> DocumentState {
 }
 
 /// Open `path` as a live engine whose sheet references `children`.
-fn open(ds: &mut DocumentState, path: &PathBuf, children: &[&str]) {
+fn open(ds: &mut DocumentState, path: &Path, children: &[&str]) {
     open_with(ds, path, schematic(children));
 }
 
-pub(crate) fn open_with(ds: &mut DocumentState, path: &PathBuf, sheet: SchematicSheet) {
+pub(crate) fn open_with(ds: &mut DocumentState, path: &Path, sheet: SchematicSheet) {
     let engine = signex_engine::Engine::new(sheet).expect("engine");
-    ds.engines.insert(path.clone(), engine);
+    ds.engines.insert(path.to_path_buf(), engine);
 }
 
 fn page_paths(ctx: &signex_output::ExportContext) -> Vec<PathBuf> {
@@ -280,6 +255,22 @@ fn loose_schematic_exports_itself_not_the_sticky_projects_sheets() {
         ctx.netlist.is_some(),
         "netlist roots at the loose document itself"
     );
+}
+
+/// #109 — "Current page" must name the sheet in the active tab, not whichever
+/// sheet the project lists first.
+#[test]
+fn the_export_context_names_the_active_sheet_as_current() {
+    let mut ds = workspace("/w/a", &["top.snxsch", "power.snxsch"]);
+    let top = PathBuf::from("/w/a").join("top.snxsch");
+    let power = PathBuf::from("/w/a").join("power.snxsch");
+    open(&mut ds, &top, &[]);
+    open(&mut ds, &power, &[]);
+    ds.active_path = Some(power.clone());
+
+    let ctx = context(&ds);
+
+    assert_eq!(ctx.sheets[ctx.current_sheet_index()].path, power);
 }
 
 #[test]
@@ -369,7 +360,7 @@ fn a_child_only_on_disk_is_stitched_without_being_opened() {
     // Same completeness requirement one step further out: the child is neither
     // in `data.sheets` nor open as a tab, but it is sitting next to its parent
     // on disk. `MissingChild` must mean *missing*, not merely *unopened*.
-    let dir = std::env::temp_dir().join(format!("signex-export-disk-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-export-disk-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let child_text =
         signex_types::format::SnxSchematic::new(sheet_with_net("R_DISK", "ON_DISK_NET", &[]))
@@ -550,10 +541,22 @@ fn diagnostic_count(marker: &str) -> usize {
         .count()
 }
 
+/// Whether the Messages panel holds a warning from an "Export anyway" write
+/// that also names `marker`.
+fn export_anyway_warning_reached_the_panel(marker: &str) -> bool {
+    crate::diagnostics::recent_entries().iter().any(|e| {
+        e.level == crate::diagnostics::DiagnosticLevel::Warning
+            && e.message.contains("Export: INCOMPLETE")
+            && e.message.contains(marker)
+    })
+}
+
 /// A project whose root references `missing` — a child that is neither open
 /// nor on disk. The one case that is a *genuine* `MissingChild`.
 fn app_with_missing_child(missing: &str) -> Signex {
-    let dir = std::env::temp_dir().join(format!("signex-export-missing-{}", Uuid::new_v4()));
+    // The Messages-panel buffer only fills once the logger is installed.
+    let _ = crate::diagnostics::init_logging();
+    let dir = std::env::temp_dir().join(format!("signex-export-missing-{}", Uuid::now_v7()));
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
     let top = dir.join("top.snxsch");
     open_with(
@@ -575,9 +578,13 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
     // the refusal is still the default — NOTHING reaches disk until the user
     // acts, and the prompt (not a silent write) is what the default raises.
     let mut app = app_with_missing_child("gone-net.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-refuse-{}.net", Uuid::now_v7()));
 
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    let task = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         !out.exists(),
@@ -598,24 +605,28 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
         prompt.messages
     );
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "the default path raises the prompt, not a dead-end error: {:?}",
-        app.document_state.export_error
+        app.document_state.error_notice
     );
     std::fs::remove_file(&out).ok();
 }
 
 #[test]
-fn export_anyway_writes_a_partial_netlist_with_an_incomplete_header() {
+fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     // #431 Option 2: the user chose "Export anyway (incomplete)". The partial
-    // .net is written, and the omission is recorded IN THE FILE — an INCOMPLETE
-    // header comment naming the omitted page — not only in the dismissed
-    // dialog, so a downstream PCB import can see the netlist is partial.
+    // .net is written as a clean, valid Protel netlist (the format has no
+    // comment syntax, so no header), and the omission reaches the user through
+    // the Messages panel, not only the dismissed dialog.
     let mut app = app_with_missing_child("gone-anyway.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-anyway-{}.net", Uuid::now_v7()));
 
     // Default path raises the prompt; nothing is written yet.
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    let task = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "nothing is written until the user acts");
     assert!(
         app.document_state.netlist_incomplete_prompt.is_some(),
@@ -623,7 +634,8 @@ fn export_anyway_writes_a_partial_netlist_with_an_incomplete_header() {
     );
 
     // The user explicitly opts into the partial export.
-    let _ = app.handle_netlist_export_anyway();
+    let task = app.handle_netlist_export_anyway();
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         app.document_state.netlist_incomplete_prompt.is_none(),
@@ -632,37 +644,41 @@ fn export_anyway_writes_a_partial_netlist_with_an_incomplete_header() {
     assert!(out.exists(), "Export anyway writes the partial .net");
     let bytes = std::fs::read_to_string(&out).expect("read written netlist");
     assert!(
-        bytes.starts_with("# "),
-        "the incomplete header must be comment-marked so an importer skips it: {bytes}"
+        bytes.starts_with("[\r\n") || bytes.starts_with("(\r\n"),
+        "the file must open with a component or net block, no header: {bytes}"
     );
     assert!(
-        bytes.contains("INCOMPLETE"),
-        "the file itself must carry an INCOMPLETE header, not only the dialog: {bytes}"
+        !bytes.contains("INCOMPLETE") && !bytes.contains('#'),
+        "Protel has no comment syntax: {bytes}"
     );
     assert!(
-        bytes.contains("gone-anyway.snxsch"),
-        "the header must name the omitted page: {bytes}"
+        export_anyway_warning_reached_the_panel("gone-anyway.snxsch"),
+        "the omission must be reported to the Messages panel naming the page"
     );
     std::fs::remove_file(&out).ok();
 }
 
 #[test]
 fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
-    // #431 review (CRITICAL): the INCOMPLETE header names the pages omitted when
-    // the prompt was RAISED, so the written bytes must come from that same
+    // #431 review (CRITICAL): the warning names the pages omitted when the
+    // prompt was RAISED, so the written bytes must come from that same
     // prompt-time derivation — never a fresh one at click time. The document can
     // change while the modal is up (no modal-aware input gating exists), and a
-    // header describing a different state than the bytes is the exact fab hazard
-    // #431 exists to prevent, just relocated to "wrong header".
+    // warning describing a different state than the bytes is the exact fab
+    // hazard #431 exists to prevent.
     //
     // Guard it by making a fresh derivation IMPOSSIBLE: drop the active engine
     // after the prompt is raised. With the snapshot, Export anyway still writes
-    // the partial .net with its header; a re-derivation would find no active
+    // the partial .net and its warning; a re-derivation would find no active
     // schematic and write nothing.
     let mut app = app_with_missing_child("gone-snapshot.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-snapshot-{}.net", Uuid::now_v7()));
 
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    let task = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
         app.document_state.netlist_incomplete_prompt.is_some(),
         "the prompt must be raised on the default path"
@@ -672,7 +688,8 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     app.document_state.engines.clear();
     app.document_state.active_path = None;
 
-    let _ = app.handle_netlist_export_anyway();
+    let task = app.handle_netlist_export_anyway();
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
         out.exists(),
@@ -682,17 +699,17 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     );
     let bytes = std::fs::read_to_string(&out).expect("read written netlist");
     assert!(
-        bytes.contains("INCOMPLETE"),
-        "the snapshot preserves the INCOMPLETE header: {bytes}"
+        bytes.starts_with("[\r\n") || bytes.starts_with("(\r\n"),
+        "the snapshot writes a clean netlist: {bytes}"
     );
     assert!(
-        bytes.contains("gone-snapshot.snxsch"),
-        "the header names the page omitted at prompt time: {bytes}"
+        export_anyway_warning_reached_the_panel("gone-snapshot.snxsch"),
+        "the warning names the page omitted at prompt time"
     );
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "the snapshot made the write succeed — no re-derivation error: {:?}",
-        app.document_state.export_error
+        app.document_state.error_notice
     );
     std::fs::remove_file(&out).ok();
 }
@@ -702,9 +719,13 @@ fn cancel_on_the_incomplete_prompt_writes_nothing() {
     // #431: "Cancel" clears the prompt and leaves the disk untouched — the
     // refuse-by-default guarantee.
     let mut app = app_with_missing_child("gone-cancel.snxsch");
-    let out = std::env::temp_dir().join(format!("signex-cancel-{}.net", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-cancel-{}.net", Uuid::now_v7()));
 
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    let task = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
+    crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
         app.document_state.netlist_incomplete_prompt.is_some(),
         "precondition: the prompt is up"
@@ -720,24 +741,47 @@ fn cancel_on_the_incomplete_prompt_writes_nothing() {
     std::fs::remove_file(&out).ok();
 }
 
+/// A PDF request for `source` with default options and every sheet of its
+/// scope picked — what an untouched preview modal would capture.
+pub(super) fn pdf_request_all_sheets(
+    app: &Signex,
+    source: &std::path::Path,
+) -> crate::app::state::PdfExportRequest {
+    let (ctx, _) =
+        super::build_page_scope_for_source(&app.document_state, source).expect("source is open");
+    crate::app::state::PdfExportRequest {
+        source: source.to_path_buf(),
+        options: Default::default(),
+        descended_placement: app.document_state.tab_placements.get(source).cloned(),
+        files: ctx
+            .sheets
+            .iter()
+            .map(|s| (s.path.clone(), s.placement.clone()))
+            .collect(),
+    }
+}
+
 #[test]
 fn pdf_export_proceeds_and_warns_once_per_user_action() {
     // The PDF is human-consumed: printing or reviewing mid-refactor with a
     // child genuinely absent from disk is a real workflow, so it degrades
     // rather than refuses — but the warning must reach the Messages panel, and
     // exactly once per user action.
-    let marker = format!("gone-pdf-{}.snxsch", Uuid::new_v4());
+    let marker = format!("gone-pdf-{}.snxsch", Uuid::now_v7());
     let _ = crate::diagnostics::init_logging();
     let before = diagnostic_count(&marker);
     let mut app = app_with_missing_child(&marker);
-    let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::new_v4()));
+    let out = std::env::temp_dir().join(format!("signex-partial-{}.pdf", Uuid::now_v7()));
 
-    let _ = app.handle_export_pdf_finished(Ok(out.clone()));
+    let source = app.document_state.active_path.clone().expect("active path");
+    let request = Box::new(pdf_request_all_sheets(&app, &source));
+    let task = app.handle_export_pdf_finished(request, Ok(out.clone()));
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
-        app.document_state.export_error.is_none(),
+        app.document_state.error_notice.is_none(),
         "a partial PDF proceeds: {:?}",
-        app.document_state.export_error
+        app.document_state.error_notice
     );
     assert!(out.exists(), "the PDF must still be written");
     assert_eq!(
@@ -755,7 +799,7 @@ fn rerasterizing_the_preview_does_not_flood_the_messages_panel() {
     // call sites including a text-input handler that fires per keystroke. The
     // panel keeps 200 entries with no dedupe, so the warnings evicted the
     // user's ERC results and then their own earliest copies.
-    let marker = format!("gone-rerender-{}.snxsch", Uuid::new_v4());
+    let marker = format!("gone-rerender-{}.snxsch", Uuid::now_v7());
     let _ = crate::diagnostics::init_logging();
     let app = app_with_missing_child(&marker);
     let before = diagnostic_count(&marker);
@@ -797,54 +841,88 @@ fn app_flat_project() -> Signex {
 }
 
 #[test]
-fn a_flat_projects_second_page_cannot_vanish_from_the_netlist_unannounced() {
-    // Rooting the netlist at the project root is right, but the stitcher only
-    // walks *down* from that root: a listed page nothing references is not in
-    // the netlist at all. Nothing is formally `MissingChild`, so before this
-    // the issue list was empty, the refusal gate never fired, and a .net
-    // holding one page of a two-page board was written to disk in silence —
-    // strictly worse than shipping the focused page, because the file looks
-    // like the whole project.
+fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
+    // #406 made the shortfall loud (refuse rather than silently ship a .net
+    // covering only the reachable page). #430 fixes the shortfall itself: the
+    // stitcher's multi-root / flat-stitch traversal now visits a page nothing
+    // references as its own independent top-level page, so both of this
+    // flat project's pages contribute and the export goes ahead.
     let mut app = app_flat_project();
 
     let (ctx, issues) = super::build_export_scope(&app.document_state).expect("context");
 
-    // The shortfall is real, not hypothetical.
     assert_eq!(
         netlist_references(&ctx),
-        vec!["R_A".to_string()],
-        "precondition: the stitcher does not reach an unreferenced page"
+        vec!["R_A".to_string(), "R_B".to_string()],
+        "both pages of the flat project contribute to the netlist"
     );
     assert!(
         issues.stitch.is_empty(),
-        "precondition: nothing is formally MissingChild here — that is the trap"
+        "a flat sibling is routine, not a structural stitch problem: {:?}",
+        issues.messages()
     );
     assert!(
-        issues.netlist_is_incomplete(),
-        "a listed page outside the hierarchy is an incomplete netlist"
+        !issues.netlist_is_incomplete(),
+        "both declared pages are in the netlist: {:?}",
+        issues.messages()
     );
 
-    // …and the machine-consumed deliverable therefore refuses by default, by
-    // the same per-deliverable policy that already covers MissingChild: #431
-    // raises the "Export anyway?" prompt and writes nothing until the user
-    // acts.
-    let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::new_v4()));
-    let _ = app.handle_export_netlist_finished(Ok(out.clone()));
+    // …and the machine-consumed deliverable is therefore written, not held
+    // behind the incomplete-export prompt.
+    let out = std::env::temp_dir().join(format!("signex-flat-{}.net", Uuid::now_v7()));
+    let task = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
+    crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
-        !out.exists(),
-        "a .net missing half the board must not reach disk by default: {}",
+        out.exists(),
+        "a complete flat-project .net must reach disk without the user having to \
+         click through an incomplete-export prompt: {}",
         out.display()
     );
-    let prompt = app
-        .document_state
-        .netlist_incomplete_prompt
-        .clone()
-        .expect("the refusal must be raised through the incomplete-export prompt");
     assert!(
-        prompt.messages.iter().any(|m| m.contains("b.snxsch")),
-        "the prompt must name the page that is not in the netlist: {:?}",
-        prompt.messages
+        app.document_state.netlist_incomplete_prompt.is_none(),
+        "nothing is incomplete, so the prompt must not be raised"
+    );
+    let bytes = std::fs::read_to_string(&out).expect("read exported netlist");
+    assert!(bytes.contains("R_A"), "R_A is in the exported file");
+    assert!(bytes.contains("R_B"), "R_B is in the exported file");
+    std::fs::remove_file(&out).ok();
+}
+
+#[test]
+fn netlist_export_writes_the_protel_format_the_dialog_promises() {
+    // #354: the save dialog offers "Protel Netlist" / `.NET`, so the bytes the
+    // handler writes must be the Protel component + net blocks with CRLF line
+    // endings — not the `# Signex netlist` debug listing.
+    let mut app = app_flat_project();
+    let out = std::env::temp_dir().join(format!("signex-protel-{}.NET", Uuid::now_v7()));
+
+    let task = app.handle_export_netlist_finished(
+        app.document_state.active_path.clone().expect("active"),
+        Ok(out.clone()),
+    );
+    crate::app::handlers::menu::export::settle(&mut app, task);
+
+    let bytes = std::fs::read_to_string(&out).expect("read exported netlist");
+    assert!(
+        bytes.starts_with("[\r\n"),
+        "a complete export opens with a component block: {bytes:?}"
+    );
+    assert!(
+        bytes.contains("[\r\nR_A\r\n"),
+        "R_A component block: {bytes:?}"
+    );
+    assert!(
+        bytes.contains("[\r\nR_B\r\n"),
+        "R_B component block: {bytes:?}"
+    );
+    assert!(bytes.contains("(\r\n"), "at least one net block: {bytes:?}");
+    assert!(
+        !bytes.contains("# Signex netlist"),
+        "the debug listing must not be what ships: {bytes:?}"
     );
     std::fs::remove_file(&out).ok();
 }
@@ -877,7 +955,7 @@ fn a_page_the_root_does_reach_is_not_reported_as_a_shortfall() {
 fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
     // "could not be found" sends the user hunting for a file that is sitting
     // right where it should be. The refusal is correct; the diagnosis was not.
-    let dir = std::env::temp_dir().join(format!("signex-export-corrupt-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-export-corrupt-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     std::fs::write(dir.join("child.snxsch"), "(this is not a schematic").expect("write child");
 
@@ -910,3 +988,102 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
 }
 
 mod diagnosis;
+
+#[test]
+fn uncovered_pdf_characters_are_named_in_the_export_warning() {
+    let marker = signex_types::object_id::short_id(&Uuid::now_v7());
+    let chars: Vec<char> = format!("\u{4E2D}\u{6587}{marker}").chars().collect();
+    let warning = super::uncovered_chars_warning(&chars).expect("a warning");
+    assert!(warning.contains(&marker), "{warning}");
+    assert!(warning.contains("have no glyph"), "{warning}");
+    assert_eq!(super::uncovered_chars_warning(&[]), None, "nothing to say");
+}
+
+mod case_probe;
+mod class_picker;
+mod class_styles;
+mod protel_hierarchy;
+
+mod bom_hierarchy;
+pub(crate) mod current_placement;
+
+mod lazy_preview;
+mod sheet_numbering;
+mod tree_nesting_pins;
+
+/// Append a second loaded project (`listed` sheets under `dir`) to `app`.
+pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {
+    let id = app.document_state.mint_project_id();
+    app.document_state.projects.push(LoadedProject {
+        id,
+        path: PathBuf::from(dir).join("Other.snxprj"),
+        data: ProjectData {
+            description: None,
+            name: "Other".to_string(),
+            dir: dir.to_string(),
+            schematic_root: listed.first().map(|f| (*f).to_string()),
+            pcb_file: None,
+            sheets: listed
+                .iter()
+                .map(|f| SheetEntry {
+                    name: (*f).to_string(),
+                    filename: (*f).to_string(),
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                    unknown: Default::default(),
+                })
+                .collect(),
+            variant_definitions: Vec::new(),
+            active_variant: None,
+            libraries: Vec::new(),
+            enable_git: false,
+            net_classes: Vec::new(),
+            rules: None,
+            annotation: None,
+            parameters: Default::default(),
+            unknown: Default::default(),
+        },
+        pending_libraries: std::collections::HashMap::new(),
+        case_fold: Default::default(),
+        case_probed: false,
+        case_decided: false,
+    });
+}
+
+/// #1080 — the title block's sign-off and document-number fields reach the
+/// export, where `${DRAWNBY}`, `${DOCUMENTNUMBER}`, … read them.
+#[test]
+fn the_export_carries_the_title_blocks_sign_off_fields() {
+    let mut ds = workspace("/w/a", &["top.snxsch"]);
+    let loose = PathBuf::from("/w/loose").join("scratch.snxsch");
+    let mut sheet = schematic(&[]);
+    for (k, v) in [
+        ("drawn_by", "A. Engineer"),
+        ("checked_by", "B. Reviewer"),
+        ("approved_by", "C. Lead"),
+        ("document_number", "DOC-0042"),
+    ] {
+        sheet.title_block.insert(k.into(), v.into());
+    }
+    open_with(&mut ds, &loose, sheet);
+    ds.active_path = Some(loose);
+
+    let fields = context(&ds).metadata.custom_fields;
+    assert_eq!(
+        fields.get("drawn_by").map(String::as_str),
+        Some("A. Engineer")
+    );
+    assert_eq!(
+        fields.get("checked_by").map(String::as_str),
+        Some("B. Reviewer")
+    );
+    assert_eq!(
+        fields.get("approved_by").map(String::as_str),
+        Some("C. Lead")
+    );
+    assert_eq!(
+        fields.get("document_number").map(String::as_str),
+        Some("DOC-0042")
+    );
+}

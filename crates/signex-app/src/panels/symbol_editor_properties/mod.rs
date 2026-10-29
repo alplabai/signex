@@ -10,7 +10,14 @@
 use iced::widget::{Column, container, row, scrollable, text};
 use iced::{Color, Element, Length};
 
-use super::{GraphicKindSummary, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection};
+use super::{
+    GraphicKindSummary, NumericDraft, PanelMsg, SymbolEditorPanelContext, SymbolEditorSelection,
+};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 mod graphic;
 mod pin;
@@ -20,6 +27,7 @@ mod symbol;
 /// tab. Mirrors Altium SchLib's right-dock Properties.
 pub(super) fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
+    draft: Option<&NumericDraft>,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -41,8 +49,8 @@ pub(super) fn view_symbol_editor_properties<'a>(
         },
     };
     col = col.push(
-        container(text(header_label).size(11).color(primary))
-            .padding([6, 8])
+        container(text(header_label).size(TS.body).color(primary))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(super::thin_sep(border_c));
@@ -52,10 +60,17 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = symbol::view_symbol_selection(col, sym, muted, primary, border_c);
         }
         SymbolEditorSelection::Pin(pin) => {
-            col = pin::view_pin_selection(col, pin, muted, primary, border_c);
+            col = pin::view_pin_selection(col, pin, draft, muted, primary, border_c);
         }
         SymbolEditorSelection::Graphic(g) => {
-            col = graphic::view_graphic_selection(col, g, muted, border_c, sym.graphic_fill_picker);
+            col = graphic::view_graphic_selection(
+                col,
+                g,
+                draft,
+                muted,
+                border_c,
+                sym.graphic_fill_picker,
+            );
         }
         SymbolEditorSelection::FieldReference => {
             col = col.push(prop_row_static(
@@ -67,10 +82,10 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = col.push(
                 container(
                     text("Bound to the host Component's designator at place-time.")
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted),
                 )
-                .padding([4, 8]),
+                .padding([SP.s, SP.m]),
             );
         }
         SymbolEditorSelection::FieldValue => {
@@ -83,10 +98,10 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = col.push(
                 container(
                     text("Bound to the host Component's value at place-time.")
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted),
                 )
-                .padding([4, 8]),
+                .padding([SP.s, SP.m]),
             );
         }
     }
@@ -97,10 +112,10 @@ pub(super) fn view_symbol_editor_properties<'a>(
             text(
                 "Click on the canvas to select. Drawing tools (rectangle, line, arc) land in v0.9 phase 3c.",
             )
-            .size(10)
+            .size(TS.caption)
             .color(muted),
         )
-        .padding([6, 8]),
+        .padding([6.0, SP.m]),
     );
 
     scrollable(col).width(Length::Fill).into()
@@ -117,17 +132,17 @@ fn prop_row_static<'a>(
     container(
         row![
             text(label.to_string())
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             text(value)
-                .size(10)
+                .size(TS.caption)
                 .color(primary)
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into()
 }

@@ -2,11 +2,21 @@ use iced::Task;
 
 use super::*;
 
+pub(crate) mod chord;
 mod command_palette;
 mod document;
+mod escape;
+#[cfg(test)]
+mod grid_properties_tests;
+pub(crate) mod input;
+mod keyboard;
 mod keymap;
 pub(crate) mod library;
+#[cfg(test)]
+mod net_color_tests;
 mod overlay;
+#[cfg(test)]
+mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
@@ -16,13 +26,36 @@ impl Signex {
         self.apply_pcb_renderer_dirty_hint(&message);
 
         match message {
+            Message::PassiveCalculator(message) => {
+                self.ui_state.passive_calculator.update(message);
+                Task::none()
+            }
             Message::Menu(msg) => self.handle_menu_message(msg),
             Message::Tab { window_id, msg } => {
                 let task = self.handle_document_tab_message(window_id, msg);
+                self.close_find_similar_if_sheet_changed();
+                self.close_paste_array_if_sheet_changed();
                 Task::batch([self.finish_update(), task])
             }
             Message::Dock(msg) => self.handle_dock_message(msg),
+            Message::Input(msg) => self.dispatch_input_message(msg),
+            Message::Library(msg) => self.dispatch_library_message(msg),
+            Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
             Message::Selection(request) => self.handle_selection_request(request),
+            // Idle cursor move (the subscription forwards every one): only
+            // the cached position changes, so skip the drag handlers and
+            // `finish_update`'s per-event work (#111).
+            // Dispatchers that skip `finish_update` leave the panel_ctx
+            // mirrors / History dirty bit stale; the cheap (IO-free)
+            // repair stays here, along with the drain + diagnostics
+            // republish safety net (no-ops when nothing is queued).
+            Message::Ui(UiMsg::DragMove(x, y)) if !self.is_layout_drag_active() => {
+                self.interaction_state.last_mouse_pos = (x, y);
+                self.sync_panel_ctx_mirrors();
+                self.sync_diagnostics_panel_ctx();
+                let history = self.refresh_history_panel_cheap();
+                Task::batch([history, self.drain_pending_git_commits()])
+            }
             Message::Ui(msg) => self.dispatch_ui_message(msg),
             // Canvas events keep their own top-level variants (hot path,
             // many emit sites). Both dismiss the first-run tour card on
@@ -30,14 +63,19 @@ impl Signex {
             Message::CanvasEvent(event) => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([save, self.handle_canvas_interaction_event(event)]);
                 }
                 self.handle_canvas_interaction_event(event)
             }
             Message::CanvasEventInWindow { window_id, event } => {
                 if self.ui_state.first_run_tour_open {
                     self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
+                    let save = overlay::dismiss_first_run_tour_task();
+                    return Task::batch([
+                        save,
+                        self.handle_canvas_event_in_window(window_id, event),
+                    ]);
                 }
                 self.handle_canvas_event_in_window(window_id, event)
             }
@@ -53,7 +91,10 @@ impl Signex {
             Message::Overlay(msg) => self.dispatch_overlay_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            Message::Project(msg) => self.dispatch_project_message(msg),
+            Message::Project(msg) => {
+                let task = self.dispatch_project_message(msg);
+                Task::batch([task, self.finish_update()])
+            }
             Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),
@@ -62,216 +103,20 @@ impl Signex {
             Message::Rename(msg) => self.dispatch_rename_message(msg),
             Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::Window(msg) => self.dispatch_window_message(msg),
+            Message::DockLayout(msg) => self.dispatch_dock_layout_message(msg),
+            Message::SearchPrefs(msg) => self.dispatch_search_prefs_message(msg),
+            Message::Autosave(msg) => self.dispatch_autosave_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
-            Message::LassoCommit => {
-                // Altium-style single terminator — Enter commits
-                // whichever multi-click buffer is currently armed:
-                //   - Lasso: selects inside the polygon.
-                //   - Polyline (Tool::Polyline): writes a SchDrawing.
-                //   - Arc (Tool::Arc): arms need 3 clicks regardless.
-                if self.interaction_state.current_tool == Tool::Polyline
-                    && self.interaction_state.polyline_points.len() >= 2
-                {
-                    let pp_w = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_width_mm)
-                        .unwrap_or(0.0);
-                    let pp_fill = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_fill)
-                        .unwrap_or(signex_types::schematic::FillType::None);
-                    let pts = std::mem::take(&mut self.interaction_state.polyline_points);
-                    let drawing = signex_types::schematic::SchDrawing::Polyline {
-                        uuid: uuid::Uuid::new_v4(),
-                        points: pts,
-                        width: pp_w,
-                        fill: pp_fill,
-                        stroke_color: None,
-                    };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSchDrawing { drawing },
-                        false,
-                        false,
-                    );
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .polyline_points
-                        .clear();
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                    return Task::none();
-                }
-                if let Some(pts) = self.ui_state.lasso_polygon.take()
-                    && pts.len() >= 3
-                    && let Some(snapshot) = self.active_render_snapshot()
-                {
-                    let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
-                    let filters = self.interaction_state.selection_filters.clone();
-                    self.interaction_state.active_canvas_mut().selected =
-                        crate::schematic_runtime::hit_test::hit_test_polygon(snapshot, &poly)
-                            .into_iter()
-                            .filter(|h| {
-                                super::handlers::selection_workflow::passes_filter(
-                                    h, snapshot, &filters,
-                                )
-                            })
-                            .collect();
-                    self.update_selection_info();
-                }
-                self.sync_lasso_polygon_to_canvas();
-                if self.open_selected_child_sheet() {
-                    return Task::none();
-                }
-                Task::none()
-            }
-            Message::CycleSelectionMode => {
-                use crate::schematic_runtime::hit_test::SelectionMode;
-                self.ui_state.selection_mode = match self.ui_state.selection_mode {
-                    SelectionMode::Inside => SelectionMode::Touching,
-                    SelectionMode::Touching => SelectionMode::Inside,
-                    SelectionMode::Single => SelectionMode::Inside,
-                    _ => SelectionMode::Inside,
-                };
-                crate::diagnostics::log_info(format!(
-                    "Selection mode: {:?}",
-                    self.ui_state.selection_mode
-                ));
-                Task::none()
-            }
-            Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
-            Message::Library(msg) => self.dispatch_library_message(msg),
-            Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
-            Message::HistoryLoaded {
-                generation,
-                path: _,
-                result,
-            } => {
-                // Drop stale results from a previous tab — the
-                // generation token compares cheaply and is the
-                // authoritative staleness check (the path field
-                // is informational only).
-                if generation != self.document_state.history.generation {
-                    return Task::none();
-                }
-                self.document_state.history.loading = false;
-                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
-                self.document_state.history.entries = match result {
-                    Ok(entries) => entries,
-                    Err(_) => Vec::new(),
-                };
-                self.document_state.panel_ctx.history = self.document_state.history.clone();
-                Task::none()
-            }
-            Message::EscapePressed => {
-                // v0.15 — if active tab is a footprint editor, reset
-                // its tool state via `FootprintToolEscape`; otherwise
-                // fall back to the schematic Tool::Select reset.
-                let footprint_path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_footprint_editor())
-                    .cloned();
-                if let Some(path) = footprint_path {
-                    // #370 — when the "Align…" dialog is open, Esc just
-                    // dismisses it (leaving the selection intact) rather
-                    // than falling through to `ToolEscape`, which would
-                    // also clear the selected pad. Any other footprint
-                    // Esc keeps the tool-reset behaviour.
-                    let align_open = self
-                        .document_state
-                        .footprint_editors
-                        .get(&path)
-                        .is_some_and(|ed| ed.state.align_modal.is_some());
-                    let esc_msg = if align_open {
-                        crate::library::messages::FootprintEditorMsg::AlignCancel
-                    } else {
-                        crate::library::messages::FootprintEditorMsg::ToolEscape
-                    };
-                    self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(esc_msg),
-                        },
-                    ))
-                } else if let Some(path) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_symbol_editor())
-                    .cloned()
-                {
-                    // Symbol editor tab: Esc's one job today is
-                    // closing an open right-click context menu (no
-                    // per-tool cancel state to reset yet, unlike the
-                    // footprint editor's `ToolEscape`).
-                    let menu_open = self
-                        .document_state
-                        .symbol_editors
-                        .get(&path)
-                        .is_some_and(|e| e.context_menu.is_some());
-                    if menu_open {
-                        self.update(Message::Library(
-                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                                path,
-                                msg: crate::library::messages::PrimitiveEdit::Symbol(
-                                    crate::library::messages::SymbolEditorMsg::CloseContextMenu,
-                                ),
-                            },
-                        ))
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
-                        crate::app::Tool::Select,
-                    )))
-                }
-            }
-            Message::FootprintModeShortcut(target) => {
-                // v0.14.2 — gate on "active tab is a footprint
-                // editor". When yes, route through the existing
-                // FootprintSetMode dispatch (which also runs the
-                // sketch dispatcher's SetMode handler so the
-                // SetMode side-effects fire). Otherwise no-op so the
-                // bare digits don't hijack other tabs.
-                let path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| t.kind.as_footprint_editor())
-                    .cloned();
-                if let Some(path) = path {
-                    self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                crate::library::messages::FootprintEditorMsg::SetMode(target),
-                            ),
-                        },
-                    ))
-                } else {
-                    Task::none()
-                }
-            }
-            Message::Noop => Task::none(),
         }
     }
 
     /// Window lifecycle, docking, and native-chrome message family
     /// (namespaced, ADR-0001 D3). Main + secondary window open / close /
     /// resize / scale, detach + reattach of modals, undocked tabs and
-    /// floating panels, and the borderless-chrome drag / resize / minimize
-    /// / maximize buttons. Routed from `dispatch_update`.
+    /// floating panels, and the borderless-chrome drag / resize /
+    /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
@@ -285,8 +130,9 @@ impl Signex {
                     // re-querying the scale factor here keeps the
                     // wordmark-PNG tier picker in sync after a
                     // cross-monitor drag.
-                    return iced::window::scale_factor(id)
+                    let scale_task = iced::window::scale_factor(id)
                         .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                    return Task::batch([scale_task, self.main_window_mode_task(id)]);
                 }
                 Task::none()
             }
@@ -296,6 +142,11 @@ impl Signex {
             }
             WindowMsg::MainWindowOpened(id) => {
                 self.ui_state.main_window_id = Some(id);
+                self.ui_state.main_window_opened = true;
+                // winit's default menu exists now; ours replaces it on the
+                // sync that ends this update.
+                #[cfg(target_os = "macos")]
+                self.native_menu.arm();
                 // Pull the real initial size from winit — opening the
                 // window at Settings.size doesn't always land at
                 // exactly that size (OS DPI scaling, display clamps).
@@ -319,13 +170,19 @@ impl Signex {
             WindowMsg::SecondaryWindowClosed(id) => {
                 // Main window closed → terminate the process.
                 if self.ui_state.main_window_id == Some(id) {
-                    return iced::exit();
+                    return self.flush_quit_writes_then(iced::exit());
                 }
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
+                let mut layout_persist = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
+                let owner = self.ui_state.library_modal_owners.remove(&id);
+                self.ui_state.modal_window_sizes.remove(&id);
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
                     use super::state::{ModalId, WindowKind};
                     match kind {
@@ -334,8 +191,25 @@ impl Signex {
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
+                            ModalId::ReprefixConfirm => self.ui_state.reprefix_confirm = None,
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
-                            ModalId::Preferences => self.ui_state.preferences_open = false,
+                            ModalId::Preferences => {
+                                // Backstop for a Preferences window destroyed
+                                // outside the guarded close paths (which all
+                                // refuse to close while dirty): if unsaved
+                                // live previews are still active, revert them
+                                // so e.g. the experimental PCB GPU render
+                                // toggle can't linger enabled with the
+                                // checkbox showing unchecked. Gated on dirty
+                                // so a clean close doesn't pay the full
+                                // revert (keymap-profile rebuild + canvas
+                                // cache clears — a visible re-tessellation
+                                // hitch on a large board) for a no-op.
+                                if self.ui_state.preferences_dirty {
+                                    self.revert_preferences_drafts();
+                                }
+                                self.ui_state.preferences_open = false;
+                            }
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
@@ -346,19 +220,79 @@ impl Signex {
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
-                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::PrintPreview => self.dismiss_print_preview(),
                             ModalId::BomPreview => self.document_state.bom_preview = None,
-                            ModalId::ProjectOptions => {
-                                self.ui_state.project_options = None;
-                            }
                             ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
+                                self.close_enable_version_control_dialog();
                             }
                             ModalId::GridProperties => {
                                 self.ui_state.grid_properties = None;
                             }
                             ModalId::SelectionFilterCustom => {
                                 self.ui_state.selection_filter_custom = None;
+                            }
+                            ModalId::About => self.ui_state.about_open = false,
+                            ModalId::KeyboardShortcuts => {
+                                self.ui_state.keyboard_shortcuts_open = false
+                            }
+                            ModalId::PassiveCalculator => {
+                                self.ui_state.passive_calculator_open = false
+                            }
+                            ModalId::FirstRunTour => self.ui_state.first_run_tour_open = false,
+                            ModalId::CreateChildSheet => {
+                                self.ui_state.create_child_sheet_confirm = None
+                            }
+                            // A window that went away without a close
+                            // request is a Cancel, never a Discard.
+                            ModalId::ErrorNotice => self.document_state.error_notice = None,
+                            ModalId::NetlistIncompletePrompt => {
+                                self.document_state.netlist_incomplete_prompt = None
+                            }
+                            ModalId::AutosaveRecovery => self.note_recovery_window_vanished(),
+                            ModalId::ProjectCloseConfirm => {
+                                self.ui_state.project_close_confirm = None
+                            }
+                            ModalId::AppQuitConfirm => self.ui_state.app_quit_confirm = None,
+                            // A window that vanished without a close request
+                            // is a Cancel: nothing is written or deleted.
+                            ModalId::LibraryPicker => self.library.picker = None,
+                            ModalId::LibraryPrimitivePicker => self.library.primitive_picker = None,
+                            ModalId::LibraryDocumentOptions => self.library.document_options = None,
+                            ModalId::LibraryCreateOptions => self.library.create_options = None,
+                            ModalId::LibraryStockCopy => self.library.stock_copy = None,
+                            ModalId::LibraryUpdates => self.library.library_updates = None,
+                            ModalId::LibraryCloseConfirm => {
+                                self.library.close_library_confirm = None
+                            }
+                            ModalId::NetColorCustom => self.ui_state.net_color_custom.show = false,
+                            // Never auto-decided: the sync shows it again.
+                            ModalId::LibraryRecovery => self.note_recovery_window_vanished(),
+                            // The edit form keeps its typed text: the window comes
+                            // back, twice at most, then it stays in the window.
+                            ModalId::LibraryEditRow => {
+                                if let Some(path) = owner {
+                                    let count = self
+                                        .ui_state
+                                        .edit_row_window_vanished
+                                        .entry(path)
+                                        .or_insert(0);
+                                    *count += 1;
+                                    if *count == 2 {
+                                        crate::diagnostics::log_warning(
+                                            "An Edit Component Details window closed twice \
+                                             unanswered; it now stays in the main window",
+                                        );
+                                    }
+                                }
+                            }
+                            // A confirm that vanished is a Cancel.
+                            ModalId::LibraryDeleteConfirm => {
+                                if let Some(path) = owner
+                                    && let Some(browser) =
+                                        self.library.library_browsers.get_mut(&path)
+                                {
+                                    browser.delete_confirm = None;
+                                }
                             }
                         },
                         // Closing an undocked-tab window is the reattach
@@ -368,14 +302,19 @@ impl Signex {
                         // that's gone.
                         WindowKind::UndockedTab { .. } => {
                             self.interaction_state.canvases.remove(&id);
+                            self.interaction_state.pcb_canvases.remove(&id);
                         }
-                        // Closing a detached panel reattaches it as a
-                        // docked panel in the right column so the user
-                        // doesn't lose access to the panel kind.
+                        // Closing a detached panel reattaches it to the
+                        // dock so the user doesn't lose access to the
+                        // panel kind. It goes back to its home region
+                        // rather than always to the right column, and
+                        // `show_panel` makes it the active tab there.
+                        // The `windows.remove` above already dropped
+                        // this window, so the dock call is the whole
+                        // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
-                            self.document_state
-                                .dock
-                                .add_panel(crate::dock::PanelPosition::Right, kind);
+                            self.document_state.dock.show_panel(kind);
+                            layout_persist = self.persist_dock_layout_soon();
                         }
                         // The Component Preview lives as a tab in the
                         // main window; its state outlasts the
@@ -390,7 +329,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::none()
+                layout_persist
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {
@@ -432,6 +371,12 @@ impl Signex {
             }
             WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
             WindowMsg::UndockedTabOpened { path, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 let title = self
                     .document_state
                     .tabs
@@ -449,31 +394,44 @@ impl Signex {
                 // Spin up a fresh canvas for this window, seeded from
                 // the engine that the tab points at so the new window
                 // renders the correct schematic from its first frame.
-                // Pan/zoom/selection start at SchematicCanvas::new
+                // Pan/zoom/selection start at CanvasSlot::new
                 // defaults — independent of the main canvas.
-                let mut per_window = crate::canvas::SchematicCanvas::new();
+                let mut per_window = crate::canvas::CanvasSlot::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
                             engine.document(),
+                            engine.revision(),
                         ),
                     ));
                 }
-                // Mirror the main canvas's theme / snap / grid / paper
-                // settings so the new window doesn't flash with the
-                // defaults before any sync happens.
-                per_window.theme_bg = self.interaction_state.canvas.theme_bg;
-                per_window.theme_grid = self.interaction_state.canvas.theme_grid;
-                per_window.theme_paper = self.interaction_state.canvas.theme_paper;
-                per_window.canvas_colors = self.interaction_state.canvas.canvas_colors;
-                per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
-                per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
-                per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
-                per_window.grid_visible = self.interaction_state.canvas.grid_visible;
+                // #631 — theme, snap, grid size/style and grid visibility
+                // used to be mirrored here so the new window would not
+                // flash the defaults. They are read from `UiState` in
+                // `view` now, so a fresh window is correct on its first
+                // frame with nothing copied. Paper size stays: it belongs
+                // to *this* window's document, not to the app.
                 per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
-                per_window.fit_to_paper();
+                // The sheet frame belongs to this window's document too;
+                // without it the undocked window draws no frame until the
+                // next paper change.
+                per_window.sheet_frame = self.sheet_frame_for_path(
+                    &path,
+                    per_window.paper_width_mm,
+                    per_window.paper_height_mm,
+                );
+                per_window.special_strings = self.special_strings_for_path(&path);
+                per_window.designators = self.designators_for_path(&path);
+                per_window.fit_to_content();
                 self.interaction_state.canvases.insert(id, per_window);
+                // A PCB tab gets its own PCB canvas too, so panning one
+                // window no longer moves the other (#494).
+                if let Some(per_window_pcb) = self.new_pcb_canvas_for(&path) {
+                    self.interaction_state
+                        .pcb_canvases
+                        .insert(id, per_window_pcb);
+                }
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.
@@ -488,19 +446,23 @@ impl Signex {
                 // canvas cache + selection leak.
                 self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
+                self.interaction_state.pcb_canvases.remove(&id);
                 iced::window::close(id)
             }
             WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
             WindowMsg::DetachedPanelOpened { kind, id } => {
+                // The entry was inserted when the open was requested; if
+                // the window closed before the OS confirmed the open, do
+                // not resurrect it (stale window + canvas leak).
+                if !self.ui_state.windows.contains_key(&id) {
+                    return Task::none();
+                }
                 self.ui_state
                     .windows
                     .insert(id, super::state::WindowKind::DetachedPanel(kind));
                 // Raise + focus the detached panel window — same
                 // `Level::Normal` open-behind issue as the modal/tab.
                 iced::window::gain_focus(id)
-            }
-            WindowMsg::StartDetachedWindowDrag(modal) => {
-                self.handle_start_detached_window_drag(modal)
             }
             WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_drag(id),
@@ -510,30 +472,6 @@ impl Signex {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
-            WindowMsg::StartDetachedModalResize { modal, direction } => {
-                // Find the OS window id hosting this modal, then ask
-                // the OS to start a resize drag in the requested
-                // direction. Same pattern as the main window —
-                // detached modals have `decorations: false`, so
-                // there's no OS frame to grab; the 6 px overlay
-                // strips are how we expose resize. Routed through
-                // `crate::chrome::start_window_resize` so the Win32
-                // SC_SIZE fallback applies here too — winit's own
-                // path silently no-ops on borderless windows after
-                // the first attempt.
-                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind {
-                        if *m == modal {
-                            return Some(*id);
-                        }
-                    }
-                    None
-                });
-                match id {
-                    Some(id) => crate::chrome::start_window_resize(id, direction),
-                    None => Task::none(),
-                }
-            }
             WindowMsg::MinimizeMainWindow => match self.ui_state.main_window_id {
                 Some(id) => iced::window::minimize(id, true),
                 None => Task::none(),
@@ -543,13 +481,49 @@ impl Signex {
                 None => Task::none(),
             },
             WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::LockedWindowClicked => match self.locking_confirm_window() {
+                Some(id) => iced::window::gain_focus(id),
+                None => Task::none(),
+            },
+            WindowMsg::WindowFocused(id) => {
+                self.ui_state.focused_window = Some(id);
+                Task::none()
+            }
+            WindowMsg::WindowUnfocused(id) => {
+                if self.ui_state.focused_window == Some(id) {
+                    self.ui_state.focused_window = None;
+                }
+                Task::none()
+            }
+            WindowMsg::NativeMenuItemActivated(id) => self.handle_native_menu_activated(&id),
+            WindowMsg::ControlsLayoutDetected(layout) => {
+                self.handle_controls_layout_detected(layout)
+            }
+            WindowMsg::MainWindowMonitorSizeRead(size) => {
+                self.ui_state.main_window_monitor_size = size;
+                Task::none()
+            }
+            WindowMsg::MainWindowModeRead(mode) => {
+                self.ui_state.main_window_mode = mode;
+                Task::none()
+            }
             WindowMsg::WindowCloseRequested(id) => {
-                // OS close request (Alt+F4 / native close). Daemon mode
-                // does not auto-close, so route the main window through
-                // the unsaved-changes guard and close any other window
-                // directly.
+                // OS close request (Alt+F4 / native close). Windows are
+                // opened with `exit_on_close_request: false`, so route the main window through
+                // the unsaved-changes guard, a detached modal through its
+                // own close message, and close any other window directly.
                 if self.ui_state.main_window_id == Some(id) {
                     self.handle_app_quit_requested()
+                } else if let Some(super::state::WindowKind::DetachedModal(modal)) =
+                    self.ui_state.windows.get(&id).cloned()
+                    && let Some(close) = self.window_close_message(id, modal)
+                {
+                    // The native close button of a detached modal runs
+                    // the modal's own close message, so the dirty guard
+                    // (Preferences keeps the window open until the user
+                    // saves or discards), the state reset and the window
+                    // close are the same as for the in-body close.
+                    self.update(close)
                 } else {
                     iced::window::close(id)
                 }
@@ -575,9 +549,9 @@ impl Signex {
                 } else {
                     self.ui_state.net_colors.remove(&net);
                 }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_content_cache();
+                }
                 Task::none()
             }
             NetColorMsg::CustomShow(show) => {
@@ -597,15 +571,21 @@ impl Signex {
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
             }
             NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8; silently ignore invalid input so the
-                // text_input doesn't reject intermediate values like
-                // the empty string while the user types.
-                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                // Parse as u8: values above 255 (however large) clamp to
+                // 255. Input that does not parse (e.g. the empty string
+                // while the user types) keeps the channel's previous value,
+                // so the text_input never rejects an intermediate value and
+                // a half-typed edit never zeroes the channel.
+                let Ok(parsed) = s.trim().parse::<u64>() else {
+                    return Task::none();
+                };
+                let parsed = parsed.min(255) as u8;
                 let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {

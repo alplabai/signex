@@ -5,8 +5,8 @@ use std::sync::Arc;
 use regex::Regex;
 use signex_erc::engine::EvalFn;
 use signex_erc::{
-    AnalysisScope, Applicability, Diagnostic, ErcContext, RuleDefinition, RuleId, RuleKind,
-    RuleTarget, Severity,
+    AnalysisScope, Applicability, Diagnostic, ErcContext, LocationSpace, NetFinding,
+    RuleDefinition, RuleId, RuleKind, RuleTarget, Severity,
 };
 use signex_types::schematic::{PinDirection, Point, SelectedItem, SelectedKind};
 
@@ -19,6 +19,7 @@ pub struct CompiledHelper {
     name: String,
     args: Vec<LiteralAst>,
     regex_arg: Option<Regex>,
+    pin_kind_arg: Option<PinDirection>,
 }
 
 /// Expression after compilation/preprocessing.
@@ -32,6 +33,11 @@ pub enum CompiledExpr {
         field: FieldExprAst,
         op: CmpOp,
         value: LiteralAst,
+    },
+    /// `pin.kind == / != <kind>`, with the kind resolved at compile time.
+    PinKindCmp {
+        op: CmpOp,
+        kind: PinDirection,
     },
     FieldMatches {
         field: FieldExprAst,
@@ -63,6 +69,11 @@ pub fn compile(rules: &[RuleAst]) -> Result<Vec<CompiledRule>, Vec<DslError>> {
     let mut errors = Vec::new();
 
     for rule in rules {
+        let unsupported = crate::validator::unsupported_features(rule);
+        if !unsupported.is_empty() {
+            errors.extend(unsupported);
+            continue;
+        }
         match compile_rule(rule) {
             Ok(compiled) => out.push(compiled),
             Err(err) => errors.push(err),
@@ -147,11 +158,22 @@ fn compile_expr(rule_id: &str, expr: &ExprAst) -> Result<CompiledExpr, DslError>
             } else {
                 None
             };
+            let pin_kind_arg = match (name.as_str(), args.first()) {
+                ("has_pin_kind", Some(kind)) => Some(resolve_pin_kind(rule_id, kind)?),
+                _ => None,
+            };
             Ok(CompiledExpr::HelperCall(CompiledHelper {
                 name: name.clone(),
                 args: args.clone(),
                 regex_arg,
+                pin_kind_arg,
             }))
+        }
+        ExprAst::FieldCmp { field, op, value } if is_pin_kind_field(field) => {
+            Ok(CompiledExpr::PinKindCmp {
+                op: *op,
+                kind: resolve_pin_kind(rule_id, value)?,
+            })
         }
         ExprAst::FieldCmp { field, op, value } => Ok(CompiledExpr::FieldCmp {
             field: field.clone(),
@@ -195,15 +217,26 @@ fn evaluate_rule(
         TargetKind::Net => {
             for net in &ctx.nets {
                 if eval_expr(expr, Subject::Net(net)) {
-                    out.push(Diagnostic {
-                        rule_id: rule_id.clone(),
-                        rule_kind,
-                        severity,
-                        message: message.to_string(),
-                        location: Point::new(0.0, 0.0),
-                        primary: None,
-                        peer: None,
-                    });
+                    // The finding carries the net; it is anchored at the
+                    // net's representative pin, not at a fake origin.
+                    out.push(
+                        Diagnostic {
+                            rule_id: rule_id.clone(),
+                            rule_kind,
+                            severity,
+                            message: message.to_string(),
+                            location: Point::new(0.0, 0.0),
+                            location_space: LocationSpace::Unplaced,
+                            child_sheet: None,
+                            owner_sheet: None,
+                            primary: None,
+                            peer: None,
+                            net: None,
+                            anchor_pin: None,
+                            tag: None,
+                        }
+                        .for_net(NetFinding::from_net(net)),
+                    );
                 }
             }
         }
@@ -217,8 +250,14 @@ fn evaluate_rule(
                             severity,
                             message: message.to_string(),
                             location: pin.world_pos,
+                            location_space: LocationSpace::ThisSheet,
+                            child_sheet: None,
+                            owner_sheet: None,
                             primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                             peer: None,
+                            net: None,
+                            anchor_pin: Some(pin.anchor()),
+                            tag: None,
                         });
                     }
                 }
@@ -233,8 +272,14 @@ fn evaluate_rule(
                         severity,
                         message: message.to_string(),
                         location: symbol.position,
+                        location_space: LocationSpace::ThisSheet,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                         peer: None,
+                        net: None,
+                        anchor_pin: None,
+                        tag: None,
                     });
                 }
             }
@@ -248,8 +293,14 @@ fn evaluate_rule(
                         severity,
                         message: message.to_string(),
                         location: sheet.position,
+                        location_space: LocationSpace::ThisSheet,
+                        child_sheet: None,
+                        owner_sheet: None,
                         primary: Some(SelectedItem::new(sheet.uuid, SelectedKind::ChildSheet)),
                         peer: None,
+                        net: None,
+                        anchor_pin: None,
+                        tag: None,
                     });
                 }
             }
@@ -266,6 +317,13 @@ fn eval_expr(expr: &CompiledExpr, subject: Subject<'_>) -> bool {
         CompiledExpr::Not(e) => !eval_expr(e, subject),
         CompiledExpr::HelperCall(helper) => eval_helper(helper, subject),
         CompiledExpr::FieldCmp { field, op, value } => eval_field_cmp(field, *op, value, subject),
+        CompiledExpr::PinKindCmp { op, kind } => match subject {
+            Subject::Pin(pin) => match op {
+                CmpOp::Eq => pin.electrical_type == *kind,
+                CmpOp::Ne => pin.electrical_type != *kind,
+            },
+            _ => false,
+        },
         CompiledExpr::FieldMatches { field, regex, .. } => {
             eval_field_matches(field, regex, subject)
         }
@@ -286,11 +344,8 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
         ("has_driver", Subject::Net(net)) => net.has_driver,
         ("has_pullup", Subject::Net(net)) => net.has_pullup,
         ("has_pin_kind", Subject::Net(net)) => helper
-            .args
-            .first()
-            .and_then(|a| parse_pin_type(a.as_str_value()))
-            .map(|t| net.pin_types.contains(&t))
-            .unwrap_or(false),
+            .pin_kind_arg
+            .is_some_and(|kind| net.pin_types.contains(&kind)),
         ("name_matches", Subject::Net(net)) => {
             if let Some(regex) = &helper.regex_arg {
                 regex.is_match(&net.name)
@@ -310,6 +365,9 @@ fn eval_helper(helper: &CompiledHelper, subject: Subject<'_>) -> bool {
 
 enum Value {
     Str(String),
+    /// Several strings; a comparison or match holds if ANY of them does
+    /// (`!=` holds when NONE equals).
+    Strs(Vec<String>),
     Bool(bool),
 }
 
@@ -335,6 +393,15 @@ fn eval_field_cmp(
                 CmpOp::Ne => normalize(&a) != normalize(&b),
             }
         }
+        (Value::Strs(all), rhs) => {
+            let any_eq = all
+                .iter()
+                .any(|a| normalize(a) == normalize(rhs.as_str_value()));
+            match op {
+                CmpOp::Eq => any_eq,
+                CmpOp::Ne => !any_eq,
+            }
+        }
         (Value::Bool(a), rhs) => {
             let b = normalize(rhs.as_str_value()) == "true";
             match op {
@@ -351,6 +418,7 @@ fn eval_field_matches(field: &FieldExprAst, regex: &Regex, subject: Subject<'_>)
     };
     match lhs {
         Value::Str(s) => regex.is_match(&s),
+        Value::Strs(all) => all.iter().any(|s| regex.is_match(s)),
         Value::Bool(_) => false,
     }
 }
@@ -360,6 +428,7 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
         (FieldExprAst::Access { object, field }, Subject::Net(net)) if object == "net" => {
             match field.as_str() {
                 "name" => Some(Value::Str(net.name.clone())),
+                "names" => Some(Value::Strs(net.names.clone())),
                 "class" => Some(Value::Str(net.class.clone())),
                 _ => None,
             }
@@ -397,7 +466,8 @@ fn resolve_field(field: &FieldExprAst, subject: Subject<'_>) -> Option<Value> {
         (FieldExprAst::MethodCall { object, method, .. }, Subject::Sheet(_))
             if object == "sheet" && method == "tagged" =>
         {
-            // Tag information is not projected into `ErcContext` yet.
+            // Unreachable through `compile()`, which rejects `sheet.tagged()`
+            // until tag information is projected into `ErcContext` (#835).
             Some(Value::Bool(false))
         }
         _ => None,
@@ -438,6 +508,11 @@ fn map_severity(severity: SeverityKind) -> Severity {
     }
 }
 
+/// Placeholder `RuleKind` for `Diagnostic::rule_kind`, which is not optional.
+/// It is NOT the rule's identity — `Diagnostic::rule_id` (`user::<name>`) is,
+/// and it reaches `Violation::rule_id`. Nothing reads the kind of a DSL
+/// diagnostic: labels, overrides and quick fixes all resolve through
+/// `RuleId::builtin_kind`, which is `None` for these.
 fn fallback_kind(target: TargetKind) -> RuleKind {
     match target {
         TargetKind::Net => RuleKind::NetLabelConflict,
@@ -456,6 +531,22 @@ fn is_driving_pin(t: PinDirection) -> bool {
             | PinDirection::OpenDrainLow
             | PinDirection::OpenDrainHigh
     )
+}
+
+/// Whether `field` is `pin.kind`, whose literals name a pin kind.
+pub(crate) fn is_pin_kind_field(field: &FieldExprAst) -> bool {
+    matches!(field, FieldExprAst::Access { object, field } if object == "pin" && field == "kind")
+}
+
+/// The pin kind `literal` names, accepting every spelling `parse_pin_type` does.
+pub(crate) fn resolve_pin_kind(
+    rule_id: &str,
+    literal: &LiteralAst,
+) -> Result<PinDirection, DslError> {
+    parse_pin_type(literal.as_str_value()).ok_or_else(|| DslError::UnknownPinKind {
+        rule: rule_id.to_string(),
+        value: literal.as_str_value().to_string(),
+    })
 }
 
 fn parse_pin_type(s: &str) -> Option<PinDirection> {
@@ -502,4 +593,36 @@ fn normalize(s: &str) -> String {
         .filter(|c| *c != '_' && *c != '-' && !c.is_whitespace())
         .flat_map(char::to_lowercase)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_pin_type, pin_type_name};
+    use signex_types::schematic::PinDirection;
+
+    /// Every name `pin.kind` compared against before #676 must still parse
+    /// back to its own kind, so no existing rule changes meaning. The list is
+    /// every `PinDirection`: a new variant breaks `pin_type_name`'s exhaustive
+    /// match first, and must be added here too.
+    #[test]
+    fn every_pin_kind_name_parses_back_to_itself() {
+        for kind in [
+            PinDirection::Input,
+            PinDirection::Output,
+            PinDirection::Bidirectional,
+            PinDirection::ThreeStatable,
+            PinDirection::Passive,
+            PinDirection::PowerInput,
+            PinDirection::PowerOutput,
+            PinDirection::GroundReference,
+            PinDirection::OpenDrainLow,
+            PinDirection::OpenDrainHigh,
+            PinDirection::Differential,
+            PinDirection::Clock,
+            PinDirection::DoNotConnect,
+            PinDirection::Unclassified,
+        ] {
+            assert_eq!(parse_pin_type(pin_type_name(kind)), Some(kind));
+        }
+    }
 }

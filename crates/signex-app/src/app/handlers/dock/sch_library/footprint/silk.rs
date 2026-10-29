@@ -28,34 +28,41 @@ pub(crate) enum SilkTextField {
     Size,
 }
 
+/// Coalescing target for a silk field edit: the graphic index plus
+/// which of its fields, so two fields of one graphic do not merge.
+fn silk_key(idx: usize, field: usize) -> u128 {
+    ((idx as u128) << 8) | field as u128
+}
+
 impl Signex {
     pub(crate) fn fp_editor_set_silk_line_endpoint(
         &mut self,
         endpoint: SilkLineEndpoint,
         value: String,
     ) -> bool {
-        let parsed = value.trim().parse::<f64>().ok();
-        if let Some(parsed) = parsed {
-            if let Some(editor) = self.active_footprint_editor_mut() {
-                if let Some(idx) = editor.state.selected_silk_f {
-                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
-                        if let signex_library::primitive::footprint::FpGraphicKind::Line {
-                            from,
-                            to,
-                        } = &mut g.kind
-                        {
-                            match endpoint {
-                                SilkLineEndpoint::FromX => from[0] = parsed,
-                                SilkLineEndpoint::FromY => from[1] = parsed,
-                                SilkLineEndpoint::ToX => to[0] = parsed,
-                                SilkLineEndpoint::ToY => to[1] = parsed,
-                            }
-                            editor.dirty = true;
-                            editor.canvas_cache.clear();
-                        }
+        let parsed = crate::numeric_field::parse_field_f64(&value);
+        if let Some(parsed) = parsed
+            && let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(idx) = editor.state.selected_silk_f
+        {
+            let key = Some(("silk_line_endpoint", silk_key(idx, endpoint as usize)));
+            editor.record_edit(key, |editor| {
+                if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx)
+                    && let signex_library::primitive::footprint::FpGraphicKind::Line { from, to } =
+                        &mut g.kind
+                {
+                    match endpoint {
+                        SilkLineEndpoint::FromX => from[0] = parsed,
+                        SilkLineEndpoint::FromY => from[1] = parsed,
+                        SilkLineEndpoint::ToX => to[0] = parsed,
+                        SilkLineEndpoint::ToY => to[1] = parsed,
                     }
+                    editor.mark_dirty();
+                    editor.canvas_cache.clear();
+                    return true;
                 }
-            }
+                false
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -66,32 +73,35 @@ impl Signex {
         field: SilkTextField,
         value: String,
     ) -> bool {
-        let parsed = value.trim().parse::<f64>().ok();
-        if let Some(parsed) = parsed {
-            if let Some(editor) = self.active_footprint_editor_mut() {
-                if let Some(idx) = editor.state.selected_silk_f {
-                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
-                        if let signex_library::primitive::footprint::FpGraphicKind::Text {
-                            position,
-                            size,
-                            ..
-                        } = &mut g.kind
-                        {
-                            match field {
-                                SilkTextField::PositionX => position[0] = parsed,
-                                SilkTextField::PositionY => position[1] = parsed,
-                                SilkTextField::Size => {
-                                    if parsed > 0.0 {
-                                        *size = parsed;
-                                    }
-                                }
+        let parsed = crate::numeric_field::parse_field_f64(&value);
+        if let Some(parsed) = parsed
+            && let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(idx) = editor.state.selected_silk_f
+        {
+            let key = Some(("silk_text_field", silk_key(idx, field as usize)));
+            editor.record_edit(key, |editor| {
+                if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx)
+                    && let signex_library::primitive::footprint::FpGraphicKind::Text {
+                        position,
+                        size,
+                        ..
+                    } = &mut g.kind
+                {
+                    match field {
+                        SilkTextField::PositionX => position[0] = parsed,
+                        SilkTextField::PositionY => position[1] = parsed,
+                        SilkTextField::Size => {
+                            if parsed > 0.0 {
+                                *size = parsed;
                             }
-                            editor.dirty = true;
-                            editor.canvas_cache.clear();
                         }
                     }
+                    editor.mark_dirty();
+                    editor.canvas_cache.clear();
+                    return true;
                 }
-            }
+                false
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -102,17 +112,20 @@ impl Signex {
         v: &str,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            let parsed = v.trim().parse::<f64>().ok();
-            if let Some(idx) = editor.state.selected_silk_f {
-                if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
-                    if let Some(w) = parsed {
-                        if w >= 0.0 {
-                            g.stroke_width = w;
-                            editor.dirty = true;
-                            editor.canvas_cache.clear();
-                        }
-                    }
-                }
+            let parsed = crate::numeric_field::parse_field_f64(v);
+            if let Some(idx) = editor.state.selected_silk_f
+                && let Some(w) = parsed
+                && w >= 0.0
+            {
+                editor.record_edit(Some(("silk_stroke_width", idx as u128)), |editor| {
+                    let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) else {
+                        return false;
+                    };
+                    g.stroke_width = w;
+                    editor.mark_dirty();
+                    editor.canvas_cache.clear();
+                    true
+                });
             }
         }
         self.refresh_panel_ctx();
@@ -123,14 +136,18 @@ impl Signex {
         &mut self,
         on: &bool,
     ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(idx) = editor.state.selected_silk_f {
-                if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
-                    g.filled = *on;
-                    editor.dirty = true;
-                    editor.canvas_cache.clear();
-                }
-            }
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(idx) = editor.state.selected_silk_f
+        {
+            editor.record_edit(None, |editor| {
+                let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) else {
+                    return false;
+                };
+                g.filled = *on;
+                editor.mark_dirty();
+                editor.canvas_cache.clear();
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -144,19 +161,22 @@ impl Signex {
         // Text content. No-op when the selection isn't a
         // Text or no silk graphic is selected.
         let value = value.to_string();
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(idx) = editor.state.selected_silk_f {
-                editor.with_parts(|_state, primitive| {
-                    use signex_library::primitive::footprint::FpGraphicKind;
-                    if let Some(g) = primitive.silk_f.get_mut(idx) {
-                        if let FpGraphicKind::Text { content, .. } = &mut g.kind {
-                            *content = value;
-                        }
-                    }
-                });
-                editor.dirty = true;
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(idx) = editor.state.selected_silk_f
+        {
+            editor.record_edit(Some(("silk_text", idx as u128)), |editor| {
+                use signex_library::primitive::footprint::FpGraphicKind;
+                let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) else {
+                    return false;
+                };
+                let FpGraphicKind::Text { content, .. } = &mut g.kind else {
+                    return false;
+                };
+                *content = value;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
-            }
+                true
+            });
         }
         self.refresh_panel_ctx();
         true
@@ -167,9 +187,11 @@ impl Signex {
     ) -> bool {
         // v0.18.24 — delete the currently-selected silk-front
         // graphic and clear the selection.
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(idx) = editor.state.selected_silk_f {
-                editor.with_parts(|state, primitive| {
+        if let Some(editor) = self.active_footprint_editor_mut()
+            && let Some(idx) = editor.state.selected_silk_f
+        {
+            editor.record_edit(None, |editor| {
+                let removed = editor.with_parts(|state, primitive| {
                     if idx < primitive.silk_f.len() {
                         primitive.silk_f.remove(idx);
                         // HI-25: keep the selection cursor consistent
@@ -179,13 +201,16 @@ impl Signex {
                                 state.selected_silk_f,
                                 idx,
                             );
+                        true
                     } else {
                         state.selected_silk_f = None;
+                        false
                     }
                 });
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
-            }
+                removed
+            });
         }
         self.refresh_panel_ctx();
         true

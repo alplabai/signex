@@ -2,19 +2,9 @@
 //! `route_open_error` classification, and the per-choice recovery
 //! actions (library-missing / git-missing / broken-binding).
 //!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
+//! Split out of the library dispatcher (`dispatch/library`).
 
 use super::*;
-
-/// Atomic write — write `bytes` to `<path>.tmp` then `rename` over
-/// `path`. A crash mid-write leaves either the original file intact
-/// Re-export of the shared atomic-write helper (HI-6). Lives in
-/// `signex-types::atomic_io` so engine, library, and app share one
-/// implementation; the function used to be a private duplicate here.
-pub(super) fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    signex_types::atomic_io::atomic_write(path, bytes)
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // Stage 10 — recovery dialog plumbing
@@ -33,10 +23,14 @@ use crate::library::recovery::{
 use crate::library::state::LibraryState;
 use signex_library::{LibraryError, LocalGitAdapter};
 
-/// Classify a `LocalGitAdapter::open` error and, if recoverable,
-/// stash the matching `RecoveryDialog` on `LibraryState::recovery`.
-/// Unrecoverable errors are left alone — the caller's `tracing::warn!`
-/// is the only surface.
+/// Classify a `LocalGitAdapter::open` error and, if recoverable and no
+/// other recovery dialog is open, stash the matching `RecoveryDialog` on
+/// `LibraryState::recovery`.
+///
+/// Returns `true` only when this call opened a dialog for this failure.
+/// `false` means the failure produced nothing the user can see — it is
+/// not recoverable, or an earlier recovery dialog is still open and must
+/// not be clobbered — so the caller has to raise the error card itself.
 ///
 /// String-matches the error message produced by `LocalGitAdapter::open`
 /// because the underlying `LibraryError` enum doesn't carry structured
@@ -49,11 +43,12 @@ pub(crate) fn route_open_error(
     state: &mut LibraryState,
     path: &std::path::Path,
     err: &LibraryError,
-) {
-    // Don't clobber an already-open recovery dialog; the user resolves
-    // them sequentially.
-    if state.recovery.is_some() {
-        return;
+) -> bool {
+    // A read-only (stock) library must never reach a flow that writes
+    // to it: no git re-init, no repair. The caller shows the plain
+    // explanation from `open_error_notice` instead (#814).
+    if state.is_read_only_target(path) {
+        return false;
     }
     let dialog = match err {
         LibraryError::NotFound(msg) if msg.contains("no .snxlib") => {
@@ -68,13 +63,44 @@ pub(crate) fn route_open_error(
             Some(RecoveryDialog::GitMissing {
                 path: path.to_path_buf(),
                 remote: None,
+                error: None,
             })
         }
         _ => None,
     };
-    if let Some(d) = dialog {
-        state.recovery = Some(d);
+    // Don't clobber an already-open recovery dialog; the user resolves
+    // them sequentially.
+    match dialog {
+        Some(d) if state.recovery.is_none() => {
+            state.recovery = Some(d);
+            true
+        }
+        _ => false,
     }
+}
+
+/// Error card for a failed library open. A read-only (stock) library
+/// gets a plain explanation instead of the raw error, since no recovery
+/// is offered for it.
+pub(crate) fn open_error_notice(
+    state: &LibraryState,
+    path: &std::path::Path,
+    action: &str,
+    err: &LibraryError,
+) -> crate::app::state::ErrorNotice {
+    if state.is_read_only_target(path) {
+        return read_only_repair_notice(path, &format!("could not be opened ({err})"));
+    }
+    crate::app::state::ErrorNotice::open(format!("Cannot {action} {}: {err}", path.display()))
+}
+
+/// Error card for a recovery attempt against a read-only (stock) library.
+fn read_only_repair_notice(path: &std::path::Path, what: &str) -> crate::app::state::ErrorNotice {
+    crate::app::state::ErrorNotice::open(format!(
+        "The library at {} ships with Signex and {what}. \
+         It is read-only and cannot be repaired from here; reinstall Signex to restore it.",
+        path.display()
+    ))
 }
 
 /// Handle the user's choice from the *Library missing* recovery dialog.
@@ -145,6 +171,35 @@ pub(super) fn handle_recovery_library_missing_locate_result(
     Task::none()
 }
 
+/// The git re-init a *Git missing* dialog started has finished: reopen the
+/// library, or keep the dialog open with the reason (#141).
+pub(super) fn handle_git_reinit_finished(
+    app: &mut Signex,
+    path: std::path::PathBuf,
+    result: Result<(), String>,
+) -> Task<Message> {
+    match result {
+        Ok(()) => {
+            app.library.recovery = None;
+            Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path))))
+        }
+        Err(reason) => {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %reason,
+                "git recover-init failed"
+            );
+            // Keep the dialog open and show the reason so the click is
+            // never a silent no-op (#141).
+            if let Some(RecoveryDialog::GitMissing { error, .. }) = app.library.recovery.as_mut() {
+                *error = Some(reason);
+            }
+            Task::none()
+        }
+    }
+}
+
 /// Handle the user's choice from the *Git missing* recovery dialog.
 pub(super) fn handle_recovery_git_missing(
     app: &mut Signex,
@@ -163,19 +218,43 @@ pub(super) fn handle_recovery_git_missing(
                     return Task::none();
                 }
             };
-            app.library.recovery = None;
-            match LocalGitAdapter::recover_init(&path) {
-                Ok(_) => Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path)))),
-                Err(e) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        path = %path.display(),
-                        error = %e,
-                        "git recover-init failed"
-                    );
-                    Task::none()
-                }
+            if app.library.is_read_only_target(&path) {
+                // Defence in depth: the dialog is never opened for a
+                // read-only library, but never write to one regardless.
+                app.library.recovery = None;
+                app.document_state.error_notice =
+                    Some(read_only_repair_notice(&path, "cannot be re-initialised"));
+                return Task::none();
             }
+            // A re-init already running on this library: wait for it.
+            if app.library.writes.pending(&path) > 0 {
+                crate::diagnostics::log_info(
+                    "Re-init was ignored: this library is still being written (a re-init already running, or an edit); click it again once that has finished.",
+                );
+                app.sync_diagnostics_panel_ctx();
+                return Task::none();
+            }
+            // `git init` and the first commit run on a worker (#893).
+            let turn = app.library.writes.turn(&path);
+            let done_path = path.clone();
+            Task::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        turn.wait();
+                        LocalGitAdapter::recover_init(&path)
+                            .map(|_| ())
+                            .map_err(|e| e.to_string())
+                    })
+                    .await
+                    .unwrap_or_else(|e| Err(format!("the git re-init task failed: {e}")))
+                },
+                move |result| {
+                    Message::Library(LibraryMessage::GitReinitFinished {
+                        path: done_path.clone(),
+                        result,
+                    })
+                },
+            )
         }
         GitMissingChoice::RestoreFromRemote => {
             // v0.9 leaves this disabled — the manifest doesn't carry a

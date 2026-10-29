@@ -10,32 +10,72 @@
 //! dispatch handlers, and inspect dirty bits / panel context — there's
 //! no narrow public API to design here, the test harness IS the audit.
 
+// `clippy::let_underscore_must_use` (Cargo.toml `[lints.clippy]`, GH #99
+// part 1) is warn-level in production code on purpose — it flags the 13
+// pre-existing discarded-`Result` sites tracked separately, plus it would
+// re-catch a regression of the `let _ = self.handle_x(...)` class this PR
+// just fixed. In-src `#[cfg(test)] mod tests { ... }` blocks are a much
+// noisier, lower-stakes surface (assertions like `let _ = fallible_call();`
+// are routine test-setup idiom, not a production Task getting dropped), so
+// suppress it there rather than let ~30 test-only warnings dilute the
+// production signal.
+#![cfg_attr(test, allow(clippy::let_underscore_must_use))]
+
+pub mod about;
+pub mod about_modal;
 pub mod active_bar;
+pub mod altium_import;
+pub mod annotate_undo;
 pub mod app;
+pub mod autosave;
 pub mod canvas;
 pub mod chrome;
+pub mod config_root;
 pub mod diagnostics;
 pub mod dock;
 pub mod feature_flags;
 pub mod find_replace;
+pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod icons;
+pub mod paste_array;
+pub mod paste_prefs;
+// Crate-internal: `IgnoreResult` is an in-tree convention, not part of
+// this crate's API surface, so the module stays private.
+mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;
+#[cfg(test)]
+pub(crate) mod layout_probe;
 pub mod library;
+#[cfg(test)]
+pub(crate) mod log_probe;
 pub mod menu_bar;
+mod numeric_field;
 pub mod panels;
+pub mod passive_calculator_modal;
 pub mod pcb_canvas;
+pub mod persist;
+pub(crate) mod polygon_path;
 pub mod preferences;
+pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;
+pub mod rule_profiles;
+pub mod sample_project;
+pub mod scene_generation;
+pub mod scene_gpu_upload;
+mod scene_line_snap;
+pub mod scene_shader;
 pub mod schematic_runtime;
-pub mod schematic_shader;
+pub mod start_screen;
+pub mod startup_args;
 pub mod status_bar;
 pub mod styles;
 pub mod tab_bar;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub(crate) mod text_trunc;
 pub mod toolbar;
-pub mod undo;
+pub mod ui_scale;

@@ -25,14 +25,8 @@ pub enum ModelImportError {
         reason: String,
     },
 
-    #[error("unresolved VRML USE node: {name}")]
-    VrmlUnresolvedUse { name: String },
-
     #[error("GLTF parse error in {path:?}: {reason}")]
     GltfParseFailed { path: PathBuf, reason: String },
-
-    #[error("tessellation failed for entity {entity_id}: {reason}")]
-    TessellationFailed { entity_id: String, reason: String },
 
     #[error("GLB serialization failed: {reason}")]
     GlbWriteFailed { reason: String },
@@ -41,19 +35,25 @@ pub enum ModelImportError {
     CacheFailed { reason: String },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ImportWarning {
     TextureMissing {
         uri: String,
     },
-    EmptyPrimitive {
-        mesh_index: usize,
-        primitive_index: usize,
+    /// The texture exists but was refused or failed to read.
+    TextureUnreadable {
+        uri: String,
+        reason: String,
     },
     UnsupportedGeometry {
         entity_type: String,
     },
-    UnsupportedGltfExtension {
-        name: String,
+    /// The source was malformed in a way the importer recovered from, but
+    /// the imported geometry differs from what the file describes: input
+    /// skipped, a field replaced, or triangles or nodes dropped (#805).
+    GeometryAltered {
+        /// 1-based source line, when the finding has one.
+        line: Option<usize>,
+        reason: String,
     },
 }

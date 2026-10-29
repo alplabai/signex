@@ -4,9 +4,12 @@ use super::*;
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum PanelMsg {
     Tree(TreeMsg),
+    /// The Navigator panel's sheet-hierarchy tree. Separate from
+    /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
+    /// one shared variant would act on the wrong tree.
+    Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
     /// v0.14.2 — Properties panel toggle for the active footprint
@@ -403,11 +406,16 @@ pub enum PanelMsg {
     HistoryRestoreClicked {
         sha: String,
     },
-    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
-    /// panel's "Conflicts (worst first)" list. `true` on row
-    /// `on_enter`, `false` on `on_exit`. The handler flips
-    /// `editor.state.hovered_over_constraint` between
-    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// Cancel on the History panel's "Discard unsaved edits and restore"
+    /// confirmation row.
+    HistoryRestoreCancelled,
+    /// #1073 — restore paste (both sides) and thermal relief on the sketch
+    /// pads that still carry the pre-#1052 all-false stack. One undo step;
+    /// the document stays unsaved.
+    FpEditorRestorePadStackDefaults,
+    /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
+    FpEditorDismissPadStackOffer,
+    /// Per-row hover on a Properties
     /// panel "Conflicts" list row. `Some(constraint_id)` highlights
     /// the specific constraint at full red and dims everything else
     /// (including other over-constraints) so the user can isolate a
@@ -576,7 +584,7 @@ pub enum PanelMsg {
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
-    /// `FootprintEditorState` (or activates an existing tab).
+    /// `FootprintDocument` (or activates an existing tab).
     FpLibraryOpenSibling(std::path::PathBuf),
     /// v0.18.8 — Footprint Library panel single-click on an internal
     /// footprint row. Sets `panel_selected_idx` (independent of
@@ -612,13 +620,21 @@ pub enum PanelMsg {
     /// pin, every other rule falls back to "zoom + select" (same as
     /// clicking the row body).
     ErcQuickFix(usize),
+    /// Waive (`waive`) or restore a net-level finding's (rule id, net) pair
+    /// (#1581). Stored in the project's rule set; one undo step.
+    ErcNetWaiverSet {
+        rule_id: String,
+        net: String,
+        waive: bool,
+    },
+    /// Per-finding waivers with a reason (#1285).
+    ErcWaiver(super::ErcWaiverMsg),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
-    SelectLibrary(String),
-    SelectComponent(String),
-    DragComponentsSplit,
-    ComponentFilter(String),
+    /// Net Classes section of the Properties panel (#1042). One nested
+    /// message so the section adds no flat leaves.
+    NetClass(NetClassMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to
@@ -635,14 +651,28 @@ pub enum PanelMsg {
     EditSymbolValue(uuid::Uuid, String),
     /// Edit a symbol's footprint (committed on submit).
     EditSymbolFootprint(uuid::Uuid, String),
+    /// Replace the sheet's embedded library symbol with the library's
+    /// current one (Properties ▸ "Update from library", #912).
+    UpdateSymbolFromLibrary(uuid::Uuid),
+    /// Open Datasheet / Edit Symbol / Change Component on the selected
+    /// placed part (#1301, #1262, #1260).
+    PlacedPartAction(crate::library::PlacedPartAction),
+    /// Switch a placed symbol to another drawing of its library row: the
+    /// symbol's uuid and the `lib_id` of the drawing (#1230).
+    SwitchSymbolChoice(uuid::Uuid, String),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
     ToggleSymbolMirrorY(uuid::Uuid),
     /// Toggle a symbol's locked state.
     ToggleSymbolLocked(uuid::Uuid),
+    /// Toggle the locked state of a wire, label, text note or drawing.
+    ToggleItemLocked(signex_types::schematic::SelectedItem),
     /// Toggle a symbol's DNP state.
     ToggleSymbolDnp(uuid::Uuid),
+    /// The Body row of a symbol's Properties picked a body (normal or
+    /// alternate / De Morgan).
+    SymbolBodyStylePicked(uuid::Uuid, signex_types::schematic::BodyStyle),
     /// Set absolute rotation on a symbol (degrees).
     EditSymbolRotation(uuid::Uuid, f64),
     /// Set font size (Altium pt) on a symbol's value text property.
@@ -668,6 +698,11 @@ pub enum PanelMsg {
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a text note's text (committed on submit).
     EditTextNoteText(uuid::Uuid, String),
+    /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
+    /// family of the selected text item.
+    EditTextFontFamily(signex_engine::TextTarget, Option<String>),
+    /// Page Options: set or clear the sheet-wide default font family.
+    SetDocumentFontFamily(Option<String>),
     /// Pre-placement: update label/text field.
     SetPrePlacementText(String),
     /// Pre-placement: update designator field.
@@ -687,6 +722,11 @@ pub enum PanelMsg {
     TogglePrePlacementItalic,
     TogglePrePlacementUnderline,
     SetPrePlacementShapeWidth(f64),
+    /// A keystroke in a numeric box: the raw text is kept as a draft and,
+    /// when it already parses, applied to the model.
+    NumericFieldTyped(super::NumericFieldKey, String),
+    /// Enter in a numeric box: drop the draft so the box shows the stored value.
+    NumericFieldSubmitted(super::NumericFieldKey),
     SetPrePlacementShapeFill(signex_types::schematic::FillType),
     /// Properties panel — edit a pin's designator (number) on the
     /// active Symbol editor tab. Routed through `handle_dock_sch_library_message`
@@ -730,8 +770,7 @@ pub enum PanelMsg {
         pin_idx: usize,
         value: f64,
     },
-    /// SCH Library panel — click on a row in the Pins sub-list.
-    /// Selects the pin on the canvas (Properties panel switches
+    /// Select a pin on the canvas (Properties panel switches
     /// to pin-mode automatically via the next refresh_panel_ctx).
     SymEditorSelectPin(usize),
     /// Properties panel — edit a pin's free-text Description.
@@ -820,7 +859,7 @@ pub enum PanelMsg {
     },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
-    /// + the on-disk container's `display_name` when the active
+    /// and the on-disk container's `display_name` when the active
     /// symbol is the only one in the file.
     SymEditorSetSymbolName(String),
     /// Properties panel — edit the active symbol's designator
@@ -905,6 +944,14 @@ pub enum PanelMsg {
     ChildSheetStrokeWidthTyping(uuid::Uuid, String),
     /// Commit the currently-buffered child sheet stroke width.
     CommitChildSheetStrokeWidth(uuid::Uuid),
+    /// Buffered keystroke for the selected sheet symbol's Name input.
+    ChildSheetNameTyping(uuid::Uuid, String),
+    /// Buffered keystroke for the selected sheet symbol's File input.
+    ChildSheetFileTyping(uuid::Uuid, String),
+    /// Commit the buffered sheet symbol Name (Enter).
+    CommitChildSheetName(uuid::Uuid),
+    /// Commit the buffered sheet symbol File reference (Enter).
+    CommitChildSheetFile(uuid::Uuid),
     /// Reset child sheet styling (border / fill colour, line width)
     /// back to theme defaults.
     ResetChildSheetStyle(uuid::Uuid),
@@ -917,7 +964,6 @@ pub enum PanelMsg {
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).
-    #[allow(dead_code)]
     SetUiFont(String),
     /// Change the canvas font (applied immediately to schematic/PCB text).
     SetCanvasFont(String),
@@ -931,10 +977,8 @@ pub enum PanelMsg {
     OpenCanvasFontPopup,
     /// Close canvas font popup.
     CloseCanvasFontPopup,
-    /// Set page margin vertical zones.
-    SetMarginVertical(u32),
-    /// Set page margin horizontal zones.
-    SetMarginHorizontal(u32),
+    /// Change one of the active sheet's frame settings (Page Options).
+    EditSheetFrame(SheetFrameEdit),
     /// Toggle a single selection filter — shared with the Active Bar.
     ToggleSelectionFilter(crate::active_bar::SelectionFilter),
     /// Toggle all selection filters on/off — shared with the Active Bar.
@@ -953,16 +997,54 @@ pub enum PanelMsg {
     SelectCustomFilterTab(usize),
     /// Page Options: choose formatting mode.
     SetPageFormatMode(PageFormatMode),
-    /// Page Options: choose paper size.
+    /// Page Options: choose paper size (a bare picker token). A named size
+    /// keeps the sheet's current orientation.
     SetPaperSize(String),
+    /// Page Options: turn the sheet to portrait or landscape.
+    SetSheetOrientation(signex_types::schematic::SheetOrientation),
     /// Page Options: choose origin corner.
     SetPageOrigin(PageOrigin),
-    /// Page Options: set custom paper width (mm).
-    SetCustomPaperWidth(f32),
-    /// Page Options: set custom paper height (mm).
-    SetCustomPaperHeight(f32),
+    /// Page Options: a keystroke in a custom width/height field (kept as a draft).
+    CustomPaperEdgeTyping(super::PaperEdge, String),
+    /// Page Options: Enter in a custom width/height field writes its draft
+    /// (mm, clamped by the model) as one edit.
+    CommitCustomPaperEdge(super::PaperEdge),
     /// Page Options: choose sheet background colour.
     SetSheetColor(SheetColor),
+    /// Title Block: a keystroke in a field (kept as a draft).
+    TitleBlockTyping(super::TitleBlockField, String),
+    /// Title Block: Enter in a field writes its draft to the sheet.
+    CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
+    /// The multi-selection form of the Properties panel (#1258).
+    MultiEdit(super::MultiEditMsg),
+}
+
+/// One change to the active sheet's frame settings (#1134).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SheetFrameEdit {
+    ShowBorder(bool),
+    ShowTitleBlock(bool),
+    /// Zones lettered A, B, C… down the sides.
+    VerticalZones(u8),
+    /// Zones numbered 1, 2, 3… along the top and bottom.
+    HorizontalZones(u8),
+}
+
+impl SheetFrameEdit {
+    /// `settings` with this change applied.
+    pub fn apply(
+        self,
+        settings: signex_types::schematic::SheetFrameSettings,
+    ) -> signex_types::schematic::SheetFrameSettings {
+        let mut settings = settings;
+        match self {
+            Self::ShowBorder(on) => settings.show_border = on,
+            Self::ShowTitleBlock(on) => settings.show_title_block = on,
+            Self::VerticalZones(n) => settings.vertical_zones = n,
+            Self::HorizontalZones(n) => settings.horizontal_zones = n,
+        }
+        settings
+    }
 }

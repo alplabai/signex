@@ -3,154 +3,6 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    /// On TAB during placement: commit the ghost at the current cursor
-    /// world position as a real engine object and select it, so the normal
-    /// selection-aware Properties panel (with full per-kind fields) renders.
-    /// Returns without committing for kinds that have no in-place properties
-    /// (wire / bus / bus entry / no-connect / component fallback).
-    #[allow(dead_code)]
-    fn commit_ghost_for_pre_placement(
-        &mut self,
-        kind: crate::panels::PrePlacementKind,
-        label_text: &str,
-    ) {
-        use crate::panels::PrePlacementKind;
-        use signex_types::schematic as sch;
-        // Snap the cursor to grid so the new object lands on a grid dot.
-        let (wx, wy) = {
-            let x = self.ui_state.cursor_x;
-            let y = self.ui_state.cursor_y;
-            if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
-                let g = self.ui_state.grid_size_mm as f64;
-                ((x / g).round() * g, (y / g).round() * g)
-            } else {
-                (x, y)
-            }
-        };
-        match kind {
-            PrePlacementKind::NetLabel
-            | PrePlacementKind::GlobalPort
-            | PrePlacementKind::HierPort => {
-                let (label_type, shape) = match kind {
-                    PrePlacementKind::GlobalPort => {
-                        (sch::LabelType::Global, "bidirectional".to_string())
-                    }
-                    PrePlacementKind::HierPort => (sch::LabelType::Hierarchical, String::new()),
-                    _ => (sch::LabelType::Net, String::new()),
-                };
-                let uuid = uuid::Uuid::new_v4();
-                let label = sch::Label {
-                    uuid,
-                    text: if label_text.is_empty() {
-                        "NET".to_string()
-                    } else {
-                        label_text.to_string()
-                    },
-                    position: sch::Point::new(wx, wy),
-                    rotation: 0.0,
-                    label_type,
-                    shape,
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify: sch::HAlign::Left,
-                    justify_v: sch::VAlign::Bottom,
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceLabel { label },
-                    false,
-                    false,
-                );
-                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
-                    uuid,
-                    kind: sch::SelectedKind::Label,
-                }];
-                // Keep the ghost armed so Resume picks up where the user
-                // left off — just hidden while paused.
-                self.update_selection_info();
-            }
-            PrePlacementKind::TextNote => {
-                let uuid = uuid::Uuid::new_v4();
-                let tn = sch::TextNote {
-                    uuid,
-                    text: if label_text.is_empty() {
-                        "Text".to_string()
-                    } else {
-                        label_text.to_string()
-                    },
-                    position: sch::Point::new(wx, wy),
-                    rotation: 0.0,
-                    font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    justify_h: sch::HAlign::Left,
-                    justify_v: sch::VAlign::default(),
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceTextNote { text_note: tn },
-                    false,
-                    false,
-                );
-                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
-                    uuid,
-                    kind: sch::SelectedKind::TextNote,
-                }];
-                self.update_selection_info();
-            }
-            PrePlacementKind::PowerPort => {
-                let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() else {
-                    return;
-                };
-                let uuid = uuid::Uuid::new_v4();
-                let symbol = sch::Symbol {
-                    uuid,
-                    lib_id,
-                    reference: String::new(),
-                    value: if label_text.is_empty() {
-                        net_name
-                    } else {
-                        label_text.to_string()
-                    },
-                    footprint: String::new(),
-                    datasheet: String::new(),
-                    position: sch::Point::new(wx, wy),
-                    rotation: 0.0,
-                    mirror_x: false,
-                    mirror_y: false,
-                    unit: 1,
-                    is_power: true,
-                    ref_text: None,
-                    val_text: None,
-                    fields_autoplaced: false,
-                    fields_user_placed: false,
-                    dnp: false,
-                    in_bom: true,
-                    on_board: true,
-                    exclude_from_sim: false,
-                    locked: false,
-                    fields: std::collections::HashMap::new(),
-                    custom_properties: Vec::new(),
-                    pin_uuids: std::collections::HashMap::new(),
-                    instances: Vec::new(),
-                    library_id: None,
-                    row_id: None,
-                    library_version: String::new(),
-                };
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSymbol { symbol },
-                    false,
-                    false,
-                );
-                self.interaction_state.active_canvas_mut().selected = vec![sch::SelectedItem {
-                    uuid,
-                    kind: sch::SelectedKind::Symbol,
-                }];
-                self.update_selection_info();
-            }
-            _ => {
-                // Wire / bus / bus entry / no-connect / component —
-                // properties are edited post-placement via the regular
-                // selection flow. TAB just pauses the ghost here.
-            }
-        }
-    }
-
     pub(super) fn dispatch_tool_message(&mut self, message: ToolMessage) -> Task<Message> {
         match message {
             ToolMessage::PrePlacementTab => {
@@ -163,21 +15,31 @@ impl Signex {
                 // tracks schematic tools, not footprint pads).
                 if let Some(active_tab) =
                     self.document_state.tabs.get(self.document_state.active_tab)
+                    && let Some(path) = active_tab.kind.as_footprint_editor()
                 {
-                    if let Some(path) = active_tab.kind.as_footprint_editor() {
-                        let path = path.clone();
-                        return self.update(crate::app::contracts::Message::Library(
-                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                                path,
-                                msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                    crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
-                                ),
-                            },
-                        ));
-                    }
+                    let path = path.clone();
+                    return self.update(crate::app::contracts::Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                            ),
+                        },
+                    ));
+                }
+                // Pasted content has no pre-placement properties: the Tab form
+                // belongs to a part on the cursor and the legacy tools.
+                if self
+                    .interaction_state
+                    .placement
+                    .as_ref()
+                    .is_some_and(|s| s.kind.is_paste())
+                {
+                    return self.finish_update();
                 }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
+                    let session_form = self.placement_form();
                     use signex_types::schematic::LabelType;
                     // Figure out the exact placement flavor so the form
                     // shows fields relevant to what's being dropped. A
@@ -210,6 +72,18 @@ impl Signex {
                                 String::new(),
                                 String::new(),
                             ),
+                            Tool::Junction => (
+                                PrePlacementKind::Other,
+                                "Junction".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Tool::NoErcDirective => (
+                                PrePlacementKind::Other,
+                                "No ERC".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
                             Tool::Text => (
                                 PrePlacementKind::TextNote,
                                 "Text".to_string(),
@@ -229,8 +103,11 @@ impl Signex {
                                         String::new(),
                                     )
                                 } else {
-                                    let (label, designator) = self
-                                        .current_component_defaults()
+                                    // A part on the cursor is the truth for its
+                                    // own form.
+                                    let (label, designator) = session_form
+                                        .as_ref()
+                                        .map(|f| (f.value.clone(), f.designator.clone()))
                                         .unwrap_or_else(|| ("NET".to_string(), String::new()));
                                     (
                                         PrePlacementKind::Component,
@@ -297,72 +174,53 @@ impl Signex {
                                 String::new(),
                             ),
                         };
-                    let label_text = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
+                    // The session's own values win over a form left from an
+                    // earlier Tab: Space / X / Y and the form edits all live
+                    // in the session.
+                    let on_cursor_part = session_form
                         .as_ref()
-                        .map(|pp| pp.label_text.clone())
-                        .filter(|text| !text.is_empty())
+                        .filter(|_| matches!(kind, PrePlacementKind::Component));
+                    let label_text = on_cursor_part
+                        .map(|f| f.value.clone())
+                        .or_else(|| {
+                            self.document_state
+                                .panel_ctx
+                                .pre_placement
+                                .as_ref()
+                                .map(|pp| pp.label_text.clone())
+                                .filter(|text| !text.is_empty())
+                        })
                         .unwrap_or(default_label_text);
-                    let designator = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.designator.clone())
-                        .filter(|value| !value.is_empty())
+                    let designator = on_cursor_part
+                        .map(|f| f.designator.clone())
+                        .or_else(|| {
+                            self.document_state
+                                .panel_ctx
+                                .pre_placement
+                                .as_ref()
+                                .map(|pp| pp.designator.clone())
+                                .filter(|value| !value.is_empty())
+                        })
                         .unwrap_or(default_designator);
-                    let prev_rotation = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.rotation)
-                        .unwrap_or(0.0);
-                    let prev_font = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.font.clone())
-                        .unwrap_or_else(|| "Iosevka".to_string());
-                    let prev_font_size = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.font_size_pt)
-                        .unwrap_or(10);
-                    let prev_jh = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.justify_h)
-                        .unwrap_or(signex_types::schematic::HAlign::Left);
-                    let prev_jv = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.justify_v)
-                        .unwrap_or_default();
-                    let prev_shape_width = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_width_mm)
-                        .unwrap_or(0.0);
-                    let prev_shape_fill = self
-                        .document_state
-                        .panel_ctx
-                        .pre_placement
-                        .as_ref()
-                        .map(|pp| pp.shape_fill)
-                        .unwrap_or(signex_types::schematic::FillType::None);
-                    let label_text_for_commit = label_text.clone();
+                    let defaults = crate::panels::PrePlacementData::new(
+                        String::new(),
+                        PrePlacementKind::Other,
+                        String::new(),
+                        0.0,
+                        0.0,
+                    );
+                    let prev = self.document_state.panel_ctx.pre_placement.as_ref();
+                    let prev_rotation = on_cursor_part
+                        .map(|f| f.rotation)
+                        .or_else(|| prev.map(|pp| pp.rotation))
+                        .unwrap_or(defaults.rotation);
+                    let prev_font = prev.map_or(defaults.font, |pp| pp.font.clone());
+                    let prev_font_size = prev.map_or(defaults.font_size_pt, |pp| pp.font_size_pt);
+                    let prev_jh = prev.map_or(defaults.justify_h, |pp| pp.justify_h);
+                    let prev_jv = prev.map_or(defaults.justify_v, |pp| pp.justify_v);
+                    let prev_shape_width =
+                        prev.map_or(defaults.shape_width_mm, |pp| pp.shape_width_mm);
+                    let prev_shape_fill = prev.map_or(defaults.shape_fill, |pp| pp.shape_fill);
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
@@ -382,16 +240,19 @@ impl Signex {
                             shape_width_mm: prev_shape_width,
                             shape_fill: prev_shape_fill,
                         });
-                    self.document_state
-                        .dock
-                        .add_panel(PanelPosition::Right, crate::panels::PanelKind::Properties);
+                    // TAB opens the pre-placement form in Properties, so
+                    // the panel has to end up in front. `add_panel`
+                    // returned early whenever Properties was already
+                    // docked behind another tab, and the form the user
+                    // just asked for stayed hidden (#641).
+                    let show_properties = self.show_panel(crate::panels::PanelKind::Properties);
                     // Freeze ghost + suppress canvas clicks until OK. TAB
                     // does NOT place the object — it pauses placement and
                     // the pre-placement form edits the properties used by
                     // the next click. Placement resumes when the user hits
                     // Resume or Enter.
                     self.interaction_state.active_canvas_mut().placement_paused = true;
-                    let _ = label_text_for_commit;
+                    return Task::batch([show_properties, self.finish_update()]);
                 }
                 self.finish_update()
             }
@@ -402,6 +263,12 @@ impl Signex {
                 // close any transient selection the dock picked up.
                 self.interaction_state.active_canvas_mut().placement_paused = false;
                 self.interaction_state.active_canvas_mut().selected.clear();
+                // The overlay layer draws the selection highlight and now
+                // also the ERC markers; without a rebuild the old highlight
+                // stays painted beside the markers (#1403).
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.update_selection_info();
                 // v0.13 — also resume the footprint editor's placement
                 // pause when the active tab is a footprint editor.
@@ -425,9 +292,30 @@ impl Signex {
             }
             ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
-                self.interaction_state.active_canvas_mut().draw_mode =
-                    self.interaction_state.draw_mode;
                 self.finish_update()
+            }
+            ToolMessage::RemoveLastVertex => {
+                // Segments commit per click, so the only uncommitted vertex
+                // is the wire's start point: popping it ends the draw but
+                // keeps the Wire tool armed. Outside a draw it is a delete.
+                if self.interaction_state.wire_drawing {
+                    self.interaction_state.wire_drawing = false;
+                    self.interaction_state.wire_points.clear();
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.wire_preview.clear();
+                    canvas.drawing_mode = false;
+                    return self.finish_update();
+                }
+                // A polyline buffers every click until Enter / double-click,
+                // so Backspace drops the last buffered point.
+                if self.interaction_state.polyline_points.pop().is_some() {
+                    let points = self.interaction_state.polyline_points.clone();
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.polyline_points = points;
+                    canvas.clear_overlay_cache();
+                    return self.finish_update();
+                }
+                self.update(Message::Edit(EditMsg::DeleteSelected))
             }
             ToolMessage::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
@@ -440,10 +328,25 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().drawing_mode = false;
                     self.interaction_state.current_tool = Tool::Select;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
+                } else if self.interaction_state.current_tool == Tool::Sheet {
+                    // Drops the half-placed corner and the ghost, back to Select.
+                    return self.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
                 }
                 self.finish_update()
             }
             ToolMessage::SelectTool(tool) => {
+                // Any tool pick ends a part on the cursor and cancels a
+                // library read still in flight.
+                self.drop_placement_session();
+                // An armed Move belongs to the Select tool: any tool pick
+                // (re-selecting Select included) cancels it and any float.
+                self.cancel_move_pick();
+                // Buffers belong to the tool that started them (#102).
+                // Re-selecting the active tool mid-gesture keeps the gesture
+                // on purpose: only a switch to a different tool drops the buffers.
+                if tool != self.interaction_state.current_tool {
+                    self.clear_drawing_buffers();
+                }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near
@@ -454,11 +357,17 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::Junction => Some("Junction".to_string()),
+                    Tool::NoErcDirective => Some("No ERC".to_string()),
                     Tool::Label => Some("Label".to_string()),
                     Tool::Component => Some("Component".to_string()),
                     Tool::Line => Some("Line".to_string()),
                     Tool::Rectangle => Some("Rectangle".to_string()),
                     Tool::Circle => Some("Circle".to_string()),
+                    Tool::Sheet => Some("Sheet".to_string()),
+                    Tool::SheetEntry => Some("Sheet Entry".to_string()),
+                    Tool::Measure => Some("Measure".to_string()),
+                    Tool::BreakWire => Some("Break Wire".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a
@@ -472,14 +381,20 @@ impl Signex {
                 if tool == Tool::Text {
                     self.interaction_state.active_canvas_mut().ghost_text =
                         Some(signex_types::schematic::TextNote {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             text: "Text".to_string(),
                             position: signex_types::schematic::Point::new(0.0, 0.0),
                             rotation: 0.0,
                             font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
+                            font_family: None,
+                            locked: false,
                         });
+                }
+                if tool == Tool::BusEntry {
+                    self.interaction_state.active_canvas_mut().ghost_bus_entry =
+                        Some(self.interaction_state.bus_entry_size);
                 }
                 if tool == Tool::Select {
                     self.clear_transient_schematic_tool_state();
@@ -487,5 +402,30 @@ impl Signex {
                 self.finish_update()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::contracts::Message;
+
+    /// #1403 - resuming placement drops the selection, so the overlay layer
+    /// that paints the highlight must be rebuilt rather than left stale.
+    #[test]
+    fn resume_placement_rebuilds_the_overlay() {
+        let (mut app, _t) = Signex::new();
+        let id = signex_types::schematic::SelectedItem::new(
+            uuid::Uuid::from_u128(7),
+            signex_types::schematic::SelectedKind::Wire,
+        );
+        app.interaction_state.active_canvas_mut().selected = vec![id];
+        let before = app.interaction_state.active_canvas().overlay_cache_clears;
+
+        let _ = app.update(Message::Tool(ToolMessage::ResumePlacement));
+
+        let canvas = app.interaction_state.active_canvas();
+        assert!(canvas.selected.is_empty());
+        assert!(canvas.overlay_cache_clears > before, "stale overlay left");
     }
 }

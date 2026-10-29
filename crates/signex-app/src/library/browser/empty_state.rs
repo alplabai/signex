@@ -6,10 +6,14 @@
 use super::*;
 use iced::widget::column;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
 pub(super) fn view_empty_state<'a>(
     library_path: &'a std::path::Path,
     lib: &'a OpenLibrary,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -24,14 +28,16 @@ pub(super) fn view_empty_state<'a>(
             .color(iced::Color::WHITE),
     )
     .padding([6, 14])
-    .on_press(LibraryMessage::BrowserAddComponent {
+    .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
         library_path: library_for_add,
         table: None,
-    })
-    .style(|_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
+    }))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(if read_only {
+            iced::Color::from_rgb(0.35, 0.35, 0.38)
+        } else {
+            iced::Color::from_rgb(0.00, 0.47, 0.84)
+        })),
         text_color: iced::Color::WHITE,
         border: Border {
             width: 0.0,
@@ -47,8 +53,8 @@ pub(super) fn view_empty_state<'a>(
                 .size(15)
                 .color(text_c),
             Space::new().height(4),
-            text("No categories — Add Component to begin")
-                .size(12)
+            text("No components — Add Component to begin")
+                .size(TS.label)
                 .color(muted),
             Space::new().height(14),
             add_btn,

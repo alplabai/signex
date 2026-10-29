@@ -2,7 +2,7 @@
 //!
 //! Per `v0.9-refactor-2-plan.md` §2.1, a "component" is no longer a file
 //! holding a chain of revisions. It's a single row inside a category table
-//! (`tables/<name>.tsv` for LocalGit; one record in `component_rows` for the
+//! (a `[tables.<name>]` block in the `.snxlib` for LocalGit; one record in `component_rows` for the
 //! database backend). Symbols, footprints, and sim models stay as standalone
 //! editable primitive files referenced by `(library_id, uuid)` tuples.
 //!
@@ -15,11 +15,25 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::alternate_symbol::AlternateSymbol;
 use crate::identity::{ComponentClass, InternalPn};
 use crate::lifecycle::LifecycleState;
 use crate::manufacturer::{DistributorListing, ManufacturerPart};
 use crate::param::ParamMap;
 use crate::primitive::PrimitiveRef;
+
+/// Row wire-schema level. Bump it whenever a `ComponentRow` field is added
+/// that an older build would drop on save (1 = implicit, pre-guard;
+/// 2 = `alternate_symbols`; 3 = the labelled documents `datasheet_label` /
+/// `more_datasheets`, #1231; 4 = `description`, #1474; 5 = `alternate_footprints`,
+/// #1234).
+pub const ROW_SCHEMA: u32 = 5;
+
+/// `code` in the error body of a row write refused for a schema mismatch.
+pub const ROW_SCHEMA_REFUSED_CODE: &str = "row_schema_too_old";
+
+/// Request header carrying the sender's [`ROW_SCHEMA`] on a row write.
+pub const ROW_SCHEMA_HEADER: &str = "x-signex-row-schema";
 
 /// Reference to a datasheet — either a remote URL or a hash-pinned local PDF.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -38,6 +52,36 @@ impl DatasheetRef {
         Self::HashPinned {
             hash: hash.into(),
             filename: filename.into(),
+        }
+    }
+}
+
+impl DatasheetRef {
+    /// True for a reference that points nowhere: the empty URL a row starts
+    /// with ("no datasheet"), or a pinned PDF not uploaded yet.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Url { url } => url.trim().is_empty(),
+            Self::HashPinned { hash, .. } => hash.is_empty(),
+        }
+    }
+}
+
+/// One document attached to a component row: a datasheet, an errata, an
+/// application note. `label` says which; empty means "Datasheet".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct DatasheetDoc {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    #[serde(flatten)]
+    pub source: DatasheetRef,
+}
+
+impl DatasheetDoc {
+    pub fn new(label: impl Into<String>, source: DatasheetRef) -> Self {
+        Self {
+            label: label.into(),
+            source,
         }
     }
 }
@@ -72,7 +116,7 @@ impl PinPadOverride {
 /// PLM-reserved fields. Inert until v3.0.
 ///
 /// **TSV persistence note:** as of v0.9, `PlmReserved` is dropped at write
-/// time — only `PlmReserved::default()` round-trips through `tables::write_table`.
+/// time — only `PlmReserved::default()` round-trips through the table cell encoding.
 /// Non-default payloads cause `LibraryError::Backend("...")`. v3.0 will add
 /// dedicated columns and full round-trip.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -105,16 +149,35 @@ pub struct ComponentRow {
     pub internal_pn: InternalPn,
     /// Component class — picks the parameter template ("resistor", "opamp", …).
     pub class: ComponentClass,
-    /// URL or hash-pinned PDF. Default is an empty URL.
+    /// The primary document: URL or hash-pinned PDF. Default is an empty
+    /// URL.
     #[serde(default)]
     pub datasheet: DatasheetRef,
+    /// Label of the primary document; empty means "Datasheet".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub datasheet_label: String,
+    /// One-line human description of the part ("100 nF 50 V X7R 0603");
+    /// shown and searched in the Place Component picker. Empty = none.
+    pub description: String,
+    /// Further documents after the primary, in display order (#1231).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub more_datasheets: Vec<DatasheetDoc>,
     /// Lifecycle state (`Released`, `Draft`, …).
     pub state: LifecycleState,
 
     // ── Primitive bindings ──────────────────────────────────────────────
+    /// Default symbol drawing.
     pub symbol_ref: PrimitiveRef,
+    /// Other drawings of the same part (IEC vs ANSI, ...); they share the
+    /// footprint pin map, so they must expose the default's pin numbers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternate_symbols: Vec<AlternateSymbol>,
     #[serde(default)]
     pub footprint_ref: Option<PrimitiveRef>,
+    /// Further footprints the part can be built with, after the default
+    /// `footprint_ref` (#1234). Empty for a single-footprint part.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternate_footprints: Vec<crate::footprint_binding::FootprintBinding>,
     #[serde(default)]
     pub sim_ref: Option<PrimitiveRef>,
 
@@ -174,9 +237,88 @@ pub struct ComponentRow {
     /// [`crate::hash::hash_row_content`].
     #[serde(default)]
     pub content_hash: [u8; 32],
+
+    /// Base revision this copy was read at: a server counter for a
+    /// database library, a content hash of the stored row for a local one
+    /// (see `local_git::helpers::row_base`); `None` for a row being
+    /// created. A write sends it as its base and is refused when the
+    /// stored row has moved on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_revision: Option<u64>,
 }
 
+/// `ComponentRow.parameters` key holding the row's reference-prefix override
+/// (`ParamValue::Text`, ASCII letters). It beats the project's designator
+/// standard at placement and at "Re-prefix to standard".
+pub const DESIGNATOR_PREFIX_PARAM: &str = "designator_prefix";
+
 impl ComponentRow {
+    /// The raw prefix override from [`DESIGNATOR_PREFIX_PARAM`], unvalidated
+    /// (see `signex_types::designator::normalize_prefix_override`). `None`
+    /// when the key is absent, not text, or blank.
+    pub fn designator_prefix_override(&self) -> Option<&str> {
+        match self.parameters.get(DESIGNATOR_PREFIX_PARAM) {
+            Some(crate::ParamValue::Text(text)) if !text.trim().is_empty() => Some(text),
+            _ => None,
+        }
+    }
+
+    /// True when `reply`, the row a server stored, carries different
+    /// alternate footprints than this row sent: a server built before
+    /// [`ROW_SCHEMA`] 5 drops them.
+    pub fn alternate_footprints_differ_in(&self, reply: &ComponentRow) -> bool {
+        self.alternate_footprints != reply.alternate_footprints
+    }
+
+    /// True when `reply`, the row a server stored, lost documents this row
+    /// carries: a server built before [`ROW_SCHEMA`] 3 drops them.
+    pub fn documents_lost_in(&self, reply: &ComponentRow) -> bool {
+        self.datasheet_label != reply.datasheet_label
+            || self.more_datasheets != reply.more_datasheets
+    }
+
+    /// Every document on the row, the primary first.
+    pub fn documents(&self) -> Vec<DatasheetDoc> {
+        std::iter::once(DatasheetDoc::new(
+            self.datasheet_label.clone(),
+            self.datasheet.clone(),
+        ))
+        .chain(self.more_datasheets.iter().cloned())
+        .collect()
+    }
+
+    /// Drop the further documents with neither a label nor a source, such
+    /// as one added and never filled in. The primary always stays.
+    pub fn drop_empty_documents(&mut self) {
+        self.more_datasheets
+            .retain(|doc| !(doc.label.trim().is_empty() && doc.source.is_empty()));
+    }
+
+    /// Replace every document; the first becomes the primary. An empty
+    /// list leaves the row with no datasheet.
+    pub fn set_documents(&mut self, docs: Vec<DatasheetDoc>) {
+        let mut docs = docs.into_iter();
+        let primary = docs.next().unwrap_or_default();
+        self.datasheet = primary.source;
+        self.datasheet_label = primary.label;
+        self.more_datasheets = docs.collect();
+    }
+
+    /// True when the row has no usable symbol binding. A new row starts
+    /// with the nil-UUID sentinel because creating a component never
+    /// mints a primitive file; the user binds one with Pick Symbol.
+    pub fn is_symbol_unbound(&self) -> bool {
+        self.symbol_ref.uuid.is_nil()
+    }
+
+    /// True when the row has no usable footprint binding (`None` or the
+    /// nil-UUID sentinel).
+    pub fn is_footprint_unbound(&self) -> bool {
+        self.footprint_ref
+            .as_ref()
+            .is_none_or(|fp| fp.uuid.is_nil())
+    }
+
     /// Recompute and store the content hash from the canonical view.
     ///
     /// Returns `LibraryError::Backend` when the row contains a non-finite
@@ -190,21 +332,46 @@ impl ComponentRow {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::ParamValue;
     use crate::identity::RowId;
     use crate::manufacturer::ManufacturerPart;
 
-    fn fixture_row() -> ComponentRow {
-        let lib = Uuid::new_v4();
+    #[test]
+    fn designator_prefix_override_reads_a_non_blank_text_parameter() {
+        let mut row = fixture_row();
+        assert_eq!(row.designator_prefix_override(), None);
+        row.parameters.insert(
+            DESIGNATOR_PREFIX_PARAM.into(),
+            ParamValue::Text("tp".into()),
+        );
+        assert_eq!(row.designator_prefix_override(), Some("tp"));
+        row.parameters.insert(
+            DESIGNATOR_PREFIX_PARAM.into(),
+            ParamValue::Text("  ".into()),
+        );
+        assert_eq!(row.designator_prefix_override(), None);
+        row.parameters
+            .insert(DESIGNATOR_PREFIX_PARAM.into(), ParamValue::Number(1.0));
+        assert_eq!(row.designator_prefix_override(), None);
+    }
+
+    pub(crate) fn fixture_row() -> ComponentRow {
+        let lib = Uuid::now_v7();
         ComponentRow {
-            row_id: Uuid::new_v4(),
+            alternate_symbols: Vec::new(),
+            row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new("R0805_10k"),
             class: ComponentClass::new("resistor"),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
-            footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+            symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+            footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -220,6 +387,7 @@ mod tests {
             created: Utc::now(),
             updated: Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
@@ -228,13 +396,18 @@ mod tests {
     #[test]
     fn component_row_json_roundtrip() {
         let row = ComponentRow {
-            row_id: Uuid::new_v4(),
+            alternate_symbols: Vec::new(),
+            row_id: Uuid::now_v7(),
             internal_pn: "R0805_10k".parse().unwrap(),
             class: ComponentClass("resistor".into()),
             datasheet: DatasheetRef::url("https://example.com"),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4()),
-            footprint_ref: Some(PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())),
+            symbol_ref: PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
+            footprint_ref: Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7())),
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: vec![],
             primary_mpn: ManufacturerPart::draft("Vishay", "CRCW08051002F"),
@@ -250,6 +423,7 @@ mod tests {
             created: Utc::now(),
             updated: Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         };
         let json = serde_json::to_string(&row).unwrap();
         let back: ComponentRow = serde_json::from_str(&json).unwrap();
@@ -262,6 +436,27 @@ mod tests {
         assert_eq!(row.content_hash, [0u8; 32]);
         row.refresh_content_hash().unwrap();
         assert_ne!(row.content_hash, [0u8; 32]);
+    }
+
+    #[test]
+    fn empty_further_documents_are_dropped_and_the_primary_kept() {
+        let mut row = fixture_row();
+        row.set_documents(vec![
+            DatasheetDoc::default(),
+            DatasheetDoc::default(),
+            DatasheetDoc::new("", DatasheetRef::hash_pinned("", "")),
+            DatasheetDoc::new("Errata", DatasheetRef::default()),
+            DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+        ]);
+        row.drop_empty_documents();
+        assert!(row.datasheet.is_empty(), "the primary stays, even empty");
+        assert_eq!(
+            row.more_datasheets,
+            vec![
+                DatasheetDoc::new("Errata", DatasheetRef::default()),
+                DatasheetDoc::new("", DatasheetRef::url("https://x.example/a.pdf")),
+            ]
+        );
     }
 
     #[test]
@@ -291,6 +486,21 @@ mod tests {
         let json = serde_json::to_string(&p).unwrap();
         let back: PlmReserved = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn nil_and_missing_refs_are_unbound_and_real_refs_are_bound() {
+        let mut row = fixture_row();
+        assert!(!row.is_symbol_unbound());
+        assert!(!row.is_footprint_unbound());
+
+        row.symbol_ref = PrimitiveRef::new(row.symbol_ref.library_id, Uuid::nil());
+        row.footprint_ref = None;
+        assert!(row.is_symbol_unbound());
+        assert!(row.is_footprint_unbound());
+
+        row.footprint_ref = Some(PrimitiveRef::new(Uuid::now_v7(), Uuid::nil()));
+        assert!(row.is_footprint_unbound(), "nil footprint uuid is unbound");
     }
 
     /// Verifies that `RowId` wraps cleanly around the row's `row_id` field —

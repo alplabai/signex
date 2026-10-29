@@ -191,19 +191,9 @@ pub struct RuntimeModelBridgeRequest {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeModelBridgeWarning {
-    TextureMissing {
-        uri: String,
-    },
-    EmptyPrimitive {
-        mesh_index: usize,
-        primitive_index: usize,
-    },
-    UnsupportedGeometry {
-        entity_type: String,
-    },
-    UnsupportedGltfExtension {
-        name: String,
-    },
+    TextureMissing { uri: String },
+    UnsupportedGeometry { entity_type: String },
+    GeometryAltered { line: Option<usize>, reason: String },
 }
 
 #[derive(Clone, Debug, PartialEq)]

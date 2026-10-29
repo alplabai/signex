@@ -19,14 +19,18 @@
 //! History is reachable via `git log`; Where-Used is a footer line
 //! on Preview.
 
+pub mod alternate_symbols;
 pub mod datasheet_picker;
 pub mod footprint;
+pub mod inert;
+mod measurement_cell;
 pub mod params;
 pub mod preview;
 pub mod sim;
 pub mod standalone;
 pub mod supply;
 pub mod symbol;
+pub mod text_extent;
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
@@ -35,6 +39,10 @@ use signex_widgets::theme_ext;
 
 use super::messages::{EditorMsg, LibraryMessage};
 use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTab};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Render a Component Preview surface — five tabs (Preview / Parameters
 /// / Supply / Datasheet / Simulation), all read-only for Symbol+
@@ -46,10 +54,11 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    let read_only = library_state.is_read_only(&state.library_path);
     let header = view_header(state, tokens, address.clone());
     let tabs = view_tabs(state.active_tab, tokens, address.clone());
     let body = view_active_tab(state, library_state, tokens, address.clone());
-    let footer = view_footer(state, tokens, address);
+    let footer = view_footer(state, tokens, address, read_only);
 
     column![header, tabs, body, footer]
         .spacing(0)
@@ -74,16 +83,16 @@ fn view_header<'a>(
     let row_id_label = format!("row: {}", state.row.row_id);
     container(
         row![
-            text("Component Preview — ").size(13).color(muted),
-            text(title).size(13).color(text_c),
+            text("Component Preview — ").size(TS.title).color(muted),
+            text(title).size(TS.title).color(text_c),
             Space::new().width(Length::Fill),
-            text(row_id_label).size(11).color(muted),
+            text(row_id_label).size(TS.body).color(muted),
             Space::new().width(8),
             close_btn(address, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([8, 14])
+    .padding([SP.m, 14.0])
     .style(crate::styles::modal_header_strip(tokens))
     .into()
 }
@@ -102,7 +111,7 @@ fn view_tabs<'a>(
         } else {
             iced::Color::TRANSPARENT
         };
-        let label = container(text(tab.label()).size(11).color(text_c)).padding([3, 10]);
+        let label = container(text(tab.label()).size(TS.body).color(text_c)).padding([3, 10]);
         let address_for_msg = address.clone();
         let tab_for_msg = *tab;
         let inner_btn = button(label)
@@ -122,7 +131,7 @@ fn view_tabs<'a>(
         row_widget = row_widget.push(inner_btn);
     }
     container(row_widget)
-        .padding([2, 4])
+        .padding([SP.xs, SP.s])
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
         .into()
@@ -134,12 +143,25 @@ fn view_active_tab<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
+    // A read-only library (the stock library) shows every editing tab
+    // dimmed and inert; the Preview tab guards its own editing parts
+    // because its Open Editor buttons must stay live.
+    let read_only = library_state.is_read_only(&state.library_path);
     let inner: Element<'_, LibraryMessage> = match state.active_tab {
         PreviewTab::Preview => preview::view(state, library_state, tokens, address),
-        PreviewTab::Parameters => params::view(state, library_state, tokens, address),
-        PreviewTab::Supply => supply::view(state, tokens, address),
-        PreviewTab::Datasheet => datasheet_picker::view(state, tokens, address),
-        PreviewTab::Simulation => sim::view(state, tokens, address),
+        PreviewTab::Parameters => inert::unless_read_only(
+            read_only,
+            params::view(state, library_state, tokens, address),
+        ),
+        PreviewTab::Supply => {
+            inert::unless_read_only(read_only, supply::view(state, tokens, address))
+        }
+        PreviewTab::Datasheet => {
+            inert::unless_read_only(read_only, datasheet_picker::view(state, tokens, address))
+        }
+        PreviewTab::Simulation => {
+            inert::unless_read_only(read_only, sim::view(state, tokens, address))
+        }
     };
     container(inner)
         .padding(14)
@@ -152,13 +174,26 @@ fn view_footer<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
+    if read_only {
+        return container(
+            text("Read-only library - this component cannot be changed.")
+                .size(TS.body)
+                .color(muted),
+        )
+        .padding([10, 14])
+        .width(Length::Fill)
+        .style(crate::styles::modal_footer_strip(tokens))
+        .into();
+    }
+
     let primary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(11).color(iced::Color::WHITE)).padding([4, 14]))
+        button(container(text(label).size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: addr.library_path.clone(),
                 table: addr.table.clone(),
@@ -179,7 +214,7 @@ fn view_footer<'a>(
             })
     };
     let secondary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(11).color(text_c)).padding([4, 14]))
+        button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, 14.0]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: addr.library_path.clone(),
                 table: addr.table.clone(),
@@ -201,9 +236,34 @@ fn view_footer<'a>(
     };
 
     let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
-        text("• unsaved").size(11).color(muted).into()
+        text("• unsaved").size(TS.body).color(muted).into()
     } else {
         Space::new().width(0).into()
+    };
+
+    // Offered once a save was refused because the row changed on the
+    // server; discarding the working copy asks first.
+    let reload: Element<'_, LibraryMessage> = if !state.stale_base {
+        Space::new().width(0).into()
+    } else if state.reload_confirming {
+        row![
+            Space::new().width(12),
+            text("Discard your edits and reload?")
+                .size(TS.body)
+                .color(muted),
+            Space::new().width(8),
+            primary("Reload", EditorMsg::ReloadConfirmed, &address),
+            Space::new().width(8),
+            secondary("Keep editing", EditorMsg::ReloadCancelled, &address),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        row![
+            Space::new().width(12),
+            secondary("Reload saved version", EditorMsg::ReloadRequested, &address),
+        ]
+        .into()
     };
 
     container(
@@ -211,6 +271,7 @@ fn view_footer<'a>(
             secondary("Save", EditorMsg::SaveDraft, &address),
             Space::new().width(8),
             primary("Save & Close", EditorMsg::Commit, &address),
+            reload,
             Space::new().width(Length::Fill),
             dirty_marker,
         ]
@@ -224,7 +285,7 @@ fn view_footer<'a>(
 fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
+    button(container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0, 6]))
         .on_press(LibraryMessage::EditorEvent {
             library_path: address.library_path,
             table: address.table,
@@ -257,7 +318,10 @@ fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, Li
 /// Helper for placeholder-card layouts — kept around for tabs that
 /// still bottom out in TODO state during the Wave-3 refactor (sim-
 /// without-binding, e.g.).
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "kept for tabs still bottoming out in TODO state during the Wave-3 refactor"
+)]
 pub(crate) fn placeholder_card<'a>(
     title: &'a str,
     todos: &'a [&'a str],
@@ -265,9 +329,13 @@ pub(crate) fn placeholder_card<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let mut col = column![text(title).size(14).color(text_c), Space::new().height(8),].spacing(4);
+    let mut col = column![
+        text(title).size(TS.heading).color(text_c),
+        Space::new().height(8),
+    ]
+    .spacing(SP.s);
     for todo in todos {
-        col = col.push(text(format!("• {todo}")).size(11).color(muted));
+        col = col.push(text(format!("• {todo}")).size(TS.body).color(muted));
     }
     container(col)
         .padding(14)

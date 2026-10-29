@@ -5,65 +5,22 @@ use crate::pdf::{
 };
 use crate::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
-use std::collections::HashMap;
 
 fn empty_sheet() -> SchematicSheet {
-    SchematicSheet {
-        uuid: uuid::Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
-        paper_size: String::new(),
-        root_sheet_page: "1".into(),
-        symbols: vec![],
-        wires: vec![],
-        junctions: vec![],
-        labels: vec![],
-        child_sheets: vec![],
-        no_connects: vec![],
-        text_notes: vec![],
-        buses: vec![],
-        bus_entries: vec![],
-        drawings: vec![],
-        no_erc_directives: vec![],
-        title_block: Default::default(),
-        lib_symbols: Default::default(),
-    }
+    SchematicSheet::default()
 }
 
 fn ctx_with_one_sheet() -> ExportContext {
     let mut sheet = empty_sheet();
     sheet.symbols.push(Symbol {
-        uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
         position: Point::new(50.0, 50.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: vec![],
-        pin_uuids: HashMap::new(),
-        instances: vec![],
-        footprint: String::new(),
-        datasheet: String::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
     sheet.labels.push(Label {
+        unknown_columns: Default::default(),
         uuid: uuid::Uuid::nil(),
         text: "VCC".to_string(),
         position: Point::new(20.0, 20.0),
@@ -73,6 +30,8 @@ fn ctx_with_one_sheet() -> ExportContext {
         font_size: 0.0,
         justify: signex_types::schematic::HAlign::Center,
         justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
+        locked: false,
     });
     ExportContext {
         sheets: vec![SheetSnapshot {
@@ -81,9 +40,13 @@ fn ctx_with_one_sheet() -> ExportContext {
             sheet_name: "Power".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     }
 }
 
@@ -112,6 +75,7 @@ fn default_opts() -> PdfOptions {
         physical_sheet_number: true,
         physical_document_number: false,
         include_no_erc_markers: false,
+        include_no_connect_markers: false,
         include_parameter_sets: false,
         include_probes: false,
         include_blankets: false,
@@ -125,6 +89,7 @@ fn default_opts() -> PdfOptions {
         include_component_parameters: false,
         global_bookmarks: false,
         palette: SchematicPalette::classic(),
+        net_class_styles: Default::default(),
     }
 }
 
@@ -237,34 +202,11 @@ fn bookmark_zoom_clamps_out_of_range() {
 fn pin_bookmarks_skipped_when_subtoggle_off() {
     let mut sheet = empty_sheet();
     let mut sym = Symbol {
-        uuid: uuid::Uuid::nil(),
         lib_id: "Device:R".to_string(),
         reference: "R1".to_string(),
         value: "10k".to_string(),
         position: Point::new(50.0, 50.0),
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: vec![],
-        pin_uuids: HashMap::new(),
-        instances: vec![],
-        footprint: String::new(),
-        datasheet: String::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     };
     sym.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
     sym.pin_uuids.insert("2".to_string(), uuid::Uuid::nil());
@@ -277,9 +219,13 @@ fn pin_bookmarks_skipped_when_subtoggle_off() {
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,
             sheet_count: 1,
+            placement: Default::default(),
         }],
         metadata: ProjectMetadata::default(),
         netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     };
 
     let opts = PdfOptions {
@@ -313,34 +259,11 @@ fn multi_sheet_bookmarks_have_independent_groups() {
         for i in 0..3 {
             let mut sheet = empty_sheet();
             sheet.symbols.push(Symbol {
-                uuid: uuid::Uuid::nil(),
                 lib_id: "Device:R".to_string(),
                 reference: format!("R{}", i + 1),
                 value: "10k".to_string(),
                 position: Point::new(50.0, 50.0),
-                rotation: 0.0,
-                mirror_x: false,
-                mirror_y: false,
-                unit: 1,
-                is_power: false,
-                ref_text: None,
-                val_text: None,
-                fields_autoplaced: false,
-                fields_user_placed: false,
-                dnp: false,
-                in_bom: true,
-                on_board: true,
-                exclude_from_sim: false,
-                locked: false,
-                fields: HashMap::new(),
-                custom_properties: vec![],
-                pin_uuids: HashMap::new(),
-                instances: vec![],
-                footprint: String::new(),
-                datasheet: String::new(),
-                library_id: None,
-                row_id: None,
-                library_version: String::new(),
+                ..Default::default()
             });
             sheets.push(SheetSnapshot {
                 path: std::path::PathBuf::from(format!("sheet_{i}.standard_sch")),
@@ -348,12 +271,16 @@ fn multi_sheet_bookmarks_have_independent_groups() {
                 sheet_name: format!("Sheet{}", i + 1),
                 sheet_number: i + 1,
                 sheet_count: 3,
+                placement: Default::default(),
             });
         }
         ExportContext {
             sheets,
             metadata: ProjectMetadata::default(),
             netlist: None,
+            netlist_sheets: Vec::new(),
+            current_sheet: None,
+            netlist_placements: Vec::new(),
         }
     };
     let opts = PdfOptions {
@@ -381,4 +308,65 @@ fn multi_sheet_bookmarks_have_independent_groups() {
             assert_eq!(item.page_idx, n - 1, "{} jumped to wrong page", item.title);
         }
     }
+}
+
+#[test]
+fn pin_bookmarks_are_sorted_and_skip_power_symbols() {
+    let mut sheet = empty_sheet();
+    let mut sym = Symbol {
+        reference: "U1".to_string(),
+        ..Default::default()
+    };
+    for n in ["9", "3", "10", "1", "2", "7"] {
+        sym.pin_uuids.insert(n.to_string(), uuid::Uuid::nil());
+    }
+    sheet.symbols.push(sym);
+    let mut pwr = Symbol {
+        reference: "#PWR01".to_string(),
+        is_power: true,
+        ..Default::default()
+    };
+    pwr.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
+    sheet.symbols.push(pwr);
+    let ctx = ExportContext {
+        sheets: vec![SheetSnapshot {
+            path: std::path::PathBuf::from("a.standard_sch"),
+            schematic: sheet,
+            sheet_name: "Sheet1".to_string(),
+            sheet_number: 1,
+            sheet_count: 1,
+            placement: Default::default(),
+        }],
+        metadata: ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    };
+    let opts = PdfOptions {
+        generate_nets_info: true,
+        bookmark_pins: true,
+        bookmark_net_labels: false,
+        bookmark_ports: false,
+        ..default_opts()
+    };
+    let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
+    let pins: Vec<&str> = items
+        .iter()
+        .filter(|i| i.title.starts_with("pin "))
+        .map(|i| i.title.as_str())
+        .collect();
+    assert_eq!(
+        pins,
+        [
+            "pin U1.1",
+            "pin U1.10",
+            "pin U1.2",
+            "pin U1.3",
+            "pin U1.7",
+            "pin U1.9"
+        ]
+    );
+    // Sheet -> Nets group -> 6 pins: the sheet owns 7 descendants.
+    assert_eq!(descendant_count(&items, 0), 7);
 }

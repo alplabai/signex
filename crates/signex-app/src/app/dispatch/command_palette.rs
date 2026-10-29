@@ -5,7 +5,8 @@ use iced::widget::operation;
 
 use super::super::*;
 use crate::app::command_palette::{
-    COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, rank_results,
+    COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, catalog_stamp,
+    rank_results,
 };
 
 impl Signex {
@@ -25,6 +26,11 @@ impl Signex {
                 // First keystroke promotes a passive (placeholder)
                 // chrome bar into a live palette.
                 self.ui_state.command_palette.open = true;
+                self.refresh_command_palette_results();
+                self.start_palette_index()
+            }
+            CommandPaletteMsg::IndexBuilt { generation, result } => {
+                self.apply_palette_index(generation, &result);
                 Task::none()
             }
             CommandPaletteMsg::MoveSelection(delta) => {
@@ -42,21 +48,51 @@ impl Signex {
     fn open_command_palette(&mut self) -> Task<Message> {
         self.ui_state.command_palette.open = true;
         self.ui_state.command_palette.selected_index = 0;
+        self.refresh_command_palette_results();
         // Focus + select-all so a fresh `Ctrl+Shift+P` can be typed
         // over without the user clearing the previous query manually.
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
             operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            // The project-wide rows come from an index built off-thread.
+            self.start_palette_index(),
         ])
     }
 
-    fn move_command_palette_selection(&mut self, delta: i32) {
-        // Recompute the result count so wrapping respects the live
-        // query — saves carrying a separate "results_len" cache.
+    /// Rebuild the catalog and rank it against the live query, keeping the
+    /// top [`MAX_RESULTS`] for the dropdown to render.
+    pub(in crate::app) fn refresh_command_palette_results(&mut self) {
         let catalog = build_catalog(self);
-        let total = rank_results(&catalog, &self.ui_state.command_palette.query)
-            .len()
-            .min(MAX_RESULTS);
+        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
+        let stamp = catalog_stamp(self);
+        let palette = &mut self.ui_state.command_palette;
+        palette.catalog_stamp = stamp;
+        palette.total_matches = ranked.len();
+        palette.results = ranked
+            .iter()
+            .take(MAX_RESULTS)
+            .map(|&(catalog_idx, _)| catalog[catalog_idx].clone())
+            .collect();
+    }
+
+    /// Re-rank the open palette when the symbols or files behind its rows
+    /// changed since the list was built, so Enter never runs a row the user
+    /// is not looking at.
+    pub(in crate::app) fn refresh_command_palette_if_stale(&mut self) {
+        if !self.ui_state.command_palette.open
+            || self.ui_state.command_palette.catalog_stamp == catalog_stamp(self)
+        {
+            return;
+        }
+        self.refresh_command_palette_results();
+        let palette = &mut self.ui_state.command_palette;
+        palette.selected_index = palette
+            .selected_index
+            .min(palette.results.len().saturating_sub(1));
+    }
+
+    fn move_command_palette_selection(&mut self, delta: i32) {
+        let total = self.ui_state.command_palette.total_matches.min(MAX_RESULTS);
         if total == 0 {
             self.ui_state.command_palette.selected_index = 0;
             return;
@@ -69,15 +105,19 @@ impl Signex {
     }
 
     fn execute_command_palette_selected(&mut self) -> Task<Message> {
-        let catalog = build_catalog(self);
-        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
-        let Some(&(catalog_idx, _)) = ranked.get(self.ui_state.command_palette.selected_index)
+        // The row the user sees and selected: the cached results, not a
+        // re-rank, which can order differently once the catalog has moved.
+        let Some(action) = self
+            .ui_state
+            .command_palette
+            .results
+            .get(self.ui_state.command_palette.selected_index)
+            .map(|entry| entry.action.clone())
         else {
             // Empty result list — close the palette quietly.
             self.ui_state.command_palette.open = false;
             return Task::none();
         };
-        let action = catalog[catalog_idx].action.clone();
 
         // Close palette before dispatching so re-entrant updates
         // (e.g. a menu that itself opens a modal) don't fight an
@@ -87,13 +127,71 @@ impl Signex {
         self.ui_state.command_palette.selected_index = 0;
 
         match action {
-            CommandAction::Menu(menu_msg) => Task::done(Message::Menu(menu_msg)),
+            // Through the same bridge the keyboard uses. The palette
+            // carries an id and never learns which `Message` it becomes
+            // — Command ≠ Message (#278). An id that stopped resolving
+            // between `build_catalog` and here is a no-op rather than a
+            // panic; `core_to_message` logs which one and why.
+            CommandAction::Command(command) => {
+                self.dispatch_command(&command, crate::app::command::CommandArgs::none(), None)
+            }
             CommandAction::Panel(panel) => {
                 Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
             }
             CommandAction::OpenFile(path) => Task::done(Message::File(FileMsg::Opened(Some(path)))),
             CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
+            CommandAction::Reveal {
+                path,
+                placement,
+                select,
+            } => self.reveal_in_project(path, placement, select),
         }
+    }
+
+    /// Open `path` at `placement` and focus the item a search row names. A
+    /// row can outlive what it pointed at (a sheet closed, renamed or
+    /// deleted, a symbol removed): the file is looked up by path, so a stale
+    /// row never opens a different file, and a missing item opens the sheet
+    /// and says so. Nothing in any document is changed.
+    ///
+    /// Opening a sheet nobody holds goes through the normal open path, which
+    /// reads that one file on the UI thread, exactly as descending into a
+    /// child sheet does.
+    fn reveal_in_project(
+        &mut self,
+        path: std::path::PathBuf,
+        placement: Option<signex_types::schematic::InstancePath>,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) -> Task<Message> {
+        self.open_sheet_with_placement(path.clone(), placement);
+        let opened = self.resolve_held_spelling(path.clone());
+        if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
+            crate::diagnostics::log_warning(format!(
+                "Search: could not open {}; the list may be out of date.",
+                path.display()
+            ));
+            return Task::none();
+        }
+        let Some(item) = select else {
+            return Task::none();
+        };
+        // Where the symbol is now, not where it was when the index was built.
+        let position = self.document_state.active_engine().and_then(|engine| {
+            engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == item.uuid)
+                .map(|s| s.position)
+        });
+        let Some(position) = position else {
+            crate::diagnostics::log_info(format!(
+                "Search: that item is no longer on {}.",
+                path.display()
+            ));
+            return Task::none();
+        };
+        self.handle_focus_at(position.x, position.y, Some(item))
     }
 
     /// Resolve a placed symbol's world position from the active
@@ -123,5 +221,103 @@ impl Signex {
                 kind: signex_types::schematic::SelectedKind::Symbol,
             }),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::handlers::menu::export::tests::app_workspace;
+
+    #[test]
+    fn the_query_ranks_into_the_cache_the_view_reads() {
+        let dir = std::env::temp_dir().join(format!("signex-palette-{}", uuid::Uuid::now_v7()));
+        let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
+
+        let _ =
+            app.dispatch_command_palette_message(CommandPaletteMsg::QueryChanged(String::new()));
+        let everything = app.ui_state.command_palette.total_matches;
+        assert!(everything > 0);
+        assert_eq!(
+            app.ui_state.command_palette.results.len(),
+            everything.min(MAX_RESULTS)
+        );
+
+        let _ = app.dispatch_command_palette_message(CommandPaletteMsg::QueryChanged(
+            "zzzzqqqqxxxx".to_string(),
+        ));
+        assert_eq!(app.ui_state.command_palette.total_matches, 0);
+        assert!(app.ui_state.command_palette.results.is_empty());
+    }
+
+    fn symbol_row(reference: &str) -> (String, String, String, String) {
+        (
+            reference.into(),
+            String::new(),
+            String::new(),
+            String::new(),
+        )
+    }
+
+    #[test]
+    fn enter_runs_the_row_the_user_selected_not_a_fresh_ranking() {
+        let (mut app, _task) = Signex::new();
+        // A cached row the live catalog does not contain: a re-rank against
+        // the query would find nothing and drop the action.
+        let palette = &mut app.ui_state.command_palette;
+        palette.open = true;
+        palette.query = "qzxjk-no-live-match".into();
+        palette.results = vec![crate::app::command_palette::CommandEntry {
+            source: crate::app::command_palette::CommandSource::Command,
+            label: "Open Panel: ERC".into(),
+            detail: String::new(),
+            action: CommandAction::Panel(crate::panels::PanelKind::Erc),
+        }];
+        palette.selected_index = 0;
+
+        let task = app.execute_command_palette_selected();
+
+        assert_eq!(task.units(), 1, "the cached row's action must run");
+        assert!(!app.ui_state.command_palette.open);
+    }
+
+    #[test]
+    fn an_open_palette_follows_the_symbols_behind_its_rows() {
+        let (mut app, _task) = Signex::new();
+        app.document_state.panel_ctx.placed_symbols = vec![symbol_row("QZX1")];
+        let _focus = app.open_command_palette();
+        app.ui_state.command_palette.query = "QZX".into();
+        app.refresh_command_palette_results();
+        assert_eq!(app.ui_state.command_palette.total_matches, 1);
+
+        // A symbol is placed while the palette is open.
+        app.document_state.panel_ctx.placed_symbols = vec![symbol_row("QZX1"), symbol_row("QZX2")];
+        app.refresh_command_palette_if_stale();
+
+        assert_eq!(app.ui_state.command_palette.total_matches, 2);
+    }
+
+    /// #1351 - a palette row goes through the same funnel as a keystroke,
+    /// so a command with nothing to act on is dropped, not run.
+    #[test]
+    fn a_palette_command_obeys_the_enablement_gate() {
+        use crate::app::command_palette::{CommandEntry, CommandSource};
+        let (mut app, _task) = Signex::new();
+        assert!(app.document_state.active_engine().is_none());
+        let before = app.interaction_state.current_tool;
+        let palette = &mut app.ui_state.command_palette;
+        palette.open = true;
+        palette.results = vec![CommandEntry {
+            source: CommandSource::Command,
+            label: "Place Wire".into(),
+            detail: String::new(),
+            action: CommandAction::Command(crate::keymap::AppCommandId::new("place_wire").unwrap()),
+        }];
+        palette.selected_index = 0;
+
+        let _ = app.execute_command_palette_selected();
+
+        assert_eq!(app.interaction_state.current_tool, before);
+        assert!(!app.ui_state.command_palette.open);
     }
 }

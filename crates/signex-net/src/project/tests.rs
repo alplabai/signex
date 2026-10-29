@@ -1,5 +1,8 @@
 //! Tests for project-level netlist stitching.
 use super::*;
+
+mod instances;
+mod net_members;
 use crate::build_netlist;
 use signex_types::schematic::{
     ChildSheet, FillType, HAlign, Junction, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
@@ -12,48 +15,29 @@ fn pt(x: f64, y: f64) -> Point {
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
-        uuid: Uuid::nil(),
-        version: 0,
-        generator: String::new(),
-        generator_version: String::new(),
         paper_size: "A4".to_string(),
-        root_sheet_page: "1".to_string(),
-        symbols: Vec::new(),
-        wires: Vec::new(),
-        junctions: Vec::new(),
-        labels: Vec::new(),
-        child_sheets: Vec::new(),
-        no_connects: Vec::new(),
-        text_notes: Vec::new(),
-        buses: Vec::new(),
-        bus_entries: Vec::new(),
-        drawings: Vec::new(),
-        no_erc_directives: Vec::new(),
-        title_block: HashMap::new(),
-        lib_symbols: HashMap::new(),
+        ..Default::default()
     }
 }
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::nil(),
         start: a,
         end: b,
-        stroke_width: 0.0,
+        ..Default::default()
     }
 }
 
 fn junction(pos: Point) -> Junction {
     Junction {
-        uuid: Uuid::nil(),
         position: pos,
-        diameter: 0.0,
-        minted: false,
+        ..Default::default()
     }
 }
 
 fn label(text: &str, pos: Point, ty: LabelType) -> Label {
     Label {
+        unknown_columns: Default::default(),
         uuid: Uuid::nil(),
         text: text.to_string(),
         position: pos,
@@ -63,6 +47,8 @@ fn label(text: &str, pos: Point, ty: LabelType) -> Label {
         font_size: 1.27,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        font_family: None,
+        locked: false,
     }
 }
 
@@ -113,34 +99,10 @@ fn add_lib(sheet: &mut SchematicSheet, lib_id: &str) {
 
 fn place(sheet: &mut SchematicSheet, reference: &str, lib_id: &str, origin: Point) {
     sheet.symbols.push(Symbol {
-        uuid: Uuid::nil(),
         lib_id: lib_id.to_string(),
         reference: reference.to_string(),
-        value: String::new(),
-        footprint: String::new(),
-        datasheet: String::new(),
         position: origin,
-        rotation: 0.0,
-        mirror_x: false,
-        mirror_y: false,
-        unit: 1,
-        is_power: false,
-        ref_text: None,
-        val_text: None,
-        fields_autoplaced: false,
-        fields_user_placed: false,
-        dnp: false,
-        in_bom: true,
-        on_board: true,
-        exclude_from_sim: false,
-        locked: false,
-        fields: HashMap::new(),
-        custom_properties: Vec::new(),
-        pin_uuids: HashMap::new(),
-        instances: Vec::new(),
-        library_id: None,
-        row_id: None,
-        library_version: String::new(),
+        ..Default::default()
     });
 }
 
@@ -200,10 +162,73 @@ fn names(nl: &Netlist) -> Vec<&str> {
     nl.nets.iter().map(|n| n.name.as_str()).collect()
 }
 
-// 1 ── Equivalence gate: build_project_netlist(root, &{}, None).netlist is
-//      byte-for-byte build_netlist(root), incl. rotated/mirrored symbols.
+/// Test-only bridge from the flat "bare filename" fixtures every test below
+/// writes to the [`ProjectGraph`] shape #466 introduced: seeds `sheets` with
+/// `root` under `root_key` plus every entry of `children`, then gives every
+/// sheet an *identity* resolution submap — each of its own `ChildSheet.filename`s
+/// maps to that same string as a [`SheetKey`]. That reproduces the flat,
+/// single-namespace model these fixtures assume (a bare filename is globally
+/// unique across the fixture), so only the call site changes, not the fixture
+/// shape. The dedicated cross-directory tests below build a real
+/// [`ProjectGraph`] by hand instead, precisely because that flat assumption is
+/// what #466 stops the app from making.
+fn stitch(
+    root: &SchematicSheet,
+    root_key: &str,
+    children: &HashMap<String, SchematicSheet>,
+) -> ProjectNetlist {
+    stitch_pages(root, root_key, children, &[])
+}
+
+/// [`stitch`] plus the flat-page roots #430 added: `pages` names further
+/// `children` entries to walk as their own top-level pages, in the order
+/// given. `stitch` is this with no extra pages.
+///
+/// Pages are seeded with `name: None`, matching what #430 ships and what the
+/// app passes: a flat page is a *peer* of the root, so its labels stay
+/// unqualified — `VCC` on page two is the same `VCC` as on the root, which is
+/// the whole point of stitching the pages into one netlist.
+/// [`name_seeded_page_qualifies_its_own_labels`] covers the other setting.
+fn stitch_pages(
+    root: &SchematicSheet,
+    root_key: &str,
+    children: &HashMap<String, SchematicSheet>,
+    pages: &[&str],
+) -> ProjectNetlist {
+    let mut sheets: HashMap<SheetKey, SchematicSheet> = children
+        .iter()
+        .map(|(k, v)| (SheetKey::new(k.clone()), v.clone()))
+        .collect();
+    sheets.insert(SheetKey::new(root_key), root.clone());
+
+    let mut resolved: HashMap<SheetKey, HashMap<String, SheetKey>> = HashMap::new();
+    for (key, sheet) in &sheets {
+        let submap = sheet
+            .child_sheets
+            .iter()
+            .map(|cs| (cs.filename.clone(), SheetKey::new(cs.filename.clone())))
+            .collect();
+        resolved.insert(key.clone(), submap);
+    }
+
+    let mut roots = vec![ProjectRoot {
+        key: SheetKey::new(root_key),
+    }];
+    roots.extend(pages.iter().map(|p| ProjectRoot {
+        key: SheetKey::new(*p),
+    }));
+
+    build_project_netlist(&ProjectGraph {
+        sheets: &sheets,
+        resolved: &resolved,
+        roots: &roots,
+    })
+}
+
+// 1 ── Equivalence gate: one root, empty resolved, is byte-for-byte
+//      build_netlist(root), incl. rotated/mirrored symbols.
 fn assert_equiv(sheet: &SchematicSheet) {
-    let p = build_project_netlist(sheet, &HashMap::new(), None);
+    let p = stitch(sheet, "root", &HashMap::new());
     assert!(
         p.issues.is_empty(),
         "single sheet has no issues: {:?}",
@@ -212,7 +237,7 @@ fn assert_equiv(sheet: &SchematicSheet) {
     assert_eq!(
         p.netlist,
         build_netlist(sheet),
-        "project(root, &{{}}) must equal build_netlist(root)"
+        "one root + empty resolved must equal build_netlist(root)"
     );
 }
 
@@ -255,6 +280,77 @@ fn equivalence_gate_root_only() {
     place(&mut d, "R1", "R", pt(10.0, 0.0));
     place_power(&mut d, "#PWR01", "PWR", "GND", pt(0.0, 0.0));
     assert_equiv(&d);
+
+    // (e) GND and VCC ports touching tip to tip, no anchor: stays two rails.
+    assert_equiv(&touching_rails(false));
+
+    // (f) the same touch with a junction under it: an anchor, so one net.
+    assert_equiv(&touching_rails(true));
+}
+
+/// A GND rail and a VCC rail, each wired to a resistor, plus a GND port and a
+/// VCC port whose tips share the wireless point `(50, 50)`; `with_junction`
+/// puts a junction there.
+fn touching_rails(with_junction: bool) -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "R");
+    add_lib(&mut s, "PWR");
+    s.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    s.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut s, "R1", "R", pt(0.0, 0.0));
+    place_power(&mut s, "#PWR1", "PWR", "GND", pt(10.0, 0.0));
+    place(&mut s, "R2", "R", pt(0.0, 20.0));
+    place_power(&mut s, "#PWR2", "PWR", "VCC", pt(10.0, 20.0));
+    place_power(&mut s, "#PWR3", "PWR", "GND", pt(50.0, 50.0));
+    place_power(&mut s, "#PWR4", "PWR", "VCC", pt(50.0, 50.0));
+    if with_junction {
+        s.junctions.push(junction(pt(50.0, 50.0)));
+    }
+    s
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_rails_in_a_project_on_one_sheet() {
+    let p = stitch(&touching_rails(false), "root", &HashMap::new());
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    let mut got = names(&p.netlist);
+    got.sort_unstable();
+    assert_eq!(got, ["GND", "VCC"]);
+}
+
+#[test]
+fn touching_gnd_and_vcc_ports_stay_two_rails_across_sheets() {
+    // The contact-only pair lives on the root; the child wires its own GND and
+    // VCC. The root's touch must not bridge the two global names.
+    let mut root = touching_rails(false);
+    root.child_sheets
+        .push(child_sheet("A", "a.sch", Vec::new()));
+
+    let mut child = empty_sheet();
+    add_lib(&mut child, "R");
+    add_lib(&mut child, "PWR");
+    child.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    child.wires.push(wire(pt(0.0, 20.0), pt(10.0, 20.0)));
+    place(&mut child, "R3", "R", pt(0.0, 0.0));
+    place_power(&mut child, "#PWR5", "PWR", "GND", pt(10.0, 0.0));
+    place(&mut child, "R4", "R", pt(0.0, 20.0));
+    place_power(&mut child, "#PWR6", "PWR", "VCC", pt(10.0, 20.0));
+
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), child);
+    let p = stitch(&root, "root", &map);
+
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    let gnd = p.netlist.nets.iter().find(|n| n.name == "GND").unwrap();
+    let vcc = p.netlist.nets.iter().find(|n| n.name == "VCC").unwrap();
+    let refs = |n: &Net| {
+        n.terminals
+            .iter()
+            .map(|t| t.reference.clone())
+            .collect::<Vec<_>>()
+    };
+    assert!(refs(gnd).contains(&"R3".to_string()) && !refs(gnd).contains(&"R4".to_string()));
+    assert!(refs(vcc).contains(&"R4".to_string()) && !refs(vcc).contains(&"R3".to_string()));
 }
 
 /// Library whose single pin sits at `local` (for the rotated-symbol case).
@@ -321,7 +417,7 @@ fn parent_child(
 #[test]
 fn sheet_pin_binds_hierarchical_child_label() {
     let (root, map) = parent_child("BUS", pt(0.0, 0.0), "BUS", LabelType::Hierarchical);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert!(p.issues.is_empty(), "{:?}", p.issues);
     // RP (root) and RC (child) are one net through the pin↔label binding.
     assert_eq!(p.netlist.nets.len(), 1);
@@ -331,7 +427,7 @@ fn sheet_pin_binds_hierarchical_child_label() {
 #[test]
 fn sheet_pin_binds_global_child_label() {
     let (root, map) = parent_child("VCC", pt(0.0, 0.0), "VCC", LabelType::Global);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 1);
     assert_eq!(p.netlist.nets[0].terminals.len(), 2);
 }
@@ -340,8 +436,35 @@ fn sheet_pin_binds_global_child_label() {
 fn unmatched_sheet_pin_stays_local() {
     // Pin "BUS" but the child's label is "OTHER" → no binding: two nets.
     let (root, map) = parent_child("BUS", pt(0.0, 0.0), "OTHER", LabelType::Hierarchical);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 2, "unbound pin keeps nets separate");
+}
+
+// A padded label or pin name is the same port as its trimmed spelling: the
+// stitcher shares `Label::port_name` / `normalize_port_name` with the engine's
+// port collector and the ERC hierarchy rule (#359).
+#[test]
+fn padded_child_label_binds_the_trimmed_sheet_pin() {
+    let (root, map) = parent_child("CLK", pt(0.0, 0.0), " CLK ", LabelType::Hierarchical);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 1, "padded label still binds");
+    assert_eq!(p.netlist.nets[0].terminals.len(), 2);
+}
+
+#[test]
+fn padded_sheet_pin_binds_the_trimmed_child_label() {
+    let (root, map) = parent_child("  CLK", pt(0.0, 0.0), "CLK", LabelType::Global);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 1, "padded pin still binds");
+}
+
+#[test]
+fn blank_port_names_never_bind() {
+    // Identical blank spellings: an untrimmed string compare would bind them
+    // (the pre-#751 stitcher did), so only the blank check keeps them apart.
+    let (root, map) = parent_child("  ", pt(0.0, 0.0), "  ", LabelType::Hierarchical);
+    let p = stitch(&root, "root", &map);
+    assert_eq!(p.netlist.nets.len(), 2, "blank names are not ports");
 }
 
 // 3 ── Global name spans sheets; power-port symbol + Power label merge.
@@ -366,7 +489,7 @@ fn global_label_spans_two_sheets() {
 
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 1, "same-name Global spans sheets");
     assert_eq!(p.netlist.nets[0].name, "NET5V");
     assert_eq!(p.netlist.nets[0].terminals.len(), 2);
@@ -385,7 +508,7 @@ fn membership_aggregates_across_sheet_occurrences() {
         uuid: rw,
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
-        stroke_width: 0.0,
+        ..Default::default()
     });
     root.labels
         .push(label("NET5V", pt(0.0, 0.0), LabelType::Global));
@@ -399,7 +522,7 @@ fn membership_aggregates_across_sheet_occurrences() {
         uuid: cw,
         start: pt(0.0, 0.0),
         end: pt(10.0, 0.0),
-        stroke_width: 0.0,
+        ..Default::default()
     });
     child
         .labels
@@ -409,7 +532,7 @@ fn membership_aggregates_across_sheet_occurrences() {
 
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 1, "same-name Global spans sheets");
     let net = &p.netlist.nets[0];
     assert!(
@@ -441,7 +564,7 @@ fn power_symbol_and_power_label_merge_across_sheets() {
 
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 1, "GND port + GND label are one net");
     assert_eq!(p.netlist.nets[0].name, "GND");
     // R1 + the #PWR01 power-port pin (root) + R2 (child).
@@ -469,7 +592,7 @@ fn local_net_labels_do_not_cross_sheets() {
 
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 2, "local Net labels stay per-sheet");
     // Root SDA stays bare; the child SDA is qualified by its sheet name.
     let ns = names(&p.netlist);
@@ -503,7 +626,7 @@ fn same_child_instantiated_twice_is_not_shorted() {
 
     let mut map = HashMap::new();
     map.insert("child.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(
         p.netlist.nets.len(),
         2,
@@ -537,7 +660,7 @@ fn missing_child_reported_and_local() {
         vec![sheet_pin("P", pt(0.0, 0.0))],
     ));
 
-    let p = build_project_netlist(&root, &HashMap::new(), None);
+    let p = stitch(&root, "root", &HashMap::new());
     assert_eq!(p.netlist.nets.len(), 1, "root net survives");
     assert!(
         p.issues.iter().any(|i| matches!(
@@ -548,7 +671,7 @@ fn missing_child_reported_and_local() {
         p.issues
     );
     // Deterministic.
-    assert_eq!(p, build_project_netlist(&root, &HashMap::new(), None));
+    assert_eq!(p, stitch(&root, "root", &HashMap::new()));
 }
 
 // 7 ── Cycles: A→B→A and child-instantiates-root → SheetCycle, no hang.
@@ -562,8 +685,10 @@ fn cycles_are_reported_without_hanging() {
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), a.clone());
     map.insert("b.sch".to_string(), b);
-    // Root is a.sch; root_filename lets the B→A edge be seen as a cycle.
-    let p = build_project_netlist(&a, &map, Some("a.sch"));
+    // Root is keyed "a.sch" — every occurrence's key is real now (no optional
+    // root filename), so the B→A edge resolving back onto the root's own key
+    // is caught on the DFS path without a hang.
+    let p = stitch(&a, "a.sch", &map);
     assert!(
         p.issues
             .iter()
@@ -597,7 +722,7 @@ fn sheet_pin_anchors_to_wire_interior() {
 
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(
         p.netlist.nets.len(),
         1,
@@ -635,7 +760,7 @@ fn two_same_name_sheet_pins_merge_through_child() {
 
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), child);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     // Both root nets merge through the shared child BUS label → one net.
     assert_eq!(
         p.netlist.nets.len(),
@@ -670,7 +795,7 @@ fn duplicate_sibling_name_collision_is_suffixed() {
     let mut map = HashMap::new();
     map.insert("a.sch".to_string(), a);
     map.insert("b.sch".to_string(), b);
-    let p = build_project_netlist(&root, &map, None);
+    let p = stitch(&root, "root", &map);
     assert_eq!(p.netlist.nets.len(), 2, "two distinct qualified nets");
     let ns = names(&p.netlist);
     assert!(ns.contains(&"charger/SDA"), "first keeps the name: {ns:?}");
@@ -703,7 +828,7 @@ fn single_sheet_name_collision_matches_build_netlist_and_is_reported() {
     place(&mut root, "R1", "R", pt(0.0, 0.0));
     place(&mut root, "R2", "R", pt(50.0, 0.0));
 
-    let p = build_project_netlist(&root, &HashMap::new(), None);
+    let p = stitch(&root, "root", &HashMap::new());
     assert_eq!(
         p.netlist,
         build_netlist(&root),
@@ -755,7 +880,7 @@ fn output_is_deterministic_across_map_order() {
             map.insert("b.sch".to_string(), mk("OTHER"));
             map.insert("a.sch".to_string(), mk("NET5V"));
         }
-        build_project_netlist(&root, &map, None)
+        stitch(&root, "root", &map)
     };
     assert_eq!(build(true), build(false));
 }
@@ -775,7 +900,7 @@ fn project_terminals_order_designators_naturally() {
         place(&mut sheet, &format!("R{n}"), "R", pt(n as f64, 0.0));
     }
 
-    let project = build_project_netlist(&sheet, &HashMap::new(), None);
+    let project = stitch(&sheet, "root", &HashMap::new());
     assert_eq!(project.netlist.nets.len(), 1);
     let order: Vec<&str> = project.netlist.nets[0]
         .terminals
@@ -786,4 +911,254 @@ fn project_terminals_order_designators_naturally() {
         order,
         vec!["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"]
     );
+}
+
+// 12 ── #466: two parents in different directories reference a child by the
+// SAME bare filename ("power.sch"); each must resolve and stitch from its
+// OWN file. This is a real `ProjectGraph` built by hand (not the `stitch`
+// flat-namespace helper above), because the flat, one-slot-per-filename
+// model is exactly what #466 removes.
+#[test]
+fn same_filename_children_of_different_parents_stitch_from_their_own_files() {
+    let mut root = empty_sheet();
+    root.child_sheets
+        .push(child_sheet("A", "a.sch", Vec::new()));
+    root.child_sheets
+        .push(child_sheet("B", "b.sch", Vec::new()));
+
+    // Both "a.sch" and "b.sch" reference a child by the identical bare
+    // filename "power.sch" — resolved (in the app, against each's own
+    // directory) to two different files, keyed "a/power.sch" and
+    // "b/power.sch" here.
+    let mut a = empty_sheet();
+    a.child_sheets
+        .push(child_sheet("PWR", "power.sch", Vec::new()));
+    let mut b = empty_sheet();
+    b.child_sheets
+        .push(child_sheet("PWR", "power.sch", Vec::new()));
+
+    let mut power_a = empty_sheet();
+    power_a.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    power_a
+        .labels
+        .push(label("VBUS_A", pt(0.0, 0.0), LabelType::Global));
+    add_lib(&mut power_a, "R");
+    place(&mut power_a, "RA", "R", pt(10.0, 0.0));
+
+    let mut power_b = empty_sheet();
+    power_b.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    power_b
+        .labels
+        .push(label("VBUS_B", pt(0.0, 0.0), LabelType::Global));
+    add_lib(&mut power_b, "R");
+    place(&mut power_b, "RB", "R", pt(10.0, 0.0));
+
+    let mut sheets: HashMap<SheetKey, SchematicSheet> = HashMap::new();
+    sheets.insert(SheetKey::new("root"), root);
+    sheets.insert(SheetKey::new("a.sch"), a);
+    sheets.insert(SheetKey::new("b.sch"), b);
+    sheets.insert(SheetKey::new("a/power.sch"), power_a);
+    sheets.insert(SheetKey::new("b/power.sch"), power_b);
+
+    let mut resolved: HashMap<SheetKey, HashMap<String, SheetKey>> = HashMap::new();
+    resolved.insert(
+        SheetKey::new("root"),
+        HashMap::from([
+            ("a.sch".to_string(), SheetKey::new("a.sch")),
+            ("b.sch".to_string(), SheetKey::new("b.sch")),
+        ]),
+    );
+    // Each parent's OWN submap maps the same ref string "power.sch" to its
+    // own directory's key — the fix: no shared, one-slot-per-filename map.
+    resolved.insert(
+        SheetKey::new("a.sch"),
+        HashMap::from([("power.sch".to_string(), SheetKey::new("a/power.sch"))]),
+    );
+    resolved.insert(
+        SheetKey::new("b.sch"),
+        HashMap::from([("power.sch".to_string(), SheetKey::new("b/power.sch"))]),
+    );
+
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let p = build_project_netlist(&ProjectGraph {
+        sheets: &sheets,
+        resolved: &resolved,
+        roots: &roots,
+    });
+
+    assert!(
+        p.issues.is_empty(),
+        "each parent resolved its own file, no ambiguity: {:?}",
+        p.issues
+    );
+    let ns = names(&p.netlist);
+    assert!(
+        ns.contains(&"VBUS_A"),
+        "a's own power sheet stitched: {ns:?}"
+    );
+    assert!(
+        ns.contains(&"VBUS_B"),
+        "b's own power sheet stitched: {ns:?}"
+    );
+    assert_eq!(
+        p.netlist.nets.len(),
+        2,
+        "the two power sheets are distinct, not merged into one: {ns:?}"
+    );
+}
+
+// Placement counts follow the occurrence tree the netlist is built from: a
+// child placed twice counts twice, and so does a grandchild under it (#730).
+#[test]
+fn occurrences_count_every_placement_of_a_nested_child() {
+    let mut root = empty_sheet();
+    root.child_sheets.push(child_sheet("A", "mid.sch", vec![]));
+    root.child_sheets.push(child_sheet("B", "mid.sch", vec![]));
+    let mut mid = empty_sheet();
+    mid.child_sheets.push(child_sheet("L", "leaf.sch", vec![]));
+    let mut sheets: HashMap<SheetKey, SchematicSheet> = HashMap::new();
+    sheets.insert(SheetKey::new("root"), root);
+    sheets.insert(SheetKey::new("mid.sch"), mid);
+    sheets.insert(SheetKey::new("leaf.sch"), empty_sheet());
+    let resolved: HashMap<SheetKey, HashMap<String, SheetKey>> = sheets
+        .iter()
+        .map(|(key, sheet)| {
+            let submap = sheet
+                .child_sheets
+                .iter()
+                .map(|cs| (cs.filename.clone(), SheetKey::new(cs.filename.clone())))
+                .collect();
+            (key.clone(), submap)
+        })
+        .collect();
+    let roots = [ProjectRoot {
+        key: SheetKey::new("root"),
+    }];
+    let mut counts: HashMap<SheetKey, usize> = HashMap::new();
+    for occ in project_occurrences(&ProjectGraph {
+        sheets: &sheets,
+        resolved: &resolved,
+        roots: &roots,
+    }) {
+        *counts.entry(occ.key).or_insert(0) += 1;
+    }
+    assert_eq!(counts[&SheetKey::new("root")], 1);
+    assert_eq!(counts[&SheetKey::new("mid.sch")], 2);
+    assert_eq!(counts[&SheetKey::new("leaf.sch")], 2);
+}
+
+mod buses;
+mod multi_named_report;
+mod multi_root;
+mod multiple_names;
+mod scope;
+
+/// #537: duplicate-uuid detection covers the whole project graph, so a
+/// declared page outside the root's hierarchy that copies the root's uuid is
+/// reported, as is a child that copies it.
+#[test]
+fn a_duplicate_sheet_uuid_is_reported_anywhere_in_the_project_graph() {
+    // `empty_sheet` has the nil uuid, which the check skips; give it a real one.
+    let mut root = empty_sheet();
+    root.uuid = uuid::Uuid::now_v7();
+    let mut page = empty_sheet();
+    page.uuid = root.uuid;
+    let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), page)].into();
+
+    let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
+    let dups: Vec<_> = p
+        .issues
+        .iter()
+        .filter(|i| matches!(i, StitchIssue::DuplicateSheetUuid { .. }))
+        .collect();
+    assert_eq!(dups.len(), 1, "{:?}", p.issues);
+
+    // Distinct uuids: nothing to report.
+    let mut other = empty_sheet();
+    other.uuid = uuid::Uuid::now_v7();
+    let children: HashMap<String, SchematicSheet> = [("page.snxsch".to_string(), other)].into();
+    let p = stitch_pages(&root, "root.snxsch", &children, &["page.snxsch"]);
+    assert!(
+        !p.issues
+            .iter()
+            .any(|i| matches!(i, StitchIssue::DuplicateSheetUuid { .. })),
+        "{:?}",
+        p.issues
+    );
+}
+
+/// One resistor wired to a power symbol (`lib_id`, `value`), alone on its rail.
+fn rail_with_port(sheet: &mut SchematicSheet, r: &str, lib_id: &str, value: &str) {
+    add_lib(sheet, "R");
+    add_lib(sheet, lib_id);
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    place(sheet, r, "R", pt(0.0, 0.0));
+    place_power(sheet, &format!("#P{r}"), lib_id, value, pt(10.0, 0.0));
+}
+
+fn project_with_child(root: SchematicSheet, child: SchematicSheet) -> ProjectNetlist {
+    let mut root = root;
+    root.child_sheets
+        .push(child_sheet("A", "a.sch", Vec::new()));
+    let mut map = HashMap::new();
+    map.insert("a.sch".to_string(), child);
+    stitch(&root, "root", &map)
+}
+
+#[test]
+fn styled_power_ports_with_one_value_merge_across_sheets() {
+    // Arrow-style ports are ordinary ports: the same value on two sheets is
+    // one rail.
+    let mut root = empty_sheet();
+    rail_with_port(&mut root, "R1", "power:arrow", "+3V3");
+    let mut child = empty_sheet();
+    rail_with_port(&mut child, "R2", "power:arrow", "+3V3");
+
+    let p = project_with_child(root, child);
+
+    assert_eq!(p.netlist.nets.len(), 1, "{:?}", p.netlist);
+    assert_eq!(p.netlist.nets[0].name, "+3V3");
+    let refs: Vec<&str> = p.netlist.nets[0]
+        .terminals
+        .iter()
+        .map(|t| t.reference.as_str())
+        .collect();
+    assert!(refs.contains(&"R1") && refs.contains(&"R2"), "{refs:?}");
+}
+
+#[test]
+fn power_flags_with_one_value_do_not_merge_across_sheets() {
+    // Every flag from the active bar carries "PWR"; a flag names no net, so
+    // flags on two sheets must leave the two rails apart.
+    let mut root = empty_sheet();
+    rail_with_port(&mut root, "R1", "power:PWR_FLAG", "PWR");
+    let mut child = empty_sheet();
+    rail_with_port(&mut child, "R2", "power:PWR_FLAG", "PWR");
+
+    let p = project_with_child(root, child);
+
+    assert_eq!(p.netlist.nets.len(), 2, "{:?}", p.netlist);
+    assert!(p.netlist.nets.iter().all(|n| n.name != "PWR"));
+}
+
+#[test]
+fn net_signature_is_named_by_a_power_port_over_a_local_label() {
+    // The power-carrier tuple also carries the owning symbol and position; the
+    // signature path must keep the name rule intact: a power port outranks a
+    // local label on the same net.
+    let mut sheet = SchematicSheet::default();
+    add_lib(&mut sheet, "pwr");
+    add_lib(&mut sheet, "r");
+    place_power(&mut sheet, "#PWR1", "pwr", "VCC", pt(0.0, 0.0));
+    place(&mut sheet, "R1", "r", pt(10.0, 0.0));
+    sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+    sheet
+        .labels
+        .push(label("SDA", pt(10.0, 0.0), LabelType::Net));
+
+    let sigs = crate::net_signatures(&sheet);
+    assert_eq!(sigs.len(), 1, "{sigs:?}");
+    assert_eq!(sigs[0].name, "VCC");
 }

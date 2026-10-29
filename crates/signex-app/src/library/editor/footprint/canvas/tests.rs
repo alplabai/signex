@@ -240,6 +240,7 @@ mod drag_track_end {
             sketch: Some(sketch),
             silk_f: &[],
             silk_b: &[],
+            zoom_step: 1.1,
         }
     }
 
@@ -296,10 +297,11 @@ mod drag_track_end {
     /// screen (100,300)) so a chosen world point maps to a screen cursor
     /// that lands inside the test bounds and inverts back exactly.
     fn seated_cstate() -> FootprintCanvasState {
-        let mut cstate = FootprintCanvasState::default();
-        cstate.scale = 10.0;
-        cstate.offset = Point::new(100.0, 300.0);
-        cstate
+        FootprintCanvasState {
+            scale: 10.0,
+            offset: Point::new(100.0, 300.0),
+            ..FootprintCanvasState::default()
+        }
     }
 
     fn left_press_at(
@@ -481,5 +483,88 @@ mod drag_track_end {
             "grabs p2 — the endpoint nearer the click in SOLVED coords"
         );
         assert_eq!(drag.sketch_line, None, "an endpoint drag, not a line drag");
+    }
+}
+
+/// Issue #170 — the wheel zoom uses the shared "Zoom speed" step carried
+/// on the canvas, not a private constant, and honours scroll magnitude.
+mod wheel_zoom {
+    use iced::widget::canvas;
+    use iced::{Color, Point, Rectangle, mouse};
+
+    use crate::library::editor::footprint::state::FootprintEditorState;
+    use crate::library::state::EditorAddress;
+
+    use super::super::{FootprintCanvas, FootprintCanvasState};
+
+    const BOUNDS: Rectangle = Rectangle {
+        x: 0.0,
+        y: 0.0,
+        width: 800.0,
+        height: 600.0,
+    };
+
+    fn scale_after_wheel(step: f32, delta: mouse::ScrollDelta) -> (f32, FootprintCanvasState) {
+        let state = FootprintEditorState::empty();
+        let cache = canvas::Cache::new();
+        let fpc = FootprintCanvas {
+            state: &state,
+            address: EditorAddress::new(
+                std::path::PathBuf::from("/tmp/lib.snxlib"),
+                "footprints".to_string(),
+                signex_library::RowId::new(),
+            ),
+            bg_color: Color::WHITE,
+            grid_color: Color::BLACK,
+            cache: &cache,
+            sketch: None,
+            silk_f: &[],
+            silk_b: &[],
+            zoom_step: step,
+        };
+        let mut cstate = FootprintCanvasState::default();
+        let before = cstate.scale;
+        let cursor = mouse::Cursor::Available(Point::new(400.0, 300.0));
+        let _ = fpc.on_wheel_scrolled(&mut cstate, &delta, BOUNDS, cursor);
+        (before, cstate)
+    }
+
+    #[test]
+    fn one_notch_zooms_by_the_configured_step() {
+        let (before, cs) = scale_after_wheel(1.25, mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 });
+
+        assert!(
+            (cs.scale / before - 1.25).abs() < 1e-4,
+            "got {}",
+            cs.scale / before
+        );
+    }
+
+    #[test]
+    fn a_nan_scroll_leaves_the_footprint_camera_untouched() {
+        let untouched = FootprintCanvasState::default();
+
+        let (before, cs) = scale_after_wheel(
+            1.1,
+            mouse::ScrollDelta::Lines {
+                x: 0.0,
+                y: f32::NAN,
+            },
+        );
+
+        assert_eq!(cs.scale, before);
+        assert_eq!(cs.offset, untouched.offset);
+    }
+
+    #[test]
+    fn a_pixel_delta_zooms_proportionally_not_a_full_step() {
+        // 25 px / 50 = half a notch at step 1.21 -> 1.1.
+        let (before, cs) = scale_after_wheel(1.21, mouse::ScrollDelta::Pixels { x: 0.0, y: 25.0 });
+
+        assert!(
+            (cs.scale / before - 1.1).abs() < 1e-4,
+            "got {}",
+            cs.scale / before
+        );
     }
 }

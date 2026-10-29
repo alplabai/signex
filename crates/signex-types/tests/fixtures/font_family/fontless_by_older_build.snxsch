@@ -1,0 +1,98 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000064"
+version = 0
+generator = ""
+generator_version = ""
+paper_size = ""
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library  pos_x  pos_y  rotation  value  mpn
+00000000-0000-0000-0000-000000000032  R1   ""       0      0      0         ""     ""
+"""
+
+[sheets.wires]
+content = """
+uuid  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid                                  text  pos_x    pos_y    rotation  kind   shape  font_size  justify  justify_v
+00000000-0000-0000-0000-000000000001  NET1  1000000  2000000  0         local  ""     1.27       left     bottom
+00000000-0000-0000-0000-000000000002  NET2  1000000  2000000  0         local  ""     1.27       left     bottom
+"""
+
+[extras.symbols.00000000-0000-0000-0000-000000000032]
+footprint = ""
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.00000000-0000-0000-0000-000000000032.fields]
+
+[extras.symbols.00000000-0000-0000-0000-000000000032.pin_uuids]
+
+[extras.symbols.00000000-0000-0000-0000-000000000032.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "bottom"
+hidden = false
+
+[extras.symbols.00000000-0000-0000-0000-000000000032.ref_text.position]
+x = 5.0
+y = 6.0
+
+[extras.symbols.00000000-0000-0000-0000-000000000032.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "bottom"
+hidden = false
+
+[extras.symbols.00000000-0000-0000-0000-000000000032.val_text.position]
+x = 5.0
+y = 6.0
+
+[extras.sheet]
+child_sheets = []
+no_connects = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.text_notes]]
+uuid = "00000000-0000-0000-0000-000000000003"
+text = "note"
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "bottom"
+
+[extras.sheet.text_notes.position]
+x = 3.0
+y = 4.0
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols]

@@ -1,6 +1,6 @@
 [package]
 name = "signex-library-server"
-description = "axum HTTP+WS server for Signex database-flavour libraries (v0.9.2)"
+description = "axum HTTP server for Signex database-flavour libraries (v0.9.2)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -22,6 +22,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+subtle = { workspace = true }
 
 [dev-dependencies]
 # Re-import signex-library with the `database` feature so the in-tree integration
@@ -31,3 +32,9 @@ tokio = { workspace = true }
 reqwest = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
+# The primitive tests build an off-circle arc to prove the load-time repair.
+signex-sketch = { workspace = true }
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

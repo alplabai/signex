@@ -1,5 +1,6 @@
 use super::footprint_summaries::{
-    build_over_constraint_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
+    build_over_constraint_summaries, build_redundant_constraint_summaries,
+    build_rejected_conflict_summaries, build_sketch_entity_summary, footprint_pad_kind_label,
     footprint_pad_shape_label,
 };
 
@@ -8,10 +9,10 @@ use super::footprint_summaries::{
 pub(super) fn build_footprint_editor_panel_ctx(
     app: &super::super::Signex,
 ) -> Option<crate::panels::FootprintEditorPanelContext> {
+    use crate::library::editor::footprint::pad_stack_check;
     use crate::library::editor::footprint::state::EditorMode;
     use crate::panels::{
-        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary,
-        FootprintSketchEntitySummary, FootprintSolveSummary, OverConstraintSummary,
+        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary, FootprintSolveSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
@@ -38,6 +39,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             final_residual_norm: out.result.final_residual_norm,
             over_constraint_count: out.over_constraints.len(),
             over_constraints,
+            redundant_constraints: build_redundant_constraint_summaries(editor.primitive(), out),
         }
     });
 
@@ -77,6 +79,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                     shape: pad.shape.clone(),
                     kind: pad.kind,
                     drill_diameter_mm: pad.drill_diameter_mm,
+                    drill_slot_length_mm: pad.passthrough.drill_slot_length_mm,
                     stack: pad.stack.clone(),
                     feature_top: pad.feature_top,
                     feature_bottom: pad.feature_bottom,
@@ -199,9 +202,12 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // v0.14.2 — discover every `.snxfpt` sibling inside the
     // containing `.snxlib`'s `footprints/` directory. Walks the
     // active footprint's path ancestors looking for a `.snxlib`
-    // file, then reads the sibling `footprints/` dir. Best-effort:
-    // failures (no library, missing dir, read error) just yield an
-    // empty siblings vec — the panel handles that gracefully.
+    // file, then reads the sibling `footprints/` dir. No library or
+    // no `footprints/` dir yields an empty siblings vec — the panel
+    // handles that gracefully. A directory that exists but cannot be
+    // read is not the same thing, and `list_dir_or_report` says so in
+    // the Messages panel instead of showing the library as having one
+    // footprint in it.
     let mut library_siblings: Vec<crate::panels::FootprintLibSibling> = Vec::new();
     let mut library_stem: Option<String> = None;
     let snxlib_ancestor = path.ancestors().find(|p| {
@@ -217,10 +223,9 @@ pub(super) fn build_footprint_editor_panel_ctx(
             .map(|s| s.to_string());
         let footprints_dir = snxlib_path.parent().map(|d| d.join("footprints"));
         if let Some(dir) = footprints_dir {
-            if let Ok(entries) = std::fs::read_dir(&dir) {
-                let mut paths: Vec<std::path::PathBuf> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.path())
+            let mut paths: Vec<std::path::PathBuf> =
+                crate::app::dir_listing::list_dir_or_report(&dir, "footprints")
+                    .into_iter()
                     .filter(|p| {
                         p.extension()
                             .and_then(|e| e.to_str())
@@ -228,24 +233,23 @@ pub(super) fn build_footprint_editor_panel_ctx(
                             .unwrap_or(false)
                     })
                     .collect();
-                paths.sort();
-                for p in paths {
-                    let display_name = p
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| {
-                            p.file_name()
-                                .map(|f| f.to_string_lossy().into_owned())
-                                .unwrap_or_default()
-                        });
-                    let is_active = p == path;
-                    library_siblings.push(crate::panels::FootprintLibSibling {
-                        path: p,
-                        display_name,
-                        is_active,
+            paths.sort();
+            for p in paths {
+                let display_name = p
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        p.file_name()
+                            .map(|f| f.to_string_lossy().into_owned())
+                            .unwrap_or_default()
                     });
-                }
+                let is_active = p == path;
+                library_siblings.push(crate::panels::FootprintLibSibling {
+                    path: p,
+                    display_name,
+                    is_active,
+                });
             }
         }
     } else {
@@ -281,6 +285,19 @@ pub(super) fn build_footprint_editor_panel_ctx(
         })
         .unwrap_or_default();
     let solve_warnings = editor.state.solve_warnings.clone();
+    let legacy_pad_stack_offer = editor
+        .state
+        .legacy_pad_stack_offered
+        .then(|| {
+            editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .map(|s| pad_stack_check::legacy_default_pads(s).len())
+        })
+        .flatten()
+        .filter(|n| *n > 0);
+    let paste_disabled_smd_pads = pad_stack_check::smd_pads_without_paste(&editor.state.pads);
     let selected_sketch_entity_id = editor.state.selected_sketch;
     let (selected_sketch_role, selected_sketch_is_point) = match selected_sketch_entity_id {
         Some(id) => {
@@ -573,6 +590,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         sketch_entity_count,
         sketch_constraint_count,
         last_solve,
+        rejected_conflicts: build_rejected_conflict_summaries(
+            editor.primitive(),
+            &editor.state.conflict,
+        ),
         selected_pad,
         selected_pad_count: editor
             .state
@@ -587,6 +608,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
         internal_selected_idx,
         sketch_parameters,
         solve_warnings,
+        legacy_pad_stack_offer,
+        paste_disabled_smd_pads,
         selected_sketch_entity_id,
         selected_sketch_role,
         selected_sketch_is_point,

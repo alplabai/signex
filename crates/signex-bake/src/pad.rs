@@ -24,9 +24,8 @@
 //! - `PadShape::Chamfered { chamfer_ratio_expr, corners }` bakes to
 //!   `LibPadShape::Chamfered` natively (was RoundRect approximation
 //!   in v0.13).
-//! - `PadShape::Custom(SketchProfile)` still falls back to
-//!   `LibPadShape::Rect` with a warning (sketch-profile bake lands
-//!   in v0.14.1).
+//! - `PadShape::Custom(SketchProfile)` traces the closed profile (Lines
+//!   and Arcs) into a custom pad polygon.
 //! - `PasteAperturePattern::{Grid, Custom}` warn + fall back to
 //!   `Single` (one aperture).
 //! - Closed-profile attrs other than `pad` (silk / courtyard /
@@ -35,7 +34,6 @@
 //!   `crate::silk` / `crate::courtyard` / `crate::mask` / `crate::pour`
 //!   modules. `bake_pads` no longer warns about them — the dispatcher
 //!   invokes those modules separately.
-//! - `keepout` / `board_cutout` / `v_score` bake lands in v0.14.1.
 //! - `construction = true` entities are skipped silently.
 
 use std::collections::{BTreeMap, HashMap};
@@ -56,8 +54,10 @@ use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::unit::{Quantity, UnitFamily};
+use signex_sketch::unit::UnitFamily;
 use signex_types::layer::SignexLayer;
+
+use crate::eval_util::{eval_length, opt_eval_length, strip_eq_prefix};
 
 /// Bake every entity tagged with [`PadAttr`] into a [`LibPad`]. Adds
 /// human-readable warnings to `warnings` for v0.14+ features.
@@ -68,16 +68,25 @@ pub fn bake_pads(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    // Build the params AST once; per-entity calls share it. Each entity
-    // re-wraps it into an EvalContext to slot in the optional
-    // array_index for that bake (None for direct, non-array bakes).
-    let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
+    // Build the params AST and its EvalContext once; every direct
+    // (non-array) pad bake shares it, with no array_index.
+    let params_ast = crate::params::params_ast(sketch, params_canonical);
+    let ctx = EvalContext {
+        params: params_ast.clone(),
+        array_index: None,
+    };
+
+    // An array source is baked by `bake_arrays` as instance 0, numbered by the
+    // array's scheme (and possibly depopulated). Baking it here as well would
+    // stack a second pad, with the source's own number, on top of instance 0.
+    // Skipping the source here, rather than instance 0 there, keeps the
+    // array's numbering and depopulation indices intact. An array that is
+    // skipped with a warning (zero count, over the cap, ...) produces no
+    // instance 0, so its source is baked here like any other pad.
+    let array_sources = claimed_array_sources(sketch, solve, &params_ast);
 
     for entity in &sketch.entities {
-        if entity.bake_skipped() {
+        if entity.bake_skipped() || array_sources.contains(&entity.id) {
             continue;
         }
         let pad_attr = match entity.pad.as_ref() {
@@ -86,16 +95,7 @@ pub fn bake_pads(
         };
 
         let pad = bake_one_pad(
-            entity.id,
-            pad_attr,
-            &params_ast,
-            None,
-            0.0,
-            0.0,
-            None,
-            sketch,
-            solve,
-            warnings,
+            entity.id, pad_attr, &ctx, 0.0, 0.0, None, sketch, solve, warnings,
         )?;
         out.push(pad);
     }
@@ -108,6 +108,34 @@ pub fn bake_pads(
     Ok(())
 }
 
+/// The sources of the arrays that actually place pads. An array that bakes
+/// nothing without a warning (every instance depopulated) still owns its
+/// source.
+fn claimed_array_sources(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    params_ast: &BTreeMap<String, ExprNode>,
+) -> std::collections::HashSet<SketchEntityId> {
+    sketch
+        .arrays
+        .iter()
+        .filter(|array| {
+            let mut placed = Vec::new();
+            let mut skipped = Vec::new();
+            let baked = crate::array::bake_one_array(
+                array,
+                params_ast,
+                sketch,
+                solve,
+                &mut placed,
+                &mut skipped,
+            );
+            baked.is_ok() && (!placed.is_empty() || skipped.is_empty())
+        })
+        .map(|array| array.kind.source())
+        .collect()
+}
+
 /// Per-pad bake — exposed `pub(crate)` so `array::bake_arrays` can
 /// reuse the body without code duplication.
 ///
@@ -115,12 +143,14 @@ pub fn bake_pads(
 /// the pad's own `offset_x_expr` / `offset_y_expr`.
 /// `extra_pad_number`, when `Some`, overrides `pad_attr.number`
 /// (LinearArray numbering scheme).
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "10 arguments: the full pad geometry is passed positionally rather than boxed into a struct the callers do not otherwise need"
+)]
 pub(crate) fn bake_one_pad(
     sketch_point_id: SketchEntityId,
     pad_attr: &PadAttr,
-    params_ast: &BTreeMap<String, ExprNode>,
-    array_index: Option<(usize, usize)>,
+    ctx: &EvalContext,
     extra_dx: f64,
     extra_dy: f64,
     extra_pad_number: Option<String>,
@@ -128,11 +158,6 @@ pub(crate) fn bake_one_pad(
     solve: &FullSolveOutput,
     warnings: &mut Vec<String>,
 ) -> Result<LibPad, SketchError> {
-    let ctx = EvalContext {
-        params: params_ast.clone(),
-        array_index,
-    };
-
     // Look up the sketch point.
     let (px, py) = point_xy(
         sketch_point_id,
@@ -143,19 +168,19 @@ pub(crate) fn bake_one_pad(
     .ok_or(SketchError::EntityNotFound(sketch_point_id))?;
 
     // Position = sketch point + array offset + per-pad authored offset.
-    let ox = opt_eval_mm(&pad_attr.offset_x_expr, &ctx)?.unwrap_or(0.0);
-    let oy = opt_eval_mm(&pad_attr.offset_y_expr, &ctx)?.unwrap_or(0.0);
+    let ox = opt_eval_length(&pad_attr.offset_x_expr, ctx)?.unwrap_or(0.0);
+    let oy = opt_eval_length(&pad_attr.offset_y_expr, ctx)?.unwrap_or(0.0);
     let position = [px + extra_dx + ox, py + extra_dy + oy];
 
-    let size_x = eval_mm(&pad_attr.size_x_expr, &ctx)?;
-    let size_y = eval_mm(&pad_attr.size_y_expr, &ctx)?;
+    let size_x = eval_length(&pad_attr.size_x_expr, ctx)?;
+    let size_y = eval_length(&pad_attr.size_y_expr, ctx)?;
 
-    let rotation = rotation_deg(&pad_attr.rotation_expr, &ctx)?;
+    let rotation = rotation_deg(&pad_attr.rotation_expr, ctx)?;
 
     let pad_number = extra_pad_number.unwrap_or_else(|| pad_attr.number.clone());
     let is_fiducial = pad_attr.kind == PadKind::Fiducial;
 
-    let mask_margin = match opt_eval_mm(&pad_attr.mask_margin_expr, &ctx)? {
+    let mask_margin = match opt_eval_length(&pad_attr.mask_margin_expr, ctx)? {
         Some(v) => Some(v),
         None if is_fiducial => Some(1.0),
         None => None,
@@ -171,13 +196,13 @@ pub(crate) fn bake_one_pad(
         }
         None
     } else {
-        opt_eval_mm(&pad_attr.paste_margin_expr, &ctx)?
+        opt_eval_length(&pad_attr.paste_margin_expr, ctx)?
     };
 
     let drill = match &pad_attr.drill {
         Some(d) => Some(LibDrill {
-            diameter: eval_mm(&d.diameter_expr, &ctx)?,
-            slot_length: opt_eval_mm(&d.slot_length_expr, &ctx)?,
+            diameter: eval_length(&d.diameter_expr, ctx)?,
+            slot_length: opt_eval_length(&d.slot_length_expr, ctx)?,
         }),
         None => None,
     };
@@ -199,7 +224,7 @@ pub(crate) fn bake_one_pad(
     } else {
         bake_shape(
             &pad_attr.shape,
-            &ctx,
+            ctx,
             warnings,
             &pad_number,
             sketch,
@@ -227,10 +252,10 @@ pub(crate) fn bake_one_pad(
         derive_layers(pad_attr.kind, pad_attr.side)
     };
 
-    let mask_top = opt_eval_mm(&pad_attr.stack.mask_top_expr, &ctx)?;
-    let mask_bottom = opt_eval_mm(&pad_attr.stack.mask_bottom_expr, &ctx)?;
-    let paste_top = opt_eval_mm(&pad_attr.stack.paste_top_expr, &ctx)?;
-    let paste_bottom = opt_eval_mm(&pad_attr.stack.paste_bottom_expr, &ctx)?;
+    let mask_top = opt_eval_length(&pad_attr.stack.mask_top_expr, ctx)?;
+    let mask_bottom = opt_eval_length(&pad_attr.stack.mask_bottom_expr, ctx)?;
+    let paste_top = opt_eval_length(&pad_attr.stack.paste_top_expr, ctx)?;
+    let paste_bottom = opt_eval_length(&pad_attr.stack.paste_bottom_expr, ctx)?;
 
     Ok(LibPad {
         number: pad_number,
@@ -272,29 +297,6 @@ pub(crate) fn bake_one_pad(
 // ─────────────────────────────────────────────────────────────────────
 // Helpers — expression eval
 // ─────────────────────────────────────────────────────────────────────
-
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace so authored expressions like `= pad_w` parse cleanly.
-/// Matches the convention used by [`signex_sketch::parameter`] and
-/// [`signex_sketch::solver::residual::resolve_dim`].
-fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
-}
-
-fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
-    let body = strip_eq_prefix(expr);
-    let ast = parse(body).map_err(SketchError::Expr)?;
-    let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
-    q.as_mm().map_err(SketchError::Unit)
-}
-
-fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, SketchError> {
-    match expr.as_deref() {
-        Some(e) => Ok(Some(eval_mm(e, ctx)?)),
-        None => Ok(None),
-    }
-}
 
 fn rotation_deg(expr: &Option<String>, ctx: &EvalContext) -> Result<f64, SketchError> {
     match expr.as_deref() {

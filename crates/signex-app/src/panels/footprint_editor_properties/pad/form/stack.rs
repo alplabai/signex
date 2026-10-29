@@ -1,10 +1,10 @@
 //! Pad Stack section renderer, split out of `form/mod.rs` to keep both
 //! files under the 800-line cap (ADR-0001 #165). Verbatim code motion.
 
+use iced::Length;
 use iced::widget::{Column, container, text};
-use iced::{Color, Length};
 
-use super::super::super::super::{CollapsedSections, PanelMsg};
+use super::super::super::super::{CollapsedSections, PanelMsg, PanelPalette};
 use super::super::super::{fp_is_collapsed, props_section_header};
 use super::super::stack_preview::{
     ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
@@ -14,6 +14,10 @@ use super::super::table::{
     pad_table_input_cell, pad_table_picklist_cell, pad_table_row,
 };
 use super::*;
+use crate::styles::Spacing;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.20 — render the "Pad Stack" section: copper shape + size,
 /// hole, per-side paste / mask expansions, tented flags, thermal
@@ -35,12 +39,16 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
     target: PadEditTarget,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     shape_params: &'a [crate::panels::PadShapeParamSummary],
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     col = col.push(props_section_header(
         "Pad Stack",
         "fp_pad_stack",
@@ -92,9 +100,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
             values,
             current_shape,
             target,
-            muted,
-            primary,
-            border_c,
+            palette,
             // Only the first (top) row drives shape / size; mid / bottom
             // mirror until the v0.21 schema lands.
             is_first,
@@ -224,7 +230,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 ),
             ],
             &[2, 2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -234,7 +239,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         // the hole centre. Only shown for Multi-Layer pads.
         col = col.push(
             container(text("Hole Details").size(9).color(muted))
-                .padding([6, 8])
+                .padding([6.0, SP.m])
                 .width(Length::Fill),
         );
         let tol_p_buf = values
@@ -349,7 +354,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -390,7 +394,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -440,7 +443,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 3, 1],
-            muted,
             primary,
             border_c,
         ));
@@ -480,7 +482,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
                 }),
             ],
             &[2, 3, 1],
-            muted,
             primary,
             border_c,
         ));

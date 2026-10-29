@@ -4,7 +4,7 @@ use crate::keymap::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     error::Error,
     fmt, io,
     path::{Path, PathBuf},
@@ -179,6 +179,48 @@ impl ShortcutProfileSet {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompiledKeymap {
     bindings: Vec<CompiledBinding>,
+    /// Per-command menu label, derived from `bindings` at compile time so
+    /// `shortcut_label` is a map hit instead of a reverse scan plus a
+    /// `String` join per menu row per frame (#1380).
+    labels: BTreeMap<AppCommandId, String>,
+}
+
+/// Per command, the label of its last `Command` binding that no later
+/// `Unbind` of the same command, context and strokes shadows. A command
+/// with no such binding has no entry.
+///
+/// The hint is context-free: it does not know which context the menu is
+/// shown in, and an `Unbind` shadows a binding only in its own context
+/// (the same rule `shortcut_label_linear` states independently).
+fn label_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, String> {
+    let mut labels = BTreeMap::new();
+    // Reverse scan; `unbinds` holds the unbinds that come after the
+    // binding under inspection.
+    let mut unbinds: BTreeSet<(&AppCommandId, ShortcutContext, &[KeyStroke])> = BTreeSet::new();
+    for binding in bindings.iter().rev() {
+        match &binding.action {
+            ShortcutBindingAction::Unbind(command) => {
+                unbinds.insert((command, binding.context, &binding.sequence));
+            }
+            ShortcutBindingAction::Command(command) => {
+                let shadowed =
+                    unbinds.contains(&(command, binding.context, binding.sequence.as_slice()));
+                if !shadowed && !labels.contains_key(command) {
+                    labels.insert(command.clone(), display_sequence(&binding.sequence));
+                }
+            }
+            ShortcutBindingAction::NoAction => {}
+        }
+    }
+    labels
+}
+
+fn display_sequence(sequence: &[KeyStroke]) -> String {
+    sequence
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 impl CompiledKeymap {
@@ -200,7 +242,8 @@ impl CompiledKeymap {
                 }
             }
         }
-        Self { bindings }
+        let labels = label_index(&bindings);
+        Self { bindings, labels }
     }
 
     pub fn lookup(&self, input: &[KeyStroke], contexts: &[ShortcutContext]) -> KeyLookup {
@@ -215,7 +258,11 @@ impl CompiledKeymap {
             })
             .collect::<Vec<_>>();
 
-        let pending = matches.iter().any(|(pending, ..)| *pending);
+        // #1378: only a live command can make a shorter chord wait; an
+        // `Unbind` / `NoAction` that starts with the same strokes must not.
+        let pending = matches.iter().any(|(pending, _, _, binding)| {
+            *pending && matches!(binding.action, ShortcutBindingAction::Command(_))
+        });
         matches.retain(|(pending, ..)| !*pending);
         let matched = !matches.is_empty();
         matches.sort_by(|(_, depth_a, index_a, _), (_, depth_b, index_b, _)| {
@@ -231,24 +278,28 @@ impl CompiledKeymap {
     }
 
     pub fn shortcut_label(&self, command: &AppCommandId) -> Option<String> {
-        // The last matching binding wins (later profile layers / sections
-        // override earlier ones), hence the reversed scan.
-        let binding = self
-            .bindings
+        self.labels.get(command).cloned()
+    }
+
+    /// A quadratic restatement of the label rule, kept so a test can prove
+    /// the index agrees with it.
+    #[cfg(test)]
+    pub(crate) fn shortcut_label_linear(&self, command: &AppCommandId) -> Option<String> {
+        self.bindings
             .iter()
+            .enumerate()
             .rev()
-            .find(|binding| binding.action.command() == Some(command))?;
-        match &binding.action {
-            ShortcutBindingAction::Command(_) => Some(
-                binding
-                    .sequence
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            ),
-            ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
-        }
+            .find_map(|(index, binding)| {
+                let ShortcutBindingAction::Command(bound) = &binding.action else {
+                    return None;
+                };
+                let shadowed = self.bindings[index + 1..].iter().any(|later| {
+                    matches!(&later.action, ShortcutBindingAction::Unbind(c) if c == bound)
+                        && later.context == binding.context
+                        && later.sequence == binding.sequence
+                });
+                (bound == command && !shadowed).then(|| display_sequence(&binding.sequence))
+            })
     }
 
     pub fn conflicts(&self) -> Vec<BindingConflict> {
@@ -261,26 +312,26 @@ impl CompiledKeymap {
             .filter(|binding| matches!(binding.action, ShortcutBindingAction::Command(_)))
         {
             let key = (binding.context, binding.sequence.clone());
-            if let Some(existing) = seen.insert(key, binding) {
-                if existing.action != binding.action {
-                    let Some(first_command) = existing.action.command().cloned() else {
-                        continue;
-                    };
-                    let Some(second_command) = binding.action.command().cloned() else {
-                        continue;
-                    };
-                    conflicts.push(BindingConflict {
-                        context: binding.context,
-                        trigger: binding
-                            .sequence
-                            .iter()
-                            .map(ToString::to_string)
-                            .collect::<Vec<_>>()
-                            .join(" "),
-                        first_command,
-                        second_command,
-                    });
-                }
+            if let Some(existing) = seen.insert(key, binding)
+                && existing.action != binding.action
+            {
+                let Some(first_command) = existing.action.command().cloned() else {
+                    continue;
+                };
+                let Some(second_command) = binding.action.command().cloned() else {
+                    continue;
+                };
+                conflicts.push(BindingConflict {
+                    context: binding.context,
+                    trigger: binding
+                        .sequence
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    first_command,
+                    second_command,
+                });
             }
         }
         conflicts
@@ -352,11 +403,11 @@ pub struct BindingConflict {
 }
 
 pub fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|base| config_path_for_dir(&base))
+    crate::config_root::config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
 }
 
 pub fn config_path_for_dir(base: &Path) -> PathBuf {
-    base.join("signex").join(USER_SHORTCUTS_FILE_NAME)
+    crate::config_root::config_root_for_dir(base).join(USER_SHORTCUTS_FILE_NAME)
 }
 
 pub fn load_profile_set() -> Result<ShortcutProfileSet, ProfileLoadError> {
@@ -393,6 +444,37 @@ pub fn save_profile_set(set: &ShortcutProfileSet) -> Result<(), ProfileLoadError
 pub fn save_profile_set_at(path: &Path, set: &ShortcutProfileSet) -> Result<(), ProfileLoadError> {
     let source = export_custom_profiles(set)?;
     signex_types::atomic_io::atomic_write(path, source.as_bytes()).map_err(ProfileLoadError::Io)
+}
+
+/// What a restore recovered out of a backup, and what it could not.
+pub struct RestoredProfiles {
+    /// The profile set the backup describes, built-ins included.
+    pub set: ShortcutProfileSet,
+    /// `Some(id)` when the backup's `active_profile` named a profile
+    /// that is not in it. The custom profiles are all present and this
+    /// is the one thing that could not be honoured, so the set comes
+    /// back with the built-in default active rather than failing the
+    /// whole restore over a dangling pointer. That is the single most
+    /// likely reason the file failed to load in the first place.
+    pub active_profile_reset: Option<String>,
+}
+
+/// Read the profiles out of a backup file, through the normal loader.
+///
+/// Deliberately NOT "copy the `.bak` back over the live file". The
+/// backup holds the file that failed to load; putting it back would
+/// reproduce the same failure on the next launch. Parsing it instead
+/// means an unrepairable backup fails here, cleanly, with both files
+/// untouched — and a backup whose only fault was a dangling
+/// `active_profile` is recovered in full.
+pub fn read_backup_profiles_at(bak: &Path) -> Result<RestoredProfiles, ProfileLoadError> {
+    let source = std::fs::read_to_string(bak).map_err(ProfileLoadError::Io)?;
+    let mut set = ShortcutProfileSet::built_ins()?;
+    let active_profile_reset = TomlShortcutConfig::parse(&source)?.apply_to_recovering(&mut set)?;
+    Ok(RestoredProfiles {
+        set,
+        active_profile_reset,
+    })
 }
 
 pub fn import_custom_profile(source: &str) -> Result<ShortcutProfile, ProfileLoadError> {
@@ -467,11 +549,42 @@ impl TomlShortcutConfig {
     }
 
     fn apply_to(self, set: &mut ShortcutProfileSet) -> Result<(), ProfileLoadError> {
+        // Delegates so the loading and the recovering path cannot drift:
+        // a dangling `active_profile` is a hard error here, and the only
+        // difference in `apply_to_recovering` is that it hands the id
+        // back instead.
+        match self.apply_to_recovering(set)? {
+            Some(id) => Err(ProfileLoadError::UnknownActiveProfile(id)),
+            None => Ok(()),
+        }
+    }
+
+    /// Apply the config, treating an unresolvable `active_profile` as
+    /// recoverable rather than fatal (#603).
+    ///
+    /// Order is load-bearing and already was: every custom profile is
+    /// inserted before `set_active_profile` runs, so by the time the
+    /// active pointer can fail the profiles are all in `set`. That is
+    /// what makes recovery possible at all — the one thing that failed
+    /// is the pointer, and the built-in default is a fine substitute
+    /// for it.
+    ///
+    /// Returns the id that could not be honoured, or `None` when the
+    /// config applied in full.
+    fn apply_to_recovering(
+        self,
+        set: &mut ShortcutProfileSet,
+    ) -> Result<Option<String>, ProfileLoadError> {
         self.signex_settings.validate()?;
         for profile in self.keyboard_shortcuts.profiles {
             set.insert_custom_profile(profile.into_profile()?)?;
         }
-        set.set_active_profile(self.keyboard_shortcuts.active_profile)
+        let wanted = self.keyboard_shortcuts.active_profile;
+        match set.set_active_profile(wanted.clone()) {
+            Ok(()) => Ok(None),
+            Err(ProfileLoadError::UnknownActiveProfile(_)) => Ok(Some(wanted)),
+            Err(other) => Err(other),
+        }
     }
 }
 
@@ -620,10 +733,10 @@ impl TomlKeymapSection {
         for trigger in &binding.triggers {
             match &binding.action {
                 ShortcutBindingAction::Command(command) => {
-                    bindings.insert(trigger.display_text(), command.clone());
+                    bindings.insert(trigger.config_text(), command.clone());
                 }
                 ShortcutBindingAction::Unbind(command) => {
-                    unbind.insert(trigger.display_text(), command.clone());
+                    unbind.insert(trigger.config_text(), command.clone());
                 }
                 ShortcutBindingAction::NoAction => return Err(ProfileLoadError::NoActionExport),
             }
@@ -662,6 +775,7 @@ pub enum ProfileLoadError {
     UnknownActiveProfile(String),
     BuiltInMutation(String),
     NoActionExport,
+    UnknownBindingSlot,
 }
 
 impl fmt::Display for ProfileLoadError {
@@ -684,6 +798,9 @@ impl fmt::Display for ProfileLoadError {
             Self::UnknownActiveProfile(id) => write!(f, "unknown shortcut profile `{id}`"),
             Self::BuiltInMutation(id) => write!(f, "built-in profile `{id}` cannot be modified"),
             Self::NoActionExport => f.write_str("no-action shortcut bindings cannot be exported"),
+            Self::UnknownBindingSlot => {
+                f.write_str("that shortcut no longer exists in the profile")
+            }
         }
     }
 }

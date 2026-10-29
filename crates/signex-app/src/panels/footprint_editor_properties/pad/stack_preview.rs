@@ -2,13 +2,16 @@
 //! enums (PadShapeChoice / HoleShapeChoice / ExpansionMode) used by
 //! the pick_list rows in `pad_form`.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{container, row, text};
+use iced::{Color, Length, Theme};
 
 use super::super::super::PanelMsg;
 use super::form::PadFormValues;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.20 — Pad Stack preview. CPU-side iso-projected 3D rendering of
 /// the pad: copper top face (red), solder mask outset (blue) at the
@@ -98,13 +101,6 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             let mask_dark = iced::Color::from_rgba8(0x1F, 0x49, 0x97, 1.0);
             let copper_color = iced::Color::from_rgba8(0xD9, 0x3D, 0x3D, 1.0);
             let copper_dark = iced::Color::from_rgba8(0x99, 0x2A, 0x2A, 1.0);
-            let hole_color = iced::Color::from_rgba8(0x70, 0x70, 0x70, 1.0);
-            let hole_dark = iced::Color::from_rgba8(0x40, 0x40, 0x40, 1.0);
-
-            let is_round = matches!(
-                self.shape,
-                signex_library::PadShape::Round | signex_library::PadShape::Oval
-            );
 
             // v0.20 — generate the pad / mask outline in world-space
             // CCW order, then project each at the requested Z. The
@@ -167,7 +163,6 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                             let t = PI + (i as f32 / arc_n as f32) * FRAC_PI_2;
                             pts.push((-inner_w + r * t.cos(), -inner_h + r * t.sin()));
                         }
-                        let _ = segments;
                         pts
                     }
                     PS::Chamfered {
@@ -207,18 +202,10 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                         } else {
                             pts.push((-hw, -hh));
                         }
-                        let _ = segments;
                         pts
                     }
                     _ => vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)],
                 }
-            };
-
-            let perimeter_pts = |hw: f32, hh: f32, z: f32, segments: usize| -> Vec<iced::Point> {
-                perimeter_world(hw, hh, segments)
-                    .into_iter()
-                    .map(|(x, y)| project(x, y, z))
-                    .collect()
             };
 
             let segments = 40;
@@ -432,11 +419,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                     wall_poly.push(project(hr * t.cos(), hr * t.sin(), mask_z_bot));
                 }
                 fill_poly(&mut frame, &wall_poly, wall_silver);
-
-                let _ = hole_color;
-                let _ = hole_dark;
             }
-            let _ = (is_round, perimeter_pts); // tidied below; suppress unused warnings
 
             vec![frame.into_geometry()]
         }
@@ -453,7 +436,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             .width(Length::Fill)
             .height(Length::Fixed(160.0)),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -476,11 +459,11 @@ pub(super) fn pad_stack_tab_strip<'a>(
         let active = current == target;
         iced::widget::button(
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(if active { primary } else { muted })
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([4, 10])
+        .padding([SP.s, 10.0])
         .width(Length::FillPortion(1))
         .on_press(PanelMsg::FpEditorSetPadStackTab(target))
         .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -512,44 +495,41 @@ pub(super) fn pad_stack_tab_strip<'a>(
             mk("Top-Middle-Bottom", PadStackTab::TopMiddleBottom),
             mk("Full Stack", PadStackTab::FullStack),
         ]
-        .spacing(2)
+        .spacing(SP.xs)
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }
 
 /// v0.20 — pick_list-friendly proxy for `signex_library::PadShape`.
-/// Mirrors Altium's COPPER → Shape dropdown verbatim minus
-/// "Custom Shape" (sketch mode owns freeform geometry):
-///   Round / Rectangular / Octagonal / Rounded Rectangle /
-///   Chamfered Rectangle / Donut.
+/// Mirrors Altium's COPPER → Shape dropdown minus "Custom Shape"
+/// (sketch mode owns freeform geometry):
+///   Round / Rectangular / Rounded Rectangle / Chamfered Rectangle.
 /// Schema-mapping notes:
-///   - Octagonal / Donut have no native variant on
-///     `signex_library::PadShape` yet; both fall back to Round at
-///     bake. Round trip preserves the picker selection across
-///     sessions once we add schema variants in v0.21.
+///   - Octagonal and Donut are deliberately not offered: neither has
+///     a variant on `signex_library::PadShape`, the sketch pad
+///     schema, or the bake path, so choosing one could only be
+///     stored as Round. A picker entry that silently changes on save
+///     is a data-loss trap; add them back only together with a
+///     native schema variant and bake geometry.
 ///   - Chamfered Rectangle uses the existing `Chamfered` variant
 ///     with sensible defaults (25% chamfer, all corners).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PadShapeChoice {
     Round,
     Rectangular,
-    Octagonal,
     RoundedRectangle,
     ChamferedRectangle,
-    Donut,
 }
 
 impl PadShapeChoice {
     pub(super) const ALL: &'static [PadShapeChoice] = &[
         PadShapeChoice::Round,
         PadShapeChoice::Rectangular,
-        PadShapeChoice::Octagonal,
         PadShapeChoice::RoundedRectangle,
         PadShapeChoice::ChamferedRectangle,
-        PadShapeChoice::Donut,
     ];
 
     pub(super) fn from_lib(s: &signex_library::PadShape) -> Self {
@@ -558,10 +538,10 @@ impl PadShapeChoice {
             signex_library::PadShape::Rect => PadShapeChoice::Rectangular,
             signex_library::PadShape::RoundRect { .. } => PadShapeChoice::RoundedRectangle,
             signex_library::PadShape::Chamfered { .. } => PadShapeChoice::ChamferedRectangle,
-            // Oval / Custom / Octagonal / Donut have no 1:1 schema
-            // home today; collapse to Round so the picker stays
-            // consistent. Custom Shape is intentionally absent — use
-            // sketch mode for freeform geometry.
+            // Oval / Custom have no picker entry; the picker shows
+            // Round for them and only rewrites the pad when the user
+            // actually picks a shape. Custom Shape is intentionally
+            // absent — use sketch mode for freeform geometry.
             _ => PadShapeChoice::Round,
         }
     }
@@ -577,11 +557,6 @@ impl PadShapeChoice {
                 chamfer_ratio: 0.25,
                 corners: ChamferedCorners::all(),
             },
-            // v0.21 schema follow-up: native Octagonal + Donut. Until
-            // then Round is the closest mappable shape (Donut's
-            // hole comes from the drill anyway).
-            PadShapeChoice::Octagonal => signex_library::PadShape::Round,
-            PadShapeChoice::Donut => signex_library::PadShape::Round,
         }
     }
 }
@@ -591,10 +566,8 @@ impl std::fmt::Display for PadShapeChoice {
         f.write_str(match self {
             PadShapeChoice::Round => "Round",
             PadShapeChoice::Rectangular => "Rectangular",
-            PadShapeChoice::Octagonal => "Octagonal",
             PadShapeChoice::RoundedRectangle => "Rounded Rectangle",
             PadShapeChoice::ChamferedRectangle => "Chamfered Rectangle",
-            PadShapeChoice::Donut => "Donut",
         })
     }
 }
@@ -641,5 +614,23 @@ impl std::fmt::Display for ExpansionMode {
             ExpansionMode::Rule => "Rule Expansion",
             ExpansionMode::Manual => "Manual",
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PadShapeChoice;
+
+    /// #964: whatever the shape picker offers must come back as the
+    /// same choice once stored, or the pad changes under the user.
+    #[test]
+    fn every_offered_shape_round_trips_through_the_library_shape() {
+        for choice in PadShapeChoice::ALL {
+            assert_eq!(
+                PadShapeChoice::from_lib(&choice.to_lib()),
+                *choice,
+                "{choice} is stored as a different shape"
+            );
+        }
     }
 }

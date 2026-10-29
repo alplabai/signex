@@ -7,7 +7,7 @@
 //! holds raw TSV inside a TOML literal multi-line string so the data is
 //! line-diffable in git and editable in any spreadsheet.
 //!
-//! Stage 1 (this module) lands the storage shape only:
+//! This module owns the storage shape:
 //!  * [`SnxlibManifest`] — the manifest header (everything outside the
 //!    `[tables.*]` blocks). `library_id` lives at the document root, not
 //!    inside `[library]`, matching the v0.9 format.
@@ -18,12 +18,13 @@
 //!    with a map of parsed tables. [`LibraryFile::parse`] and
 //!    [`LibraryFile::write`] are the round-trip entrypoints.
 //!
-//! Reserved-core-column validation, typed accessors for fields like
-//! `row_id` / `version` / `released`, and the cascade engine are later
-//! stages of `v0.9-snxlib-as-file-plan.md` — Stage 1 only establishes
-//! the storage shape and the round-trip contract.
+//! This module is the storage shape and the round-trip contract only.
+//! Reserved-core-column validation and typed accessors for fields like
+//! `row_id` / `version` / `released` live with the adapters, and the
+//! cascade engine in [`crate::cascade`].
 
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -31,9 +32,11 @@ use uuid::Uuid;
 use crate::adapter::LibraryError;
 use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
+pub use layout::SourceLayout;
+
 /// Format token written at the top of every `.snxlib`. Bumping this is a
 /// wire-format break — older Signex versions refuse to open the file.
-pub const FORMAT_TOKEN: &str = "snxlib/1";
+pub const FORMAT_TOKEN: &str = "snxlib/2";
 
 /// Top-level on-disk shape of a `.snxlib` file.
 ///
@@ -48,6 +51,10 @@ pub struct LibraryFile {
     /// sorted iteration drives deterministic write output for clean
     /// git diffs.
     pub tables: BTreeMap<String, LibraryTable>,
+    /// The text this file was parsed from, when it holds keys the structs
+    /// above do not model; [`LibraryFile::write`] edits that text in place
+    /// so those keys survive (#1435). Not part of `==`.
+    pub layout: SourceLayout,
 }
 
 /// Manifest header — everything in a `.snxlib` *except* the
@@ -96,6 +103,10 @@ pub struct LibrarySection {
     pub description: Option<String>,
 }
 
+/// Fixes a TSV row whose cell count mismatches its header; see
+/// [`LibraryFile::parse_with`].
+pub type RowRepair<'a> = &'a dyn Fn(&[String], &[&str]) -> Option<Vec<String>>;
+
 /// Parsed in-memory view of one `[tables.<name>]` block.
 ///
 /// `columns` is the TSV header row, in declaration order (preserved
@@ -108,11 +119,24 @@ pub struct LibrarySection {
 /// validation on edit, and rendering hints (checkboxes for bool, drop-
 /// downs for enum). Columns without an entry default to
 /// [`ColumnType::String`] so untyped tables keep working unchanged.
+///
+/// `pricing` is the cached distributor price of each row, keyed by the
+/// row's `row_id` text. It is a sidecar like `column_types`: written as
+/// `[tables.<name>.pricing.<row_id>.<distributor>.<sku>]` sub-tables only when
+/// non-empty, so a library without cached prices is byte-identical to one
+/// written before the sidecar existed. See `docs/architecture/snxlib-pricing.md`.
+///
+/// Rows are shared, copy-on-write: cloning a table copies one pointer per
+/// row, and an edit replaces only the rows it touches (`Arc::make_mut` or a
+/// new `Arc`). An edit works on a clone of the whole library (#831), so on
+/// a large library this is what keeps that clone and the drop of the old
+/// copy cheap (#416).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LibraryTable {
     pub columns: Vec<String>,
-    pub rows: Vec<LibraryRow>,
+    pub rows: Vec<Arc<LibraryRow>>,
     pub column_types: BTreeMap<String, ColumnType>,
+    pub pricing: BTreeMap<String, crate::pricing::RowPricing>,
 }
 
 /// Per-column type declared in `[tables.<name>.column_types]`.
@@ -229,7 +253,7 @@ impl<'de> Deserialize<'de> for ColumnType {
 
 /// One row inside a [`LibraryTable`]. Cell lookup is by column name —
 /// see [`LibraryTable::cell`] for a schema-aware accessor.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LibraryRow {
     pub cells: BTreeMap<String, String>,
 }
@@ -271,8 +295,8 @@ pub enum LibraryFileError {
         expected: usize,
     },
     #[error(
-        "table {table:?}: row {row_index} cell {column:?} contains a tab or newline; \
-         TSV cells must be free of \\t and \\n"
+        "table {table:?}: row {row_index} cell {column:?} contains a tab, newline or other control character; \
+         TSV cells must be free of them"
     )]
     DisallowedControlInCell {
         table: String,
@@ -280,8 +304,8 @@ pub enum LibraryFileError {
         column: String,
     },
     #[error(
-        "table {table:?}: column {column:?} name contains a tab or newline; \
-         TSV column names must be free of \\t and \\n"
+        "table {table:?}: column {column:?} name contains a tab, newline or other control character; \
+         TSV column names must be free of them"
     )]
     DisallowedControlInColumn { table: String, column: String },
     #[error(
@@ -289,6 +313,29 @@ pub enum LibraryFileError {
          (\"'''\") which would terminate the embedded TOML literal multi-line string"
     )]
     DisallowedTripleQuoteInCell { table: String, column: String },
+    #[error(
+        "table {table:?}: column name {column:?} contains the literal triple single-quote \
+         (\"'''\") which would terminate the embedded TOML literal multi-line string"
+    )]
+    DisallowedTripleQuoteInColumn { table: String, column: String },
+    #[error(
+        "table {table:?}: cached price of row {row_id:?} from {distributor:?} is not storable: {reason}"
+    )]
+    InvalidPricing {
+        table: String,
+        row_id: String,
+        distributor: String,
+        reason: String,
+    },
+    #[error("class key {key:?} is declared more than once; class keys must be unique")]
+    DuplicateClassKey { key: String },
+    #[error("the written .snxlib document does not parse back: {reason}")]
+    WrittenDocumentUnreadable { reason: String },
+    #[error(
+        "the written .snxlib document does not read back as the same table {table:?}; \
+         refusing to overwrite the file with lossy output"
+    )]
+    WrittenDocumentDiffers { table: String },
     #[error(
         "table {table:?}: column_types declares {column:?} but the TSV header \
          does not include that column"
@@ -301,10 +348,23 @@ impl From<LibraryFileError> for LibraryError {
     /// channel so callers can `?` through `LibraryAdapter` methods without
     /// matching on the inner enum.
     fn from(value: LibraryFileError) -> Self {
-        LibraryError::Backend(value.to_string())
+        match value {
+            // Encoding our own value failed: a program bug, not the user's data.
+            LibraryFileError::TomlSer(_) => LibraryError::Backend(value.to_string()),
+            _ => LibraryError::InvalidData(value.to_string()),
+        }
     }
 }
 
 mod codec;
+mod layout;
+#[cfg(test)]
+mod layout_tests;
+mod row_lines;
+pub(crate) use row_lines::RowLines;
+#[cfg(test)]
+mod pricing_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod write_equivalence_tests;

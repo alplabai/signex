@@ -4,9 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use crate::render_config::{
-    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
-};
+use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Column, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -15,20 +13,28 @@ use crate::app::view::dialogs::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
-use crate::styles::MODAL_CORNER_RADIUS;
+use crate::styles::{MODAL_CORNER_RADIUS, Spacing, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
+mod annotation;
 mod appearance;
 mod component_classes;
 mod distributors;
-mod erc;
+mod editing;
 mod keymap;
+mod profiles;
 mod widgets;
 
+use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
 use distributors::content_library_distributors;
-use erc::content_erc;
+use editing::content_editing;
 use keymap::content_keyboard_shortcuts;
+use profiles::content_profiles;
+pub use profiles::{ProfileAction, ProfilesMsg};
 
 // Shared style / text / button helpers live in `widgets`; re-export them
 // at their original module-local visibility so the shell here and every
@@ -43,12 +49,17 @@ pub(in crate::preferences) use widgets::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Schematic annotation settings (the undo scope of an annotate run).
+    Annotation,
+    /// Schematic editing behaviour (rubber-banding wires on move).
+    Editing,
     /// Keyboard-shortcut profile editor — pick / create / delete /
     /// import / export a profile and rebind individual commands via the
     /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
     Keyboard,
-    /// Electrical Rule Check — per-rule severity override.
-    Erc,
+    /// Rule profiles: the library of named ERC rule sets, the default for
+    /// new projects, and the editor for each profile (#1608).
+    RuleProfiles,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
     LibraryDistributors,
     /// User-editable component-class registry — surfaces in the New
@@ -56,14 +67,16 @@ pub enum PrefNav {
     /// `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
-    // Future: Editor, Shortcuts, ...
+    // Future: Editor, ...
 }
 
 impl PrefNav {
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Annotation,
+        PrefNav::Editing,
         PrefNav::Keyboard,
-        PrefNav::Erc,
+        PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
     ];
@@ -71,8 +84,10 @@ impl PrefNav {
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Annotation => "Annotation",
+            PrefNav::Editing => "Editing",
             PrefNav::Keyboard => "Keyboard Shortcuts",
-            PrefNav::Erc => "Electrical Rules",
+            PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             // Now a *seed* pane — the actual class registry is
             // per-library inside each `.snxlib`'s manifest. This
@@ -86,8 +101,10 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Annotation => "Schematic",
+            PrefNav::Editing => "Schematic",
             PrefNav::Keyboard => "System",
-            PrefNav::Erc => "Validation",
+            PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
         }
@@ -98,6 +115,8 @@ impl PrefNav {
 
 #[derive(Debug, Clone)]
 pub enum PrefMsg {
+    /// Inert message: handled by doing nothing.
+    Noop,
     /// Navigate to a category.
     Nav(PrefNav),
     /// Close without saving (only if not dirty; app ignores if dirty).
@@ -106,35 +125,68 @@ pub enum PrefMsg {
     DiscardAndClose,
     /// Commit the current draft and keep the dialog open.
     Save,
+    /// Every `prefs.json` write a Save started has finished (#1351). Save
+    /// returns them as background tasks, so the file-health probe that
+    /// reports a refused write has to wait for this.
+    SaveWritesFinished,
     /// Update the draft theme (not applied until Save).
     DraftTheme(ThemeId),
     /// Update the draft UI font (not applied until Save).
     DraftFont(String),
-    /// Update draft power port drawing style (applies as live preview).
-    DraftPowerPortStyle(PowerPortStyle),
-    /// Update draft global/hier label drawing style (applies as live preview).
-    DraftLabelStyle(LabelStyle),
-    /// Update draft hierarchical-sheet drawing style (applies as live preview).
-    DraftMultisheetStyle(MultisheetStyle),
     /// Update draft visible-grid render style (applies as live preview).
     DraftGridStyle(GridStyle),
+    /// Toggle the experimental PCB GPU render. Applies as live preview,
+    /// persisted on Save.
+    DraftPcbGpuRender(bool),
+    /// Choose the undo scope of an annotate run. Persisted on Save.
+    DraftAnnotateUndo(crate::annotate_undo::AnnotateUndo),
+    /// Toggle "Keep wires connected when moving". Persisted on Save.
+    DraftMoveKeepsWires(bool),
+    /// Toggle "Select by drag direction". Persisted on Save.
+    DraftDragDirectionSelect(bool),
+    /// Toggle "Show net info on hover". Persisted on Save.
+    DraftNetHoverEnabled(bool),
+    /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
+    DraftIncrementStep(i32),
+    /// Choose what a pasted part is called. Persisted on Save.
+    DraftPasteDesignators(crate::paste_prefs::PasteDesignators),
+    /// Choose where the window's minimize / maximize / close buttons go.
+    /// Persisted on Save.
+    DraftWindowControlsPlacement(crate::chrome::controls::WindowControlsPlacement),
+    /// Toggle opt-in autosave of recovery copies (#104). Persisted on Save.
+    DraftAutosaveEnabled(bool),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
     DraftSymbolGridStyle(GridStyle),
+    /// Update the wheel-zoom speed (percent per notch, 5..=50) shared by
+    /// every canvas. Persisted on Save.
+    DraftZoomStepPercent(u8),
+    /// Update the interface scale (percent, 80..=200 in 10 % steps).
+    /// Applied to every window on Save.
+    DraftUiScalePercent(u16),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
     ExportTheme,
+    /// Outcome of the theme-export write (#533). `Ok` carries the path
+    /// actually written, `Err` the `std::io::Error` rendered for the
+    /// user. Cancelling the save dialog emits nothing — only a real
+    /// attempt reports. Without this the write result was discarded and
+    /// a failed export looked identical to a successful one.
+    ThemeExportFinished(Result<std::path::PathBuf, String>),
     /// Loaded JSON content from an import pick dialog.
     ThemeFileLoaded(String),
-    /// Set the severity override for an ERC rule. Setting the override
-    /// to the default value clears the entry instead.
-    DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
-    /// Clear every ERC severity override — reset to defaults.
-    ResetErcSeverities,
+    /// Rule Profiles pane (#1608). Its edits are written to the profile
+    /// files at once, so they are not drafts and never mark the dialog dirty.
+    Profiles(ProfilesMsg),
+    /// Move an unloadable `prefs.json` aside so writes can resume from a
+    /// fresh file, keeping the original on disk beside it (#602). Offered
+    /// only from the banner, and the handler re-checks the file before
+    /// acting: a healthy file is never moved.
+    ResetPrefsFile,
     /// Library → Distributor APIs pane forwarded a settings message.
     /// Folded into `PrefMsg` so the Preferences modal can mount the
     /// live panel as a first-class pane without breaking the
@@ -175,21 +227,28 @@ pub enum PrefMsg {
     KeymapCreateCustomProfile,
     /// Delete the active custom profile draft (built-ins are protected).
     KeymapDeleteActiveProfile,
+    /// Recover the profiles held in `keyboard_shortcuts.toml.bak` (#603).
+    /// Reads the backup through the normal loader — it is not a
+    /// file-level copy back, because the backup is by definition the file
+    /// that failed to load.
+    KeymapRestoreFromBackup,
+    /// Delete `keyboard_shortcuts.toml.bak` (#603). Only ever from this
+    /// explicit action; no save path removes it.
+    KeymapDiscardBackup,
     /// Open a file picker to import a custom profile (`.toml`).
     KeymapImportProfile,
     /// Loaded profile source from the import pick dialog.
     KeymapProfileLoaded(String),
     /// Save the active profile to a `.toml` file.
     KeymapExportProfile,
-    /// Direct text edit of a binding's trigger (kept for API parity;
-    /// the recorder is the primary edit path).
-    KeymapBindingChanged {
-        command: crate::keymap::AppCommandId,
-        context: crate::keymap::ShortcutContext,
-        trigger: String,
-    },
+    /// Outcome of the keymap-export write (#533) — same shape and same
+    /// reason as [`Self::ThemeExportFinished`]. Reports through
+    /// `preferences_keymap_status`, where the serialization failure at
+    /// the same call site already reported.
+    KeymapExportFinished(Result<std::path::PathBuf, String>),
     /// Open the chord recorder for a specific binding.
     KeymapRecorderOpen {
+        slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,
@@ -216,10 +275,87 @@ pub enum PrefMsg {
 const DLG_W: f32 = 960.0;
 const DLG_H: f32 = 660.0;
 const NAV_W: f32 = 220.0;
-const HDR_H: f32 = 40.0;
 const FOOTER_H: f32 = 44.0;
 
 // ─── Public view ──────────────────────────────────────────────
+
+// ─── Render inputs ────────────────────────────────────────────
+
+/// Everything the Preferences dialog reads to render one frame.
+///
+/// The dialog is a four-hop chain — `view` / `view_body` -> `build_dialog`
+/// -> `build_content` — and every hop needs very nearly the same inputs.
+/// Passed positionally that was 23 parameters per hop, and several share a
+/// type: `draft_theme`, `saved_theme` and `theme_id` are all `ThemeId`;
+/// `draft_grid_style` and `draft_symbol_grid_style` are both `GridStyle`.
+/// A transposed pair would have compiled silently and shipped the wrong
+/// control state. Naming the fields makes that a compile error instead.
+///
+/// Every field is `Copy`, so the whole struct is passed by value and each
+/// hop costs a move rather than a fresh borrow.
+#[derive(Clone, Copy)]
+pub struct PrefsView<'a> {
+    pub nav: PrefNav,
+    pub draft_theme: ThemeId,
+    pub saved_theme: ThemeId,
+    pub draft_font: &'a str,
+    pub draft_grid_style: GridStyle,
+    pub draft_pcb_gpu_render: bool,
+    pub draft_annotate_undo: crate::annotate_undo::AnnotateUndo,
+    pub draft_move_keeps_wires: bool,
+    pub draft_net_hover_enabled: bool,
+    pub draft_drag_direction_select: bool,
+    pub draft_increment_step: i32,
+    pub draft_paste_designators: crate::paste_prefs::PasteDesignators,
+    pub draft_window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
+    /// Whether the drafted placement only applies after a restart (macOS).
+    pub window_controls_restart_note: bool,
+    pub draft_autosave_enabled: bool,
+    pub draft_symbol_grid_size_mm: f32,
+    pub draft_symbol_grid_style: GridStyle,
+    pub draft_symbol_pin_selection: PinSelectionMode,
+    pub draft_zoom_step_percent: u8,
+    pub draft_ui_scale_percent: u16,
+    pub custom_name: Option<&'a str>,
+    /// Appearance ▸ theme import/export status line. Empty renders nothing.
+    pub theme_status: &'a str,
+    pub dirty: bool,
+    pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
+    /// The profile new projects start from; `None` is automatic.
+    pub default_profile: Option<&'a str>,
+    pub distributor_settings: &'a crate::library::state::DistributorSettings,
+    pub panel_tokens: &'a signex_types::theme::ThemeTokens,
+    pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    pub keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    pub keymap_status: &'a str,
+    /// Boot-time shortcut-file load failure (#595). `Some` renders a
+    /// persistent banner under the pane header naming the file and the
+    /// error; `None` renders nothing. Distinct from `keymap_status`,
+    /// which is transient per-action feedback cleared on every open.
+    pub keymap_load_error: Option<&'a str>,
+    /// Path of `keyboard_shortcuts.toml.bak` when it exists (#603).
+    /// `Some` renders the recover row with its Restore and Discard
+    /// actions. Independent of `keymap_load_error` — the backup outlives
+    /// the failure that produced it.
+    pub keymap_backup: Option<&'a str>,
+    /// `prefs.json` health failure (#602). `Some` renders a dialog-wide
+    /// banner naming the file and the error; `None` renders nothing.
+    ///
+    /// Dialog-wide and not pane-local, unlike [`Self::keymap_load_error`]:
+    /// `keyboard_shortcuts.toml` backs one pane, but `prefs.json` backs
+    /// every pane in this dialog — theme, dock, ERC severities, filter
+    /// presets, component classes — so a banner tucked inside one pane is
+    /// invisible to a user sitting in another.
+    pub prefs_load_error: Option<&'a str>,
+    /// Result of the prefs-file recovery action. Transient per-action
+    /// feedback shown in the same banner; empty renders nothing.
+    pub prefs_status: &'a str,
+    pub keymap_search: &'a str,
+    pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
+    pub theme_id: ThemeId,
+}
+
+// ─── Dialog entry points ──────────────────────────────────────
 
 /// Build the full-screen backdrop + centred dialog.
 ///
@@ -228,55 +364,8 @@ const FOOTER_H: f32 = 44.0;
 /// * `draft_font`       — UI font name pending save
 /// * `custom_name`      — name of the loaded custom theme (if any)
 /// * `dirty`            — whether there are unsaved changes
-#[allow(clippy::too_many_arguments)]
-pub fn view<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    dirty: bool,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    theme_id: ThemeId,
-) -> Element<'a, PrefMsg> {
-    let dialog = build_dialog(
-        nav,
-        draft_theme,
-        saved_theme,
-        draft_font,
-        draft_power_port_style,
-        draft_label_style,
-        draft_multisheet_style,
-        draft_grid_style,
-        draft_symbol_grid_size_mm,
-        draft_symbol_grid_style,
-        draft_symbol_pin_selection,
-        custom_name,
-        dirty,
-        erc_overrides,
-        distributor_settings,
-        panel_tokens,
-        draft_component_classes,
-        keymap_editor,
-        keymap_status,
-        keymap_search,
-        keymap_recorder,
-        theme_id,
-    );
+pub fn view<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let dialog = build_dialog(v, true);
 
     container(
         column![
@@ -308,86 +397,25 @@ pub fn view<'a>(
 
 // ─── Dialog shell ─────────────────────────────────────────────
 
-/// Render the Preferences dialog body without the centred backdrop —
-/// used by `view_detached_modal` so the dialog fills its own OS window.
-/// In-window callers go through `view()` which wraps this in a tinted
-/// dismiss layer.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn view_body<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &'a str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    dirty: bool,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    theme_id: ThemeId,
-) -> Element<'a, PrefMsg> {
-    build_dialog(
-        nav,
-        draft_theme,
-        saved_theme,
-        draft_font,
-        draft_power_port_style,
-        draft_label_style,
-        draft_multisheet_style,
-        draft_grid_style,
-        draft_symbol_grid_size_mm,
-        draft_symbol_grid_style,
-        draft_symbol_pin_selection,
-        custom_name,
-        dirty,
-        erc_overrides,
-        distributor_settings,
-        panel_tokens,
-        draft_component_classes,
-        keymap_editor,
-        keymap_status,
-        keymap_search,
-        keymap_recorder,
-        theme_id,
-    )
+/// Render the Preferences dialog body without the centred backdrop or
+/// the in-dialog header — used by `view_detached_modal` so the dialog
+/// fills its own OS window, whose native title bar supplies the title and
+/// the close button. In-window callers go through `view()` which wraps the
+/// full dialog (header included) in a tinted dismiss layer.
+pub(crate) fn view_body<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    build_dialog(v, false)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_dialog<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    dirty: bool,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-    theme_id: ThemeId,
-) -> Element<'a, PrefMsg> {
+fn build_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg> {
+    let PrefsView {
+        nav,
+        dirty,
+        theme_id,
+        prefs_load_error,
+        prefs_status,
+        ..
+    } = v;
+
     // ── Header ── canonical modal chrome (28px, asymmetric padding,
     // SVG close-X with red hover) — same shape every other modal in
     // the app uses so the chrome stays consistent across surfaces.
@@ -431,28 +459,7 @@ fn build_dialog<'a>(
                 )),
                 ..container::Style::default()
             }),
-        build_content(
-            nav,
-            draft_theme,
-            saved_theme,
-            draft_font,
-            draft_power_port_style,
-            draft_label_style,
-            draft_multisheet_style,
-            draft_grid_style,
-            draft_symbol_grid_size_mm,
-            draft_symbol_grid_style,
-            draft_symbol_pin_selection,
-            custom_name,
-            erc_overrides,
-            distributor_settings,
-            panel_tokens,
-            draft_component_classes,
-            keymap_editor,
-            keymap_status,
-            keymap_search,
-            keymap_recorder,
-        ),
+        build_content(v),
     ]
     .width(Length::Fill)
     .height(Length::Fill);
@@ -474,7 +481,19 @@ fn build_dialog<'a>(
             .into()
     };
 
-    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider(), body.into()];
+    // The prefs-file banner sits above the nav / content split, so it is
+    // outside every `scrollable` and shows in whichever pane the user is
+    // on. `view()` and `view_body()` both funnel through here, so this one
+    // insertion covers the in-app overlay and the detached OS window.
+    let mut col_items: Vec<Element<'a, PrefMsg>> = Vec::new();
+    if with_header {
+        col_items.push(header.into());
+        col_items.push(h_divider());
+    }
+    if let Some(banner) = build_prefs_file_banner(prefs_load_error, prefs_status) {
+        col_items.push(banner);
+    }
+    col_items.push(body.into());
     if let Some(footer) = footer_opt {
         col_items.push(h_divider());
         col_items.push(footer);
@@ -551,7 +570,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
         container(
             row![
                 text(item.label())
-                    .size(12)
+                    .size(TS.label)
                     .style(move |theme: &Theme| text::Style {
                         color: Some(if is_active {
                             theme.extended_palette().primary.base.text
@@ -562,7 +581,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6, 12])
+        .padding([6.0, SP.l])
         .width(Length::Fill),
     )
     .padding(0)
@@ -593,44 +612,42 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
-fn build_content<'a>(
-    nav: PrefNav,
-    draft_theme: ThemeId,
-    saved_theme: ThemeId,
-    draft_font: &str,
-    draft_power_port_style: PowerPortStyle,
-    draft_label_style: LabelStyle,
-    draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
-    draft_symbol_grid_size_mm: f32,
-    draft_symbol_grid_style: GridStyle,
-    draft_symbol_pin_selection: PinSelectionMode,
-    custom_name: Option<&'a str>,
-    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    distributor_settings: &'a crate::library::state::DistributorSettings,
-    panel_tokens: &'a signex_types::theme::ThemeTokens,
-    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
-    keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    keymap_status: &'a str,
-    keymap_search: &'a str,
-    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
-) -> Element<'a, PrefMsg> {
+fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let PrefsView {
+        nav,
+        draft_annotate_undo,
+        draft_move_keeps_wires,
+        draft_net_hover_enabled,
+        draft_drag_direction_select,
+        draft_increment_step,
+        draft_paste_designators,
+        draft_autosave_enabled,
+        profiles,
+        default_profile,
+        distributor_settings,
+        panel_tokens,
+        draft_component_classes,
+        keymap_editor,
+        keymap_status,
+        keymap_load_error,
+        keymap_backup,
+        keymap_search,
+        keymap_recorder,
+        ..
+    } = v;
+
     let inner = match nav {
-        PrefNav::Appearance => content_appearance(
-            draft_theme,
-            saved_theme,
-            draft_font,
-            draft_power_port_style,
-            draft_label_style,
-            draft_multisheet_style,
-            draft_grid_style,
-            draft_symbol_grid_size_mm,
-            draft_symbol_grid_style,
-            draft_symbol_pin_selection,
-            custom_name,
+        PrefNav::Appearance => content_appearance(v),
+        PrefNav::Annotation => content_annotation(draft_annotate_undo),
+        PrefNav::Editing => content_editing(
+            draft_move_keeps_wires,
+            draft_net_hover_enabled,
+            draft_drag_direction_select,
+            draft_increment_step,
+            draft_paste_designators,
+            draft_autosave_enabled,
         ),
-        PrefNav::Erc => content_erc(erc_overrides),
+        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens),
         // Library → Distributor APIs — the library subsystem owns
         // the actual form
         // (`crate::library::settings::distributor_apis::view`); we
@@ -643,9 +660,14 @@ fn build_content<'a>(
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
-        PrefNav::Keyboard => {
-            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_search, keymap_recorder)
-        }
+        PrefNav::Keyboard => content_keyboard_shortcuts(
+            keymap_editor,
+            keymap_status,
+            keymap_load_error,
+            keymap_backup,
+            keymap_search,
+            keymap_recorder,
+        ),
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
@@ -721,10 +743,10 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         return None;
     }
     let footer_row: Element<'a, PrefMsg> = row![
-        text("● Unsaved changes").size(11).style(text_warning),
+        text("● Unsaved changes").size(TS.body).style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
-        Space::new().width(8),
+        Space::new().width(SP.l),
         save_btn(),
     ]
     .align_y(iced::Alignment::Center)
@@ -734,7 +756,22 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         container(footer_row)
             .width(Length::Fill)
             .height(FOOTER_H)
-            .padding([0, 16])
+            // Centre the row in the strip. `container` aligns its content
+            // to the top by default, and the row's own `align_y(Center)`
+            // only centres its children against each other inside the
+            // row's own height — neither moves the row down inside a
+            // fixed-height parent, so without this the buttons sit flush
+            // against the divider above them.
+            //
+            // `align_y` and NOT `center_y`: the latter is
+            // `self.height(height).align_y(Center)`, so it would replace
+            // the fixed `FOOTER_H` above and let the strip swallow every
+            // spare pixel of the dialog.
+            .align_y(iced::alignment::Vertical::Center)
+            // 20 rather than 16 on the sides: at 16 the Save button sat
+            // almost against the card's right border, and the strip reads
+            // as cramped even though the footer's own height is fixed.
+            .padding([0, 20])
             .style(move |theme: &Theme| {
                 let palette = theme.extended_palette();
                 container::Style {
@@ -753,40 +790,127 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
     )
 }
 
+/// Dialog-wide alert strip for a `prefs.json` that could not be loaded,
+/// carrying the result of the recovery action once it has run (#602).
+///
+/// `None` — and therefore a dialog byte-for-byte what it is today — is
+/// the healthy case: nothing to report and nothing to offer. That is the
+/// acceptance criterion "with a healthy `prefs.json`, nothing about the
+/// current behaviour changes".
+///
+/// Same alert-strip shape as [`build_footer`]: a `background.weak` fill
+/// with a `background.strong` hairline, every colour resolved from the
+/// theme rather than hardcoded, so it reads on light and dark palettes.
+/// The button is [`secondary_button_style`] and not `danger_button_style`
+/// on purpose — the action is neutral. Nothing is deleted; the file the
+/// user may still want is renamed, not removed.
+fn build_prefs_file_banner<'a>(
+    load_error: Option<&'a str>,
+    status: &'a str,
+) -> Option<Element<'a, PrefMsg>> {
+    if load_error.is_none() && status.is_empty() {
+        return None;
+    }
+
+    // `Length::Fill`, and no `Space` spacer beside it. `iced`'s flex pass
+    // lays non-`Fill` children out in source order, subtracting each
+    // measured width from what is left, and only serves `Fill` children
+    // from the remainder afterwards. A `Shrink` text column therefore
+    // measures against the dialog's whole inner width first and leaves
+    // the button a ~37px sliver on the 900px detached Preferences window,
+    // with its label wrapped to five lines and the spacer given 0px.
+    // Making the text the fluid child inverts that: the button is the
+    // only `Shrink` child in the first pass, takes its natural width, and
+    // the text wraps into what remains.
+    let mut lines = column![].spacing(SP.s).width(Length::Fill);
+    if let Some(error) = load_error {
+        // Name the real file, resolved through the same accessor the
+        // probe and the recovery use, so the path the user is told to
+        // repair is the path the app actually reads and writes.
+        let path = crate::fonts::prefs_file_path().display().to_string();
+        lines = lines.push(
+            text(format!("Your preferences file at {path} {error}."))
+                .size(TS.body)
+                .style(text_warning),
+        );
+        // Scoped to what `prefs.json` actually backs. The banner spans
+        // the whole dialog, and two of the panes it covers persist
+        // elsewhere: Keyboard Shortcuts through `keyboard_shortcuts.toml`
+        // and Library Distributors through `distributors.toml`. Claiming
+        // "nothing you change is being saved" there is false, and on the
+        // Distributors pane it invites a user to re-enter API keys that
+        // did save.
+        lines = lines.push(
+            text(
+                "Appearance, ERC severities, component classes and panel layout are showing \
+                 their defaults, and changes to them are not being saved. The file itself \
+                 has not been altered — repair it by hand, or start a fresh one and keep \
+                 the old file beside it.",
+            )
+            .size(TS.caption)
+            .style(text_muted),
+        );
+    }
+    if !status.is_empty() {
+        lines = lines.push(text(status).size(TS.caption).style(text_muted));
+    }
+
+    let mut strip = row![lines].spacing(SP.xl).align_y(iced::Alignment::Center);
+    // Offered only while the file is actually broken: once it loads, the
+    // banner is a result line and there is nothing left to reset.
+    if load_error.is_some() {
+        strip = strip.push(
+            button(text("Start a fresh preferences file").size(TS.body))
+                .padding([7, 14])
+                .on_press(PrefMsg::ResetPrefsFile)
+                // NOT `secondary_button_style` — that fills with
+                // `background.weak`, which is exactly this strip's own
+                // fill, so the button was the same colour as the surface
+                // under it and read as a bare outline. Its hover tone,
+                // `background.strong`, is this strip's border colour, so
+                // hovering merged it with its own frame. `primary` is the
+                // one tone that contrasts on `background.weak` — and this
+                // is the single action the whole strip exists to offer.
+                .style(primary_button_style),
+        );
+    }
+
+    Some(
+        container(strip)
+            .width(Length::Fill)
+            // Vertical padding, unlike `build_footer`'s `[0, 16]`: that
+            // strip is one line inside a fixed `FOOTER_H`, this one grows
+            // to two or three wrapped lines and would otherwise sit flush
+            // against the divider above and the nav column below.
+            .padding([SP.l, SP.xl])
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(Background::Color(palette.background.weak.color)),
+                    border: Border {
+                        width: 1.0,
+                        color: palette.background.strong.color,
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                }
+            })
+            .into(),
+    )
+}
+
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Save").size(12))
-        .padding([6, 20])
+    button(text("Save").size(TS.label))
+        .padding([SP.m, 20.0])
         .on_press(PrefMsg::Save)
         .style(success_button_style)
         .into()
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Discard & Close").size(12))
-        .padding([6, 16])
+    button(text("Discard & Close").size(TS.label))
+        .padding([SP.m, SP.xl])
         .on_press(PrefMsg::DiscardAndClose)
         .style(danger_button_style)
-        .into()
-}
-
-fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Close").size(12).color(Color::WHITE))
-        .padding([6, 20])
-        .on_press(PrefMsg::Close)
-        .style(|_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Color::from_rgb(0.28, 0.42, 0.65),
-                _ => Color::from_rgb(0.22, 0.36, 0.58),
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                text_color: Color::WHITE,
-                ..button::Style::default()
-            }
-        })
         .into()
 }

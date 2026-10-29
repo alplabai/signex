@@ -12,17 +12,22 @@ use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length};
 
 use super::widgets::{
-    close_x_button, detached_header, draggable_header, primary_button_themed, wrap_modal,
+    close_x_button, draggable_header, os_title_bar_slot, primary_button_themed, wrap_modal,
 };
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
+mod rules;
 mod sidebar;
 mod table;
 
+pub(in crate::app) use table::{default_column_width, sorted_row_order};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
-        let modal_w = 1000.0_f32;
-        let modal_h = 700.0_f32;
         let dialog = self.view_bom_preview_body_inner(true);
         let offset = self
             .ui_state
@@ -34,8 +39,14 @@ impl Signex {
             dialog,
             offset,
             self.ui_state.window_size,
-            (modal_w, modal_h),
+            self.bom_modal_size(),
         )
+    }
+
+    /// The in-window BOM modal: 1000 x 700 where the window allows, capped
+    /// to the window otherwise (#1227).
+    pub(in crate::app::view) fn bom_modal_size(&self) -> (f32, f32) {
+        super::widgets::fit_modal_size(self.ui_state.window_size, (1000.0, 700.0))
     }
 
     pub(in crate::app::view) fn view_bom_preview_body(&self) -> Element<'_, Message> {
@@ -69,7 +80,6 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let _ = border_c;
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -77,10 +87,7 @@ impl Signex {
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(
-                header_content,
-                super::super::super::state::ModalId::BomPreview,
-            )
+            os_title_bar_slot()
         };
 
         let body = self.bom_table();
@@ -93,7 +100,11 @@ impl Signex {
             .unwrap_or_else(|| "Base".to_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let status_label = format!("{} of {} lines visible", row_count, total_count);
+        let mut status_label = format!("{} of {} lines visible", row_count, total_count);
+        if let Some(prices) = price_status(&preview.table, &preview.options.columns) {
+            status_label.push_str(" · ");
+            status_label.push_str(&prices);
+        }
         let variant_label = format!("Current variant: {}", active_variant_label);
 
         // Variant dropdown for the top toolbar — placeholder in the
@@ -101,16 +112,18 @@ impl Signex {
         // on the right.
         let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
             text(format!("Variant: {}", active_variant_label))
-                .size(11)
+                .size(TS.body)
                 .color(text_muted)
                 .into()
         } else {
             container(
                 row![
                     Space::new().width(Length::Fill),
-                    text(active_variant_label.clone()).size(11).color(text_c),
+                    text(active_variant_label.clone())
+                        .size(TS.body)
+                        .color(text_c),
                     Space::new().width(Length::Fill),
-                    text("\u{25BE}").size(10).color(text_c),
+                    text("\u{25BE}").size(TS.caption).color(text_c),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -131,7 +144,7 @@ impl Signex {
             .into()
         };
         let info_badge: Element<'_, Message> =
-            container(text("i").size(11).color(iced::Color::WHITE))
+            container(text("i").size(TS.body).color(iced::Color::WHITE))
                 .width(20)
                 .height(20)
                 .align_x(iced::alignment::Horizontal::Center)
@@ -157,7 +170,7 @@ impl Signex {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([8, 14])
+        .padding([SP.m, 14.0])
         .width(Length::Fill)
         .style(crate::styles::toolbar_strip(tokens));
 
@@ -170,7 +183,7 @@ impl Signex {
             container(body)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .padding([6, 8]),
+                .padding([6.0, SP.m]),
             container(Space::new())
                 .width(1)
                 .height(Length::Fill)
@@ -189,14 +202,34 @@ impl Signex {
         // Dropping the separate status / button rows removes the
         // empty band between them and tightens the modal's
         // bottom chrome.
+        let issue_badge: Element<'_, Message> =
+            match rules::issue_count_label(&preview.validation_report) {
+                Some(label) => {
+                    let severity = if preview.validation_report.has_errors() {
+                        signex_output::BomIssueSeverity::Error
+                    } else {
+                        signex_output::BomIssueSeverity::Warning
+                    };
+                    text(label)
+                        .size(TS.caption)
+                        .color(rules::severity_color(severity, text_muted))
+                        .into()
+                }
+                None => text("No BOM issues")
+                    .size(TS.caption)
+                    .color(text_muted)
+                    .into(),
+            };
         let footer = container(
             row![
-                text(status_label).size(10).color(text_muted),
+                text(status_label).size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text("|").size(10).color(text_muted),
+                text("|").size(TS.caption).color(text_muted),
                 Space::new().width(12),
-                text(variant_label).size(10).color(text_muted),
+                text(variant_label).size(TS.caption).color(text_muted),
                 Space::new().width(Length::Fill),
+                issue_badge,
+                Space::new().width(12),
                 primary_button_themed(
                     "Export\u{2026}",
                     Some(Message::BomPreview(BomPreviewMsg::Export)),
@@ -220,14 +253,98 @@ impl Signex {
             .height(1)
             .style(crate::styles::chrome_separator(tokens));
 
+        let (modal_w, modal_h): (Length, Length) = if draggable {
+            let (w, h) = self.bom_modal_size();
+            (Length::Fixed(w), Length::Fixed(h))
+        } else {
+            (Length::Fill, Length::Fill)
+        };
         let dialog = container(
             column![header, title_separator, toolbar_strip, main_row, footer]
                 .spacing(0)
-                .width(Length::Fill)
-                .height(Length::Fill),
+                .width(modal_w)
+                .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+/// The footer's price summary while a price column is shown (#1023): the
+/// total per currency, and how many lines have no cached price (no price
+/// for their library row or MPN). `None` while no price column is shown.
+pub(in crate::app) fn price_status(
+    table: &signex_output::BomTable,
+    columns: &[signex_output::BomColumn],
+) -> Option<String> {
+    if !columns
+        .iter()
+        .any(|column| signex_output::BomColumn::PRICES.contains(column))
+    {
+        return None;
+    }
+    let totals = signex_output::bom::price_totals(table);
+    let unpriced = table.rows.iter().filter(|row| row.price.is_none()).count();
+    let mut parts = Vec::new();
+    if totals.is_empty() {
+        parts.push("no cached prices".to_string());
+    } else {
+        let sums: Vec<String> = totals
+            .iter()
+            .map(|(currency, total)| format!("{} {currency}", signex_output::bom::money(*total)))
+            .collect();
+        parts.push(format!("Total {}", sums.join(" + ")));
+    }
+    if unpriced > 0 && !totals.is_empty() {
+        parts.push(format!(
+            "{unpriced} line{} without a cached price",
+            if unpriced == 1 { "" } else { "s" }
+        ));
+    }
+    Some(parts.join(" · "))
+}
+
+#[cfg(test)]
+mod price_status_tests {
+    use signex_output::bom::BomPrice;
+    use signex_output::{BomColumn, BomRow, BomTable};
+
+    use super::price_status;
+
+    fn row(price: Option<(&str, f64)>) -> BomRow {
+        BomRow {
+            price: price.map(|(currency, extended_price)| BomPrice {
+                distributor: "D".into(),
+                currency: currency.into(),
+                unit_price: extended_price,
+                extended_price,
+                buy_qty: 1,
+                stock: None,
+                age: String::new(),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_footer_shows_totals_and_unpriced_lines_only_with_a_price_column() {
+        let table = BomTable {
+            rows: vec![row(Some(("USD", 1.5))), row(Some(("EUR", 2.0))), row(None)],
+            ..Default::default()
+        };
+        assert_eq!(price_status(&table, &[BomColumn::Name]), None);
+        assert_eq!(
+            price_status(&table, &[BomColumn::UnitPrice]).as_deref(),
+            Some("Total 2.00 EUR + 1.50 USD · 1 line without a cached price")
+        );
+        let none = BomTable {
+            rows: vec![row(None)],
+            ..Default::default()
+        };
+        assert_eq!(
+            price_status(&none, &[BomColumn::ExtendedPrice]).as_deref(),
+            Some("no cached prices")
+        );
     }
 }

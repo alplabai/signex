@@ -1,10 +1,11 @@
 //! Placed schematic-sheet elements and the sheet container.
 
 use super::*;
+use crate::format::{SheetUnknown, UnknownColumns};
 
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Wire {
     pub uuid: Uuid,
     pub start: Point,
@@ -12,9 +13,16 @@ pub struct Wire {
     /// Stroke width in mm. 0.0 = use schematic default (~0.15mm).
     #[serde(default)]
     pub stroke_width: f64,
+    /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Junction {
     pub uuid: Uuid,
     pub position: Point,
@@ -31,9 +39,13 @@ pub struct Junction {
     /// if it no longer sits on a wire (issue #422).
     #[serde(default)]
     pub minted: bool,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Label {
     pub uuid: Uuid,
     pub text: String,
@@ -45,23 +57,62 @@ pub struct Label {
     pub shape: String,
     #[serde(default)]
     pub font_size: f64,
+    /// Font family the author chose for this label, `None` to inherit the
+    /// sheet default (see [`crate::font`]). On disk it is an optional
+    /// `font_family` TSV column, present only when some label sets one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify: HAlign,
     #[serde(default = "default_label_v_align")]
     pub justify_v: VAlign,
+    /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
+}
+
+impl Label {
+    /// The sheet-port name this label exposes to a parent sheet, or `None`
+    /// when it is not a port label (only Hierarchical and Global labels cross
+    /// a sheet boundary) or its text is blank. The single predicate +
+    /// normaliser the engine's port collector, the netlist stitcher and the
+    /// ERC hierarchy rule all share (#359).
+    pub fn port_name(&self) -> Option<&str> {
+        sheet_port_name(self.label_type, &self.text)
+    }
+}
+
+/// [`Label::port_name`] for callers that hold a label's kind and text
+/// separately (e.g. the ERC snapshot).
+pub fn sheet_port_name(label_type: LabelType, text: &str) -> Option<&str> {
+    match label_type {
+        LabelType::Hierarchical | LabelType::Global => normalize_port_name(text),
+        LabelType::Net | LabelType::Power => None,
+    }
+}
+
+/// Canonical form of a sheet port / sheet pin name: surrounding whitespace is
+/// not part of the name, and a blank name is no name at all.
+pub fn normalize_port_name(text: &str) -> Option<&str> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then_some(trimmed)
 }
 
 fn default_label_v_align() -> VAlign {
     VAlign::Bottom
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NoConnect {
     pub uuid: Uuid,
     pub position: Point,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextNote {
     pub uuid: Uuid,
     pub text: String,
@@ -70,20 +121,28 @@ pub struct TextNote {
     pub rotation: f64,
     #[serde(default)]
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]
     pub justify_v: VAlign,
+    /// Frozen against every edit until unlocked (#1573); see `Symbol::locked`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bus {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BusEntry {
     pub uuid: Uuid,
     pub position: Point,
@@ -94,7 +153,7 @@ pub struct BusEntry {
 // Hierarchical sheets
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SheetPin {
     pub uuid: Uuid,
     pub name: String,
@@ -109,7 +168,7 @@ pub struct SheetPin {
     pub user_moved: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChildSheet {
     pub uuid: Uuid,
     pub name: String,
@@ -152,7 +211,7 @@ pub struct StrokeColor {
     pub a: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SchDrawing {
     Line {
@@ -163,6 +222,8 @@ pub enum SchDrawing {
         width: f64,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Rect {
         uuid: Uuid,
@@ -174,6 +235,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Circle {
         uuid: Uuid,
@@ -185,6 +248,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Arc {
         uuid: Uuid,
@@ -197,6 +262,8 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
     Polyline {
         uuid: Uuid,
@@ -207,12 +274,121 @@ pub enum SchDrawing {
         fill: FillType,
         #[serde(default)]
         stroke_color: Option<StrokeColor>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        locked: bool,
     },
+}
+
+// ---------------------------------------------------------------------------
+// Library symbol table
+// ---------------------------------------------------------------------------
+
+/// The sheet's embedded library symbols, keyed by lib id.
+///
+/// Reference-counted so a sheet copy (the per-frame drag preview, the engine's
+/// undo snapshot) shares the table instead of deep-copying every `LibSymbol`.
+/// Reads go through [`Deref`](std::ops::Deref); the first mutation of a shared
+/// table copies it ([`std::sync::Arc::make_mut`]), so an edit never shows in
+/// another copy. Serialises exactly like the plain map.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LibSymbolTable(std::sync::Arc<HashMap<String, LibSymbol>>);
+
+impl LibSymbolTable {
+    /// True when both tables are the same allocation (a copy that has not
+    /// been mutated since).
+    pub fn shares_storage_with(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl std::ops::Deref for LibSymbolTable {
+    type Target = HashMap<String, LibSymbol>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for LibSymbolTable {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        std::sync::Arc::make_mut(&mut self.0)
+    }
+}
+
+impl FromIterator<(String, LibSymbol)> for LibSymbolTable {
+    fn from_iter<I: IntoIterator<Item = (String, LibSymbol)>>(iter: I) -> Self {
+        Self(std::sync::Arc::new(iter.into_iter().collect()))
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Top-level sheet
 // ---------------------------------------------------------------------------
+
+impl SchDrawing {
+    /// The drawing's own id, whichever shape it is.
+    pub fn uuid(&self) -> Uuid {
+        match self {
+            Self::Line { uuid, .. }
+            | Self::Rect { uuid, .. }
+            | Self::Circle { uuid, .. }
+            | Self::Arc { uuid, .. }
+            | Self::Polyline { uuid, .. } => *uuid,
+        }
+    }
+
+    /// Whether the drawing is locked (#1573), whichever shape it is.
+    pub fn is_locked(&self) -> bool {
+        match self {
+            Self::Line { locked, .. }
+            | Self::Rect { locked, .. }
+            | Self::Circle { locked, .. }
+            | Self::Arc { locked, .. }
+            | Self::Polyline { locked, .. } => *locked,
+        }
+    }
+
+    /// Set the lock, whichever shape the drawing is.
+    pub fn set_locked(&mut self, value: bool) {
+        match self {
+            Self::Line { locked, .. }
+            | Self::Rect { locked, .. }
+            | Self::Circle { locked, .. }
+            | Self::Arc { locked, .. }
+            | Self::Polyline { locked, .. } => *locked = value,
+        }
+    }
+}
+
+/// `skip_serializing_if` predicate: a lock is written only when set, so an
+/// untouched file re-saves byte-identical.
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+/// Whether a drawing paints under the circuit or over it (#1583).
+///
+/// Drawings are documentation, so the default keeps them behind symbols,
+/// wires and pins; `Above` is for a highlight or a callout laid over the
+/// circuit. Text notes are not drawings and always stay on top.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DrawingPlacement {
+    #[default]
+    Behind,
+    Above,
+}
+
+impl SchematicSheet {
+    /// The placement of drawing `uuid`; [`DrawingPlacement::Behind`] when none
+    /// was chosen.
+    pub fn drawing_placement(&self, uuid: Uuid) -> DrawingPlacement {
+        self.drawing_placements
+            .get(&uuid)
+            .copied()
+            .unwrap_or_default()
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchematicSheet {
@@ -225,6 +401,11 @@ pub struct SchematicSheet {
     pub generator_version: String,
     #[serde(default)]
     pub paper_size: String,
+    /// Sheet-wide default font family for every text item that names none.
+    /// `None` means the bundled default (Iosevka). Stored under
+    /// `[extras.sheet]` only when set, so legacy files stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default = "default_root_sheet_page")]
     pub root_sheet_page: String,
     #[serde(default)]
@@ -252,11 +433,99 @@ pub struct SchematicSheet {
     #[serde(default)]
     pub title_block: HashMap<String, String>,
     #[serde(default)]
-    pub lib_symbols: HashMap<String, LibSymbol>,
+    pub lib_symbols: LibSymbolTable,
+    /// Net colour overrides set with the Active Bar net-colour pen, keyed by
+    /// the uuid of the wire or junction they colour. Saved per sheet in
+    /// `[extras.sheet.net_colors]`; empty (and not written) when the sheet
+    /// has none. Overrides whose element no longer exists are pruned when
+    /// the sheet is saved.
+    #[serde(default)]
+    pub net_colors: HashMap<Uuid, crate::theme::Color>,
+    /// Where each drawing sits against the circuit (#1583), by drawing uuid.
+    /// Only drawings that sit [`DrawingPlacement::Above`] have an entry: no
+    /// entry means [`DrawingPlacement::Behind`], so a sheet that never chose
+    /// one writes nothing and re-saves byte-identical. Saved in
+    /// `[extras.sheet.drawing_placements]`.
+    #[serde(default)]
+    pub drawing_placements: BTreeMap<Uuid, DrawingPlacement>,
+    /// Border, title block and zone counts of the sheet frame. Saved in
+    /// `[extras.sheet.frame]` only when not the default.
+    #[serde(default, skip_serializing_if = "SheetFrameSettings::is_default")]
+    pub frame: SheetFrameSettings,
+    /// Keys in the `.snxsch` manifest and `[extras.sheet]` that this
+    /// build does not recognise, kept per section so a save re-emits
+    /// each where it was found. Empty for every file written by this
+    /// build.
+    #[serde(default, skip_serializing_if = "SheetUnknown::is_empty")]
+    pub unknown: SheetUnknown,
 }
 
 fn default_root_sheet_page() -> String {
     "1".to_string()
+}
+
+/// An empty sheet with a nil uuid; every other field equals its serde default
+/// (pinned by `sheet_default_equals_deserialized_empty_manifest`).
+/// For fixtures and partial literals; production code builds sheets
+/// exhaustively and mints real uuids.
+impl Default for SchematicSheet {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: String::new(),
+            font_family: None,
+            root_sheet_page: default_root_sheet_page(),
+            symbols: Vec::new(),
+            wires: Vec::new(),
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: HashMap::new(),
+            lib_symbols: LibSymbolTable::default(),
+            net_colors: HashMap::new(),
+            drawing_placements: BTreeMap::new(),
+            frame: SheetFrameSettings::default(),
+            unknown: SheetUnknown::default(),
+        }
+    }
+}
+
+/// Zero-length wire at the origin with a nil uuid. For fixtures and partial
+/// literals; production code builds wires exhaustively and mints real uuids.
+impl Default for Wire {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            start: Point::default(),
+            end: Point::default(),
+            stroke_width: 0.0,
+            locked: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
+/// Junction at the origin with a nil uuid. For fixtures and partial literals;
+/// production code builds junctions exhaustively and mints real uuids.
+impl Default for Junction {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            position: Point::default(),
+            diameter: 0.0,
+            minted: false,
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +540,8 @@ pub enum SelectedKind {
     BusEntry,
     Junction,
     NoConnect,
+    /// Generic No-ERC directive (`SchematicSheet::no_erc_directives`).
+    NoErcDirective,
     Label,
     /// Hierarchical sheet pin rendered on a child-sheet symbol.
     SheetPin,
@@ -350,6 +621,26 @@ impl Aabb {
 }
 
 impl SchematicSheet {
+    /// True when the sheet was written by a newer Signex than this build.
+    /// It loads for viewing but must not be edited or saved: the writer would
+    /// drop content this build has no field for. The one rule every edit,
+    /// save and bulk pass asks.
+    pub fn is_read_only(&self) -> bool {
+        self.unknown.newer_minor_source.is_some()
+    }
+
+    /// The typed paper size and orientation stored in `paper_size`.
+    pub fn sheet_size(&self) -> (super::SheetSize, super::SheetOrientation) {
+        super::SheetSize::parse(&self.paper_size)
+    }
+
+    /// Page `(width_mm, height_mm)` of this sheet; the single reading the
+    /// canvas frame and the PDF page share.
+    pub fn paper_mm(&self) -> (f64, f64) {
+        let (size, orientation) = self.sheet_size();
+        size.dimensions_mm(orientation)
+    }
+
     /// Compute the bounding box of all elements in the sheet.
     pub fn content_bounds(&self) -> Option<Aabb> {
         let mut aabb: Option<Aabb> = None;
@@ -386,6 +677,9 @@ impl SchematicSheet {
         for n in &self.no_connects {
             extend(n.position.x, n.position.y);
         }
+        for d in &self.no_erc_directives {
+            extend(d.position.x, d.position.y);
+        }
         for t in &self.text_notes {
             extend(t.position.x, t.position.y);
         }
@@ -412,4 +706,56 @@ pub fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f6
     let proj_x = ax + t * dx;
     let proj_y = ay + t * dy;
     ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
+}
+
+#[cfg(test)]
+mod lib_symbol_table_tests {
+    use super::*;
+
+    fn symbol(id: &str) -> LibSymbol {
+        LibSymbol {
+            id: id.to_string(),
+            reference: "U".into(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: "d".into(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: Vec::new(),
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        }
+    }
+
+    #[test]
+    fn serialises_byte_identically_to_the_plain_map() {
+        let mut plain = HashMap::new();
+        plain.insert("A:B".to_string(), symbol("A:B"));
+        let table: LibSymbolTable = plain.clone().into_iter().collect();
+
+        let from_table = serde_json::to_string(&table).unwrap();
+        assert_eq!(from_table, serde_json::to_string(&plain).unwrap());
+
+        let back: LibSymbolTable = serde_json::from_str(&from_table).unwrap();
+        assert_eq!(serde_json::to_string(&back).unwrap(), from_table);
+    }
+
+    #[test]
+    fn a_copy_shares_until_mutated_and_the_original_is_untouched() {
+        let mut live: LibSymbolTable = [("A:B".to_string(), symbol("A:B"))].into_iter().collect();
+        let snapshot = live.clone();
+        assert!(live.shares_storage_with(&snapshot));
+
+        live.insert("C:D".to_string(), symbol("C:D"));
+        assert!(!live.shares_storage_with(&snapshot));
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(live.len(), 2);
+    }
 }

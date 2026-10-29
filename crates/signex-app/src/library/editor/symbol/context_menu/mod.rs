@@ -17,7 +17,7 @@ use std::path::Path;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
-use crate::app::SymbolEditorState;
+use crate::app::SymbolDocument;
 use crate::library::editor::symbol::state::SymbolContextSubmenu;
 use crate::library::messages::{
     LibraryMessage, PrimitiveEdit, SymbolContextSubmenuMsg, SymbolEditorMsg,
@@ -36,13 +36,12 @@ pub const MENU_WIDTH: f32 = 200.0;
 /// Build the right-click context menu card for the active symbol
 /// editor. Returns `None` when the menu is closed.
 pub fn view_context_menu<'a>(
-    editor: &'a SymbolEditorState,
+    editor: &'a SymbolDocument,
     tokens: &'a ThemeTokens,
     path: &'a Path,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     let menu_state = editor.context_menu.as_ref()?;
-    let rows =
-        build_symbol_context_menu_rows(editor.primitive(), editor.active_part, &editor.selected);
+    let rows = build_symbol_context_menu_rows(editor.primitive(), editor.view(), &editor.selected);
     let entries = flatten(rows, menu_state.open_submenu, path, false);
     Some(signex_widgets::active_bar_dropdown::view(
         entries,

@@ -28,21 +28,27 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+mod symbol_index;
+mod symbol_problems;
+
+pub use symbol_problems::SymbolFileProblem;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
-use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{CommitOutcome, HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
+use crate::git_identity::identity_for_repo;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
 use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
-use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
+use crate::tables::{
+    ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, alternate_symbols_cell, record_to_row, row_to_record,
+};
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
@@ -104,6 +110,34 @@ pub struct LocalGitAdapter {
     /// libgit2's responsibility; this only addresses the in-process
     /// race that `RwLock<LibraryFile>` does NOT cover.)
     git_lock: Mutex<()>,
+    /// `.snxsym` containers the last symbol scan could not read (#690).
+    symbol_problems: Mutex<symbol_problems::SymbolProblemLedger>,
+    /// uuid -> `.snxsym` container path, a hint only: every use re-reads
+    /// the file and falls back to a rescan on mismatch (#1362).
+    symbol_index: symbol_index::SymbolIndex,
+    /// `.snxfpt` files already warned about, keyed by (path, mtime) (#924).
+    skipped_footprints: Mutex<std::collections::HashSet<(PathBuf, std::time::SystemTime)>>,
+    /// Stamp and content hash of the `.snxlib` text behind `library_file`
+    /// (#531). `None` forces a reload on the next access. Lock order:
+    /// `library_file` before `disk_stamp`.
+    disk_stamp: Mutex<Option<disk_sync::KnownDisk>>,
+    /// Last on-disk state whose failed reload was already logged, so a
+    /// persistently unreadable or missing file warns once, not on every
+    /// read.
+    warned_state: Mutex<Option<disk_sync::DiskState>>,
+    /// The "cannot lock on this filesystem" warning was logged (#832).
+    write_lock_warned: std::sync::atomic::AtomicBool,
+    /// How many plain-text database token warnings this adapter logged: 0
+    /// or 1 (see `plain_token`).
+    plain_token_warnings: std::sync::atomic::AtomicUsize,
+    /// Encoded row lines from the last row write (#416). Lock order: after
+    /// `library_file` and `disk_stamp`.
+    row_lines: Mutex<crate::library_file::RowLines>,
+    /// Files saved whose commit failed (#858); see `uncommitted`.
+    uncommitted: Mutex<uncommitted::UncommittedLedger>,
+    /// Converted rows served to readers (#1437). Lock order: after
+    /// `library_file`.
+    row_reads: read_cache::RowReads,
 }
 
 impl LocalGitAdapter {
@@ -128,14 +162,21 @@ impl LocalGitAdapter {
         }
 
         let root_dir = parent_dir(&file_path)?;
+        if opts.enable_git {
+            // Fail before anything lands on disk when no user identity
+            // resolves, so a refused init leaves no half-made library.
+            crate::git_identity::identity_for_default_config()?;
+        }
         fs::create_dir_all(&root_dir)?;
 
         let library_file = LibraryFile {
+            layout: Default::default(),
             manifest: snx_manifest,
             tables: std::collections::BTreeMap::new(),
         };
         let text = library_file.write()?;
-        fs::write(&file_path, &text)?;
+        signex_types::atomic_io::atomic_write(&file_path, text.as_bytes())?;
+        let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
 
         // Git scaffolding — only when the user opted in. Without
         // `enable_git` the library lives on disk as plain files and
@@ -151,7 +192,7 @@ impl LocalGitAdapter {
 
             let repo = git2::Repository::init(&root_dir)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-            let (sig_name, sig_email) = identity_for_repo(&repo);
+            let (sig_name, sig_email) = identity_for_repo(&repo)?;
             let sig = git2::Signature::now(&sig_name, &sig_email)
                 .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
@@ -194,6 +235,16 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
+            skipped_footprints: Mutex::default(),
+            disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
+            warned_state: Mutex::new(None),
+            write_lock_warned: Default::default(),
+            plain_token_warnings: Default::default(),
+            row_lines: Mutex::default(),
+            uncommitted: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -209,8 +260,11 @@ impl LocalGitAdapter {
                 file_path.display()
             )));
         }
+        // Stamp first: a write racing the read then costs one extra reload.
+        let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let root_dir = parent_dir(&file_path)?;
         // Validate the repo opens — but treat a missing `.git/` as a
         // clean "no version control" state rather than a hard error.
@@ -224,13 +278,25 @@ impl LocalGitAdapter {
                 .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         }
         let manifest_synth = synthesize_manifest(&library_file.manifest);
-        Ok(Self {
+        let adapter = Self {
             file_path,
             root_dir,
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
-        })
+            symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
+            skipped_footprints: Mutex::default(),
+            disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
+            warned_state: Mutex::new(None),
+            write_lock_warned: Default::default(),
+            plain_token_warnings: Default::default(),
+            row_lines: Mutex::default(),
+            uncommitted: Mutex::default(),
+            row_reads: Default::default(),
+        };
+        adapter.seed_uncommitted_from_working_tree();
+        Ok(adapter)
     }
 
     /// Recover a library whose `.git/` directory was deleted
@@ -250,13 +316,24 @@ impl LocalGitAdapter {
         }
         let root_dir = parent_dir(&file_path)?;
 
+        // Refuse before `git init` touches disk: an unresolvable user
+        // identity must not leave a fresh, unborn `.git/` behind (that
+        // would hide the GitMissing recovery on the next open).
+        // When a repo already exists (re-init of a repo whose `.git` was not
+        // deleted) its own config counts, as it does for every later commit.
+        let preflight = match git2::Repository::open(&root_dir) {
+            Ok(existing) => identity_for_repo(&existing),
+            Err(_) => crate::git_identity::identity_for_default_config(),
+        };
+        preflight?;
+
         // `git2::Repository::init` is idempotent on an already-init'd
         // working tree, so this also handles the "git was *not*
         // deleted" case as a no-op + re-commit-everything. The recovery
         // dialog is the gate; the adapter just does what it's asked.
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git re-init: {e}")))?;
-        let (sig_name, sig_email) = identity_for_repo(&repo);
+        let (sig_name, sig_email) = identity_for_repo(&repo)?;
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
@@ -264,8 +341,19 @@ impl LocalGitAdapter {
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
         index
-            .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+            .add_all(
+                ["."].iter(),
+                git2::IndexAddOption::DEFAULT,
+                Some(&mut skip_write_lock_files),
+            )
             .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
+        if lfs::convert_index(&repo, &mut index)
+            .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?
+            > 0
+        {
+            lfs::install_pre_push_hook(&repo)
+                .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
+        }
         index
             .write()
             .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
@@ -296,8 +384,11 @@ impl LocalGitAdapter {
         )
         .map_err(|e| LibraryError::Backend(format!("git recover commit: {e}")))?;
 
+        // Stamp first: a write racing the read then costs one extra reload.
+        let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
-        let library_file = LibraryFile::parse(&text)?;
+        let library_file =
+            LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let manifest_synth = synthesize_manifest(&library_file.manifest);
         Ok(Self {
             file_path,
@@ -305,6 +396,16 @@ impl LocalGitAdapter {
             library_file: RwLock::new(library_file),
             manifest_synth,
             git_lock: Mutex::new(()),
+            symbol_problems: Mutex::default(),
+            symbol_index: Default::default(),
+            skipped_footprints: Mutex::default(),
+            disk_stamp: Mutex::new(Some(disk_sync::KnownDisk::new(disk_stamp, &text))),
+            warned_state: Mutex::new(None),
+            write_lock_warned: Default::default(),
+            plain_token_warnings: Default::default(),
+            row_lines: Mutex::default(),
+            uncommitted: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -341,10 +442,43 @@ impl LocalGitAdapter {
 }
 
 mod adapter;
+mod commit_lock;
+mod disk_sync;
+/// `add_all` callback: stage everything except a write-lock file (#832).
+pub(crate) fn skip_write_lock_files(path: &Path, _spec: &[u8]) -> i32 {
+    i32::from(is_write_lock_file(path))
+}
+
+pub use disk_sync::DiskStamp;
+pub use write_lock::{
+    WRITE_LOCK_WAIT, enclosing_library_file, is_write_lock_file, rewrite_file_under_library_lock,
+    write_lock_path,
+};
 mod helpers;
+pub use helpers::component_to_library_row;
+pub(crate) mod lfs;
+mod pinned_assets;
 mod primitives;
+mod read_cache;
+mod row_edit;
+mod uncommitted;
+#[cfg(test)]
+mod uncommitted_tests;
+mod write_lock;
 
 use helpers::*;
+use row_edit::RowChange;
+
+#[cfg(test)]
+mod write_oracle_tests;
+
+#[cfg(test)]
+mod insert_row_tests;
+mod plain_token;
+#[cfg(test)]
+mod plain_token_tests;
+#[cfg(test)]
+mod read_cache_tests;
 
 #[cfg(test)]
 mod tests {
@@ -377,8 +511,35 @@ mod tests {
         Symbol::empty(name)
     }
 
+    /// #924 — a skipped footprint is reported once per (path, mtime), and
+    /// again after the file changes.
+    #[test]
+    fn skipped_footprint_warns_once_per_file_version() {
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "Dedup");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Dedup"),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: false,
+            },
+        )
+        .unwrap();
+        let bad = dir.path().join("bad.snxfpt");
+        std::fs::write(&bad, "a").unwrap();
+        assert!(adapter.warn_footprint_skipped_once(&bad, "e"));
+        assert!(!adapter.warn_footprint_skipped_once(&bad, "e"));
+        let f = std::fs::OpenOptions::new().write(true).open(&bad).unwrap();
+        f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
+            .unwrap();
+        assert!(adapter.warn_footprint_skipped_once(&bad, "e"));
+    }
+
     #[test]
     fn init_creates_snxlib_file_and_repo() {
+        crate::git_identity::test_identity::install();
         let dir = tempfile::tempdir().unwrap();
         let path = fixture_snxlib_path(&dir, "Test");
         // Default `LibraryInitOptions` flips `enable_git` off; this
@@ -398,6 +559,43 @@ mod tests {
         .expect("init succeeds");
         assert!(path.exists(), "expected .snxlib file at {path:?}");
         assert!(path.parent().unwrap().join(".git").exists());
+    }
+
+    /// #149: committing a path whose content matches HEAD makes no commit.
+    #[test]
+    fn commit_path_skips_unchanged_tree() {
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "Same");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Same"),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: false,
+            },
+        )
+        .unwrap();
+        let repo = git2::Repository::open(adapter.root()).unwrap();
+        let head = || repo.head().unwrap().target().unwrap();
+
+        fs::write(adapter.root().join("note.txt"), "a").unwrap();
+        assert!(
+            adapter
+                .commit_path("note.txt", "", "add note")
+                .is_recorded()
+        );
+        let first = head();
+        assert!(adapter.commit_path("note.txt", "", "again").is_recorded());
+        assert_eq!(head(), first, "unchanged tree must not commit");
+
+        fs::write(adapter.root().join("note.txt"), "b").unwrap();
+        assert!(
+            adapter
+                .commit_path("note.txt", "", "edit note")
+                .is_recorded()
+        );
+        assert_ne!(head(), first, "a real change still commits");
     }
 
     #[test]
@@ -420,6 +618,7 @@ mod tests {
 
     #[test]
     fn lfs_opt_in_writes_gitattributes() {
+        crate::git_identity::test_identity::install();
         let dir = tempfile::tempdir().unwrap();
         let path = fixture_snxlib_path(&dir, "Lfs");
         let adapter = LocalGitAdapter::init(

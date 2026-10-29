@@ -1,0 +1,110 @@
+format = "snxlib/2"
+library_id = "019df45d-af5e-7a00-8c3b-dd3bf89b40ae"
+
+[library]
+name = "Stock"
+description = "Reference footprints and symbols bundled with Signex."
+
+[mode]
+kind = "local_git"
+
+[workflow]
+mode = "personal"
+review_required = false
+reviewers_required = 1
+auto_lifecycle_promote = "Released"
+
+[users]
+default_role = ""
+allow_self_signup = false
+
+[[classes]]
+key = "resistor"
+label = "Resistor"
+
+[[classes]]
+key = "capacitor"
+label = "Capacitor"
+
+[[classes]]
+key = "inductor"
+label = "Inductor"
+
+[[classes]]
+key = "diode"
+label = "Diode"
+
+[[classes]]
+key = "led"
+label = "LED"
+
+[[classes]]
+key = "transistor"
+label = "Transistor"
+
+[[classes]]
+key = "ic"
+label = "Integrated Circuit"
+
+[[classes]]
+key = "connector"
+label = "Connector"
+
+[[classes]]
+key = "switch"
+label = "Switch"
+
+[[classes]]
+key = "crystal"
+label = "Crystal / Oscillator"
+
+[[classes]]
+key = "mechanical"
+label = "Mechanical"
+
+[[classes]]
+key = "fiducial"
+label = "Fiducial"
+
+[[classes]]
+key = "generic"
+label = "Generic"
+
+[tables.components]
+tsv = '''
+row_id	internal_pn	class	datasheet	state	symbol_ref	footprint_ref	sim_ref	primary_mpn	alternates	supply	parameters	pin_map_overrides	created	updated	content_hash	version	released	symbol_version	footprint_version	sim_version	description
+01a18461-b555-75c3-995a-0a8a51e590a4	STOCK-R	resistor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"bf88a609-74df-4453-a656-d68ef86e421d"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af63-7823-b5c3-01594028ccef"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	1c87d4305e3eaac8a16ce14e148f9bfadec0f267f601f8bc6723ccb02256fdbe	0.0.1	true	0.0.1	0.0.1		Resistor (IEC rectangle). Chip-0805 footprint.
+01a18461-b55e-7523-b9c9-d63b68daae2d	STOCK-C	capacitor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"9b489446-5f4e-4f4f-a166-85c076b4ff18"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af63-7823-b5c3-01594028ccef"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	728d1a4f6e690c675d3a2ea15c56e8b3a84ccf452d3f354cb97be9ffa0a52229	0.0.1	true	0.0.1	0.0.1		Capacitor, non-polarised. Chip-0805 footprint.
+01a18461-b561-7339-8ca8-366a1e75f029	STOCK-C_Polarized	capacitor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"2604013a-f69d-4802-827d-9e5add7d2356"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	d2774fc21ef7999355e311e644306f0802d27ef48b7c8363d1016893cd112978	0.0.1	true	0.0.1			Polarised capacitor; pin 1 is the positive plate.
+01a18461-b564-7742-8d1f-5970e27e2659	STOCK-L	inductor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"53e23353-f544-4652-8123-b8666f5986b9"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af63-7823-b5c3-01594028ccef"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	c672b8152536cd2b6eb10b1ee1a4166c1c0770f1647f2632f76b8fd2aa9ccf32	0.0.1	true	0.0.1	0.0.1		Inductor (four-hump coil). Chip-0805 footprint.
+01a18461-b567-7294-9054-dcaef701f93b	STOCK-Ferrite	inductor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"9b67ea2f-57cc-464f-b39b-80a1508c1ca9"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af63-7823-b5c3-01594028ccef"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	5961e38add83ba7519ae8c2dba52c4402795c276131b956a3412eb1a42c5f33e	0.0.1	true	0.0.1	0.0.1		Ferrite bead: a rectangle struck through by a diagonal. Chip-0805 footprint.
+01a18461-b56a-71bb-9548-4f548c72ca99	STOCK-Fuse	generic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"018d4323-4516-4c9d-8b60-fbc6662e7848"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af63-7823-b5c3-01594028ccef"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	f1eee4fef1c383832b8ab9857a1aaf46f05ec04751345c6a628612eab69c65f0	0.0.1	true	0.0.1	0.0.1		Fuse: a rectangle with the element drawn along its axis. Chip-0805 footprint.
+01a18461-b56d-76ce-96b5-09c429eacb1e	STOCK-D	diode	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"1288921b-aa3c-46a2-8ef7-31d1f7ec5834"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af67-7c20-9d3e-8b2f1d7a3c05"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	b6079735b26f798c508fac668aa1d1027caa8541d3ad271bc7d88dc8fec97944	0.0.1	true	0.0.1	0.0.1		Diode; pin 1 cathode, pin 2 anode. Chip-0805-Polarised footprint.
+01a18461-b570-7585-ac70-cf199f9c6e3e	STOCK-D_Schottky	diode	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"3b71eb69-67e4-434a-9b74-ded23c704b68"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af67-7c20-9d3e-8b2f1d7a3c05"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	a33d6ba08e7a8b210ac6814fe6c0af28d2f5f0c6f5bb8210b2f5585f2d2ef698	0.0.1	true	0.0.1	0.0.1		Schottky diode; pin 1 cathode, pin 2 anode. Chip-0805-Polarised footprint.
+01a18461-b573-721f-92d5-ee2658a6d058	STOCK-D_Zener	diode	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"a23b688f-74d9-40b5-93c4-6d48114992bc"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af67-7c20-9d3e-8b2f1d7a3c05"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	3ba45c771c57fd52be206f2e85d1063a491025fe42d1eebbb0c57ac321a021e8	0.0.1	true	0.0.1	0.0.1		Zener diode; pin 1 cathode, pin 2 anode. Chip-0805-Polarised footprint.
+01a18461-b577-73e1-8726-372141f949af	STOCK-LED	led	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"c2368f96-f502-4125-94e5-029eaa698ede"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af67-7c20-9d3e-8b2f1d7a3c05"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	a0a39720e8396c618e65790d590c5acb9d2f88ef51a29dfa9dd7336b3d96e0af	0.0.1	true	0.0.1	0.0.1		Light-emitting diode; pin 1 cathode, pin 2 anode. Chip-0805-Polarised footprint.
+01a18461-b57a-7507-a154-3cd59262073f	STOCK-Q_NPN	transistor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"3aa4c65d-91dc-46f4-b1cd-bd010bce921d"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	2ea106a23edf4abac365b0c6ff615c3bbe07df0e255e3d17eaad230ffe662f51	0.0.1	true	0.0.1			NPN bipolar transistor; pins 1 B, 2 E, 3 C.
+01a18461-b57d-77f5-b360-9710bf084215	STOCK-Q_PNP	transistor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"0cbf07b0-c162-4567-9e9a-78c089e24d52"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	e49f9d786cf6ecff7d07ea31304cbf670e443c6378e02839a7b8276a8cdd0069	0.0.1	true	0.0.1			PNP bipolar transistor; pins 1 B, 2 E, 3 C.
+01a18461-b580-72ec-a9cd-54fc454f7377	STOCK-Q_NMOS	transistor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"2a530743-7082-424f-bfad-ba7f0e1e858e"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	0d3c9a584148ced428d77ff461585deb076da1966f9fc31e7ce0ae4359269452	0.0.1	true	0.0.1			N-channel enhancement MOSFET; pins 1 G, 2 S, 3 D.
+01a18461-b583-7754-a605-75b147818921	STOCK-Q_PMOS	transistor	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"e7e9f067-7a54-43a3-bafb-87a4cfa17d79"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	a15fcfbc4a23dc8cdfc136d2fe99df91988efd60bcd3d837348176a391d92bc6	0.0.1	true	0.0.1			P-channel enhancement MOSFET; pins 1 G, 2 S, 3 D.
+01a18461-b586-751d-83ae-eb3cb7271b1e	STOCK-Crystal	crystal	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"60f53907-9a68-4b5e-a5a2-24b258a0901a"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	daf1a0c9cda5ca01272877d53a802a473ae1cfcdd5190b2522f7cf6513a0d638	0.0.1	true	0.0.1			Two-terminal crystal resonator.
+01a18461-b58a-7109-98de-3517476e83d8	STOCK-IC_Generic	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"15fc3bcf-6b70-413d-89a0-36e9d5ab5319"}	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"019df45d-af5f-7bb0-914a-26b538180e51"}		{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	dc6c2f155819458e9f4fc9646f6ca32d4c93381f3c7d0df5af070bbfd5c413d8	0.0.1	true	0.0.1	0.0.1		Generic 8-pin rectangular IC body; rename pins per part. SOIC-8 footprint.
+01a18461-b58d-75dd-a724-5eb3dc524249	STOCK-Conn_1x02	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"01a13ac9-cda8-487d-a53f-945732e945e0"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	90895c2e99ef7af676123be8be7285050c64c08ae8fcaeaa2f41cd966c1430b6	0.0.1	true	0.0.1			2-pin single-row header, 2.54 mm pitch.
+01a18461-b590-74fe-9267-fda68cbd460e	STOCK-Conn_1x03	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"d4f30085-41dc-458b-b7cc-0a3be9242226"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	1b8528f65ad4977ff8eb9916ae36d6f832186fbc412184d6c8b946af6b4aaf48	0.0.1	true	0.0.1			3-pin single-row header, 2.54 mm pitch.
+01a18461-b593-722e-b618-2aea834369a8	STOCK-Conn_1x04	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"a6bcc7d8-26ad-48ca-9347-7ddd4ff2326a"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	123ecdf498d3b3c1e24e345c772e41544d82f9c0ca70348d48eff61ffc5537f3	0.0.1	true	0.0.1			4-pin single-row header, 2.54 mm pitch.
+01a18461-b596-77b5-9358-f9dbd478797f	STOCK-Conn_1x05	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"1048ab67-cd77-4cad-a969-6380151c78de"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	6e2d99466a314239b1b20b9af058dce4ffbff1f14726ad96c8a94e26b42f97a1	0.0.1	true	0.0.1			5-pin single-row header, 2.54 mm pitch.
+01a18461-b599-7183-bd6d-7cb2743c2871	STOCK-Conn_1x06	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"a8dc8059-32fa-4317-922c-2664893d3451"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	35d706ca8062c095eafc0418f28b8ebdbfaa0552c9fea9d9a7b8d81485f21105	0.0.1	true	0.0.1			6-pin single-row header, 2.54 mm pitch.
+01a18461-b59c-70cb-a1e1-c1163bafd166	STOCK-Conn_1x08	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"36e24ede-f621-49cb-8c6c-3016d54640b9"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	8051545361db57cf4d3541d609cc966c9356f6978665731d0f7a95ce65eb49aa	0.0.1	true	0.0.1			8-pin single-row header, 2.54 mm pitch.
+01a18461-b59f-72f1-ad3b-1b1b4ad7d658	STOCK-Conn_1x10	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"8d2e9e62-fc08-4777-bc43-dd5e0b68cf19"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	7ad463d0cdf29bbd5d221db83bdf64be594b1889decb4ffc474ae1cd3e14d7b4	0.0.1	true	0.0.1			10-pin single-row header, 2.54 mm pitch.
+01a18461-b5a3-7719-9837-d621a7430117	STOCK-Conn_2x05	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"243191a8-f6cd-472f-8356-61f3df22e5eb"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	d47a8d33a5acd2b3de387c007282958db0b6c3a657305c3648489c3908da820a	0.0.1	true	0.0.1			10-pin dual-row header, 2.54 mm pitch; odd pins left, even pins right.
+01a18461-b5a6-7206-8fb7-3b4dfb26b5f6	STOCK-Conn_2x10	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"d64fe024-5686-4d71-96c9-dcf1ce295ebd"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	6998eeea52c79ab022d82d7f26d158306d344601e90e734114abc88863866a57	0.0.1	true	0.0.1			20-pin dual-row header, 2.54 mm pitch; odd pins left, even pins right.
+01a18461-b5a9-71cc-a68c-d4a504c446d5	STOCK-Screw_1x02	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"f3cab735-da24-44e6-bb3e-4615efc900f1"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	d5a8a883b8faf9566b94b7e638445e6723a6fa098686afed39c8d8b608ef4f8a	0.0.1	true	0.0.1			2-position screw terminal block.
+01a18461-b5ac-7226-8212-40535e0ceeb2	STOCK-Screw_1x03	connector	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"b5a279c3-0dcc-44e8-b2e4-6659eeb85bf0"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	71663e91ae01b9151922415d7137a201f6868093158328ef35a7d9e5d39cd7ed	0.0.1	true	0.0.1			3-position screw terminal block.
+01a18461-b5af-7262-b21e-aa1a5a4079de	STOCK-74HC00	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"89216e25-1574-48a2-b782-bf247ea267ac"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	31508aa1a4be0fea584029bd27584fc4d81dc306bd703207ff78ba6870e5f2bd	0.0.1	true	0.0.1			Quad 2-input NAND gate, 14-pin DIP/SOIC.
+01a18461-b5b2-723c-9f23-77e1bed55ae6	STOCK-74HC02	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"e35c6a45-ff32-4c9d-8569-41ad556d3343"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	61761c5704f8e58fabb35c6535f29238b734ce1766d1115ae982e05dfe42af8f	0.0.1	true	0.0.1			Quad 2-input NOR gate, 14-pin DIP/SOIC.
+01a18461-b5b5-73ea-b833-411a906f34f3	STOCK-74HC04	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"d22fdf64-507b-4437-b995-58404735a4aa"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	4b8d7b15e4985b147a793c2aeef2bd4c84a0e84b80cebefda7a4e868bc6411ca	0.0.1	true	0.0.1			Hex inverter, 14-pin DIP/SOIC.
+01a18461-b5b8-766c-8e63-40d3df715155	STOCK-74HC08	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"85b91fa5-96c5-4d28-b3c5-6f672b72fc15"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	34caddac2100f73990ef6d5630981c8f221641f7eeab806aa5a37daa3a32057b	0.0.1	true	0.0.1			Quad 2-input AND gate, 14-pin DIP/SOIC.
+01a18461-b5bb-7137-863b-5492b0a1fe63	STOCK-74HC14	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"208165e1-a261-489c-829f-d9d2c551f940"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	89e0019f2da80077bb41a1b76da6952274038b8110f20c3d19c5258f1d095fb4	0.0.1	true	0.0.1			Hex Schmitt-trigger inverter, 14-pin DIP/SOIC.
+01a18461-b5be-752d-9461-dc77c0d1ddaa	STOCK-74HC32	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"8e2bf1d2-8728-4329-ac45-9db91ccf043f"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	565a7af9934c2607c8f7951fb5d9774f545580747cac3a1a61016703ab549c90	0.0.1	true	0.0.1			Quad 2-input OR gate, 14-pin DIP/SOIC.
+01a18461-b5c2-7105-9182-ccd452248d54	STOCK-74HC86	ic	{"kind":"url","url":""}	Released	{"library_id":"019df45d-af5e-7a00-8c3b-dd3bf89b40ae","uuid":"f5650d62-9751-4109-a389-5bcbdaeb099c"}			{"manufacturer":"","mpn":"","status":"Primary","notes":null}	[]	[]	{}	[]	2026-05-04T19:01:13+00:00	2026-05-04T19:01:13+00:00	f425352a204f36c190a8f60f5c78757e095272f49393b224e388f7cf9cbfcab7	0.0.1	true	0.0.1			Quad 2-input XOR gate, 14-pin DIP/SOIC.
+'''

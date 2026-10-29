@@ -7,7 +7,7 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_msg, save_entry, submenu_launcher};
+use super::items::{dd_cmd, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
@@ -54,35 +54,89 @@ pub(super) fn tree_node_role(icon: &TreeIcon, path_len: usize, has_children: boo
     TreeNodeRole::Unknown
 }
 
+/// Why Refresh All Pricing is greyed when no enabled distributor can price.
+pub(super) const NO_PRICING_CLIENT: &str = "No enabled distributor returns prices yet";
+
+/// "Refresh All Pricing" for a library node. The gate is static: it asks only
+/// whether an *enabled* distributor (the Distributor APIs list) has a client
+/// that can return prices. It does not look at credentials, because `view`
+/// must not touch the OS keyring; a distributor without a key or token shows
+/// up per row in the Messages panel as an authentication failure. The refresh
+/// itself refuses a second concurrent run with a Messages-panel line, so the
+/// row stays pressable while one runs.
+pub(super) fn refresh_pricing_entry(
+    library_ref: Option<crate::app::LibraryRowRef>,
+    any_client_prices: bool,
+) -> DropdownEntry<Message> {
+    if !any_client_prices {
+        return dd_disabled(None, "Refresh All Pricing", Some(NO_PRICING_CLIENT));
+    }
+    match library_ref {
+        Some(row) => dd_msg(
+            None,
+            "Refresh All Pricing",
+            "",
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::RefreshLibraryPricing(row),
+            )),
+        ),
+        None => dd_disabled(None, "Refresh All Pricing", Some("Library not found")),
+    }
+}
+
 impl Signex {
+    /// Whether "Enable Version Control..." is offered for `dir`: a pure read
+    /// of the probed Model fact, never the disk (#1098).
+    pub(in crate::app::view) fn offers_enable_version_control(
+        &self,
+        dir: &std::path::Path,
+    ) -> bool {
+        self.document_state.project_fs.facts.lacks_git(dir)
+    }
+
     /// Build the Projects-panel tree-view right-click menu. The item set
     /// is derived from the clicked node's [`TreeNodeRole`] — project root
     /// vs library leaf vs openable leaf vs container branch — so the menu
     /// matches what Altium shows in each context. Empty-area clicks are
     /// filtered upstream (no menu shown), so `path` is `Some` whenever
     /// this runs.
-    #[allow(clippy::vec_init_then_push)]
     pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
     ) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        // No entries (an empty-area click, or a row that no longer exists)
+        // renders an empty placeholder so the overlay layer above has
+        // something to render into.
+        let Some(v) = self.project_tree_entries(ctx) else {
+            return container(iced::widget::Space::new()).into();
+        };
+        signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+    }
+
+    /// The pure row data behind [`Self::view_project_tree_context_menu`]:
+    /// `None` when the click names no live tree row.
+    pub(super) fn project_tree_entries(
+        &self,
+        ctx: &crate::app::ProjectTreeContextMenuState,
+    ) -> Option<Vec<DropdownEntry<Message>>> {
         use crate::app::ProjectTreeAction as A;
-        use signex_widgets::tree_view::get_node;
+        use signex_widgets::tree_view::{get_node, resolve_path};
 
         let panel_ctx = &self.document_state.panel_ctx;
         let tokens = &panel_ctx.tokens;
         let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(18);
 
-        let Some(path) = ctx.path.as_ref() else {
-            // Background (empty-area) clicks currently produce no menu —
-            // Altium shows a "New Project..." flow there which we do not
-            // ship yet. Return an empty placeholder so the overlay layer
-            // above has something to render into.
-            return container(iced::widget::Space::new()).into();
-        };
-        let Some(node) = get_node(panel_ctx.project_tree.as_slice(), path) else {
-            return container(iced::widget::Space::new()).into();
-        };
+        // Background (empty-area) clicks currently produce no menu —
+        // Altium shows a "New Project..." flow there which we do not ship yet.
+        let key = ctx.key.as_ref()?;
+        // Resolve the stored key against the tree as it is NOW, so the
+        // actions below carry indices of the row the user right-clicked
+        // even if the tree was rebuilt since. A row that no longer exists
+        // yields no menu rather than a menu for whatever took its place.
+        let path_vec = resolve_path(panel_ctx.project_tree.as_slice(), key)?;
+        let path = &path_vec;
+        let node = get_node(panel_ctx.project_tree.as_slice(), path)?;
 
         let role = tree_node_role(&node.icon, path.len(), !node.children.is_empty());
         let has_schematic = panel_ctx.has_schematic;
@@ -110,11 +164,11 @@ impl Signex {
                     .map(|p| p.path.clone());
                 let project_is_dirty = project_path
                     .as_ref()
-                    .map(|p| self.document_state.dirty_paths.contains(p))
+                    .map(|p| self.document_state.is_document_dirty(p))
                     .unwrap_or(false);
                 let can_save = has_schematic || project_is_dirty;
 
-                v.push(dd_disabled(
+                v.push(dd_planned(
                     None,
                     "Make Project Available Online...",
                     Some("v3.4"),
@@ -124,7 +178,7 @@ impl Signex {
                     "Validate Project",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ValidateProject(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(submenu_launcher(
@@ -139,16 +193,19 @@ impl Signex {
                     "Add Existing to Project...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                        A::AddExistingToProject(path.clone()),
+                        A::AddExistingToProject(key.clone()),
                     )),
                 ));
-                v.push(save_entry(can_save));
+                v.push(save_entry(
+                    can_save,
+                    &self.keymap_shortcut_label("save_document"),
+                ));
                 v.push(dd_msg(
                     None,
                     "Rename...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                        A::OpenProjectRenameDialog(path.clone()),
+                        A::OpenProjectRenameDialog(key.clone()),
                     )),
                 ));
                 v.push(DropdownEntry::Separator);
@@ -169,7 +226,7 @@ impl Signex {
                     "Close Project",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseProject(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(if has_project_dir {
@@ -178,25 +235,25 @@ impl Signex {
                         "Explore",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::RevealInExplorer(path.clone()),
+                            A::RevealInExplorer(key.clone()),
                         )),
                     )
                 } else {
                     dd_disabled(None, "Explore", None)
                 });
                 v.push(DropdownEntry::Separator);
-                v.push(dd_disabled(None, "Variants...", Some("v1.1")));
+                v.push(dd_planned(None, "Variants...", Some("v1.1")));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_disabled(None, "Project Packager...", Some("v4.2")));
-                v.push(dd_disabled(None, "Project Releaser...", Some("v5.2")));
+                v.push(dd_planned(None, "Project Packager...", Some("v4.2")));
+                v.push(dd_planned(None, "Project Releaser...", Some("v5.2")));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_disabled(None, "Share...", Some("v3.4")));
-                v.push(dd_msg(
+                v.push(dd_planned(None, "Share...", Some("v3.4")));
+                v.push(dd_cmd(
                     None,
-                    "Project Options...",
-                    "",
+                    "open_project_options",
+                    &self.keymap_shortcut_label("open_project_options"),
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenProjectOptions(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 // Enable Version Control — only surfaced when the project
@@ -205,7 +262,7 @@ impl Signex {
                     .first()
                     .and_then(|idx| self.document_state.projects.get(*idx))
                     .and_then(|p| p.path.parent())
-                    .map(|dir| !dir.join(".git").exists())
+                    .map(|dir| self.offers_enable_version_control(dir))
                     .unwrap_or(false);
                 if no_git_yet {
                     v.push(dd_msg(
@@ -213,12 +270,15 @@ impl Signex {
                         "Enable Version Control...",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenEnableVersionControl(path.clone()),
+                            A::OpenEnableVersionControl(key.clone()),
                         )),
                     ));
                 }
             }
             TreeNodeRole::Library => {
+                // Identity of the right-clicked library, so the actions
+                // below cannot be retargeted by a tree rebuild (#742).
+                let library_ref = self.library_row_ref(path.as_slice());
                 // Library node menu — mirrors Altium's "Add New ▸" submenu:
                 // Component opens the New Component modal; Symbol / Footprint
                 // create FILES via the adapter. The basic expand / refresh
@@ -248,33 +308,27 @@ impl Signex {
                     ));
                 }
                 v.push(DropdownEntry::Separator);
-                // Stage 18 distributor refresh stub — resolves the clicked
-                // library's `.snxlib` file via the project tree.
-                if let Some(lib_path) = self.library_node_path_from_tree(path.as_slice()) {
-                    v.push(dd_msg(
-                        None,
-                        "Refresh All Pricing",
-                        "",
-                        Message::Library(crate::library::LibraryMessage::LibraryRefreshAllPricing(
-                            lib_path,
-                        )),
-                    ));
-                } else {
-                    v.push(dd_disabled(None, "Refresh All Pricing", None));
-                }
+                v.push(refresh_pricing_entry(
+                    library_ref.clone(),
+                    self.library
+                        .settings
+                        .preferred_order
+                        .iter()
+                        .any(|s| signex_library::source_supports_pricing(*s)),
+                ));
                 v.push(DropdownEntry::Separator);
                 // Enable Version Control on the library directory itself —
                 // hidden once the library has a `.git/`.
-                if let Some(lib_file) = self.library_node_path_from_tree(path.as_slice())
-                    && let Some(lib_dir) = lib_file.parent()
-                    && !lib_dir.join(".git").exists()
+                if let Some(library_ref) = library_ref.clone()
+                    && let Some(lib_dir) = library_ref.root.parent()
+                    && self.offers_enable_version_control(lib_dir)
                 {
                     v.push(dd_msg(
                         None,
                         "Enable Version Control...",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::OpenLibraryEnableVersionControl(path.clone()),
+                            A::OpenLibraryEnableVersionControl(library_ref),
                         )),
                     ));
                     v.push(DropdownEntry::Separator);
@@ -285,7 +339,7 @@ impl Signex {
                     toggle_label,
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(dd_msg(
@@ -296,14 +350,17 @@ impl Signex {
                 ));
                 // F23 — "Remove from Project" reuses the RemoveDialog flow.
                 v.push(DropdownEntry::Separator);
-                v.push(dd_msg(
-                    None,
-                    "Remove from Project...",
-                    "",
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        path.clone(),
-                    ))),
-                ));
+                v.push(match library_ref {
+                    Some(library_ref) => dd_msg(
+                        None,
+                        "Remove from Project...",
+                        "",
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RemoveLibrary(
+                            library_ref,
+                        ))),
+                    ),
+                    None => dd_disabled(None, "Remove from Project...", None),
+                });
             }
             TreeNodeRole::OpenableLeaf => {
                 // Sheet / PCB / library leaf — Altium's per-document menu.
@@ -320,7 +377,7 @@ impl Signex {
                     "Open",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenNode(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(DropdownEntry::Separator);
@@ -330,7 +387,7 @@ impl Signex {
                         "Explore",
                         "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                            A::RevealInExplorer(path.clone()),
+                            A::RevealInExplorer(key.clone()),
                         )),
                     )
                 } else {
@@ -342,7 +399,7 @@ impl Signex {
                     "Rename...",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRenameDialog(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(dd_msg(
@@ -350,7 +407,7 @@ impl Signex {
                     "Remove from Project",
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(DropdownEntry::Separator);
@@ -367,7 +424,7 @@ impl Signex {
                 } else {
                     dd_disabled(None, "Print...", None)
                 });
-                v.push(dd_disabled(None, "Show Differences...", Some("v4.3")));
+                v.push(dd_planned(None, "Show Differences...", Some("v4.3")));
             }
             TreeNodeRole::Container => {
                 // Source Documents / Libraries / Settings folders. Minimum
@@ -378,7 +435,7 @@ impl Signex {
                     label,
                     "",
                     Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
-                        path.clone(),
+                        key.clone(),
                     ))),
                 ));
                 v.push(dd_msg(
@@ -413,6 +470,6 @@ impl Signex {
             }
         }
 
-        signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
+        Some(v)
     }
 }

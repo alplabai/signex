@@ -3,6 +3,7 @@ pub mod error;
 pub mod glb;
 pub mod gltf;
 pub mod normalize;
+pub mod read;
 pub mod step;
 pub mod vrml;
 
@@ -69,28 +70,44 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
 
     let format = detect_format(source_path)?;
 
-    let source_mtime = source_path
+    let source_meta = source_path
         .metadata()
-        .and_then(|m| m.modified())
+        .map_err(|e| ModelImportError::IoFailed {
+            path: source_path.clone(),
+            message: e.to_string(),
+        })?;
+    let source_mtime = source_meta
+        .modified()
         .map_err(|e| ModelImportError::IoFailed {
             path: source_path.clone(),
             message: e.to_string(),
         })?;
 
+    let dependency_stamp = match format {
+        SourceFormat::Gltf => gltf::dependency_stamp(source_path),
+        _ => String::new(),
+    };
     let glb_path = cache::cache_path(
         &request.cache_dir,
         source_path,
         source_mtime,
+        source_meta.len(),
         request.converter_version,
+        &dependency_stamp,
     )?;
 
-    // Cache hit
-    if cache::is_cache_valid(&glb_path) {
+    // Cache hit: a valid GLB plus the warnings its conversion recorded. A GLB
+    // with no readable warnings sidecar (written before #871, or damaged) is
+    // a miss, so its warnings are produced again instead of lost.
+    if cache::is_cache_valid(&glb_path)
+        && let Some(warnings) = cache::read_warnings(&glb_path)
+    {
         let byte_len = glb_path.metadata().map(|m| m.len() as usize).unwrap_or(0);
+        cache::touch(&glb_path);
         return Ok(ModelImportResult {
             glb_path,
             cache_hit: true,
-            warnings: vec![],
+            warnings,
             metadata: ImportMetadata {
                 source_format: format,
                 source_path: source_path.clone(),
@@ -106,8 +123,15 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
     // Cache miss: convert
     let (glb_bytes, warnings, mesh_count, primitive_count) = match format {
         SourceFormat::Vrml => {
-            let meshes = vrml::load(source_path)?;
+            let (meshes, parse_warnings) = vrml::load(source_path)?;
             let mesh_count = meshes.len();
+            let warnings = parse_warnings
+                .into_iter()
+                .map(|w| ImportWarning::GeometryAltered {
+                    line: w.line,
+                    reason: w.reason,
+                })
+                .collect();
             let (json, bin) = normalize::meshes_to_gltf(
                 &meshes,
                 "vrml",
@@ -115,7 +139,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
                 request.converter_version,
             );
             let glb = glb::writer::write_glb(&json, &bin)?;
-            (glb, vec![], mesh_count, mesh_count)
+            (glb, warnings, mesh_count, mesh_count)
         }
         SourceFormat::Step => {
             let result = step::load(source_path)?;
@@ -147,21 +171,45 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
         }
         SourceFormat::Glb => {
             // GLB pass-through: copy as-is
-            let bytes = std::fs::read(source_path).map_err(|e| ModelImportError::IoFailed {
-                path: source_path.clone(),
-                message: e.to_string(),
+            let bytes = read::read_capped(source_path, read::MAX_READ_BYTES).map_err(|e| {
+                ModelImportError::IoFailed {
+                    path: source_path.clone(),
+                    message: e.to_string(),
+                }
             })?;
+            // A corrupt source would otherwise be cached and then always miss.
+            if !cache::is_valid_glb(&bytes) {
+                return Err(ModelImportError::GltfParseFailed {
+                    path: source_path.clone(),
+                    reason: "not a well-formed GLB (header, length or chunks)".to_owned(),
+                });
+            }
             (bytes, vec![], 0, 0)
         }
     };
 
     // Write to cache
-    std::fs::create_dir_all(&request.cache_dir).map_err(|e| ModelImportError::CacheFailed {
-        reason: e.to_string(),
+    // The warnings sidecar first: a crash before the GLB lands leaves only a
+    // sidecar, which is not a hit on its own (#871).
+    let sidecar = cache::warnings_path(&glb_path);
+    let warnings_json =
+        serde_json::to_vec(&warnings).map_err(|e| ModelImportError::CacheFailed {
+            reason: format!("encoding warnings for {}: {e}", glb_path.display()),
+        })?;
+    signex_types::atomic_io::atomic_write(&sidecar, &warnings_json).map_err(|e| {
+        ModelImportError::CacheFailed {
+            reason: format!("writing {}: {e}", sidecar.display()),
+        }
     })?;
-    std::fs::write(&glb_path, &glb_bytes).map_err(|e| ModelImportError::CacheFailed {
-        reason: e.to_string(),
+    // Temp + fsync + rename (also creates `cache_dir`): a crash can never
+    // leave a partial GLB at `glb_path` for the next import to trust (#147).
+    signex_types::atomic_io::atomic_write(&glb_path, &glb_bytes).map_err(|e| {
+        ModelImportError::CacheFailed {
+            reason: format!("writing {}: {e}", glb_path.display()),
+        }
     })?;
+
+    cache::evict_oldest(&request.cache_dir, cache::MAX_CACHE_ENTRIES, &glb_path);
 
     let byte_len = glb_bytes.len();
 

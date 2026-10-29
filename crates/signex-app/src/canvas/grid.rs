@@ -4,10 +4,21 @@ use iced::widget::canvas;
 use iced::{Color, Point};
 
 use super::camera::Camera;
+use crate::render_config::GridStyle;
 
 /// Schematic grid sizes in mm — exact multiples/fractions of 2.54 mm (100 mil).
 /// Range: 0.635 mm (¼ grid) → 5.08 mm (2× grid). Default: 1.27 mm (Altium default, 50 mil).
 pub const GRID_SIZES_MM: &[f32] = &[0.635, 1.27, 2.54, 5.08];
+
+/// The grid pitch as the exact `f64` millimetre value the user sees.
+///
+/// The pitch is stored as `f32`, and widening it with `f64::from` turns
+/// `1.27` into `1.2699999809…`, which lands snapped points 1–4 nm off the
+/// grid in the saved file. Rounding to the nearest whole nanometre recovers
+/// the intended decimal (`1.27f32` -> `1.27f64`).
+pub fn pitch_mm_exact(mm: f32) -> f64 {
+    (f64::from(mm) * 1e6).round() / 1e6
+}
 
 /// Human-readable labels for GRID_SIZES_MM (same order).
 pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 mm"];
@@ -16,56 +27,22 @@ pub const GRID_SIZE_LABELS: &[&str] = &["0.635 mm", "1.27 mm", "2.54 mm", "5.08 
 /// 0.635 mm = 25 mil, 1.27 mm = 50 mil, 2.54 mm = 100 mil, 5.08 mm = 200 mil.
 pub const GRID_SIZE_LABELS_MIL: &[&str] = &["25 mil", "50 mil", "100 mil", "200 mil"];
 
-/// Grid state — size, visibility, snap.
-#[derive(Debug, Clone)]
-pub struct GridState {
-    /// Index into GRID_SIZES_MM.
-    pub size_index: usize,
-    /// Whether snap-to-grid is enabled.
-    #[allow(dead_code)]
-    pub snap: bool,
-}
-
-impl Default for GridState {
-    fn default() -> Self {
-        Self {
-            size_index: 1, // 1.27mm default (50mil) — Altium default
-            snap: true,
+/// Smallest `grid_mm * 5^k` (k = 0..=4) whose on-screen distance at `scale`
+/// px/mm is at least `min_px`, or `None` when even the coarsest level is too
+/// dense to draw. The result is always an integer multiple of `grid_mm`, so a
+/// drawn line never lands off a real grid point (a plain pixel clamp would).
+pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
+    if grid_mm <= 0.0 || scale <= 0.0 {
+        return None;
+    }
+    let mut pitch = grid_mm;
+    for _ in 0..5 {
+        if pitch * scale >= min_px {
+            return Some(pitch);
         }
+        pitch *= 5.0;
     }
-}
-
-impl GridState {
-    /// Current grid size in mm.
-    pub fn size_mm(&self) -> f32 {
-        GRID_SIZES_MM[self.size_index]
-    }
-
-    /// Cycle to next grid size (wraps around).
-    #[allow(dead_code)]
-    pub fn cycle_forward(&mut self) {
-        self.size_index = (self.size_index + 1) % GRID_SIZES_MM.len();
-    }
-
-    /// Cycle to previous grid size (wraps around).
-    #[allow(dead_code)]
-    pub fn cycle_backward(&mut self) {
-        if self.size_index == 0 {
-            self.size_index = GRID_SIZES_MM.len() - 1;
-        } else {
-            self.size_index -= 1;
-        }
-    }
-
-    /// Snap a world-space coordinate to the nearest grid point.
-    #[allow(dead_code)]
-    pub fn snap_world(&self, world: Point) -> Point {
-        if !self.snap {
-            return world;
-        }
-        let g = self.size_mm();
-        Point::new((world.x / g).round() * g, (world.y / g).round() * g)
-    }
+    None
 }
 
 /// Draw the grid dots on a canvas frame.
@@ -77,6 +54,13 @@ impl GridState {
 /// (no more "very prominent at one zoom, invisible at the next") and the
 /// minor → major transitions cross-fade smoothly via alpha rather than
 /// snapping on/off.
+///
+/// `style` is the caller's effective glyph choice — #630 moved it off a
+/// process global that this function used to read from inside `draw`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "8 arguments: camera + grid metrics + page bounds + colour + glyph style, all per-frame draw inputs"
+)]
 pub fn draw_grid(
     frame: &mut canvas::Frame,
     camera: &Camera,
@@ -85,6 +69,7 @@ pub fn draw_grid(
     color: Color,
     page_w: f32,
     page_h: f32,
+    style: GridStyle,
 ) {
     if grid_mm <= 0.0 || camera.scale <= 0.0 {
         return;
@@ -92,13 +77,9 @@ pub fn draw_grid(
 
     // --- 1. Pick adaptive minor step (5^k * grid_mm), aiming for ≥ 6 px. ---
     const MIN_PX: f32 = 6.0;
-    let mut minor_mm = grid_mm;
-    for _ in 0..4 {
-        if minor_mm * camera.scale >= MIN_PX {
-            break;
-        }
-        minor_mm *= 5.0;
-    }
+    let Some(minor_mm) = adaptive_pitch_mm(grid_mm, camera.scale, MIN_PX) else {
+        return;
+    };
     let minor_screen = minor_mm * camera.scale;
     let major_mm = minor_mm * 5.0;
     let major_screen = major_mm * camera.scale;
@@ -138,7 +119,6 @@ pub fn draw_grid(
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
 
-    let style = crate::render_config::grid_style();
     // Small-cross arm length in screen pixels (Standard-style "+").
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
     let minor_stroke = canvas::Stroke::default()
@@ -147,7 +127,7 @@ pub fn draw_grid(
 
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
-    if matches!(style, crate::render_config::GridStyle::Lines) {
+    if matches!(style, GridStyle::Lines) {
         let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
         let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
         let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
@@ -196,11 +176,11 @@ pub fn draw_grid(
                             && screen.y <= bounds.height + dot_radius
                         {
                             match style {
-                                crate::render_config::GridStyle::Dots => {
+                                GridStyle::Dots => {
                                     let dot = canvas::Path::circle(screen, dot_radius);
                                     frame.fill(&dot, dot_color);
                                 }
-                                crate::render_config::GridStyle::SmallCrosses => {
+                                GridStyle::SmallCrosses => {
                                     let h = canvas::Path::line(
                                         Point::new(screen.x - cross_arm, screen.y),
                                         Point::new(screen.x + cross_arm, screen.y),
@@ -216,7 +196,7 @@ pub fn draw_grid(
                                 // early return at the top of this function (≈ line 150); this match
                                 // arm is structurally unreachable. If a new `GridStyle` variant ever
                                 // lands, it must be handled at BOTH sites.
-                                crate::render_config::GridStyle::Lines => unreachable!(),
+                                GridStyle::Lines => unreachable!(),
                             }
                         }
                     }
@@ -272,5 +252,55 @@ pub fn draw_grid(
             frame.stroke(&line, stroke);
         }
         my += major_mm;
+    }
+}
+
+#[cfg(test)]
+mod pitch_tests {
+    use super::{adaptive_pitch_mm, pitch_mm_exact};
+
+    #[test]
+    fn default_pcb_zoom_draws_a_multiple_of_the_grid() {
+        // 3.0 px/mm, 2.54 mm grid: 7.62 px < 8, so step to 5 x 2.54.
+        let p = adaptive_pitch_mm(2.54, 3.0, 8.0).unwrap();
+        assert!((p / 2.54 - 5.0).abs() < 1e-4, "{p}");
+    }
+
+    #[test]
+    fn dense_enough_grid_keeps_its_own_pitch() {
+        assert_eq!(adaptive_pitch_mm(1.27, 10.0, 8.0), Some(1.27));
+    }
+
+    #[test]
+    fn too_dense_even_at_coarsest_level_hides() {
+        assert_eq!(adaptive_pitch_mm(0.635, 0.01, 8.0), None);
+        assert_eq!(adaptive_pitch_mm(0.0, 3.0, 8.0), None);
+    }
+
+    /// #1057 - a snapped point is an exact multiple of the pitch in nm, for
+    /// every preset and the issue's extra grids, at large step counts.
+    #[test]
+    fn snapped_points_are_exact_nm_multiples() {
+        let grids: [(f32, i64); 7] = [
+            (0.635, 635_000),
+            (1.27, 1_270_000),
+            (2.54, 2_540_000),
+            (5.08, 5_080_000),
+            (0.127, 127_000),
+            (0.1, 100_000),
+            (0.254, 254_000),
+        ];
+        for (mm, pitch_nm) in grids {
+            let g = pitch_mm_exact(mm);
+            for steps in [1_i64, 7, 100, 400, 1000, 5000] {
+                let x = steps as f64 * g + 0.3 * g;
+                let snapped = (x / g).round() * g;
+                assert_eq!(
+                    (snapped * 1e6).round() as i64,
+                    steps * pitch_nm,
+                    "{mm} x {steps}"
+                );
+            }
+        }
     }
 }

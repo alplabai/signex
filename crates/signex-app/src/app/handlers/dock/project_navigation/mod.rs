@@ -3,29 +3,97 @@ use iced::Task;
 use super::super::super::*;
 
 mod add;
+pub(crate) mod add_io;
+pub(crate) use add::register_sheet_entry;
+#[cfg(test)]
+mod add_library_tests;
+#[cfg(test)]
+mod add_subdir_tests;
+#[cfg(test)]
+mod add_tests;
 mod close_project;
+#[cfg(test)]
+mod close_project_paused_tests;
+mod dialog_target;
+mod exclude_dirty;
+#[cfg(test)]
+mod exclude_dirty_tests;
+#[cfg(test)]
+mod library_row_tests;
+mod missing_child;
+#[cfg(test)]
+mod nested_row_incomplete_tests;
+#[cfg(test)]
+mod nested_row_messages_tests;
+#[cfg(test)]
+mod nested_row_safety_tests;
+#[cfg(test)]
+mod nested_row_spelling_tests;
+#[cfg(test)]
+mod nested_row_tests;
 mod open_document;
+#[cfg(test)]
+mod path_op_guard_tests;
 mod project_actions;
+mod project_rename;
+#[cfg(test)]
+mod project_rename_failing_move_tests;
+mod project_rename_fs;
+#[cfg(test)]
+mod project_rename_inflight_tests;
+#[cfg(test)]
+mod project_rename_recovery_tests;
+#[cfg(test)]
+mod project_rename_tests;
 mod remove;
+mod remove_guard;
 mod rename;
+mod rename_apply;
+mod rename_library;
+mod save_all;
+#[cfg(test)]
+mod save_all_case_variant_tests;
+#[cfg(test)]
+mod save_all_gate_tests;
+#[cfg(test)]
+mod save_all_tests;
+mod sheet_references;
+pub(crate) mod sheet_users;
+#[cfg(test)]
+mod subdir_entry_tests;
+#[cfg(test)]
+mod tree_key_tests;
 mod version_control;
 
 impl Signex {
+    /// Returns `None` when the message isn't a project-navigation message
+    /// (so the caller falls through to the next dock handler), or
+    /// `Some(task)` when handled — the task carries the follow-up work
+    /// from opening a project-tree document (library-browser mount /
+    /// primitive-editor open) so it isn't dropped.
     pub(super) fn handle_dock_project_navigation_panel_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
-    ) -> bool {
-        use signex_widgets::tree_view::{TreeIcon, TreeMsg, get_node};
+    ) -> Option<Task<Message>> {
+        use signex_widgets::tree_view::{TreeIcon, TreeMsg, get_node, resolve_path};
 
-        match panel_msg {
-            crate::panels::PanelMsg::Tree(TreeMsg::Toggle(path)) => {
-                signex_widgets::tree_view::toggle(
-                    &mut self.document_state.panel_ctx.project_tree,
-                    path,
-                );
+        let mut follow = Task::none();
+        let handled = match panel_msg {
+            crate::panels::PanelMsg::Tree(TreeMsg::Toggle(key)) => {
+                if let Some(path) =
+                    resolve_path(self.document_state.panel_ctx.project_tree.as_slice(), key)
+                {
+                    signex_widgets::tree_view::toggle(
+                        &mut self.document_state.panel_ctx.project_tree,
+                        &path,
+                    );
+                }
                 true
             }
-            crate::panels::PanelMsg::Tree(TreeMsg::Select(path)) => {
+            crate::panels::PanelMsg::Tree(TreeMsg::Select(key)) => {
+                let path = resolve_path(self.document_state.panel_ctx.project_tree.as_slice(), key)
+                    .unwrap_or_default();
+                let path = &path;
                 let selected_node =
                     get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
                 let is_openable = selected_node.is_some_and(|node| {
@@ -44,14 +112,18 @@ impl Signex {
                 });
                 if !is_openable {
                     self.interaction_state.last_tree_click = None;
-                    return true;
+                    // `follow` is still its initial `Task::none()` here —
+                    // nothing between the `let mut follow` above and this
+                    // early return assigns it. Spelled out explicitly so
+                    // a reader doesn't have to scan upward to confirm it.
+                    return Some(Task::none());
                 }
                 // Single-click highlight: every leaf click sets the
                 // tree's "selected" path so the row gets the active
                 // background tint immediately, even before the second
                 // click opens it. Persists across panel refreshes via
                 // `runtime.rs`.
-                self.document_state.panel_ctx.project_tree_selected = Some(path.clone());
+                self.document_state.panel_ctx.project_tree_selected = Some(key.clone());
                 // Double-click gate — first click memos the path; the
                 // second click on the *same* path within the window
                 // actually opens the file. Otherwise the memo just
@@ -62,31 +134,30 @@ impl Signex {
                 let now = std::time::Instant::now();
                 let is_double = matches!(
                     &self.interaction_state.last_tree_click,
-                    Some((prev, t)) if prev == path && now.duration_since(*t) <= TREE_DOUBLE_CLICK_WINDOW
+                    Some((prev, t)) if prev == key && now.duration_since(*t) <= TREE_DOUBLE_CLICK_WINDOW
                 );
                 if is_double {
                     self.interaction_state.last_tree_click = None;
-                    if let Some(node) = selected_node
-                        && let Err(error) =
-                            self.open_project_tree_document(path, node.label.clone())
-                    {
-                        crate::diagnostics::log_error(
-                            "Failed to open project tree document",
-                            &error,
-                        );
+                    if let Some(missing) = self.missing_child_sheet_at(path) {
+                        follow = self.offer_create_child_sheet(&missing);
+                    } else if let Some(node) = selected_node {
+                        match self.open_project_tree_document(path, node.label.clone()) {
+                            Ok(task) => follow = task,
+                            Err(error) => crate::diagnostics::log_error(
+                                "Failed to open project tree document",
+                                &error,
+                            ),
+                        }
                     }
                 } else {
-                    self.interaction_state.last_tree_click = Some((path.clone(), now));
+                    self.interaction_state.last_tree_click = Some((key.clone(), now));
                 }
                 true
             }
-            crate::panels::PanelMsg::Tree(TreeMsg::ContextMenu(path)) => {
+            crate::panels::PanelMsg::Tree(TreeMsg::ContextMenu(key)) => {
                 // Routed up to the app level as a Message so the overlay
                 // dispatcher can anchor the menu at `last_mouse_pos`.
-                // `handle_*_panel_message` returns `bool` and has no
-                // way to emit a follow-up Task, so we poke the state
-                // directly — same shape as the canvas menu wiring.
-                self.dispatch_show_project_tree_context_menu(Some(path.clone()));
+                self.dispatch_show_project_tree_context_menu(Some(key.clone()));
                 true
             }
             crate::panels::PanelMsg::Tree(TreeMsg::BackgroundContextMenu) => {
@@ -94,14 +165,18 @@ impl Signex {
                 true
             }
             _ => false,
-        }
+        };
+        if handled { Some(follow) } else { None }
     }
 
-    fn dispatch_show_project_tree_context_menu(&mut self, path: Option<Vec<usize>>) {
+    fn dispatch_show_project_tree_context_menu(
+        &mut self,
+        key: Option<signex_widgets::tree_view::TreeKey>,
+    ) {
         let (x, y) = self.interaction_state.last_mouse_pos;
         self.interaction_state.context_menu = None;
         self.interaction_state.project_tree_context_menu =
-            Some(crate::app::ProjectTreeContextMenuState { x, y, path });
+            Some(crate::app::ProjectTreeContextMenuState { x, y, key });
     }
 
     pub(crate) fn handle_project_tree_action(
@@ -116,16 +191,42 @@ impl Signex {
         // menu is always wrong after a pick.
         self.interaction_state.project_tree_context_menu = None;
 
+        // Resolve the row the action names against the tree as it is now,
+        // so a rebuild or reorder since the menu opened cannot retarget it.
+        // A row that no longer exists drops the action.
+        let tree_path = match action.row_key() {
+            Some(key) => match self.resolve_tree_row(key) {
+                Some(path) => path,
+                None => {
+                    crate::diagnostics::log_warning(
+                        "Project tree action dropped: its row is gone or moved under another sheet since the menu opened. Open the menu again on the row.",
+                    );
+                    return Task::none();
+                }
+            },
+            None => Vec::new(),
+        };
+
         match action {
-            ProjectTreeAction::OpenNode(path) => {
+            ProjectTreeAction::OpenNode(_) => {
+                let path = tree_path;
                 // Reuse the existing leaf-open path. Wrapping the inner
                 // call in the same PanelMsg handler keeps the icon-gate
                 // logic (only schematic / pcb / snx* leaves open) in
                 // one place.
-                let msg = crate::panels::PanelMsg::Tree(TreeMsg::Select(path));
-                self.handle_dock_project_navigation_panel_message(&msg);
+                let key = signex_widgets::tree_view::key_of(
+                    self.document_state.panel_ctx.project_tree.as_slice(),
+                    &path,
+                );
+                if let Some(key) = key {
+                    let msg = crate::panels::PanelMsg::Tree(TreeMsg::Select(key));
+                    if let Some(task) = self.handle_dock_project_navigation_panel_message(&msg) {
+                        return task;
+                    }
+                }
             }
-            ProjectTreeAction::ToggleNode(path) => {
+            ProjectTreeAction::ToggleNode(_) => {
+                let path = tree_path;
                 signex_widgets::tree_view::toggle(
                     &mut self.document_state.panel_ctx.project_tree,
                     &path,
@@ -146,13 +247,14 @@ impl Signex {
                 // items we haven't touched yet. Collects close tasks
                 // into a single batch so orphan-window close commands
                 // from every tab fire concurrently.
+                self.cancel_in_flight_reads();
                 let mut tasks = Vec::new();
                 for idx in (0..self.document_state.tabs.len()).rev() {
-                    tasks.push(self.close_tab_now(idx));
+                    tasks.push(self.close_tab_parking_dirty(idx));
                 }
                 return Task::batch(tasks);
             }
-            ProjectTreeAction::RevealInExplorer(tree_path) => {
+            ProjectTreeAction::RevealInExplorer(_) => {
                 // The tree_path's first index picks the owning project,
                 // so right-clicking project B's leaf reveals in B's dir
                 // even when project A is active. Single-element path =
@@ -176,41 +278,55 @@ impl Signex {
                     Message::PrintPreview(PrintPreviewMsg::Requested)
                 });
             }
-            ProjectTreeAction::OpenRenameDialog(tree_path) => {
+            ProjectTreeAction::OpenRenameDialog(_) => {
                 self.open_rename_dialog(tree_path);
             }
-            ProjectTreeAction::OpenRemoveDialog(tree_path) => {
+            ProjectTreeAction::OpenRemoveDialog(_) => {
                 self.open_remove_dialog(tree_path);
             }
-            ProjectTreeAction::CloseProject(tree_path) => {
+            ProjectTreeAction::CloseProject(_) => {
                 return self.close_project_at_tree_path(&tree_path);
             }
-            ProjectTreeAction::ValidateProject(tree_path) => {
+            ProjectTreeAction::ValidateProject(_) => {
                 return self.run_validate_project(tree_path);
             }
-            ProjectTreeAction::OpenProjectRenameDialog(tree_path) => {
+            ProjectTreeAction::OpenProjectRenameDialog(_) => {
                 self.open_project_rename_dialog(tree_path);
             }
-            ProjectTreeAction::OpenProjectOptions(tree_path) => {
-                self.open_project_options_dialog(tree_path);
+            ProjectTreeAction::OpenProjectOptions(_) => {
+                if let Some(&project_idx) = tree_path.first() {
+                    self.open_project_tab(project_idx);
+                }
             }
-            ProjectTreeAction::AddExistingToProject(tree_path) => {
+            ProjectTreeAction::AddExistingToProject(_) => {
                 return self.add_existing_to_project(tree_path);
             }
-            ProjectTreeAction::AddNewSchematic(tree_path) => {
+            ProjectTreeAction::AddNewSchematic(_) => {
                 return self.add_new_schematic(tree_path);
             }
-            ProjectTreeAction::AddProjectSymbolLibrary(tree_path) => {
+            ProjectTreeAction::AddProjectSymbolLibrary(_) => {
                 return self.add_project_symbol_library(tree_path);
             }
-            ProjectTreeAction::AddProjectFootprintLibrary(tree_path) => {
+            ProjectTreeAction::AddProjectFootprintLibrary(_) => {
                 return self.add_project_footprint_library(tree_path);
             }
-            ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
+            ProjectTreeAction::OpenEnableVersionControl(_) => {
                 self.open_enable_version_control_dialog(tree_path);
             }
-            ProjectTreeAction::OpenLibraryEnableVersionControl(tree_path) => {
-                self.open_library_enable_version_control_dialog(tree_path);
+            ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
+                self.open_library_enable_version_control_dialog(row);
+            }
+            ProjectTreeAction::RemoveLibrary(row) => {
+                self.open_library_remove_dialog(row);
+            }
+            ProjectTreeAction::RefreshLibraryPricing(row) => {
+                if self
+                    .resolve_library_row(&row, "Refresh All Pricing")
+                    .is_none()
+                {
+                    return Task::none();
+                }
+                return self.start_pricing_refresh(row);
             }
         }
         Task::none()
@@ -250,7 +366,7 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
             .arg(arg)
             .spawn()
             .map_err(|e| anyhow::anyhow!("explorer.exe failed to spawn: {e}"))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "macos")]
@@ -264,7 +380,7 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
         cmd.arg(path)
             .spawn()
             .map_err(|e| anyhow::anyhow!("open failed to spawn: {e}"))?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
@@ -280,5 +396,172 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
             .spawn()
             .map_err(|e| anyhow::anyhow!("xdg-open failed to spawn: {e}"))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_widgets::tree_view::TreeMsg;
+
+    /// Regression (#99 part 1): `handle_dock_project_navigation_panel_message`
+    /// used to return `bool` and its `TreeMsg::Select` double-click arm
+    /// discarded `open_project_tree_document`'s `Task` via `let _ = ...`.
+    /// The explicit `Option<Task<Message>>` annotation is a compile-time
+    /// tripwire — this test stops compiling if the signature regresses
+    /// back to `bool`.
+    #[test]
+    fn handled_tree_message_returns_some_task() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let msg = crate::panels::PanelMsg::Tree(TreeMsg::Toggle(vec![]));
+
+        let result: Option<Task<Message>> = app.handle_dock_project_navigation_panel_message(&msg);
+
+        assert!(
+            result.is_some(),
+            "a Tree message must be reported as handled"
+        );
+    }
+
+    fn two_sheet_tree() -> Vec<signex_widgets::tree_view::TreeNode> {
+        use signex_widgets::tree_view::{TreeIcon, TreeNode};
+        vec![TreeNode::branch(
+            "proj",
+            TreeIcon::Folder,
+            vec![TreeNode::branch(
+                "Source Documents",
+                TreeIcon::Folder,
+                vec![
+                    TreeNode::leaf("a.snxsch", TreeIcon::SnxSchematic),
+                    TreeNode::leaf("b.snxsch", TreeIcon::SnxSchematic),
+                ],
+            )],
+        )]
+    }
+
+    fn label_at_key(app: &Signex, key: &[String]) -> Option<String> {
+        use signex_widgets::tree_view::{get_node, resolve_path};
+        let tree = app.document_state.panel_ctx.project_tree.as_slice();
+        let path = resolve_path(tree, key)?;
+        get_node(tree, &path).map(|n| n.label.clone())
+    }
+
+    /// #686: the highlight and the right-click target were index paths, so a
+    /// sheet inserted before the selected one (Add New Schematic, Refresh)
+    /// moved both onto a different file. They are keys now.
+    #[test]
+    fn selection_and_menu_target_follow_their_row_when_a_sibling_is_inserted() {
+        use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
+
+        let (mut app, _bootstrap_task) = Signex::new();
+        app.document_state.panel_ctx.project_tree = two_sheet_tree();
+        let b_key = key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 1]).expect("row b");
+
+        let _ = app.handle_dock_project_navigation_panel_message(&crate::panels::PanelMsg::Tree(
+            TreeMsg::Select(b_key.clone()),
+        ));
+        let _ = app.handle_dock_project_navigation_panel_message(&crate::panels::PanelMsg::Tree(
+            TreeMsg::ContextMenu(b_key.clone()),
+        ));
+
+        app.document_state.panel_ctx.project_tree[0].children[0]
+            .children
+            .insert(0, TreeNode::leaf("new.snxsch", TreeIcon::SnxSchematic));
+
+        let selected = app
+            .document_state
+            .panel_ctx
+            .project_tree_selected
+            .clone()
+            .expect("selection stored");
+        assert_eq!(label_at_key(&app, &selected).as_deref(), Some("b.snxsch"));
+        let menu_key = app
+            .interaction_state
+            .project_tree_context_menu
+            .as_ref()
+            .and_then(|m| m.key.clone())
+            .expect("menu open on a row");
+        assert_eq!(label_at_key(&app, &menu_key).as_deref(), Some("b.snxsch"));
+    }
+
+    /// A key whose row was removed must resolve to nothing, never to the
+    /// neighbour that slid into its index.
+    #[test]
+    fn toggle_of_a_removed_row_changes_nothing() {
+        use signex_widgets::tree_view::key_of;
+
+        let (mut app, _bootstrap_task) = Signex::new();
+        app.document_state.panel_ctx.project_tree = two_sheet_tree();
+        let tree = &app.document_state.panel_ctx.project_tree;
+        let docs_key = key_of(tree, &[0, 0]).expect("row");
+        app.document_state.panel_ctx.project_tree[0]
+            .children
+            .clear();
+
+        let _ = app.handle_dock_project_navigation_panel_message(&crate::panels::PanelMsg::Tree(
+            TreeMsg::Toggle(docs_key),
+        ));
+
+        assert!(app.document_state.panel_ctx.project_tree[0].expanded);
+    }
+
+    /// A message this handler doesn't own must fall through as `None`
+    /// so the dock dispatcher tries the next handler in the chain
+    /// (`handlers/dock/mod.rs`), rather than swallowing it.
+    #[test]
+    fn unrelated_panel_message_falls_through_as_none() {
+        let (mut app, _bootstrap_task) = Signex::new();
+        let msg = crate::panels::PanelMsg::SetUnit(signex_types::coord::Unit::Mm);
+
+        let result = app.handle_dock_project_navigation_panel_message(&msg);
+
+        assert!(result.is_none(), "non-tree messages must fall through");
+    }
+
+    /// Regression (#110): Close All Documents discarded dirty symbol and
+    /// footprint drafts; it must park them like the tab-menu Close All.
+    #[test]
+    fn close_all_documents_parks_dirty_primitive_drafts() {
+        use crate::app::{FootprintDocument, SymbolDocument, TabInfo, TabKind};
+
+        let (mut app, _task) = Signex::new();
+        let sym = std::path::PathBuf::from("/w/lib.snxlib/symbols/s.snxsym");
+        let fp = std::path::PathBuf::from("/w/lib.snxlib/footprints/g.snxfpt");
+        let mut sym_ed = SymbolDocument::new(
+            sym.clone(),
+            signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s")),
+        );
+        sym_ed.mark_dirty();
+        let mut fp_ed = FootprintDocument::new(
+            fp.clone(),
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("g")),
+        );
+        fp_ed.mark_dirty();
+        app.document_state
+            .symbol_editors
+            .insert(sym.clone(), sym_ed);
+        app.document_state
+            .footprint_editors
+            .insert(fp.clone(), fp_ed);
+        for (path, kind) in [
+            (sym.clone(), TabKind::SymbolEditor(sym.clone())),
+            (fp.clone(), TabKind::FootprintEditor(fp.clone())),
+        ] {
+            app.document_state.tabs.push(TabInfo {
+                title: "t".into(),
+                path,
+                cached_document: None,
+                project_id: None,
+                kind,
+            });
+        }
+
+        let _ = app.handle_project_tree_action(crate::app::ProjectTreeAction::CloseAllDocuments);
+
+        assert!(app.document_state.tabs.is_empty());
+        assert!(app.document_state.symbol_editors.contains_key(&sym));
+        assert!(app.document_state.footprint_editors.contains_key(&fp));
+        assert!(app.document_state.is_document_dirty(&sym));
+        assert!(app.document_state.is_document_dirty(&fp));
     }
 }

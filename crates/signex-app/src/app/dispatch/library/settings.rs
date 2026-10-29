@@ -19,6 +19,21 @@ impl Signex {
                 if self.library.settings.digikey_in_flight {
                     return Task::none();
                 }
+                // The keyring has one slot. A cancelled worker may still
+                // write its token (or the delete of that token may still be
+                // queued), and a second flow writing in between would have
+                // its token removed. Refuse until the old worker is done.
+                if self.library.settings.digikey_worker_busy {
+                    let reason = "the cancelled DigiKey attempt is still winding down; \
+                        try Connect again in a moment";
+                    tracing::warn!(
+                        target: "signex::distributor",
+                        distributor = "digikey",
+                        "DigiKey Connect was refused: {reason}"
+                    );
+                    self.library.settings.digikey_status = Some(format!("Please wait: {reason}"));
+                    return Task::none();
+                }
                 // Bump the generation BEFORE spawning so the worker
                 // captures the current value. `DigiKeyOAuthResult`
                 // discards messages whose generation is stale — i.e.
@@ -33,6 +48,7 @@ impl Signex {
                     .wrapping_add(1);
                 let generation = self.library.settings.digikey_flow_generation;
                 self.library.settings.digikey_in_flight = true;
+                self.library.settings.digikey_worker_busy = true;
                 self.library.settings.digikey_status = Some("Waiting for browser…".to_string());
                 let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 self.library.settings.digikey_cancel = Some(cancel_flag.clone());
@@ -101,8 +117,33 @@ impl Signex {
                 // Drop stale results from a cancelled flow — see the
                 // comment on `DigiKeyConnect` for why.
                 if generation != self.library.settings.digikey_flow_generation {
+                    // A Connected result from a cancelled flow means the
+                    // token was stored before the cancel landed; nobody
+                    // will see it, so take it back out of the keyring.
+                    // The keyring delete is blocking IO (D-Bus and an
+                    // unlock prompt on Linux), so it runs off `update`.
+                    if connected_label.is_none() {
+                        // Nothing was stored: the worker is finished.
+                        self.library.settings.digikey_worker_busy = false;
+                    } else {
+                        // Stays busy until `DigiKeyStaleTokenRemoved`.
+                        let remove = self.library.settings.digikey_token_remover;
+                        return Task::perform(
+                            async move {
+                                tokio::task::spawn_blocking(remove)
+                                    .await
+                                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                            },
+                            |result| {
+                                Message::Library(LibraryMessage::Settings(
+                                    SettingsMsg::DigiKeyStaleTokenRemoved(result),
+                                ))
+                            },
+                        );
+                    }
                     return Task::none();
                 }
+                self.library.settings.digikey_worker_busy = false;
                 self.library.settings.digikey_in_flight = false;
                 self.library.settings.digikey_cancel = None;
                 match (connected_label, error) {
@@ -112,10 +153,30 @@ impl Signex {
                             Some(format!("Connected as {label}"));
                     }
                     (_, Some(reason)) => {
+                        // Every failure reaches the Messages panel, not
+                        // only the settings status line (#1093).
+                        crate::diagnostics::log_warning(digikey_failure_message(&reason));
                         self.library.settings.digikey_status = Some(format!("Failed: {reason}"));
                     }
                     (None, None) => {
                         self.library.settings.digikey_status = Some("Cancelled".to_string());
+                    }
+                }
+            }
+            SettingsMsg::DigiKeyStaleTokenRemoved(result) => {
+                self.library.settings.digikey_worker_busy = false;
+                let removed = result.is_ok();
+                digikey_oauth::log_stale_token_removal(result);
+                // The keyring is now empty: the panel must not keep saying
+                // "Connected" over it (a reconnect cancelled late took the
+                // earlier token with it).
+                if removed && self.library.settings.digikey_account_email.take().is_some() {
+                    crate::diagnostics::log_warning(
+                        "The DigiKey connection was cleared: a cancelled reconnect had replaced \
+                         the stored token, and that token was removed. Connect again to use DigiKey.",
+                    );
+                    if !self.library.settings.digikey_in_flight {
+                        self.library.settings.digikey_status = Some("Not connected".to_string());
                     }
                 }
             }
@@ -156,25 +217,15 @@ impl Signex {
                     move |result| {
                         let result = match result {
                             Ok(()) => {
-                                // MD-17: surface keyring backend
-                                // unavailability instead of panicking
-                                // — the dialog will tell the user to
-                                // install libsecret or run with the
-                                // env-var auth flow.
-                                match KeyringStore::for_provider("mouser", "default") {
-                                    Ok(store) => {
-                                        if let Err(e) = store.set_secret(&key_for_writeback) {
-                                            Err(format!(
-                                                "API key valid, but keyring write failed: {e}"
-                                            ))
-                                        } else {
-                                            Ok(())
-                                        }
-                                    }
-                                    Err(e) => Err(format!(
-                                        "API key valid, but OS keychain unavailable: {e}"
-                                    )),
-                                }
+                                // MD-17 / #976: a missing OS keychain is a
+                                // visible failure, never a silent skip.
+                                persist_mouser_key(
+                                    |key| {
+                                        KeyringStore::for_provider("mouser", "default")?
+                                            .set_secret(key)
+                                    },
+                                    &key_for_writeback,
+                                )
                             }
                             Err(e) => Err(e),
                         };
@@ -188,7 +239,10 @@ impl Signex {
                 self.library.settings.mouser_in_flight = false;
                 self.library.settings.mouser_status = Some(match result {
                     Ok(()) => "\u{2713} Connected & key saved to keyring.".to_string(),
-                    Err(e) => format!("Failed: {e}"),
+                    Err(e) => {
+                        crate::diagnostics::log_warning(mouser_failure_message(&e));
+                        format!("Failed: {e}")
+                    }
                 });
             }
             SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
@@ -220,5 +274,74 @@ impl Signex {
         order.swap(i, target);
         let saved = crate::library::settings::persistence::save_preferred_order(order);
         self.library.settings.preferred_order_error = saved.err();
+    }
+}
+
+/// Save a validated Mouser API key through `save` (the OS keychain in
+/// production) and turn a failure into the user-visible status text. There is
+/// no fallback store: when the keychain is unavailable the user is told why,
+/// and the key is not kept anywhere.
+fn persist_mouser_key(
+    save: impl FnOnce(&str) -> Result<(), signex_library::distributors::keyring::KeyringError>,
+    key: &str,
+) -> Result<(), String> {
+    save(key).map_err(|e| format!("API key valid, but it could not be saved: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::persist_mouser_key;
+    use signex_library::distributors::keyring::KeyringError;
+
+    #[test]
+    fn mouser_key_save_failure_tells_user_why() {
+        let err = persist_mouser_key(
+            |_| Err(KeyringError::Backend("no Secret Service provider".into())),
+            "k",
+        )
+        .unwrap_err();
+        assert!(
+            err.starts_with("API key valid, but it could not be saved"),
+            "{err}"
+        );
+        assert!(err.contains("OS keychain unavailable"), "{err}");
+        assert!(err.contains("no Secret Service provider"), "{err}");
+    }
+
+    #[test]
+    fn mouser_key_save_success_passes_key_through() {
+        let mut seen = String::new();
+        let r = persist_mouser_key(
+            |k| {
+                seen = k.to_string();
+                Ok(())
+            },
+            "abc",
+        );
+        assert!(r.is_ok());
+        assert_eq!(seen, "abc");
+    }
+}
+
+/// Messages-panel text for a failed DigiKey connect.
+fn digikey_failure_message(reason: &str) -> String {
+    format!("DigiKey: connecting the account failed: {reason}")
+}
+
+/// Messages-panel text for a failed Mouser key test.
+fn mouser_failure_message(reason: &str) -> String {
+    format!("Mouser: testing the API key failed: {reason}")
+}
+
+#[cfg(test)]
+mod failure_message_tests {
+    use super::*;
+
+    #[test]
+    fn failure_messages_name_the_distributor_and_keep_the_reason() {
+        let d = digikey_failure_message("redirect timed out");
+        assert!(d.starts_with("DigiKey:") && d.ends_with("redirect timed out"));
+        let m = mouser_failure_message("HTTP 401");
+        assert!(m.starts_with("Mouser:") && m.ends_with("HTTP 401"));
     }
 }

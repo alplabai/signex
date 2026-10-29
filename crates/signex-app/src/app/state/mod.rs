@@ -6,12 +6,53 @@ use crate::dock::DockArea;
 
 use super::TabInfo;
 
+mod case_fold;
+pub(crate) mod dir_case;
+mod dirty;
+#[cfg(test)]
+mod dirty_tests;
+mod error_notice;
 mod interaction;
+mod keymap_recorder;
+pub(crate) mod library_entry;
+mod link_policy;
+pub(crate) mod navigator_job;
+pub(crate) mod net_class_picks;
+pub(crate) mod net_class_styles;
+pub(crate) mod net_nav;
+pub(crate) mod ownership_index;
+mod path_key;
+mod pcb_revision;
+mod pdf_page_setup;
+mod pdf_preview_raster;
+mod placement;
+mod profile_update;
+pub(crate) mod project_case;
+pub(crate) mod project_fs;
+pub(crate) mod project_hierarchy;
+mod reference_policy;
+pub(crate) mod rule_profile_ui;
+pub(crate) mod rules_history;
 pub(crate) mod scope;
+mod sheet_read;
+pub(crate) mod sheet_refs;
+mod tab_placements;
 mod ui;
+pub(crate) mod volume_case;
 
+pub use case_fold::CaseFold;
+pub use error_notice::ErrorNotice;
 pub use interaction::InteractionState;
-pub use ui::UiState;
+pub use keymap_recorder::KeymapRecorderState;
+pub use pdf_page_setup::PageSetupInputs;
+pub use pdf_preview_raster::{
+    PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
+    forget_page_setup, rekey_page_setup,
+};
+pub use placement::{LastPlacement, PasteCounters, PlacementKind, PlacementSession};
+pub use profile_update::PendingProfileUpdate;
+pub use tab_placements::{TabPlacements, default_placement};
+pub use ui::{NetColorStep, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -21,66 +62,15 @@ pub struct Signex {
     /// `document_state` so the library dispatcher can mutate it
     /// without colliding with schematic / PCB engine borrows.
     pub library: crate::library::LibraryState,
-}
-
-/// Chord-recorder overlay state for the Preferences ▸ Keyboard
-/// Shortcuts pane. Holds the binding being edited plus the strokes
-/// captured so far. The keyboard subscription feeds raw key events
-/// here (as `PrefMsg::KeymapRecorderKeyPressed`) while this is `Some`,
-/// so recording never triggers a live command.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeymapRecorderState {
-    pub command: crate::keymap::AppCommandId,
-    pub command_label: String,
-    pub context: crate::keymap::ShortcutContext,
-    pub original_trigger: String,
-    pub strokes: Vec<crate::keymap::KeyStroke>,
-    pub modifiers: crate::keymap::Modifiers,
-    pub recording: bool,
-}
-
-impl KeymapRecorderState {
-    /// Longest chord the recorder will hold before wrapping back to a
-    /// single stroke (Altium-style two/three-key gestures fit inside).
-    pub const MAX_STROKES: usize = 3;
-
-    pub fn new(
-        command: crate::keymap::AppCommandId,
-        command_label: String,
-        context: crate::keymap::ShortcutContext,
-        trigger: String,
-    ) -> Self {
-        // Seed the capture buffer with the binding's current key
-        // sequence so the user sees what they are replacing. Pointer
-        // gestures aren't keyboard-recordable, so they start empty.
-        let strokes = crate::keymap::ShortcutTrigger::parse(&trigger)
-            .ok()
-            .and_then(|trigger| match trigger {
-                crate::keymap::ShortcutTrigger::KeySequence(strokes) => Some(strokes),
-                crate::keymap::ShortcutTrigger::PointerGesture(_) => None,
-            })
-            .unwrap_or_default();
-        Self {
-            command,
-            command_label,
-            context,
-            original_trigger: trigger,
-            strokes,
-            modifiers: crate::keymap::Modifiers::default(),
-            recording: true,
-        }
-    }
-
-    pub fn trigger_text(&self) -> String {
-        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
-    }
+    /// The macOS system menu bar built from the menu model; inert elsewhere
+    /// (docs/MENU_BAR.md, "Native macOS menu").
+    pub(crate) native_menu: crate::menu_bar::native::NativeMenuState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
 /// modals; Phase 3 adds `UndockedTab(tab_index)` so a schematic sheet
 /// can live in its own OS window.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum WindowKind {
     DetachedModal(ModalId),
     /// Undocked document tab. Stores the tab's file path (unique per
@@ -142,10 +132,11 @@ pub struct MoveSelectionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub enum ModalId {
     AnnotateDialog,
     AnnotateResetConfirm,
+    /// Re-prefix to standard (#1315): the list of changes, to confirm.
+    ReprefixConfirm,
     ErcDialog,
     /// Altium-style Move-Selection dialog — numeric ΔX / ΔY inputs.
     MoveSelection,
@@ -165,8 +156,6 @@ pub enum ModalId {
     PrintPreview,
     /// BOM Export preview modal (File → Export → Bill of Materials…).
     BomPreview,
-    /// Project Options metadata modal (Projects-panel root → Project Options...).
-    ProjectOptions,
     /// Enable Version Control confirm modal (Projects-panel root →
     /// Enable Version Control...).
     EnableVersionControl,
@@ -176,21 +165,49 @@ pub enum ModalId {
     /// v0.18.14.1 — Custom Selection Filter modal (8-row checkbox
     /// table; opens from the Properties `Custom…` button).
     SelectionFilterCustom,
+    /// Help ▸ About Signex.
+    About,
+    /// The keyboard-shortcuts reference sheet (F1).
+    KeyboardShortcuts,
+    /// Tools ▸ Passive Network Calculator.
+    PassiveCalculator,
+    /// The first-run onboarding tour.
+    FirstRunTour,
+    /// "Create Sheet": where to write the file of a sheet symbol (confirm
+    /// class).
+    CreateChildSheet,
+    /// The error card (confirm class): one at a time.
+    ErrorNotice,
+    /// The netlist-incomplete "export anyway?" prompt (confirm class).
+    NetlistIncompletePrompt,
+    /// The autosave recovery prompt (confirm class).
+    AutosaveRecovery,
+    /// "Close Project - Unsaved Edits" (confirm class, on the data-loss path).
+    ProjectCloseConfirm,
+    /// "Exit Signex - Unsaved Edits" (confirm class, on the data-loss path).
+    AppQuitConfirm,
+    // Library dialogs. Edit row and delete confirm are bound to ONE library
+    // browser per window (`UiState::library_modal_owners`); the rest are
+    // single-instance.
+    LibraryPicker,
+    LibraryEditRow,
+    LibraryPrimitivePicker,
+    LibraryDocumentOptions,
+    LibraryCreateOptions,
+    /// Which library receives a copy of a stock primitive (#813).
+    LibraryStockCopy,
+    LibraryUpdates,
+    /// Close library with unsaved drafts (confirm class).
+    LibraryCloseConfirm,
+    /// Delete the selected library row (confirm class).
+    LibraryDeleteConfirm,
+    /// Library recovery (confirm class); never auto-decided.
+    LibraryRecovery,
+    /// The custom net colour picker.
+    NetColorCustom,
 }
 
-/// Order in which symbols are visited during Annotate. Mirrors Altium's
-/// "Order of Processing" drop-down (four variants).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AnnotateOrder {
-    /// Top-to-bottom within each column, left-to-right across columns.
-    UpThenAcross,
-    /// Bottom-to-top within each column, left-to-right across columns.
-    DownThenAcross,
-    /// Left-to-right within each row, top-to-bottom across rows.
-    AcrossThenDown,
-    /// Left-to-right within each row, bottom-to-top across rows.
-    AcrossThenUp,
-}
+pub use signex_types::schematic::AnnotateOrder;
 
 /// Opaque identifier for a loaded project in the workspace. Assigned by
 /// `DocumentState::next_project_id` on load and never reused, so stale
@@ -200,7 +217,13 @@ pub enum AnnotateOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ProjectId(u32);
 
-impl ProjectId {}
+impl ProjectId {
+    /// A fixed id for a test that has no `DocumentState` to mint one from.
+    #[cfg(test)]
+    pub(crate) const fn test_id(n: u32) -> Self {
+        Self(n)
+    }
+}
 
 impl std::fmt::Display for ProjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -209,7 +232,7 @@ impl std::fmt::Display for ProjectId {
 }
 
 /// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.standard_pro` / `.snxprj` location on disk); `data`
+/// canonical identity (`.snxprj` location on disk); `data`
 /// is the parsed project contents. Multiple projects with different
 /// `path`s coexist in `DocumentState.projects`; two identical `path`s
 /// at once is a loader bug (existing `open_project_file` de-dupes).
@@ -226,9 +249,17 @@ pub struct LoadedProject {
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
     /// explicit user save" invariant. Keyed by a temporary handle that
     /// becomes the eventual `library_id` once materialised.
-    #[allow(clippy::implicit_hasher)]
     pub pending_libraries:
         std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
+    /// Path-key rules for this project's volume, probed once off-thread
+    /// after load (#694); the host default until the answer arrives.
+    pub case_fold: scope::CaseFold,
+    /// The volume probe has reported; the first answer wins.
+    pub case_probed: bool,
+    /// The probe DECIDED (not undecided, failed or a stat error): only then is
+    /// `case_fold` a fact about the volume rather than the host default, and
+    /// only then does document identity trust it (#1447).
+    pub case_decided: bool,
 }
 
 impl LoadedProject {
@@ -256,27 +287,83 @@ impl LoadedProject {
 /// Raised (instead of a dead-end error) when `File ▸ Export Netlist` derives a
 /// netlist that does not cover the whole project. Holds the picked `save_path`
 /// and the omitted-page `messages` so the two prompt actions can act without
-/// re-deriving: "Export anyway" writes the partial `.net` with these messages
-/// recorded in its INCOMPLETE header comment; "Cancel" writes nothing. The
+/// re-deriving: "Export anyway" writes the partial `.net` (a clean file —
+/// Protel has no comment syntax) and logs these messages as a warning;
+/// "Cancel" writes nothing. The
 /// refusal stays the default — nothing reaches disk until the user acts.
 #[derive(Debug, Clone)]
 pub struct NetlistIncompletePrompt {
     /// Where the file dialog said to write the `.net`.
     pub save_path: PathBuf,
     /// One user-facing line per omitted / uncovered page — the same
-    /// `ExportIssues::messages()` shown in the prompt and written into the
-    /// exported file's INCOMPLETE header.
+    /// `ExportIssues::messages()` shown in the prompt and logged as a
+    /// warning when the user exports anyway.
     pub messages: Vec<String>,
     /// The export scope snapshotted when the prompt was raised. "Export anyway"
     /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
-    /// the INCOMPLETE header (drawn from `messages`, the same derivation) always
+    /// the warning (drawn from `messages`, the same derivation) always
     /// describe the same project state, even if the document changes while the
     /// modal is up (#431 review).
     pub ctx: signex_output::ExportContext,
 }
 
+/// One printed page copy in the export file picker: the sheet file plus the
+/// sheet placement it is a copy of (root for a page printed as itself). A
+/// child placed twice is two picker rows with one path, so the path alone
+/// cannot key a tick.
+pub type PageKey = (PathBuf, signex_types::schematic::InstancePath);
+
+/// What the preview modal chose for one PDF export, for the document it was
+/// chosen on. Carried inside `ExportMsg::PdfFinished`, so each Export click
+/// owns its own copy and overlapping exports cannot clobber each other (#852).
+#[derive(Debug, Clone)]
+pub struct PdfExportRequest {
+    /// The document the export was started from.
+    pub source: PathBuf,
+    pub options: signex_output::PdfOptions,
+    /// Sheet paths to include, from the preview's file picker. An empty set
+    /// (after a Clear) means "no files chosen" and the export is rejected.
+    pub files: std::collections::HashSet<PageKey>,
+    /// The sheet placement `source` was descended into when the export was
+    /// requested (#1133), read then because the dialog can outlive the tab.
+    pub descended_placement: Option<signex_types::schematic::InstancePath>,
+}
+
 pub struct DocumentState {
     pub dock: DockArea,
+    /// Change detection + debounce for persisting `dock` (#692). The
+    /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
+    pub dock_layout_sync: crate::dock::DockLayoutSync,
+    /// The Components filter + Library Browser queries and the debounce
+    /// that persists them (#859); see `handlers/dock/search_prefs_persist.rs`.
+    pub search_prefs: crate::persist::SearchPrefsSync,
+    /// Off-thread document writes: per-path ordering, in-flight tracking and
+    /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
+    pub document_saves: crate::persist::DocumentSaves,
+    /// Opt-in recovery sidecars of dirty schematics (#104); see `crate::autosave`.
+    pub autosave: crate::autosave::AutosaveState,
+    /// Disk facts behind the project tree's `(missing)` marks (#111).
+    pub project_fs: project_fs::ProjectFsCache,
+    /// Off-thread Navigator hierarchy assembly (#1470).
+    pub navigator_job: navigator_job::NavigatorJob,
+    /// Cached sheet-path -> owning-project index, rebuilt when its inputs
+    /// change (#1470); see `state/ownership_index.rs`.
+    pub(crate) ownership: std::cell::RefCell<Option<ownership_index::OwnershipIndex>>,
+    /// Projects already told (once per open) that an ERC run fell back to this
+    /// machine's preferences because they store no rule set (#1085).
+    pub erc_fallback_noted: std::collections::HashSet<ProjectId>,
+    /// Projects already told (once per open) that the profile their rules
+    /// were seeded from has changed locally (#1085).
+    pub profile_drift_noted: std::collections::HashSet<ProjectId>,
+    /// Undo / redo of each project's stored rule set edits (#1085).
+    pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    /// Which font families the Messages panel has already said an open
+    /// document names but this machine lacks (#510), so each is reported
+    /// once per document.
+    pub missing_fonts: crate::fonts::document_report::MissingFontReporter,
+    /// Engines (`Engine::instance_id`) already told, once per open, that an
+    /// edit was refused because the sheet is read-only (#1402).
+    pub read_only_refusal_noted: std::collections::HashSet<u64>,
     pub tabs: Vec<TabInfo>,
     pub active_tab: usize,
     /// All live schematic engines keyed by their on-disk path. Every
@@ -292,10 +379,10 @@ pub struct DocumentState {
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
     /// `LibraryMessage::OpenPrimitiveEditor`; drop in
     /// `close_tab_at_index` alongside the engine cleanup.
-    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolDocument>,
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
-    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintDocument>,
     /// v0.26-E — process-local clipboard for footprint-editor pad
     /// Cut / Copy / Paste. Survives tab switches so a pad copied from
     /// one footprint can be pasted into another. `None` until the
@@ -322,48 +409,80 @@ pub struct DocumentState {
     /// resolution — must use [`DocumentState::active_document_project`]
     /// instead, or it silently operates on another project's sheets (#406).
     pub active_project: Option<ProjectId>,
-    /// Files with unsaved edits, keyed by absolute path. Tracks the
-    /// "Altium-style" project-scoped dirty state — a file stays in this
-    /// set after its tab is closed (the engine in `engines` keeps the
-    /// edited document) and clears when the file is saved or the
-    /// project's edits are explicitly discarded. Drives the red dot on
-    /// the Projects-panel tree row independently of `tab.dirty`, which
-    /// would otherwise lose the signal the moment the tab is closed.
-    pub dirty_paths: std::collections::HashSet<PathBuf>,
+    /// Project paths (or loose root sheets) whose per-placement-designator
+    /// load note was already started, so it appears once per load, not once
+    /// per opened sheet.
+    pub instance_note_scopes: std::collections::HashSet<std::path::PathBuf>,
+    /// A schematic tab just opened: the next `finish_update` starts the
+    /// per-placement designator note (a no-op once its scope was noted).
+    pub instance_note_due: bool,
+    /// Schematic tabs opened since the last `update` finished: each needs
+    /// its earlier-run recovery copy checked (#1208). `open_schematic_tab`
+    /// queues the path, `update` starts the check.
+    pub recovery_check_due: Vec<std::path::PathBuf>,
+    /// Dirty documents that no editor draft holds; see `dirty.rs`, the only
+    /// reader and writer. Ask `is_document_dirty`, never this field.
+    pub(crate) dirty_docs: dirty::DirtyDocuments,
+    /// Undo/redo of each project's net-class table (#1042). The table is
+    /// project data, so it has its own history beside the per-sheet engines.
+    pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
+    /// Project tab state per loaded project (#1202): selected section and
+    /// the General history. Outlives the tab, dropped with the project.
+    pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
+    /// Net-class picks made from a sheet's Properties panel, keyed by that
+    /// sheet, so Ctrl+Z on it can interleave them with its engine edits (#1220).
+    pub net_class_picks: std::collections::HashMap<PathBuf, net_class_picks::NetClassPickSteps>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
     /// as "no longer loaded").
     pub next_project_id: u32,
+    /// Monotonic counter minting the raw value of [`signex_engine::UndoGroupId`]s for
+    /// project-wide undo steps (an annotate run under "One step for the whole
+    /// project"). Never reused.
+    pub next_undo_group: u64,
+    /// Bumped whenever a document is opened, saved or closed, when a project
+    /// closes, and when a rename, delete or project-folder move starts and
+    /// finishes. A background job that read sheets from disk records it first
+    /// and applies its result only if it is unchanged, so it never installs
+    /// bytes a later open, save, close, move or delete has already superseded.
+    pub documents_epoch: u64,
+    /// Designators used on the sheets of the project a part is placed in,
+    /// scanned off-thread; see `designator_scan.rs`.
+    pub(crate) designator_cache: crate::app::designator_scan::DesignatorCache,
+    /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
+    pub next_pcb_revision: u64,
+    /// The current board revision per PCB path; a PCB save completion only
+    /// marks clean while it still matches.
+    pub pcb_revisions: std::collections::HashMap<PathBuf, u64>,
+    /// The sheets each undo group touched. Undo/redo of a
+    /// grouped entry consults this to find the sheets that must move with it.
+    pub undo_groups:
+        std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     pub panel_ctx: crate::panels::PanelContext,
-    pub standard_lib_dir: Option<PathBuf>,
-    pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
     /// PDF` and `File → Print Preview` both populate this field.
     pub preview: Option<PreviewState>,
-    /// Pending PDF options stashed from the unified preview modal
-    /// while the file picker is running. Used by
-    /// `handle_export_pdf_finished` to apply user-selected options
-    /// instead of defaults. Cleared after export.
-    pub pending_pdf_options: Option<signex_output::PdfOptions>,
-    /// Companion to `pending_pdf_options` — sheet paths to include in
-    /// the export, copied from the preview's file picker. Empty set
-    /// (after a Clear) means "no files chosen" and the export is
-    /// rejected with a user-visible error. `None` means the preview
-    /// path was bypassed (legacy direct-export caller); the export
-    /// then includes every sheet by default.
-    pub pending_pdf_files: Option<std::collections::HashSet<PathBuf>>,
-    /// Pending BOM options stashed from the BOM preview modal while
-    /// the file picker is running. Without this, the user's column /
-    /// grouping / variant / include-DNP picks in the preview would
-    /// be dropped on export and the actual file would be a default
-    /// 6-column Grouped Base BOM. Cleared after export.
-    pub pending_bom_options: Option<signex_output::BomOptions>,
-    /// User-visible export error. `Some(msg)` while the error modal is shown.
-    /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
-    /// itself (not the file dialog) fails. Cleared by DismissExportError.
-    pub export_error: Option<String>,
+    /// Page setup (size, orientation, margins, scale) each document last used
+    /// in the PDF export modal, restored when it reopens for the same
+    /// document. Session-only; never written to disk.
+    pub page_setup_memory: PageSetupMemory,
+    /// The sheet symbol each child tab was descended through (#1133).
+    pub tab_placements: TabPlacements,
+    /// Sheet history, net highlight, hover insight and the project net index
+    /// they read (#1270, #1271, #1272).
+    pub net_nav: net_nav::NetNavState,
+    /// Generation counter and in-flight job of the preview renderer.
+    pub raster_queue: RasterQueue,
+    /// The app's one user-visible error card. `Some` while it is shown;
+    /// cleared by `OverlayMsg::DismissErrorNotice`.
+    ///
+    /// Not export-only, despite the heading it used to hardcode: the
+    /// project-close path already raised it for "could not save N
+    /// file(s)", so a failed close announced itself to the user as
+    /// "Export Failed" (#532). The title now travels with the message.
+    pub error_notice: Option<ErrorNotice>,
     /// #431 — pending "Export anyway (incomplete)?" prompt. `Some` while the
     /// netlist-incomplete modal is up, waiting on the user's choice. Set by
     /// `handle_export_netlist_finished` when the derived netlist has a hole;
@@ -390,6 +509,98 @@ pub struct DocumentState {
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
     /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// The subset of `inflight_git_commits` whose commit reads the working
+    /// file when its worker starts instead of holding the bytes it records
+    /// (primitive-editor saves, project-file saves, renames). A History
+    /// restore of such a file waits, or the commit would record the restored
+    /// bytes under its own label; commits that carry their bytes never block it.
+    pub unbound_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+    /// The newest save sequence queued for a commit, per `(project_root,
+    /// rel_path)`; a commit of an older write is dropped.
+    pub git_commit_sequences: std::collections::HashMap<(PathBuf, PathBuf), u64>,
+    /// #833 — repo roots with a commit currently running. At most one
+    /// commit per repo is in flight; the rest wait in
+    /// `pending_git_commits` so concurrent tasks never race on the
+    /// repo's index lock. Cleared per repo by `GitCommitDone`.
+    pub active_git_repos: std::collections::HashSet<PathBuf>,
+    /// #1205 — project folders whose auto-commit the guard refused to
+    /// initialise; each is announced once, not on every save.
+    pub paused_git_projects: std::collections::HashSet<PathBuf>,
+    /// #478 review — paths whose async schematic/PCB read+parse
+    /// (`open_schematic_file` / `open_pcb_file`) has been spawned but
+    /// hasn't completed yet. Without this, firing the same open twice
+    /// before the first `Task::perform` resolves races two tabs into
+    /// existence aliasing one `engines` entry; closing either then
+    /// orphans the other. Inserted right before the `Task::perform` is
+    /// spawned; cleared in both the `Ok` and `Err` arms of
+    /// `FileMsg::SchematicOpenFinished` / `FileMsg::PcbOpenFinished`.
+    pub pending_opens: crate::app::document_read::InFlightReads,
+    /// What the directory case probes of loose documents reported, and the
+    /// opens and saves waiting on one (#1447).
+    pub dir_case: dir_case::DirCases,
+    /// #859 — History restores running on a worker, keyed by the document
+    /// path. A second restore click for the same document is ignored until
+    /// the first completes; closing the project or all documents cancels it.
+    pub pending_restores: crate::app::document_read::InFlightReads,
+    /// #859 — renames and deletes whose disk work runs on a worker. Saves,
+    /// opens, restores and second moves of an overlapping path are refused
+    /// until the completion message drops the entry.
+    pub pending_path_ops: crate::app::path_ops::PendingPathOps,
+    /// The Altium import still running, if any. A second import is
+    /// refused while one runs: two converters writing the same output
+    /// folder would interleave.
+    pub altium_import_running: Option<AltiumImportRun>,
+    /// Projects whose folder is being renamed on the blocking pool (#1221).
+    /// A second rename of the same project is refused until the first
+    /// reports back.
+    pub project_folder_renames: std::collections::HashSet<ProjectId>,
+    /// Where each write running on the blocking pool lands (an export, Add
+    /// New Schematic, the target folder of an Add Existing copy, a new
+    /// library file), one entry per write. A folder rename is refused while
+    /// one lies under the folder, or the late write would land in the old
+    /// folder.
+    pub project_writes: Vec<PathBuf>,
+    /// Project folders a rename moved away this session. A write a dialog
+    /// aimed there before the move is refused, or it would recreate the old
+    /// folder as an orphan.
+    pub moved_project_dirs: Vec<MovedProjectDir>,
+    /// Commits asked for while their project folder moved, run once the move
+    /// has finished.
+    pub deferred_git_commits: Vec<DeferredGitCommit>,
+}
+
+/// A project folder a rename moved from `old` to `new`.
+#[derive(Debug, Clone)]
+pub struct MovedProjectDir {
+    pub old: PathBuf,
+    pub new: PathBuf,
+    pub fold: CaseFold,
+}
+
+/// A project commit asked for while the project folder moved; the paths are
+/// as they were named then.
+#[derive(Debug, Clone)]
+pub struct DeferredGitCommit {
+    pub project: ProjectId,
+    pub file_path: PathBuf,
+    pub message: String,
+    pub replace_message: bool,
+    pub removed_path: Option<PathBuf>,
+}
+
+/// An Altium import on the blocking pool (#1123).
+#[derive(Debug, Clone)]
+pub struct AltiumImportRun {
+    /// The picked Altium file.
+    pub input: PathBuf,
+    /// Set by Cancel; the converter loop stops the child when it sees it.
+    pub cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl PartialEq for AltiumImportRun {
+    fn eq(&self, other: &Self) -> bool {
+        self.input == other.input && std::sync::Arc::ptr_eq(&self.cancel, &other.cancel)
+    }
 }
 
 /// v0.23 — One queued commit for the async git pipeline. Stays
@@ -399,33 +610,71 @@ pub struct DocumentState {
 pub struct PendingGitCommit {
     pub project_root: PathBuf,
     pub rel_path: PathBuf,
+    /// A project-relative path the same commit removes, so a move reads as
+    /// a rename in the history (#1219).
+    pub removed_rel_path: Option<PathBuf>,
     pub message: String,
+    /// The exact bytes to commit for `rel_path`: what a save wrote or a
+    /// restore read back. `None` commits the working file as it is when the
+    /// worker runs (callers that hold no copy of what they wrote).
+    pub content: Option<crate::persist::SharedBytes>,
+}
+
+impl PendingGitCommit {
+    /// Whether the worker reads the working file when it runs: it holds no
+    /// bytes, or it is a rename commit, which stages the file from disk and
+    /// ignores any bytes.
+    pub fn reads_working_file(&self) -> bool {
+        self.content.is_none() || self.removed_rel_path.is_some()
+    }
+}
+
+/// The bytes a commit records and the order of the write they came from.
+/// Saves of one file can report completion out of order; a commit of an
+/// older write must never replace, or queue behind, a newer one's.
+#[derive(Debug, Clone)]
+pub struct CommitBytes {
+    pub bytes: crate::persist::SharedBytes,
+    /// The write's position in its document-save ledger; `0` is exempt from
+    /// ordering (a restore).
+    pub sequence: u64,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
-/// Properties panel — Altium-style General / Columns split.
+/// Properties panel — Altium-style General / Columns / Rules split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BomSidebarTab {
     General,
     Columns,
+    Rules,
 }
 
 /// Live BOM preview state — the rolled-up table for the active project
 /// plus the user-editable options that drive the next rollup. Re-rolled
 /// whenever an option toggle fires.
 pub struct BomPreviewState {
+    /// The document the preview was built for; Export writes this one even if
+    /// the user has switched tabs since (#852).
+    pub source: PathBuf,
     pub options: signex_output::BomOptions,
     pub table: signex_output::BomTable,
+    /// Live validation of `table` under `options.rule_options`. Refreshed on
+    /// every rollup and every rule toggle so it never goes stale against the
+    /// displayed table. Advisory only — it never blocks export.
+    pub validation_report: signex_output::BomValidationReport,
     /// Available variants for the active project. Reserved for the
     /// variant picker dropdown — empty when no variants are defined.
     /// Currently only seeded; the picker UI lands in v0.8.1.
-    #[allow(dead_code)]
     pub variants: Vec<String>,
     /// Active sort spec — `(column index in options.columns, ascending)`.
     /// `None` = render rollup order (the default emit order from
     /// `bom::rollup`). Click a header cell to set; click the same one
     /// again to flip direction.
     pub sort: Option<(usize, bool)>,
+    /// Row indexes into `table.rows` in display order under `sort`. Recomputed
+    /// in `update` whenever the rows, columns or sort change, so `view` only
+    /// reads it.
+    pub row_order: Vec<usize>,
     /// In-flight column drag — `Some(from_idx)` while the user is
     /// holding the mouse down on a header cell. The header only
     /// renders the drag highlight once the cursor has moved past
@@ -533,11 +782,22 @@ impl std::fmt::Display for PdfQuality {
 /// the leftovers — UI presentation (active tab, quality enum), the
 /// rasterised pages, and pan/zoom interaction state.
 pub struct PreviewState {
-    pub pages: Vec<signex_output::PreviewPage>,
-    pub page_handles: Vec<iced::widget::image::Handle>,
+    /// The document the preview was built for; Export writes this one even if
+    /// the user has switched tabs since (#852).
+    pub source: PathBuf,
+    /// The previewed pages in print order. Their pixels are rasterised
+    /// lazily: the shown page first, any other when it is navigated to.
+    pub pages: Vec<PreviewSlot>,
+    /// What the newest rasterisation renders from, so a page navigated to
+    /// later is rasterised from the same snapshot.
+    pub raster_source: Option<RasterSource>,
     pub selected: usize,
     pub pdf_options: signex_output::PdfOptions,
     pub specific_page_input: String,
+    /// Why the preview shows no page when the page range, not the file
+    /// picker, selects nothing (#1081): a sheet number no printed page
+    /// carries. `None` otherwise.
+    pub range_note: Option<String>,
     /// Multiplicative zoom for the preview image. 1.0 = fit-to-viewport;
     /// scroll wheel multiplies by `1.10`/`1/1.10`. Clamped to
     /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast
@@ -559,19 +819,29 @@ pub struct PreviewState {
     /// rather than re-deriving from the project, so the checkbox list is
     /// guaranteed to match the pages the exporter will emit (a loose
     /// schematic lists itself; a project lists its sheets).
-    pub sheet_files: Vec<(PathBuf, String)>,
+    pub sheet_files: Vec<(PageKey, String)>,
     /// Files the user has ticked for export, a subset of `sheet_files`.
     /// Seeded to all of them on open. Empty = nothing selected, which the
     /// export path rejects with a user-visible error.
-    pub selected_files: std::collections::HashSet<PathBuf>,
+    pub selected_files: std::collections::HashSet<PageKey>,
     /// Available variants for the active project — drives the variant
     /// picker dropdown options. The currently-selected value lives on
     /// `pdf_options.variant`.
     pub variants: Vec<String>,
     /// Quality preset shown in the Settings tab dropdown. Mapped to
     /// `pdf_options.dpi` at export time; the preview always rasterises
-    /// at 96 DPI for speed.
+    /// at `PdfQuality::preview_dpi` (72/144/200) for speed.
     pub quality: PdfQuality,
+    /// Typed text of the page-setup fields (custom size, margins, percent)
+    /// plus the reason the last edit was rejected or clamped.
+    pub page_setup: PageSetupInputs,
+    /// Generation of the newest background rasterisation request; results
+    /// tagged with an older one are stale and discarded.
+    pub raster_generation: u64,
+    /// The document the preview was opened for, recorded at open. The
+    /// remembered page setup is filed under this, not whichever tab is
+    /// active when the preview closes.
+    pub source_path: Option<PathBuf>,
 }
 
 impl PreviewState {
@@ -590,6 +860,10 @@ impl DocumentState {
 
     pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {
         self.projects.iter().find(|p| p.id == id)
+    }
+
+    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
+        self.projects.iter_mut().find(|p| p.id == id)
     }
 
     /// Resolve the project that contains a file at this path. Used for
@@ -625,46 +899,80 @@ impl DocumentState {
         let Some(path) = self.active_path.as_ref() else {
             return self.active_loaded_project();
         };
-        scope::project_owning_sheet(&self.projects, &self.child_sheet_refs(), path)
+        self.document_project(path)
+    }
+    /// Every open engine that belongs to the same project as the active
+    /// document, the active one included. A loose active document yields only
+    /// itself. Used where a name must be unique across the whole hierarchy
+    /// (a project-wide default such as a new child sheet's `sheetN`).
+    pub fn engines_in_active_document_project(&self) -> Vec<&signex_engine::Engine> {
+        let Some(project) = self.active_document_project() else {
+            return self.active_engine().into_iter().collect();
+        };
+        scope::engines_in_project(
+            &self.projects,
+            &self.ownership_index(),
+            &self.engines,
+            project.id,
+        )
     }
 
-    /// Open engine paths that belong to no loaded project — the page set of a
-    /// loose-document export. An open tab belonging to some *other* loaded
-    /// project would otherwise ride along as an extra page.
-    ///
-    /// Sorted by path: `engines` is a `HashMap`, so an unsorted result orders
-    /// the loose export's pages (and the print-preview file-picker rows, which
-    /// are re-seeded from this set on every rerasterize) by hash iteration
-    /// order — visibly reshuffling between rerasterizes with two or more loose
-    /// schematics open. Callers that want a specific page first re-order after.
-    pub fn unowned_engine_paths(&self) -> Vec<PathBuf> {
-        let refs = self.child_sheet_refs();
-        let mut paths: Vec<PathBuf> = self
-            .engines
-            .keys()
-            .filter(|p| scope::project_owning_sheet(&self.projects, &refs, p).is_none())
-            .cloned()
-            .collect();
-        paths.sort();
-        paths
+    /// [`engines_in_active_document_project`](Self::engines_in_active_document_project)
+    /// with each engine's sheet path, so a reference can be resolved against
+    /// the folder of the sheet that carries it.
+    pub(crate) fn engine_entries_in_active_document_project(
+        &self,
+    ) -> Vec<(&PathBuf, &signex_engine::Engine)> {
+        let Some(project) = self.active_document_project() else {
+            return self
+                .active_path
+                .as_ref()
+                .and_then(|path| self.engines.get_key_value(path))
+                .into_iter()
+                .collect();
+        };
+        scope::engine_entries_in_project(
+            &self.projects,
+            &self.ownership_index(),
+            &self.engines,
+            project.id,
+        )
     }
 
-    /// `sheet path → the `filename` strings it references as child sheets`,
-    /// over every loaded engine. Input to the hierarchy walk in
-    /// [`active_document_project`](Self::active_document_project).
-    fn child_sheet_refs(&self) -> std::collections::HashMap<PathBuf, Vec<String>> {
-        self.engines
-            .iter()
-            .map(|(path, engine)| {
-                let refs = engine
-                    .document()
-                    .child_sheets
-                    .iter()
-                    .map(|cs| cs.filename.clone())
-                    .collect();
-                (path.clone(), refs)
-            })
-            .collect()
+    /// Record that the set of open documents, or what they hold on disk,
+    /// changed. See [`DocumentState::documents_epoch`].
+    pub fn note_documents_changed(&mut self) {
+        self.documents_epoch += 1;
+    }
+
+    /// Install `engine` for `path` and move the epoch. Use this for any engine
+    /// a background read could otherwise miss. The active-session swap in
+    /// `load_gateway` and the bulk `engines.retain` calls bypass it; they act
+    /// only on engines that already existed, which a background read never
+    /// replaces from disk.
+    pub fn insert_engine(
+        &mut self,
+        path: PathBuf,
+        engine: signex_engine::Engine,
+    ) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.insert(path, engine)
+    }
+
+    /// Drop the engine for `path`; see [`DocumentState::insert_engine`].
+    pub fn remove_engine(&mut self, path: &std::path::Path) -> Option<signex_engine::Engine> {
+        self.note_documents_changed();
+        self.engines.remove(path)
+    }
+
+    /// A `.snxsch` was written or deleted on disk with no engine behind it
+    /// (the unopened-sheet Annotate and Reset Duplicate Designators writes,
+    /// a deleted project file). The writers reach it through
+    /// `autosave_after_disk_write` or `drop_deleted_documents`; a new
+    /// engine-less writer must call one of those or this, so a background read
+    /// of that file can tell it is out of date.
+    pub fn note_document_written_behind_engines(&mut self) {
+        self.note_documents_changed();
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
@@ -680,6 +988,7 @@ impl DocumentState {
     /// active tab — the tab's engine is gone, and `active_path` follows
     /// to whichever tab becomes active next.
     pub fn clear_active_engine(&mut self) {
+        self.note_documents_changed();
         if let Some(path) = self.active_path.as_ref().cloned() {
             self.engines.remove(&path);
         }

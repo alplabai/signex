@@ -17,36 +17,48 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         Some(SymbolSelection::Graphic(idx)) => {
             translate_graphic_to(sym, idx, x, y);
         }
-        // SymbolSelection::Field — no-op; the on-canvas designator /
-        // value drag re-binds against `ComponentRow` once that pipeline
-        // ships.
+        Some(SymbolSelection::Field(key)) => move_field_to(sym, key, x, y),
         // All / Multiple — delta-based movement handled by move_all / move_multiple.
-        Some(SymbolSelection::Field(_))
-        | Some(SymbolSelection::All)
-        | Some(SymbolSelection::Multiple { .. })
-        | None => {}
+        Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. }) | None => {}
     }
 }
 
-/// Shift every pin and every graphic by `(dx, dy)` mm.
+/// Shift every pin and graphic visible on `view` by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::All` active (Ctrl+A
-/// select-all). The caller is responsible for computing the delta and
-/// for grid-snapping if desired.
-pub fn move_all(sym: &mut Symbol, dx: f64, dy: f64) {
-    for pin in &mut sym.pins {
-        pin.position[0] += dx;
-        pin.position[1] += dy;
-    }
-    for graphic in &mut sym.graphics {
-        translate_graphic_by(&mut graphic.kind, dx, dy);
-    }
+/// select-all, or a box over everything on the unit). `All` names the
+/// ACTIVE unit's items, like box-select, delete and rotate do, so other
+/// units' items stay put. Field positions follow the policy documented
+/// on [`move_multiple`]. The caller computes the delta and snaps it.
+pub fn move_all(sym: &mut Symbol, view: PartView, dx: f64, dy: f64) {
+    let pins: Vec<usize> = (0..sym.pins.len())
+        .filter(|&i| pin_on_part(&sym.pins[i], view))
+        .collect();
+    let graphics: Vec<usize> = (0..sym.graphics.len())
+        .filter(|&i| graphic_on_part(&sym.graphics[i], view))
+        .collect();
+    move_multiple(sym, &pins, &graphics, dx, dy);
 }
 
 /// Shift only the specified pins and graphics by `(dx, dy)` mm.
 ///
 /// Used when the user drags with `SymbolSelection::Multiple` active
 /// (box selection result). Out-of-range indices are silently skipped.
+///
+/// Field policy: `designator_pos` / `comment_pos` are stored once per
+/// symbol and shared by every unit (units are not first-class yet,
+/// #289, and the format has no per-unit positions). Stored positions
+/// therefore shift only when the move covers the WHOLE symbol: every
+/// pin and graphic of every unit. Moving one unit's whole body on a
+/// multi-unit symbol leaves them where they are, otherwise the other
+/// units' fields would drift away from bodies that did not move.
+/// Default-placed fields follow the active unit's body on their own.
+///
+/// A symbol with no pins and no graphics has no body to move: the
+/// "covers every element" test would hold vacuously, so it is guarded
+/// out. Select-all on such a symbol names nothing, and a drag with it
+/// must not shift the stored fields; a field is moved by selecting it
+/// (`SymbolSelection::Field`), which has its own path.
 pub fn move_multiple(
     sym: &mut Symbol,
     pin_indices: &[usize],
@@ -54,6 +66,10 @@ pub fn move_multiple(
     dx: f64,
     dy: f64,
 ) {
+    let has_body = !sym.pins.is_empty() || !sym.graphics.is_empty();
+    let covers_symbol = has_body
+        && (0..sym.pins.len()).all(|i| pin_indices.contains(&i))
+        && (0..sym.graphics.len()).all(|i| graphic_indices.contains(&i));
     for &i in pin_indices {
         if let Some(pin) = sym.pins.get_mut(i) {
             pin.position[0] += dx;
@@ -65,6 +81,120 @@ pub fn move_multiple(
             translate_graphic_by(&mut g.kind, dx, dy);
         }
     }
+    if covers_symbol {
+        shift_placed_fields(sym, dx, dy);
+    }
+}
+
+/// Snap every pin/graphic named by `sel` onto the nearest multiple of
+/// `step_mm`, in place. Mirrors the footprint editor's
+/// `ActiveBarAlignSelectionToGrid` (#426): each element's own anchor
+/// point(s) land on the grid independently — a `Rectangle`/`Line`
+/// snaps `from` and `to` separately (so a shape already square with
+/// the grid on one corner doesn't get skewed to keep it), `Circle`/
+/// `Arc` snap `center` only (radius untouched), `Text` snaps
+/// `position`, and `Polygon` snaps every vertex. Returns `true` only
+/// when a snap actually moved a coordinate — a delta check against the
+/// pre-snap value, not merely "the selection resolved to an existing
+/// pin/graphic" (#477: a pin or shape already sitting exactly on the
+/// grid, or an `All`/`Multiple` selection made entirely of such
+/// elements, must report `changed = false` so the caller's undo/redo
+/// gate treats it as the no-op it is). See [`super::selected_is_alignable`]
+/// for the selection-kind precheck most callers should run first.
+pub fn align_selected_to_grid(
+    sym: &mut Symbol,
+    sel: &Option<SymbolSelection>,
+    step_mm: f64,
+) -> bool {
+    let step = step_mm.max(1e-6);
+    match sel {
+        Some(SymbolSelection::Pin(idx)) => match sym.pins.get_mut(*idx) {
+            Some(pin) => {
+                let before = pin.position;
+                snap_pin_to_grid(pin, step);
+                pin.position != before
+            }
+            None => false,
+        },
+        Some(SymbolSelection::Graphic(idx)) => match sym.graphics.get_mut(*idx) {
+            Some(g) => {
+                let before = g.kind.clone();
+                snap_graphic_to_grid(&mut g.kind, step);
+                g.kind != before
+            }
+            None => false,
+        },
+        Some(SymbolSelection::Multiple {
+            pin_indices,
+            graphic_indices,
+        }) => {
+            let mut changed = false;
+            for &i in pin_indices {
+                if let Some(pin) = sym.pins.get_mut(i) {
+                    let before = pin.position;
+                    snap_pin_to_grid(pin, step);
+                    changed |= pin.position != before;
+                }
+            }
+            for &i in graphic_indices {
+                if let Some(g) = sym.graphics.get_mut(i) {
+                    let before = g.kind.clone();
+                    snap_graphic_to_grid(&mut g.kind, step);
+                    changed |= g.kind != before;
+                }
+            }
+            changed
+        }
+        Some(SymbolSelection::All) => {
+            let mut changed = false;
+            for pin in sym.pins.iter_mut() {
+                let before = pin.position;
+                snap_pin_to_grid(pin, step);
+                changed |= pin.position != before;
+            }
+            for g in sym.graphics.iter_mut() {
+                let before = g.kind.clone();
+                snap_graphic_to_grid(&mut g.kind, step);
+                changed |= g.kind != before;
+            }
+            changed
+        }
+        Some(SymbolSelection::Field(_)) | None => false,
+    }
+}
+
+fn snap_pin_to_grid(pin: &mut SymbolPin, step: f64) {
+    pin.position[0] = snap_value_to_grid(pin.position[0], step);
+    pin.position[1] = snap_value_to_grid(pin.position[1], step);
+}
+
+fn snap_graphic_to_grid(kind: &mut SymbolGraphicKind, step: f64) {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            from[0] = snap_value_to_grid(from[0], step);
+            from[1] = snap_value_to_grid(from[1], step);
+            to[0] = snap_value_to_grid(to[0], step);
+            to[1] = snap_value_to_grid(to[1], step);
+        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+            center[0] = snap_value_to_grid(center[0], step);
+            center[1] = snap_value_to_grid(center[1], step);
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            position[0] = snap_value_to_grid(position[0], step);
+            position[1] = snap_value_to_grid(position[1], step);
+        }
+        SymbolGraphicKind::Polygon { vertices } => {
+            for v in vertices.iter_mut() {
+                v[0] = snap_value_to_grid(v[0], step);
+                v[1] = snap_value_to_grid(v[1], step);
+            }
+        }
+    }
+}
+
+fn snap_value_to_grid(v: f64, step: f64) -> f64 {
+    (v / step).round() * step
 }
 
 /// Perform a rubber-band box selection against all symbol primitives.
@@ -72,6 +202,10 @@ pub fn move_multiple(
 /// The selection kind (`Window` / `Crossing`) is determined by the
 /// caller from the drag direction before calling this function.
 /// Returns `None` when nothing falls inside the box.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "box corners, selection kind, active part and filter are all independent inputs; bundling them would only move the argument list into a one-use struct"
+)]
 pub fn select_in_box(
     sym: &Symbol,
     x0: f64,
@@ -79,7 +213,8 @@ pub fn select_in_box(
     x1: f64,
     y1: f64,
     kind: BoxSelectKind,
-    active_part: u8,
+    view: PartView,
+    filter: &SymbolSelectionFilter,
 ) -> Option<SymbolSelection> {
     let xmin = x0.min(x1);
     let xmax = x0.max(x1);
@@ -88,7 +223,7 @@ pub fn select_in_box(
 
     let mut pin_indices = Vec::new();
     for (i, pin) in sym.pins.iter().enumerate() {
-        if !super::pin_on_part(pin, active_part) {
+        if !filter.pins || !super::pin_on_part(pin, view) {
             continue;
         }
         let hit = match kind {
@@ -118,7 +253,7 @@ pub fn select_in_box(
 
     let mut graphic_indices = Vec::new();
     for (i, g) in sym.graphics.iter().enumerate() {
-        if !super::graphic_on_part(g, active_part) {
+        if !super::graphic_on_part(g, view) || !filter.allows_graphic(&g.kind) {
             continue;
         }
         let hit = match kind {
@@ -141,14 +276,20 @@ pub fn select_in_box(
     let visible_pins = sym
         .pins
         .iter()
-        .filter(|p| super::pin_on_part(p, active_part))
+        .filter(|p| super::pin_on_part(p, view))
         .count();
     let visible_graphics = sym
         .graphics
         .iter()
-        .filter(|g| super::graphic_on_part(g, active_part))
+        .filter(|g| super::graphic_on_part(g, view))
         .count();
-    if pin_indices.len() == visible_pins && graphic_indices.len() == visible_graphics {
+    // `All` means "every item", so a box taken under a restricted
+    // filter must stay `Multiple` - `All` would move/delete the
+    // filtered-out kinds too.
+    if filter.is_unrestricted()
+        && pin_indices.len() == visible_pins
+        && graphic_indices.len() == visible_graphics
+    {
         return Some(SymbolSelection::All);
     }
     Some(SymbolSelection::Multiple {
@@ -181,12 +322,13 @@ fn graphic_fully_inside_box(
                 && center[1] - radius >= ymin
                 && center[1] + radius <= ymax
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            let h = size * 0.5;
-            position[0] - h >= xmin
-                && position[0] + h <= xmax
-                && position[1] - h >= ymin
-                && position[1] + h <= ymax
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            let (gx0, gx1, gy0, gy1) = super::hit_test::text_bounds(position, content, *size, 0.0);
+            gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax
         }
         SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
             Some((gx0, gy0, gx1, gy1)) => gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax,
@@ -213,12 +355,13 @@ fn graphic_intersects_box(
             let (cx, cy, r) = (center[0], center[1], *radius);
             cx - r <= xmax && cx + r >= xmin && cy - r <= ymax && cy + r >= ymin
         }
-        SymbolGraphicKind::Text { position, size, .. } => {
-            let h = size * 0.5;
-            position[0] - h <= xmax
-                && position[0] + h >= xmin
-                && position[1] - h <= ymax
-                && position[1] + h >= ymin
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => {
+            let (gx0, gx1, gy0, gy1) = super::hit_test::text_bounds(position, content, *size, 0.0);
+            gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin
         }
         SymbolGraphicKind::Polygon { vertices } => match polygon_bbox(vertices) {
             Some((gx0, gy0, gx1, gy1)) => gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin,
@@ -274,4 +417,81 @@ fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> boo
     let d4 = cross2d(a, b, d);
     ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
         && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::{SymbolGraphic, SymbolGraphicKind, SymbolPin};
+
+    /// Two units, each a pin plus a rectangle, sharing one stored
+    /// designator and one stored value.
+    fn two_unit_symbol() -> Symbol {
+        let mut s = Symbol::empty("T");
+        for (part, x) in [(1u8, 0.0), (2u8, 40.0)] {
+            let mut p = SymbolPin::new("1", "P");
+            p.position = [x, 0.0];
+            p.part_number = part;
+            s.pins.push(p);
+            s.graphics.push(SymbolGraphic {
+                body_style: 1,
+                kind: SymbolGraphicKind::Rectangle {
+                    from: [x, -5.08],
+                    to: [x + 10.16, 5.08],
+                },
+                stroke_width: 0.15,
+                part_number: part,
+                fill: None,
+            });
+        }
+        s.designator_pos = Some([0.0, 7.62]);
+        s.comment_pos = Some([0.0, -7.62]);
+        s
+    }
+
+    #[test]
+    fn selection_spanning_every_unit_moves_the_stored_fields() {
+        let mut s = two_unit_symbol();
+
+        move_multiple(&mut s, &[0, 1], &[0, 1], 2.54, 1.27);
+
+        assert_eq!(s.pins[0].position, [2.54, 1.27]);
+        assert_eq!(s.pins[1].position, [42.54, 1.27], "unit B moved too");
+        assert_eq!(s.designator_pos, Some([2.54, 8.89]));
+        assert_eq!(s.comment_pos, Some([2.54, -6.35]));
+    }
+
+    #[test]
+    fn selection_missing_one_graphic_of_another_unit_leaves_fields_alone() {
+        let mut s = two_unit_symbol();
+
+        move_multiple(&mut s, &[0, 1], &[0], 2.54, 0.0);
+
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+        assert_eq!(s.comment_pos, Some([0.0, -7.62]));
+    }
+
+    #[test]
+    fn one_unit_move_leaves_the_stored_fields_alone() {
+        let mut s = two_unit_symbol();
+
+        move_all(&mut s, PartView::normal(1), 2.54, 0.0);
+
+        assert_eq!(s.pins[0].position, [2.54, 0.0]);
+        assert_eq!(s.pins[1].position, [40.0, 0.0]);
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+    }
+
+    #[test]
+    fn a_symbol_with_no_pins_or_graphics_does_not_shift_its_stored_fields() {
+        let mut s = Symbol::empty("T");
+        s.designator_pos = Some([0.0, 7.62]);
+        s.comment_pos = Some([0.0, -7.62]);
+
+        move_all(&mut s, PartView::normal(1), 2.54, 2.54);
+        move_multiple(&mut s, &[], &[], 2.54, 2.54);
+
+        assert_eq!(s.designator_pos, Some([0.0, 7.62]));
+        assert_eq!(s.comment_pos, Some([0.0, -7.62]));
+    }
 }

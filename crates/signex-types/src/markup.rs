@@ -63,27 +63,6 @@ pub struct ExpressionEvalContext<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Auto net name — Signex format, not derived from any other EDA tool
-// ---------------------------------------------------------------------------
-
-/// Default name for an unnamed net.
-///
-/// Format: `unnamed-<sheet>:<ref>:<pin>`. Picks the lexicographically-
-/// smallest `(refdes, pin)` for determinism. Sheet defaults to empty
-/// string when the caller doesn't have a sheet context.
-pub fn auto_net_name(sheet: &str, pins: &[(String, String)]) -> Option<String> {
-    pins.iter()
-        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
-        .map(|(r, p)| {
-            if sheet.is_empty() {
-                format!("unnamed-{r}:{p}")
-            } else {
-                format!("unnamed-{sheet}:{r}:{p}")
-            }
-        })
-}
-
-// ---------------------------------------------------------------------------
 // Expression evaluator
 // ---------------------------------------------------------------------------
 
@@ -327,8 +306,10 @@ fn read_paired_single(input: &str, start: usize, sigil: u8) -> Option<(String, u
     let bytes = input.as_bytes();
     let mut i = start;
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            i += 2;
+        if bytes[i] == b'\\'
+            && let Some(escaped) = input[i + 1..].chars().next()
+        {
+            i += 1 + escaped.len_utf8();
             continue;
         }
         if bytes[i] == sigil {
@@ -349,8 +330,10 @@ fn read_paired_double(input: &str, start: usize, sigil: u8) -> Option<(String, u
     let bytes = input.as_bytes();
     let mut i = start;
     while i + 1 < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            i += 2;
+        if bytes[i] == b'\\'
+            && let Some(escaped) = input[i + 1..].chars().next()
+        {
+            i += 1 + escaped.len_utf8();
             continue;
         }
         if bytes[i] == sigil && bytes[i + 1] == sigil {
@@ -371,8 +354,10 @@ fn read_overbar(input: &str, start: usize) -> Option<(String, usize)> {
     let bytes = input.as_bytes();
     let mut i = start;
     while i + 1 < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            i += 2;
+        if bytes[i] == b'\\'
+            && let Some(escaped) = input[i + 1..].chars().next()
+        {
+            i += 1 + escaped.len_utf8();
             continue;
         }
         if bytes[i] == b'~' && bytes[i + 1] == b'_' {
@@ -392,8 +377,10 @@ fn read_paired_bracket(input: &str, start: usize) -> Option<(String, usize)> {
     let bytes = input.as_bytes();
     let mut i = start;
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            i += 2;
+        if bytes[i] == b'\\'
+            && let Some(escaped) = input[i + 1..].chars().next()
+        {
+            i += 1 + escaped.len_utf8();
             continue;
         }
         if bytes[i] == b']' {
@@ -413,8 +400,10 @@ fn read_paired_paren(input: &str, start: usize) -> Option<(String, usize)> {
     let bytes = input.as_bytes();
     let mut i = start;
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            i += 2;
+        if bytes[i] == b'\\'
+            && let Some(escaped) = input[i + 1..].chars().next()
+        {
+            i += 1 + escaped.len_utf8();
             continue;
         }
         if bytes[i] == b')' {
@@ -435,9 +424,11 @@ fn unescape(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            out.push(bytes[i + 1] as char);
-            i += 2;
+        if bytes[i] == b'\\'
+            && let Some(escaped) = input[i + 1..].chars().next()
+        {
+            out.push(escaped);
+            i += 1 + escaped.len_utf8();
             continue;
         }
         let ch = input[i..].chars().next().unwrap_or('\0');
@@ -666,6 +657,106 @@ mod tests {
         );
     }
 
+    fn assert_escaped_unicode_span(open: &str, close: &str, segment: fn(String) -> RichSegment) {
+        for text in ["Ölçüm", "µA", "測定", "🦀"] {
+            let input = format!("before {open}\\{text}{close} after");
+            assert_eq!(
+                parse_signex_markup(&input),
+                vec![
+                    RichSegment::Normal("before ".into()),
+                    segment(text.into()),
+                    RichSegment::Normal(" after".into()),
+                ],
+                "{input:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn escaped_unicode_in_single_sigil_spans() {
+        assert_escaped_unicode_span("*", "*", RichSegment::Italic);
+        assert_escaped_unicode_span("~", "~", RichSegment::Subscript);
+        assert_escaped_unicode_span("^", "^", RichSegment::Superscript);
+    }
+
+    #[test]
+    fn escaped_unicode_in_double_sigil_spans() {
+        assert_escaped_unicode_span("**", "**", RichSegment::Bold);
+        assert_escaped_unicode_span("~~", "~~", RichSegment::Strike);
+    }
+
+    #[test]
+    fn escaped_unicode_in_overbar() {
+        assert_escaped_unicode_span("_~", "~_", RichSegment::Overbar);
+    }
+
+    #[test]
+    fn escaped_unicode_in_link_label() {
+        for text in ["Ölçüm", "µA", "測定", "🦀"] {
+            assert_eq!(
+                parse_signex_markup(&format!("[\\{text}](url)")),
+                vec![RichSegment::Link {
+                    label: text.into(),
+                    url: "url".into()
+                }],
+            );
+        }
+    }
+
+    #[test]
+    fn escaped_unicode_in_link_url() {
+        for text in ["Ölçüm", "µA", "測定", "🦀"] {
+            assert_eq!(
+                parse_signex_markup(&format!("[label](https://example.com/\\{text})")),
+                vec![RichSegment::Link {
+                    label: "label".into(),
+                    url: format!("https://example.com/{text}"),
+                }],
+            );
+        }
+    }
+
+    #[test]
+    fn escaped_unicode_in_unfinished_markup_stays_literal() {
+        for prefix in ["*", "~", "^", "_~", "[", "[label]("] {
+            for text in ["Ö", "測", "🦀"] {
+                for suffix in ["", "\\"] {
+                    let input = format!("{prefix}\\{text}{suffix}");
+                    assert_eq!(
+                        parse_signex_markup(&input),
+                        vec![RichSegment::Normal(input)]
+                    );
+                }
+            }
+        }
+    }
+
+    /// Pins existing behaviour, not a spec decision: outside a span only a
+    /// sigil can be escaped (`\µA` keeps its backslash), while inside a span
+    /// any character can (`*\Ölçüm*` gives `Ölçüm`).
+    #[test]
+    fn unicode_and_ascii_escaping_keep_existing_boundaries() {
+        for (input, expected) in [
+            (r"\µA", RichSegment::Normal(r"\µA".into())),
+            (r"µA\", RichSegment::Normal("µA\\".into())),
+            (r"*µ\*A*", RichSegment::Italic("µ*A".into())),
+            (r"**µ\*\*A**", RichSegment::Bold("µ**A".into())),
+            (r"_~µ\~\_A~_", RichSegment::Overbar("µ~_A".into())),
+            (r"*\\µA*", RichSegment::Italic(r"\µA".into())),
+            (r"*\A\B*", RichSegment::Italic("AB".into())),
+            (r"*µA\*", RichSegment::Normal("*µA*".into())),
+            (
+                r"[µ\]A](u\)rl)",
+                RichSegment::Link {
+                    label: "µ]A".into(),
+                    url: "u)rl".into(),
+                },
+            ),
+        ] {
+            assert_eq!(parse_signex_markup(input), vec![expected], "{input:?}");
+        }
+    }
+
     #[test]
     fn mixed_overbar_and_subscript() {
         // _~OE~_~0~ → overbar OE + subscript 0
@@ -685,27 +776,6 @@ mod tests {
             parse_signex_markup("a*b"),
             vec![RichSegment::Normal("a*b".into())]
         );
-    }
-
-    #[test]
-    fn auto_net_name_format_is_signex() {
-        let pins = vec![
-            ("U2".to_string(), "5".to_string()),
-            ("R1".to_string(), "2".to_string()),
-            ("R1".to_string(), "1".to_string()),
-        ];
-        // Format must be "unnamed-<sheet>:<ref>:<pin>" per the Apache-clean
-        // remediation. Must NOT match the historical Standard format string.
-        assert_eq!(auto_net_name("", &pins), Some("unnamed-R1:1".to_string()));
-        assert_eq!(
-            auto_net_name("PowerSupply", &pins),
-            Some("unnamed-PowerSupply:R1:1".to_string())
-        );
-    }
-
-    #[test]
-    fn auto_net_name_empty_pins() {
-        assert_eq!(auto_net_name("", &[]), None);
     }
 
     #[test]

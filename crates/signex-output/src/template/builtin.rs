@@ -7,7 +7,7 @@
 //! When users want to customise, they clone a built-in via the future
 //! `.snxsht` parser (`format.rs`).
 
-use super::{FontStyle, Frame, Template, TemplateId, TitleBlock, TitleBlockField};
+use super::{FontStyle, Frame, Template, TemplateId, TitleBlock, TitleBlockCell};
 use crate::pdf::{Orientation, PageSize};
 
 /// Every built-in template's IDs, in display order.
@@ -153,68 +153,64 @@ const BUILTIN_TEMPLATES: &[(&str, &str, PageSize, Orientation)] = &[
     ),
 ];
 
-/// Shared title-block layout used by every built-in. 180 x 40 mm rectangle
-/// anchored at the page's bottom-right, with six fields stacked over two
-/// columns. Matches the sketch in OUTPUT_PLAN.md §4.
-fn standard_title_block() -> TitleBlock {
+/// Width of the standard title block, in mm: about a third of an A4
+/// landscape sheet (#1201).
+pub const STANDARD_TITLE_BLOCK_W_MM: f64 = 110.0;
+/// Height of the standard title block, in mm: four rows.
+pub const STANDARD_TITLE_BLOCK_H_MM: f64 = 28.0;
+
+/// Shared title-block layout used by every built-in: a compact table of
+/// labelled cells anchored at the drawing area's bottom-right (#1201).
+///
+/// | Title (full width)                        |
+/// | Doc No     | Rev  | Sheet   | Date         |
+/// | Company            | File                  |
+/// | Drawn       | Checked      | Approved      |
+///
+/// Also the title block the schematic canvas and the PDF export draw for a
+/// sheet with no `.snxsht` template, so what is on screen is what prints.
+pub fn standard_title_block() -> TitleBlock {
+    /// A cell with a 2.5 mm regular value.
+    fn cell([x_mm, y_mm, w_mm, h_mm]: [f64; 4], caption: &str, value: &str) -> TitleBlockCell {
+        TitleBlockCell {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+            caption: caption.into(),
+            value: value.into(),
+            font_family: "Roboto".into(),
+            value_size_mm: 2.5,
+            value_style: FontStyle::Normal,
+        }
+    }
     TitleBlock {
-        width_mm: 180.0,
-        height_mm: 40.0,
-        fields: vec![
-            TitleBlockField {
-                name: "title".into(),
-                x_mm: 4.0,
-                y_mm: 4.0,
-                font_family: "Roboto".into(),
-                font_size_mm: 4.5,
-                font_style: FontStyle::Bold,
-                default_text: "${TITLE}".into(),
+        width_mm: STANDARD_TITLE_BLOCK_W_MM,
+        height_mm: STANDARD_TITLE_BLOCK_H_MM,
+        fields: Vec::new(),
+        cells: vec![
+            TitleBlockCell {
+                value_size_mm: 3.5,
+                value_style: FontStyle::Bold,
+                ..cell([0.0, 0.0, 110.0, 9.0], "Title", "${TITLE}")
             },
-            TitleBlockField {
-                name: "revision".into(),
-                x_mm: 4.0,
-                y_mm: 12.0,
-                font_family: "Roboto".into(),
-                font_size_mm: 3.0,
-                font_style: FontStyle::Normal,
-                default_text: "Rev: ${REV}".into(),
+            cell([0.0, 9.0, 40.0, 7.0], "Doc No", "${DOCUMENTNUMBER}"),
+            cell([40.0, 9.0, 16.0, 7.0], "Rev", "${REV}"),
+            cell(
+                [56.0, 9.0, 26.0, 7.0],
+                "Sheet",
+                "${SHEETNUMBER} of ${SHEETCOUNT}",
+            ),
+            cell([82.0, 9.0, 28.0, 7.0], "Date", "${DATE}"),
+            cell([0.0, 16.0, 60.0, 6.0], "Company", "${COMPANY}"),
+            TitleBlockCell {
+                value_style: FontStyle::Italic,
+                ..cell([60.0, 16.0, 50.0, 6.0], "File", "${FILENAME}")
             },
-            TitleBlockField {
-                name: "date".into(),
-                x_mm: 4.0,
-                y_mm: 18.0,
-                font_family: "Roboto".into(),
-                font_size_mm: 3.0,
-                font_style: FontStyle::Normal,
-                default_text: "${DATE}".into(),
-            },
-            TitleBlockField {
-                name: "company".into(),
-                x_mm: 4.0,
-                y_mm: 24.0,
-                font_family: "Roboto".into(),
-                font_size_mm: 3.0,
-                font_style: FontStyle::Normal,
-                default_text: "${COMPANY}".into(),
-            },
-            TitleBlockField {
-                name: "sheet".into(),
-                x_mm: 100.0,
-                y_mm: 4.0,
-                font_family: "Roboto".into(),
-                font_size_mm: 3.0,
-                font_style: FontStyle::Normal,
-                default_text: "Sheet ${SHEETNUMBER} of ${SHEETCOUNT}".into(),
-            },
-            TitleBlockField {
-                name: "filename".into(),
-                x_mm: 100.0,
-                y_mm: 12.0,
-                font_family: "Iosevka".into(),
-                font_size_mm: 2.5,
-                font_style: FontStyle::Italic,
-                default_text: "${FILENAME}".into(),
-            },
+            // Sign-off row (#1080).
+            cell([0.0, 22.0, 37.0, 6.0], "Drawn", "${DRAWNBY}"),
+            cell([37.0, 22.0, 37.0, 6.0], "Checked", "${CHECKEDBY}"),
+            cell([74.0, 22.0, 36.0, 6.0], "Approved", "${APPROVEDBY}"),
         ],
     }
 }
@@ -239,7 +235,29 @@ mod tests {
             let t = load_builtin(&id).unwrap_or_else(|| panic!("missing: {id:?}"));
             assert_eq!(t.id, id);
             assert!(!t.display_name.is_empty());
-            assert_eq!(t.title_block.fields.len(), 6);
+            assert_eq!(t.title_block.cells.len(), 10);
+        }
+    }
+
+    /// #1080 - the document number and the sign-off row are in every built-in.
+    #[test]
+    fn every_built_in_has_the_document_number_and_sign_off_rows() {
+        for id in all_builtin_ids() {
+            let block = load_builtin(&id).unwrap().title_block;
+            for (caption, value) in [
+                ("Doc No", "${DOCUMENTNUMBER}"),
+                ("Drawn", "${DRAWNBY}"),
+                ("Checked", "${CHECKEDBY}"),
+                ("Approved", "${APPROVEDBY}"),
+            ] {
+                assert!(
+                    block
+                        .cells
+                        .iter()
+                        .any(|c| c.caption == caption && c.value == value),
+                    "{id:?} lacks {caption}"
+                );
+            }
         }
     }
 
@@ -262,9 +280,9 @@ mod tests {
             let t = load_builtin(&id).unwrap();
             let concat: String = t
                 .title_block
-                .fields
+                .cells
                 .iter()
-                .map(|f| f.default_text.as_str())
+                .map(|c| c.value.as_str())
                 .collect();
             assert!(concat.contains("${TITLE}"), "{id:?} missing TITLE");
             assert!(concat.contains("${REV}"), "{id:?} missing REV");

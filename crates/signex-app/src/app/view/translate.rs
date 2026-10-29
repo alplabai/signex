@@ -194,7 +194,10 @@ where
     }
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "generic translate wrapper kept for view code that needs to offset an Element"
+)]
 pub fn translate<'a, Message, Theme, Renderer>(
     content: impl Into<Element<'a, Message, Theme, Renderer>>,
     offset: (f32, f32),

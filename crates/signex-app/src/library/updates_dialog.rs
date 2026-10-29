@@ -27,25 +27,29 @@
 //! "Update Selected Components" rewrites the picked Symbols to the
 //! latest version + dirty-marks the schematic. "Skip All" leaves
 //! everything pinned and the dispatcher records the schematic in
-//! `LibraryState.skipped_updates_for` so the status bar can show a
-//! persistent indicator until resolved.
+//! `LibraryState.skipped_updates_for`. Nothing renders that set yet; the
+//! user-visible trace of a refused or unreadable update is its line in the
+//! Messages panel.
 //!
-//! The matching `needs_overlay` predicate in
-//! `app/view/mod.rs::view_main_for` includes
-//! `library_updates.is_some()` — without it the modal's `collect_overlays`
-//! contribution is discarded silently and clicks fall through (memory:
-//! `[needs_overlay predicate gates modal rendering]`).
+//! Painted by `library_updates_overlay` via `collect_overlays`, which
+//! runs every frame; the builder's `library_updates.is_some()` guard is
+//! the only open check.
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme};
+use iced::widget::{Space, checkbox, column, container, row, scrollable, text};
+use iced::{Element, Length};
 use signex_library::RowId;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use uuid::Uuid;
 
 use super::messages::LibraryMessage;
+use super::modal_chrome::{primary_btn_if, secondary_btn};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Modal width — wider than the recovery dialogs (520 px) because the
 /// drift list needs room for the ref-designator column + two version
@@ -114,7 +118,6 @@ pub fn classify_bump(current: &str, latest: &str) -> BumpKind {
 /// One row in the modal — drift between a placed Symbol's pinned
 /// version and its source row's current version.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct LibraryUpdateEntry {
     /// Schematic-side UUID for the placed `Symbol` — used to look up
     /// the instance back on apply (the engine indexes by Symbol UUID).
@@ -122,6 +125,9 @@ pub struct LibraryUpdateEntry {
     /// Reference designator (e.g. `R12`, `U3`) — sort key + display
     /// label.
     pub ref_des: String,
+    /// Embedded-symbol key (`<library>:<symbol>`). Every instance sharing it
+    /// shares one embedded copy, so the modal selects them together.
+    pub lib_id: String,
     /// Source library that owns the row.
     pub library_id: Uuid,
     /// Library's display name — pulled from `OpenLibrary.display_name`
@@ -148,9 +154,7 @@ pub struct LibraryUpdateEntry {
 
 /// Modal state — owned by [`crate::library::LibraryState::library_updates`].
 /// `None` while closed; populated by the schematic-open scan. Sorted
-/// by `ref_des` (lexicographic with natural-numeric tail handling
-/// would be nicer but isn't worth the dep here — `R12` sorts before
-/// `R2` in pure lex; the user can re-sort visually if it bites).
+/// by `ref_des` in natural order (`R2` before `R12`).
 #[derive(Debug, Clone)]
 pub struct LibraryUpdatesState {
     /// Schematic the scan ran against — drift applies into this
@@ -160,6 +164,11 @@ pub struct LibraryUpdatesState {
     pub schematic_path: PathBuf,
     /// Drift rows, sorted by `ref_des`.
     pub entries: Vec<LibraryUpdateEntry>,
+    /// The open-time scan could not check or update some symbol: a later
+    /// Apply must not clear the sheet's pending-update flag.
+    pub scan_failed: bool,
+    /// [`signex_engine::Engine::instance_id`] of the sheet when scanned.
+    pub engine_instance: u64,
 }
 
 impl LibraryUpdatesState {
@@ -169,25 +178,39 @@ impl LibraryUpdatesState {
     pub fn new(schematic_path: PathBuf, mut entries: Vec<LibraryUpdateEntry>) -> Self {
         entries
             .sort_by(|a, b| signex_types::designator::compare_references(&a.ref_des, &b.ref_des));
-        for entry in &mut entries {
-            entry.selected = entry.bump_kind.default_checked();
+        // Instances of one symbol share a copy, so they share a checkbox:
+        // default on only when every one of them is a safe (patch) bump.
+        let safe: Vec<bool> = entries
+            .iter()
+            .map(|e| {
+                entries
+                    .iter()
+                    .filter(|o| o.lib_id == e.lib_id)
+                    .all(|o| o.bump_kind.default_checked())
+            })
+            .collect();
+        for (entry, safe) in entries.iter_mut().zip(safe) {
+            entry.selected = safe;
         }
         Self {
             schematic_path,
             entries,
+            scan_failed: false,
+            engine_instance: 0,
         }
     }
 
-    /// Toggle the checkbox for one entry, addressed by `symbol_uuid`.
+    /// Toggle the checkbox of the entry addressed by `symbol_uuid` and of
+    /// every entry sharing its `lib_id` (one embedded copy, one decision).
     /// No-op when the uuid isn't present (e.g. the user dismissed and
     /// re-scanned).
     pub fn toggle(&mut self, symbol_uuid: Uuid) {
-        if let Some(e) = self
-            .entries
-            .iter_mut()
-            .find(|e| e.symbol_uuid == symbol_uuid)
-        {
-            e.selected = !e.selected;
+        let Some(e) = self.entries.iter().find(|e| e.symbol_uuid == symbol_uuid) else {
+            return;
+        };
+        let (lib_id, selected) = (e.lib_id.clone(), !e.selected);
+        for e in self.entries.iter_mut().filter(|e| e.lib_id == lib_id) {
+            e.selected = selected;
         }
     }
 
@@ -202,10 +225,10 @@ impl LibraryUpdatesState {
 pub fn view<'a>(
     state: &'a LibraryUpdatesState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     let title_label = state
         .schematic_path
@@ -216,9 +239,11 @@ pub fn view<'a>(
 
     let header = container(
         row![
-            text("Library Updates Available").size(14).color(text_c),
+            text("Library Updates Available")
+                .size(TS.heading)
+                .color(text_c),
             Space::new().width(Length::Fill),
-            text(title_label).size(11).color(muted),
+            text(title_label).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -227,9 +252,9 @@ pub fn view<'a>(
 
     // Build the drift list. Each row is checkbox + ref_des + library
     // name + version pair + bump-kind badge.
-    let mut rows: iced::widget::Column<'a, LibraryMessage> = column![].spacing(2);
+    let mut rows: iced::widget::Column<'a, LibraryMessage> = column![].spacing(SP.xs);
     for entry in &state.entries {
-        let row_view = render_entry_row(entry, text_c, muted, border);
+        let row_view = render_entry_row(entry, text_c, muted, tokens);
         rows = rows.push(row_view);
     }
 
@@ -239,33 +264,28 @@ pub fn view<'a>(
             state.entries.len(),
             if state.entries.len() == 1 { "" } else { "s" }
         ))
-        .size(11)
+        .size(TS.body)
         .color(muted),
         Space::new().height(8),
         scrollable(rows).height(Length::Fixed(LIST_MAX_H)),
     ]
-    .spacing(2);
+    .spacing(SP.xs);
 
     let selected = state.selected_count();
     let update_label = format!("Update Selected Components ({})", selected);
 
     let footer = container(
         row![
-            secondary_btn(
-                "Skip All",
-                LibraryMessage::LibraryUpdatesSkipAll,
-                text_c,
-                border,
-            ),
+            secondary_btn("Skip All", LibraryMessage::LibraryUpdatesSkipAll, tokens,),
             Space::new().width(Length::Fill),
-            secondary_btn(
-                "Cancel",
-                LibraryMessage::LibraryUpdatesCancel,
-                text_c,
-                border,
-            ),
+            secondary_btn("Cancel", LibraryMessage::LibraryUpdatesCancel, tokens,),
             Space::new().width(8),
-            primary_btn(&update_label, LibraryMessage::LibraryUpdatesApply, selected),
+            primary_btn_if(
+                &update_label,
+                LibraryMessage::LibraryUpdatesApply,
+                selected > 0,
+                tokens,
+            ),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -273,7 +293,8 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([14, 16]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([14.0, SP.xl]), footer]
+            .width(super::card_len(windowed, MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -284,7 +305,7 @@ fn render_entry_row<'a>(
     entry: &'a LibraryUpdateEntry,
     text_c: iced::Color,
     muted: iced::Color,
-    _border: iced::Color,
+    tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     // Warning glyph for major bumps — leaves room for users to back
     // out before the click. Patch / minor get a neutral dot.
@@ -293,14 +314,14 @@ fn render_entry_row<'a>(
         _ => "  ",
     };
     let badge_color = match entry.bump_kind {
-        BumpKind::Major => iced::Color::from_rgb(0.86, 0.40, 0.36),
-        BumpKind::Minor => iced::Color::from_rgb(0.93, 0.65, 0.30),
-        BumpKind::Patch => iced::Color::from_rgb(0.42, 0.74, 0.42),
+        BumpKind::Major => theme_ext::error_color(tokens),
+        BumpKind::Minor => theme_ext::warning_color(tokens),
+        BumpKind::Patch => theme_ext::success_color(tokens),
     };
 
     let symbol_uuid = entry.symbol_uuid;
     let cb: Element<'a, LibraryMessage> = checkbox(entry.selected)
-        .size(14)
+        .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
         .into();
 
@@ -310,77 +331,31 @@ fn render_entry_row<'a>(
             Space::new().width(8),
             container(
                 text(format!("{}{}", prefix, entry.ref_des))
-                    .size(12)
+                    .size(TS.label)
                     .color(text_c)
             )
             .width(Length::Fixed(96.0)),
-            container(text(&entry.library_name).size(11).color(muted)).width(Length::Fixed(160.0)),
+            container(text(&entry.library_name).size(TS.body).color(muted))
+                .width(Length::Fixed(160.0)),
             container(
                 text(format!(
                     "{} \u{2192} {}",
                     entry.current_version, entry.latest_version
                 ))
-                .size(11)
+                .size(TS.body)
                 .color(text_c),
             )
             .width(Length::Fill),
-            container(text(entry.bump_kind.label()).size(10).color(badge_color))
-                .width(Length::Fixed(60.0)),
+            container(
+                text(entry.bump_kind.label())
+                    .size(TS.caption)
+                    .color(badge_color)
+            )
+            .width(Length::Fixed(60.0)),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([4, 4])
-    .into()
-}
-
-fn secondary_btn<'a>(
-    label: &'a str,
-    message: LibraryMessage,
-    text_color: iced::Color,
-    border: iced::Color,
-) -> Element<'a, LibraryMessage> {
-    button(container(text(label.to_string()).size(11).color(text_color)).padding([4, 14]))
-        .on_press(message)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
-}
-
-fn primary_btn<'a>(
-    label: &str,
-    message: LibraryMessage,
-    selected: usize,
-) -> Element<'a, LibraryMessage> {
-    let bg = if selected == 0 {
-        iced::Color::from_rgba(0.0, 0.47, 0.84, 0.4)
-    } else {
-        iced::Color::from_rgb(0.00, 0.47, 0.84)
-    };
-    let fg = iced::Color::WHITE;
-    let mut btn = button(container(text(label.to_string()).size(11).color(fg)).padding([4, 14]));
-    if selected > 0 {
-        btn = btn.on_press(message);
-    }
-    btn.style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(bg)),
-        text_color: fg,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    })
+    .padding([SP.s, SP.s])
     .into()
 }
 
@@ -419,8 +394,9 @@ mod tests {
         let path = PathBuf::from("/tmp/x.standard_sch");
         let library_path = PathBuf::from("/tmp/x.snxlib");
         let mk = |refdes: &str, kind: BumpKind| LibraryUpdateEntry {
-            symbol_uuid: Uuid::new_v4(),
+            symbol_uuid: Uuid::now_v7(),
             ref_des: refdes.to_string(),
+            lib_id: format!("L:{refdes}"),
             library_id: Uuid::nil(),
             library_name: "Lib".to_string(),
             row_id: RowId::from_uuid(Uuid::nil()),
@@ -464,13 +440,14 @@ mod tests {
     fn toggle_flips_only_matching_uuid() {
         let path = PathBuf::from("/tmp/x.standard_sch");
         let library_path = PathBuf::from("/tmp/x.snxlib");
-        let id = Uuid::new_v4();
-        let other = Uuid::new_v4();
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
         let mut state = LibraryUpdatesState::new(
             path,
             vec![LibraryUpdateEntry {
                 symbol_uuid: id,
                 ref_des: "R1".to_string(),
+                lib_id: "L:R1".to_string(),
                 library_id: Uuid::nil(),
                 library_name: "Lib".to_string(),
                 row_id: RowId::from_uuid(Uuid::nil()),
@@ -488,5 +465,40 @@ mod tests {
         // Unknown uuid is a no-op.
         state.toggle(other);
         assert!(!state.entries[0].selected);
+    }
+
+    /// Instances sharing a `lib_id` share one embedded copy: one checkbox
+    /// for the group, default on only if every member is a patch bump.
+    #[test]
+    fn instances_of_one_lib_id_are_selected_together() {
+        let mk = |refdes: &str, lib_id: &str, kind: BumpKind| LibraryUpdateEntry {
+            symbol_uuid: Uuid::now_v7(),
+            ref_des: refdes.to_string(),
+            lib_id: lib_id.to_string(),
+            library_id: Uuid::nil(),
+            library_name: "Lib".to_string(),
+            row_id: RowId::from_uuid(Uuid::nil()),
+            library_path: PathBuf::from("/tmp/x.snxlib"),
+            current_version: "1.0.0".to_string(),
+            latest_version: "1.0.1".to_string(),
+            bump_kind: kind,
+            selected: false,
+        };
+        let mut state = LibraryUpdatesState::new(
+            PathBuf::from("/tmp/x.standard_sch"),
+            vec![
+                mk("R1", "L:R", BumpKind::Patch),
+                mk("R2", "L:R", BumpKind::Major),
+                mk("C1", "L:C", BumpKind::Patch),
+            ],
+        );
+        let sel = |s: &LibraryUpdatesState| -> Vec<bool> {
+            s.entries.iter().map(|e| e.selected).collect()
+        };
+        // C1 (own group, patch) on; R1/R2 off because R2 is a major bump.
+        assert_eq!(sel(&state), vec![true, false, false]);
+        let r1 = state.entries[1].symbol_uuid;
+        state.toggle(r1);
+        assert_eq!(sel(&state), vec![true, true, true]);
     }
 }

@@ -4,6 +4,11 @@
 //! `properties_parameters` module.
 
 use super::super::*;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// Net-attribute row: label | checkbox | text value | unit. Used for
 /// "Power Net = 0.000 V" and "High Speed = 0.000 Hz".
@@ -20,9 +25,9 @@ pub fn net_numeric_row<'a>(
             property_label(label.to_string(), label_c),
             iced::widget::checkbox(false)
                 .on_toggle(|_| PanelMsg::Noop)
-                .size(12)
-                .spacing(4),
-            container(text(value.to_string()).size(11).color(label_c),)
+                .size(TS.label)
+                .spacing(SP.s),
+            container(text(value.to_string()).size(TS.body).color(label_c),)
                 .padding([3, 6])
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
@@ -34,7 +39,7 @@ pub fn net_numeric_row<'a>(
                     },
                     ..container::Style::default()
                 }),
-            text(unit.to_string()).size(10).color(label_c),
+            text(unit.to_string()).size(TS.caption).color(label_c),
         ]
         .spacing(6.0)
         .align_y(iced::Alignment::Center),
@@ -47,7 +52,6 @@ pub fn net_numeric_row<'a>(
 /// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
 pub fn net_params_tabs<'a>(
     primary: Color,
-    label_c: Color,
     input_bg: Color,
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
@@ -57,11 +61,11 @@ pub fn net_params_tabs<'a>(
         let fg_inactive = primary;
         iced::widget::button(
             text(label.to_string())
-                .size(11)
+                .size(TS.body)
                 .color(if active { fg_active } else { fg_inactive })
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([3, 12])
+        .padding([3.0, SP.l])
         .on_press(PanelMsg::Noop)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
@@ -84,7 +88,6 @@ pub fn net_params_tabs<'a>(
         })
         .into()
     };
-    let _ = label_c;
     container(
         row![
             tab("All", true),
@@ -92,7 +95,7 @@ pub fn net_params_tabs<'a>(
             tab("Rules", false),
             tab("Classes", false),
         ]
-        .spacing(4.0),
+        .spacing(SP.s),
     )
     .padding([4, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
@@ -104,15 +107,15 @@ pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, Pan
     container(
         row![
             text("Name".to_string())
-                .size(10)
+                .size(TS.caption)
                 .color(label_c)
                 .width(Length::FillPortion(2)),
             text("Value".to_string())
-                .size(10)
+                .size(TS.caption)
                 .color(label_c)
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4.0),
+        .spacing(SP.s),
     )
     .padding([4, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
@@ -134,7 +137,7 @@ pub fn empty_section_row<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     container(
-        container(text(label.to_string()).size(10).color(label_c))
+        container(text(label.to_string()).size(TS.caption).color(label_c))
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
     )
@@ -158,8 +161,8 @@ pub fn net_params_add_bar<'a>(
     input_bdr: Color,
 ) -> Element<'a, PanelMsg> {
     let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        iced::widget::button(text(label.to_string()).size(11).color(label_c))
-            .padding([4, 8])
+        iced::widget::button(text(label.to_string()).size(TS.body).color(label_c))
+            .padding([SP.s, SP.m])
             .on_press(PanelMsg::Noop)
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(Background::Color(input_bg)),
@@ -178,10 +181,10 @@ pub fn net_params_add_bar<'a>(
             Space::new().width(Length::Fill),
             iced::widget::button(
                 text("Add \u{25BE}".to_string())
-                    .size(11)
+                    .size(TS.body)
                     .color(Color::WHITE)
             )
-            .padding([4, 12])
+            .padding([SP.s, SP.l])
             .on_press(PanelMsg::Noop)
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(Background::Color(input_bdr)),
@@ -196,7 +199,7 @@ pub fn net_params_add_bar<'a>(
             icon_btn("\u{270E}"),
             icon_btn("\u{1F5D1}"),
         ]
-        .spacing(4.0)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
     .padding([6, PROPERTY_ROW_PAD_X])
@@ -211,14 +214,16 @@ pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,
     h: signex_types::schematic::HAlign,
-    input_bg: Color,
-    input_bdr: Color,
-    primary: Color,
-    muted: Color,
+    palette: PanelPalette,
     theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    let _ = muted;
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        primary,
+        ..
+    } = palette;
 
     // Cell size mimics Altium's compact 24×24 px anchor picker.
     const CELL_SIZE: f32 = 24.0;
@@ -311,6 +316,8 @@ pub fn justification_grid(
         }
     };
 
+    // A label has only four anchor directions, so the nine cells map onto
+    // them (corners follow their edge; centre re-sends the current one).
     let hl = |dir: LabelDir| current_dir == dir;
 
     iced::widget::column![
@@ -331,7 +338,7 @@ pub fn justification_grid(
                 to_msg(LabelDir::Up)
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
         iced::widget::row![
             cell(
                 crate::icons::icon_justify_l(theme),
@@ -349,7 +356,7 @@ pub fn justification_grid(
                 to_msg(LabelDir::Right)
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
         iced::widget::row![
             cell(
                 crate::icons::icon_justify_bl(theme),
@@ -367,9 +374,9 @@ pub fn justification_grid(
                 to_msg(LabelDir::Down)
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .into()
 }
 
@@ -381,11 +388,9 @@ pub fn preplacement_justification_grid(
     input_bg: Color,
     input_bdr: Color,
     primary: Color,
-    muted: Color,
     theme: signex_types::theme::ThemeId,
 ) -> Element<'static, PanelMsg> {
     use signex_types::schematic::HAlign;
-    let _ = muted;
 
     const CELL_SIZE: f32 = 24.0;
     let cell = |handle: iced::widget::svg::Handle,
@@ -453,7 +458,7 @@ pub fn preplacement_justification_grid(
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
         iced::widget::row![
             cell(
                 crate::icons::icon_justify_l(theme),
@@ -471,7 +476,7 @@ pub fn preplacement_justification_grid(
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
         iced::widget::row![
             cell(
                 crate::icons::icon_justify_bl(theme),
@@ -489,8 +494,8 @@ pub fn preplacement_justification_grid(
                 PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .into()
 }

@@ -211,21 +211,21 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if self.state.touching_line_active {
-            if let Some((sx, sy)) = self.state.touching_line_first {
-                let p0 = cstate.world_to_screen((sx, sy));
-                let p1 = match self.state.cursor_mm {
-                    Some(c) => cstate.world_to_screen(c),
-                    None => p0,
-                };
-                let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
-                frame.stroke(
-                    &Path::line(p0, p1),
-                    Stroke::default().with_width(1.5).with_color(line_col),
-                );
-                frame.fill(&Path::circle(p0, 3.5), line_col);
-                frame.fill(&Path::circle(p1, 3.5), line_col);
-            }
+        if self.state.touching_line_active
+            && let Some((sx, sy)) = self.state.touching_line_first
+        {
+            let p0 = cstate.world_to_screen((sx, sy));
+            let p1 = match self.state.cursor_mm {
+                Some(c) => cstate.world_to_screen(c),
+                None => p0,
+            };
+            let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
+            frame.stroke(
+                &Path::line(p0, p1),
+                Stroke::default().with_width(1.5).with_color(line_col),
+            );
+            frame.fill(&Path::circle(p0, 3.5), line_col);
+            frame.fill(&Path::circle(p1, 3.5), line_col);
         }
     }
 
@@ -303,13 +303,14 @@ impl FootprintCanvas<'_> {
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
+        conflict_colour: iced::Color,
     ) {
         if matches!(
             self.state.mode,
             crate::library::editor::footprint::state::EditorMode::Sketch
         ) && let Some(sketch) = self.sketch
         {
-            draw_sketch_overlay(frame, cstate, sketch, self.state);
+            draw_sketch_overlay(frame, cstate, sketch, self.state, conflict_colour);
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);

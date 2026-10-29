@@ -1,5 +1,7 @@
 [workspace]
 resolver = "2"
+# cargo-fuzz crate: standalone (own [workspace]), needs nightly to run.
+exclude = ["fuzz"]
 members = [
     "crates/signex-app",
     "crates/signex-engine",
@@ -41,7 +43,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.15.0"
+version = "1.0.0-rc.1"
 edition = "2024"
 # MSRV tracks the pinned toolchain (`rust-toolchain.toml` channel). We build,
 # test, and support exactly one toolchain — the pinned stable — so the declared
@@ -63,12 +65,15 @@ iced_aw = { version = "0.13", default-features = false, features = [
 ] }
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 toml = "0.8"
+# Format-preserving edit of a .snxlib that holds unknown keys (#1435). Same
+# version and features `toml` already builds, so it adds no crate.
+toml_edit = "0.22"
 
 # Identity
-uuid = { version = "1.23.1", features = ["v4", "v7", "serde"] }
+uuid = { version = "1.23.1", features = ["v7", "serde"] }
 
 # Error handling
 thiserror = "2"
@@ -83,7 +88,7 @@ regex = "1"
 
 # Output generation
 pdf-writer = "0.14"
-rust_xlsxwriter = "0.77"
+rust_xlsxwriter = "0.101"
 tiny-skia = "0.11"
 ttf-parser = "0.25"
 
@@ -105,9 +110,9 @@ chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
 
 # Library subsystem — Phase 1 (adapters: local-git, database server, distributor APIs, search, AI-stub)
-git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"] }
 keyring = "3"
-tantivy = "0.22"
+tantivy = "0.27"
 # NOTE: oauth2 is declared directly in signex-library (it needs
 # default-features = false + the reqwest-blocking feature set, which cannot
 # be expressed by inheriting a workspace entry). No crate inherits an
@@ -117,12 +122,15 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "sqlite", "macros", "chrono", "uuid", "migrate"] }
-pdf-extract = "0.7"
+pdf-extract = "0.12"
 tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request", "limit"] }
 # Per-IP rate limiting for the library server (HI-2). Closes the DoS surface
-# on `/locks` (unbounded acquire) + mutating routes. `governor` is the
+# on the mutating routes. `governor` is the
 # underlying token-bucket impl.
 tower_governor = "0.4"
+# Constant-time bearer-token comparison in the library server (already a
+# transitive dep via the RustCrypto stack; BSD-3-Clause).
+subtle = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
@@ -134,6 +142,35 @@ signex-sketch = { path = "crates/signex-sketch" }
 
 # Internal — bake pipeline (v0.13 Phase 7)
 signex-bake = { path = "crates/signex-bake" }
+
+# Inherited by every member via `[lints] workspace = true` (GH #548).
+[workspace.lints.rust]
+# `iced::Task` is `#[must_use]` (iced_runtime-0.14.0/src/task.rs), so a bare
+# `self.open_project_file(path)?;` that drops one already made rustc fire —
+# at WARN level, in a build that emits dozens of unrelated warnings. The
+# discard in #544 reached a PR anyway. Signal buried in noise is not a gate.
+#
+# This catches strictly more than scripts/check_discarded_tasks.sh can: any
+# must-use type, any method name, any line wrapping. It does NOT replace
+# that script — rustc counts `let _ = ...` as "used", so the `let _ =`
+# discard shape stays the grep gate's job.
+unused_must_use = "deny"
+
+# Deliberately NOT lifted here: clippy's `let_underscore_must_use`, which
+# `signex-app` carries locally. Workspace-wide it fires 27 times outside
+# that crate — signex-output 17 (netlist/mod.rs, svg/document.rs), signex-gfx
+# 7 (debug_pass/), signex-types 3 (atomic_io.rs) — none of them `Task`
+# discards, and #548's whole complaint is that signal buried in noise is not
+# a gate. Measured on d6c5531e with `--force-warn`, production targets only.
+# An earlier version of this comment said 33 and listed signex-library; that
+# count was wrong and signex-library contributes none (#577). The 27 sit in
+# three clusters rather than scattered, so lifting the lint here is more
+# tractable than "33 across four crates" suggested — revisit after #533.
+#
+# `signex-app` therefore keeps explicit `[lints.*]` tables instead of
+# `workspace = true`. A lint added above does NOT reach it automatically —
+# it must be hand-copied into crates/signex-app/Cargo.toml at the same
+# level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 [profile.release]
 lto = "thin"

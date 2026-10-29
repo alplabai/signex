@@ -1,7 +1,12 @@
 //! Shared panel widget helpers (chevrons, section rows, form rows).
 
 use super::*;
+use crate::styles::{Spacing, TypeScale};
 use iced::widget::column;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -65,12 +70,12 @@ pub fn collapsible_section_header<'a>(
                         .style(move |_: &Theme, _| iced::widget::svg::Style {
                             color: Some(header_color),
                         }),
-                    text(title.to_string()).size(12).color(header_color),
+                    text(title.to_string()).size(TS.label).color(header_color),
                 ]
                 .spacing(6)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([6, 8])
+            .padding([6.0, SP.m])
             .width(Length::Fill),
         )
         .padding(0)
@@ -122,12 +127,15 @@ pub fn prop_kv_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(key.to_string()).size(10).color(key_c).width(84),
-            text(value.to_string()).size(10).color(val_c),
+            text(key.to_string())
+                .size(TS.caption)
+                .color(key_c)
+                .width(84),
+            text(value.to_string()).size(TS.caption).color(val_c),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([4, 8])
+    .padding([SP.s, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -149,11 +157,14 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
         column![
             section_title(title, &ctx.tokens),
             separator(&ctx.tokens),
-            text(desc.to_string())
+            text(crate::active_bar::PLANNED_TOOLTIP)
                 .size(10)
+                .color(theme_ext::text_primary(&ctx.tokens)),
+            text(desc.to_string())
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .padding(6),
     )
     .width(Length::Fill)
@@ -177,18 +188,18 @@ pub fn part_tree_row<'a>(
             // Tree-expander indent: 18 px gutter + a faint glyph so
             // the part rows visually nest under the symbol.
             text("\u{2514}")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(18.0)),
             text(label.to_string())
-                .size(10)
+                .size(TS.caption)
                 .color(label_color)
                 .width(Length::Fill),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .on_press(PanelMsg::SymEditorSelectPart(part))
     .style(
@@ -219,7 +230,7 @@ pub fn part_tree_row<'a>(
 pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     container(
         text(label.into())
-            .size(11)
+            .size(TS.body)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::None),
     )
@@ -232,7 +243,7 @@ pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Elem
 fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     container(
         text(label.into())
-            .size(10)
+            .size(TS.caption)
             .color(color)
             .wrapping(iced::widget::text::Wrapping::None),
     )
@@ -241,29 +252,20 @@ fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> El
     .into()
 }
 
-/// Numeric edit row used by the shape pre-placement form. Writes on
-/// submit — partial text mid-type doesn't panic via parse failure.
+/// Numeric edit row used by the shape pre-placement form. The typed text
+/// stays as a draft while the box is edited, so `-` and `1.` survive; each
+/// parsable keystroke is applied, and Enter shows the stored value again.
 pub fn form_edit_row_f64<'a>(
     label: &'a str,
     value: f64,
+    key: crate::panels::NumericFieldKey,
+    draft: Option<&crate::panels::NumericDraft>,
     muted: Color,
-    on_submit: impl Fn(f64) -> PanelMsg + 'a + Clone,
 ) -> Element<'a, PanelMsg> {
-    use iced::widget::{row, text, text_input};
-    let buf = format!("{value:.3}");
-    let on_submit_cb = on_submit.clone();
+    use iced::widget::row;
     row![
         property_label_small(label, muted),
-        text_input("", &buf)
-            .size(11)
-            .on_input(move |s| {
-                if let Ok(v) = s.parse::<f64>() {
-                    on_submit_cb(v)
-                } else {
-                    PanelMsg::Noop
-                }
-            })
-            .width(Length::FillPortion(3)),
+        crate::panels::numeric_input("", key, value, draft).size(TS.body),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
@@ -279,8 +281,8 @@ pub fn shape_fill_row<'a>(
     use iced::widget::{button, row, text};
     use signex_types::schematic::FillType;
     let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        button(text(label).size(10))
-            .padding([3, 8])
+        button(text(label).size(TS.caption))
+            .padding([3.0, SP.m])
             .on_press(PanelMsg::SetPrePlacementShapeFill(ft))
             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(if active {
@@ -304,7 +306,7 @@ pub fn shape_fill_row<'a>(
     };
     row![
         text("Fill")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
@@ -316,7 +318,7 @@ pub fn shape_fill_row<'a>(
                 current == FillType::Background
             ),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .width(Length::FillPortion(3)),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])

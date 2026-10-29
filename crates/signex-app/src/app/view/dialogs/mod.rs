@@ -10,11 +10,15 @@ use super::*;
 use iced::Color;
 
 mod annotate;
-mod annotate_preview;
+mod autosave_recovery;
 mod bom;
+pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
 mod confirms;
+mod create_child_sheet;
 mod erc;
 mod project;
+mod rule_editor;
+pub(crate) use rule_editor::{RuleEditor, rule_editor};
 mod widgets;
 
 // ── Modal chrome — single source of truth ───────────────────────────
@@ -46,7 +50,7 @@ pub(crate) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
 /// Title text size in the modal header.
 pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
 /// Close-X hit-box width — same width the chrome close uses
-/// (`view::view_main_window_chrome::chrome_btn`).
+/// (`view/chrome/buttons.rs::windows_button`).
 pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
 /// Close-X hit-box height — also matches the chrome close (full
 /// menu-bar height) so the modal X is pixel-identical to the OS-window X.
@@ -56,5 +60,8 @@ pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(crate) use widgets::{close_x_button, detached_header};
-pub(in crate::app::view) use widgets::{draggable_header, wrap_modal};
+pub(crate) use widgets::{close_x_button, os_title_bar_slot};
+pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size, wrap_modal};
+
+#[cfg(test)]
+mod fit_window_tests;

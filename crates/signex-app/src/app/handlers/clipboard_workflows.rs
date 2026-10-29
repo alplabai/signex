@@ -2,135 +2,39 @@ use iced::Task;
 
 use super::super::*;
 
-fn union_bounds(
-    current: Option<signex_types::schematic::Aabb>,
-    next: signex_types::schematic::Aabb,
-) -> Option<signex_types::schematic::Aabb> {
-    Some(match current {
-        Some(bounds) => bounds.union(&next),
-        None => next,
-    })
-}
-
-fn clipboard_bounds(app: &Signex) -> Option<signex_types::schematic::Aabb> {
-    use signex_types::schematic::Aabb;
-
-    let mut bounds = None;
-
-    for wire in &app.interaction_state.clipboard_wires {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y),
-        );
-    }
-    for bus in &app.interaction_state.clipboard_buses {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y),
-        );
-    }
-    for label in &app.interaction_state.clipboard_labels {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(
-                label.position.x,
-                label.position.y,
-                label.position.x,
-                label.position.y,
-            )
-            .expand(1.27),
-        );
-    }
-    for symbol in &app.interaction_state.clipboard_symbols {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(
-                symbol.position.x - 5.08,
-                symbol.position.y - 5.08,
-                symbol.position.x + 5.08,
-                symbol.position.y + 5.08,
-            ),
-        );
-        if let Some(ref_text) = &symbol.ref_text {
-            bounds = union_bounds(
-                bounds,
-                Aabb::new(
-                    ref_text.position.x,
-                    ref_text.position.y,
-                    ref_text.position.x,
-                    ref_text.position.y,
-                )
-                .expand(1.27),
-            );
-        }
-        if let Some(val_text) = &symbol.val_text {
-            bounds = union_bounds(
-                bounds,
-                Aabb::new(
-                    val_text.position.x,
-                    val_text.position.y,
-                    val_text.position.x,
-                    val_text.position.y,
-                )
-                .expand(1.27),
-            );
-        }
-    }
-    for junction in &app.interaction_state.clipboard_junctions {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(
-                junction.position.x,
-                junction.position.y,
-                junction.position.x,
-                junction.position.y,
-            )
-            .expand(0.8),
-        );
-    }
-    for no_connect in &app.interaction_state.clipboard_no_connects {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(
-                no_connect.position.x,
-                no_connect.position.y,
-                no_connect.position.x,
-                no_connect.position.y,
-            )
-            .expand(1.27),
-        );
-    }
-    for text_note in &app.interaction_state.clipboard_text_notes {
-        bounds = union_bounds(
-            bounds,
-            Aabb::new(
-                text_note.position.x,
-                text_note.position.y,
-                text_note.position.x,
-                text_note.position.y,
-            )
-            .expand(1.27),
-        );
-    }
-
-    bounds
-}
+/// Fixed offset of a Duplicate, and the fallback of Smart Paste.
+pub(crate) const DEFAULT_PASTE_OFFSET_MM: f64 = 5.08;
 
 fn smart_paste_offset(app: &Signex) -> (f64, f64) {
-    let default_offset = 5.08;
+    let default_offset = DEFAULT_PASTE_OFFSET_MM;
     let Some(snapshot) = app.active_render_snapshot() else {
         return (default_offset, default_offset);
     };
-    let Some(clipboard_bounds) = clipboard_bounds(app) else {
+    let Some(copied) = app.interaction_state.clipboard.as_ref() else {
+        return (default_offset, default_offset);
+    };
+    let Some(clipboard_min_x) = copied.bounds.map(|b| b.min_x) else {
         return (default_offset, default_offset);
     };
     let Some(content_bounds) = snapshot.content_bounds() else {
         return (default_offset, default_offset);
     };
 
-    let margin = app.ui_state.grid_size_mm.max(2.54) as f64;
-    let offset_x = (content_bounds.max_x - clipboard_bounds.min_x) + margin;
+    let margin = crate::canvas::grid::pitch_mm_exact(app.ui_state.grid_size_mm.max(2.54));
+    let offset_x = (content_bounds.max_x - clipboard_min_x) + margin;
     (offset_x, margin)
+}
+
+/// What a Copy did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CopyOutcome {
+    /// The in-app copy now holds the selection.
+    Carried,
+    /// Nothing in the selection can be carried; the in-app copy was cleared.
+    NothingToCarry,
+    /// No copy was made (nothing selected, no sheet, or an error that was
+    /// logged); the in-app copy is as it was.
+    Failed,
 }
 
 impl Signex {
@@ -143,125 +47,186 @@ impl Signex {
     /// scope; Cut just can't silently eat what Copy drops).
     pub(crate) fn handle_selection_cut_requested(&mut self) -> Task<Message> {
         let selected = self.interaction_state.active_canvas().selected.clone();
-        let (cuttable, kept) = signex_engine::partition_cuttable(&selected);
+        let (carriable, mut kept) = signex_engine::partition_cuttable(&selected);
+        // Delete skips locked symbols; Cut must too, or Copy would overwrite
+        // the clipboard with a symbol that then stays on the sheet (#1250).
+        let (cuttable, skipped) = match self.document_state.active_engine() {
+            Some(engine) => {
+                let (command, skipped) =
+                    engine.without_locked(signex_engine::Command::DeleteSelection {
+                        items: carriable.clone(),
+                    });
+                match command {
+                    Some(signex_engine::Command::DeleteSelection { items }) => (items, skipped),
+                    _ => (Vec::new(), skipped),
+                }
+            }
+            None => (carriable.clone(), Vec::new()),
+        };
+        Self::report_locked_skips(&skipped);
+        kept.extend(carriable.into_iter().filter(|i| !cuttable.contains(i)));
         if cuttable.is_empty() {
             return Task::none();
         }
 
         self.interaction_state.active_canvas_mut().selected = cuttable;
-        self.handle_selection_copy_requested();
-        self.handle_selection_delete_requested();
+        let previous_copy = self.interaction_state.clipboard.clone();
+        let previous_text = self.interaction_state.clipboard_text.clone();
+        // Cut deletes only what the copy now holds: if the copy failed (the
+        // reason is in the Messages panel), nothing is deleted.
+        if self.handle_selection_copy_requested() != CopyOutcome::Carried {
+            crate::diagnostics::log_warning(
+                "Cut cancelled: the selection could not be copied, so nothing was deleted.",
+            );
+            self.interaction_state.clipboard = previous_copy;
+            self.interaction_state.clipboard_text = previous_text;
+            self.interaction_state.active_canvas_mut().selected = selected;
+            return Task::none();
+        }
+        // The system clipboard is written only once the delete went through;
+        // a failed delete leaves the earlier copy in charge.
+        if !self.handle_selection_delete_requested() {
+            crate::diagnostics::log_warning(
+                "Cut cancelled: the selection could not be deleted, so nothing was copied.",
+            );
+            self.interaction_state.clipboard = previous_copy;
+            self.interaction_state.clipboard_text = previous_text;
+            self.interaction_state.active_canvas_mut().selected = selected;
+            return Task::none();
+        }
         self.interaction_state
             .active_canvas_mut()
             .selected
             .extend(kept);
-        Task::none()
+        self.clipboard_write_task()
     }
 
-    pub(crate) fn handle_selection_duplicate_requested(&mut self) {
+    /// Duplicate copies the selection (the copy is the clipboard, as for any
+    /// Copy) and places it at once, shifted by a fixed offset.
+    pub(crate) fn handle_selection_duplicate_requested(&mut self) -> Task<Message> {
         if self.interaction_state.active_canvas().selected.is_empty()
             || !self.has_active_schematic()
         {
-            return;
+            return self.finish_update();
         }
 
-        self.handle_selection_copy_requested();
-        self.handle_clipboard_paste_requested();
+        // A failed copy must not paste whatever was on the clipboard before.
+        let outcome = self.handle_selection_copy_requested();
+        let write = self.mirror_copy_on_clipboard_task(outcome);
+        if outcome != CopyOutcome::Carried {
+            return Task::batch([write, self.finish_update()]);
+        }
+        // The offset paste itself happens once Next free numbering is ready.
+        Task::batch([write, self.begin_paste(crate::app::PasteIntent::Duplicate)])
     }
 
     pub(crate) fn handle_clipboard_smart_paste_requested(&mut self) {
         let (offset_x, offset_y) = smart_paste_offset(self);
-        self.handle_paste_with_offset(offset_x, offset_y);
+        self.paste_with_offset(offset_x, offset_y);
     }
 
-    pub(crate) fn handle_selection_copy_requested(&mut self) {
+    /// Copy the selection to the in-app clipboard; see [`CopyOutcome`].
+    pub(crate) fn handle_selection_copy_requested(&mut self) -> CopyOutcome {
         let Some(engine) = self.document_state.active_engine() else {
-            return;
+            return CopyOutcome::Failed;
         };
-
-        let clipboard =
-            engine.collect_selection_clipboard(&self.interaction_state.active_canvas().selected);
-
-        self.interaction_state.clipboard_wires = clipboard.wires;
-        self.interaction_state.clipboard_buses = clipboard.buses;
-        self.interaction_state.clipboard_labels = clipboard.labels;
-        self.interaction_state.clipboard_symbols = clipboard.symbols;
-        self.interaction_state.clipboard_junctions = clipboard.junctions;
-        self.interaction_state.clipboard_no_connects = clipboard.no_connects;
-        self.interaction_state.clipboard_text_notes = clipboard.text_notes;
-    }
-
-    pub(crate) fn handle_clipboard_paste_requested(&mut self) {
-        self.handle_paste_with_offset(5.08, 5.08);
-    }
-
-    fn handle_paste_with_offset(&mut self, offset_x: f64, offset_y: f64) {
-        if self.has_active_schematic() {
-            let mut commands = Vec::new();
-            for w in &self.interaction_state.clipboard_wires {
-                let mut nw = w.clone();
-                nw.uuid = uuid::Uuid::new_v4();
-                nw.start.x += offset_x;
-                nw.start.y += offset_y;
-                nw.end.x += offset_x;
-                nw.end.y += offset_y;
-                commands.push(signex_engine::Command::PlaceWireSegment { wire: nw });
+        let selected = &self.interaction_state.active_canvas().selected;
+        if selected.is_empty() {
+            return CopyOutcome::Failed;
+        }
+        let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
+        match engine.copy_selection(selected, grid) {
+            Ok(Some(copied)) => {
+                self.interaction_state.clipboard = Some(copied);
+                CopyOutcome::Carried
             }
-            for b in &self.interaction_state.clipboard_buses {
-                let mut nb = b.clone();
-                nb.uuid = uuid::Uuid::new_v4();
-                nb.start.x += offset_x;
-                nb.start.y += offset_y;
-                nb.end.x += offset_x;
-                nb.end.y += offset_y;
-                commands.push(signex_engine::Command::PlaceBus { bus: nb });
+            Ok(None) => {
+                crate::diagnostics::log_info(
+                    "Copy: nothing in the selection can be copied (sheet symbols and sheet pins are not carried); the clipboard was emptied.",
+                );
+                self.interaction_state.clipboard = None;
+                self.interaction_state.clipboard_text = None;
+                CopyOutcome::NothingToCarry
             }
-            for l in &self.interaction_state.clipboard_labels {
-                let mut nl = l.clone();
-                nl.uuid = uuid::Uuid::new_v4();
-                nl.position.x += offset_x;
-                nl.position.y += offset_y;
-                commands.push(signex_engine::Command::PlaceLabel { label: nl });
-            }
-            for s in &self.interaction_state.clipboard_symbols {
-                let mut ns = s.clone();
-                ns.uuid = uuid::Uuid::new_v4();
-                ns.position.x += offset_x;
-                ns.position.y += offset_y;
-                if let Some(ref mut rt) = ns.ref_text {
-                    rt.position.x += offset_x;
-                    rt.position.y += offset_y;
-                }
-                if let Some(ref mut vt) = ns.val_text {
-                    vt.position.x += offset_x;
-                    vt.position.y += offset_y;
-                }
-                commands.push(signex_engine::Command::PlaceSymbol { symbol: ns });
-            }
-            for j in &self.interaction_state.clipboard_junctions {
-                let mut nj = j.clone();
-                nj.uuid = uuid::Uuid::new_v4();
-                nj.position.x += offset_x;
-                nj.position.y += offset_y;
-                commands.push(signex_engine::Command::PlaceJunction { junction: nj });
-            }
-            for nc in &self.interaction_state.clipboard_no_connects {
-                let mut nnc = nc.clone();
-                nnc.uuid = uuid::Uuid::new_v4();
-                nnc.position.x += offset_x;
-                nnc.position.y += offset_y;
-                commands.push(signex_engine::Command::PlaceNoConnect { no_connect: nnc });
-            }
-            for tn in &self.interaction_state.clipboard_text_notes {
-                let mut ntn = tn.clone();
-                ntn.uuid = uuid::Uuid::new_v4();
-                ntn.position.x += offset_x;
-                ntn.position.y += offset_y;
-                commands.push(signex_engine::Command::PlaceTextNote { text_note: ntn });
-            }
-            if !commands.is_empty() {
-                self.apply_engine_commands(commands, true, true);
+            Err(error) => {
+                crate::diagnostics::log_warning(format!("Copy failed: {error}."));
+                CopyOutcome::Failed
             }
         }
+    }
+
+    /// Paste: the copied content attaches to the cursor, Space / X / Y turn
+    /// it, and one click places it as one undo step. A paste is single-shot.
+    pub(crate) fn handle_clipboard_paste_requested(&mut self) {
+        self.arm_paste_session(crate::app::state::PlacementKind::Paste);
+    }
+
+    /// Attach the copy to the cursor as a `kind` session (a paste or a
+    /// stamp). Designators are given at each click, not here.
+    pub(crate) fn arm_paste_session(&mut self, kind: crate::app::state::PlacementKind) {
+        let Some((payload, target, _origin)) = self.prepared_paste() else {
+            return;
+        };
+        // A library read still in flight must not replace the paste on the
+        // cursor when it finishes: a paste is the newest gesture.
+        self.interaction_state.placement_epoch += 1;
+        self.arm_placement_session(payload, &target, kind);
+        self.refresh_paste_ghost();
+    }
+
+    /// Smart Paste and Duplicate: place the copy now, shifted by a fixed
+    /// offset from where it was copied, as one undo step.
+    pub(crate) fn paste_with_offset(&mut self, offset_x: f64, offset_y: f64) {
+        let Some((payload, target, origin)) = self.prepared_paste() else {
+            return;
+        };
+        let payload = self.paste_numbering(&target).apply(&payload);
+        let at = signex_types::schematic::Point::new(origin.x + offset_x, origin.y + offset_y);
+        match payload.place_commands(at) {
+            Ok(commands) if !commands.is_empty() => {
+                self.apply_engine_commands(commands, true, true);
+            }
+            Ok(_) => {}
+            Err(error) => crate::diagnostics::log_warning(format!(
+                "Paste failed: the copy could not be placed ({error})."
+            )),
+        }
+    }
+
+    /// The clipboard as it will land on the active sheet: the payload with
+    /// the sheet's own copy of any body it already holds (so a ghost shows
+    /// what lands), the sheet, and where the copy came from. `None` when
+    /// there is nothing to paste or no sheet is active (silent: there is
+    /// nothing to say), or when the sheet is read-only (reported in the
+    /// Messages panel and as a notice).
+    pub(crate) fn prepared_paste(
+        &mut self,
+    ) -> Option<(
+        signex_engine::PlacementPayload,
+        std::path::PathBuf,
+        signex_types::schematic::Point,
+    )> {
+        let copied = self.interaction_state.clipboard.clone()?;
+        let target = self.document_state.active_path.clone()?;
+        let sheet = self.document_state.engines.get(&target)?.document();
+        if sheet.unknown.newer_minor_source.is_some() {
+            let detail = format!(
+                "The sheet {} was written by a newer Signex and is read-only in this build; nothing was pasted.",
+                target.display()
+            );
+            crate::diagnostics::log_warning(format!("Paste failed: {detail}"));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice {
+                title: "Paste Failed".to_owned(),
+                detail,
+            });
+            return None;
+        }
+        let (payload, differing) = copied.payload.adopt_sheet_bodies(sheet);
+        for id in differing {
+            crate::diagnostics::log_warning(format!(
+                "Library symbol {id} in the clipboard differs from the copy this sheet already holds; the sheet keeps its existing copy, so the pasted parts use it. Select a pasted part and use \"Update from library\" in Properties to adopt a newer one."
+            ));
+        }
+        Some((payload, target, copied.origin))
     }
 }

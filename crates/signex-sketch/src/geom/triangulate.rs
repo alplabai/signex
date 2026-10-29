@@ -1,14 +1,29 @@
 //! Polygon triangulation via ear-clipping.
 //!
-//! Time complexity: O(n²) for the basic form; with holes
-//! pre-merged via the bridge-edge technique it stays O((n+h)²)
-//! where h is the total hole-vertex count. Typical sketch closed
-//! loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
+//! Time complexity: each pass rescans for an ear from the start of
+//! the ring and each ear test is O(n), so a pass costs O(n) when an
+//! early vertex is an ear and O(n²) in the worst case; the full
+//! clip is O(n²) to O(n³). With holes pre-merged via the bridge-edge
+//! technique n becomes the total vertex count including holes.
+//! Typical sketch closed loops have ≤ ~64 vertices (rounded rect = 8 + 4·arc_segments),
 //! where the basic form's constant factors beat the more
 //! sophisticated O(n log n) variants.
 
 use super::Point2;
 use super::predicates::{Sign, orient2d, signed_area};
+
+fn is_finite(p: &Point2) -> bool {
+    p.x.is_finite() && p.y.is_finite()
+}
+
+/// Report a skipped polygon: callers get no triangles back and have no error
+/// channel, so this log record is how the skip becomes visible.
+fn warn_non_finite() {
+    tracing::warn!(
+        target: "signex::sketch",
+        "polygon has a non-finite coordinate; triangulation skipped"
+    );
+}
 
 /// Triangulate a simple polygon. Returns a list of triangles, each
 /// as a triple of indices into the original `polygon` slice.
@@ -26,6 +41,10 @@ use super::predicates::{Sign, orient2d, signed_area};
 /// every candidate degenerate.
 pub fn ear_clip(polygon: &[Point2]) -> Vec<[usize; 3]> {
     if polygon.len() < 3 {
+        return Vec::new();
+    }
+    if !polygon.iter().all(is_finite) {
+        warn_non_finite();
         return Vec::new();
     }
 
@@ -116,45 +135,73 @@ fn is_ear(polygon: &[Point2], ring: &[usize], prev: usize, curr: usize, next: us
     if !matches!(orient2d(a, b, c), Sign::Positive) {
         return false;
     }
-    // No other vertex of the polygon may lie strictly inside the
-    // triangle. We allow on-edge / on-vertex matches at the three
-    // corners themselves.
+    // No other vertex of the polygon may lie inside the triangle, INCLUDING
+    // exactly on one of its edges. We allow on-edge / on-vertex matches at
+    // the three corners themselves (excluded above) — but nowhere else: a
+    // bridge edge (prev -> next) created by clipping this ear that happens
+    // to pass exactly through another remaining vertex corrupts the
+    // topology (the two rings the bridge was meant to separate collapse
+    // into a self-intersecting remainder). See
+    // `ear_clip_partitions_l_shape_area_exactly` below — the regression
+    // test for a real failure this produced on an axis-aligned L-shape.
+    //
+    // Exception: a ring vertex whose COORDINATES coincide exactly with one
+    // of this ear's own corners is the same geometric point under a
+    // different index — `ear_clip_with_holes`'s bridge stitch deliberately
+    // duplicates the two cut vertices this way, so a coincident duplicate
+    // must not block the ear it is itself a corner of.
     for &i in ring.iter() {
         if i == prev || i == curr || i == next {
             continue;
         }
-        if point_in_triangle(polygon[i], a, b, c) {
+        let p = polygon[i];
+        if p == a || p == b || p == c {
+            continue;
+        }
+        if point_in_triangle(p, a, b, c) {
             return false;
         }
     }
     true
 }
 
-/// Strict interior test for a point in a triangle. Uses three
-/// orientation predicates — when all three return the same sign,
-/// the point is on the appropriate side of every edge. Boundary
-/// hits (Sign::Zero) count as "outside" so a vertex coincident
-/// with an edge doesn't disqualify the candidate ear.
+/// Whether `p` lies inside the triangle `a,b,c`, OR exactly on one of its
+/// edges/their infinite extension. Uses three orientation predicates: `p` is
+/// strictly OUTSIDE only when it falls on opposite sides of at least two of
+/// the triangle's edges (one `Positive`, one `Negative`) — anything else
+/// (all one sign, or one/more `Sign::Zero` alongside a single consistent
+/// sign) counts as blocking.
+///
+/// A point exactly on an edge is intentionally NOT treated as "outside"
+/// here (unlike the classic strict-interior test), because when `p` is some
+/// OTHER remaining polygon vertex rather than one of `a`/`b`/`c` themselves,
+/// clipping this ear would create a new bridge edge running exactly through
+/// `p` — collapsing the remaining ring into a self-intersecting polygon
+/// (zero or negative net area) instead of a simple one. The caller already
+/// excludes the ear's own three corners from this check, so every point
+/// tested here is a genuinely different vertex.
 fn point_in_triangle(p: Point2, a: Point2, b: Point2, c: Point2) -> bool {
     let s_ab = orient2d(a, b, p);
     let s_bc = orient2d(b, c, p);
     let s_ca = orient2d(c, a, p);
-    matches!(
-        (s_ab, s_bc, s_ca),
-        (Sign::Positive, Sign::Positive, Sign::Positive)
-            | (Sign::Negative, Sign::Negative, Sign::Negative)
-    )
+    let has_negative = matches!(s_ab, Sign::Negative)
+        || matches!(s_bc, Sign::Negative)
+        || matches!(s_ca, Sign::Negative);
+    let has_positive = matches!(s_ab, Sign::Positive)
+        || matches!(s_bc, Sign::Positive)
+        || matches!(s_ca, Sign::Positive);
+    !(has_negative && has_positive)
 }
 
 /// Triangulate an outer polygon with optional hole rings. Each
 /// hole is bridged to the outer ring via a "cut" edge connecting
-/// the rightmost hole vertex to the nearest outer vertex visible
-/// to it; after all holes are bridged the merged ring is a
-/// simple polygon that the basic ear-clipper handles.
+/// the hole's rightmost vertex to a ring vertex visible along a +x
+/// ray (holes bridged in descending rightmost-x order); the merged
+/// ring is then clipped by a clipper that tolerates the collinear
+/// and coincident vertices the bridges leave behind.
 ///
-/// Output triangle indices reference a flat vertex array
-/// `[outer_vertices, hole_0_vertices, hole_1_vertices, ...]` in
-/// the same order as the input. Hole rings should wind opposite
+/// Output triangle indices reference the returned merged ring (the outer
+/// ring with each hole spliced in at its bridge), not the input arrays. Hole rings should wind opposite
 /// to the outer ring (CCW outer + CW holes by convention) but
 /// the implementation normalises before merging.
 pub fn ear_clip_with_holes(
@@ -162,6 +209,12 @@ pub fn ear_clip_with_holes(
     holes: &[Vec<Point2>],
 ) -> (Vec<Point2>, Vec<[usize; 3]>) {
     if outer.len() < 3 {
+        return (Vec::new(), Vec::new());
+    }
+    // A NaN or infinite coordinate has no place in the bridging or the
+    // spatial indexes; there is no polygon to fill, so produce no triangles.
+    if !outer.iter().chain(holes.iter().flatten()).all(is_finite) {
+        warn_non_finite();
         return (Vec::new(), Vec::new());
     }
     if holes.is_empty() {
@@ -193,64 +246,11 @@ pub fn ear_clip_with_holes(
         hole_pts.push(pts);
     }
 
-    // Sort holes by descending rightmost x so we bridge the
-    // outer-most holes first (matches the standard left-to-right
-    // hole-cutter convention; without this, bridges from later
-    // holes can cross earlier ones).
-    hole_pts.sort_by(|a, b| {
-        let ax = a.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
-        let bx = b.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
-        bx.partial_cmp(&ax).unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Stitch holes into the outer ring one at a time.
-    let mut merged: Vec<Point2> = outer_pts;
-    for hole in hole_pts {
-        merged = bridge_hole_into_outer(&merged, &hole);
-    }
-
-    let triangles = ear_clip(&merged);
+    // Bridge the holes in descending rightmost-x order and clip the merged
+    // ring with the degeneracy-tolerant clipper (see `holes`).
+    let merged = super::holes::merge_holes(outer_pts, hole_pts);
+    let triangles = super::tolerant_clip::clip_ears_tolerant(&merged);
     (merged, triangles)
-}
-
-/// Bridge a hole into the outer ring. Pick the hole's rightmost
-/// vertex, find the outer vertex closest to it (left-of, on a
-/// horizontal ray), and cut a "bridge" edge that visits both
-/// rings. The bridge is two coincident edges so the merged ring
-/// is still simple.
-fn bridge_hole_into_outer(outer: &[Point2], hole: &[Point2]) -> Vec<Point2> {
-    if hole.is_empty() {
-        return outer.to_vec();
-    }
-    // Hole's rightmost vertex.
-    let mut hole_idx = 0;
-    let mut max_x = hole[0].x;
-    for (i, p) in hole.iter().enumerate().skip(1) {
-        if p.x > max_x {
-            max_x = p.x;
-            hole_idx = i;
-        }
-    }
-    // Closest outer vertex to the hole's rightmost (Euclidean).
-    let target = hole[hole_idx];
-    let mut outer_idx = 0;
-    let mut best_d = f64::INFINITY;
-    for (i, p) in outer.iter().enumerate() {
-        let dx = p.x - target.x;
-        let dy = p.y - target.y;
-        let d = dx * dx + dy * dy;
-        if d < best_d {
-            best_d = d;
-            outer_idx = i;
-        }
-    }
-    // Splice: outer[0..=outer_idx] + hole[hole_idx..] + hole[..=hole_idx] + outer[outer_idx..].
-    let mut merged: Vec<Point2> = Vec::with_capacity(outer.len() + hole.len() + 2);
-    merged.extend_from_slice(&outer[..=outer_idx]);
-    merged.extend_from_slice(&hole[hole_idx..]);
-    merged.extend_from_slice(&hole[..=hole_idx]);
-    merged.extend_from_slice(&outer[outer_idx..]);
-    merged
 }
 
 #[cfg(test)]
@@ -259,6 +259,30 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Point2 {
         Point2::new(x, y)
+    }
+
+    #[test]
+    fn non_finite_coordinates_give_no_triangles() {
+        let square = vec![p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)];
+        let hole = vec![p(4.0, 4.0), p(4.0, 6.0), p(6.0, 6.0), p(6.0, 4.0)];
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut in_hole = hole.clone();
+            in_hole[1].y = bad;
+            assert!(ear_clip_with_holes(&square, &[in_hole]).1.is_empty());
+            let mut in_outer = square.clone();
+            in_outer[2].x = bad;
+            assert!(
+                ear_clip_with_holes(&in_outer, std::slice::from_ref(&hole))
+                    .1
+                    .is_empty()
+            );
+        }
+        assert!(!ear_clip_with_holes(&square, &[hole]).1.is_empty());
+        // No holes: the plain clipper path refuses too.
+        let mut bad = square.clone();
+        bad[1].x = f64::NAN;
+        assert!(ear_clip_with_holes(&bad, &[]).1.is_empty());
+        assert!(ear_clip(&bad).is_empty());
     }
 
     #[test]
@@ -309,6 +333,46 @@ mod tests {
         assert_eq!(tris.len(), 4, "L-shape should triangulate into 4 tris");
     }
 
+    /// Regression: on this exact L-shape, the first ear-clip (removing
+    /// vertex 0) creates a bridge edge from vertex 5 to vertex 1 that passes
+    /// exactly through vertex 3 — `(0,2)` to `(2,0)` is the line `x+y=2`,
+    /// and vertex 3 is `(1,1)`. A point-in-triangle test that treats
+    /// boundary hits as "outside" for vertices other than the ear's own
+    /// corners approves the next ear (removing vertex 1) anyway, because
+    /// vertex 3 is exactly ON that bridge edge rather than strictly inside
+    /// the candidate triangle. The result: the remaining ring collapses to
+    /// zero net area (self-intersecting) instead of a simple quad, so two
+    /// of the emitted "triangles" overlap with opposite winding rather than
+    /// partitioning the polygon. Every triangle's contribution to the
+    /// total area must sum to exactly the polygon's own area — the bug
+    /// this pins produced 4.0 instead of the correct 3.0.
+    #[test]
+    fn ear_clip_partitions_l_shape_area_exactly() {
+        let pts = [
+            p(0.0, 0.0),
+            p(2.0, 0.0),
+            p(2.0, 1.0),
+            p(1.0, 1.0),
+            p(1.0, 2.0),
+            p(0.0, 2.0),
+        ];
+        let tris = ear_clip(&pts);
+        assert_eq!(tris.len(), 4);
+
+        let total_area: f64 = tris
+            .iter()
+            .map(|&[a, b, c]| {
+                let (a, b, c) = (pts[a], pts[b], pts[c]);
+                ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)).abs() / 2.0
+            })
+            .sum();
+
+        assert!(
+            (total_area - 3.0).abs() < 1e-9,
+            "L-shape area is 3.0 (2x2 square minus a 1x1 notch), got {total_area}"
+        );
+    }
+
     #[test]
     fn convex_pentagon_emits_three_triangles() {
         let pts: Vec<Point2> = (0..5)
@@ -350,5 +414,53 @@ mod tests {
         assert_eq!(merged.len(), 10);
         // n=10 → 8 triangles.
         assert_eq!(tris.len(), 8);
+    }
+
+    #[test]
+    fn hole_bridge_skips_nearest_outer_vertex_hidden_behind_a_wall() {
+        // C-shaped outer (open to the right) with a tooth hanging into the
+        // gap. The hole sits in the bottom arm; the tooth tip (6.5, 3) is the
+        // plain nearest outer vertex to the hole's rightmost vertex but lies
+        // across the arm's top wall (y = 2), so a bridge to it crosses an
+        // outer edge. The bridge must go to a visible vertex instead.
+        let outer = vec![
+            p(0.0, 0.0),
+            p(10.0, 0.0),
+            p(10.0, 2.0),
+            p(2.0, 2.0),
+            p(2.0, 5.0),
+            p(6.0, 5.0),
+            p(6.5, 3.0),
+            p(7.0, 5.0),
+            p(10.0, 5.0),
+            p(10.0, 7.0),
+            p(0.0, 7.0),
+        ];
+        let hole = vec![p(5.0, 0.5), p(6.5, 0.5), p(6.5, 1.5), p(5.0, 1.5)];
+        let (merged, tris) = ear_clip_with_holes(&outer, std::slice::from_ref(&hole));
+
+        let expected = signed_area(&outer).abs() - signed_area(&hole).abs();
+        let total: f64 = tris
+            .iter()
+            .map(|&[a, b, c]| signed_area(&[merged[a], merged[b], merged[c]]).abs())
+            .sum();
+        assert!(
+            (total - expected).abs() <= expected * 1e-9,
+            "triangle area {total}, want {expected}"
+        );
+        for &[a, b, c] in &tris {
+            let m = Point2::new(
+                (merged[a].x + merged[b].x + merged[c].x) / 3.0,
+                (merged[a].y + merged[b].y + merged[c].y) / 3.0,
+            );
+            assert!(
+                crate::geom::point_in_polygon(m, &outer),
+                "centroid {m:?} outside outer"
+            );
+            assert!(
+                !crate::geom::point_in_polygon(m, &hole),
+                "centroid {m:?} inside hole"
+            );
+        }
     }
 }

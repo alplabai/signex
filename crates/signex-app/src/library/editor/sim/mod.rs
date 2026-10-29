@@ -25,6 +25,10 @@ use signex_widgets::theme_ext;
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 const SIM_KIND_OPTS: [SimKind; 4] = [
     SimKind::Spice3,
     SimKind::Ngspice,
@@ -74,7 +78,7 @@ pub fn view<'a>(
             row_id,
             msg: EditorMsg::SimSetEnabled(v),
         })
-        .size(14)
+        .size(TS.heading)
         .text_size(12)
         .spacing(6);
 
@@ -84,10 +88,10 @@ pub fn view<'a>(
             row![toggle].align_y(iced::Alignment::Center),
             Space::new().height(10),
             text("No SPICE model bound to this component.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
             text("Toggle \u{201C}Has SPICE Model\u{201D} to add one.")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         ]
         .spacing(0)
@@ -114,7 +118,7 @@ pub fn view<'a>(
         },
     )
     .text_size(12)
-    .padding([4, 8]);
+    .padding([SP.s, SP.m]);
 
     let header_row =
         row![toggle, Space::new().width(20), kind_picker,].align_y(iced::Alignment::Center);
@@ -129,9 +133,9 @@ pub fn view<'a>(
             row_id,
             msg: EditorMsg::SimSetName(s),
         })
-        .padding([4, 8])
-        .size(12);
-    let name_block = column![text("Name").size(10).color(muted), name_input,].spacing(4);
+        .padding([SP.s, SP.m])
+        .size(TS.label);
+    let name_block = column![text("Name").size(TS.caption).color(muted), name_input,].spacing(SP.s);
 
     // SPICE deck — multi-line text_editor backed by state.sim_body.
     let deck: Element<'a, LibraryMessage> = if let Some(content) = state.sim_body.as_ref() {
@@ -139,8 +143,8 @@ pub fn view<'a>(
         let table_for_deck = address.table.clone();
         let editor_widget = text_editor(content)
             .placeholder(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS")
-            .padding(8)
-            .size(12)
+            .padding(SP.m)
+            .size(TS.label)
             .height(Length::Fixed(220.0))
             .on_action(move |a| LibraryMessage::EditorEvent {
                 library_path: lib_path_for_deck.clone(),
@@ -154,9 +158,9 @@ pub fn view<'a>(
         // This branch is the safety fallback for tabs that landed on
         // Sim without going through SelectTab — show a passive
         // multi-line view of whatever sim.body has.
-        text(sim.body.clone()).size(11).color(text_c).into()
+        text(sim.body.clone()).size(TS.body).color(text_c).into()
     };
-    let deck_block = column![text("SPICE deck").size(10).color(muted), deck,].spacing(4);
+    let deck_block = column![text("SPICE deck").size(TS.caption).color(muted), deck,].spacing(SP.s);
 
     // Pin/Node map table. Defensive fallback: if `editor.symbol` is
     // None (the symbol primitive failed to resolve, or the user
@@ -168,14 +172,14 @@ pub fn view<'a>(
         Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, &address),
         None => container(
             text("(load Symbol tab first to populate pin/node map)")
-                .size(11)
+                .size(TS.body)
                 .color(muted),
         )
         .padding([6, 0])
         .into(),
     };
     let table_block = column![
-        text("Pin / Node Map").size(10).color(muted),
+        text("Pin / Node Map").size(TS.caption).color(muted),
         Space::new().height(4),
         table,
     ]
@@ -215,31 +219,34 @@ fn view_pin_node_table<'a>(
     let border = theme_ext::border_color(tokens);
 
     if pins.is_empty() {
-        return container(text("(symbol has no pins yet)").size(11).color(muted))
+        return container(text("(symbol has no pins yet)").size(TS.body).color(muted))
             .padding([6, 0])
             .into();
     }
 
     let header = row![
-        text("Pin").size(10).color(muted).width(Length::Fixed(56.0)),
+        text("Pin")
+            .size(TS.caption)
+            .color(muted)
+            .width(Length::Fixed(56.0)),
         text("Symbol")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
         text("SPICE Node")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(3)),
     ]
-    .padding([4, 8]);
+    .padding([SP.s, SP.m]);
 
-    let mut col = column![header].spacing(2);
+    let mut col = column![header].spacing(SP.xs);
     for pin in pins {
         col = col.push(pin_node_row(sim, pin, tokens, address));
     }
 
     container(col)
-        .padding(4)
+        .padding(SP.s)
         .style(move |_: &Theme| iced::widget::container::Style {
             border: Border {
                 width: 1.0,
@@ -273,7 +280,7 @@ fn pin_node_row<'a>(
     let row_id = address.row_id;
     let input = text_input("net", &buf)
         .padding([3, 6])
-        .size(11)
+        .size(TS.body)
         .on_input(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_input.clone(),
             table: table_for_input.clone(),
@@ -287,7 +294,7 @@ fn pin_node_row<'a>(
     container(
         row![
             text(pin.number.clone())
-                .size(11)
+                .size(TS.body)
                 .color(text_c)
                 .width(Length::Fixed(56.0)),
             text(if pin.name.is_empty() {
@@ -295,13 +302,13 @@ fn pin_node_row<'a>(
             } else {
                 pin.name.clone()
             })
-            .size(11)
+            .size(TS.body)
             .color(muted)
             .width(Length::FillPortion(2)),
             container(input).width(Length::FillPortion(3)),
         ]
         .align_y(iced::Alignment::Center)
-        .padding([3, 8]),
+        .padding([3.0, SP.m]),
     )
     .style(move |_: &Theme| iced::widget::container::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -330,15 +337,20 @@ mod tests {
     use uuid::Uuid;
 
     fn fixture_editor() -> ComponentPreviewState {
-        let lib_id = Uuid::new_v4();
+        let lib_id = Uuid::now_v7();
         let row = ComponentRow {
-            row_id: Uuid::new_v4(),
+            alternate_symbols: Vec::new(),
+            row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new("TEST_PN"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: PrimitiveRef::new(lib_id, Uuid::new_v4()),
+            symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
             footprint_ref: None,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("Acme", "ACM-001"),
@@ -354,6 +366,7 @@ mod tests {
             created: chrono::Utc::now(),
             updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         };
         ComponentPreviewState::from_row(PathBuf::from("/tmp/test.snxlib"), "generics".into(), row)
     }

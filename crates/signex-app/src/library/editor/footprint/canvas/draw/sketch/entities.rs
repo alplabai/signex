@@ -6,7 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
-use crate::library::editor::footprint::state::{EditorPad, FootprintEditorState};
+use crate::library::editor::footprint::state::FootprintEditorState;
 
 use super::constraints::draw_constraint_icons;
 use super::fills::draw_filled_closed_loops;
@@ -21,6 +21,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     cstate: &FootprintCanvasState,
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
+    conflict_colour: Color,
 ) {
     use signex_sketch::entity::EntityKind;
     use signex_sketch::id::SketchEntityId;
@@ -32,15 +33,15 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     ) -> Option<(f64, f64)> {
         // Prefer the solved state if available; fall back to the
         // entity's authored coords.
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some((x, y)) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some((x, y)) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some((x, y));
-            }
+            )
+        {
+            return Some((x, y));
         }
         sketch
             .entities
@@ -58,8 +59,14 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     // light-grey "no solve" colour was effectively invisible
     // against white; dark grey reads at the same weight as the
     // black fully-constrained state without competing with it.
+    // Entities named by the constraints of a rejected edit take the
+    // theme's error colour until the next edit or successful solve.
+    let conflict_entities = state.conflict.entities(sketch);
     let dof_colour = |id: SketchEntityId| -> Color {
         use signex_sketch::solver::dof::DofColor;
+        if conflict_entities.contains(&id) {
+            return conflict_colour;
+        }
         if let Some(solve) = state.last_solve.as_ref() {
             match solve.colours.get(&id) {
                 Some(DofColor::Under) => Color::from_rgba(0.10, 0.30, 0.85, 1.00),
@@ -88,7 +95,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     // entities so glyphs sit underneath the geometry layer and don't
     // hide pad-edge clicks. Tinted red for over-constrained
     // constraints; muted otherwise.
-    draw_constraint_icons(frame, cstate, sketch, state);
+    draw_constraint_icons(frame, cstate, sketch, state, conflict_colour);
 
     // v0.16.1 — Filled rendering for closed loops. Walks the line
     // graph, finds simple cycles whose Lines are NOT all

@@ -6,11 +6,15 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 pub(super) fn view_header<'a>(
     library_path: &'a std::path::Path,
     _lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
+    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     // Hoisted owned path — see comment in `view_table_sidebar`.
@@ -21,16 +25,20 @@ pub(super) fn view_header<'a>(
     let library_for_plus = lib_pb.clone();
     let table_for_plus = browser.active_table.clone();
     let plus_btn = button(text("+ Component").size(BROWSER_TEXT_SIZE).color(text_c))
-        .padding([4, 10])
-        .on_press(LibraryMessage::BrowserAddComponent {
+        .padding([SP.s, 10.0])
+        .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
             library_path: library_for_plus,
             table: table_for_plus,
-        })
-        .style(|_: &Theme, _| iced::widget::button::Style {
+        }))
+        .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.04,
             ))),
-            text_color: iced::Color::WHITE,
+            text_color: if read_only {
+                iced::Color::from_rgb(0.55, 0.55, 0.58)
+            } else {
+                iced::Color::WHITE
+            },
             border: Border {
                 width: 0.0,
                 radius: 3.0.into(),
@@ -39,14 +47,13 @@ pub(super) fn view_header<'a>(
             ..iced::widget::button::Style::default()
         });
 
-    // Add-table control. Either the inline name form (while
     let library_for_search = lib_pb.clone();
     let search = text_input("Search…", &browser.search)
         .on_input(move |s| LibraryMessage::BrowserSearchChanged {
             library_path: library_for_search.clone(),
             value: s,
         })
-        .padding(4)
+        .padding(SP.s)
         .size(BROWSER_TEXT_SIZE)
         .width(Length::Fixed(220.0));
 
@@ -64,7 +71,7 @@ pub(super) fn view_header<'a>(
         },
     )
     .placeholder("Lifecycle")
-    .padding(4)
+    .padding(SP.s)
     .text_size(BROWSER_TEXT_SIZE);
 
     container(

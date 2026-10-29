@@ -1,15 +1,17 @@
 # Signex — Roadmap
 
 > **Status:** Living document. Updated quarterly. Last reconciled against
-> reality 2026-07-15.
+> reality 2026-10-29.
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
 > **Owns:** the version axis. Every version number Signex ships is defined
 > here and nowhere else.
 
 This document describes *when* things ship. It does not describe *what*
-features do — that is `MASTER_PLAN.md` and `PRODUCT_AND_EDITIONS.md`. It
-does not describe *how* they are implemented — that is `ARCHITECTURE.md`.
+features do — that is the product plan in the private `signex-internal`
+repo (`docs/internal`, not in this checkout). It does not describe *how*
+they are implemented — that is `docs/architecture/` and
+`docs/REPOSITORY_AND_CODEBASE.md`.
 
 The dates and durations here are working estimates. They are not
 commitments. They will move. The order and the gates are firmer than the
@@ -25,7 +27,7 @@ Nothing else defines what ships in a version.
 | Source | Owns | Does not own |
 |--------|------|--------------|
 | `docs/ROADMAP.md` (this file) | Version numbers, ordering, gates, exit criteria | Feature semantics |
-| `MASTER_PLAN.md` | Scope, principles, product thesis, format stance | Version numbers |
+| Product plan (`signex-internal`) | Scope, principles, product thesis, format stance | Version numbers |
 | `.github/milestones.yml` | The GitHub projection of this file | Anything not listed here |
 | `signex-internal` → `docs/ROADMAP_DETAIL.md` | Near-term per-version scope decomposition | Gate definitions |
 
@@ -44,12 +46,13 @@ Two of them placed different features at v1.4 and v1.5. A fourth axis
 Honesty first, because the previous revision of this document did not
 have this section and drifted six versions away from reality as a result.
 
-| Fact | State (2026-07-18) |
+| Fact | State (2026-10-29) |
 |------|--------------------|
-| Latest tagged release | **v0.14.0** (2026-07-18) |
-| `workspace.package.version` | **0.14.0** |
-| Latest CHANGELOG section | **0.14.0** — shipped 2026-07-18 |
-| Current work | Editor fixes (v0.15.0), command registry + symbol multi-unit tail (v0.16.0) |
+| Latest tagged release | **v0.15.0** (2026-07-23) |
+| Next tag | **v1.0.0-rc.1**, the first release candidate of v1.0.0. It publishes as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 until v1.0.0 |
+| `workspace.package.version` | **1.0.0-rc.1** |
+| Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
+| Current work | v0.16.0 milestone: one open issue left, #271 (menu rows keyed off one label/shortcut table). v1.0.0 milestone: #859 (synchronous IO still in `update`), #661 (one document model epic), #322 (this user guide). Release prep for rc.1 follows |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
 **shipped**. The work since v0.9 — the Apache-clean native-format
@@ -148,7 +151,7 @@ how taxonomies rot.
 
 ---
 
-## 6. Shipped — v0.1 → v0.14
+## 6. Shipped — v0.1 → v0.15
 
 Recorded so the phase model below is readable as history rather than
 plan. Detail lives in `CHANGELOG.md`.
@@ -158,26 +161,26 @@ plan. Detail lives in `CHANGELOG.md`.
 | v0.1.0 – v0.6.4 | ✅ | Shell, canvas, schematic viewer, schematic editor, installers |
 | v0.7.x | ✅ | ERC (11 rules), annotation, pin matrix, multi-window |
 | v0.8.0 | ✅ | PDF / BOM / netlist export, multi-project workspaces |
-| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, KiCad I/O → companion repo |
+| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, external-format I/O → companion repo |
 | v0.10.0 – v0.11.0 | ✅ | Library browser, `.snxlib` classes, master-detail browser |
 | v0.12.0 | ⚠️ | Cleanroom renderer rewrite — merged, **never released** (see §2) |
 | v0.13.0 | ✅ | Sketch mode α — Newton-LM constraint solver, footprint pad-bake |
 | v0.14.0 | ✅ | Footprint editor parity, symbol multi-unit + polygon, `signex-net` netlist contract, keyboard-shortcut profiles, schematic GPU render, ADR-0001 decomposition |
+| v0.15.0 | ✅ | Editor fixes: footprint/symbol editor correctness, order-independent netlist with ERC/BOM on one topology, crash-safe persistence, pinned Rust 1.97.0 + enforced rustfmt and god-file gates |
 
 This covers Phases 0–6 of the original plan. Those phases are closed.
 
 ---
 
-## 7. Release Train — v0.15 → v1.0
+## 7. Release Train — v0.16 → v1.0
 
 Near-term and concrete. **The train is derived from the issue tracker,
 not from the internal specs.** See §9 for why that distinction is
-load-bearing. (v0.14.0 shipped 2026-07-18 — see §6.)
+load-bearing. (v0.15.0 shipped 2026-07-23 — see §6.)
 
 | Version | Scope | Milestone |
 |---------|-------|-----------|
-| **v0.15.0** | Editor fixes carrying `tier: p0`, plus Break Track / Drag Track End (the one item v0.14.0 actually deferred) | `v0.15.0 — Editor Fixes` |
-| **v0.16.0** | Command Registry — one addressable action system (menus, keybindings, CLI, plugins) — and the symbol multi-unit tail | `v0.16.0 — Command Registry & Symbol Units` |
+| **v0.16.0** | Command catalog groundwork (menus read one label/shortcut table, #271), root `Message` namespacing (#162), table/settings write cost (#416), and the symbol multi-unit tail. The full Command Registry epic (#278: dispatch, palette, CLI, plugins) moved to v1.1. | `v0.16.0 — Command Registry & Symbol Units` |
 | v0.17+ | Not enumerated | *(gets versions when it gets milestones)* |
 
 **v0.14.0 is one release, not two.** Its CHANGELOG section was written
@@ -221,6 +224,26 @@ macOS, Linux.
   edit it, and save it without consulting a developer
 - Issue tracker has zero `tier: p0` bugs
 
+**Status against the criteria (2026-10-29), for the rc.1 decision:**
+
+- *Must-do items:* `MASTER_PLAN.md` is in the private `signex-internal` repo
+  and is not checked here. The open v1.0.0 milestone issues are listed in §2.
+- *Fixture corpus:* **open question.** `crates/signex-types/tests/corpus/`
+  holds 43 `.snxsch`, 36 `.snxpcb` and 8 `.snxprj` files, each a small
+  single-feature case, plus the bundled sample project. Whether those count as
+  "50+ native projects" is a product decision; as whole projects there are
+  8 `.snxprj`.
+- *Non-developer beta tester:* **not yet exercised.** The install-to-PDF
+  walkthrough in `docs/USER_GUIDE.md` has not been followed end to end by a
+  person with a fresh install. The release packages are unsigned
+  (`docs/RELEASE_SIGNING.md`), so Windows and macOS first-launch warnings apply.
+- *Zero `tier: p0` bugs:* no open issue carries both `tier: p0` and
+  `type: bug`. Open `tier: p0` issues exist that are not bugs (#859, #322,
+  #271, #278, #115).
+
+A release candidate is a tag of the form `v1.0.0-rc.N`; `release.yml` builds
+the same packages as a final release and publishes them as a pre-release.
+
 ### v1.x — Schematic Refinement
 
 Sub-versions are enumerated because they are staged releases, not
@@ -233,7 +256,7 @@ between bands.
 
 | Version | Scope |
 |---------|-------|
-| **v1.1.0 — Advanced Schematic** | Design variants (fitted / not-fitted / alternate) with 7 drawing styles; multi-channel design (Repeat keyword, channel naming) including per-channel variant state; signal harnesses (connectors, entries, nested); Parameter Manager; net classes + diff-pair classes; smart paste (rubber stamp, paste array); change component |
+| **v1.1.0 — Advanced Schematic** | Design variants (fitted / not-fitted / alternate) with 7 drawing styles; multi-channel design (Repeat keyword, channel naming) including per-channel variant state; signal harnesses (connectors, entries, nested); Parameter Manager; net classes + diff-pair classes; smart paste (rubber stamp, paste array); change component; Command Registry (#278: dispatch, command palette, args, CLI, plugin hooks) |
 
 #### v1.2 — SCH Tables & Docs (P1)
 
@@ -486,7 +509,7 @@ composition workspace separate from the schematic editor. See
 Each foreign-format importer is a **separate companion repo / binary**,
 licensed appropriately for its source-format constraints and distributed
 independently of the main workspace — the same architectural pattern as
-`signex-kicad-import` shipped at v0.9.0. One-way conversion to native
+the [import companion repository](https://github.com/alplabai/signex-kicad-import) shipped at v0.9.0. One-way conversion to native
 `.snx*`, no compile-time dependency from the main repo.
 
 | Version | Scope |

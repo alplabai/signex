@@ -12,8 +12,8 @@
 //!    arc centre to the line equals the arc radius (in absolute
 //!    value, since the line can sit on either side of the centre).
 //!  - Arc/arc tangency:
-//!      external — `|C2 − C1| = r1 + r2`
-//!      internal — `|C2 − C1| = |r1 − r2|`
+//!    external — `|C2 − C1| = r1 + r2`
+//!    internal — `|C2 − C1| = |r1 − r2|`
 
 use crate::entity::EntityKind;
 use crate::error::SketchError;
@@ -31,7 +31,7 @@ fn line_length(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<f64, SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p_s = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let p_e = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
     Ok(norm(sub(p_e, p_s)))
@@ -46,14 +46,14 @@ fn entity_radius(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<f64, SketchError> {
-    let entity = find_entity(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
+    let entity = find_entity(id, index, sketch).ok_or(SketchError::EntityNotFound(id))?;
     match entity.kind {
         EntityKind::Circle { .. } => {
             circle_radius(id, state, index).ok_or(SketchError::EntityNotFound(id))
         }
         EntityKind::Arc { .. } => {
             let (center, start, _end, _ccw) =
-                arc_refs(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
+                arc_refs(id, index, sketch).ok_or(SketchError::EntityNotFound(id))?;
             let c = point_xy(center, state, index, sketch)
                 .ok_or(SketchError::EntityNotFound(center))?;
             let s =
@@ -71,7 +71,7 @@ fn entity_center_xy(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec2, SketchError> {
-    let entity = find_entity(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
+    let entity = find_entity(id, index, sketch).ok_or(SketchError::EntityNotFound(id))?;
     let center_id = match entity.kind {
         EntityKind::Circle { center, .. } => center,
         EntityKind::Arc { center, .. } => center,
@@ -112,8 +112,9 @@ pub fn equal_radius(
 ///
 /// Residual = `|signed_perp_dist| − r_arc`. The line can sit on
 /// either side of the centre and still be tangent, so the absolute
-/// value is required. A degenerate (zero-length) line collapses to
-/// `0 − r` so LM still has gradient information to grow the line.
+/// value is required. A degenerate (zero-length) line has no
+/// direction, so its signed distance is taken as 0 and the residual
+/// is the constant `0 − r`, which gives LM no gradient.
 pub fn tangent_line_arc(
     line: SketchEntityId,
     arc: SketchEntityId,
@@ -121,7 +122,7 @@ pub fn tangent_line_arc(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
+    let (s, e) = line_endpoints(line, index, sketch).ok_or(SketchError::EntityNotFound(line))?;
     let p_s = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
     let p_e = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
     let c = entity_center_xy(arc, state, index, sketch)?;

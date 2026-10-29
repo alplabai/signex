@@ -81,7 +81,7 @@ mod tests {
 
     fn wire(a: Point, b: Point) -> ErcWire {
         ErcWire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: a,
             end: b,
         }
@@ -105,10 +105,12 @@ mod tests {
             labels,
             junctions,
             no_connects: Vec::new(),
+            no_erc_directives: Vec::new(),
             bus_entries: Vec::new(),
             child_sheets: Vec::new(),
             nets: Vec::new(),
             children: HashMap::new(),
+            key: None,
         }
     }
 

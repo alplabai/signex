@@ -9,26 +9,25 @@
 use iced::widget::{Column, container, row, scrollable, text};
 use iced::{Color, Element, Length};
 
-use super::{CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg};
+use super::{
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
+};
+use crate::styles::{Spacing, TypeScale};
 use pad::{
     PadEditTarget, PadFormValues, render_pad_form_pad_features, render_pad_form_pad_stack,
     render_pad_form_properties,
 };
 
-/// v0.23 — Per-instance checkbox grid safety cap for Grid arrays.
-/// Dense BGAs can declare hundreds of cells per axis; rendering a
-/// 50×50 = 2500-checkbox grid would blow the panel viewport. Above
-/// this cap the user keeps editing via `mask_expr`.
-const MAX_GRID_CHECKBOX_DIM: u32 = 32;
-
-/// v0.23 — Per-instance checkbox row safety cap for Polar arrays.
-/// 64 instances covers 5° increments around a full circle; finer
-/// patterns continue to author through `mask_expr`.
-const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 // Submodule declarations (split from the original 4570-line file).
+mod conflicts;
 mod managers;
 mod pad;
+mod pad_stack_check;
+mod redundant;
 mod sections;
 mod selection;
 mod snap_options;
@@ -46,19 +45,21 @@ mod subforms;
 ///    and the most recent solve summary when a sketch exists.
 pub(super) fn view_footprint_editor_properties<'a>(
     fp: &'a FootprintEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
+    palette: PanelPalette,
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-    accent_c: Color,
-    tag_hover: Color,
     unit: signex_types::coord::Unit,
-    seg_hover: Color,
 ) -> Element<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        input_bg,
+        input_bdr,
+        accent: accent_c,
+        ..
+    } = palette;
     let mode_label = match fp.mode_kind {
         FootprintModeKind::Pads => "Pads",
         FootprintModeKind::Sketch => "Sketch",
@@ -78,18 +79,22 @@ pub(super) fn view_footprint_editor_properties<'a>(
     };
 
     let mut header_row = row![
-        text(&fp.footprint_name).size(12).color(primary),
-        text("·").size(12).color(muted),
-        text(mode_label).size(11).color(muted),
+        text(&fp.footprint_name).size(TS.label).color(primary),
+        text("·").size(TS.label).color(muted),
+        text(mode_label).size(TS.body).color(muted),
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center);
     if let Some(tag) = multi_select_tag {
-        header_row = header_row.push(text("·").size(12).color(muted));
-        header_row = header_row.push(text(tag).size(11).color(accent_c));
+        header_row = header_row.push(text("·").size(TS.label).color(muted));
+        header_row = header_row.push(text(tag).size(TS.body).color(accent_c));
     }
 
-    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
+    col = col.push(
+        container(header_row)
+            .padding([6.0, SP.m])
+            .width(Length::Fill),
+    );
     col = col.push(super::thin_sep(border_c));
 
     // v0.20 — Altium-parity context-aware Properties panel for the
@@ -105,78 +110,66 @@ pub(super) fn view_footprint_editor_properties<'a>(
     //   - Otherwise → fall through to the existing empty-canvas chrome.
     if fp.mode_kind == FootprintModeKind::Pads {
         let in_placement = fp.placement_active || fp.placement_paused;
-        if let Some(pad) = fp.selected_pad.as_ref() {
-            if !in_placement {
-                let values = PadFormValues::from_selected_pad(pad, fp);
-                let target = PadEditTarget::Selected(pad.idx);
-                col = render_pad_form_properties(
-                    col,
-                    &values,
-                    target,
-                    false,
-                    muted,
-                    primary,
-                    border_c,
-                    collapsed_sections,
-                );
-                col = props_kv_row(
-                    col,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                    "Position",
-                    format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
-                );
-                col = render_pad_form_pad_stack(
-                    col,
-                    &values,
-                    target,
-                    muted,
-                    primary,
-                    border_c,
-                    collapsed_sections,
-                    &fp.selected_pad_shape_params,
-                );
-                col = render_pad_form_pad_features(
-                    col,
-                    &values,
-                    target,
-                    muted,
-                    primary,
-                    border_c,
-                    collapsed_sections,
-                );
-                // v0.21 — "Edit in Sketch" jump button. Visible only
-                // when the pad has a backing sketch entity (auto-
-                // minted on first Sketch-mode entry or placed via
-                // sketch). The handler switches editor.state.mode to
-                // Sketch + selects entity_id; if the pad has no
-                // sketch entity yet, this is a no-op.
-                let pad_idx = pad.idx;
-                col = col.push(
-                    container(
-                        iced::widget::button(text("Edit in Sketch ▸").size(10).color(primary))
-                            .padding([4, 10])
-                            .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
-                            .style(iced::widget::button::primary),
-                    )
-                    .padding([6, 8])
-                    .width(Length::Fill),
-                );
-                // v0.25 polish — reserve 12 px on the right so the
-                // scrollbar doesn't overlap input fields. Without
-                // this, picklists and text_inputs that extend to
-                // Length::Fill end exactly under the scrollbar's
-                // track and the user can't reach the right edge.
-                return scrollable(container(col).padding(iced::Padding {
-                    top: 0.0,
-                    right: 12.0,
-                    bottom: 0.0,
-                    left: 0.0,
-                }))
-                .width(Length::Fill)
-                .into();
-            }
+        if let Some(pad) = fp.selected_pad.as_ref()
+            && !in_placement
+        {
+            let values = PadFormValues::from_selected_pad(pad, fp);
+            let target = PadEditTarget::Selected(pad.idx);
+            col = render_pad_form_properties(
+                col,
+                &values,
+                target,
+                false,
+                palette,
+                collapsed_sections,
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                input_bg,
+                input_bdr,
+                "Position",
+                format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
+            );
+            col = render_pad_form_pad_stack(
+                col,
+                &values,
+                target,
+                palette,
+                collapsed_sections,
+                &fp.selected_pad_shape_params,
+            );
+            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
+            // v0.21 — "Edit in Sketch" jump button. Visible only
+            // when the pad has a backing sketch entity (auto-
+            // minted on first Sketch-mode entry or placed via
+            // sketch). The handler switches editor.state.mode to
+            // Sketch + selects entity_id; if the pad has no
+            // sketch entity yet, this is a no-op.
+            let pad_idx = pad.idx;
+            col = col.push(
+                container(
+                    iced::widget::button(text("Edit in Sketch ▸").size(TS.caption).color(primary))
+                        .padding([SP.s, 10.0])
+                        .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
+                        .style(iced::widget::button::primary),
+                )
+                .padding([6.0, SP.m])
+                .width(Length::Fill),
+            );
+            // v0.25 polish — reserve 12 px on the right so the
+            // scrollbar doesn't overlap input fields. Without
+            // this, picklists and text_inputs that extend to
+            // Length::Fill end exactly under the scrollbar's
+            // track and the user can't reach the right edge.
+            return scrollable(container(col).padding(iced::Padding {
+                top: 0.0,
+                right: 12.0,
+                bottom: 0.0,
+                left: 0.0,
+            }))
+            .width(Length::Fill)
+            .into();
         }
         if in_placement {
             let values = PadFormValues::from_next_pad(fp);
@@ -186,30 +179,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 &values,
                 target,
                 fp.placement_paused,
-                muted,
-                primary,
-                border_c,
+                palette,
                 collapsed_sections,
             );
-            col = render_pad_form_pad_stack(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-                &[],
-            );
-            col = render_pad_form_pad_features(
-                col,
-                &values,
-                target,
-                muted,
-                primary,
-                border_c,
-                collapsed_sections,
-            );
+            col = render_pad_form_pad_stack(col, &values, target, palette, collapsed_sections, &[]);
+            col = render_pad_form_pad_features(col, &values, target, palette, collapsed_sections);
             return scrollable(container(col).padding(iced::Padding {
                 top: 0.0,
                 right: 12.0,
@@ -231,29 +205,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
         col,
         fp,
         mode_label,
-        muted,
-        primary,
-        border_c,
-        input_bg,
-        input_bdr,
+        palette,
         custom_filter_presets,
         active_custom_filter_tab,
         collapsed_sections,
-        accent_c,
-        tag_hover,
     );
-    col = sections::view_sections(
-        col,
-        fp,
-        muted,
-        primary,
-        border_c,
-        input_bg,
-        input_bdr,
-        collapsed_sections,
-        unit,
-        seg_hover,
-    );
+    col = pad_stack_check::view_pad_stack_check(col, fp, palette, collapsed_sections);
+    col = sections::view_sections(col, fp, palette, collapsed_sections, unit);
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);
 
     // v0.25 polish — see early-return scrollable wrappers above for
@@ -309,8 +267,8 @@ fn render_fp_settings_and_hint<'a>(
             FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
         };
         col = col.push(
-            container(text(hint).size(10).color(muted))
-                .padding([4, 8])
+            container(text(hint).size(TS.caption).color(muted))
+                .padding([SP.s, SP.m])
                 .width(Length::Fill),
         );
     }

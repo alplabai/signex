@@ -3,27 +3,28 @@
 //! `from_sheet` composes a schematic page into the `SvgElement` list
 //! (page fill, wires/buses/junctions, labels, notes, child sheets,
 //! drawings, symbols); `rasterize_rgba*` renders that list to RGBA
-//! pixels; `encode_svg_document` serializes it to an SVG string.
+//! pixels; [`SvgRenderContext::svg_document`] serializes it to an SVG string on demand.
 //!
 //! Extracted verbatim from the SVG exporter (`svg/mod.rs`); pure code
 //! motion, zero behaviour change.
 
-use super::drawings::push_sch_drawing_path;
+use super::drawings::push_placed_drawings;
+use super::family::alias_for_family;
 use super::geometry::{path_to_tiny_skia, rect_path};
 use super::labels::{
     halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
-use super::symbols::{
-    field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
-};
-use super::text::draw_text_outline;
+use super::markers::{push_no_connect_x, push_no_erc_diamond};
+use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
+use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
-use signex_types::schematic::LabelType;
+use signex_types::schematic::field_effective_style;
+use signex_types::schematic::{DrawingPlacement, LabelType};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -40,14 +41,7 @@ impl SvgRenderContext {
         let width = (page_w_mm * units_per_mm) as f32;
         let height = (page_h_mm * units_per_mm) as f32;
 
-        let xform = PageTransform::new(
-            sheet,
-            page_w_mm,
-            page_h_mm,
-            &opts.margins,
-            &opts.scale,
-            units_per_mm,
-        );
+        let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, units_per_mm);
 
         let mut elements = Vec::new();
         let palette = &opts.palette;
@@ -84,20 +78,47 @@ impl SvgRenderContext {
             },
         ));
 
+        push_placed_drawings(
+            &mut elements,
+            &sheet.schematic,
+            DrawingPlacement::Behind,
+            &xform,
+            palette,
+        );
+
         // Base primitives
         for wire in &sheet.schematic.wires {
-            let stroke_mm = if wire.stroke_width > 0.0 {
-                wire.stroke_width
-            } else {
-                0.15
-            };
+            let class = opts.net_class_styles.get(&wire.uuid);
+            let stroke_mm = wire_style::wire_width_mm(wire, class);
+            let start = (
+                xform.x(wire.start.x) as f64,
+                xform.px_y(wire.start.y) as f64,
+            );
+            let end = (xform.x(wire.end.x) as f64, xform.px_y(wire.end.y) as f64);
+            let marks = wire_style::line_marks(
+                start,
+                end,
+                class.map(|style| style.line).unwrap_or_default(),
+                stroke_mm * xform.mm_to_unit,
+            );
+            let commands = marks
+                .into_iter()
+                .flat_map(|(a, b)| {
+                    [
+                        SvgPathCommand::MoveTo(pt(a.0 as f32, a.1 as f32)),
+                        SvgPathCommand::LineTo(pt(b.0 as f32, b.1 as f32)),
+                    ]
+                })
+                .collect();
             elements.push(SvgElement::Path {
-                commands: vec![
-                    SvgPathCommand::MoveTo(pt(xform.x(wire.start.x), xform.px_y(wire.start.y))),
-                    SvgPathCommand::LineTo(pt(xform.x(wire.end.x), xform.px_y(wire.end.y))),
-                ],
+                commands,
                 style: SvgStyle {
-                    stroke_rgb: Some(palette.wire),
+                    stroke_rgb: Some(wire_style::wire_rgb(
+                        wire,
+                        &sheet.schematic.net_colors,
+                        &opts.net_class_styles,
+                        palette.wire,
+                    )),
                     fill_rgb: None,
                     stroke_width: (stroke_mm * xform.mm_to_unit) as f32,
                 },
@@ -144,50 +165,42 @@ impl SvgRenderContext {
             let half = side / 2.0;
             let cx = xform.x(j.position.x);
             let cy = xform.px_y(j.position.y);
+            let junction_rgb = wire_style::junction_rgb(
+                j,
+                &sheet.schematic.net_colors,
+                &opts.net_class_styles,
+                palette.junction,
+            );
             elements.push(rect_path(
                 cx - half,
                 cy - half,
                 side,
                 side,
                 SvgStyle {
-                    stroke_rgb: Some(palette.junction),
-                    fill_rgb: Some(palette.junction),
+                    stroke_rgb: Some(junction_rgb),
+                    fill_rgb: Some(junction_rgb),
                     stroke_width: 0.8,
                 },
             ));
         }
 
-        // Standard's "no_connect" X markers map to Altium's "No-ERC
-        // Markers" — render them only when the user kept the toggle
-        // on. Altium's checklist hides these from the printed PDF
-        // for cleaner deliverables.
-        if opts.include_no_erc_markers {
+        if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {
-                let arm = (1.0 * xform.mm_to_unit) as f32;
-                let cx = xform.x(nc.position.x);
-                let cy = xform.px_y(nc.position.y);
-                let style = SvgStyle {
-                    stroke_rgb: Some(palette.no_connect),
-                    fill_rgb: None,
-                    stroke_width: 0.8,
-                };
-                elements.push(SvgElement::Path {
-                    commands: vec![
-                        SvgPathCommand::MoveTo(pt(cx - arm, cy - arm)),
-                        SvgPathCommand::LineTo(pt(cx + arm, cy + arm)),
-                    ],
-                    style,
-                });
-                elements.push(SvgElement::Path {
-                    commands: vec![
-                        SvgPathCommand::MoveTo(pt(cx - arm, cy + arm)),
-                        SvgPathCommand::LineTo(pt(cx + arm, cy - arm)),
-                    ],
-                    style,
-                });
+                push_no_connect_x(&mut elements, &xform, palette.no_connect, nc.position);
+            }
+        }
+        if opts.include_no_erc_markers {
+            for directive in &sheet.schematic.no_erc_directives {
+                push_no_erc_diamond(
+                    &mut elements,
+                    &xform,
+                    palette.no_connect,
+                    directive.position,
+                );
             }
         }
 
+        let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
             let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale);
             let spin = label_spin_style(label.justify, label.rotation);
@@ -205,7 +218,7 @@ impl SvgRenderContext {
             elements.push(SvgElement::Text {
                 x: xform.x(label.position.x + off_x),
                 y: xform.px_y(label.position.y + off_y),
-                font_alias: "F3",
+                font_alias: alias_for_family(label.font_family.as_deref(), document_family, "F3"),
                 size_pt,
                 align,
                 v_align,
@@ -223,13 +236,22 @@ impl SvgRenderContext {
                 elements.push(SvgElement::Text {
                     x: xform.x(note.position.x),
                     y: xform.px_y(note.position.y),
-                    font_alias: "F1",
+                    font_alias: alias_for_family(
+                        note.font_family.as_deref(),
+                        document_family,
+                        "F1",
+                    ),
                     size_pt,
                     align: halign_to_svg(note.justify_h),
                     v_align: valign_to_svg(note.justify_v),
                     rotation_deg: note.rotation as f32,
                     fill_rgb: palette.note_text,
-                    text: normalize_standard_text(&note.text),
+                    text: normalize_standard_text(
+                        &match eval_inputs.and_then(|e| e.special_strings) {
+                            Some(special) => crate::resolve(&note.text, special),
+                            None => note.text.clone(),
+                        },
+                    ),
                 });
             }
         }
@@ -282,11 +304,11 @@ impl SvgRenderContext {
             }
         }
 
-        for drawing in &sheet.schematic.drawings {
-            push_sch_drawing_path(&mut elements, drawing, &xform, palette);
-        }
-
         // Full symbol body graphics from library definitions.
+        let mut lib_by_id: HashMap<&str, &signex_types::schematic::LibSymbol> = HashMap::new();
+        for ls in sheet.schematic.lib_symbols.values() {
+            lib_by_id.entry(ls.id.as_str()).or_insert(ls);
+        }
         for sym in &sheet.schematic.symbols {
             let symbol_vars = symbol_eval_variables(sym);
             let mut refdes_vars = HashMap::new();
@@ -302,20 +324,25 @@ impl SvgRenderContext {
                 ..ExpressionEvalContext::default()
             };
 
-            let symbol_pin_nets =
-                eval_inputs.and_then(|e| e.net_name_by_symbol_pin.get(&sym.uuid.to_string()));
+            let symbol_pin_nets = eval_inputs.and_then(|e| {
+                e.net_name_by_symbol_pin
+                    .get(&crate::expression::symbol_occurrence_key(
+                        sym.uuid,
+                        &sheet.placement,
+                    ))
+            });
 
-            if let Some(lib) = sheet
-                .schematic
-                .lib_symbols
-                .values()
-                .find(|ls| ls.id == sym.lib_id)
-            {
-                push_symbol_lib_graphics(&mut elements, sym, lib, &xform, palette);
+            let lib = lib_by_id
+                .get(sym.lib_id.as_str())
+                .copied()
+                .map(std::borrow::Cow::Borrowed)
+                .or_else(|| sheet.schematic.resolve_lib_symbol(sym));
+            if let Some(lib) = lib {
+                push_symbol_lib_graphics(&mut elements, sym, Some(&lib), &xform, palette);
                 push_symbol_pins(
                     &mut elements,
                     sym,
-                    lib,
+                    &lib,
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
@@ -344,14 +371,19 @@ impl SvgRenderContext {
                 && let Some(ref_text) = &sym.ref_text
                 && !ref_text.hidden
             {
+                let ref_style = field_effective_style(ref_text, sym);
                 elements.push(SvgElement::Text {
                     x: xform.x(ref_text.position.x),
                     y: xform.px_y(ref_text.position.y),
-                    font_alias: "F3",
+                    font_alias: alias_for_family(
+                        ref_text.font_family.as_deref(),
+                        document_family,
+                        "F3",
+                    ),
                     size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
-                    align: halign_to_svg(field_effective_style(ref_text, sym).1),
-                    v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
-                    rotation_deg: field_effective_style(ref_text, sym).0 as f32,
+                    align: halign_to_svg(ref_style.1),
+                    v_align: valign_to_svg(ref_style.2),
+                    rotation_deg: ref_style.0 as f32,
                     fill_rgb: palette.reference,
                     text: normalize_standard_text_with_ctx(&sym.reference, &symbol_eval_ctx),
                 });
@@ -361,28 +393,45 @@ impl SvgRenderContext {
                 && let Some(val_text) = &sym.val_text
                 && !val_text.hidden
             {
+                let val_style = field_effective_style(val_text, sym);
                 elements.push(SvgElement::Text {
                     x: xform.x(val_text.position.x),
                     y: xform.px_y(val_text.position.y),
-                    font_alias: "F1",
+                    font_alias: alias_for_family(
+                        val_text.font_family.as_deref(),
+                        document_family,
+                        "F1",
+                    ),
                     size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
-                    align: halign_to_svg(field_effective_style(val_text, sym).1),
-                    v_align: valign_to_svg(field_effective_style(val_text, sym).2),
-                    rotation_deg: field_effective_style(val_text, sym).0 as f32,
+                    align: halign_to_svg(val_style.1),
+                    v_align: valign_to_svg(val_style.2),
+                    rotation_deg: val_style.0 as f32,
                     fill_rgb: palette.value,
                     text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
         }
 
-        let svg_document = encode_svg_document(width, height, &elements);
+        push_placed_drawings(
+            &mut elements,
+            &sheet.schematic,
+            DrawingPlacement::Above,
+            &xform,
+            palette,
+        );
 
         Self {
             width,
             height,
             elements,
-            svg_document,
+            paper: palette.paper,
         }
+    }
+
+    /// Serialize the elements to an SVG document string. Computed on
+    /// demand: the PDF and raster paths never need it.
+    pub fn svg_document(&self) -> String {
+        encode_svg_document(self.width, self.height, &self.elements)
     }
 
     pub fn rasterize_rgba(&self, width: u32, height: u32) -> Option<Vec<u8>> {
@@ -404,7 +453,7 @@ impl SvgRenderContext {
                     if let Some(path) = path_to_tiny_skia(commands) {
                         if let Some((r, g, b)) = style.fill_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             pixmap.fill_path(
                                 &path,
@@ -417,7 +466,7 @@ impl SvgRenderContext {
 
                         if let Some((r, g, b)) = style.stroke_rgb {
                             let mut paint = Paint::default();
-                            let (mr, mg, mb) = map_colour_mode((r, g, b), colour_mode);
+                            let (mr, mg, mb) = map_ink_mode((r, g, b), colour_mode, self.paper);
                             paint.set_color(rgb_to_color(mr, mg, mb));
                             let stroke = Stroke {
                                 width: style.stroke_width.max(0.5),
@@ -438,19 +487,18 @@ impl SvgRenderContext {
                     text,
                     font_alias,
                 } => {
-                    let mapped_fill = map_colour_mode(*fill_rgb, colour_mode);
-                    draw_text_outline(
-                        &mut pixmap,
-                        *x,
-                        *y,
-                        *size_pt,
-                        *align,
-                        *v_align,
-                        *rotation_deg,
-                        mapped_fill,
+                    let mapped_fill = map_ink_mode(*fill_rgb, colour_mode, self.paper);
+                    let style = TextStyle {
+                        x: *x,
+                        y: *y,
+                        size_pt: *size_pt,
+                        align: *align,
+                        v_align: *v_align,
+                        rotation_deg: *rotation_deg,
+                        fill_rgb: mapped_fill,
                         font_alias,
-                        text,
-                    );
+                    };
+                    draw_text_outline(&mut pixmap, &style, text);
                 }
             }
         }

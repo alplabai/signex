@@ -4,107 +4,186 @@ use iced::Task;
 
 use super::super::super::*;
 
+type RuleOverrides = std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>;
+type PinMatrixOverrides = std::collections::HashMap<(u8, u8), signex_erc::Severity>;
+
 impl Signex {
-    pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
-        let dsl_eval_fns = self.load_project_dsl_eval_fns();
-        let overrides = self.ui_state.erc_severity_override.clone();
-        let apply_overrides =
-            |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
-                for v in &mut violations {
-                    if let Some(&sev) = overrides.get(&v.rule) {
-                        v.severity = sev;
-                    }
+    /// The rule settings an ERC run uses (#1085): the active project's stored
+    /// rule set when it has one, never the machine's preferences, so the same
+    /// project gives the same result everywhere. A project without a stored
+    /// set falls back to this machine's preferences (the pre-#1085 behaviour)
+    /// and says so once per project open in the Messages panel.
+    fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
+        let project = self.document_state.active_document_project();
+        let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
+            let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
+            if let Some(id) = project.map(|p| p.id)
+                && self.note_erc_fallback(id)
+            {
+                if unreadable {
+                    // Kept for re-save, never applied (#1180).
+                    crate::diagnostics::log_warning(
+                        "This project's rule set cannot be read by this version of Signex; it is \
+                         kept unchanged, and this machine's ERC rules (the User Default profile) are used.",
+                    );
+                } else {
+                    crate::diagnostics::log_info(
+                        "This project has no saved rule set; using this machine's ERC rules (the User Default profile).",
+                    );
                 }
-                violations.retain(|v| v.severity != signex_erc::Severity::Off);
-                violations.sort_by_key(|v| {
-                    let bucket = match v.severity {
-                        signex_erc::Severity::Error => 0,
-                        signex_erc::Severity::Warning => 1,
-                        signex_erc::Severity::Info => 2,
-                        signex_erc::Severity::Off => 3,
-                    };
-                    (bucket, format!("{:?}", v.rule))
-                });
-                violations
-            };
-
-        let mut by_path: std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>> =
-            std::collections::HashMap::new();
-
-        // First pass: collect every project sheet's snapshot keyed by its
-        // absolute path (live engine snapshots for open tabs, disk parses for
-        // the rest).
-        let mut snapshots_by_path: std::collections::HashMap<
-            std::path::PathBuf,
-            crate::schematic_runtime::SchematicRenderSnapshot,
-        > = std::collections::HashMap::new();
-
-        // Active tab.
-        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
-            && let Some(snapshot) = self.active_render_snapshot()
-        {
-            snapshots_by_path.insert(tab.path.clone(), snapshot.clone());
-        }
-        // Cached tabs — engines for every open schematic tab live in
-        // `document_state.engines`, keyed by path. The active one was
-        // already handled above via the render snapshot.
-        for (idx, tab) in self.document_state.tabs.iter().enumerate() {
-            if idx == self.document_state.active_tab {
-                continue;
             }
-            if let Some(engine) = self.document_state.engines.get(&tab.path) {
-                snapshots_by_path.insert(tab.path.clone(), engine.document().clone());
-            }
-        }
-        // The project itself, from the one assembler the export and the cached
-        // canvas netlist also use: the declared pages *plus* everything
-        // reachable down the `child_sheets` graph. Reading the declared pages
-        // alone is what made `BadHierSheetPin` fire on a child that was
-        // sitting unopened on disk beside its parent (#406).
-        let (_pages, project_set) =
-            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-
-        // The child sheet-map keyed by the exact `ChildSheet.filename` each
-        // parent references (not the bare basename) — the shared view the
-        // netlist stitcher and ERC's `BadHierSheetPin` both read (ADR-0002 D8).
-        // Built from the project's own sheets only: an open tab belonging to
-        // some *other* project must never resolve this project's child
-        // references.
-        let (children, children_issues) =
-            crate::app::project_sheets::project_children_map(&project_set.sheets);
-        for issue in &children_issues {
-            crate::diagnostics::log_warning(crate::app::project_sheets::stitch_issue_message(
-                issue,
+            return (
+                self.ui_state.erc_severity_override.clone(),
+                self.ui_state.pin_matrix_overrides.clone(),
+            );
+        };
+        let resolved = signex_erc::project_rules::resolve(&rules.erc);
+        for entry in &resolved.unrecognised {
+            crate::diagnostics::log_warning(format!(
+                "Project ERC rules: ignoring unrecognised entry ({entry})"
             ));
         }
-
-        // ERC still reports on every sheet the user has open — a loose tab is
-        // not part of the project, but it is on screen and its violations are
-        // wanted — plus every project sheet, opened or not.
-        for (path, sheet) in project_set.sheets {
-            snapshots_by_path.entry(path).or_insert(sheet);
+        if !resolved.missing.is_empty() {
+            let names: Vec<_> = resolved.missing.iter().map(|r| r.key()).collect();
+            crate::diagnostics::log_info(format!(
+                "Project ERC rules do not list {}; using the built-in default for them.",
+                names.join(", ")
+            ));
         }
+        (resolved.severity, resolved.pin_matrix)
+    }
 
-        // Second pass: run ERC with the shared children map so
-        // BadHierSheetPin can cross-check each sheet symbol against
-        // the actual child schematic.
-        for (path, snapshot) in &snapshots_by_path {
-            let violations = if let Some(eval_fns) = dsl_eval_fns.as_ref() {
-                apply_overrides(signex_erc::run_with_project_and_dsl(
-                    snapshot, &children, eval_fns,
-                ))
-            } else {
-                apply_overrides(signex_erc::run_with_project(snapshot, &children))
-            };
-            by_path.insert(path.clone(), violations);
+    /// Record that `id` has been told about the preferences fallback; true
+    /// only the first time, so the note appears once per project open.
+    pub(super) fn note_erc_fallback(&mut self, id: ProjectId) -> bool {
+        self.document_state.erc_fallback_noted.insert(id)
+    }
+
+    /// Start an ERC run. The disk reads and the rule pass run in
+    /// `spawn_blocking`; [`Self::handle_erc_run_finished`] applies the result
+    /// if no newer run superseded it (#111).
+    pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
+        let (generation, inputs) = self.begin_erc_run();
+        let drift = self.check_profile_drift_task();
+        let run = Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || super::erc_job::run_erc_job(inputs))
+                    .await
+                    .map_err(|e| format!("ERC worker failed: {e}"))
+            },
+            move |result| {
+                Message::Erc(ErcMsg::RunFinished {
+                    generation,
+                    result: std::sync::Arc::new(result),
+                })
+            },
+        );
+        Task::batch([run, drift])
+    }
+
+    /// Run ERC to completion on the calling thread - tests only.
+    #[cfg(test)]
+    pub(crate) fn run_erc_blocking(&mut self) {
+        let (generation, inputs) = self.begin_erc_run();
+        let outcome = Ok(super::erc_job::run_erc_job(inputs));
+        self.apply_erc_run_result(generation, &outcome);
+    }
+
+    /// Capture the run's inputs from live state (memory only, no IO), claim a
+    /// new generation and flag the run as in flight.
+    pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let rule_set = self.current_rule_set_identity();
+        let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
+        let ds = &self.document_state;
+        let tab_paths = ds
+            .tabs
+            .iter()
+            .filter(|t| ds.engines.contains_key(&t.path))
+            .map(|t| t.path.clone())
+            .collect();
+        let active = ds
+            .tabs
+            .get(ds.active_tab)
+            .zip(self.active_render_snapshot())
+            .map(|(tab, snapshot)| (tab.path.clone(), snapshot.clone()));
+        let pages = crate::app::project_sheets::declared_pages(ds);
+        let root = ds
+            .active_path
+            .clone()
+            .map(|active| crate::app::project_sheets::resolve_netlist_root(ds).unwrap_or(active));
+        let inputs = super::erc_job::ErcRunInputs {
+            open: crate::app::project_sheets::open_sheets_snapshot(ds),
+            tab_paths,
+            active,
+            pages,
+            root,
+            project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
+            overrides,
+            rule_set,
+            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            net_waivers: ds
+                .active_document_project()
+                .and_then(|p| p.data.rules.as_ref())
+                .map(|r| r.erc_net_waivers.clone())
+                .unwrap_or_default(),
+            violation_waivers: ds
+                .active_document_project()
+                .and_then(|p| p.data.rules.as_ref())
+                .map(|r| r.erc_waivers.clone())
+                .unwrap_or_default(),
+            fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
+        };
+
+        self.ui_state.erc_run_generation += 1;
+        self.ui_state.erc_running = true;
+        self.refresh_panel_ctx();
+        (self.ui_state.erc_run_generation, inputs)
+    }
+
+    /// A finished ERC run: apply it, then surface the ERC panel.
+    pub(crate) fn handle_erc_run_finished(
+        &mut self,
+        generation: u64,
+        result: &Result<super::erc_job::ErcRunOutcome, String>,
+    ) -> Task<Message> {
+        if !self.apply_erc_run_result(generation, result) {
+            return Task::none();
         }
+        // Surface the ERC panel so the user can see the results.
+        // `add_panel` could not do that: with ERC already docked it
+        // returned early, leaving the results behind whatever tab was
+        // active. `show_panel` makes it the active tab (#641).
+        self.show_panel(crate::panels::PanelKind::Erc)
+    }
 
-        let total: usize = by_path.values().map(|v| v.len()).sum();
-        crate::diagnostics::log_info(format!(
-            "ERC: {} total violations across {} sheet(s)",
-            total,
-            by_path.len(),
-        ));
+    /// Apply a finished run's result - unless a newer run has started since.
+    /// Returns whether violations were applied.
+    pub(super) fn apply_erc_run_result(
+        &mut self,
+        generation: u64,
+        result: &Result<super::erc_job::ErcRunOutcome, String>,
+    ) -> bool {
+        if generation != self.ui_state.erc_run_generation {
+            return false;
+        }
+        self.ui_state.erc_running = false;
+        let outcome = match result {
+            Ok(outcome) => outcome,
+            Err(why) => {
+                crate::diagnostics::log_warning(why);
+                self.refresh_panel_ctx();
+                return false;
+            }
+        };
+        // The rows now in the cache were produced under this rule set; only a
+        // successful, current run may name it in the report header.
+        self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
+        for warning in &outcome.warnings {
+            crate::diagnostics::log_warning(warning);
+        }
+        for info in &outcome.infos {
+            crate::diagnostics::log_info(info);
+        }
 
         // Repoint the visible list + canvas markers at the active
         // sheet's entry. Updates on tab switch via `sync_active_tab`.
@@ -113,7 +192,10 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
-        self.ui_state.erc_violations_by_path = by_path;
+        self.ui_state.erc_violations_by_path = outcome.by_path.clone();
+        self.ui_state.erc_waived_hidden = outcome.waived_hidden.clone();
+        self.ui_state.erc_waived_findings = outcome.waived_findings.clone();
+        self.ui_state.erc_lapsed_waivers = outcome.lapsed_waivers.clone();
         self.ui_state.erc_focus_global_index = self
             .ui_state
             .erc_violations_by_path
@@ -121,48 +203,8 @@ impl Signex {
             .any(|v| !v.is_empty())
             .then_some(0);
         self.refresh_active_erc_from_cache(active_path.as_ref());
-
-        // Surface the ERC panel so the user can see the results.
-        self.document_state.dock.add_panel(
-            crate::dock::PanelPosition::Bottom,
-            crate::panels::PanelKind::Erc,
-        );
-        Task::none()
-    }
-
-    fn load_project_dsl_eval_fns(&self) -> Option<Vec<signex_erc::engine::EvalFn>> {
-        let project_root = self
-            .document_state
-            .active_document_project()
-            .map(|p| p.dir().to_path_buf())?;
-
-        let dsl_path_candidates = [
-            project_root.join("erc.dsl"),
-            project_root.join("signex.erc.dsl"),
-        ];
-        let dsl_path = dsl_path_candidates.iter().find(|p| p.exists())?;
-
-        let Ok(src) = std::fs::read_to_string(dsl_path) else {
-            crate::diagnostics::log_info(format!("ERC DSL: failed to read {}", dsl_path.display()));
-            return None;
-        };
-
-        match signex_erc_dsl::parse_validate_compile_to_eval_fns(&src) {
-            Ok(eval_fns) => {
-                crate::diagnostics::log_info(format!(
-                    "ERC DSL: loaded {} compiled rule(s) from {}",
-                    eval_fns.len(),
-                    dsl_path.display()
-                ));
-                Some(eval_fns)
-            }
-            Err(errors) => {
-                for error in errors {
-                    crate::diagnostics::log_info(format!("ERC DSL: {error}"));
-                }
-                None
-            }
-        }
+        self.refresh_panel_ctx();
+        true
     }
 
     /// Repoint `erc_violations` + canvas markers at whatever the
@@ -177,17 +219,27 @@ impl Signex {
             .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
             .cloned()
             .unwrap_or_default();
+        // Only a point in THIS sheet's own coordinates may be drawn here; a
+        // child-space or unplaced one would land on empty canvas (#956).
+        // A net-level finding is drawn at its net's representative pin with the
+        // distinct net marker; a No-ERC directive never reaches it.
         self.interaction_state.active_canvas_mut().erc_markers = violations
             .iter()
+            .filter(|v| {
+                matches!(
+                    v.location_space,
+                    signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                )
+            })
             .map(|v| crate::canvas::ErcMarker {
                 x: v.location.x,
                 y: v.location.y,
+                net_level: v.location_space == signex_erc::LocationSpace::Net,
                 severity: match v.severity {
                     signex_erc::Severity::Error => crate::canvas::ErcMarkerSeverity::Error,
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
-                primary_uuid: v.primary.as_ref().map(|s| s.uuid),
             })
             .collect();
         self.interaction_state
@@ -224,12 +276,19 @@ impl Signex {
                             }
                             _ => crate::panels::ErcSeverityLite::Info,
                         },
-                        rule_label: v.rule.label(),
-                        rule_kind: v.rule,
+                        rule_label: v.display_name(),
+                        rule_kind: v.builtin_kind(),
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
                         select: v.primary,
+                        locatable: matches!(
+                            v.location_space,
+                            signex_erc::LocationSpace::ThisSheet | signex_erc::LocationSpace::Net
+                        ),
+                        net: v.net.clone(),
+                        rule_id: v.rule_id.to_string(),
+                        waiver_key: v.waiver_key.clone(),
                     });
                 }
             }
@@ -268,12 +327,25 @@ impl Signex {
         // rule kind — the engine command path operates on the active
         // engine, and even the non-mutating rules want the canvas to
         // scroll to the offending point.
-        self.ensure_sheet_open_and_active(&target.sheet_path);
+        if !target.locatable {
+            // No point on any open sheet to go to: report, don't pan.
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            return Task::none();
+        }
+        if !self.ensure_sheet_open_and_active(&target.sheet_path) {
+            // The fix would land on whatever sheet is active instead (#1367).
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            crate::diagnostics::log_warning(format!(
+                "ERC quick fix not applied: sheet did not open ({})",
+                target.sheet_path.display()
+            ));
+            return Task::none();
+        }
 
         match target.rule_kind {
-            signex_erc::RuleKind::UnusedPin => {
+            Some(signex_erc::RuleKind::UnusedPin) => {
                 let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(target.world_x, target.world_y),
                 };
                 self.apply_engine_command(
@@ -281,17 +353,18 @@ impl Signex {
                     false,
                     false,
                 );
-                // Re-run ERC so the cleared violation drops out of
-                // the panel without forcing the user to press F8.
-                let _ = self.handle_run_erc();
-                // Focus the cleared point so the new NoConnect marker
-                // is visible — a small but reassuring "the fix landed
-                // here" cue.
-                self.handle_focus_at(target.world_x, target.world_y, None)
+                // Re-run ERC so the cleared violation drops out of the
+                // panel without forcing the user to press F8, then focus
+                // the cleared point so the new NoConnect marker is visible.
+                // The run is asynchronous; the two tasks are independent.
+                Task::batch([
+                    self.handle_run_erc(),
+                    self.handle_focus_at(target.world_x, target.world_y, None),
+                ])
             }
             _ => {
                 self.ui_state.erc_focus_global_index = Some(clamped);
-                self.handle_focus_at(target.world_x, target.world_y, target.select)
+                self.focus_erc_entry(&target)
             }
         }
     }
@@ -305,14 +378,24 @@ impl Signex {
         let clamped = index.min(entries.len() - 1);
         let target = entries[clamped].clone();
 
+        if !target.locatable {
+            self.ui_state.erc_focus_global_index = Some(clamped);
+            return Task::none();
+        }
+
         // Ensure the target sheet is open and active before focusing its point.
+        // Navigation only; the reason is already logged.
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
         self.ui_state.erc_focus_global_index = Some(clamped);
-        self.handle_focus_at(target.world_x, target.world_y, target.select)
+        self.focus_erc_entry(&target)
     }
 
-    fn ensure_sheet_open_and_active(&mut self, path: &std::path::PathBuf) {
+    /// Open `path` if needed and make it the active sheet. Returns `true`
+    /// when it is open and active afterwards; every `false` has already
+    /// logged its reason to the Messages panel.
+    pub(crate) fn ensure_sheet_open_and_active(&mut self, path: &std::path::Path) -> bool {
+        let path = &self.resolve_held_spelling_now(path.to_path_buf());
         if let Some(index) = self
             .document_state
             .tabs
@@ -324,7 +407,7 @@ impl Signex {
                 self.document_state.active_tab = index;
                 self.sync_active_tab();
             }
-            return;
+            return true;
         }
 
         let is_schematic = path
@@ -333,30 +416,43 @@ impl Signex {
             .map(|e| matches!(e, "snxsch"))
             .unwrap_or(false);
         if !is_schematic {
-            return;
+            crate::diagnostics::log_warning(format!(
+                "Not a schematic sheet, cannot open: {}",
+                path.display()
+            ));
+            return false;
         }
 
-        let Ok(text) = std::fs::read_to_string(path) else {
-            crate::diagnostics::log_info(format!(
-                "ERC navigation: failed to read sheet {}",
-                path.display()
-            ));
-            return;
-        };
-        let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
-        else {
-            crate::diagnostics::log_info(format!(
-                "ERC navigation: failed to parse sheet {}",
-                path.display()
-            ));
-            return;
-        };
         let title = path
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "sheet".to_string());
+        // A dirty engine parked without a tab holds unsaved edits: reattach
+        // it rather than replace it with the on-disk sheet (#1135).
+        if self.path_is_owned_by_open_document(path) {
+            self.attach_parked_schematic_tab(path.clone(), title);
+            self.sync_active_tab();
+            return true;
+        }
+
+        let Ok(text) = std::fs::read_to_string(path) else {
+            crate::diagnostics::log_warning(format!(
+                "Sheet could not be read, ERC navigation skipped: {}",
+                path.display()
+            ));
+            return false;
+        };
+        let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+        else {
+            crate::diagnostics::log_warning(format!(
+                "Sheet could not be parsed, ERC navigation skipped: {}",
+                path.display()
+            ));
+            return false;
+        };
         self.open_schematic_tab(path.clone(), title, sheet);
         self.sync_active_tab();
+        true
     }
 
     /// Move the viewport to center on a world-space point and optionally
@@ -368,6 +464,18 @@ impl Signex {
         world_y: f64,
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
+        self.focus_world_point(world_x, world_y, select);
+        Task::none()
+    }
+
+    /// Select `select` (when given) and stage a fit around `(world_x,
+    /// world_y)`, for callers that return no task.
+    pub(crate) fn focus_world_point(
+        &mut self,
+        world_x: f64,
+        world_y: f64,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) {
         if let Some(item) = select {
             self.interaction_state.active_canvas_mut().selected = vec![item];
             self.update_selection_info();
@@ -387,14 +495,12 @@ impl Signex {
                 width: half * 2.0,
                 height: half * 2.0,
             }));
-        Task::none()
     }
 
     pub(crate) fn handle_toggle_auto_focus(&mut self) -> Task<Message> {
         self.ui_state.auto_focus = !self.ui_state.auto_focus;
         // Mirror the flag onto the canvas so the renderer can compute
         // the focus uuid set locally without reaching into app state.
-        self.interaction_state.active_canvas_mut().auto_focus = self.ui_state.auto_focus;
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
@@ -404,3 +510,8 @@ impl Signex {
         Task::none()
     }
 }
+
+#[cfg(test)]
+mod rules_tests;
+#[cfg(test)]
+mod tests;

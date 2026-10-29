@@ -10,6 +10,13 @@ impl Signex {
         use crate::active_bar::ActiveBarAction;
 
         self.interaction_state.active_bar_menu = None;
+        // A planned tool is greyed everywhere it is shown, but the keymap,
+        // the palette and a group button's last tool can still name it
+        // (#1249). Refuse before anything is armed or remembered.
+        if let Some(name) = crate::active_bar::planned_name(&action) {
+            crate::diagnostics::log_info(crate::active_bar::refusal_line(name));
+            return Task::none();
+        }
         self.remember_active_bar_group(&action);
 
         match action {
@@ -30,7 +37,8 @@ impl Signex {
                 self.interaction_state.pending_port = None;
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
-                        uuid: uuid::Uuid::new_v4(),
+                        unknown_columns: Default::default(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: "NET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -39,6 +47,8 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
+                        locked: false,
                     });
                 task
             }
@@ -68,13 +78,15 @@ impl Signex {
                 let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
                 self.interaction_state.active_canvas_mut().ghost_text =
                     Some(signex_types::schematic::TextNote {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: default_text.to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify_h: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::default(),
+                        font_family: None,
+                        locked: false,
                     });
                 task
             }
@@ -87,11 +99,16 @@ impl Signex {
             ActiveBarAction::DrawFullCircle => {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)))
             }
-            ActiveBarAction::RotateSelection | ActiveBarAction::RotateSelectionCW => {
-                self.update(Message::Edit(EditMsg::RotateSelected))
+            ActiveBarAction::RotateSelection => {
+                self.update(Message::Edit(EditMsg::RotateSelectedCounterclockwise))
             }
-            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
-            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
+            ActiveBarAction::RotateSelectionCW => {
+                self.update(Message::Edit(EditMsg::RotateSelectedClockwise))
+            }
+            // Axes are crossed on purpose, like the `mirror_x` / `mirror_y`
+            // keys: see the "Visual-flip semantics" note in command/bridge.rs.
+            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
+            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
             // "Select → Connection": if a wire/bus/junction/label is already
             // selected, expand immediately. Otherwise fall through to Select
             // tool so the next click triggers the net walk via the hit-test
@@ -283,10 +300,19 @@ impl Signex {
                 }
                 Task::none()
             }
-            // MoveSelection / MoveSelectionXY → open the Move
-            // Selection dialog (numeric ΔX / ΔY apply to every
-            // selected item through Command::MoveSelection).
-            ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
+            // Move / Move Selection → arm the interactive click-click
+            // gestures (#271); the drop commits through MoveSelected.
+            ActiveBarAction::Move => {
+                self.arm_move_pick(crate::canvas::MovePick::Object);
+                Task::none()
+            }
+            ActiveBarAction::MoveSelection => {
+                self.arm_move_pick(crate::canvas::MovePick::Selection);
+                Task::none()
+            }
+            // Move Selection by X, Y... → open the dialog (numeric ΔX / ΔY
+            // apply to every selected item through Command::MoveSelection).
+            ActiveBarAction::MoveSelectionXY => {
                 self.update(Message::MoveSelection(MoveSelectionMsg::Open))
             }
             ActiveBarAction::AlignLeft

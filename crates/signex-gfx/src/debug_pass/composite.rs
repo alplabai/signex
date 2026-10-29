@@ -38,8 +38,20 @@ async fn run_text_geometry_composite_smoke_pass_with(
     let mut text_pipeline = GlyphonTextPipeline::new(&device, &queue, target_format);
 
     polygon_pipeline.upload(&device, &queue, polygons);
+    // Headless: the harness owns its font system — see `debug_pass`.
+    let mut font_system = cryoglyph::FontSystem::new();
     text_pipeline
-        .upload(&device, &queue, texts, scale_px_per_mm, [128, 128])
+        .upload(
+            &device,
+            &queue,
+            &mut font_system,
+            texts,
+            scale_px_per_mm,
+            super::DEBUG_TEXT_POLICY,
+            super::DEBUG_TEXT_FAMILY,
+            [128, 128],
+            [0.0, 0.0],
+        )
         .map_err(|err| format!("failed to prepare text: {err}"))?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -106,6 +118,7 @@ async fn run_text_geometry_composite_smoke_pass_with(
 
 pub async fn run_text_geometry_composite_smoke_pass() -> Result<CompositeSmokeReport, String> {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]],
         fill_color: [0.15, 0.25, 0.85, 1.0],
         stroke_color: None,
@@ -122,6 +135,7 @@ pub async fn run_text_geometry_composite_smoke_pass() -> Result<CompositeSmokeRe
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     }];
 
     run_text_geometry_composite_smoke_pass_with(32.0, &polygons, &texts).await
@@ -179,8 +193,20 @@ pub(super) async fn run_grid_overlay_text_composite_smoke_pass_with(
 
     let empty_texts: [TextItem; 0] = [];
     let text_items = if text_enabled { texts } else { &empty_texts };
+    // Headless: the harness owns its font system — see `debug_pass`.
+    let mut font_system = cryoglyph::FontSystem::new();
     text_pipeline
-        .upload(&device, &queue, text_items, scale_px_per_mm, [128, 128])
+        .upload(
+            &device,
+            &queue,
+            &mut font_system,
+            text_items,
+            scale_px_per_mm,
+            super::DEBUG_TEXT_POLICY,
+            super::DEBUG_TEXT_FAMILY,
+            [128, 128],
+            [0.0, 0.0],
+        )
         .map_err(|err| format!("failed to prepare text: {err}"))?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -260,6 +286,7 @@ pub(super) async fn run_grid_overlay_text_composite_smoke_pass_with(
 pub async fn run_grid_overlay_text_composite_smoke_pass()
 -> Result<OverlayCompositeSmokeReport, String> {
     let polygons = [GpuPolygon {
+        holes: Vec::new(),
         vertices: vec![[0.5, 0.5], [4.5, 0.5], [4.5, 4.5], [0.5, 4.5]],
         fill_color: [0.18, 0.22, 0.78, 1.0],
         stroke_color: None,
@@ -295,6 +322,7 @@ pub async fn run_grid_overlay_text_composite_smoke_pass()
         rotation: 0.0,
         h_align: TextHAlign::Left,
         v_align: TextVAlign::Top,
+        family: None,
     }];
 
     run_grid_overlay_text_composite_smoke_pass_with(

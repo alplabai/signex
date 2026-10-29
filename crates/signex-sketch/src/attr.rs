@@ -91,9 +91,10 @@ impl std::fmt::Display for ElectricalType {
 /// Pad Features section exposes this exactly:
 ///   - `None`        — bare copper / no machining.
 ///   - `Counterbore` — flat-bottom recess machined around the hole
-///                     to seat a fastener head flush.
+///     to seat a fastener head flush.
 ///   - `Countersink` — conical recess machined around the hole for
-///                     a flat-head fastener.
+///     a flat-head fastener.
+///
 /// The earlier "Solder Bumps / Glue Dots / Adhesive Beads" variants
 /// were factually wrong — those are mechanical-layer purposes
 /// (Glue Points / Coating / Gold Plating) authored as separate
@@ -158,7 +159,7 @@ impl TestpointFlags {
 /// expression overrides the rule-driven default at bake time. `None`
 /// here means "use the rule-driven value" — same convention as
 /// Altium's "Rule Expansion" cell.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PadStackOverrides {
     /// Override for top-side paste expansion (mm). `None` = rule.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -199,6 +200,27 @@ pub struct PadStackOverrides {
     pub corner_radius_pct: Option<f64>,
 }
 
+/// Hand-written so the paste-enable and thermal-relief flags default to
+/// `true`, matching their serde defaults above.
+impl Default for PadStackOverrides {
+    fn default() -> Self {
+        Self {
+            paste_top_expr: None,
+            paste_top_pct: None,
+            paste_bottom_expr: None,
+            paste_bottom_pct: None,
+            paste_top_enabled: true,
+            paste_bottom_enabled: true,
+            mask_top_expr: None,
+            mask_bottom_expr: None,
+            mask_top_tented: false,
+            mask_bottom_tented: false,
+            thermal_relief: true,
+            corner_radius_pct: None,
+        }
+    }
+}
+
 impl PadStackOverrides {
     pub fn is_default(&self) -> bool {
         self.paste_top_expr.is_none()
@@ -221,8 +243,9 @@ impl PadStackOverrides {
 ///
 /// `Default` exists so existing literal constructors can omit the
 /// pad-stack / feature / testpoint fields via `..PadAttr::default()`.
-/// Default values place a 1×1 mm SMD round pad on the top side with
-/// no overrides — the canonical "blank" pad.
+/// The derived default is a blank pad: empty `number`, the default
+/// `kind`, `side` and `shape`, empty `size_x_expr` / `size_y_expr`
+/// (the caller must fill in the size expressions) and no overrides.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PadAttr {
     pub number: String,
@@ -385,7 +408,9 @@ pub enum CustomPadShape {
 /// Solder-paste aperture layout for a pad.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
+#[derive(Default)]
 pub enum PasteAperturePattern {
+    #[default]
     Single,
     Grid {
         nx_expr: String,
@@ -395,12 +420,6 @@ pub enum PasteAperturePattern {
     Custom {
         source: Vec<SketchEntityId>,
     },
-}
-
-impl Default for PasteAperturePattern {
-    fn default() -> Self {
-        Self::Single
-    }
 }
 
 /// Closed sketch profile bakes as a silkscreen line/arc set.
@@ -413,7 +432,7 @@ pub struct SilkAttr {
 /// Closed sketch profile bakes as the courtyard polygon.
 /// v0.13 round-trips; v0.14 bakes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CourtyardAttr;
+pub struct CourtyardAttr {}
 
 /// Closed sketch profile bakes as a mask opening (cutout).
 /// v0.13 round-trips; v0.14 bakes.
@@ -641,4 +660,18 @@ pub enum LinkedRadius {
         sw: String,
         nw: String,
     },
+}
+
+#[cfg(test)]
+mod pad_stack_default_tests {
+    use super::*;
+
+    #[test]
+    fn default_matches_serde_defaults() {
+        let from_serde: PadStackOverrides = serde_json::from_str("{}").unwrap();
+        assert_eq!(PadStackOverrides::default(), from_serde);
+        assert!(from_serde.is_default());
+        assert!(PadStackOverrides::default().paste_top_enabled);
+        assert!(PadStackOverrides::default().thermal_relief);
+    }
 }

@@ -1,10 +1,9 @@
-//! Library left-dock panel — flat library list (post-WS-K refactor).
+//! Library left-dock panel — flat library list.
 //!
-//! The inline category-tree-with-row-grid the v0.9-refactor-2 plan §10
-//! sketched is now superseded by the main-window Library Browser tab
-//! (see [`crate::library::browser`]). This panel is reduced to a flat
-//! list of open libraries, each with a single `[Open]` button that
-//! opens the browser tab for that library.
+//! The per-library row grid lives in the main-window Library Browser
+//! tab (see [`crate::library::browser`]); this panel is a flat list of
+//! open libraries, each with a single `[Open]` button that opens the
+//! browser tab for that library.
 //!
 //! Shape:
 //!
@@ -23,13 +22,16 @@
 //! which routes through the same handler the project-tree double-click
 //! uses.
 
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{Column, Space, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{LibraryMessage, PickerMsg};
 use super::state::LibraryState;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 const LIB_PANEL_TEXT_SIZE: f32 = 11.0;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
@@ -46,14 +48,14 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     // search lives inside the Library Browser tab (each browser tab
     // has its own search buffer).
     let search = text_input("Search libraries…", &state.panel_search)
-        .on_input(|s| LibraryMessage::Picker(PickerMsg::FilterChanged(s)))
+        .on_input(|s| LibraryMessage::Picker(PickerMsg::PanelSearchChanged(s)))
         .padding(LIB_PANEL_ROW_PADDING)
         .size(LIB_PANEL_TEXT_SIZE);
 
     let mut col: Column<'a, LibraryMessage> = column![]
-        .spacing(2)
+        .spacing(SP.xs)
         .width(Length::Fill)
-        .push(container(search).padding([4, 4]));
+        .push(container(search).padding([SP.s, SP.s]));
 
     if state.open_libraries.is_empty() {
         col = col.push(
@@ -62,7 +64,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([12, 8]),
+            .padding([SP.l, SP.m]),
         );
     } else {
         for lib in state.open_libraries.iter() {
@@ -85,26 +87,15 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                 button(
                     text("Open")
                         .size(LIB_PANEL_TEXT_SIZE)
-                        .color(iced::Color::WHITE),
+                        .color(crate::styles::tokens::on_accent(tokens)),
                 )
-                .padding([2, 10])
+                .padding([SP.xs, 10.0])
                 .on_press(open_msg)
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.00, 0.47, 0.84,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                }),
+                .style(crate::styles::accent_button(tokens)),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center);
-            col = col.push(container(label).padding([2, 6]));
+            col = col.push(container(label).padding([SP.xs, 6.0]));
         }
     }
 
@@ -115,13 +106,13 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(text_c)
             )
-            .padding([4, 8])
+            .padding([SP.s, SP.m])
             .on_press(LibraryMessage::OpenLibraryDialog)
             .style(crate::styles::menu_item(tokens)),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([6, 4]);
+    .padding([6.0, SP.s]);
 
     let body = container(col).style(move |_: &Theme| iced::widget::container::Style {
         background: None,
@@ -134,7 +125,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     });
 
     column![
-        scrollable(body).width(Length::Fill).height(Length::Fill),
+        crate::panels::panel_scrollable(body).height(Length::Fill),
         Space::new().height(2),
         footer
     ]

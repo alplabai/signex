@@ -30,11 +30,21 @@ impl Signex {
             ActiveBarAction::PlacePowerMinus5 => {
                 follow = self.set_pending_power_port("-5V", "power:-5V");
             }
-            ActiveBarAction::PlacePowerArrow
-            | ActiveBarAction::PlacePowerWave
-            | ActiveBarAction::PlacePowerBar
-            | ActiveBarAction::PlacePowerCircle => {
-                follow = self.set_pending_power_port("PWR", "power:PWR_FLAG");
+            // Styled ports carry the style keyword the built-in power renderer
+            // recognizes. They must never use `power:PWR_FLAG`: a flag does not
+            // name a net, so a styled port with that lib_id would stop merging
+            // by value in the netlist and ERC.
+            ActiveBarAction::PlacePowerArrow => {
+                follow = self.set_pending_power_port("PWR", "power:arrow");
+            }
+            ActiveBarAction::PlacePowerWave => {
+                follow = self.set_pending_power_port("PWR", "power:wave");
+            }
+            ActiveBarAction::PlacePowerBar => {
+                follow = self.set_pending_power_port("PWR", "power:bar");
+            }
+            ActiveBarAction::PlacePowerCircle => {
+                follow = self.set_pending_power_port("PWR", "power:circle");
             }
             ActiveBarAction::PlacePowerSignalGND => {
                 follow = self.set_pending_power_port("GNDREF", "power:GNDREF");
@@ -50,7 +60,8 @@ impl Signex {
                 ));
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
-                        uuid: uuid::Uuid::new_v4(),
+                        unknown_columns: Default::default(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: "PORT".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -59,6 +70,8 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
+                        locked: false,
                     });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
@@ -69,7 +82,8 @@ impl Signex {
                 ));
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
-                        uuid: uuid::Uuid::new_v4(),
+                        unknown_columns: Default::default(),
+                        uuid: uuid::Uuid::now_v7(),
                         text: "SHEET".to_string(),
                         position: signex_types::schematic::Point::new(0.0, 0.0),
                         rotation: 0.0,
@@ -78,96 +92,37 @@ impl Signex {
                         font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                         justify: signex_types::schematic::HAlign::Left,
                         justify_v: signex_types::schematic::VAlign::Bottom,
+                        font_family: None,
+                        locked: false,
                     });
             }
             ActiveBarAction::PlaceBusEntry => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
                 self.interaction_state.pending_power = None;
             }
-            // No-ERC directive reuses the existing No-Connect tool (Altium's
-            // "Place No ERC" also drops an X marker at the clicked pin).
+            ActiveBarAction::PlaceJunction => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Junction)));
+            }
             ActiveBarAction::PlaceNoERC => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoErcDirective)));
             }
-            // Sheet-symbol / rounded rect / graphic — all rectangle-dragged
-            // shapes in Altium. Until each has a bespoke tool, use the
-            // rectangle tool so the drag-to-size gesture produces a visible
-            // shape. (Text Frame is handled in action_groups so the ghost
-            // text preview kicks in.)
-            ActiveBarAction::PlaceSheetSymbol
-            | ActiveBarAction::PlaceSheetEntry
-            | ActiveBarAction::PlaceDeviceSheetSymbol
-            | ActiveBarAction::PlaceReuseBlock
-            | ActiveBarAction::DrawRoundRectangle
-            | ActiveBarAction::PlaceGraphic => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+            // Sheet symbol has its own tool: a hierarchical sheet, not a
+            // plain rectangle.
+            ActiveBarAction::PlaceSheetSymbol => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Sheet)));
             }
-            // Arc — dedicated 3-click tool. Elliptical / ellipse still
-            // fall back to Circle until v1.2 curves land.
+            // Sheet entry has its own tool: one click on a sheet symbol's
+            // border places an entry.
+            ActiveBarAction::PlaceSheetEntry => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::SheetEntry)));
+            }
+            // Arc — dedicated 3-click tool.
             ActiveBarAction::DrawArc => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));
             }
-            ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
-            }
-            // Polygon — click-by-click freeform. Bezier still falls back
-            // to Line until v1.2 curves.
+            // Polygon — click-by-click freeform.
             ActiveBarAction::DrawPolygon => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
-            }
-            ActiveBarAction::DrawBezier => {
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
-            }
-            // Harness + signal integrity directives — not yet implemented.
-            // Log so the user sees the click registered and knows it's pending.
-            ActiveBarAction::PlaceSignalHarness
-            | ActiveBarAction::PlaceHarnessConnector
-            | ActiveBarAction::PlaceHarnessEntry => {
-                crate::diagnostics::log_info(
-                    "Harness tools are planned for v1.1 (Advanced Schematic)",
-                );
-            }
-            ActiveBarAction::PlaceParameterSet => {
-                // Parameter Set — attaches named params to a net. Arm a
-                // label-tool ghost with a "PARAM=VALUE" default so the
-                // user drops + edits inline. Bulk edits go through the
-                // Parameter Manager (Design menu).
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
-                self.interaction_state.pending_port = None;
-                self.interaction_state.active_canvas_mut().ghost_label =
-                    Some(signex_types::schematic::Label {
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "PARAM=VALUE".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        label_type: signex_types::schematic::LabelType::Net,
-                        shape: String::new(),
-                        font_size: 1.8,
-                        justify: signex_types::schematic::HAlign::Left,
-                        justify_v: signex_types::schematic::VAlign::Bottom,
-                    });
-            }
-            ActiveBarAction::PlaceDiffPair => {
-                // DiffPair directive — attaches a differential-pair rule.
-                // Ships as a text note until the PCB router's constraint
-                // model lands in v2.1.
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
-                self.interaction_state.active_canvas_mut().ghost_text =
-                    Some(signex_types::schematic::TextNote {
-                        uuid: uuid::Uuid::new_v4(),
-                        text: "DIFF_PAIR".to_string(),
-                        position: signex_types::schematic::Point::new(0.0, 0.0),
-                        rotation: 0.0,
-                        font_size: 1.8,
-                        justify_h: signex_types::schematic::HAlign::Left,
-                        justify_v: signex_types::schematic::VAlign::default(),
-                    });
-            }
-            ActiveBarAction::PlaceBlanket | ActiveBarAction::PlaceCompileMask => {
-                // Blanket / Compile Mask — rectangular rule areas.
-                // Placement is Tool::Rectangle for v0.7; rule/mask
-                // semantics are a v1.1 (Advanced Schematic) item.
-                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
@@ -191,6 +146,7 @@ impl Signex {
                     ActiveBarAction::NetColorDarkGreen => (0x16, 0xA3, 0x4A),
                     _ => (0xFF, 0xFF, 0xFF),
                 };
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(signex_types::theme::Color {
                     r: c.0,
                     g: c.1,
@@ -224,6 +180,7 @@ impl Signex {
                 // A distinct armed state: use a sentinel color (alpha 0)
                 // to mean "clear mode". Simpler than a second enum — we
                 // still read pending_net_color at click time.
+                self.cancel_placement_session();
                 self.ui_state.pending_net_color = Some(signex_types::theme::Color {
                     r: 0,
                     g: 0,
@@ -235,22 +192,23 @@ impl Signex {
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
-                if !self.ui_state.wire_color_overrides.is_empty() {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
-                }
-                self.ui_state.wire_color_overrides.clear();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .wire_color_overrides
-                    .clear();
+                // #631 — clearing `ui_state` is the whole operation now;
+                // the canvas reads that map through `CanvasViewPrefs`
+                // instead of keeping a cleared-in-parallel copy. #1005 —
+                // each sheet keeps its own undo step for what this removes.
+                let kept = self.clear_all_net_colors_undoably();
                 self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
-                crate::diagnostics::log_info("Cleared all net-color overrides");
+                if kept == 0 {
+                    crate::diagnostics::log_info("Cleared all net-color overrides");
+                } else {
+                    crate::diagnostics::log_info(format!(
+                        "Cleared net-color overrides, except on {kept} read-only sheet(s)"
+                    ));
+                }
             }
             _ => {}
         }
@@ -270,7 +228,9 @@ impl Signex {
         // before committing to a click.
         self.interaction_state.active_canvas_mut().ghost_symbol =
             Some(signex_types::schematic::Symbol {
-                uuid: uuid::Uuid::new_v4(),
+                unknown_columns: Default::default(),
+                unknown: Default::default(),
+                uuid: uuid::Uuid::now_v7(),
                 lib_id: lib_id.to_string(),
                 reference: String::new(),
                 value: net_name.to_string(),
@@ -281,6 +241,7 @@ impl Signex {
                 mirror_x: false,
                 mirror_y: false,
                 unit: 1,
+                body_style: Default::default(),
                 is_power: true,
                 ref_text: None,
                 val_text: None,

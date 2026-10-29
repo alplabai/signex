@@ -24,6 +24,9 @@ use crate::library::editor::symbol::state::{
 };
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+
 /// Convenience: route a `SymbolEditorMsg` to the editor at `path`.
 fn sym(path: PathBuf, msg: SymbolEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent {
@@ -102,7 +105,8 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
     );
 
     let layout = column![
-        container(row![all_btn].spacing(4).align_y(iced::Alignment::Center)).padding([4, 8]),
+        container(row![all_btn].spacing(SP.s).align_y(iced::Alignment::Center))
+            .padding([SP.s, SP.m]),
         container(
             row![
                 make_chip("Pins", K::Pins),
@@ -110,20 +114,20 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
                 make_chip("Texts", K::Texts),
                 make_chip("Designators", K::Designators),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
         container(
             row![
                 make_chip("Values", K::Values),
                 make_chip("Parameters", K::Parameters),
                 make_chip("Other", K::Other),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     ]
     .spacing(0)
     .width(Length::Shrink);
@@ -132,7 +136,6 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
 }
 
 fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
-    let _ = path;
     // SchLib snap surface is simpler than footprint — pin tips, line
     // endpoints, arc centres, text origins. All stubs until the
     // SchLib snap subsystem ships.
@@ -141,28 +144,28 @@ fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
         DropdownEntry::Item(DropdownItem::new(
             "Pin Tips",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path: path.clone(),
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Pin Tips")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Line Endpoints",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path: path.clone(),
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Line Endpoints")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Arc Centres",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path: path.clone(),
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Arc Centres")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Text Origins",
             LibraryMessage::PrimitiveEditorEvent {
-                path: PathBuf::new(),
+                path,
                 msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Text Origins")),
             },
         )),
@@ -170,8 +173,26 @@ fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
 }
 
 fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
+    // #426 — a symbol has no separate move tool: dragging a pin or a
+    // graphic under the Select tool IS the move, exactly like the
+    // footprint editor (see `footprint::active_bar_dropdowns::
+    // place_entries`'s "no ratlines" comment) — a symbol has no
+    // ratsnest connectivity to preserve either, so Move arms Select
+    // directly rather than routing through `ActiveBarStub`. `Drag`
+    // stays a stub for now (Altium's Move/Drag split on whether
+    // connected wires stretch with the move — the schematic wiring
+    // side of that distinction isn't decided yet for SchLib).
     vec![
-        DropdownEntry::Item(stub_with_icon("Move", path.clone(), ic::icon_dd_move(tid))),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Move",
+                sym(
+                    path.clone(),
+                    SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
+                ),
+            )
+            .icon(ic::icon_dd_move(tid)),
+        ),
         DropdownEntry::Item(stub_with_icon("Drag", path.clone(), ic::icon_dd_drag(tid))),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub_with_icon(
@@ -286,11 +307,15 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
             ic::icon_dd_dist_vert(tid),
         )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Align To Grid",
-            path,
-            ic::icon_dd_align_grid(tid),
-        )),
+        // #426 — real implementation: snaps every pin/graphic named by
+        // the current selection onto the symbol canvas's snap grid.
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Align To Grid",
+                sym(path, SymbolEditorMsg::AlignSelectedToGrid),
+            )
+            .icon(ic::icon_dd_align_grid(tid)),
+        ),
     ]
 }
 
@@ -385,4 +410,99 @@ fn shapes_entries(
         DropdownEntry::Item(stub("Pie Chart", path.clone())),
         DropdownEntry::Item(stub("Elliptical Arc", path)),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::theme::ThemeId;
+
+    /// Look up a dropdown row by its exact label — robust against the
+    /// row's position shifting as sibling stub rows are wired up.
+    fn item_msg<'a>(
+        entries: &'a [DropdownEntry<LibraryMessage>],
+        label: &str,
+    ) -> &'a SymbolEditorMsg {
+        let item = entries
+            .iter()
+            .find_map(|e| match e {
+                DropdownEntry::Item(item) if item.label == label => Some(item),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no dropdown row labelled {label:?}"));
+        match item
+            .on_press
+            .as_ref()
+            .unwrap_or_else(|| panic!("row {label:?} has no left-click action"))
+        {
+            LibraryMessage::PrimitiveEditorEvent {
+                msg: PrimitiveEdit::Symbol(sym_msg),
+                ..
+            } => sym_msg,
+            _ => panic!("expected a Symbol primitive-editor event on row {label:?}"),
+        }
+    }
+
+    /// #426 — the Place dropdown's "Move" row used to be a dead
+    /// `ActiveBarStub("Move")`. It now arms the Select tool, same
+    /// decision recorded on `place_entries`'s doc comment.
+    #[test]
+    fn place_move_row_arms_select_tool() {
+        let entries = place_entries(PathBuf::from("t.snxsym"), ThemeId::Signex);
+        assert!(matches!(
+            item_msg(&entries, "Move"),
+            SymbolEditorMsg::SetTool(SymbolToolMsg::Select)
+        ));
+    }
+
+    /// #426 — the Align dropdown's "Align To Grid" row used to be a
+    /// dead `ActiveBarStub`. It now dispatches the real
+    /// `AlignSelectedToGrid` snap.
+    #[test]
+    fn align_to_grid_row_snaps_selection() {
+        let entries = align_entries(PathBuf::from("t.snxsym"), ThemeId::Signex);
+        assert!(matches!(
+            item_msg(&entries, "Align To Grid"),
+            SymbolEditorMsg::AlignSelectedToGrid
+        ));
+    }
+
+    /// #596 — Snap rows used to hardcode an empty path, so the
+    /// dispatcher never found the tab and the stubs stayed inert.
+    /// Contract: header + four stub rows, fixed order/labels/payloads,
+    /// each row routes the real tab path.
+    #[test]
+    fn snap_entries_route_tab_path_and_preserve_stub_contract() {
+        let tab = PathBuf::from("t.snxsym");
+        let entries = snap_entries(tab.clone());
+        assert_eq!(entries.len(), 5, "header + four snap rows");
+
+        match &entries[0] {
+            DropdownEntry::Header(h) => assert_eq!(h, "Snap targets"),
+            _ => panic!("expected Header at index 0"),
+        }
+
+        let expected = [
+            ("Pin Tips", "Snap → Pin Tips"),
+            ("Line Endpoints", "Snap → Line Endpoints"),
+            ("Arc Centres", "Snap → Arc Centres"),
+            ("Text Origins", "Snap → Text Origins"),
+        ];
+        for (i, (label, stub)) in expected.iter().enumerate() {
+            let DropdownEntry::Item(item) = &entries[i + 1] else {
+                panic!("expected Item at index {}", i + 1);
+            };
+            assert_eq!(item.label, *label);
+            match item.on_press.as_ref() {
+                Some(LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub(payload)),
+                }) => {
+                    assert_eq!(path, &tab, "row {label:?} must route the tab path");
+                    assert_eq!(payload, stub);
+                }
+                other => panic!("row {label:?}: expected routed ActiveBarStub, got {other:?}"),
+            }
+        }
+    }
 }

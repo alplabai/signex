@@ -4,17 +4,16 @@
 //! `<config_dir>/signex/distributors.toml`.
 //!
 //! Why a dedicated file vs. piggy-backing on `prefs.json`:
-//! - `prefs.json` is JSON; the rest of the v0.9 library config is TOML
+//! - `prefs.json` is JSON; the rest of the library config is TOML
 //!   (matching `Manifest`).
-//! - The file gets cross-tool-readable lifecycle defaults in v0.9.1
-//!   (AVL, template defaults, etc.); keeping it TOML now lets the
-//!   schema grow without a migration.
+//! - Keeping this file TOML lets the schema grow (AVL, template defaults,
+//!   etc.) without a migration.
 //!
-//! Errors are intentionally swallowed at the boundary because:
-//! - On startup, a missing/corrupt config must not block the app —
-//!   we fall back to [`DistributorSettings::default()`].
-//! - On save, an I/O failure is non-critical — the next save will
-//!   just overwrite. A `tracing::warn!` surfaces the why.
+//! Error handling:
+//! - On load, a missing/corrupt config must not block the app — we
+//!   fall back to [`DistributorSettings::default()`](crate::library::state::DistributorSettings).
+//! - On save, failures are returned as `Err(String)` (and logged with
+//!   `tracing::warn!`) so the dispatcher can show them inline.
 
 use std::path::PathBuf;
 
@@ -26,7 +25,7 @@ use signex_library::DistributorSource;
 const FILE_NAME: &str = "distributors.toml";
 
 /// On-disk shape. `serde(default)` lets older / partial files load
-/// cleanly when v0.9.1 lands new sub-tables.
+/// cleanly when new sub-tables are added.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct DistributorsConfig {
     #[serde(default)]
@@ -99,19 +98,18 @@ fn str_to_source(s: &str) -> Option<DistributorSource> {
 /// when the platform refuses to hand us a config dir (rare; e.g. some
 /// sandboxed CI runners). Tests override via [`config_path_for_dir`].
 pub fn config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|p| p.join("signex").join(FILE_NAME))
+    crate::config_root::config_root().map(|root| root.join(FILE_NAME))
 }
 
 /// Test-friendly variant — same layout, but rooted under the supplied
 /// directory. Lets unit tests round-trip without touching the real
 /// per-user config dir.
-#[allow(dead_code)]
 pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
-    base.join("signex").join(FILE_NAME)
+    crate::config_root::config_root_for_dir(base).join(FILE_NAME)
 }
 
-/// Load the persisted preferred-order list. Returns the v0.9-library-plan.md
-/// default when the file is missing/empty/corrupt — startup is
+/// Load the persisted preferred-order list. Returns the default order
+/// when the file is missing/empty/corrupt — startup is
 /// best-effort.
 pub fn load_preferred_order() -> Vec<DistributorSource> {
     config_path()

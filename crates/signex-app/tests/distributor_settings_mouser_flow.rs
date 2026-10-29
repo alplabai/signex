@@ -1,8 +1,9 @@
+// Standalone binary: counts entries in the process-wide, 200-entry diagnostics ring before/after; other tests' logging would evict them.
 //! Wiremock-backed validation for the Mouser test flow.
 //!
 //! The signex-app handler runs `MouserAdapter::lookup_by_mpn(SENTINEL)`
 //! against the Mouser API; on success it writes the API key to the OS
-//! keyring. This test mirrors `signex-library/tests/distributor_mouser.rs`
+//! keyring. This test mirrors `signex-library/tests/integration/distributor_mouser.rs`
 //! by hitting the same code path against a wiremock instance — proves
 //! the app's choice of sentinel MPN + adapter wiring matches the
 //! library-level integration shape.
@@ -12,6 +13,11 @@
 //! Service); the writeback path lives behind one extra `if Ok` arm in
 //! the dispatcher and is covered by the underlying
 //! `KeyringStore::set_secret` tests in `signex-library`.
+
+// This integration-test binary discards fallible test-setup calls with
+// `let _ = ...` routinely (not a production `Task` getting dropped — see
+// GH #99 part 1). `[lints]` in Cargo.toml is package-scoped, not
+// target-scoped, so each integration-test crate root needs its own allow.
 
 use std::future::Future;
 
@@ -143,5 +149,64 @@ fn mouser_test_flow_handles_empty_search_results() {
             let parts = adapter.lookup_by_mpn(SENTINEL_MPN).unwrap();
             assert!(parts.is_empty());
         },
+    );
+}
+
+use signex_app::app::{Message, Signex};
+use signex_app::library::messages::{LibraryMessage, SettingsMsg};
+
+/// How many Messages-panel entries contain `needle`. The diagnostics ring
+/// is shared by the whole test binary, so callers pass a unique string.
+fn logged(needle: &str) -> usize {
+    drop(signex_app::diagnostics::init_logging());
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(needle))
+        .count()
+}
+
+fn settings(app: &mut Signex, msg: SettingsMsg) {
+    drop(app.update(Message::Library(LibraryMessage::Settings(msg))));
+}
+
+/// #1093: a failed key test reaches the Messages panel, not only the
+/// settings status line.
+#[test]
+fn a_failed_mouser_key_test_reaches_the_messages_panel() {
+    let reason = "mouser-1093-unique-reason";
+    let before = logged(reason);
+    let (mut app, _t) = Signex::new();
+    app.library.settings.mouser_in_flight = true;
+
+    settings(&mut app, SettingsMsg::MouserTestResult(Err(reason.into())));
+
+    assert_eq!(logged(reason) - before, 1);
+    assert_eq!(
+        app.library.settings.mouser_status.as_deref(),
+        Some(format!("Failed: {reason}").as_str())
+    );
+}
+
+/// #1093: the same for a failed DigiKey connect.
+#[test]
+fn a_failed_digikey_connect_reaches_the_messages_panel() {
+    let reason = "digikey-1093-unique-reason";
+    let before = logged(reason);
+    let (mut app, _t) = Signex::new();
+    let generation = app.library.settings.digikey_flow_generation;
+
+    settings(
+        &mut app,
+        SettingsMsg::DigiKeyOAuthResult {
+            generation,
+            connected_label: None,
+            error: Some(reason.into()),
+        },
+    );
+
+    assert_eq!(logged(reason) - before, 1);
+    assert_eq!(
+        app.library.settings.digikey_status.as_deref(),
+        Some(format!("Failed: {reason}").as_str())
     );
 }

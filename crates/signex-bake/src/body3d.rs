@@ -26,21 +26,17 @@
 //! - Multiple BodyTop planes / multiple closed profiles per plane:
 //!   first wins; subsequent emit warnings.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use signex_library::primitive::footprint::{Body3D, Polygon};
 use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
-use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
+use crate::eval_util::{build_ctx, eval_mm};
 use crate::profile::{TraceError, trace_closed_profile};
 
 pub fn bake_body3d(
@@ -81,7 +77,7 @@ pub fn bake_body3d(
             body_3d.outline = Some(Polygon::new(vertices));
             // Evaluate offset_z_expr to mm; on failure, leave whatever
             // the caller had set and warn.
-            let ctx = build_ctx(params_canonical);
+            let ctx = build_ctx(sketch, params_canonical);
             match eval_mm(&offset_z_expr, &ctx) {
                 Ok(z_mm) => {
                     // MD-9: guard against NaN / Inf / overflow before
@@ -130,25 +126,6 @@ fn find_seed_on_plane(sketch: &SketchData, plane_id: PlaneId) -> Option<SketchEn
                 && matches!(e.kind, EntityKind::Line { .. } | EntityKind::Arc { .. })
         })
         .map(|e| e.id)
-}
-
-fn build_ctx(params_canonical: &HashMap<String, f64>) -> EvalContext {
-    let mut params: BTreeMap<String, ExprNode> = BTreeMap::new();
-    for (name, value) in params_canonical {
-        params.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
-    }
-    EvalContext {
-        params,
-        array_index: None,
-    }
-}
-
-fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
-    let s = expr.trim();
-    let body = s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s);
-    let ast = parse(body).map_err(|e| format!("parse: {e:?}"))?;
-    let q = eval(&ast, ctx).map_err(|e| format!("eval: {e:?}"))?;
-    q.as_mm().map_err(|e| format!("unit: {e:?}"))
 }
 
 #[cfg(test)]
@@ -254,8 +231,10 @@ mod tests {
         // bakes, offset_z stays at the prior value.
         let data = sketch_with_body_top_rectangle("(((bad");
         let solved = solve(&data);
-        let mut body = Body3D::default();
-        body.offset_z_mm = 7.5; // sentinel
+        let mut body = Body3D {
+            offset_z_mm: 7.5, // sentinel
+            ..Body3D::default()
+        };
         let mut warnings = Vec::new();
         bake_body3d(&data, &solved, &HashMap::new(), &mut body, &mut warnings).unwrap();
         assert!(body.outline.is_some(), "outline should still bake");

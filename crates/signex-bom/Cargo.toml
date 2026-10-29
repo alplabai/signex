@@ -11,3 +11,7 @@ description = "BOM engine for Signex EDA"
 [dependencies]
 serde = { workspace = true }
 signex-types = { path = "../signex-types" }
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

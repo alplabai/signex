@@ -6,7 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
-use crate::library::editor::footprint::snap::{self, SnapKind, SnapResult};
+use crate::library::editor::footprint::snap::SnapKind;
 use crate::library::editor::footprint::state::FootprintEditorState;
 
 /// v0.22 Phase A6 — Inferred-constraint snap glyph at the cursor.

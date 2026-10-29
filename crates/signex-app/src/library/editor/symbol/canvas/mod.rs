@@ -42,14 +42,17 @@ use std::collections::HashMap;
 use super::state::{self, SymbolSelection};
 
 mod draw;
+mod fields;
 mod geometry;
 mod input;
 mod pins;
+mod press;
 mod types;
 
 pub use types::{CanvasAction, CanvasState, RotatePivotMode, SymbolTool};
 
 use pins::{PIN_TEXT_LAYOUT, PinRenderGeometry, SymbolPalette};
+use press::PressTarget;
 
 // Re-export the free math / coordinate helpers so the `input` and
 // `draw` submodules keep resolving them via their `use super::super::*`
@@ -69,7 +72,7 @@ pub struct SymbolCanvas<'a> {
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
     /// Click-collect vertex stash for the `PlacePolygon` tool —
-    /// owned by [`crate::app::SymbolEditorState::polygon_vertices`],
+    /// owned by [`crate::app::SymbolDocument::polygon_vertices`],
     /// not this Program's ephemeral `CanvasState`, so it can't survive
     /// a tab switch and mis-commit into a different document (see the
     /// commit that introduced this field for the cross-tab-corruption
@@ -77,20 +80,19 @@ pub struct SymbolCanvas<'a> {
     /// `CanvasAction::PolygonClick` / `PolygonCommit` / `PolygonCancel`
     /// and the dispatcher mutates the editor's copy.
     pub polygon_vertices: &'a [(f64, f64)],
-    /// Active sub-part the canvas is filtering pins for. Pins with
-    /// `part_number == 0` (Part Zero) render on every part; pins
-    /// with `part_number == active_part` render on the active part
-    /// only. Defaults to `1` (single-part components).
-    pub active_part: u8,
+    /// Active sub-part and body the canvas is filtering for. Items with
+    /// `part_number == 0` (Part Zero) render on every part and body-0 items
+    /// on both bodies; others render only on the exact part and body.
+    pub view: state::PartView,
     /// Whether the right-click context menu is currently open (see
-    /// `SymbolEditorState::context_menu`). The context menu and a pan
+    /// `SymbolDocument::context_menu`). The context menu and a pan
     /// can't coexist — once an in-flight right-drag crosses the pan
     /// motion threshold while this is `true`, the pointer handler
     /// closes the menu instead of publishing that frame's pan (mirrors
     /// the footprint canvas's `pan_on_cursor_moved`).
     pub context_menu_open: bool,
     /// Pan/zoom state owned by the editor tab — see
-    /// [`crate::app::SymbolEditorState::camera`].
+    /// [`crate::app::SymbolDocument::camera`].
     pub camera: &'a crate::canvas::Camera,
     /// Visible grid spacing in mm — sourced from
     /// `panel_ctx.grid_size_mm` so the schematic + library editors
@@ -100,11 +102,23 @@ pub struct SymbolCanvas<'a> {
     /// `panel_ctx.grid_visible` (View ▸ Toggle Grid / status-bar
     /// click).
     pub grid_visible: bool,
+    /// Glyph the visible grid draws. Sourced from
+    /// `panel_ctx.symbol_grid_style`, which carries the Preferences
+    /// live-preview draft while that dialog is open — #630 replaced the
+    /// process global this `draw` path used to read directly.
+    pub grid_style: crate::render_config::GridStyle,
     /// When on, pins can be grabbed by their name/number label and a
     /// selected pin's labels glow with it. Sourced from
     /// `LibraryDisplaySettings.pin_selection` via
     /// `PinSelectionMode::allows_label_grab` (Document Options picker).
     pub pin_label_grab: bool,
+    /// Per-kind selectable flags (the Active Bar filter pills); gates
+    /// every Select-tool hit-test and the rubber-band selection.
+    pub selection_filter: state::SymbolSelectionFilter,
+    /// The editor is waiting for a real viewport size to apply a
+    /// queued Fit / centre-origin camera request: the canvas reports
+    /// its measured bounds once via [`CanvasAction::ViewportMeasured`].
+    pub view_pending: bool,
     pub bg_color: Color,
     pub grid_color: Color,
     pub body_color: Color,
@@ -119,19 +133,23 @@ pub struct SymbolCanvas<'a> {
 
 impl<'a> SymbolCanvas<'a> {
     /// Construct the per-frame canvas with the inputs from
-    /// `SymbolEditorState` + the active theme + global grid/unit
+    /// `SymbolDocument` + the active theme + global grid/unit
     /// settings. See module-level docs for the parity rationale.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "16 arguments: the per-frame canvas takes the symbol, theme and global grid/unit settings; see the module docs for the parity rationale"
+    )]
     pub fn new(
         symbol: &'a Symbol,
         selected: Option<SymbolSelection>,
         tool: SymbolTool,
         polygon_vertices: &'a [(f64, f64)],
-        active_part: u8,
+        view: state::PartView,
         context_menu_open: bool,
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
         grid_visible: bool,
+        grid_style: crate::render_config::GridStyle,
         pin_label_grab: bool,
         sheet_color: Color,
         accent_color: Color,
@@ -151,12 +169,15 @@ impl<'a> SymbolCanvas<'a> {
             selected,
             tool,
             polygon_vertices,
-            active_part,
+            view,
             context_menu_open,
             camera,
             grid_size_mm,
             grid_visible,
+            grid_style,
             pin_label_grab,
+            selection_filter: state::SymbolSelectionFilter::default(),
+            view_pending: false,
             bg_color: sheet_color,
             grid_color: palette.grid,
             body_color: palette.body,
@@ -167,11 +188,31 @@ impl<'a> SymbolCanvas<'a> {
         }
     }
 
+    /// Apply the editor's selection filter pills to this canvas.
+    pub fn with_selection_filter(mut self, filter: state::SymbolSelectionFilter) -> Self {
+        self.selection_filter = filter;
+        self
+    }
+
+    /// Mark a queued Fit / centre-origin request so the canvas reports
+    /// its real bounds on the next event.
+    pub fn with_view_pending(mut self, pending: bool) -> Self {
+        self.view_pending = pending;
+        self
+    }
+
+    /// Screen-space pick radius (8 px) converted to world mm, so grab
+    /// zones feel the same at every zoom. Shared by the pin, handle and
+    /// hover hit-tests.
+    fn pick_tolerance_mm(&self) -> f64 {
+        (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64
+    }
+
     /// True when `pin` should render on the currently-active part.
     /// Part Zero (`part_number == 0`) appears on every part; other
     /// pins only render when they match `active_part`.
     fn pin_visible_on_active_part(&self, pin: &SymbolPin) -> bool {
-        pin.part_number == 0 || pin.part_number == self.active_part
+        state::pin_on_part(pin, self.view)
     }
 
     /// Pin index whose NAME or NUMBER label bounding box contains (x, y),
@@ -179,7 +220,7 @@ impl<'a> SymbolCanvas<'a> {
     /// pin by its text, not just its tip. Iterates in reverse so the
     /// last-drawn pin wins on overlap.
     fn pin_hit_by_label(&self, x: f64, y: f64) -> Option<usize> {
-        if !self.pin_label_grab {
+        if !self.pin_label_grab || !self.selection_filter.pins {
             return None;
         }
         for (i, pin) in self.symbol.pins.iter().enumerate().rev() {
@@ -292,9 +333,19 @@ impl<'a> SymbolCanvas<'a> {
 /// mm visible grid still snaps to 1.27 mm — Altium's "smaller grid
 /// for visual precision, larger for commit". Future toolbar work
 /// could expose a separate snap-grid picker.
-const SNAP_GRID_MM: f64 = 1.27;
+///
+/// `pub(crate)` (not module-private) so the active-bar's "Align To
+/// Grid" dispatch (`updates::transform`) snaps selections onto the
+/// exact same grid the canvas already places/drags things onto (#426).
+pub(crate) const SNAP_GRID_MM: f64 = 1.27;
 const ORIGIN_MARKER_MM: f32 = 1.27;
-const MM_PER_EM: f32 = 0.72;
+/// This surface's readability limits. Wider than the schematic's `[6.0, 64.0]`
+/// on purpose — a symbol is edited close up, so pin text may render smaller
+/// and grow larger here. The mm→em ratio is *not* a per-surface choice and
+/// lives once in `signex_gfx::primitive::text::MM_PER_EM`; a local copy of it
+/// is what let this canvas and its own hit-test disagree.
+const SYMBOL_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
+    signex_gfx::primitive::text::TextSizePolicy::new(2.0, 96.0);
 const SYMBOL_AXIS_STROKE_PX_AT_100: f32 = 1.0;
 const SYMBOL_GRAPHIC_STROKE_PX_AT_100: f32 = 1.5;
 const SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
@@ -347,7 +398,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
         // pre-split god-function; behaviour is byte-identical.
-        match event {
+        let routed = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.on_left_press(state, bounds, cursor)
             }
@@ -371,7 +422,29 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 self.on_key_pressed(state, key, modifiers)
             }
             _ => None,
+        };
+        // A queued Fit / centre-origin request needs the real canvas
+        // size, which only the widget knows. Report it, and carry the
+        // event's own action along so the dispatcher applies the view
+        // AND still processes the event (a mid-drag release must not
+        // be swallowed by the measurement).
+        if self.view_pending && bounds.width > 0.0 && bounds.height > 0.0 {
+            let (then, status) = routed.map_or((None, iced::event::Status::Ignored), |action| {
+                let (message, _, status) = action.into_inner();
+                (message, status)
+            });
+            let measured = canvas::Action::publish(CanvasAction::ViewportMeasured {
+                width: bounds.width,
+                height: bounds.height,
+                then: then.map(Box::new),
+            });
+            return Some(if status == iced::event::Status::Captured {
+                measured.and_capture()
+            } else {
+                measured
+            });
         }
+        routed
     }
 
     fn mouse_interaction(
@@ -394,20 +467,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // Hover detection: change the cursor when the pointer is close
         // to any graphic handle. Tolerance is expressed in screen pixels
         // so it feels the same at all zoom levels.
-        if self.tool == SymbolTool::Select {
-            if let Some(pos) = cursor.position_in(bounds) {
-                let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
-                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((_, handle)) = state::hit_test_graphic_handle(
-                    self.symbol,
-                    wx,
-                    wy,
-                    tol_mm,
-                    self.active_part,
-                    &self.selected,
-                ) {
-                    return state::handle_interaction(handle);
-                }
+        if self.tool == SymbolTool::Select
+            && let Some(pos) = cursor.position_in(bounds)
+        {
+            let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
+            if let Some(PressTarget::Handle(_, handle)) = self.press_target(wx, wy) {
+                return state::handle_interaction(handle);
             }
         }
         if cursor.is_over(bounds) {
@@ -437,6 +502,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_symbol_with_renderer(&mut frame, &self.selected, self.camera.scale);
         self.draw_resize_handles(&mut frame);
         self.draw_box_select_overlay(&mut frame, state);
+        self.draw_pin_preview(&mut frame, state);
         self.draw_rect_preview(&mut frame, state);
         self.draw_line_preview(&mut frame, state);
         self.draw_circle_preview(&mut frame, state);
@@ -455,15 +521,6 @@ impl<'a> SymbolCanvas<'a> {
         scale: f32,
     ) {
         let snapshot = self.build_symbol_renderer_snapshot(selected, scale);
-        if snapshot.wires.is_empty()
-            && snapshot.junctions.is_empty()
-            && snapshot.arcs.is_empty()
-            && snapshot.polygons.is_empty()
-            && snapshot.labels.is_empty()
-            && snapshot.pin_texts.is_empty()
-        {
-            return;
-        }
 
         let mut scene = Scene::default();
         SchematicRenderer::build_scene(
@@ -488,9 +545,8 @@ impl<'a> SymbolCanvas<'a> {
             crate::renderer_scene_canvas::SceneDrawOptions {
                 scale_px_per_mm: scale,
                 min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-                text_mm_per_em: MM_PER_EM,
-                text_min_px: 2.0,
-                text_max_px: 96.0,
+                text_min_px: SYMBOL_TEXT_SIZE.min_px,
+                text_max_px: SYMBOL_TEXT_SIZE.max_px,
             },
         );
     }
@@ -509,7 +565,7 @@ impl<'a> SymbolCanvas<'a> {
 
         let mut body_drawn = false;
         for (i, g) in self.symbol.graphics.iter().enumerate() {
-            if !state::graphic_on_part(g, self.active_part) {
+            if !state::graphic_on_part(g, self.view) {
                 continue;
             }
             let is_selected = is_graphic_selected(selected, i);
@@ -615,6 +671,7 @@ impl<'a> SymbolCanvas<'a> {
                         rotation_rad: 0.0,
                         h_align: HAlign::Left,
                         v_align: VAlign::Top,
+                        family: None,
                     });
                 }
                 SymbolGraphicKind::Polygon { vertices } => {
@@ -711,6 +768,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
                 v_align: VAlign::Bottom,
+                family: None,
             });
 
             pin_texts.push(signex_renderer::schematic::TextInput {
@@ -730,6 +788,7 @@ impl<'a> SymbolCanvas<'a> {
                 rotation_rad: geom.text_rotation,
                 h_align: geom.name_h_align,
                 v_align: VAlign::Center,
+                family: None,
             });
         }
 
@@ -740,11 +799,19 @@ impl<'a> SymbolCanvas<'a> {
             polygons,
             labels,
             pin_texts,
-            reference_value_texts: Vec::new(),
+            reference_value_texts: self.field_texts(selected),
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
+            drawings: Vec::new(),
+            drawings_front: Vec::new(),
             wire_color_overrides: HashMap::new(),
+            wire_line_styles: HashMap::new(),
         }
     }
 }
+
+#[cfg(test)]
+mod rotate_keys_tests;
+#[cfg(test)]
+mod tests;

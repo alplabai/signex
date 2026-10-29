@@ -16,8 +16,12 @@ use crate::styles;
 
 use super::{
     AbColors, ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
-    requires_net_color, requires_selection,
+    action_enabled,
 };
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 // ─── View: Dropdown menus ────────────────────────────────────
 
@@ -36,8 +40,8 @@ pub fn view_dropdown<'a>(
     // the schematic, footprint, and future PCB active bars share ONE
     // dropdown widget (see ADR-0003 — active_bar / menus data-driven
     // redesign). Enable/disable is folded into each `DropdownItem` here
-    // from the passed booleans, so the old render-time `HasSelectionGuard`
-    // thread-local is no longer needed for the dropdown.
+    // from the passed booleans — #633 removed the render-time
+    // thread-locals the bar buttons used to share.
     let entries = dropdown_entries(
         menu,
         tokens,
@@ -50,36 +54,31 @@ pub fn view_dropdown<'a>(
     signex_widgets::active_bar_dropdown::view(entries, tokens, dropdown_min_width(menu))
 }
 
-/// Whether `action`'s dropdown row is clickable given the current
-/// selection / net-colour context. Pure replacement for the render-time
-/// `HasSelectionGuard` thread-local: the enable state is computed at
-/// build time and baked into the `DropdownItem` rather than read from a
-/// global during draw.
-fn dd_action_enabled(action: &ActiveBarAction, has_selection: bool, has_net_colors: bool) -> bool {
-    if requires_selection(action) && !has_selection {
-        return false;
-    }
-    if requires_net_color(action) && !has_net_colors {
-        return false;
-    }
-    true
-}
-
 /// One icon + label dropdown row. Disabled rows drop their `on_press`
 /// (the widget greys the row and ignores clicks — Altium parity).
 fn dd_item(
     icon: svg::Handle,
-    label: &str,
+    label: &'static str,
     action: ActiveBarAction,
     has_selection: bool,
     has_net_colors: bool,
 ) -> DropdownEntry<ActiveBarMsg> {
-    let enabled = dd_action_enabled(&action, has_selection, has_net_colors);
-    DropdownEntry::Item(
-        DropdownItem::new(label, ActiveBarMsg::Action(action))
-            .icon(icon)
-            .disabled(!enabled),
-    )
+    let enabled = action_enabled(&action, has_selection, has_net_colors);
+    // #271 — the visible text comes from the command catalog when the
+    // action has an id, so the Active Bar stops being the only surface
+    // keeping its own copy of a command's wording. `label` is the
+    // fallback for actions still without an id (the parameterised
+    // families awaiting `CommandArgs`), and a test pins the catalog text
+    // to these literals so nothing the user sees moves.
+    let label = crate::app::command::active_bar::action_label(&action, label);
+    let planned = super::is_planned(&action);
+    let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action))
+        .icon(icon)
+        .disabled(!enabled);
+    if planned {
+        item = item.tooltip(super::PLANNED_TOOLTIP);
+    }
+    DropdownEntry::Item(item)
 }
 
 /// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
@@ -187,7 +186,7 @@ const SELECT_MODE: &[EntrySpec] = &[
 
 const SELECT: &[EntrySpec] = &[
     EntrySpec::item(ic::icon_dd_drag, "Drag", ActiveBarAction::Drag),
-    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::MoveSelection),
+    EntrySpec::item(ic::icon_dd_move, "Move", ActiveBarAction::Move),
     EntrySpec::item(
         ic::icon_dd_move_sel,
         "Move Selection",
@@ -210,7 +209,7 @@ const SELECT: &[EntrySpec] = &[
     ),
     EntrySpec::item(
         ic::icon_dd_rotate,
-        "Rotate Selection",
+        "Rotate Selection Counter-Clockwise",
         ActiveBarAction::RotateSelection,
     ),
     EntrySpec::item(
@@ -314,6 +313,11 @@ const WIRING: &[EntrySpec] = &[
         ic::icon_dd_net_label,
         "Net Label",
         ActiveBarAction::PlaceNetLabel,
+    ),
+    EntrySpec::item(
+        ic::icon_dd_junction,
+        "Junction",
+        ActiveBarAction::PlaceJunction,
     ),
 ];
 
@@ -538,6 +542,7 @@ fn net_color_entries(
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let ac = AbColors::from_tokens(tokens);
+    let swatch_border = ac.sep;
     let color_item =
         |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
             // The 14×14 swatch sits inside a 20×20 slot so the label column
@@ -551,7 +556,7 @@ fn net_color_entries(
                     border: Border {
                         width: 1.0,
                         radius: 2.0.into(),
-                        color: Color::from_rgb(0.3, 0.3, 0.35),
+                        color: swatch_border,
                     },
                     ..container::Style::default()
                 });
@@ -564,15 +569,15 @@ fn net_color_entries(
                 row![
                     swatch_slot,
                     text(label.to_string())
-                        .size(13)
+                        .size(TS.title)
                         .color(ac.text)
                         .wrapping(iced::widget::text::Wrapping::None),
                 ]
-                .spacing(8)
+                .spacing(SP.m)
                 .align_y(iced::Alignment::Center),
             )
             .width(iced::Length::Fill)
-            .padding([5, 12])
+            .padding([5.0, SP.l])
             .on_press(ActiveBarMsg::Action(action))
             .style(dd_btn_style_f(ac.text, ac.hover))
             .into()
@@ -661,18 +666,23 @@ fn filter_entry(
     let chip_border = styles::ti(tokens.accent);
     let chip_radius = 2.0_f32;
     let all_on = filters.len() == SelectionFilter::ALL.len();
+    // Chip fills and off-state text come from the theme, so the chips
+    // read on light themes as well as dark.
+    let chip_on_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Pressed);
+    let chip_off_bg = styles::tokens::overlay(tokens, styles::tokens::Overlay::Faint);
+    let chip_off_text = styles::tokens::muted_text(tokens);
     let tag = |filter: SelectionFilter, enabled: bool| -> Element<'static, ActiveBarMsg> {
         let label = filter.label();
-        let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-        let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+        let active_bg = chip_on_bg;
+        let inactive_bg = chip_off_bg;
         let text_on = text_primary;
-        let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-        button(
-            text(label.to_string())
-                .size(11)
-                .color(if enabled { text_on } else { text_off }),
-        )
-        .padding([4, 10])
+        let text_off = chip_off_text;
+        button(text(label.to_string()).size(TS.body).color(if enabled {
+            text_on
+        } else {
+            text_off
+        }))
+        .padding([SP.s, 10.0])
         .on_press(ActiveBarMsg::ToggleFilter(filter))
         .style(move |_: &Theme, status: button::Status| {
             let bg = match status {
@@ -694,15 +704,15 @@ fn filter_entry(
     };
     let all_label = if all_on { "All - On" } else { "All - Off" };
     // All-On/Off as a real toggle button (matches chip styling).
-    let all_active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let all_inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let all_text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-    let all_toggle = button(text(all_label.to_string()).size(11).color(if all_on {
+    let all_active_bg = chip_on_bg;
+    let all_inactive_bg = chip_off_bg;
+    let all_text_off = chip_off_text;
+    let all_toggle = button(text(all_label.to_string()).size(TS.body).color(if all_on {
         text_primary
     } else {
         all_text_off
     }))
-    .padding([4, 12])
+    .padding([SP.s, SP.l])
     .on_press(ActiveBarMsg::ToggleAllFilters)
     .style(move |_: &Theme, status: button::Status| {
         let bg = match status {
@@ -727,7 +737,7 @@ fn filter_entry(
     // Row 1 = All toggle followed by user-defined preset shortcuts
     // (clicking one replaces the active filter set).
     let mut top_row = iced::widget::Row::new()
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .push(all_toggle);
     for (idx, preset) in custom_presets_owned.iter().enumerate() {
@@ -736,13 +746,13 @@ fn filter_entry(
         } else {
             preset.name.clone()
         };
-        let preset_btn = button(text(label).size(11).color(text_primary))
-            .padding([4, 10])
+        let preset_btn = button(text(label).size(TS.body).color(text_primary))
+            .padding([SP.s, 10.0])
             .on_press(ActiveBarMsg::ApplyCustomFilter(idx))
             .style(move |_: &Theme, status: button::Status| {
                 let bg = match status {
                     button::Status::Hovered => Background::Color(hover_c),
-                    _ => Background::Color(Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)),
+                    _ => Background::Color(chip_off_bg),
                 };
                 button::Style {
                     background: Some(bg),
@@ -759,7 +769,7 @@ fn filter_entry(
     }
     // 3-row layout: row 1 = All toggle + presets. Rows 2 & 3 = 6+6 chips.
     let filter_content: Element<'static, ActiveBarMsg> = column![
-        container(top_row).padding([4, 8]),
+        container(top_row).padding([SP.s, SP.m]),
         container(
             column![
                 row![
@@ -788,7 +798,7 @@ fn filter_entry(
                         filters.contains(&SelectionFilter::NetLabels)
                     ),
                 ]
-                .spacing(4),
+                .spacing(SP.s),
                 row![
                     tag(
                         SelectionFilter::Parameters,
@@ -815,13 +825,13 @@ fn filter_entry(
                         filters.contains(&SelectionFilter::Other)
                     ),
                 ]
-                .spacing(4),
+                .spacing(SP.s),
             ]
-            .spacing(4),
+            .spacing(SP.s),
         )
-        .padding([4, 8]),
+        .padding([SP.s, SP.m]),
     ]
-    .spacing(2)
+    .spacing(SP.xs)
     .into();
     DropdownEntry::Custom(filter_content)
 }
@@ -875,36 +885,7 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
-    // Bar layout (`view_bar`), in the widget's own constants so the
-    // pixel geometry has one home. Advancing past one button costs
-    // BTN_SIZE + ROW_SPACING; past one separator, SEP_W + ROW_SPACING.
-    //
-    // The index map below is still hand-maintained, unlike the
-    // footprint bar's — converting it needs `view_bar` split into a
-    // `bar_items()` the offsets can be measured from, which is its own
-    // change. It is correct today: the bar's only Custom slot (the
-    // draw-mode pill) is appended after all thirteen triggers.
-    use signex_widgets::active_bar::{BAR_PADDING, BTN_SIZE, ROW_SPACING, SEP_W};
-    // Layout: [Filter][Move] | [Select][Align] | [Wire][Power] | [Harness][Sheet][Port][Dir] | [Text][Shapes][NetColor]
-    //  btn:     0      1    s    2      3     s   4      5    s    6      7     8    9    s  10     11     12
-    let btn = BTN_SIZE + ROW_SPACING;
-    let s = SEP_W + ROW_SPACING;
-    let pad = BAR_PADDING;
-    pad + match menu {
-        ActiveBarMenu::Filter => 0.0,
-        ActiveBarMenu::Select => btn,
-        ActiveBarMenu::SelectMode => 2.0 * btn + s,
-        ActiveBarMenu::Align => 3.0 * btn + s,
-        ActiveBarMenu::Wiring => 4.0 * btn + 2.0 * s,
-        ActiveBarMenu::Power => 5.0 * btn + 2.0 * s,
-        ActiveBarMenu::Harness => 6.0 * btn + 3.0 * s,
-        ActiveBarMenu::SheetSymbol => 7.0 * btn + 3.0 * s,
-        ActiveBarMenu::Port => 8.0 * btn + 3.0 * s,
-        ActiveBarMenu::Directives => 9.0 * btn + 3.0 * s,
-        ActiveBarMenu::TextTools => 10.0 * btn + 4.0 * s,
-        ActiveBarMenu::Shapes => 11.0 * btn + 4.0 * s,
-        ActiveBarMenu::NetColor => 12.0 * btn + 4.0 * s,
-    }
+    super::layout::trigger_left(menu)
 }
 
 fn dd_btn_style_f(
@@ -932,6 +913,14 @@ mod tests {
     use super::*;
 
     const TID: ThemeId = ThemeId::CatppuccinMocha;
+
+    /// #1248 - a fresh session's Directives button must be clickable.
+    #[test]
+    fn default_directives_button_is_enabled() {
+        use super::super::{DIRECTIVES_DEFAULT_ACTION, is_planned};
+        assert!(!is_planned(&DIRECTIVES_DEFAULT_ACTION));
+        assert!(action_enabled(&DIRECTIVES_DEFAULT_ACTION, false, false));
+    }
 
     fn items(entries: &[DropdownEntry<ActiveBarMsg>]) -> Vec<(String, bool)> {
         entries
@@ -968,35 +957,30 @@ mod tests {
     #[test]
     fn action_enable_predicate() {
         // selection-gated action
-        assert!(!dd_action_enabled(
+        assert!(!action_enabled(
             &ActiveBarAction::MoveSelection,
             false,
             true
         ));
-        assert!(dd_action_enabled(
-            &ActiveBarAction::MoveSelection,
-            true,
-            false
-        ));
+        assert!(action_enabled(&ActiveBarAction::MoveSelection, true, false));
         // net-colour-gated action
-        assert!(!dd_action_enabled(
+        assert!(!action_enabled(
             &ActiveBarAction::ClearNetColor,
             true,
             false
         ));
-        assert!(dd_action_enabled(
-            &ActiveBarAction::ClearNetColor,
-            true,
-            true
-        ));
+        assert!(action_enabled(&ActiveBarAction::ClearNetColor, true, true));
         // ungated action is always on
-        assert!(dd_action_enabled(&ActiveBarAction::DrawWire, false, false));
+        assert!(action_enabled(&ActiveBarAction::DrawWire, false, false));
     }
 
     #[test]
-    fn wiring_menu_is_four_ungated_items() {
+    fn wiring_menu_is_five_ungated_items() {
         let e = render(WIRING, TID, false, false);
-        assert_eq!(labels(&e), ["Wire", "Bus", "Bus Entry", "Net Label"]);
+        assert_eq!(
+            labels(&e),
+            ["Wire", "Bus", "Bus Entry", "Net Label", "Junction"]
+        );
         assert!(items(&e).iter().all(|(_, d)| !d)); // wiring is never gated
         assert_eq!(seps(&e), 0);
     }
@@ -1158,12 +1142,12 @@ mod tests {
             false,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1181,12 +1165,12 @@ mod tests {
             true,
             &[
                 "ITEM:Drag|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Move|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Move|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move Selection by X, Y...|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=true|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=true|icon=true|checked=false|shortcut=None",
@@ -1209,7 +1193,7 @@ mod tests {
                 "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1232,7 +1216,7 @@ mod tests {
                 "ITEM:Move Selection by X, Y...|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Drag Selection|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Move To Front|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Rotate Selection|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Rotate Selection Counter-Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rotate Selection Clockwise|disabled=false|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Bring To Front|disabled=false|icon=true|checked=false|shortcut=None",
@@ -1325,6 +1309,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1336,6 +1321,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1347,6 +1333,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1358,6 +1345,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1445,9 +1433,9 @@ mod tests {
             false,
             false,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1455,9 +1443,9 @@ mod tests {
             false,
             true,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1465,9 +1453,9 @@ mod tests {
             true,
             false,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1475,9 +1463,9 @@ mod tests {
             true,
             true,
             &[
-                "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1487,8 +1475,8 @@ mod tests {
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1498,8 +1486,8 @@ mod tests {
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1509,8 +1497,8 @@ mod tests {
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1520,8 +1508,8 @@ mod tests {
             &[
                 "ITEM:Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Sheet Entry|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Device Sheet Symbol|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Reuse Block...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Device Sheet Symbol|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Reuse Block...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1565,11 +1553,11 @@ mod tests {
             false,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1577,11 +1565,11 @@ mod tests {
             false,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1589,11 +1577,11 @@ mod tests {
             true,
             false,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1601,11 +1589,11 @@ mod tests {
             true,
             true,
             &[
-                "ITEM:Parameter Set|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Parameter Set|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Generic No ERC|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Differential Pair|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Blanket|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Compile Mask|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Differential Pair|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Blanket|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Compile Mask|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1655,16 +1643,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1674,16 +1662,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1693,16 +1681,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1712,16 +1700,16 @@ mod tests {
             &[
                 "ITEM:Arc|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Full Circle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Elliptical Arc|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Ellipse|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Elliptical Arc|disabled=true|icon=true|checked=false|shortcut=None",
+                "ITEM:Ellipse|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
                 "ITEM:Line|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Round Rectangle|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Round Rectangle|disabled=true|icon=true|checked=false|shortcut=None",
                 "ITEM:Polygon|disabled=false|icon=true|checked=false|shortcut=None",
-                "ITEM:Bezier|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Bezier|disabled=true|icon=true|checked=false|shortcut=None",
                 "SEP",
-                "ITEM:Graphic...|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Graphic...|disabled=true|icon=true|checked=false|shortcut=None",
             ],
         ),
         (

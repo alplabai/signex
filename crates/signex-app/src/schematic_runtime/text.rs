@@ -1,18 +1,12 @@
 use super::*;
 
-pub fn expand_char_escapes(text: &str) -> String {
-    text.to_string()
-}
-
-pub fn escape_for_standard(text: &str) -> String {
-    text.to_string()
-}
-
 pub fn draw_text_note_preview(
     frame: &mut canvas::Frame,
     note: &TextNote,
     transform: &ScreenTransform,
     color: Color,
+    colors: &CanvasColors,
+    document_family: Option<&str>,
 ) {
     let snapshot = RendererSnapshot {
         wires: Vec::new(),
@@ -31,21 +25,23 @@ pub fn draw_text_note_preview(
             color: to_rgba(color),
             bold: false,
             italic: false,
+            family: resolve_family(note.font_family.as_deref(), document_family),
             rotation_rad: note.rotation.to_radians() as f32,
             h_align: note.justify_h,
             v_align: note.justify_v,
         }],
         overlays: OverlayInputs::default(),
         erc_markers: Vec::new(),
+        drawings: Vec::new(),
+        drawings_front: Vec::new(),
         wire_color_overrides: HashMap::new(),
+        wire_line_styles: HashMap::new(),
     };
 
     draw_renderer_snapshot(
         frame,
         &snapshot,
-        &ResolvedTheme::from_canvas_colors(signex_types::theme::canvas_colors(
-            signex_types::theme::ThemeId::Signex,
-        )),
+        &ResolvedTheme::from_canvas_colors(*colors),
         DirtyFlags::TEXT,
         transform,
     );

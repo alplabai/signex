@@ -30,7 +30,18 @@ mkdir -p "$PKG_DIR/usr/share/mime/packages"
 mkdir -p "$PKG_DIR/usr/share/doc/signex"
 
 cp "$BINARY_PATH" "$PKG_DIR/usr/bin/signex"
+# Licenses of the fonts compiled into the binary (#1179).
+bash "$SCRIPT_DIR/../copy-font-licenses.sh" "$PKG_DIR/usr/share/doc/signex/fonts"
 chmod 755 "$PKG_DIR/usr/bin/signex"
+
+# Stock library -> /usr/share/signex/library (the app resolves it as
+# <exe dir>/../share/signex/library). Skipped on a clone without the assets.
+STOCK_LIB="$(cd "$SCRIPT_DIR/../.." && pwd)/assets/stock-library"
+if [[ -f "$STOCK_LIB/Stock.snxlib" ]]; then
+  mkdir -p "$PKG_DIR/usr/share/signex/library"
+  cp -R "$STOCK_LIB/." "$PKG_DIR/usr/share/signex/library/"
+  find "$PKG_DIR/usr/share/signex/library" \( -name .git -o -name .gitkeep \) -exec rm -rf {} +
+fi
 
 # Signex application icons for desktop launchers. The desktop entry
 # below uses Icon=signex, so hicolor app icons must be installed under
@@ -116,22 +127,28 @@ cat > "$PKG_DIR/usr/share/mime/packages/signex.xml" <<MIME_EOF
 </mime-info>
 MIME_EOF
 
+# Debian orders "1.0.0-rc.1" ABOVE "1.0.0" (the part after the hyphen is a
+# revision), so an rc could never upgrade to the final release. A semver
+# pre-release X.Y.Z-rc.N becomes X.Y.Z~rc.N in the control file, which sorts
+# below X.Y.Z. The file name keeps the tag's version string.
+DEB_VERSION="${VERSION/-/\~}"
+
 # Control file — Installed-Size is approx (binary + assets); dpkg-deb
 # computes the actual compressed size when it builds.
 INSTALLED_SIZE=$(du -sk "$PKG_DIR/usr" | cut -f1)
 cat > "$PKG_DIR/DEBIAN/control" <<CONTROL_EOF
 Package: signex
-Version: $VERSION
+Version: $DEB_VERSION
 Section: electronics
 Priority: optional
 Architecture: $ARCH
-Depends: libc6, libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6, libxinerama1, libvulkan1
+Depends: libc6 (>= 2.35), libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6, libxinerama1, libvulkan1
 Installed-Size: $INSTALLED_SIZE
 Maintainer: alpCaner <alpcaner92@gmail.com>
 Homepage: https://github.com/alplabai/signex
 Description: AI-first EDA editor
  Signex is an electronics design automation editor with an
- Altium-inspired interaction layer and native `.snx***` file
+ Altium-inspired interaction layer and native .snx* file
  formats.
 CONTROL_EOF
 

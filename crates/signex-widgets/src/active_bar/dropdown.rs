@@ -39,7 +39,8 @@
 //!   handles that — left-click action + right-click dropdown +
 //!   chevron indicator).
 //! - The toggle state (each editor's state owns it).
-//! - The click-outside backstop layer (each editor's view stacks it).
+//! - The click-outside backstop layer (`active_bar::view_with_overlay` stacks it under
+//!   the panel).
 
 use iced::widget::svg;
 use iced::widget::{Column, Space, button, container, row, text};
@@ -87,6 +88,12 @@ where
     /// Message published when the user clicks this row. `None` =
     /// passive (used for "coming soon" stubs).
     pub on_press: Option<M>,
+    /// Hover text for a row that cannot be used yet (e.g. "Planned").
+    pub tooltip: Option<String>,
+    /// Id of the command this row runs, when it runs one. The widget never
+    /// reads it; menu builders set it so a test can walk the rows and check
+    /// each command row's label and shortcut against the command catalog.
+    pub command_id: Option<&'static str>,
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
@@ -99,7 +106,21 @@ impl<M: 'static + Clone> DropdownItem<M> {
             shortcut: None,
             disabled: false,
             on_press: Some(on_press),
+            tooltip: None,
+            command_id: None,
         }
+    }
+
+    /// Builder: record the id of the command this row runs.
+    pub fn command(mut self, id: &'static str) -> Self {
+        self.command_id = Some(id);
+        self
+    }
+
+    /// Builder: attach a hover tooltip (shown on disabled rows too).
+    pub fn tooltip(mut self, text: impl Into<String>) -> Self {
+        self.tooltip = Some(text.into());
+        self
     }
 
     /// Builder: mark this item as currently active (paints a "✓").
@@ -127,6 +148,23 @@ impl<M: 'static + Clone> DropdownItem<M> {
             self.on_press = None;
         }
         self
+    }
+}
+
+/// Chrome of the small hover hint shown on a planned row, shared by the
+/// dropdowns here and the application menu bar so the two cannot drift.
+pub fn tooltip_style(
+    background: Color,
+    border: Color,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(background)),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..container::Style::default()
     }
 }
 
@@ -183,6 +221,8 @@ where
                     shortcut,
                     disabled,
                     on_press,
+                    tooltip: tooltip_text,
+                    command_id: _,
                 } = item;
                 let row_text_c = if disabled { muted } else { primary };
                 // Match the schematic dropdown's vocabulary: 20×20
@@ -248,7 +288,21 @@ where
                 if let Some(msg) = on_press {
                     btn = btn.on_press(msg);
                 }
-                col = col.push(btn);
+                match tooltip_text {
+                    Some(hint) => {
+                        col = col.push(
+                            iced::widget::tooltip(
+                                btn,
+                                container(text(hint).size(11).color(primary))
+                                    .padding([3, 8])
+                                    .style(tooltip_style(panel_bg, border_c)),
+                                iced::widget::tooltip::Position::Right,
+                            )
+                            .gap(4),
+                        );
+                    }
+                    None => col = col.push(btn),
+                }
             }
         }
     }

@@ -35,7 +35,7 @@ use std::collections::HashSet;
 
 use super::state::EditorPad;
 use attr::{ensure_board_top_plane, id_slug, pad_attr_from_editor_pad};
-pub use attr::{mirror_pad_attrs_into_sketch, mirror_rotation_expr};
+pub use attr::{mirror_pad_attrs_into_sketch, mirror_rotation_expr, seed_pads_from_sketch_attrs};
 use mint::{
     mint_chamfered_pad_geometry, mint_oval_pad_geometry, mint_pad_corner_outline,
     mint_round_pad_geometry, mint_round_rect_pad_geometry,
@@ -528,71 +528,20 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     // v0.24 Track A5 + A6 — the seed spans all three ownership fields
     // (centre, bbox corners, `shape_params` sidecars); see [`ownership`].
     let to_drop = ownership::owned_sketch_entities(pad, sketch);
-    let mut drop_set: HashSet<SketchEntityId> = to_drop.iter().copied().collect();
-
-    // Secondary sweep — a Line / Arc / Circle that references a dropped
-    // Point cannot survive it, so it joins the drop set (which also
-    // feeds the constraint sweep below). One pass suffices because
-    // Points are leaves.
-    //
-    // Only the dependent entity is added, never the Points it
-    // references. Pulling those in too was over-collection: the pad's
-    // own anchors / inset arc-centres are already reached by
-    // [`ownership::owned_sketch_entities`] expanding its Arcs forward,
-    // so the only ids the far side of this edge can contribute are
-    // FOREIGN — the far endpoint of a user-drawn silk Line that merely
-    // happens to share one of the pad's anchor Points. Deleting a pad
-    // must not take user geometry with it.
-    let mut secondary_drops: HashSet<SketchEntityId> = HashSet::new();
-    for entity in &sketch.entities {
-        if drop_set.contains(&entity.id) {
-            continue;
-        }
-        let touched = match &entity.kind {
-            EntityKind::Line { start, end } => drop_set.contains(start) || drop_set.contains(end),
-            EntityKind::Arc {
-                center, start, end, ..
-            } => drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end),
-            EntityKind::Circle { center, .. } => drop_set.contains(center),
-            EntityKind::Point { .. } => false,
-        };
-        if touched {
-            secondary_drops.insert(entity.id);
-        }
+    // Each owned entity goes through the structural cascade: only
+    // entities, constraints and arrays that DEPEND on it follow. The
+    // far endpoints of a user-drawn silk Line sharing one of the pad's
+    // anchors are never pulled in, so deleting a pad does not take user
+    // geometry with it.
+    let mut repaired = 0;
+    for id in to_drop {
+        repaired += sketch.remove_entity_cascade(id).repaired;
     }
-    drop_set.extend(secondary_drops);
-
-    sketch.entities.retain(|e| {
-        if drop_set.contains(&e.id) {
-            return false;
-        }
-        match &e.kind {
-            EntityKind::Line { start, end } => {
-                !(drop_set.contains(start) || drop_set.contains(end))
-            }
-            EntityKind::Arc {
-                center, start, end, ..
-            } => !(drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end)),
-            EntityKind::Circle { center, .. } => !drop_set.contains(center),
-            EntityKind::Point { .. } => true,
-        }
-    });
-    // Drop dangling constraint refs — coarse rule via Debug
-    // stringification (mirrors the SketchEdit::DeleteEntity path).
-    //
-    // Tested against the WHOLE drop set, not the centre alone. Every
-    // outline corner and every anchor just went with it, so a
-    // constraint the user authored against a chamfer anchor is as
-    // dangling as one against the centre; matching only the centre
-    // left those rows behind pointing at entities that no longer
-    // exist. It matters more now that re-mint runs this path on every
-    // rotate and flip rather than only on a pad delete — the stale
-    // rows would otherwise accumulate one transform at a time.
-    let dropped_ids: Vec<String> = drop_set.iter().map(|id| id.to_string()).collect();
-    sketch.constraints.retain(|c| {
-        let rendered = format!("{:?}", c.kind);
-        !dropped_ids.iter().any(|id| rendered.contains(id))
-    });
+    if repaired > 0 {
+        crate::diagnostics::log_warning(format!(
+            "Repaired {repaired} dangling sketch reference(s) left by an earlier edit"
+        ));
+    }
 
     // v0.24 Track A — drop shape parameters keyed by the centre-Point
     // UUID slug. `contains`, not `ends_with`: the per-corner unlink

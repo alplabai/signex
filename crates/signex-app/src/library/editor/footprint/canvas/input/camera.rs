@@ -11,7 +11,7 @@ use iced::{Point, Rectangle};
 
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::{FootprintCanvas, FootprintCanvasState, MAX_SCALE, MIN_SCALE, ZOOM_FACTOR};
+use super::super::{FootprintCanvas, FootprintCanvasState, MAX_SCALE, MIN_SCALE};
 
 impl FootprintCanvas<'_> {
     /// First-draw camera placement.
@@ -80,17 +80,14 @@ impl FootprintCanvas<'_> {
             mouse::ScrollDelta::Lines { y, .. } => *y,
             mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
         };
-        let Some(cursor_pos) = cursor.position_in(bounds) else {
-            return None;
-        };
+        let cursor_pos = cursor.position_in(bounds)?;
         if scroll_y == 0.0 {
             return None;
         }
-        let factor = if scroll_y > 0.0 {
-            ZOOM_FACTOR
-        } else {
-            1.0 / ZOOM_FACTOR
-        };
+        let factor = crate::canvas::Camera::zoom_factor_for_scroll(self.zoom_step, scroll_y);
+        if !factor.is_finite() || factor == 1.0 {
+            return None;
+        }
         let new_scale = (cstate.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
         let actual_factor = new_scale / cstate.scale;
         cstate.offset.x = cursor_pos.x - (cursor_pos.x - cstate.offset.x) * actual_factor;

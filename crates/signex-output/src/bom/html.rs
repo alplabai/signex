@@ -96,7 +96,7 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
     html.push_str("      <tr>\n");
 
     for col in columns {
-        html.push_str(&format!("        <th>{}</th>\n", col.header()));
+        html.push_str(&format!("        <th>{}</th>\n", escape_html(col.header())));
     }
 
     html.push_str("      </tr>\n");
@@ -107,20 +107,19 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
         html.push_str("      <tr>\n");
 
         for col in columns {
-            let value = match col {
-                BomColumn::Name => row.name.clone(),
-                BomColumn::Designator | BomColumn::Reference => row.references.join(", "),
-                BomColumn::LibRef => row.lib_ref.clone(),
-                BomColumn::Qty => row.qty.to_string(),
-                BomColumn::Value => row.value.clone(),
-                BomColumn::Footprint => row.footprint.clone(),
-                BomColumn::Description => row.description.clone(),
-                BomColumn::Custom(name) => row.custom.get(name).cloned().unwrap_or_default(),
-            };
-
+            let value = super::cell_text(row, col);
             html.push_str(&format!("        <td>{}</td>\n", escape_html(&value)));
         }
 
+        html.push_str("      </tr>\n");
+    }
+
+    // One total line per currency under a priced BOM (#1023).
+    for line in super::total_lines(table, columns) {
+        html.push_str("      <tr class=\"total\">\n");
+        for (text, _) in line {
+            html.push_str(&format!("        <td>{}</td>\n", escape_html(&text)));
+        }
         html.push_str("      </tr>\n");
     }
 
@@ -135,13 +134,41 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
 
 /// Escape HTML special characters.
 fn escape_html(s: &str) -> String {
-    s.chars()
-        .map(|ch| match ch {
-            '<' => "&lt;".to_string(),
-            '>' => "&gt;".to_string(),
-            '"' => "&quot;".to_string(),
-            '&' => "&amp;".to_string(),
-            _ => ch.to_string(),
-        })
-        .collect()
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '&' => out.push_str("&amp;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn escape_html_handles_every_special_and_multibyte() {
+        assert_eq!(
+            escape_html("<a href=\"x\">R&D 日本é</a>"),
+            "&lt;a href=&quot;x&quot;&gt;R&amp;D 日本é&lt;/a&gt;"
+        );
+        assert_eq!(escape_html(""), "");
+    }
+
+    #[test]
+    fn custom_column_header_is_escaped() {
+        let out = emit(
+            &BomTable::default(),
+            &[BomColumn::Custom("<script>alert(1)</script>".into())],
+        )
+        .unwrap();
+        let html = String::from_utf8(out).unwrap();
+        assert!(html.contains("<th>&lt;script&gt;alert(1)&lt;/script&gt;</th>"));
+        assert!(!html.contains("<script>"));
+    }
 }

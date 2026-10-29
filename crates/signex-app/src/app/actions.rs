@@ -8,6 +8,22 @@ impl Signex {
         self.interaction_state.active_canvas_mut().ghost_label = None;
         self.interaction_state.active_canvas_mut().ghost_symbol = None;
         self.interaction_state.active_canvas_mut().ghost_text = None;
+        self.interaction_state.active_canvas_mut().ghost_bus_entry = None;
+    }
+
+    /// Drop a half-placed two-click shape anchor on the app and on every
+    /// window's canvas, so a leftover corner from one tool or tab can't
+    /// complete as the first click of another.
+    pub(crate) fn clear_shape_anchors(&mut self) {
+        self.interaction_state.shape_anchor = None;
+        let clear = |canvas: &mut crate::canvas::CanvasSlot| {
+            canvas.shape_anchor = None;
+            canvas.clear_overlay_cache();
+        };
+        clear(&mut self.interaction_state.canvas);
+        for canvas in self.interaction_state.canvases.values_mut() {
+            clear(canvas);
+        }
     }
 
     /// Mirror `ui_state.lasso_polygon` into the canvas widget's copy and
@@ -23,29 +39,7 @@ impl Signex {
             .clear_overlay_cache();
     }
 
-    fn component_value_from_lib_id(lib_id: &str) -> String {
-        lib_id
-            .rsplit(':')
-            .next()
-            .filter(|value| !value.is_empty())
-            .unwrap_or(lib_id)
-            .to_string()
-    }
-
-    fn component_prefix_from_lib_id(lib_id: &str) -> String {
-        let value = Self::component_value_from_lib_id(lib_id);
-        let prefix: String = value
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphabetic())
-            .collect();
-        if prefix.is_empty() {
-            "U".to_string()
-        } else {
-            prefix.to_ascii_uppercase()
-        }
-    }
-
-    fn increment_designator(reference: &str) -> Option<String> {
+    pub(crate) fn increment_designator(reference: &str) -> Option<String> {
         let digit_start = reference
             .char_indices()
             .find(|(_, ch)| ch.is_ascii_digit())
@@ -55,154 +49,49 @@ impl Signex {
         let value = digits.parse::<u32>().ok()?;
         Some(format!(
             "{prefix}{:0width$}",
-            value + 1,
+            value.checked_add(1)?,
             width = digits.len()
         ))
     }
 
-    fn next_designator_for_prefix(&self, prefix: &str) -> String {
-        let next_index = self
-            .active_render_snapshot()
-            .map(|snapshot| {
-                snapshot
-                    .symbols
-                    .iter()
-                    .filter_map(|symbol| {
-                        let reference = symbol.reference.trim();
-                        if !reference.starts_with(prefix) {
-                            return None;
-                        }
-                        reference[prefix.len()..].parse::<u32>().ok()
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + 1
-            })
-            .unwrap_or(1);
-
-        format!("{prefix}{next_index}")
+    /// The next free `prefix` designator for a part placed on `sheet`,
+    /// numbered against every sheet of its project so a new part never
+    /// collides with another sheet (#1381). Open sheets are read live and
+    /// closed ones from the cached designator scan (`designator_scan.rs`),
+    /// so there is no disk read here; until the first scan lands only open
+    /// sheets count. A free-standing sheet only looks at itself. Annotate
+    /// still does the full renumber.
+    pub(crate) fn next_designator_in_sheet(&self, sheet: &std::path::Path, prefix: &str) -> String {
+        next_designator(prefix, self.used_designators(sheet).into_iter())
     }
 
-    pub(crate) fn current_component_defaults(&self) -> Option<(String, String)> {
-        let lib_id = self.document_state.panel_ctx.selected_component.as_ref()?;
-        let value = Self::component_value_from_lib_id(lib_id);
-        let designator = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.designator.trim().to_string())
-            .filter(|designator| !designator.is_empty())
-            .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(lib_id))
-            });
-        Some((value, designator))
-    }
-
-    pub(crate) fn place_selected_component(&mut self, wx: f64, wy: f64) -> bool {
-        let Some(lib_id) = self.document_state.panel_ctx.selected_component.clone() else {
-            return false;
-        };
-
-        let default_value = Self::component_value_from_lib_id(&lib_id);
-        let reference = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.designator.trim().to_string())
-            .filter(|designator| !designator.is_empty())
-            .unwrap_or_else(|| {
-                self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id))
-            });
-        let value = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.label_text.trim().to_string())
-            .filter(|text| !text.is_empty() && text != "NET")
-            .unwrap_or(default_value.clone());
-        let rotation = self
-            .document_state
-            .panel_ctx
-            .pre_placement
-            .as_ref()
-            .map(|pp| pp.rotation)
-            .unwrap_or(0.0);
-
-        let symbol = signex_types::schematic::Symbol {
-            uuid: uuid::Uuid::new_v4(),
-            lib_id: lib_id.clone(),
-            reference: reference.clone(),
-            value,
-            footprint: String::new(),
-            datasheet: String::new(),
-            position: signex_types::schematic::Point::new(wx, wy),
-            rotation,
-            mirror_x: false,
-            mirror_y: false,
-            unit: 1,
-            is_power: false,
-            ref_text: Some(signex_types::schematic::TextProp {
-                position: signex_types::schematic::Point::new(wx, wy - 2.54),
-                rotation,
-                font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                justify_h: signex_types::schematic::HAlign::Center,
-                justify_v: signex_types::schematic::VAlign::default(),
-                hidden: false,
-            }),
-            val_text: Some(signex_types::schematic::TextProp {
-                position: signex_types::schematic::Point::new(wx, wy + 2.54),
-                rotation,
-                font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
-                justify_h: signex_types::schematic::HAlign::Center,
-                justify_v: signex_types::schematic::VAlign::default(),
-                hidden: false,
-            }),
-            fields_autoplaced: true,
-            fields_user_placed: false,
-            dnp: false,
-            in_bom: true,
-            on_board: true,
-            exclude_from_sim: false,
-            locked: false,
-            fields: std::collections::HashMap::new(),
-            custom_properties: Vec::new(),
-            pin_uuids: std::collections::HashMap::new(),
-            instances: Vec::new(),
-            // Legacy lib_id-driven place flow has no `.snxlib` identity —
-            // Stage 16 of `v0.9-snxlib-as-file-plan.md` only tags
-            // placements that go through the Library picker
-            // (`handle_place_library_component`). Anything placed via
-            // `selected_component` (Standard-style lib_id) skips drift
-            // tracking by design.
-            library_id: None,
-            row_id: None,
-            library_version: String::new(),
-        };
-        self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
-
-        let next_designator = Self::increment_designator(&reference).unwrap_or_else(|| {
-            self.next_designator_for_prefix(&Self::component_prefix_from_lib_id(&lib_id))
-        });
-
-        if let Some(ref mut pp) = self.document_state.panel_ctx.pre_placement {
-            pp.label_text = default_value;
-            pp.designator = next_designator;
-        }
-
-        true
-    }
-
+    /// Cancel the in-flight placement session and every armed mode.
+    ///
+    /// There is exactly ONE session app-wide — `current_tool` and all the
+    /// placement buffers below are single fields, and a tool picked from
+    /// an undocked window's toolbar sets those same globals — so the
+    /// session half of this runs once. The canvas half does not: the
+    /// ghosts and previews live on each window's `CanvasSlot`.
+    ///
+    /// #554 — this used to reach the canvas only through
+    /// `active_canvas_mut()`, which is always the MAIN slot
+    /// (`state/interaction.rs`). The per-window canvases in
+    /// `InteractionState::canvases` were never swept, and the
+    /// wire-preview paint gate is two per-canvas fields
+    /// (`if self.drawing_mode && !self.wire_preview.is_empty()`,
+    /// `canvas/draw/previews.rs`) — so cancelling a wire left an undocked
+    /// window painting a frozen ghost of it. Sweeping every canvas fixes
+    /// that in both directions: Esc in the undocked window, AND Esc in
+    /// the main window while the wire was being drawn in the undocked
+    /// one, which per-window routing alone would not.
     pub(crate) fn clear_transient_schematic_tool_state(&mut self) {
+        // ── The one app-wide session ─────────────────────────────────
         self.interaction_state.pending_power = None;
         self.interaction_state.pending_port = None;
-        self.interaction_state.active_canvas_mut().ghost_label = None;
-        self.interaction_state.active_canvas_mut().ghost_symbol = None;
-        self.interaction_state.active_canvas_mut().ghost_text = None;
-        self.interaction_state.active_canvas_mut().tool_preview = None;
-        self.interaction_state.active_canvas_mut().placement_paused = false;
+        // A part on the cursor is part of the same session: Esc, a
+        // right-click and every tool change end it, and a library read
+        // still in flight no longer arms one.
+        self.drop_placement_session();
         // Drop any configured pre-placement defaults so the next tool
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
@@ -211,37 +100,105 @@ impl Signex {
         // z-order reference picker, and any in-flight lasso —
         // Altium-parity "one terminator kills every armed mode".
         self.ui_state.pending_net_color = None;
-        self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.ui_state.reorder_picker = None;
-        self.interaction_state
-            .active_canvas_mut()
-            .reorder_picker_armed = false;
+        self.ui_state.move_pick = None;
         self.ui_state.lasso_polygon = None;
-        self.sync_lasso_polygon_to_canvas();
+        self.clear_drawing_buffers();
 
-        if self.interaction_state.wire_drawing {
-            self.interaction_state.wire_drawing = false;
-            self.interaction_state.wire_points.clear();
-            self.interaction_state
-                .active_canvas_mut()
-                .wire_preview
-                .clear();
-            self.interaction_state.active_canvas_mut().drawing_mode = false;
+        // ── Every window's leftovers ─────────────────────────────────
+        //
+        // The main slot plus `canvases` covers both regimes: during a
+        // `dispatch_canvas_event_in_window` swap the window's canvas IS
+        // the main slot and its `canvases` entry is temporarily absent,
+        // so the two together are always the full set, with nothing
+        // visited twice.
+        let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {
+            canvas.ghost_label = None;
+            canvas.ghost_symbol = None;
+            canvas.ghost_text = None;
+            canvas.ghost_bus_entry = None;
+            canvas.tool_preview = None;
+            canvas.placement_paused = false;
+            canvas.pending_net_color = None;
+            canvas.reorder_picker_armed = false;
+            canvas.move_pick = None;
+            canvas.move_epoch += 1;
+            canvas.lasso_polygon = None;
+            // Mirrors `sync_lasso_polygon_to_canvas`, which only ever
+            // reaches the main slot.
+            canvas.clear_overlay_cache();
+        };
+        clear_canvas(&mut self.interaction_state.canvas);
+        for canvas in self.interaction_state.canvases.values_mut() {
+            clear_canvas(canvas);
         }
-        // Drop any in-flight arc / polyline click buffers.
+    }
+
+    /// Drop every in-flight multi-click drawing buffer: the wire in
+    /// progress, the arc / polyline click lists and the two-click shape
+    /// anchor, on the app-wide session and on every window's canvas.
+    ///
+    /// Shared by [`Self::clear_transient_schematic_tool_state`] and every
+    /// tool switch (#102): a buffer started under one placement tool must
+    /// not survive into the next (a half-drawn wire turning into a
+    /// polyline vertex, a Line anchor becoming a Rectangle corner).
+    pub(crate) fn clear_drawing_buffers(&mut self) {
+        let was_drawing = std::mem::take(&mut self.interaction_state.wire_drawing);
+        if was_drawing {
+            self.interaction_state.wire_points.clear();
+        }
         self.interaction_state.arc_points.clear();
         self.interaction_state.polyline_points.clear();
-        self.interaction_state
-            .active_canvas_mut()
-            .arc_points
-            .clear();
-        self.interaction_state
-            .active_canvas_mut()
-            .polyline_points
-            .clear();
-        // Drop any two-click shape anchor.
         self.interaction_state.shape_anchor = None;
-        self.interaction_state.active_canvas_mut().shape_anchor = None;
+
+        // The main slot plus `canvases` is the full set of windows.
+        let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {
+            if was_drawing {
+                canvas.wire_preview.clear();
+                canvas.drawing_mode = false;
+            }
+            canvas.arc_points.clear();
+            canvas.polyline_points.clear();
+            canvas.shape_anchor = None;
+            canvas.measure = None;
+            canvas.clear_overlay_cache();
+        };
+        clear_canvas(&mut self.interaction_state.canvas);
+        for canvas in self.interaction_state.canvases.values_mut() {
+            clear_canvas(canvas);
+        }
+    }
+
+    /// Snap a world-space point to the grid when snapping is on and the grid
+    /// size is positive; otherwise return it unchanged. The one snap rule
+    /// every canvas click path shares.
+    pub(crate) fn snap_to_grid(&self, x: f64, y: f64) -> (f64, f64) {
+        crate::canvas::placement_ghost::ghost_anchor(
+            (x, y),
+            self.ui_state.snap_enabled,
+            crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+        )
+    }
+
+    /// Where a wire click at `(x, y)` lands: on the nearest electrical hotspot
+    /// (pin end, wire end, junction) within the capture radius when the
+    /// electrical-grid toggle (Shift+E) is on, otherwise on the grid.
+    pub(crate) fn snap_wire_point(&self, x: f64, y: f64) -> (f64, f64) {
+        if self.ui_state.snap_hotspots
+            && let Some(sheet) = self.active_render_snapshot()
+            && let Some(p) = signex_types::schematic::snap_to_hotspot(
+                sheet,
+                signex_types::schematic::Point::new(x, y),
+                signex_types::schematic::hotspot_capture_radius(if self.ui_state.snap_enabled {
+                    crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm)
+                } else {
+                    0.0
+                }),
+            )
+        {
+            return (p.x, p.y);
+        }
+        self.snap_to_grid(x, y)
     }
 
     pub(crate) fn align_selected(&mut self, action: &crate::active_bar::ActiveBarAction) {
@@ -280,9 +237,10 @@ impl Signex {
             .fold(f64::NEG_INFINITY, f64::max);
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
-        let gs = self.ui_state.grid_size_mm as f64;
+        let gs = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
 
-        let mut engine_commands = Vec::new();
+        let keep_wires = self.ui_state.move_keeps_wires;
+        let mut moves = Vec::new();
         for anchor in &positions {
             let (target_x, target_y) = match action {
                 ActiveBarAction::AlignLeft => (min_x, anchor.y),
@@ -299,11 +257,8 @@ impl Signex {
             let dx = target_x - anchor.x;
             let dy = target_y - anchor.y;
             if dx.abs() > 0.001 || dy.abs() > 0.001 {
-                let items = vec![signex_types::schematic::SelectedItem::new(
-                    anchor.uuid,
-                    anchor.kind,
-                )];
-                engine_commands.push(signex_engine::Command::MoveSelection { items, dx, dy });
+                let item = signex_types::schematic::SelectedItem::new(anchor.uuid, anchor.kind);
+                moves.push((item, dx, dy));
             }
         }
 
@@ -312,7 +267,7 @@ impl Signex {
             ActiveBarAction::DistributeHorizontally | ActiveBarAction::DistributeVertically
         ) && positions.len() > 2
         {
-            engine_commands.clear();
+            moves.clear();
             let mut sorted = positions.clone();
             let n = sorted.len();
             match action {
@@ -323,15 +278,11 @@ impl Signex {
                         let target_x = min_x + step * index as f64;
                         let dx = target_x - anchor.x;
                         if dx.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(
+                            let item = signex_types::schematic::SelectedItem::new(
                                 anchor.uuid,
                                 anchor.kind,
-                            )];
-                            engine_commands.push(signex_engine::Command::MoveSelection {
-                                items,
-                                dx,
-                                dy: 0.0,
-                            });
+                            );
+                            moves.push((item, dx, 0.0));
                         }
                     }
                 }
@@ -342,15 +293,11 @@ impl Signex {
                         let target_y = min_y + step * index as f64;
                         let dy = target_y - anchor.y;
                         if dy.abs() > 0.001 {
-                            let items = vec![signex_types::schematic::SelectedItem::new(
+                            let item = signex_types::schematic::SelectedItem::new(
                                 anchor.uuid,
                                 anchor.kind,
-                            )];
-                            engine_commands.push(signex_engine::Command::MoveSelection {
-                                items,
-                                dx: 0.0,
-                                dy,
-                            });
+                            );
+                            moves.push((item, 0.0, dy));
                         }
                     }
                 }
@@ -358,8 +305,84 @@ impl Signex {
             }
         }
 
-        if !engine_commands.is_empty() {
-            self.apply_engine_commands(engine_commands, true, false);
+        // One command for the whole align/distribute: one undo step, and a
+        // wire between two symbols that move alike translates whole.
+        if !moves.is_empty() {
+            self.apply_engine_commands(
+                vec![signex_engine::Command::MoveEach { moves, keep_wires }],
+                true,
+                false,
+            );
         }
+    }
+}
+
+/// `prefix` followed by one more than the highest number any of `references`
+/// carries under that prefix.
+fn next_designator<'a>(prefix: &str, references: impl Iterator<Item = &'a str>) -> String {
+    let next_index = references
+        .filter_map(|reference| {
+            let reference = reference.trim();
+            reference
+                .strip_prefix(prefix)
+                .and_then(|n| n.parse::<u32>().ok())
+        })
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    format!("{prefix}{next_index}")
+}
+
+#[cfg(test)]
+mod designator_tests {
+    use super::Signex;
+
+    #[test]
+    fn designator_increment_does_not_overflow() {
+        assert_eq!(Signex::increment_designator("R4294967295"), None);
+        assert_eq!(
+            Signex::increment_designator("R009").as_deref(),
+            Some("R010")
+        );
+    }
+
+    fn sheet_with(references: &[&str]) -> signex_types::schematic::SchematicSheet {
+        let mut sheet = signex_types::schematic::SchematicSheet::default();
+        for reference in references {
+            sheet.symbols.push(signex_types::schematic::Symbol {
+                uuid: uuid::Uuid::now_v7(),
+                reference: (*reference).to_string(),
+                ..Default::default()
+            });
+        }
+        sheet
+    }
+
+    /// #1381: the suggestion is numbered against the whole project.
+    #[test]
+    fn next_designator_is_unique_across_the_project() {
+        use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+        let mut app = app_workspace("/w/a", &["a.snxsch", "b.snxsch"]);
+        let a = std::path::PathBuf::from("/w/a/a.snxsch");
+        let b = std::path::PathBuf::from("/w/a/b.snxsch");
+        open_with(&mut app.document_state, &a, sheet_with(&["C1"]));
+        let on_b: Vec<String> = (1..=7).map(|n| format!("R{n}")).collect();
+        let on_b: Vec<&str> = on_b.iter().map(String::as_str).collect();
+        open_with(&mut app.document_state, &b, sheet_with(&on_b));
+
+        assert_eq!(app.next_designator_in_sheet(&a, "R"), "R8");
+        assert_eq!(app.next_designator_in_sheet(&b, "R"), "R8");
+    }
+
+    #[test]
+    fn a_free_standing_sheet_only_looks_at_itself() {
+        use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
+        let mut app = app_workspace("/w/a", &["a.snxsch"]);
+        let loose = std::path::PathBuf::from("/w/loose/x.snxsch");
+        let other = std::path::PathBuf::from("/w/loose/y.snxsch");
+        open_with(&mut app.document_state, &loose, sheet_with(&["R2"]));
+        open_with(&mut app.document_state, &other, sheet_with(&["R9"]));
+
+        assert_eq!(app.next_designator_in_sheet(&loose, "R"), "R3");
     }
 }

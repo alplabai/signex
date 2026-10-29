@@ -1,6 +1,7 @@
 //! Pin TSV codec + token conversions for the symbol wire format.
 
 use super::*;
+use crate::primitive::tsv_cell::fmt_f64;
 
 // ---- Pin TSV codec --------------------------------------------------
 
@@ -110,36 +111,24 @@ pub(super) fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, Symbo
     })
 }
 
-/// Format an `f64` for a TSV cell. `0.0` emits literally as `"0"` so
-/// the most common default is short; non-zero values use the
-/// shortest precision-preserving form via `Display`. Cells must be
-/// re-parseable by `f64::from_str`.
-///
-/// HI-10: non-finite values (NaN / ±Inf) silently become `"NaN"` /
-/// `"inf"` strings via `Display`, which fail to re-parse. Surface as
-/// an empty cell — round-trip lands on `parse_f64_cell`'s "invalid
-/// numeric" error rather than corrupting the file.
-fn fmt_f64(v: f64) -> String {
-    if v == 0.0 {
-        "0".to_string()
-    } else if !v.is_finite() {
-        // Don't write NaN / inf — caller's invariant is broken.
-        debug_assert!(v.is_finite(), "fmt_f64 called with non-finite {v}");
-        String::new()
-    } else {
-        format!("{v}")
+/// An optional cell: `None` is an empty cell, a non-finite value is the
+/// error case reported by the caller.
+fn fmt_opt_f64(v: Option<f64>) -> Option<String> {
+    match v {
+        None => Some(String::new()),
+        Some(v) => fmt_f64(v),
     }
 }
 
-fn fmt_opt_f64(v: Option<f64>) -> String {
-    v.map(fmt_f64).unwrap_or_default()
-}
-
 fn parse_f64_cell(col: &'static str, s: &str) -> Result<f64, SymbolFileError> {
-    s.parse().map_err(|_| SymbolFileError::InvalidNumericCell {
-        column: col,
-        value: s.to_string(),
-    })
+    // #678: reject `NaN` / `inf` (and `1e999`, which overflows to inf).
+    s.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite())
+        .ok_or_else(|| SymbolFileError::InvalidNumericCell {
+            column: col,
+            value: s.to_string(),
+        })
 }
 
 fn parse_opt_f64_cell(col: &'static str, s: &str) -> Result<Option<f64>, SymbolFileError> {
@@ -161,20 +150,31 @@ fn parse_bool_cell(col: &'static str, s: &str) -> Result<bool, SymbolFileError> 
     }
 }
 
-fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
+fn pin_to_tsv_row(pin: &SymbolPin, with_body: bool) -> Result<String, SymbolFileError> {
+    // The cell is `|`-separated with no escaping (the layout every
+    // `.snxsym` on disk uses, backslashes literal), so an item holding `|`
+    // would reload as two items. Refuse it at save instead.
+    if let Some(bad) = pin.function.iter().find(|f| f.contains('|')) {
+        return Err(SymbolFileError::PipeInPinFunction { value: bad.clone() });
+    }
     let function_str = pin.function.join("|");
-    let cells: [String; 20] = [
+    let non_finite = |column: &str| SymbolFileError::NonFiniteField {
+        field: format!("pin {:?} {column}", pin.number),
+    };
+    let num = |v: f64, column: &str| fmt_f64(v).ok_or_else(|| non_finite(column));
+    let opt = |v: Option<f64>, column: &str| fmt_opt_f64(v).ok_or_else(|| non_finite(column));
+    let mut cells: Vec<String> = vec![
         pin.number.clone(),
         pin.name.clone(),
         pin_direction_token(pin.electrical).to_string(),
-        fmt_f64(pin.position[0]),
-        fmt_f64(pin.position[1]),
+        num(pin.position[0], "pos_x")?,
+        num(pin.position[1], "pos_y")?,
         pin_orientation_token(pin.orientation).to_string(),
-        fmt_f64(pin.length),
+        num(pin.length, "length")?,
         pin.description.clone(),
         function_str,
-        fmt_opt_f64(pin.pin_package_length),
-        fmt_opt_f64(pin.propagation_delay_ns),
+        opt(pin.pin_package_length, "pin_package_length")?,
+        opt(pin.propagation_delay_ns, "propagation_delay_ns")?,
         pin.designator_visible.to_string(),
         pin.name_visible.to_string(),
         pin_symbol_kind_token(pin.inside_symbol).to_string(),
@@ -185,7 +185,13 @@ fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
         pin.locked.to_string(),
         pin.part_number.to_string(),
     ];
-    for (col, cell) in PIN_TSV_COLUMNS.iter().zip(cells.iter()) {
+    if with_body {
+        cells.push(pin.body_style.to_string());
+    }
+    let columns = PIN_TSV_COLUMNS
+        .iter()
+        .chain(with_body.then_some(&PIN_TSV_BODY_COLUMN));
+    for (col, cell) in columns.zip(cells.iter()) {
         if cell.contains('\t') || cell.contains('\n') || cell.contains("'''") {
             return Err(SymbolFileError::InvalidTsvCell {
                 column: col,
@@ -199,12 +205,20 @@ fn pin_to_tsv_row(pin: &SymbolPin) -> Result<String, SymbolFileError> {
 /// Encode a slice of pins as TSV — header row first, then one row
 /// per pin. Empty slice still emits the header row so the round-trip
 /// produces a parseable block.
+///
+/// The legacy 20-column layout is written unless some pin is off the
+/// normal body, in which case the `body_style` column is appended.
 pub(crate) fn pins_to_tsv(pins: &[SymbolPin]) -> Result<String, SymbolFileError> {
+    let with_body = pins.iter().any(|p| p.body_style != BODY_NORMAL);
     let mut out = String::new();
     out.push_str(&PIN_TSV_COLUMNS.join("\t"));
+    if with_body {
+        out.push('\t');
+        out.push_str(PIN_TSV_BODY_COLUMN);
+    }
     out.push('\n');
     for pin in pins {
-        out.push_str(&pin_to_tsv_row(pin)?);
+        out.push_str(&pin_to_tsv_row(pin, with_body)?);
         out.push('\n');
     }
     Ok(out)
@@ -221,12 +235,13 @@ pub(crate) fn pins_from_tsv(tsv: &str) -> Result<Vec<SymbolPin>, SymbolFileError
     let mut lines = trimmed.split('\n');
     let header = lines.next().ok_or(SymbolFileError::EmptyPinsTsv)?;
     let header_cols: Vec<&str> = header.split('\t').collect();
-    if header_cols.len() != PIN_TSV_COLUMNS.len()
-        || header_cols
-            .iter()
-            .zip(PIN_TSV_COLUMNS.iter())
-            .any(|(g, e)| g != e)
-    {
+    // Legacy files have the 20 base columns; a De Morgan file appends one.
+    let with_body = header_cols.len() == PIN_TSV_COLUMNS.len() + 1;
+    let expected_len = PIN_TSV_COLUMNS.len() + usize::from(with_body);
+    let expected = PIN_TSV_COLUMNS
+        .iter()
+        .chain(with_body.then_some(&PIN_TSV_BODY_COLUMN));
+    if header_cols.len() != expected_len || header_cols.iter().zip(expected).any(|(g, e)| g != e) {
         return Err(SymbolFileError::PinsTsvSchemaMismatch {
             got: header_cols.iter().map(|s| (*s).to_string()).collect(),
         });
@@ -234,11 +249,11 @@ pub(crate) fn pins_from_tsv(tsv: &str) -> Result<Vec<SymbolPin>, SymbolFileError
     let mut pins = Vec::new();
     for (row_idx, line) in lines.enumerate() {
         let cells: Vec<&str> = line.split('\t').collect();
-        if cells.len() != PIN_TSV_COLUMNS.len() {
+        if cells.len() != expected_len {
             return Err(SymbolFileError::PinsTsvCellCountMismatch {
                 row_index: row_idx,
                 got: cells.len(),
-                expected: PIN_TSV_COLUMNS.len(),
+                expected: expected_len,
             });
         }
         pins.push(pin_from_tsv_row(&cells)?);
@@ -255,6 +270,19 @@ fn pin_from_tsv_row(cells: &[&str]) -> Result<SymbolPin, SymbolFileError> {
                 column: "part_number",
                 value: part_number_raw.to_string(),
             })?;
+    // Absent column = a legacy file: every pin is on the normal body.
+    let body_style = match cells.get(20) {
+        None => BODY_NORMAL,
+        Some(raw) => match raw.parse::<u8>() {
+            Ok(tag @ (BODY_COMMON | BODY_NORMAL | BODY_ALTERNATE)) => tag,
+            _ => {
+                return Err(SymbolFileError::InvalidNumericCell {
+                    column: "body_style",
+                    value: (*raw).to_string(),
+                });
+            }
+        },
+    };
     Ok(SymbolPin {
         number: cells[0].to_string(),
         name: cells[1].to_string(),
@@ -282,5 +310,27 @@ fn pin_from_tsv_row(cells: &[&str]) -> Result<SymbolPin, SymbolFileError> {
         hidden: parse_bool_cell("hidden", cells[17])?,
         locked: parse_bool_cell("locked", cells[18])?,
         part_number,
+        body_style,
     })
+}
+
+#[cfg(test)]
+mod non_finite_cell_tests {
+    use super::*;
+
+    /// #678: `f64::from_str` accepts `NaN` / `inf` and overflows `1e999`;
+    /// a numeric cell must reject all of them.
+    #[test]
+    fn numeric_cell_rejects_non_finite() {
+        for bad in ["NaN", "nan", "inf", "-inf", "infinity", "1e999"] {
+            assert!(
+                matches!(
+                    parse_f64_cell("col", bad),
+                    Err(SymbolFileError::InvalidNumericCell { .. })
+                ),
+                "{bad:?} must be rejected"
+            );
+        }
+        assert_eq!(parse_f64_cell("col", "1.5").unwrap(), 1.5);
+    }
 }

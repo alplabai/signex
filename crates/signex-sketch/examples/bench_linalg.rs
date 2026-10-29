@@ -30,8 +30,9 @@
 //! --------------
 //! For `n ≤ 200` unknowns (the v0.13 sketcher's worst-case constraint
 //! count), end-to-end solve should be sub-millisecond on a 2024-class
-//! laptop. The LM iteration's 50 ms timeout comfortably covers a full
-//! Newton–Marquardt loop (50–100 iterations × sub-ms solve each).
+//! laptop. The solver's default work budget (see
+//! `signex_sketch::solver::lm::DEFAULT_WORK_BUDGET`) comfortably covers a
+//! full Newton–Marquardt loop (50–100 iterations × sub-ms solve each).
 //!
 //! What we do NOT claim
 //! --------------------
@@ -53,8 +54,8 @@ fn make_matrix(n: usize) -> (Vec<Vec<f64>>, Vec<f64>) {
     let mut a = vec![vec![0.0; n]; n];
     let mut b = vec![0.0; n];
     for i in 0..n {
-        for j in 0..n {
-            a[i][j] = if i == j {
+        for (j, cell) in a[i].iter_mut().enumerate() {
+            *cell = if i == j {
                 4.0 + (i as f64) * 0.01
             } else {
                 1.0 / (1.0 + ((i as f64) - (j as f64)).abs())

@@ -4,7 +4,7 @@
     "circle_instances": 1,
     "arc_instances": 1,
     "polygon_vertices": 6,
-    "text_instances": 2,
+    "text_instances": 1,
     "grid_minor_lod_alpha": 1.0,
     "grid_major_lod_alpha": 1.0,
     "text_geometry_text_instances": 1,
@@ -15,7 +15,7 @@
     "overlay_stage_order": ["Grid", "Geometry", "Overlay", "Text"]
   },
   "upload": {
-    "all_dirty_total_updates": 13,
+    "all_dirty_total_updates": 14,
     "core_culling_total_updates": 5,
     "core_visible_lines": 1,
     "core_visible_circles": 1,

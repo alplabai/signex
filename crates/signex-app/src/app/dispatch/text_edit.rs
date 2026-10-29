@@ -12,31 +12,14 @@ impl Signex {
                 self.finish_update()
             }
             TextEditMsg::Submit => {
-                if let Some(state) = self.interaction_state.editing_text.take()
-                    && state.text != state.original_text
-                {
-                    // User typed the visible form (e.g. "/OE"). Re-escape
-                    // reserved characters back to Standard tokens before the
-                    // engine persists the change.
-                    let stored = crate::schematic_runtime::text::escape_for_standard(&state.text);
-                    let engine_command = match state.kind {
-                        signex_types::schematic::SelectedKind::Label => {
-                            signex_engine::Command::UpdateText {
-                                target: signex_engine::TextTarget::Label(state.uuid),
-                                value: stored,
-                            }
-                        }
-                        signex_types::schematic::SelectedKind::TextNote => {
-                            signex_engine::Command::UpdateText {
-                                target: signex_engine::TextTarget::TextNote(state.uuid),
-                                value: stored,
-                            }
-                        }
-                        _ => return Task::none(),
-                    };
-                    self.apply_engine_command(engine_command, false, true);
+                if let Some(state) = self.interaction_state.editing_text.take() {
+                    self.commit_text_edit(state);
                 }
                 self.finish_update()
+            }
+            TextEditMsg::Requested(target) => {
+                let focus = self.request_text_edit(target);
+                Task::batch([focus, self.finish_update()])
             }
         }
     }

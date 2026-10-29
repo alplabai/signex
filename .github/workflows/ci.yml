@@ -12,6 +12,10 @@ on:
     branches: [main, trunk]
   pull_request:
     branches: [main, trunk]
+    # The default three, plus ready_for_review: marking a draft ready is what
+    # starts its first full build (drafts skip the Rust jobs, see `changes`).
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -20,10 +24,76 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # CI build-time settings. Neither changes what is tested, only how fast the
+  # test binaries get built.
+  #
+  # Debug builds carry full debuginfo by default. CI never attaches a
+  # debugger, and full debuginfo makes every link slower (each integration-test
+  # binary is linked on its own) and the rust-cache archive bigger, so it also
+  # slows the cache restore and save. `line-tables-only` keeps file:line in
+  # panic backtraces, which is all a CI failure needs.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  # On Windows, MSVC `link.exe` made the test build take 10m16s against 3m52s
+  # on Linux. rust-lld ships with the toolchain and is much faster at linking.
+  # Cargo reads this variable only when building for this target, so Linux and
+  # macOS ignore it.
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
 
 jobs:
+  # Decides whether this run needs the Rust jobs (compile, clippy, test,
+  # postgres). A draft PR skips them, and so does a PR that only touches
+  # prose; the lint job and the `ci · required` aggregator always run. Push,
+  # merge-queue and manual runs always build, so trunk is never merged
+  # untested, and a draft cannot be merged at all. The decision and its
+  # controls: scripts/ci_build_needed.sh.
+  changes:
+    name: changes · build needed?
+    runs-on: ubuntu-latest
+    # pull-requests: read for the live draft lookup below.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Decide
+        id: decide
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The draft flag is read live, not from the event payload: a push
+          # and "Ready for review" seconds apart left only the push's run,
+          # whose payload still said draft, so the ready PR got a green
+          # `ci · required` with no build. A failed lookup leaves CI_DRAFT
+          # empty, which builds.
+          CI_DRAFT=""
+          if [ -n "$PR_NUMBER" ]; then
+            CI_DRAFT=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft) || CI_DRAFT=""
+          fi
+          export CI_DRAFT
+          echo "Draft (live): ${CI_DRAFT:-unknown}"
+          # Only a PR has a base to diff against. --no-renames: a move out of
+          # crates/ must list the deleted path too, or `crates/x.rs ->
+          # docs/x.rs` would look like prose.
+          build=$(
+            if [ -n "$BASE_SHA" ]; then
+              git diff --no-renames --name-only "$BASE_SHA"...HEAD
+            fi | bash scripts/ci_build_needed.sh
+          )
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Rust jobs needed: $build"
+
   check:
     name: check · ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -38,29 +108,53 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Cached .deb downloads; see the action for why.
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        run: |
-          # Drop the pre-provisioned packages.microsoft.com apt sources. The
-          # build needs nothing from them, but when that repo serves an invalid
-          # InRelease (a recurring runner-image outage) `apt-get update` fails
-          # the whole step under `set -e`. Everything below is in the Ubuntu
-          # archive.
-          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
-            | sudo xargs -0 -r rm -f || true
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libvulkan-dev \
+        uses: ./.github/actions/linux-deps
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libvulkan-dev
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
 
       - name: Check
         run: cargo check --workspace
 
+      # No `-W clippy::all`. `clippy::all` is already the default lint set, so
+      # the flag bought nothing — but a *group-level* `-W` sets every lint in
+      # the group to warn, and that group contains the 67 deny-by-default
+      # `correctness` lints. It turned every one of them from a build failure
+      # into an annotation, i.e. it made this step weaker than no flag at all
+      # (#567). `--all-targets` reaches `tests/`, `benches/`, `examples/` and
+      # inline `#[cfg(test)] mod tests` — bare `cargo clippy` compiles the lib
+      # without `cfg(test)`, so those bodies were never even parsed as live
+      # code. `--all-features` reaches signex-library's `local-git`,
+      # `database`, `search-tantivy`, `distributors-community` and `ai-stub`
+      # modules.
+      #
+      # `-- -D warnings` (#539) is what keeps the count at zero. Getting there
+      # took #587 (217 machine-applicable), #588 (111 that needed a decision)
+      # and #589 (16 `dead_code`) off a backlog of 344; without a gate the
+      # next 344 accumulate the same way, one "just a warning" at a time.
+      # It denies warn-level lints in workspace code only — dependencies are
+      # built with `--cap-lints allow`, and cargo's own future-incompat notice
+      # for `block v0.1.6` is not a rustc lint, so neither fails the step.
+      #
+      # The cost: a toolchain bump that introduces a new lint turns this red
+      # on whichever PR happens to bump it. That is deliberate and contained —
+      # `rust-toolchain.toml` pins 1.97.0, so new lints only ever arrive in a
+      # PR that changes that pin, never in an unrelated one.
+      #
+      # Silencing a lint to get green defeats the point. Fix the code; if a
+      # lint genuinely cannot be satisfied, `#[expect(lint, reason = "…")]`
+      # with a real reason is the escape hatch, and it has to survive review.
       - name: Clippy
-        run: cargo clippy --workspace -- -W clippy::all
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
     name: test · workspace
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -71,17 +165,17 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Prebuilt binary; config and the reason for nextest in .config/nextest.toml.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Install Linux dependencies
-        run: |
-          # See the check job: drop the packages.microsoft.com apt sources so a
-          # broken InRelease there can't fail `apt-get update`. All packages
-          # below come from the Ubuntu archive.
-          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
-            | sudo xargs -0 -r rm -f || true
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libvulkan-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+        uses: ./.github/actions/linux-deps
+        with:
+          packages: >-
+            libxkbcommon-dev libwayland-dev libvulkan-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
             mesa-vulkan-drivers
 
       # signex-gfx's debug_pass smoke tests request a real wgpu adapter and
@@ -89,24 +183,97 @@ jobs:
       # provide lavapipe (mesa-vulkan-drivers, a software Vulkan ICD) above;
       # wgpu picks it up automatically and the tests run on the CPU rasterizer.
       - name: Test
-        run: cargo test --workspace
+        env:
+          # Fail closed: pixel goldens must run strictly on lavapipe, and a
+          # missing reference fails the job.
+          SIGNEX_REQUIRE_LAVAPIPE: "1"
+          # Generation path for a new or changed scene: the rendered frame of a
+          # missing reference is written here (never into the source tree) and
+          # uploaded below for review and commit.
+          SIGNEX_GOLDEN_CANDIDATES: ${{ github.workspace }}/target/golden-candidates
+        run: cargo nextest run --workspace --profile ci
 
-  fmt:
-    name: fmt · rustfmt
-    runs-on: ubuntu-latest
+      # nextest does not run doctests.
+      - name: Doctests
+        run: cargo test --workspace --doc
+
+      - name: Upload pixel golden candidates
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: pixel-golden-candidates
+          path: target/golden-candidates
+          if-no-files-found: ignore
+
+  # The same suite on Windows and macOS (#695): `check` compiles the
+  # `cfg(windows)` / macOS code, but only this job runs it. A separate job,
+  # not a matrix on `test`, because only Linux needs the apt packages and the
+  # lavapipe env. The GPU smoke tests get WARP (DX12) on Windows and the
+  # runner's Metal device on macOS; no extra install.
+  # Skipped in the merge queue. It has never been a required check, so the
+  # queue merged without waiting for it there either: it never kept a break
+  # out of trunk, it only named the group that caused one. The trunk push run
+  # tests the merged tree. A burst of merges cancels all but the last push run
+  # (one concurrency group per ref), and that last run tests the tip, which
+  # holds every merge of the burst. What the skip gives up is which merge
+  # broke it, found with one bisect. What it saves is two runner slots, one
+  # of them macOS (5 org-wide), per queued PR.
+  test-os:
+    name: test · ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: false
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Prebuilt binary; config and the reason for nextest in .config/nextest.toml.
+      - uses: taiki-e/install-action@v2
         with:
-          components: rustfmt
+          tool: cargo-nextest
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Test
+        run: cargo nextest run --workspace --profile ci
 
-  deny:
-    name: deny · licenses + deps
+      - name: Doctests
+        run: cargo test --workspace --doc
+
+  # Library-server Postgres integration test (#113). Non-required: the
+  # default `cargo test --workspace` stays hermetic (SQLite); this job
+  # exercises the Postgres migrations against a real server. The test is
+  # `#[ignore]`d without the URL, hence `--ignored`. Throwaway CI-only
+  # credentials on a job-local service container; no secrets.
+  # Skipped in the merge queue for the same reason as `test-os`.
+  library-server-pg:
+    name: test · library-server postgres
+    needs: changes
+    if: needs.changes.outputs.build == 'true' && github.event_name != 'merge_group'
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: signex
+          POSTGRES_PASSWORD: signex
+          POSTGRES_DB: signex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U signex -d signex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SIGNEX_TEST_PG_URL: postgres://signex:signex@localhost:5432/signex_test
     steps:
       - uses: actions/checkout@v5
 
@@ -114,34 +281,199 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
+      - name: Test (postgres)
+        run: cargo test -p signex-library-server --test integration_db -- --ignored
+
+  # Every repo-level gate that needs no compile, as steps of ONE job. Each
+  # was a separate job, and on the org's 20-concurrent-job plan every one
+  # queued for its own runner slot to do a few seconds of work.
+  # `if: !cancelled()` on each step keeps reporting every failing gate, not
+  # just the first.
+  lint:
+    name: lint · repo gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
+        with:
+          components: rustfmt
+
+      # Prebuilt binary; `cargo install` compiled it from source every run.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Path-filter controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_ci_build_needed.sh
+
+      - name: Check formatting
+        if: ${{ !cancelled() }}
+        run: cargo fmt --all -- --check
 
       - name: Check licenses
+        if: ${{ !cancelled() }}
         run: cargo deny --all-features check licenses
 
       - name: Check sources
+        if: ${{ !cancelled() }}
         run: cargo deny --all-features check sources
         continue-on-error: true
 
       # Advisories are informational, not a merge gate: they fire on newly
       # published RUSTSEC entries against the shared Cargo.lock (mostly
-      # transitive GUI-stack crates like quick-xml / ttf-parser pinned deep
+      # transitive GUI-stack crates like ttf-parser / rustybuzz pinned deep
       # in iced/winit) with no code change on our side. Surface them as an
       # annotation; criticals are addressed by a human, not by blocking CI.
       # (deny.toml documents this same intent; `licenses` above stays hard.)
       - name: Check advisories
+        if: ${{ !cancelled() }}
         run: cargo deny --all-features check advisories
         continue-on-error: true
 
-  no-god-files:
-    name: no god-files
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
+      # `[bans]` in deny.toml (the glyphon regression ban; duplicate
+      # versions at "warn") was configured but never evaluated, because only
+      # the three checks above ran (#664). Hard: a banned crate fails the job.
+      - name: Check bans
+        if: ${{ !cancelled() }}
+        run: cargo deny --all-features check bans
+
+      # ADR-0001 D5 (#664): workspace dependency edges are an allow-list in
+      # scripts/arch-edges.txt, and domain crates may not depend on the
+      # UI/GPU stack. Rules and rationale live in the script.
+      - name: Architecture guard
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_arch_guard.sh
+
+      - name: Architecture guard controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_arch_guard.sh
 
       # Hard gate (NOT continue-on-error): a PR may not add a new production
       # god-file or grow a grandfathered one. Ratchet + rationale live in
       # scripts/check_file_size.sh; the slice model it points to is ADR-0001.
       - name: God-file ratchet gate
+        if: ${{ !cancelled() }}
         run: bash scripts/check_file_size.sh
+
+      # This step fails hard (NOT continue-on-error) on a violation, and
+      # `ci · required` gates the merge on this job, so a violation actually
+      # blocks it (GH #548 proposal 2).
+      #
+      # Scope, corrected (#548): `let _ = self.handle_x(...)` silently drops
+      # an `iced::Task<Message>` and rustc does NOT catch it — binding to `_`
+      # counts as "used" under `unused_must_use`. That shape is this gate's
+      # entire reason to exist. The neighbouring `self.handle_x(...)?;` shape
+      # is the COMPILER's job, not this script's: `unused_must_use` is denied
+      # for signex-app in crates/signex-app/Cargo.toml, so it fails the build.
+      # An earlier version of this comment claimed the compiler was blind to
+      # both. It never was blind to the second one — the warning was simply
+      # buried among ~324 unrelated workspace warnings and nobody read it.
+      #
+      # Rationale + known blind spots live in
+      # scripts/check_discarded_tasks.sh; GH #99 part 1.
+      - name: Discarded-Task ratchet gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_discarded_tasks.sh
+
+      - name: Discarded-Task gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_discarded_tasks.sh
+
+      # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
+      # mixing inheritance with per-lint overrides, and that crate carries its
+      # own `[lints.clippy] let_underscore_must_use` that the workspace
+      # deliberately does not. So it re-declares the workspace lints by hand,
+      # and until now nothing checked that copy: a lint added to
+      # `[workspace.lints.rust]` silently skipped the largest crate in the
+      # repo, with no error and no warning (GH #570).
+      #
+      # This step fails hard (NOT continue-on-error); like every hard step in
+      # this job it blocks the merge through `ci · required`.
+      - name: Lint-lockstep gate
+        if: ${{ !cancelled() }}
+        run: bash scripts/check_lint_lockstep.sh
+
+      # Fragment names/bodies are validated on every event (PR, merge queue,
+      # push). Rule + rationale: changelog.d/README.md (GH #748).
+      - name: Validate fragments
+        if: ${{ !cancelled() }}
+        run: |
+          bash scripts/changelog_assemble.sh --check
+          bash scripts/test_changelog_assemble.sh
+
+      # PR-only, feature PRs into trunk only (trunk -> main promotion and the
+      # merge queue are exempt). CHANGELOG.md is edited directly only by
+      # same-repo release PRs (head `chore/release-*` or `release/*`, the shape
+      # every release prep PR has used); forks cannot self-exempt.
+      # TRANSITION: warning only while open PRs still edit CHANGELOG.md; flip
+      # the `::warning` to `::error` + `exit 1` once they land (follow-up to #748).
+      # Branch/title go through env, never inline-interpolated into the script.
+      - name: CHANGELOG.md should not be edited directly
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'trunk' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          IS_SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          if [ "$IS_SAME_REPO" = true ]; then
+            case "$HEAD_REF" in
+              chore/release-* | release/*)
+                echo "release PR ($HEAD_REF): CHANGELOG.md edits allowed"
+                exit 0
+                ;;
+            esac
+          fi
+          git fetch --no-tags origin "$BASE_REF"
+          if git diff --name-only "origin/$BASE_REF...HEAD" | awk '$0 == "CHANGELOG.md" {f=1} END {exit !f}'; then
+            echo "::warning file=CHANGELOG.md::Do not edit CHANGELOG.md in a PR. Add a fragment changelog.d/<number>.<section>.md instead (see changelog.d/README.md)."
+          fi
+
+      # Advisory: a feat/fix PR with no new fragment gets a warning annotation.
+      - name: Warn when a feat/fix PR has no fragment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'trunk' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$PR_TITLE" | awk '/^(feat|fix)(\([^)]*\))?!?:/{f=1} END{exit !f}'; then
+            git fetch --no-tags origin "$BASE_REF"
+            if ! git diff --name-only --diff-filter=A "origin/$BASE_REF...HEAD" |
+              awk '/^changelog\.d\/[0-9]+\..+\.md$/{f=1} END{exit !f}'; then
+              echo "::warning title=No changelog fragment::feat/fix PR adds no changelog.d/<number>.<section>.md fragment. Add one, or ignore if the change is not user-visible."
+            fi
+          fi
+
+  # The ONE status context branch protection requires from this workflow.
+  # Adding, renaming or path-gating a job here never needs a ruleset edit:
+  # list it under `needs` and this job decides. A Rust job counts as passed
+  # when it succeeded, or when `changes` succeeded and skipped it on purpose.
+  required:
+    name: ci · required
+    if: always()
+    # test-os and library-server-pg stay out on purpose: neither has ever
+    # been a required check.
+    needs: [changes, check, test, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All required jobs passed or were skipped by the path filter
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          BUILD: ${{ needs.changes.outputs.build }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$NEEDS" | jq -r --arg build "$BUILD" '
+            to_entries[]
+            | select(
+                (.value.result == "success" | not)
+                and ((.value.result == "skipped" and $build == "false"
+                      and .key != "changes" and .key != "lint") | not)
+              )
+            | .key')
+          if [ -n "$bad" ]; then
+            echo "::error::Required jobs did not pass: $(echo "$bad" | tr '\n' ' ')"
+            exit 1
+          fi

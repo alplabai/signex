@@ -19,6 +19,7 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::component_preview::apply_inline_edit;
+use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
 use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
@@ -28,32 +29,88 @@ use crate::library::messages::{
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
-    EditRowModalState, EditorAddress, LibraryCreateOptionsState, NewComponentState, PickerState,
-    PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, EditorAddress, LibraryCreateOptionsState, PickerState, PreviewTab,
+    PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
+mod alternate_symbols;
 mod browser;
+mod commit_pending;
 mod component_preview;
 mod components_panel;
+mod datasheet_save;
 mod document_options;
+#[cfg(test)]
+mod edit_modal_tests;
 mod editor;
+mod external_edits;
+#[cfg(test)]
+mod grid_window_tests;
 mod lifecycle;
 mod new_component;
+mod new_row;
+mod pricing;
+#[cfg(test)]
+mod pricing_tests;
 mod primitive_picker;
+mod read_only;
 mod recovery;
+#[cfg(test)]
+mod recovery_read_only_tests;
+mod refresh;
 mod registration;
+mod rename_guard;
+pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 mod settings;
+#[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
+mod stale_row_tests;
+mod stock_copy;
 mod updates;
+mod use_site;
+mod write_done;
+#[cfg(test)]
+mod write_off_thread_tests;
 
 use recovery::{
-    atomic_write, handle_recovery_broken_binding, handle_recovery_git_missing,
-    handle_recovery_library_missing, handle_recovery_library_missing_locate_result,
-    route_open_error,
+    handle_recovery_broken_binding, handle_recovery_git_missing, handle_recovery_library_missing,
+    handle_recovery_library_missing_locate_result, open_error_notice, route_open_error,
 };
 
 impl Signex {
+    /// Library arms that can queue a git commit (a primitive Save) or log a
+    /// diagnostic run `finish_update` so the queue drains and the Messages
+    /// panel republishes in the same frame (#111). Per-event traffic
+    /// (editor cursor / drag ticks, search keystrokes, non-Save primitive
+    /// edits) cannot queue a commit, so it only does the cheap diagnostics
+    /// republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
+        if let Some(refusal) = self.library_write_refusal(&msg) {
+            crate::diagnostics::log_warning(&refusal);
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::library_change(refusal));
+            return self.finish_update();
+        }
+        let per_event = matches!(
+            &msg,
+            LibraryMessage::EditorEvent { .. }
+                | LibraryMessage::BrowserSearchChanged { .. }
+                | LibraryMessage::PrimitiveEditorEvent {
+                    msg: PrimitiveEdit::Symbol(_) | PrimitiveEdit::Footprint(_),
+                    ..
+                }
+        );
+        let task = self.route_library_message(msg);
+        if per_event {
+            self.sync_diagnostics_panel_ctx();
+            return task;
+        }
+        Task::batch([task, self.finish_update()])
+    }
+
+    fn route_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
         match msg {
             LibraryMessage::OpenLibraryDialog => self.handle_open_library_dialog(),
             LibraryMessage::OpenLibraryAt(None) => Task::none(),
@@ -61,6 +118,7 @@ impl Signex {
             LibraryMessage::CloseLibrary(path) => self.handle_close_library(path),
             LibraryMessage::OpenPicker => {
                 self.library.picker = Some(PickerState::default());
+                self.library.sync_view_caches();
                 Task::none()
             }
             LibraryMessage::ClosePicker => {
@@ -75,26 +133,9 @@ impl Signex {
             // fills in the PN inline in the table and picks the
             // symbol / footprint via the Properties panel.
             //
-            // When no library is open OR no table exists, fall back
-            // to the legacy modal path so the user gets a clear
-            // picker UI (the modal handles "no library" + table
-            // selection edge cases).
+            // When no library is open OR no table exists, nothing can
+            // be appended; the handler tells the Messages panel why.
             LibraryMessage::NewComponent => self.handle_new_component(),
-            LibraryMessage::CloseNewComponent => {
-                self.library.new_component = None;
-                Task::none()
-            }
-            LibraryMessage::NewComponentSetInternalPn(s) => {
-                self.handle_new_component_set_internal_pn(s)
-            }
-            LibraryMessage::NewComponentSetLibrary(idx) => {
-                self.handle_new_component_set_library(idx)
-            }
-            LibraryMessage::NewComponentSetClass(class) => {
-                self.handle_new_component_set_class(class)
-            }
-            LibraryMessage::NewComponentSetTable(name) => self.handle_new_component_set_table(name),
-            LibraryMessage::NewComponentSetCategory(s) => self.handle_new_component_set_category(s),
             LibraryMessage::BrowserBeginAddTable { library_path } => {
                 self.handle_browser_begin_add_table(library_path)
             }
@@ -112,6 +153,13 @@ impl Signex {
             LibraryMessage::BrowserDismissDeleteError { library_path } => {
                 self.handle_browser_dismiss_delete_error(library_path)
             }
+            LibraryMessage::BrowserCommitPending { library_path } => {
+                self.handle_browser_commit_pending(library_path)
+            }
+            LibraryMessage::BrowserCommitPendingDone {
+                library_path,
+                result,
+            } => self.handle_browser_commit_pending_done(&library_path, result),
             LibraryMessage::BrowserBeginRenameTable {
                 library_path,
                 table,
@@ -123,78 +171,13 @@ impl Signex {
             LibraryMessage::BrowserCancelRenameTable { library_path } => {
                 self.handle_browser_cancel_rename_table(library_path)
             }
-            LibraryMessage::BrowserBeginAddClass { library_path } => {
-                self.handle_browser_begin_add_class(library_path)
-            }
-            LibraryMessage::BrowserSetNewClassKey {
-                library_path,
-                value,
-            } => self.handle_browser_set_new_class_key(library_path, value),
-            LibraryMessage::BrowserSetNewClassLabel {
-                library_path,
-                value,
-            } => self.handle_browser_set_new_class_label(library_path, value),
-            LibraryMessage::BrowserCancelAddClass { library_path } => {
-                self.handle_browser_cancel_add_class(library_path)
-            }
-            LibraryMessage::BrowserConfirmAddClass { library_path } => {
-                self.handle_browser_confirm_add_class(library_path)
-            }
-            LibraryMessage::BrowserDeleteClass { library_path, key } => {
-                self.handle_browser_delete_class(library_path, key)
-            }
-            LibraryMessage::BrowserBeginRenameClass { library_path, key } => {
-                self.handle_browser_begin_rename_class(library_path, key)
-            }
-            LibraryMessage::BrowserSetRenameClassKey {
-                library_path,
-                value,
-            } => self.handle_browser_set_rename_class_key(library_path, value),
-            LibraryMessage::BrowserSetRenameClassLabel {
-                library_path,
-                value,
-            } => self.handle_browser_set_rename_class_label(library_path, value),
-            LibraryMessage::BrowserCancelRenameClass { library_path } => {
-                self.handle_browser_cancel_rename_class(library_path)
-            }
-            LibraryMessage::BrowserConfirmRenameClass { library_path } => {
-                self.handle_browser_confirm_rename_class(library_path)
-            }
             LibraryMessage::BrowserConfirmRenameTable { library_path } => {
                 self.handle_browser_confirm_rename_table(library_path)
             }
             LibraryMessage::BrowserConfirmAddTable { library_path } => {
                 self.handle_browser_confirm_add_table(library_path)
             }
-            LibraryMessage::NewComponentToggleAdvanced => {
-                self.handle_new_component_toggle_advanced()
-            }
-            LibraryMessage::NewComponentBeginCreateTable => {
-                self.handle_new_component_begin_create_table()
-            }
-            LibraryMessage::NewComponentSetNewTableName(name) => {
-                self.handle_new_component_set_new_table_name(name)
-            }
-            LibraryMessage::NewComponentCancelCreateTable => {
-                self.handle_new_component_cancel_create_table()
-            }
-            LibraryMessage::NewComponentConfirmCreateTable => {
-                self.handle_new_component_confirm_create_table()
-            }
-            LibraryMessage::NewComponentSubmit => self.handle_new_component_submit(),
-            LibraryMessage::NewComponentSubmit => {
-                // WS-8 will replace `commands::create_component` with the
-                // row-based `create_component_row`. Until that lands, the
-                // dispatcher logs the request and bails.
-                tracing::warn!(
-                    target: "signex::library",
-                    "NewComponentSubmit: row-based create flow ships in WS-8"
-                );
-                self.library.new_component = None;
-                Task::none()
-            }
 
-            LibraryMessage::ToggleLibraryTreeNode(idx) => self.handle_toggle_library_tree_node(idx),
             LibraryMessage::OpenComponentRow {
                 library_path,
                 table,
@@ -209,10 +192,7 @@ impl Signex {
             } => self.handle_editor_event(EditorAddress::new(library_path, table, row_id), msg),
             LibraryMessage::Picker(msg) => self.handle_picker_message(msg),
             LibraryMessage::Settings(msg) => self.handle_library_settings_message(msg),
-            LibraryMessage::JumpToUseSite(site) => {
-                commands::jump_to_use_site(&site);
-                Task::none()
-            }
+            LibraryMessage::JumpToUseSite(site) => self.handle_jump_to_use_site(site),
             LibraryMessage::Noop => Task::none(),
 
             LibraryMessage::ConfirmCloseLibrary {
@@ -227,6 +207,43 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
+            LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
+            LibraryMessage::LibraryUpdateSymbolsRead(read) => {
+                self.handle_library_update_symbols_read(*read)
+            }
+            LibraryMessage::LibraryComponentResolved {
+                target_sheet,
+                arm_epoch,
+                library_path,
+                result,
+            } => self.handle_library_component_resolved(
+                target_sheet,
+                arm_epoch,
+                library_path,
+                result,
+            ),
+            LibraryMessage::DesignatorsScanned { generation, result } => {
+                self.apply_designator_scan(generation, &result);
+                Task::none()
+            }
+            LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
+            LibraryMessage::SymbolChoiceResolved {
+                target_sheet,
+                engine_instance,
+                symbol_id,
+                request,
+                label,
+                result,
+            } => self.handle_symbol_choice_resolved(
+                crate::app::handlers::library_symbol_choice::SwitchContext {
+                    target_sheet,
+                    engine_instance,
+                    symbol_id,
+                    request,
+                    label,
+                },
+                result,
+            ),
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
@@ -247,12 +264,17 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsConfirm => {
                 self.handle_library_create_options_confirm()
             }
-            LibraryMessage::AddLibrarySymbolFilePicked(path) => {
-                self.handle_add_library_symbol_file_picked(path)
+            LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
+                self.handle_add_library_symbol_file_picked(project_id, path)
             }
-            LibraryMessage::AddLibraryFootprintFilePicked(path) => {
-                self.handle_add_library_footprint_file_picked(path)
+            LibraryMessage::AddLibraryFootprintFilePicked { project_id, path } => {
+                self.handle_add_library_footprint_file_picked(project_id, path)
             }
+            LibraryMessage::AddLibraryFileWritten {
+                project_id,
+                path,
+                result,
+            } => self.handle_add_library_file_written(project_id, path, result),
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,
@@ -263,6 +285,19 @@ impl Signex {
             }
             // ── Library Browser tab ──────────────────────────────────
             LibraryMessage::OpenLibraryBrowser(path) => self.handle_open_library_browser(path),
+            LibraryMessage::MountFinished { path, prepared } => {
+                self.handle_mount_finished(path, prepared)
+            }
+            LibraryMessage::RefreshFinished {
+                path,
+                generation,
+                snapshot,
+            } => {
+                let task = self.handle_refresh_finished(path, generation, snapshot);
+                self.close_libraries_whose_writes_are_done();
+                task
+            }
+            LibraryMessage::WriteFinished(done) => self.handle_write_finished(*done),
             LibraryMessage::BrowserSelectTable {
                 library_path,
                 table,
@@ -271,6 +306,9 @@ impl Signex {
                 library_path,
                 value,
             } => self.handle_browser_search_changed(library_path, value),
+            LibraryMessage::BrowserRangeFilter { library_path, msg } => {
+                self.handle_browser_range_filter(library_path, msg)
+            }
             LibraryMessage::BrowserSortColumn {
                 library_path,
                 column_key,
@@ -280,6 +318,14 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_browser_select_row(library_path, table, row_id),
+            LibraryMessage::BrowserGridScrolled {
+                library_path,
+                offset_y,
+            } => self.handle_browser_grid_scrolled(library_path, offset_y),
+            LibraryMessage::BrowserGridResized {
+                library_path,
+                viewport_h,
+            } => self.handle_browser_grid_resized(library_path, viewport_h),
             LibraryMessage::BrowserAddComponent {
                 library_path,
                 table,
@@ -333,14 +379,6 @@ impl Signex {
             LibraryMessage::BrowserClassFilterClicked { library_path, key } => {
                 self.handle_browser_class_filter_clicked(library_path, key)
             }
-            LibraryMessage::BrowserRefreshPricing {
-                library_path,
-                table,
-                row_id,
-            } => self.handle_browser_refresh_pricing(library_path, table, row_id),
-            LibraryMessage::LibraryRefreshAllPricing(library_path) => {
-                self.handle_library_refresh_all_pricing(library_path)
-            }
             // ── Document Options modal (Tools ▸ Document Options) ──
             LibraryMessage::OpenDocumentOptions { library_path } => {
                 self.handle_open_document_options(library_path)
@@ -367,6 +405,9 @@ impl Signex {
                 handle_recovery_library_missing_locate_result(self, picked)
             }
             LibraryMessage::RecoveryGitMissing(choice) => handle_recovery_git_missing(self, choice),
+            LibraryMessage::GitReinitFinished { path, result } => {
+                recovery::handle_git_reinit_finished(self, path, result)
+            }
             LibraryMessage::RecoveryBrokenBinding(choice) => {
                 handle_recovery_broken_binding(self, choice)
             }
@@ -375,13 +416,11 @@ impl Signex {
             LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid) => {
                 self.handle_library_updates_toggle_selection(symbol_uuid)
             }
-            LibraryMessage::LibraryUpdatesApply => {
-                self.handle_library_updates_apply();
-                Task::none()
-            }
+            LibraryMessage::LibraryUpdatesApply => self.handle_library_updates_apply(),
             LibraryMessage::LibraryUpdatesSkipAll => self.handle_library_updates_skip_all(),
             LibraryMessage::LibraryUpdatesCancel => {
                 self.library.library_updates = None;
+                self.show_next_queued_updates();
                 Task::none()
             }
 
@@ -402,17 +441,20 @@ impl Signex {
             LibraryMessage::ComponentsPanelPromoteToGlobal(path) => {
                 self.handle_components_panel_promote_to_global(path)
             }
-            LibraryMessage::ComponentsPanelManageGlobal => {
-                self.handle_components_panel_manage_global()
-            }
-            LibraryMessage::ComponentsPanelAddToProject { library_path } => {
-                self.handle_components_panel_add_to_project(library_path)
-            }
             LibraryMessage::ComponentsPanelPlace {
                 library_path,
                 table,
                 row_id,
             } => self.handle_components_panel_place(library_path, table, row_id),
+            LibraryMessage::ExternalEditsPollTicked => self.handle_external_edits_poll_ticked(),
+            LibraryMessage::ExternalEditsPolled(changed) => {
+                self.handle_external_edits_polled(changed)
+            }
+            LibraryMessage::PricingRefreshFinished {
+                library_path,
+                outcome,
+            } => self.handle_pricing_refresh_finished(library_path, outcome),
+            LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
         }
     }
 }

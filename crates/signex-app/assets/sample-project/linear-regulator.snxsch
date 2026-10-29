@@ -1,0 +1,1163 @@
+format = "snxsch/1"
+schematic_id = "5a3c0000-0000-4000-8000-00000000002e"
+version = 1
+generator = "signex"
+generator_version = "0.1.0"
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref     library               pos_x      pos_y      rotation  value      mpn
+5a3c0000-0000-4000-8000-000000000001  J1      Connector:Conn_01x02  45720000   101600000  0         "5V in"    ""
+5a3c0000-0000-4000-8000-000000000002  C1      Device:C              63500000   102870000  0         10uF       ""
+5a3c0000-0000-4000-8000-000000000003  U1      Regulator:LDO_3V3     88900000   101600000  0         LDO_3V3    ""
+5a3c0000-0000-4000-8000-000000000004  C2      Device:C              109220000  102870000  0         10uF       ""
+5a3c0000-0000-4000-8000-000000000005  R1      Device:R              121920000  102870000  0         470R       ""
+5a3c0000-0000-4000-8000-000000000006  D1      Device:LED            121920000  114300000  0         Green      ""
+5a3c0000-0000-4000-8000-000000000007  J2      Connector:Conn_01x02  139700000  101600000  0         "3V3 out"  ""
+5a3c0000-0000-4000-8000-000000000008  #PWR01  power:+5V             57150000   99060000   0         +5V        ""
+5a3c0000-0000-4000-8000-000000000009  #PWR02  power:+3V3            104140000  99060000   0         +3V3       ""
+5a3c0000-0000-4000-8000-00000000000a  #PWR03  power:GND             88900000   119380000  0         GND        ""
+"""
+
+[sheets.wires]
+content = """
+uuid                                  start_x    start_y    end_x      end_y      stroke_width
+5a3c0000-0000-4000-8000-00000000000b  50800000   99060000   53340000   99060000   0
+5a3c0000-0000-4000-8000-00000000000c  53340000   99060000   57150000   99060000   0
+5a3c0000-0000-4000-8000-00000000000d  57150000   99060000   63500000   99060000   0
+5a3c0000-0000-4000-8000-00000000000e  63500000   99060000   78740000   99060000   0
+5a3c0000-0000-4000-8000-00000000000f  99060000   99060000   104140000  99060000   0
+5a3c0000-0000-4000-8000-000000000010  104140000  99060000   109220000  99060000   0
+5a3c0000-0000-4000-8000-000000000011  109220000  99060000   116840000  99060000   0
+5a3c0000-0000-4000-8000-000000000012  116840000  99060000   121920000  99060000   0
+5a3c0000-0000-4000-8000-000000000013  121920000  99060000   134620000  99060000   0
+5a3c0000-0000-4000-8000-000000000014  50800000   104140000  50800000   119380000  0
+5a3c0000-0000-4000-8000-000000000015  50800000   119380000  55880000   119380000  0
+5a3c0000-0000-4000-8000-000000000016  55880000   119380000  63500000   119380000  0
+5a3c0000-0000-4000-8000-000000000017  63500000   119380000  88900000   119380000  0
+5a3c0000-0000-4000-8000-000000000018  88900000   119380000  109220000  119380000  0
+5a3c0000-0000-4000-8000-000000000019  109220000  119380000  121920000  119380000  0
+5a3c0000-0000-4000-8000-00000000001a  121920000  119380000  134620000  119380000  0
+5a3c0000-0000-4000-8000-00000000001b  134620000  104140000  134620000  119380000  0
+5a3c0000-0000-4000-8000-00000000001c  63500000   106680000  63500000   119380000  0
+5a3c0000-0000-4000-8000-00000000001d  88900000   109220000  88900000   119380000  0
+5a3c0000-0000-4000-8000-00000000001e  109220000  106680000  109220000  119380000  0
+5a3c0000-0000-4000-8000-00000000001f  121920000  106680000  121920000  110490000  0
+5a3c0000-0000-4000-8000-000000000020  121920000  118110000  121920000  119380000  0
+"""
+
+[sheets.junctions]
+content = """
+uuid                                  pos_x      pos_y      diameter
+5a3c0000-0000-4000-8000-000000000021  63500000   99060000   0
+5a3c0000-0000-4000-8000-000000000022  109220000  99060000   0
+5a3c0000-0000-4000-8000-000000000023  121920000  99060000   0
+5a3c0000-0000-4000-8000-000000000024  63500000   119380000  0
+5a3c0000-0000-4000-8000-000000000025  88900000   119380000  0
+5a3c0000-0000-4000-8000-000000000026  109220000  119380000  0
+5a3c0000-0000-4000-8000-000000000027  121920000  119380000  0
+"""
+
+[sheets.labels]
+content = """
+uuid                                  text  pos_x      pos_y      rotation  kind   shape  font_size  justify  justify_v
+5a3c0000-0000-4000-8000-000000000028  +5V   53340000   99060000   0         local  ""     1.27       left     bottom
+5a3c0000-0000-4000-8000-000000000029  +3V3  116840000  99060000   0         local  ""     1.27       left     bottom
+5a3c0000-0000-4000-8000-00000000002a  GND   55880000   119380000  0         local  ""     1.27       left     bottom
+"""
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001]
+footprint = "PinHeader_1x02_P2.54mm"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "right"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001.ref_text.position]
+x = 39.72
+y = 100.33
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "right"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000001.val_text.position]
+x = 39.72
+y = 102.86999999999999
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002]
+footprint = "C_0805"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002.ref_text.position]
+x = 66.04
+y = 101.60000000000001
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000002.val_text.position]
+x = 66.04
+y = 104.14
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003]
+footprint = "SOT-223"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "right"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003.ref_text.position]
+x = 82.9
+y = 100.33
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "right"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000003.val_text.position]
+x = 82.9
+y = 102.86999999999999
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004]
+footprint = "C_0805"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004.ref_text.position]
+x = 111.76
+y = 101.60000000000001
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000004.val_text.position]
+x = 111.76
+y = 104.14
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005]
+footprint = "R_0603"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005.ref_text.position]
+x = 124.46000000000001
+y = 101.60000000000001
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000005.val_text.position]
+x = 124.46000000000001
+y = 104.14
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006]
+footprint = "LED_0603"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006.ref_text.position]
+x = 124.46000000000001
+y = 113.03
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000006.val_text.position]
+x = 124.46000000000001
+y = 115.57
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007]
+footprint = "PinHeader_1x02_P2.54mm"
+datasheet = ""
+mirror_x = false
+mirror_y = true
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007.ref_text.position]
+x = 145.7
+y = 100.33
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = false
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000007.val_text.position]
+x = 145.7
+y = 102.86999999999999
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008]
+footprint = ""
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = true
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = false
+on_board = false
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = true
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008.ref_text.position]
+x = 57.15
+y = 97.79
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = true
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000008.val_text.position]
+x = 57.15
+y = 100.33
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009]
+footprint = ""
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = true
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = false
+on_board = false
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = true
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009.ref_text.position]
+x = 104.14
+y = 97.79
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = true
+
+[extras.symbols.5a3c0000-0000-4000-8000-000000000009.val_text.position]
+x = 104.14
+y = 100.33
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a]
+footprint = ""
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = true
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = false
+on_board = false
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a.fields]
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a.pin_uuids]
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a.ref_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = true
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a.ref_text.position]
+x = 88.9
+y = 118.11
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a.val_text]
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+hidden = true
+
+[extras.symbols.5a3c0000-0000-4000-8000-00000000000a.val_text.position]
+x = 88.9
+y = 120.64999999999999
+
+[extras.sheet]
+child_sheets = []
+no_connects = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.text_notes]]
+uuid = "5a3c0000-0000-4000-8000-00000000002b"
+text = "5 V to 3.3 V linear regulator with power-on LED"
+rotation = 0.0
+font_size = 2.54
+justify_h = "left"
+justify_v = "center"
+
+[extras.sheet.text_notes.position]
+x = 40.0
+y = 60.0
+
+[[extras.sheet.text_notes]]
+uuid = "5a3c0000-0000-4000-8000-00000000002c"
+text = "C1 and C2 sit close to U1. R1 sets the LED current: (3.3 V - 2.1 V) / 470 R = 2.6 mA."
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+
+[extras.sheet.text_notes.position]
+x = 40.0
+y = 68.0
+
+[[extras.sheet.text_notes]]
+uuid = "5a3c0000-0000-4000-8000-00000000002d"
+text = "Generic part values for illustration. This copy is yours to edit and is never overwritten."
+rotation = 0.0
+font_size = 1.27
+justify_h = "left"
+justify_v = "center"
+
+[extras.sheet.text_notes.position]
+x = 40.0
+y = 72.0
+
+[extras.sheet.title_block]
+comment1 = "Original sample design shipped with Signex (Apache-2.0)."
+comment2 = "Generic 5 V to 3.3 V LDO application circuit; values are illustrative."
+company = "Alp Lab"
+date = "2026-01-01"
+rev = "A"
+title = "Linear Regulator Sample"
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02"]
+id = "Connector:Conn_01x02"
+reference = "J"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Two-position header"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics.graphic]
+type = "rectangle"
+width = 0.0
+fill = "background"
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics.graphic.start]
+x = -2.54
+y = -5.08
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".graphics.graphic.end]
+x = 2.54
+y = 5.08
+
+[[extras.sheet.lib_symbols."Connector:Conn_01x02".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 180.0
+length = 2.54
+name = "Pin_1"
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin.position]
+x = 5.08
+y = 2.54
+
+[[extras.sheet.lib_symbols."Connector:Conn_01x02".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 180.0
+length = 2.54
+name = "Pin_2"
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Connector:Conn_01x02".pins.pin.position]
+x = 5.08
+y = -2.54
+
+[extras.sheet.lib_symbols."Device:C"]
+id = "Device:C"
+reference = "C"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Capacitor"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Device:C".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:C".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+x = -1.905
+y = 0.635
+
+[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+x = 1.905
+y = 0.635
+
+[[extras.sheet.lib_symbols."Device:C".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:C".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+x = -1.905
+y = -0.635
+
+[[extras.sheet.lib_symbols."Device:C".graphics.graphic.points]]
+x = 1.905
+y = -0.635
+
+[[extras.sheet.lib_symbols."Device:C".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:C".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 270.0
+length = 3.175
+name = "~"
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Device:C".pins.pin.position]
+x = 0.0
+y = 3.81
+
+[[extras.sheet.lib_symbols."Device:C".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:C".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 90.0
+length = 3.175
+name = "~"
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Device:C".pins.pin.position]
+x = 0.0
+y = -3.81
+
+[extras.sheet.lib_symbols."Device:LED"]
+id = "Device:LED"
+reference = "D"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Light emitting diode"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Device:LED".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:LED".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+x = -1.27
+y = 1.27
+
+[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+x = 1.27
+y = 1.27
+
+[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+x = 0.0
+y = -1.27
+
+[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+x = -1.27
+y = 1.27
+
+[[extras.sheet.lib_symbols."Device:LED".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:LED".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+x = -1.27
+y = -1.27
+
+[[extras.sheet.lib_symbols."Device:LED".graphics.graphic.points]]
+x = 1.27
+y = -1.27
+
+[[extras.sheet.lib_symbols."Device:LED".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:LED".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 270.0
+length = 2.54
+name = "A"
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Device:LED".pins.pin.position]
+x = 0.0
+y = 3.81
+
+[[extras.sheet.lib_symbols."Device:LED".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:LED".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 90.0
+length = 2.54
+name = "K"
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Device:LED".pins.pin.position]
+x = 0.0
+y = -3.81
+
+[extras.sheet.lib_symbols."Device:R"]
+id = "Device:R"
+reference = "R"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Resistor"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Device:R".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:R".graphics.graphic]
+type = "rectangle"
+width = 0.0
+fill = "background"
+
+[extras.sheet.lib_symbols."Device:R".graphics.graphic.start]
+x = -1.016
+y = -2.54
+
+[extras.sheet.lib_symbols."Device:R".graphics.graphic.end]
+x = 1.016
+y = 2.54
+
+[[extras.sheet.lib_symbols."Device:R".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:R".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 270.0
+length = 1.27
+name = "~"
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Device:R".pins.pin.position]
+x = 0.0
+y = 3.81
+
+[[extras.sheet.lib_symbols."Device:R".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Device:R".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 90.0
+length = 1.27
+name = "~"
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Device:R".pins.pin.position]
+x = 0.0
+y = -3.81
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3"]
+id = "Regulator:LDO_3V3"
+reference = "U"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Generic fixed 3.3 V low-dropout linear regulator"
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics.graphic]
+type = "rectangle"
+width = 0.0
+fill = "background"
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics.graphic.start]
+x = -7.62
+y = -5.08
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".graphics.graphic.end]
+x = 7.62
+y = 5.08
+
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin]
+direction = "power_input"
+shape_style = "plain"
+rotation = 0.0
+length = 2.54
+name = "VIN"
+number = "3"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin.position]
+x = -10.16
+y = 2.54
+
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin]
+direction = "power_output"
+shape_style = "plain"
+rotation = 180.0
+length = 2.54
+name = "VOUT"
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin.position]
+x = 10.16
+y = 2.54
+
+[[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin]
+direction = "ground_reference"
+shape_style = "plain"
+rotation = 90.0
+length = 2.54
+name = "GND"
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Regulator:LDO_3V3".pins.pin.position]
+x = 0.0
+y = -7.62
+
+[extras.sheet.lib_symbols."power:+3V3"]
+id = "power:+3V3"
+reference = "#PWR"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Power port +3V3"
+keywords = ""
+fp_filters = ""
+in_bom = false
+on_board = false
+in_pos_files = false
+duplicate_pin_numbers_are_jumpers = false
+pins = []
+show_pin_numbers = false
+show_pin_names = false
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."power:+3V3".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:+3V3".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+x = 0.0
+y = 0.0
+
+[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+x = 0.0
+y = 1.27
+
+[[extras.sheet.lib_symbols."power:+3V3".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:+3V3".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+x = -1.27
+y = 1.27
+
+[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+x = 1.27
+y = 1.27
+
+[extras.sheet.lib_symbols."power:+5V"]
+id = "power:+5V"
+reference = "#PWR"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Power port +5V"
+keywords = ""
+fp_filters = ""
+in_bom = false
+on_board = false
+in_pos_files = false
+duplicate_pin_numbers_are_jumpers = false
+pins = []
+show_pin_numbers = false
+show_pin_names = false
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."power:+5V".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:+5V".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+x = 0.0
+y = 0.0
+
+[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+x = 0.0
+y = 1.27
+
+[[extras.sheet.lib_symbols."power:+5V".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:+5V".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+x = -1.27
+y = 1.27
+
+[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+x = 1.27
+y = 1.27
+
+[extras.sheet.lib_symbols."power:GND"]
+id = "power:GND"
+reference = "#PWR"
+value = ""
+footprint = ""
+datasheet = ""
+description = "Power port GND"
+keywords = ""
+fp_filters = ""
+in_bom = false
+on_board = false
+in_pos_files = false
+duplicate_pin_numbers_are_jumpers = false
+pins = []
+show_pin_numbers = false
+show_pin_names = false
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."power:GND".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.0
+y = 0.0
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.0
+y = -1.27
+
+[[extras.sheet.lib_symbols."power:GND".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = -1.27
+y = -1.27
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 1.27
+y = -1.27
+
+[[extras.sheet.lib_symbols."power:GND".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = -0.762
+y = -1.905
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.762
+y = -1.905
+
+[[extras.sheet.lib_symbols."power:GND".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = -0.254
+y = -2.54
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.254
+y = -2.54

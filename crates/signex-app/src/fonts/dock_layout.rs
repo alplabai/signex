@@ -2,47 +2,56 @@
 
 use super::*;
 
-/// Persist the list of dock panels per region + their active index
-/// so the next session reopens with the same layout.
-pub fn write_dock_layout(dock: &crate::dock::DockArea) {
-    let path = prefs_path();
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
+/// Writes the dock layout into `prefs.json`. The production
+/// [`crate::dock::DockLayoutStore`]; it runs on a background thread via
+/// `Task`, never inside `update` (#692).
+pub struct PrefsDockLayoutStore {
+    path: std::path::PathBuf,
+}
 
-    fn region_to_json(
-        dock: &crate::dock::DockArea,
-        pos: crate::dock::PanelPosition,
-    ) -> serde_json::Value {
-        let kinds: Vec<&str> = dock
-            .panel_kinds(pos)
-            .iter()
-            .map(|k| panel_kind_key(*k))
-            .collect();
-        serde_json::json!({
-            "panels": kinds,
-            "collapsed": dock.is_collapsed(pos),
-        })
+impl PrefsDockLayoutStore {
+    /// The store for the user's real `prefs.json`.
+    pub fn user_prefs() -> Self {
+        Self::at(prefs_path())
     }
 
-    json["dock"] = serde_json::json!({
-        "left":   region_to_json(dock, crate::dock::PanelPosition::Left),
-        "right":  region_to_json(dock, crate::dock::PanelPosition::Right),
-        "bottom": region_to_json(dock, crate::dock::PanelPosition::Bottom),
-    });
+    /// The store for an explicit prefs file (tests).
+    pub fn at(path: std::path::PathBuf) -> Self {
+        Self { path }
+    }
+}
 
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
+impl crate::dock::DockLayoutStore for PrefsDockLayoutStore {
+    fn write(&self, layout: &crate::dock::DockLayoutSnapshot) -> Result<(), String> {
+        fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
+            let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
+            serde_json::json!({
+                "panels": kinds,
+                "collapsed": region.collapsed,
+            })
+        }
+
+        try_update_prefs_json(&self.path, "dock", |prefs| {
+            prefs.insert(
+                "dock".to_string(),
+                serde_json::json!({
+                    "left":   region_to_json(&layout.left),
+                    "right":  region_to_json(&layout.right),
+                    "bottom": region_to_json(&layout.bottom),
+                }),
+            );
+        })
     }
 }
 
 /// Rebuild a DockArea from persisted JSON. Returns None when no saved
 /// layout exists so the caller can fall back to the default seed.
 pub fn read_dock_layout() -> Option<crate::dock::DockArea> {
-    let path = prefs_path();
-    let bytes = std::fs::read(&path).ok()?;
-    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    read_dock_layout_from(load_prefs_json().as_ref())
+}
+
+pub fn read_dock_layout_from(json: Option<&serde_json::Value>) -> Option<crate::dock::DockArea> {
+    let json = json?;
     let dock_v = json.get("dock")?.as_object()?;
     let mut dock = crate::dock::DockArea::new();
     for (region_key, pos) in [

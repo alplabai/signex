@@ -33,7 +33,9 @@ pub(crate) fn passes_filter(
         SelectedKind::TextNote => SelectionFilter::Texts,
         SelectedKind::SymbolRefField | SelectedKind::SymbolValField => SelectionFilter::Parameters,
         SelectedKind::Drawing => SelectionFilter::DrawingObjects,
-        SelectedKind::Junction | SelectedKind::NoConnect => SelectionFilter::Other,
+        SelectedKind::Junction | SelectedKind::NoConnect | SelectedKind::NoErcDirective => {
+            SelectionFilter::Other
+        }
     };
     filters.contains(&required)
 }
@@ -61,6 +63,12 @@ fn all_selectable_items(
     }
     for no_connect in &snapshot.no_connects {
         items.push(SelectedItem::new(no_connect.uuid, SelectedKind::NoConnect));
+    }
+    for directive in &snapshot.no_erc_directives {
+        items.push(SelectedItem::new(
+            directive.uuid,
+            SelectedKind::NoErcDirective,
+        ));
     }
     for text_note in &snapshot.text_notes {
         items.push(SelectedItem::new(text_note.uuid, SelectedKind::TextNote));
@@ -132,6 +140,12 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
+            selection_request::SelectionRequest::ClearAll => {
+                let canvas = self.interaction_state.active_canvas_mut();
+                canvas.selected.clear();
+                canvas.clear_overlay_cache();
+                self.update_selection_info();
+            }
             selection_request::SelectionRequest::StoreSlot { slot } => {
                 let selected = self.interaction_state.canvas.selected.clone();
                 if let Some(selection_slot) = self.interaction_state.selection_slots.get_mut(slot) {
@@ -155,8 +169,13 @@ impl Signex {
             }
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    let hit =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
+                    let hit = crate::schematic_runtime::hit_test::hit_test_styled(
+                        snapshot,
+                        &self.interaction_state.active_canvas().designators,
+                        world_x,
+                        world_y,
+                        self.ui_state.net_class_styles.styles(),
+                    );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
@@ -166,14 +185,27 @@ impl Signex {
                     self.update_selection_info();
                 }
             }
-            selection_request::SelectionRequest::BoxSelect { x1, y1, x2, y2 } => {
+            selection_request::SelectionRequest::BoxSelect {
+                x1,
+                y1,
+                x2,
+                y2,
+                direction,
+            } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let rect = signex_types::schematic::Aabb::new(x1, y1, x2, y2);
                     let filters = self.interaction_state.selection_filters.clone();
-                    let mode = self.ui_state.selection_mode;
+                    let mode = crate::schematic_runtime::hit_test::SelectionMode::for_box_drag(
+                        direction,
+                        self.ui_state.drag_direction_select,
+                        self.ui_state.selection_mode,
+                    );
                     self.interaction_state.active_canvas_mut().selected =
                         crate::schematic_runtime::hit_test::hit_test_rect_mode(
-                            snapshot, &rect, mode,
+                            snapshot,
+                            &self.interaction_state.active_canvas().designators,
+                            &rect,
+                            mode,
                         )
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
@@ -186,8 +218,13 @@ impl Signex {
             }
             selection_request::SelectionRequest::SelectConnected { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    let hit =
-                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
+                    let hit = crate::schematic_runtime::hit_test::hit_test_styled(
+                        snapshot,
+                        &self.interaction_state.active_canvas().designators,
+                        world_x,
+                        world_y,
+                        self.ui_state.net_class_styles.styles(),
+                    );
                     if let Some(item) = hit {
                         self.interaction_state.active_canvas_mut().selected =
                             expand_to_net(snapshot, &item);
@@ -198,9 +235,19 @@ impl Signex {
                     }
                 }
             }
+            selection_request::SelectionRequest::FindSimilar(msg) => {
+                return self.handle_find_similar_message(msg);
+            }
+            selection_request::SelectionRequest::DragKeepingConnections => {
+                self.arm_drag_keeping_connections();
+            }
+            selection_request::SelectionRequest::CycleMode => return self.cycle_selection_mode(),
+            selection_request::SelectionRequest::LassoCommit => {
+                return self.commit_lasso_or_polyline();
+            }
             selection_request::SelectionRequest::ArmDrag => {
                 // Placeholder — full immediate-drag requires shared state
-                // across SchematicCanvas and CanvasState (which are updated
+                // across CanvasSlot and CanvasState (which are updated
                 // in different phases). Deferred; for now the user can still
                 // drag by clicking a selected item in the standard way.
                 crate::diagnostics::log_info(
@@ -211,6 +258,96 @@ impl Signex {
 
         Task::none()
     }
+
+    /// Enter key: commit whichever multi-click buffer is armed (polyline
+    /// drawing or lasso polygon), then fall through to opening a selected
+    /// child sheet.
+    fn commit_lasso_or_polyline(&mut self) -> Task<Message> {
+        // Altium-style single terminator — Enter commits
+        // whichever multi-click buffer is currently armed:
+        //   - Lasso: selects inside the polygon.
+        //   - Polyline (Tool::Polyline): writes a SchDrawing.
+        //   - Arc (Tool::Arc): arms need 3 clicks regardless.
+        if self.interaction_state.current_tool == Tool::Polyline
+            && self.interaction_state.polyline_points.len() >= 2
+        {
+            let pp_w = self
+                .document_state
+                .panel_ctx
+                .pre_placement
+                .as_ref()
+                .map(|pp| pp.shape_width_mm)
+                .unwrap_or(0.0);
+            let pp_fill = self
+                .document_state
+                .panel_ctx
+                .pre_placement
+                .as_ref()
+                .map(|pp| pp.shape_fill)
+                .unwrap_or(signex_types::schematic::FillType::None);
+            let pts = std::mem::take(&mut self.interaction_state.polyline_points);
+            let drawing = signex_types::schematic::SchDrawing::Polyline {
+                uuid: uuid::Uuid::now_v7(),
+                points: pts,
+                width: pp_w,
+                fill: pp_fill,
+                stroke_color: None,
+                locked: false,
+            };
+            self.apply_engine_command(
+                signex_engine::Command::PlaceSchDrawing { drawing },
+                false,
+                false,
+            );
+            self.interaction_state
+                .active_canvas_mut()
+                .polyline_points
+                .clear();
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
+            return Task::none();
+        }
+        if let Some(pts) = self.ui_state.lasso_polygon.take()
+            && pts.len() >= 3
+            && let Some(snapshot) = self.active_render_snapshot()
+        {
+            let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
+            let filters = self.interaction_state.selection_filters.clone();
+            self.interaction_state.active_canvas_mut().selected =
+                crate::schematic_runtime::hit_test::hit_test_polygon(snapshot, &poly)
+                    .into_iter()
+                    .filter(|h| passes_filter(h, snapshot, &filters))
+                    .collect();
+            self.update_selection_info();
+        }
+        self.sync_lasso_polygon_to_canvas();
+        if self.open_selected_child_sheet() {
+            return Task::none();
+        }
+        Task::none()
+    }
+
+    /// Cycle the rubber-band selection mode (Shift+S).
+    fn cycle_selection_mode(&mut self) -> Task<Message> {
+        use crate::schematic_runtime::hit_test::SelectionMode;
+        self.ui_state.selection_mode = match self.ui_state.selection_mode {
+            SelectionMode::Inside => SelectionMode::Touching,
+            SelectionMode::Touching => SelectionMode::Inside,
+            SelectionMode::Single => SelectionMode::Inside,
+        };
+        crate::diagnostics::log_info(format!(
+            "Selection mode: {:?}",
+            self.ui_state.selection_mode
+        ));
+        if self.ui_state.drag_direction_select {
+            crate::diagnostics::log_info(
+                "Select by drag direction is on: the drag direction decides box selection \
+                 (Preferences > Editing turns it off)",
+            );
+        }
+        Task::none()
+    }
 }
 
 /// Given a hit on a wire/bus/junction/label, return the full set of net-geom
@@ -218,10 +355,13 @@ impl Signex {
 /// Symbols and their pins are intentionally excluded — this matches Altium's
 /// "Select » Connection" behaviour which picks net geometry only.
 ///
-/// Endpoints are quantised to 0.001 mm (1 nm in Standard-space integer units)
-/// and stored in a HashSet — lookup is O(1), so the overall walk is
-/// O(N · passes) instead of the naive O(P²·N²). Critical for power nets
-/// with hundreds of wires.
+/// Endpoints are quantised to 0.001 mm (1 µm) and stored in a HashSet, so
+/// lookup is O(1) and the overall walk is O(N · passes) instead of the naive
+/// O(P²·N²). Critical for power nets with hundreds of wires.
+///
+/// Known limit (deferred): connectivity here is endpoint-sharing only, so it
+/// can over-select across buses and misses T-junctions; the authoritative
+/// netlist lives in `signex-net`.
 fn expand_to_net(
     snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     seed: &signex_types::schematic::SelectedItem,

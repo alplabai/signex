@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::format::{UnknownColumns, UnknownFields};
 use crate::property::SchematicProperty;
 
 // ---------------------------------------------------------------------------
@@ -279,9 +280,9 @@ impl SymbolTransform {
         Point::new(rx + self.origin.x, ry + self.origin.y)
     }
 
-    /// Compose a child rotation (degrees, clockwise positive in
-    /// schematic-screen space) with the parent's rotation + mirror so
-    /// the rendered angle ends up correct.
+    /// Compose a child rotation (degrees, counter-clockwise positive on
+    /// screen, the same convention as `Symbol::rotation`) with the parent's
+    /// rotation + mirror so the rendered angle ends up correct.
     #[must_use]
     pub fn apply_angle(&self, child_deg: f64) -> f64 {
         let mut r = self.rotation_deg + child_deg;
@@ -412,11 +413,16 @@ pub enum LabelType {
 // Text property (for reference/value fields)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextProp {
     pub position: Point,
     pub rotation: f64,
     pub font_size: f64,
+    /// Font family the author chose for this text, `None` to inherit the
+    /// sheet default (see [`crate::font`]). Never rewritten when the family
+    /// is not installed: resolution happens at render time only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_family: Option<String>,
     #[serde(default)]
     pub justify_h: HAlign,
     #[serde(default)]
@@ -425,7 +431,7 @@ pub struct TextProp {
     pub hidden: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SymbolInstance {
     #[serde(default)]
     pub project: String,
@@ -437,7 +443,7 @@ pub struct SymbolInstance {
     pub unit: u32,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct SheetInstance {
     #[serde(default)]
     pub project: String,
@@ -459,7 +465,7 @@ pub struct SheetInstance {
 /// - `body_style == 0` → common to all body styles (normal + De Morgan)
 /// - `body_style == 1` → normal body style (default)
 /// - `body_style == 2` → De Morgan body style
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibGraphic {
     #[serde(default)]
     pub unit: u32,
@@ -469,7 +475,7 @@ pub struct LibGraphic {
 }
 
 /// A pin inside a library symbol, tagged with unit and body-style.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibPin {
     #[serde(default)]
     pub unit: u32,
@@ -482,7 +488,7 @@ fn default_body_style() -> u32 {
     1
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibSymbol {
     pub id: String,
     #[serde(default)]
@@ -519,11 +525,23 @@ pub struct LibSymbol {
     pub pin_name_offset: f64,
 }
 
+impl LibSymbol {
+    /// Whether `other` is the same body: every stored field equal. The one
+    /// comparison behind "the sheet's copy differs from the library's" for
+    /// both a library placement and a paste.
+    pub fn same_body(&self, other: &Self) -> bool {
+        matches!(
+            (serde_json::to_string(self), serde_json::to_string(other)),
+            (Ok(a), Ok(b)) if a == b
+        )
+    }
+}
+
 fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Graphic {
     Polyline {
@@ -606,7 +624,7 @@ pub enum Graphic {
 // Pin
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pin {
     pub direction: PinDirection,
     pub shape_style: PinShapeStyle,
@@ -631,7 +649,7 @@ pub struct Pin {
 // Symbol instance
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     pub uuid: Uuid,
     pub lib_id: String,
@@ -652,6 +670,11 @@ pub struct Symbol {
     pub mirror_y: bool,
     #[serde(default = "default_unit")]
     pub unit: u32,
+    /// Which body of the library symbol this instance shows. `Alternate`
+    /// (De Morgan) only takes effect when the library symbol has one for
+    /// `unit`; otherwise the normal body is drawn and wired.
+    #[serde(default)]
+    pub body_style: BodyStyle,
     #[serde(default)]
     pub is_power: bool,
     pub ref_text: Option<TextProp>,
@@ -711,16 +734,98 @@ pub struct Symbol {
     /// current `ComponentRow.version` on schematic open.
     #[serde(default)]
     pub library_version: String,
+    /// Keys in this symbol's `[extras.symbols.<uuid>]` table that this
+    /// build does not recognise, kept so a save re-emits them. Empty for
+    /// every file written by this build.
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
+    /// TSV columns this build does not recognise, kept per row so a
+    /// save re-emits them (see [`UnknownColumns`]).
+    #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
+    pub unknown_columns: UnknownColumns,
 }
 
 fn default_unit() -> u32 {
     1
 }
 
+/// Blank symbol at the origin with a nil uuid; serde defaults elsewhere
+/// (`unit` 1, `in_bom` and `on_board` true). For fixtures and partial
+/// literals; production code builds symbols exhaustively and mints real uuids.
+impl Default for Symbol {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::nil(),
+            lib_id: String::new(),
+            reference: String::new(),
+            value: String::new(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: Point::default(),
+            rotation: 0.0,
+            mirror_x: false,
+            mirror_y: false,
+            unit: default_unit(),
+            body_style: BodyStyle::Normal,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: HashMap::new(),
+            custom_properties: Vec::new(),
+            pin_uuids: HashMap::new(),
+            instances: Vec::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+            unknown: UnknownFields::default(),
+            unknown_columns: UnknownColumns::default(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod body_style;
+pub use body_style::{BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, BodyStyle, item_shown, shown_on};
+mod bus_entry;
+pub use bus_entry::*;
+mod bus_name;
+pub use bus_name::*;
+mod field_style;
+mod instance_path;
+pub use field_style::{field_effective_style, readable_text_style};
+pub use instance_path::InstancePath;
+mod parts;
+pub use parts::*;
+mod pin_map;
+pub use pin_map::{PinMapping, PinMatchedBy, PinPair, map_pins, pin_key};
 mod sheet;
 pub use sheet::*;
+mod sheet_frame;
+pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
+mod sheet_size;
+pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
+mod hotspot;
+pub use hotspot::{
+    SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot, snap_to_hotspot,
+};
+mod power_port_symbol;
+pub use power_port_symbol::{PowerPortStyle, power_port_graphics, power_port_lib_symbol};
+mod symbol_geometry;
+pub use symbol_geometry::{
+    SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,
+    primitives_bounds, text_aabb, text_aabb_with_width, text_height_mm,
+};
+
+#[cfg(test)]
+mod default_tests;
 
 #[cfg(test)]
 mod symbol_transform_tests {

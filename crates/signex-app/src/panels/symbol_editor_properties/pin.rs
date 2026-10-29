@@ -3,7 +3,12 @@
 use iced::widget::{Column, column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::super::{PanelMsg, SymbolPinSummary};
+use super::super::{NumericDraft, NumericFieldKey, PanelMsg, SymbolPinSummary, numeric_input};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// IEEE-symbol pick_list row used four times (Inside / Inside Edge /
 /// Outside Edge / Outside) on the pin Properties surface. `slot`
@@ -52,20 +57,20 @@ fn view_pin_symbol_picker<'a>(
             value,
         }
     })
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .text_size(10);
     container(
         row![
             text(label.to_string())
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             container(picker).width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -75,6 +80,7 @@ fn view_pin_symbol_picker<'a>(
 pub(super) fn view_pin_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     pin: &'a SymbolPinSummary,
+    draft: Option<&NumericDraft>,
     muted: Color,
     primary: Color,
     border_c: Color,
@@ -85,19 +91,19 @@ pub(super) fn view_pin_selection<'a>(
     let designator_row: Element<'a, PanelMsg> = container(
         row![
             text("Designator")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("number", pin.number.as_str())
-                .padding([2, 4])
-                .size(11)
+                .padding([SP.xs, SP.s])
+                .size(TS.body)
                 .on_input(move |s| PanelMsg::SymEditorSetPinNumber { pin_idx, value: s })
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(designator_row);
@@ -106,19 +112,19 @@ pub(super) fn view_pin_selection<'a>(
     let name_row: Element<'a, PanelMsg> = container(
         row![
             text("Name")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("name", pin.name.as_str())
-                .padding([2, 4])
-                .size(11)
+                .padding([SP.xs, SP.s])
+                .size(TS.body)
                 .on_input(move |s| PanelMsg::SymEditorSetPinName { pin_idx, value: s })
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(name_row);
@@ -161,20 +167,20 @@ pub(super) fn view_pin_selection<'a>(
                 .unwrap_or(signex_library::PinDirection::Unspecified);
             PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
         })
-        .padding([2, 4])
+        .padding([SP.xs, SP.s])
         .text_size(11);
     let electrical_row: Element<'a, PanelMsg> = container(
         row![
             text("Electrical")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             container(electrical_picker).width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(electrical_row);
@@ -185,25 +191,17 @@ pub(super) fn view_pin_selection<'a>(
     let pos_x_row: Element<'a, PanelMsg> = container(
         row![
             text("X")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pos_x))
-                .padding([2, 4])
-                .size(11)
-                .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(pos_x);
-                    PanelMsg::SymEditorSetPinX {
-                        pin_idx,
-                        value: parsed,
-                    }
-                })
-                .width(Length::FillPortion(3)),
+            numeric_input("mm", NumericFieldKey::PinX(pin_idx), pos_x, draft)
+                .padding([SP.xs, SP.s])
+                .size(TS.body),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(pos_x_row);
@@ -211,25 +209,17 @@ pub(super) fn view_pin_selection<'a>(
     let pos_y_row: Element<'a, PanelMsg> = container(
         row![
             text("Y")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pos_y))
-                .padding([2, 4])
-                .size(11)
-                .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(pos_y);
-                    PanelMsg::SymEditorSetPinY {
-                        pin_idx,
-                        value: parsed,
-                    }
-                })
-                .width(Length::FillPortion(3)),
+            numeric_input("mm", NumericFieldKey::PinY(pin_idx), pos_y, draft)
+                .padding([SP.xs, SP.s])
+                .size(TS.body),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(pos_y_row);
@@ -266,20 +256,20 @@ pub(super) fn view_pin_selection<'a>(
             PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
         },
     )
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .text_size(11);
     let orientation_row: Element<'a, PanelMsg> = container(
         row![
             text("Orientation")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             container(orientation_picker).width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(orientation_row);
@@ -288,25 +278,17 @@ pub(super) fn view_pin_selection<'a>(
     let length_row: Element<'a, PanelMsg> = container(
         row![
             text("Length")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("mm", &format!("{:.3}", pin.length))
-                .padding([2, 4])
-                .size(11)
-                .on_input(move |s| {
-                    let parsed = s.trim().parse::<f64>().unwrap_or(0.0);
-                    PanelMsg::SymEditorSetPinLength {
-                        pin_idx,
-                        value: parsed,
-                    }
-                })
-                .width(Length::FillPortion(3)),
+            numeric_input("mm", NumericFieldKey::PinLength(pin_idx), pin.length, draft)
+                .padding([SP.xs, SP.s])
+                .size(TS.body),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(length_row);
@@ -316,12 +298,12 @@ pub(super) fn view_pin_selection<'a>(
     let part_row: Element<'a, PanelMsg> = container(
         row![
             text("Part Number")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("1, or 0 for shared", &part_now.to_string(),)
-                .padding([2, 4])
-                .size(11)
+                .padding([SP.xs, SP.s])
+                .size(TS.body)
                 .on_input(move |s| {
                     let parsed = s.trim().parse::<u8>().unwrap_or(part_now);
                     PanelMsg::SymEditorSetPinPartNumber {
@@ -331,10 +313,10 @@ pub(super) fn view_pin_selection<'a>(
                 })
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(part_row);
@@ -343,19 +325,19 @@ pub(super) fn view_pin_selection<'a>(
     let description_row: Element<'a, PanelMsg> = container(
         row![
             text("Description")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("free text", pin.details.description.as_str())
-                .padding([2, 4])
-                .size(11)
+                .padding([SP.xs, SP.s])
+                .size(TS.body)
                 .on_input(move |s| PanelMsg::SymEditorSetPinDescription { pin_idx, value: s })
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(description_row);
@@ -365,19 +347,19 @@ pub(super) fn view_pin_selection<'a>(
     let function_row: Element<'a, PanelMsg> = container(
         row![
             text("Function")
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
             iced::widget::text_input("alt-names, comma-separated", &function_csv)
-                .padding([2, 4])
-                .size(11)
+                .padding([SP.xs, SP.s])
+                .size(TS.body)
                 .on_input(move |s| PanelMsg::SymEditorSetPinFunctionCsv { pin_idx, value: s })
                 .width(Length::FillPortion(3)),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center),
     )
-    .padding([3, 8])
+    .padding([3.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(function_row);
@@ -386,9 +368,9 @@ pub(super) fn view_pin_selection<'a>(
     let toggle_row = |label: &'static str, value: bool, msg: PanelMsg| -> Element<'a, PanelMsg> {
         row![
             iced::widget::checkbox(value)
-                .size(14)
+                .size(TS.heading)
                 .on_toggle(move |_| msg.clone()),
-            text(label.to_string()).size(10).color(muted),
+            text(label.to_string()).size(TS.caption).color(muted),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center)
@@ -417,16 +399,17 @@ pub(super) fn view_pin_selection<'a>(
                 PanelMsg::SymEditorTogglePinLocked(pin_idx),
             ),
         ]
-        .spacing(2),
+        .spacing(SP.xs),
     )
-    .padding([6, 8])
+    .padding([6.0, SP.m])
     .width(Length::Fill)
     .into();
     col = col.push(toggles_row);
 
     // ── IEEE Symbols (Inside / Inside Edge / Outside Edge / Outside) ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Symbols").size(10).color(primary)).padding([4, 8]));
+    col =
+        col.push(container(text("Symbols").size(TS.caption).color(primary)).padding([SP.s, SP.m]));
     col = col.push(view_pin_symbol_picker(
         "Inside",
         pin.details.inside_symbol,

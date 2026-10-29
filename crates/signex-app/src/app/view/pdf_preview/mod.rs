@@ -7,6 +7,10 @@
 
 use super::*;
 
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
+mod page_setup;
 mod preview;
 mod settings;
 
@@ -53,7 +57,7 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(label).size(12).color(label_color)).padding([6, 18]);
+            let inner = container(text(label).size(TS.label).color(label_color)).padding([6, 18]);
             mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreview(PrintPreviewMsg::SetTab(this)))
                 .interaction(iced::mouse::Interaction::Pointer)

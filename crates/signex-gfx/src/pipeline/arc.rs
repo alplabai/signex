@@ -118,23 +118,30 @@ impl ArcPipeline {
     }
 
     pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, arcs: &[Arc]) {
-        self.instance_count = arcs.len() as u32;
-
         if arcs.is_empty() {
+            self.instance_count = 0;
             return;
         }
 
-        if arcs.len() > self.instance_capacity {
-            self.instance_capacity = arcs.len().next_power_of_two();
-            self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("signex_gfx_arc_instances"),
-                size: (self.instance_capacity * std::mem::size_of::<Arc>()) as wgpu::BufferAddress,
+        let writable = super::growth::ensure_capacity(
+            device,
+            &mut self.instance_buffer,
+            &mut self.instance_capacity,
+            arcs.len(),
+            &super::growth::GrowthParams {
+                elem_size: std::mem::size_of::<Arc>(),
+                label: "signex_gfx_arc_instances",
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-        }
+                max_buffer_size: device.limits().max_buffer_size,
+            },
+        );
+        self.instance_count = writable as u32;
 
-        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(arcs));
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&arcs[..writable]),
+        );
     }
 
     pub fn draw(
@@ -150,6 +157,12 @@ impl ArcPipeline {
         render_pass.set_bind_group(0, camera_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
         render_pass.draw(0..6, 0..self.instance_count);
+    }
+
+    /// The render pipeline, for callers that draw sub-ranges of their own
+    /// buffers with it (`pipeline::ordered`).
+    pub(crate) fn render_pipeline(&self) -> &wgpu::RenderPipeline {
+        &self.render_pipeline
     }
 
     pub fn instance_count(&self) -> u32 {

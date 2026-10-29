@@ -1,22 +1,26 @@
-//! Datasheet tab — small pick_list + value control bound to
-//! `state.row.datasheet`. Standalone Component-Preview tab per
-//! `v0.9-refactor-2-plan.md` §11.5.
+//! Datasheet tab — one card per document on the row (#1231), the
+//! primary first, each with a label, a mode pick_list and a value
+//! control. Standalone Component-Preview tab.
 //!
-//! Two modes:
+//! Two modes per document:
 //!  * **URL** — plain text input. Sets `DatasheetRef::Url`.
 //!  * **Pinned PDF** — file picker. Hashes the bytes and sets
 //!    `DatasheetRef::HashPinned { hash, filename }`.
 //!
-//! The mode is derived from the row's `DatasheetRef` variant.
+//! The mode is derived from the document's `DatasheetRef` variant.
 
 use iced::widget::{Space, button, column, container, pick_list, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
-use signex_library::DatasheetRef;
+use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
-use super::super::messages::{EditorMsg, LibraryMessage};
+use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Mode picker entries — drives both the visible pick_list and the
 /// inline message routing.
@@ -49,57 +53,169 @@ impl std::fmt::Display for DatasheetMode {
     }
 }
 
-/// Render the Datasheet tab. Reads / writes `state.row.datasheet`.
+/// Render the Datasheet tab: one card per document in
+/// `state.row.documents()`, the primary first, then "Add document".
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
+    let docs = state.row.documents();
+    let count = docs.len();
 
-    let datasheet = Some(&state.row.datasheet);
-    let mode = DatasheetMode::from_ref(datasheet);
-    let lib_path_mode = address.library_path.clone();
-    let table_mode = address.table.clone();
-    let row_id = address.row_id;
+    let mut list = column![].spacing(SP.m).width(Length::Fill);
+    for (index, doc) in docs.into_iter().enumerate() {
+        let error = state.datasheet_errors.get(&index).map(String::as_str);
+        list = list.push(view_document(
+            index,
+            count,
+            doc,
+            error,
+            tokens,
+            address.clone(),
+        ));
+    }
+
+    let add = small_button("Add document", tokens).on_press(event(&address, DatasheetMsg::Add));
+
+    column![
+        list,
+        Space::new().height(6),
+        row![
+            text(
+                "The first document is the primary: it is the one the schematic opens. \
+                 A pinned PDF is stored beside the library file, named by its hash, when \
+                 you save the row, and a git-backed library commits it with the row. A \
+                 library without a local folder (a server library) cannot store PDFs: \
+                 use a URL there."
+            )
+            .size(TS.caption)
+            .color(muted)
+            .width(Length::Fill),
+            Space::new().width(8),
+            add,
+        ]
+        .align_y(iced::Alignment::Center),
+    ]
+    .spacing(0)
+    .width(Length::Fill)
+    .into()
+}
+
+fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
+    LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg: EditorMsg::Datasheet(msg),
+    }
+}
+
+fn small_button<'a>(
+    label: &'a str,
+    tokens: &'a ThemeTokens,
+) -> iced::widget::Button<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    button(text(label).size(TS.caption).color(text_c))
+        .padding([SP.xs, SP.m])
+        .style(crate::styles::outline_button(tokens))
+}
+
+/// One document card: its role and label, the mode picker, the value
+/// control, and the reorder / remove buttons.
+fn view_document<'a>(
+    index: usize,
+    count: usize,
+    doc: DatasheetDoc,
+    error: Option<&'a str>,
+    tokens: &'a ThemeTokens,
+    address: EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let muted = theme_ext::text_secondary(tokens);
+    let mode = DatasheetMode::from_ref(Some(&doc.source));
+
+    let mode_address = address.clone();
     let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
-        LibraryMessage::EditorEvent {
-            library_path: lib_path_mode.clone(),
-            table: table_mode.clone(),
-            row_id,
-            msg: EditorMsg::DatasheetSetMode(m),
-        }
+        event(&mode_address, DatasheetMsg::SetMode(index, m))
     })
     .text_size(11)
-    .padding([4, 8]);
+    .padding([SP.s, SP.m]);
 
-    let mode_row = row![
-        text("Datasheet").size(10).color(muted),
+    let label_address = address.clone();
+    let label_input = text_input("Datasheet", &doc.label)
+        .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
+        .padding([SP.s, SP.m])
+        .size(TS.body)
+        .width(Length::Fixed(160.0));
+
+    let mut actions = row![].spacing(SP.s).align_y(iced::Alignment::Center);
+    if index > 0 {
+        actions = actions.push(
+            small_button("Make primary", tokens)
+                .on_press(event(&address, DatasheetMsg::Move { from: index, to: 0 })),
+        );
+        actions = actions.push(small_button("Up", tokens).on_press(event(
+            &address,
+            DatasheetMsg::Move {
+                from: index,
+                to: index - 1,
+            },
+        )));
+    }
+    if index + 1 < count {
+        actions = actions.push(small_button("Down", tokens).on_press(event(
+            &address,
+            DatasheetMsg::Move {
+                from: index,
+                to: index + 1,
+            },
+        )));
+    }
+    actions = actions.push(
+        small_button("Remove", tokens).on_press(event(&address, DatasheetMsg::Remove(index))),
+    );
+
+    let header = row![
+        text(if index == 0 { "Primary" } else { "Document" })
+            .size(TS.caption)
+            .color(muted),
+        Space::new().width(8),
+        label_input,
         Space::new().width(Length::Fill),
         mode_picker,
     ]
     .align_y(iced::Alignment::Center);
 
     let value_row: Element<'a, LibraryMessage> = match mode {
-        DatasheetMode::Url => view_url_input(datasheet, address.clone()),
-        DatasheetMode::PinnedPdf => view_pinned_input(datasheet, tokens, address.clone()),
+        DatasheetMode::Url => view_url_input(index, &doc.source, address.clone()),
+        DatasheetMode::PinnedPdf => view_pinned_input(index, &doc.source, tokens, address.clone()),
     };
 
-    column![
-        mode_row,
-        Space::new().height(4),
-        value_row,
-        Space::new().height(2),
-        text(match mode {
-            DatasheetMode::Url => "Tip: paste a public datasheet URL.",
-            DatasheetMode::PinnedPdf => {
-                "Pinned PDFs are content-addressed — the hash travels with the part."
-            }
-        })
-        .size(10)
-        .color(muted),
-    ]
-    .spacing(0)
+    let error_row: Element<'a, LibraryMessage> = match error {
+        Some(reason) => column![
+            text(reason)
+                .size(TS.body)
+                .color(theme_ext::error_color(tokens)),
+            Space::new().height(4),
+        ]
+        .into(),
+        None => Space::new().height(0).into(),
+    };
+
+    container(
+        column![
+            header,
+            Space::new().height(4),
+            value_row,
+            Space::new().height(4),
+            error_row,
+            row![Space::new().width(Length::Fill), actions],
+        ]
+        .spacing(0),
+    )
+    .padding(SP.m)
+    .style(crate::styles::modal_card(tokens))
     .width(Length::Fill)
     .into()
 }
@@ -109,94 +225,76 @@ pub fn view<'a>(
 // ─────────────────────────────────────────────────────────────────────
 
 fn view_url_input<'a>(
-    datasheet: Option<&'a DatasheetRef>,
+    index: usize,
+    source: &DatasheetRef,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let url_value = match datasheet {
-        Some(DatasheetRef::Url { url }) => url.clone(),
+    let url_value = match source {
+        DatasheetRef::Url { url } => url.clone(),
         _ => String::new(),
     };
-    let lib_path = address.library_path;
-    let table = address.table;
-    let row_id = address.row_id;
     text_input("https://example.com/datasheet.pdf", &url_value)
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path.clone(),
-            table: table.clone(),
-            row_id,
-            msg: EditorMsg::DatasheetSetUrl(s),
-        })
-        .padding([4, 8])
-        .size(12)
+        .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
+        .padding([SP.s, SP.m])
+        .size(TS.label)
         .into()
 }
 
 fn view_pinned_input<'a>(
-    datasheet: Option<&'a DatasheetRef>,
+    index: usize,
+    source: &DatasheetRef,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let upload_btn =
-        button(container(text("Upload PDF…").size(11).color(iced::Color::WHITE)).padding([4, 14]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: address.library_path.clone(),
-                table: address.table.clone(),
-                row_id: address.row_id,
-                msg: EditorMsg::DatasheetUploadDialog,
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            });
+    let upload_btn = button(
+        container(text("Upload PDF…").size(TS.body).color(iced::Color::WHITE))
+            .padding([SP.s, 14.0]),
+    )
+    .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.00, 0.47, 0.84,
+        ))),
+        text_color: iced::Color::WHITE,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
 
-    let summary: Element<'a, LibraryMessage> = match datasheet {
-        Some(DatasheetRef::HashPinned { hash, filename }) => {
+    let summary: Element<'a, LibraryMessage> = match source {
+        DatasheetRef::HashPinned { hash, filename } if !hash.is_empty() => {
             let short_hash = if hash.len() > 12 {
-                format!("{}…", &hash[..12])
+                format!("{}…", crate::text_trunc::prefix_within_bytes(hash, 12))
             } else {
                 hash.clone()
             };
-            container(
-                column![
-                    row![
-                        text(filename.clone()).size(11).color(text_c),
-                        Space::new().width(Length::Fill),
-                        text(short_hash).size(10).color(muted),
-                    ]
-                    .align_y(iced::Alignment::Center),
-                ]
-                .spacing(0),
-            )
-            .padding(8)
-            .style(crate::styles::modal_card(tokens))
-            .width(Length::Fill)
+            row![
+                text(filename.clone()).size(TS.body).color(text_c),
+                Space::new().width(Length::Fill),
+                text(short_hash).size(TS.caption).color(muted),
+            ]
+            .align_y(iced::Alignment::Center)
             .into()
         }
-        _ => container(
-            text("No PDF attached yet — click \"Upload PDF…\".")
-                .size(11)
-                .color(muted),
-        )
-        .padding(8)
-        .style(crate::styles::modal_card(tokens))
-        .width(Length::Fill)
-        .into(),
+        _ => text("No PDF attached yet — click \"Upload PDF…\".")
+            .size(TS.body)
+            .color(muted)
+            .into(),
     };
 
-    row![summary, Space::new().width(8), upload_btn]
-        .align_y(iced::Alignment::Center)
-        .into()
+    row![
+        container(summary).width(Length::Fill),
+        Space::new().width(8),
+        upload_btn
+    ]
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 #[cfg(test)]

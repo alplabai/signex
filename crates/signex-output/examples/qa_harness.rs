@@ -80,6 +80,7 @@ fn main() {
             sheet_name: entry.name.clone(),
             sheet_number: i + 1,
             sheet_count: project.sheets.len().max(1),
+            placement: Default::default(),
         });
     }
 
@@ -98,11 +99,15 @@ fn main() {
         company: tb.get("company").cloned().unwrap_or_default(),
         comments: [comment(1), comment(2), comment(3), comment(4)],
         custom_fields: std::collections::BTreeMap::new(),
+        project_parameters: None,
     };
     let ctx = ExportContext {
         sheets: snapshots,
         metadata,
         netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
     };
 
     println!();

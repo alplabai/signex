@@ -6,6 +6,12 @@
 //! behaviour change.
 
 use super::super::*;
+use super::font_row::font_family_row;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 pub(in crate::panels) fn view_selected_element_properties<'a>(
     ctx: &'a PanelContext,
@@ -13,8 +19,12 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let input_bg = crate::styles::ti(ctx.tokens.selection);
-    let input_bdr = crate::styles::ti(ctx.tokens.accent);
+    let palette = PanelPalette::from_tokens(&ctx.tokens);
+    let PanelPalette {
+        input_bg,
+        input_bdr,
+        ..
+    } = palette;
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
     let elem_type = ctx
@@ -36,8 +46,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
     // ── Header ──
     col = col.push(
-        container(text(elem_type.to_owned()).size(11).color(primary))
-            .padding([6, 8])
+        container(text(elem_type.to_owned()).size(TS.body).color(primary))
+            .padding([6.0, SP.m])
             .width(Length::Fill),
     );
     col = col.push(thin_sep(border_c));
@@ -52,42 +62,16 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let position = get("Position");
         let rotation_str = get("Rotation");
         let lib_id = get("Library ID");
-        let rotation_deg = rotation_str
-            .trim_end_matches('°')
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
-        // Pick a Style token by looking inside the lib_id (same logic the
-        // built-in power renderer uses).
-        let lid = lib_id.to_lowercase();
-        let current_style =
-            if lid.contains("gnd") && !lid.contains("earth") && !lid.contains("gndref") {
-                "Power Ground"
-            } else if lid.contains("gndref") {
-                "Signal Ground"
-            } else if lid.contains("earth") {
-                "Earth"
-            } else if lid.contains("arrow") {
-                "Arrow"
-            } else if lid.contains("wave") {
-                "Wave"
-            } else if lid.contains("circle") {
-                "Circle"
-            } else {
-                "Bar"
-            };
-        let style_options: Vec<String> = [
-            "Bar",
-            "Arrow",
-            "Wave",
-            "Circle",
-            "Power Ground",
-            "Signal Ground",
-            "Earth",
-        ]
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
+        let library_name = get("Library");
+        let library_drifted = get("Library Drift") == "Yes";
+        let rotation_deg = rotation_degrees(&rotation_str);
+        // The Style row reads the same classifier the built-in power-port
+        // body is drawn from, so the style shown is the shape on the canvas.
+        let current_style = signex_types::schematic::PowerPortStyle::of(&lib_id).label();
+        let style_options: Vec<String> = signex_types::schematic::PowerPortStyle::ALL
+            .iter()
+            .map(|s| s.label().to_string())
+            .collect();
 
         // ── Location ──
         let pos_loc = position.clone();
@@ -115,11 +99,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     rotation_opts,
                     rot_label,
                     move |s| {
-                        let deg = s
-                            .split_whitespace()
-                            .next()
-                            .and_then(|n| n.parse::<f64>().ok())
-                            .unwrap_or(0.0);
+                        let deg = pick_list_degrees(&s);
                         PanelMsg::EditSymbolRotation(id, deg)
                     },
                     muted,
@@ -149,29 +129,18 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     style_options,
                     current_style.to_string(),
                     move |style_label| {
-                        // Map Altium Style label → lib_id keyword the built-in
-                        // power renderer recognizes.
-                        let tag = match style_label.as_str() {
-                            "Bar" => "bar",
-                            "Arrow" => "arrow",
-                            "Wave" => "wave",
-                            "Circle" => "circle",
-                            "Power Ground" => "GND",
-                            "Signal Ground" => "GNDREF",
-                            "Earth" => "Earth",
-                            _ => "bar",
-                        };
-                        let new_lib = format!("power:{tag}");
-                        // The built-in renderer flips body direction when
-                        // lib_id contains "gnd". Compensate rotation so the
-                        // port keeps its current visual orientation: if we
-                        // are switching between gnd-like and non-gnd-like,
-                        // rotate by +180° from current, else keep current.
-                        let old_gnd = base_lib.to_lowercase().contains("gnd")
-                            && !base_lib.to_lowercase().contains("earth");
-                        let new_gnd = new_lib.to_lowercase().contains("gnd")
-                            && !new_lib.to_lowercase().contains("earth");
-                        let target_rot = if old_gnd != new_gnd {
+                        use signex_types::schematic::PowerPortStyle;
+                        let new_style = PowerPortStyle::ALL
+                            .into_iter()
+                            .find(|s| s.label() == style_label)
+                            .unwrap_or(PowerPortStyle::Bar);
+                        let new_lib = format!("power:{}", new_style.lib_tag());
+                        // A ground body hangs below its connection point and
+                        // every other style rises above it. Turn the port by
+                        // 180° when the direction flips, so it keeps its
+                        // current visual orientation.
+                        let old_down = PowerPortStyle::of(&base_lib).hangs_down();
+                        let target_rot = if old_down != new_style.hangs_down() {
                             (current_rot + 180.0).rem_euclid(360.0)
                         } else {
                             current_rot
@@ -184,7 +153,15 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     },
                     muted,
                 ));
-                c
+                super::library_rows::push_library_rows(
+                    c,
+                    id,
+                    &library_name,
+                    library_drifted,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                )
             },
         ));
 
@@ -287,7 +264,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             border_c,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(net_params_tabs(primary, muted, input_bg, input_bdr));
+                c = c.push(net_params_tabs(primary, input_bg, input_bdr));
                 c = c.push(net_params_header(muted, border_c));
                 c = c.push(empty_section_row("No Parameters", muted, border_c));
                 c = c.push(empty_section_row("No Rules", muted, border_c));
@@ -308,6 +285,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let datasheet = get("Datasheet");
             let footprint = get("Footprint");
             let lib_id = get("Library ID");
+            let library_name = get("Library");
+            let symbol_choices = ctx.symbol_choices.clone();
+            let library_drifted = get("Library Drift") == "Yes";
+            let body = get("Body Style");
             let position = get("Position");
             let rotation = get("Rotation");
             let locked = get("Locked") == "Yes";
@@ -320,6 +301,16 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 .selection_info
                 .iter()
                 .any(|(k, v)| k == "Mirror" && v == "Y");
+            // The library row's documents (#1231): every
+            // ("Document: LABEL", value) tuple, the primary first.
+            let documents: Vec<(String, String)> = ctx
+                .selection_info
+                .iter()
+                .filter_map(|(k, v)| {
+                    k.strip_prefix(crate::library::row_documents::DOCUMENT_KEY)
+                        .map(|label| (label.to_string(), v.clone()))
+                })
+                .collect();
             // Custom parameters: every ("Param: NAME", value) tuple.
             let params: Vec<(String, String)> = ctx
                 .selection_info
@@ -367,6 +358,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 input_bdr,
                             ));
                         }
+                        for (label, value) in &documents {
+                            c = c.push(form_input_row(label, value, muted, input_bg, input_bdr));
+                        }
                         c = c.push(form_input_row(
                             "Library ID",
                             &lib_id,
@@ -374,7 +368,23 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
-                        c
+                        c = super::library_rows::push_symbol_choice_row(
+                            c,
+                            id,
+                            &symbol_choices,
+                            muted,
+                        );
+                        c = super::library_rows::push_library_rows(
+                            c,
+                            id,
+                            &library_name,
+                            library_drifted,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                        );
+                        c = super::library_rows::push_part_actions(c);
+                        super::body_row::push_body_row(c, id, &body, muted, input_bg, input_bdr)
                     },
                 ));
 
@@ -455,10 +465,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             c = c.push(
                                 container(
                                     text("No custom parameters".to_string())
-                                        .size(11)
+                                        .size(TS.body)
                                         .color(muted),
                                 )
-                                .padding([6, 8]),
+                                .padding([6.0, SP.m]),
                             );
                         } else {
                             for (name, value) in &section_params {
@@ -480,6 +490,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let justify_v = get("Justify V");
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
+            let font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
             let is_reference = matches!(
                 selected_kind,
                 Some(signex_types::schematic::SelectedKind::SymbolRefField)
@@ -557,26 +568,34 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
+                        c = c.push(font_family_row(
+                            "Font",
+                            font_family.as_deref(),
+                            muted,
+                            move |family| {
+                                let target = if is_reference {
+                                    signex_engine::TextTarget::SymbolReference(id)
+                                } else {
+                                    signex_engine::TextTarget::SymbolValue(id)
+                                };
+                                PanelMsg::EditTextFontFamily(target, family)
+                            },
+                        ));
                         c
                     },
                 ));
             }
         }
         Some(signex_types::schematic::SelectedKind::Label) => {
-            // Net Name stored in Standard escapes `/` as `{slash}`. Show the
-            // visible form in the panel; the edit handler re-escapes on save.
-            let label_text = crate::schematic_runtime::text::expand_char_escapes(&get("Text"));
+            let label_text = get("Text");
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
             let justify_h_str = get("Justify H");
+            let label_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             // Parse numeric values for edit controls (with fallbacks).
-            let rotation_deg = rotation_str
-                .trim_end_matches('°')
-                .trim()
-                .parse::<f64>()
-                .unwrap_or(0.0);
+            let rotation_deg = rotation_degrees(&rotation_str);
             let text_size_pt = text_size_str.parse::<u32>().unwrap_or(10);
             let justify_h = match justify_h_str.as_str() {
                 "Left" => signex_types::schematic::HAlign::Left,
@@ -611,11 +630,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             rotation_opts,
                             rot_label,
                             move |s| {
-                                let deg = s
-                                    .split_whitespace()
-                                    .next()
-                                    .and_then(|n| n.parse::<f64>().ok())
-                                    .unwrap_or(0.0);
+                                let deg = pick_list_degrees(&s);
                                 PanelMsg::EditLabelRotation(id, deg)
                             },
                             muted,
@@ -626,6 +641,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
 
                 // ── Properties (Net Name, Font, Justification) ──
                 let net_name = label_text.clone();
+                // The picker works on the net the project netlist puts this
+                // label on (a child sheet's local `LOCAL` is `/LOCAL`), in the
+                // table of the project the label's sheet belongs to.
+                let net_class_picker = ctx.net_classes.label.as_ref().map(|pick| {
+                    (
+                        pick.project,
+                        pick.net.clone(),
+                        crate::panels::net_class_choices(&pick.classes),
+                        crate::panels::net_class_choice(&pick.classes, &pick.net),
+                    )
+                });
                 col = col.push(collapsible_section(
                     "sel_props",
                     "Properties",
@@ -637,19 +663,32 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
                             PanelMsg::EditLabelText(id, s)
                         }));
-                        // Font family + size + color (color + family are cosmetic for now)
-                        let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
-                        let default_font = font_opts
-                            .iter()
-                            .find(|f| f.to_lowercase().contains("iosevka"))
-                            .cloned()
-                            .unwrap_or_else(|| font_opts.first().cloned().unwrap_or_default());
-                        c = c.push(form_pick_row(
+                        if let Some((project, net, choices, current)) = net_class_picker {
+                            c = c.push(form_pick_row(
+                                "Net Class",
+                                choices,
+                                current,
+                                move |choice| {
+                                    PanelMsg::NetClass(NetClassMsg::AssignNet {
+                                        project,
+                                        net: net.clone(),
+                                        class: choice.into_class(),
+                                    })
+                                },
+                                muted,
+                            ));
+                        }
+                        // Font family (stored on the label; size is below, colour is cosmetic for now)
+                        c = c.push(font_family_row(
                             "Font",
-                            font_opts,
-                            default_font,
-                            |_| PanelMsg::Noop,
+                            label_font_family.as_deref(),
                             muted,
+                            move |family| {
+                                PanelMsg::EditTextFontFamily(
+                                    signex_engine::TextTarget::Label(id),
+                                    family,
+                                )
+                            },
                         ));
                         let size_opts: Vec<String> =
                             [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
@@ -675,13 +714,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                                 id,
                                 rotation_deg,
                                 justify_h,
-                                input_bg,
-                                input_bdr,
-                                primary,
-                                muted,
+                                palette,
                                 ctx.theme_id,
                             ))
-                            .padding([4, 8]),
+                            .padding([SP.s, SP.m]),
                         );
                         c
                     },
@@ -695,6 +731,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let text_size = get("Text Size");
             let justify_h = get("Justify H");
             let justify_v = get("Justify V");
+            let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             if let Some(id) = uuid {
                 col = col.push(collapsible_section(
@@ -747,6 +784,17 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             input_bg,
                             input_bdr,
                         ));
+                        c = c.push(font_family_row(
+                            "Font",
+                            note_font_family.as_deref(),
+                            muted,
+                            move |family| {
+                                PanelMsg::EditTextFontFamily(
+                                    signex_engine::TextTarget::TextNote(id),
+                                    family,
+                                )
+                            },
+                        ));
                         c
                     },
                 ));
@@ -760,10 +808,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         }
         _ => {
             // Generic read-only properties for other types
+            // `Locked` is the checkbox row below, not a read-only line.
             let info: Vec<(String, String)> = ctx
                 .selection_info
                 .iter()
-                .filter(|(k, _)| k != "Type")
+                .filter(|(k, _)| k != "Type" && k != "Locked")
                 .cloned()
                 .collect();
             col = col.push(collapsible_section(
@@ -783,10 +832,78 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         }
     }
 
+    // ── Lock ── (#1573): wires, labels, text notes and drawings.
+    if let (Some(id), Some(kind)) = (uuid, selected_kind)
+        && matches!(
+            kind,
+            signex_types::schematic::SelectedKind::Wire
+                | signex_types::schematic::SelectedKind::Label
+                | signex_types::schematic::SelectedKind::TextNote
+                | signex_types::schematic::SelectedKind::Drawing
+        )
+    {
+        let locked = get("Locked") == "Yes";
+        let item = signex_types::schematic::SelectedItem::new(id, kind);
+        col = col.push(collapsible_section(
+            "sel_state",
+            "State",
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                Column::new()
+                    .spacing(0)
+                    .width(Length::Fill)
+                    .push(form_check_row(
+                        "Locked",
+                        locked,
+                        PanelMsg::ToggleItemLocked(item),
+                        muted,
+                    ))
+            },
+        ));
+    }
+
     // ── Status bar ──
     col = col.push(Space::new().height(8.0));
     col = col.push(thin_sep(border_c));
-    col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
+    col = col.push(
+        container(text("1 object selected").size(TS.caption).color(muted)).padding([SP.s, SP.m]),
+    );
 
     scrollable(col).width(Length::Fill).into()
+}
+
+/// Rotation, in degrees, read from the panel's display text (`90°`). A
+/// missing, malformed or non-finite value reads as `0`. Pure: this runs
+/// while the panel is built, so no refusal is logged here.
+fn rotation_degrees(text: &str) -> f64 {
+    signex_types::numeric::parse_finite_f64(text.trim_end_matches('°')).unwrap_or(0.0)
+}
+
+/// Rotation, in degrees, from a rotation pick-list label (`90 Degrees`).
+fn pick_list_degrees(label: &str) -> f64 {
+    rotation_degrees(label.split_whitespace().next().unwrap_or(""))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{pick_list_degrees, rotation_degrees};
+
+    /// #828 -- a non-finite rotation text never reaches the element.
+    #[test]
+    fn non_finite_rotation_reads_as_zero() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "inf°"] {
+            assert_eq!(rotation_degrees(bad), 0.0, "{bad:?}");
+            assert_eq!(pick_list_degrees(&format!("{bad} Degrees")), 0.0, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn ordinary_rotation_still_reads() {
+        assert_eq!(rotation_degrees("90°"), 90.0);
+        assert_eq!(rotation_degrees(" 270 "), 270.0);
+        assert_eq!(pick_list_degrees("180 Degrees"), 180.0);
+        assert_eq!(pick_list_degrees(""), 0.0);
+    }
 }

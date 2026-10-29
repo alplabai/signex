@@ -17,6 +17,7 @@ pub(super) fn draw_constraint_icons(
     cstate: &FootprintCanvasState,
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
+    conflict_colour: Color,
 ) {
     use signex_sketch::constraint::ConstraintKind;
     use signex_sketch::entity::EntityKind;
@@ -29,15 +30,15 @@ pub(super) fn draw_constraint_icons(
         .unwrap_or_default();
 
     let point_world_local = |id: SketchEntityId| -> Option<(f64, f64)> {
-        if let Some(solve) = state.last_solve.as_ref() {
-            if let Some(p) = signex_sketch::solver::state::point_xy(
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some(p) = signex_sketch::solver::state::point_xy(
                 id,
                 &solve.result.state,
                 &solve.result.index,
                 sketch,
-            ) {
-                return Some(p);
-            }
+            )
+        {
+            return Some(p);
         }
         sketch
             .entities
@@ -289,7 +290,10 @@ pub(super) fn draw_constraint_icons(
         // isolation (the whole over-constraint set lights up).
         let hover = state.conflicts_row_hovered;
         let is_over = over_set.contains(&c.id);
+        let is_conflict = state.conflict.contains_constraint(c.id);
         let colour = match (hover, is_over) {
+            // A rejected edit's conflict always shows in the error colour.
+            _ if is_conflict => conflict_colour,
             // Specific row hovered + this is the row → full red.
             (Some(h), _) if h == c.id => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
             // Specific row hovered + this is NOT the row → dimmed.

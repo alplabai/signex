@@ -3,6 +3,123 @@
 use crate::*;
 
 impl Engine {
+    /// Write the `locked` flag of a wire, label, text note or drawing (#1573);
+    /// a missing item, another kind or an unchanged value is a no-op that
+    /// records no history entry.
+    fn set_item_locked(
+        &mut self,
+        before: SchematicSheet,
+        item: signex_types::schematic::SelectedItem,
+        locked: bool,
+    ) -> Result<CommandResult, EngineError> {
+        use signex_types::schematic::SelectedKind;
+        let doc = &mut self.document;
+        let slot: Option<&mut bool> = match item.kind {
+            SelectedKind::Wire => doc
+                .wires
+                .iter_mut()
+                .find(|w| w.uuid == item.uuid)
+                .map(|w| &mut w.locked),
+            SelectedKind::Label => doc
+                .labels
+                .iter_mut()
+                .find(|l| l.uuid == item.uuid)
+                .map(|l| &mut l.locked),
+            SelectedKind::TextNote => doc
+                .text_notes
+                .iter_mut()
+                .find(|n| n.uuid == item.uuid)
+                .map(|n| &mut n.locked),
+            _ => None,
+        };
+        let changed = match slot {
+            Some(slot) => std::mem::replace(slot, locked) != locked,
+            None if item.kind == SelectedKind::Drawing => doc
+                .drawings
+                .iter_mut()
+                .find(|d| d.uuid() == item.uuid)
+                .is_some_and(|d| {
+                    let differs = d.is_locked() != locked;
+                    d.set_locked(locked);
+                    differs
+                }),
+            None => false,
+        };
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::from_selected_kind(item.kind),
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
+    /// Write one boolean symbol flag; a missing symbol or an unchanged
+    /// value is a no-op that records no history entry.
+    fn set_symbol_flag(
+        &mut self,
+        before: SchematicSheet,
+        symbol_id: uuid::Uuid,
+        flag: impl Fn(&mut signex_types::schematic::Symbol) -> &mut bool,
+        value: bool,
+    ) -> Result<CommandResult, EngineError> {
+        let changed = self
+            .document
+            .symbols
+            .iter_mut()
+            .find(|s| s.uuid == symbol_id)
+            .map(|s| {
+                let slot = flag(s);
+                let differs = *slot != value;
+                *slot = value;
+                differs
+            })
+            .unwrap_or(false);
+
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::SymbolFieldsUpdated,
+            document: DocumentPatch::SYMBOLS,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
+    fn set_wire_width(
+        &mut self,
+        before: SchematicSheet,
+        wire_id: uuid::Uuid,
+        width_mm: f64,
+    ) -> Result<CommandResult, EngineError> {
+        if !width_mm.is_finite() || width_mm < 0.0 {
+            return Err(EngineError::InvalidWireWidth(width_mm));
+        }
+        let changed = self
+            .document
+            .wires
+            .iter_mut()
+            .find(|w| w.uuid == wire_id)
+            .is_some_and(|w| {
+                let differs = (w.stroke_width - width_mm).abs() > 1e-9;
+                w.stroke_width = width_mm;
+                differs
+            });
+        if !changed {
+            return Ok(CommandResult::unchanged());
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::StyleUpdated,
+            document: DocumentPatch::WIRES,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
     pub(crate) fn exec_edits(
         &mut self,
         before: SchematicSheet,
@@ -182,6 +299,32 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetSymbolLocked { symbol_id, locked } => {
+                self.set_symbol_flag(before, symbol_id, |s| &mut s.locked, locked)
+            }
+            Command::SetItemLocked { item, locked } => self.set_item_locked(before, item, locked),
+            Command::SetSymbolDnp { symbol_id, dnp } => {
+                self.set_symbol_flag(before, symbol_id, |s| &mut s.dnp, dnp)
+            }
+            Command::SetSymbolFlag {
+                symbol_id,
+                flag,
+                value,
+            } => match flag {
+                SymbolFlag::InBom => {
+                    self.set_symbol_flag(before, symbol_id, |s| &mut s.in_bom, value)
+                }
+                SymbolFlag::OnBoard => {
+                    self.set_symbol_flag(before, symbol_id, |s| &mut s.on_board, value)
+                }
+            },
+            Command::SetWireWidth { wire_id, width_mm } => {
+                self.set_wire_width(before, wire_id, width_mm)
+            }
+            Command::SetSymbolBodyStyle {
+                symbol_id,
+                body_style,
+            } => self.set_symbol_body_style(before, symbol_id, body_style),
             Command::UpdateSymbolTextSize {
                 symbol_id,
                 field,
@@ -361,7 +504,90 @@ impl Engine {
 
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetTextFontFamily {
+                target,
+                font_family,
+            } => self.set_text_font_family(before, target, font_family),
+            Command::SetSymbolDesignatorIn {
+                symbol,
+                placement,
+                reference,
+            } => self.set_symbol_designator_in(before, symbol, placement, reference),
             _ => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::test_sheet;
+
+    fn engine_with_symbol() -> (Engine, uuid::Uuid) {
+        let uuid = uuid::Uuid::now_v7();
+        let mut sheet = test_sheet();
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            position: signex_types::schematic::Point::new(0.0, 0.0),
+            ..Default::default()
+        });
+        (Engine::new(sheet).unwrap(), uuid)
+    }
+
+    #[test]
+    fn set_symbol_dnp_applies_and_one_undo_reverts() {
+        let (mut engine, id) = engine_with_symbol();
+        let r = engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: true,
+            })
+            .unwrap();
+        assert!(r.changed);
+        assert!(engine.document().symbols[0].dnp);
+        assert!(!engine.document().symbols[0].locked);
+        assert!(engine.undo().unwrap().is_some());
+        assert!(!engine.document().symbols[0].dnp);
+        assert!(!engine.can_undo());
+    }
+
+    #[test]
+    fn set_symbol_locked_applies_and_one_undo_reverts() {
+        let (mut engine, id) = engine_with_symbol();
+        let r = engine
+            .execute(Command::SetSymbolLocked {
+                symbol_id: id,
+                locked: true,
+            })
+            .unwrap();
+        assert!(r.changed);
+        assert!(engine.document().symbols[0].locked);
+        assert!(!engine.document().symbols[0].dnp);
+        assert!(engine.undo().unwrap().is_some());
+        assert!(!engine.document().symbols[0].locked);
+        assert!(!engine.can_undo());
+    }
+
+    #[test]
+    fn unchanged_or_unknown_symbol_flag_records_no_history() {
+        let (mut engine, id) = engine_with_symbol();
+        let same = engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: false,
+            })
+            .unwrap();
+        assert!(!same.changed);
+        let missing = engine
+            .execute(Command::SetSymbolLocked {
+                symbol_id: uuid::Uuid::now_v7(),
+                locked: true,
+            })
+            .unwrap();
+        assert!(!missing.changed);
+        assert!(!engine.can_undo());
     }
 }

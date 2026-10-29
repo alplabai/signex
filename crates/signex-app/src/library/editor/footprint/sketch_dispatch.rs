@@ -9,19 +9,21 @@
 //! - The dispatcher is a free function so it can be unit-tested
 //!   without spinning up an iced runtime.
 //! - The solver is always live. v0.22 stripped the previous
-//!   auto-pause hysteresis: footprint sketches stay small enough
-//!   that every solve completes well under the per-frame budget,
-//!   and a "paused" state was confusing for both users and the
-//!   downstream Signal AI agent reading solver state.
-//! - All `SketchError` cases — including timeouts — propagate as
+//!   auto-pause hysteresis: a "paused" state was confusing for both
+//!   users and the downstream Signal AI agent reading solver state.
+//!   A solve is bounded by one work budget; a large sketch can exhaust
+//!   it, and that is reported, not hidden.
+//! - All `SketchError` cases — including an exhausted work budget — propagate as
 //!   `SketchError::SolveFailed`. The `_with_warnings` wrappers
 //!   surface them in `state.solve_warnings`; nothing is silently
 //!   swallowed.
 
 use signex_library::primitive::footprint::Footprint;
 use signex_sketch::id::SketchEntityId;
-use signex_sketch::{SketchData, SketchError, parameter};
+use signex_sketch::{SketchData, SketchError, SolveError, parameter};
 
+use super::sketch_bake::{bake_solution, discard_failed_solve};
+use super::sketch_conflict::{mutate_solve_or_revert, was_reverted};
 use super::sketch_mode::SketchEdit;
 use super::state::FootprintEditorState;
 use crate::library::messages::RoleTag;
@@ -37,8 +39,116 @@ pub fn apply_sketch_edit(
     footprint: &mut Footprint,
     edit: SketchEdit,
 ) -> Result<(), SketchError> {
-    apply_edit_inner(footprint, edit);
-    solve_and_bake(state, footprint)
+    mutate_solve_or_revert(state, footprint, |fp| apply_edit_inner(fp, edit))
+}
+
+/// The warnings in `current` that were not in the previous solve's set,
+/// remembering `current` as the new set. A drag re-solves every frame
+/// with the same warnings; only a change in the set reaches the log.
+pub(super) fn take_unlogged_warnings(current: &[String], logged: &mut Vec<String>) -> Vec<String> {
+    let keyed: Vec<(String, String)> = current.iter().map(|w| (w.clone(), w.clone())).collect();
+    take_unlogged_keyed(&keyed, logged)
+}
+
+/// [`take_unlogged_warnings`] over `(key, text)` pairs: the set comparison
+/// uses the key, the returned warnings are the text.
+pub(super) fn take_unlogged_keyed(
+    current: &[(String, String)],
+    logged: &mut Vec<String>,
+) -> Vec<String> {
+    let fresh = current
+        .iter()
+        .filter(|(key, _)| !logged.contains(key))
+        .map(|(_, text)| text.clone())
+        .collect();
+    logged.clear();
+    logged.extend(current.iter().map(|(key, _)| key.clone()));
+    fresh
+}
+
+/// The key a solve failure is de-duplicated on: the error variant plus the
+/// fields that stay put while a drag re-solves. `DidNotConverge` keeps its
+/// iteration count but not the residual, and `BudgetExceeded` keeps the
+/// budget but not the work spent, so a sketch that never converges is one
+/// log entry rather than one per pointer tick.
+pub(super) fn solve_failure_key(error: &SketchError) -> String {
+    match error {
+        SketchError::SolveFailed(SolveError::DidNotConverge { iters, .. }) => {
+            format!("did-not-converge:{iters}")
+        }
+        SketchError::SolveFailed(SolveError::BudgetExceeded { budget, .. }) => {
+            format!("budget-exceeded:{budget}")
+        }
+        other => format!("{other}"),
+    }
+}
+
+/// The key of a rejected edit's named conflict, built from what the
+/// conflicting constraints are (their kind and the entity they act on), not
+/// their ids: the UI mints a fresh id for the constraint on every attempt, so
+/// the same click again is the same conflict. A conflict between other
+/// constraints has other rows and so another key.
+fn rejected_conflict_key(state: &FootprintEditorState) -> Option<String> {
+    let mut rows: Vec<String> = state
+        .conflict
+        .rows()
+        .iter()
+        .map(|r| format!("{}@{:?}", r.kind_label, r.focus))
+        .collect();
+    if rows.is_empty() {
+        return None;
+    }
+    rows.sort();
+    Some(format!("rejected:{}", rows.join(",")))
+}
+
+/// Record `error` in `state.solve_warnings` and return the warnings that
+/// have not been logged since the set last changed. The bake warnings key on
+/// their text, the failure on [`solve_failure_key`].
+pub(super) fn unlogged_failure_warnings(
+    state: &mut FootprintEditorState,
+    error: &SketchError,
+) -> Vec<String> {
+    state.solve_warnings.push(format!("{error}"));
+    let last = state.solve_warnings.len() - 1;
+    let failure_key = was_reverted(error)
+        .then(|| rejected_conflict_key(state))
+        .flatten()
+        .unwrap_or_else(|| solve_failure_key(error));
+    let keyed: Vec<(String, String)> = state
+        .solve_warnings
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            let key = if i == last {
+                failure_key.clone()
+            } else {
+                w.clone()
+            };
+            (key, w.clone())
+        })
+        .collect();
+    take_unlogged_keyed(&keyed, &mut state.logged_solve_warnings)
+}
+
+/// Surface a failed edit: Properties-strip warning plus the Messages
+/// panel. A named conflict was reverted and says so; any other failure
+/// (no convergence, an empty conflict, a zero-length line) left the edit in
+/// place and says that. A drag fails the same way on every pointer tick, so
+/// the log gets the message once per change of the warning set, not once per
+/// tick (the Properties strip shows it for as long as it holds).
+pub(super) fn report_solve_failure(state: &mut FootprintEditorState, error: &SketchError) {
+    let text = format!("{error}");
+    for warning in unlogged_failure_warnings(state, error) {
+        let message = if warning != text {
+            format!("Sketch bake: {warning}")
+        } else if was_reverted(error) {
+            format!("Sketch edit rejected: {error}")
+        } else {
+            format!("Sketch solve failed (the edit was kept): {error}")
+        };
+        crate::diagnostics::log_warning(message);
+    }
 }
 
 /// Same as [`apply_sketch_edit`] but captures any returned
@@ -52,7 +162,7 @@ pub fn apply_sketch_edit_with_warnings(
     edit: SketchEdit,
 ) {
     if let Err(e) = apply_sketch_edit(state, footprint, edit) {
-        state.solve_warnings.push(format!("{e}"));
+        report_solve_failure(state, &e);
     }
 }
 
@@ -79,8 +189,7 @@ pub fn apply_sketch_role(
     id: SketchEntityId,
     role: RoleTag,
 ) -> Result<(), SketchError> {
-    set_entity_role(footprint, id, role);
-    solve_and_bake(state, footprint)
+    mutate_solve_or_revert(state, footprint, |fp| set_entity_role(fp, id, role))
 }
 
 /// `_with_warnings` companion to [`apply_sketch_role`] — captures the
@@ -92,7 +201,7 @@ pub fn apply_sketch_role_with_warnings(
     role: RoleTag,
 ) {
     if let Err(e) = apply_sketch_role(state, footprint, id, role) {
-        state.solve_warnings.push(format!("{e}"));
+        report_solve_failure(state, &e);
     }
 }
 
@@ -182,7 +291,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
             });
         }
         RoleTag::Courtyard => {
-            entity.courtyard = Some(CourtyardAttr);
+            entity.courtyard = Some(CourtyardAttr {});
         }
         RoleTag::Keepout => {
             entity.keepout = Some(KeepoutAttr {
@@ -310,29 +419,37 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
 
 /// Mutates `footprint.sketch` per the edit. Idempotent on its inputs
 /// so the test harness can inspect intermediate state.
-fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
+pub(super) fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
     let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
     match edit {
-        SketchEdit::AddEntity(e) => sketch.entities.push(e),
+        SketchEdit::AddEntity(e) => sketch.entities.push(*e),
         SketchEdit::DeleteEntity(id) => {
-            sketch.entities.retain(|e| e.id != id);
-            // Drop dangling constraint refs — coarse rule, drop any
-            // constraint that mentions the deleted ID via the kind's
-            // payload. Most kinds carry one or two SketchEntityIds;
-            // we use Debug to stringify for a simple text search.
-            // This is intentionally simple for v0.13; Phase 6 wires
-            // a structured constraint-rewrite pass.
-            sketch
-                .constraints
-                .retain(|c| !format!("{:?}", c.kind).contains(&id.to_string()));
+            // Structural cascade: lines/arcs/circles built on the entity
+            // and every constraint or array naming a removed entity go with it, in
+            // this one mutation (one undo step).
+            let removed = sketch.remove_entity_cascade(id);
+            let others = removed.entities.len().saturating_sub(1);
+            if others > 0 || !removed.constraints.is_empty() || !removed.arrays.is_empty() {
+                crate::diagnostics::log_info(format!(
+                    "Deleting a sketch entity also removed {others} dependent entity(ies), {} constraint(s) and {} array(s)",
+                    removed.constraints.len(),
+                    removed.arrays.len()
+                ));
+            }
+            if removed.repaired > 0 {
+                crate::diagnostics::log_warning(format!(
+                    "Repaired {} dangling sketch reference(s) left by an earlier edit",
+                    removed.repaired
+                ));
+            }
         }
         SketchEdit::MovePoint { id, dx, dy } => {
             for ent in sketch.entities.iter_mut() {
-                if ent.id == id {
-                    if let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind {
-                        *x += dx;
-                        *y += dy;
-                    }
+                if ent.id == id
+                    && let signex_sketch::entity::EntityKind::Point { x, y } = &mut ent.kind
+                {
+                    *x += dx;
+                    *y += dy;
                 }
             }
         }
@@ -353,16 +470,31 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
 /// Resolve parameters, run LM, capture DOF, bake pads.
 ///
 /// v0.22 — solver is always live, no hysteresis, no pause state. All
-/// `SolveError` variants (including `Timeout`) propagate as
+/// `SolveError` variants (including `BudgetExceeded`) propagate as
 /// `SketchError::SolveFailed` so the `_with_warnings` wrappers
-/// surface them to the user in `state.solve_warnings`. Footprint
-/// sketches stay small (tens-to-low-hundreds of entities); a
-/// timeout indicates a real solver problem worth showing, not a
-/// transient that can be silently swallowed.
-fn solve_and_bake(
+/// surface them to the user in `state.solve_warnings`. Minted pads add
+/// free points to the sketch (a rectangular pad 5, a rounded-rectangle pad
+/// 17, none fixed); points no constraint touches stay out of the solve
+/// (#1055), so pads cost solve work only once they are constrained.
+pub(super) fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
 ) -> Result<(), SketchError> {
+    // An inline solve covers every edit made so far, so a drag solve still
+    // running off-thread is stale the moment this one starts.
+    // Every path that reaches here settles an owed drag solve first; a
+    // batch still pending would be dropped without a rollback or collapse.
+    debug_assert!(
+        !state.sketch_solve.has_unsolved(),
+        "an inline solve discarded an unsettled drag batch"
+    );
+    if state.sketch_solve.has_unsolved() {
+        crate::diagnostics::log_warning(
+            "Sketch solve: an unsettled drag batch was discarded by an inline solve",
+        );
+    }
+    state.sketch_solve.supersede();
+
     let sketch = match footprint.sketch.as_ref() {
         Some(s) => s,
         None => return Ok(()),
@@ -372,195 +504,18 @@ fn solve_and_bake(
 
     let resolved = parameter::resolve(&sketch.parameters).map_err(SketchError::Expr)?;
 
+    // Runs synchronously inside `update`, for edits that are not a drag tick (a
+    // drag tick solves off the UI thread, #1047, under the same budget). The LM work of the whole solve (first run,
+    // retry, offset undo, conflict narrowing) draws on ONE work budget,
+    // `Solver::work_budget`, so a solve that fails is bounded: measured in
+    // release, roughly 90 to 150 ms at the default budget. A solve that converges
+    // also runs the DOF analysis, which the budget does not bound: 14 ms at
+    // n = 254, and for an already-converged sketch 92 ms at n = 574
+    // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
+    // A converged sketch is never refused for its size, so it still bakes.
     match state.sketch_solver.solve(sketch, &resolved) {
-        Ok(out) => {
-            // Phase 7.3 — bake pads + arrays into the footprint, but
-            // skip the overwrite on an empty sketch: a fresh
-            // SetMode(Sketch) toggle on a footprint with literal pads
-            // would otherwise produce an empty Vec and clobber the
-            // user's existing pad authoring on first entry. Once the
-            // user adds sketch entities, the sketch becomes the
-            // source of truth and a (possibly empty) bake result is
-            // intentional.
-            if !sketch.entities.is_empty() {
-                // Pads + array expansions.
-                let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
-                signex_bake::bake_pads(
-                    sketch,
-                    &out,
-                    &resolved,
-                    &mut baked,
-                    &mut state.solve_warnings,
-                )?;
-                signex_bake::bake_arrays(
-                    sketch,
-                    &out,
-                    &resolved,
-                    &mut baked,
-                    &mut state.solve_warnings,
-                )?;
-                footprint.pads = baked;
-
-                // v0.14 closed-profile bakes — silk / courtyard / mask /
-                // paste-aperture / pour. Each replaces its corresponding
-                // Footprint field (or appends, in the case of the
-                // multi-record Vec fields) so the sketch is the source
-                // of truth for any geometry it produces.
-                let mut silk_f = Vec::new();
-                let mut silk_b = Vec::new();
-                signex_bake::bake_silk(
-                    sketch,
-                    &out,
-                    &mut silk_f,
-                    &mut silk_b,
-                    &mut state.solve_warnings,
-                )?;
-                if !silk_f.is_empty() {
-                    footprint.silk_f = silk_f;
-                }
-                if !silk_b.is_empty() {
-                    footprint.silk_b = silk_b;
-                }
-
-                let mut courtyard = signex_library::primitive::footprint::Polygon::default();
-                signex_bake::bake_courtyard(
-                    sketch,
-                    &out,
-                    &mut courtyard,
-                    &mut state.solve_warnings,
-                )?;
-                if !courtyard.points.is_empty() {
-                    footprint.courtyard = courtyard;
-                }
-
-                let mut mask_openings = Vec::new();
-                let mut mask_excludes = Vec::new();
-                let mut paste_apertures = Vec::new();
-                let mut pours = Vec::new();
-                let mut keepouts = Vec::new();
-                let mut cutouts = Vec::new();
-                let mut v_scores = Vec::new();
-                signex_bake::bake_mask_openings(
-                    sketch,
-                    &out,
-                    &mut mask_openings,
-                    &mut state.solve_warnings,
-                )?;
-                signex_bake::bake_mask_excludes(
-                    sketch,
-                    &out,
-                    &mut mask_excludes,
-                    &mut state.solve_warnings,
-                )?;
-                signex_bake::bake_paste_apertures(
-                    sketch,
-                    &out,
-                    &mut paste_apertures,
-                    &mut state.solve_warnings,
-                )?;
-                signex_bake::bake_pours(
-                    sketch,
-                    &out,
-                    &resolved,
-                    &mut pours,
-                    &mut state.solve_warnings,
-                )?;
-                signex_bake::bake_keepouts(sketch, &out, &mut keepouts, &mut state.solve_warnings)?;
-                signex_bake::bake_cutouts(
-                    sketch,
-                    &out,
-                    &resolved,
-                    &mut cutouts,
-                    &mut state.solve_warnings,
-                )?;
-                signex_bake::bake_v_scores(
-                    sketch,
-                    &out,
-                    &resolved,
-                    &mut v_scores,
-                    &mut state.solve_warnings,
-                )?;
-                if !mask_openings.is_empty() {
-                    footprint.mask_openings = mask_openings;
-                }
-                if !mask_excludes.is_empty() {
-                    footprint.mask_excludes = mask_excludes;
-                }
-                if !paste_apertures.is_empty() {
-                    footprint.paste_apertures = paste_apertures;
-                }
-                if !pours.is_empty() {
-                    footprint.pours = pours;
-                }
-                if !keepouts.is_empty() {
-                    footprint.keepouts = keepouts;
-                }
-                if !cutouts.is_empty() {
-                    footprint.cutouts = cutouts;
-                }
-                if !v_scores.is_empty() {
-                    footprint.v_scores = v_scores;
-                }
-
-                // v0.14.1 — 3D extrude profile from a BodyTop plane
-                // enriches the existing body_3d.outline + offset_z_mm.
-                signex_bake::bake_body3d(
-                    sketch,
-                    &out,
-                    &resolved,
-                    &mut footprint.body_3d,
-                    &mut state.solve_warnings,
-                )?;
-
-                // v0.22 Phase D2 — refresh editor-side pads cache so
-                // the canvas + Pads-mode Properties panel see what
-                // the bake just produced. Preserves sketch_entity_id
-                // / corner_entity_ids by matching pad.number across
-                // the old + new lists.
-                state.refresh_pads_from_primitive(footprint);
-
-                // v0.24 Phase 3 (Track A4) — reverse mirror. Walk
-                // each pad's shape_params (preserved across the
-                // refresh above) and re-derive
-                // EditorPad.stack.corner_radius_pct from the live
-                // resolved corner_r value. Keeps the Pads-mode
-                // "Corner radius %" input in sync when the sketch
-                // parameter is edited from elsewhere (Properties row,
-                // parameter table, drag handle).
-                super::pad_to_sketch::mirror_solve_to_pad_stack(state, &resolved);
-
-                // v0.25 polish — Oval pads: width/height parameter
-                // edits propagate back to `pad.size_mm` so the bbox
-                // tracks the resolved values. Without this, the
-                // subsequent mirror_solve_to_oval_geometry call would
-                // reposition anchors against a stale bbox.
-                super::pad_to_sketch::mirror_solve_to_oval_size(state, &resolved);
-
-                // v0.24 Track A6 — chamfer anchor reposition. The
-                // shared `chamfer_len_<slug>` parameter doesn't drive
-                // the anchor Points via solver constraints (literal
-                // mint), so this post-solve pass rewrites the
-                // anchor coords from the resolved chamfer_len value.
-                // Only fires for pads with a `chamfer_len` binding;
-                // other pads get an early return inside the helper.
-                //
-                // v0.24 Phase 6 — same pattern for RoundRect arcs and
-                // Oval anchors / centres. Each helper bails early on
-                // pads whose `shape_params` don't carry the matching
-                // canonical key, so all three run unconditionally
-                // without per-shape branching here.
-                if let Some(sketch) = footprint.sketch.as_mut() {
-                    super::pad_to_sketch::mirror_solve_to_chamfer_anchors(state, sketch, &resolved);
-                    super::pad_to_sketch::mirror_solve_to_round_rect_geometry(
-                        state, sketch, &resolved,
-                    );
-                    super::pad_to_sketch::mirror_solve_to_oval_geometry(state, sketch, &resolved);
-                }
-            }
-
-            state.last_solve = Some(out);
-        }
-        Err(e) => return Err(SketchError::SolveFailed(e)),
+        Ok(out) => bake_solution(state, footprint, &resolved, out)?,
+        Err(e) => return Err(discard_failed_solve(state, e)),
     }
     Ok(())
 }

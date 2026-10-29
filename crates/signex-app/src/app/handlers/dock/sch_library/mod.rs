@@ -30,9 +30,14 @@ use super::super::super::*;
 use crate::panels::PanelMsg;
 
 mod footprint;
+mod numeric_input;
 mod symbol;
 
 use footprint::{SilkLineEndpoint, SilkTextField};
+use numeric_input::{
+    CORNER_RADIUS_PCT_MAX, CORNER_RADIUS_PCT_MIN, fp_parse_optional_number,
+    fp_parse_optional_number_in, fp_resolve_optional_number,
+};
 
 impl Signex {
     /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`
@@ -57,7 +62,8 @@ impl Signex {
         let mut follow = Task::none();
         let handled = match panel_msg {
             PanelMsg::FpLibraryOpenSibling(sibling_path) => {
-                self.handle_fp_library_open_sibling(sibling_path)
+                follow = self.handle_fp_library_open_sibling(sibling_path);
+                true
             }
             PanelMsg::FpLibrarySelectInternal(idx) => self.handle_fp_library_select_internal(idx),
             PanelMsg::FpLibraryAddInternal => {
@@ -266,7 +272,7 @@ impl Signex {
                 self.with_selected_pad(*idx, |pad| pad.electrical_type = *value)
             }
             PanelMsg::FpEditorSetSelectedPadNet { idx, value } => {
-                self.with_selected_pad(*idx, |pad| pad.net = value.clone())
+                self.with_selected_pad_field(*idx, Some("pad_net"), |pad| pad.net = value.clone())
             }
             PanelMsg::FpEditorToggleSelectedPadLocked { idx, value } => {
                 self.with_selected_pad(*idx, |pad| pad.locked = *value)
@@ -333,10 +339,23 @@ impl Signex {
                 .with_selected_pad(*idx, |pad| {
                     pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
+            // #599 — an unreadable rotation must not overwrite the
+            // stored one; `Some(stored)` is the only path that writes.
+            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
+                match fp_resolve_optional_number(
+                    "Hole rotation (°), selected pad",
+                    value,
+                    fp_parse_optional_number(value),
+                ) {
+                    Some(stored) => {
+                        self.with_selected_pad(*idx, |pad| pad.hole_rotation_deg = stored)
+                    }
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => self
                 .with_selected_pad(*idx, |pad| {
                     pad.copper_offset_x_mm = fp_parse_optional_mm(value)
@@ -414,10 +433,22 @@ impl Signex {
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_rotation_deg = value.trim().parse::<f64>().ok()
-                }),
+            // #599 — same refusal for the sketch-mode pad attribute.
+            PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
+                match fp_resolve_optional_number(
+                    "Hole rotation (°), sketch pad",
+                    value,
+                    fp_parse_optional_number(value),
+                ) {
+                    Some(stored) => {
+                        self.with_selected_sketch_pad(*id, |attr| attr.hole_rotation_deg = stored)
+                    }
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => self
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.copper_offset_x_mm = fp_parse_optional_mm(value)
@@ -426,14 +457,27 @@ impl Signex {
                 .with_selected_sketch_pad(*id, |attr| {
                     attr.copper_offset_y_mm = fp_parse_optional_mm(value)
                 }),
-            PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.stack.corner_radius_pct = value
-                        .trim()
-                        .parse::<f64>()
-                        .ok()
-                        .filter(|v| (0.0..=50.0).contains(v))
-                }),
+            // #599 — out of range clamps to the nearest bound, an
+            // unreadable buffer is refused; neither clears the value.
+            PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
+                match fp_resolve_optional_number(
+                    "Corner radius %, sketch pad",
+                    value,
+                    fp_parse_optional_number_in(
+                        value,
+                        CORNER_RADIUS_PCT_MIN,
+                        CORNER_RADIUS_PCT_MAX,
+                    ),
+                ) {
+                    Some(stored) => self.with_selected_sketch_pad(*id, |attr| {
+                        attr.stack.corner_radius_pct = stored
+                    }),
+                    None => {
+                        self.refresh_panel_ctx();
+                        true
+                    }
+                }
+            }
             PanelMsg::FpEditorEditPadInSketch { pad_idx } => {
                 self.handle_fp_editor_edit_pad_in_sketch(pad_idx)
             }
@@ -463,9 +507,18 @@ impl Signex {
                 // working-tree file with the historical blob. Mark
                 // the file dirty so the next save commits the
                 // restored content.
-                self.handle_history_restore_clicked(sha);
+                follow = self.handle_history_restore_clicked(sha);
                 true
             }
+            PanelMsg::HistoryRestoreCancelled => {
+                self.document_state.history.pending_restore = None;
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
+                true
+            }
+            PanelMsg::FpEditorRestorePadStackDefaults => {
+                self.fp_editor_restore_pad_stack_defaults()
+            }
+            PanelMsg::FpEditorDismissPadStackOffer => self.fp_editor_dismiss_pad_stack_offer(),
             PanelMsg::FpEditorHoverOverConstraint { constraint } => {
                 self.handle_fp_editor_hover_over_constraint(constraint)
             }
@@ -587,7 +640,9 @@ impl Signex {
             }
             PanelMsg::SymEditorSelectPin(idx) => self.sym_editor_select_pin(*idx),
             PanelMsg::SymEditorSetPinDescription { pin_idx, value } => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.description = value.clone())
+                self.sym_editor_mutate_pin(*pin_idx, Some("pin_description"), |pin| {
+                    pin.description = value.clone()
+                })
             }
             PanelMsg::SymEditorSetPinFunctionCsv { pin_idx, value } => {
                 let parsed: Vec<String> = value
@@ -596,25 +651,25 @@ impl Signex {
                     .filter(|s| !s.is_empty())
                     .map(String::from)
                     .collect();
-                self.sym_editor_mutate_pin(*pin_idx, move |pin| {
+                self.sym_editor_mutate_pin(*pin_idx, Some("pin_function"), move |pin| {
                     pin.function = parsed.clone();
                 })
             }
             PanelMsg::SymEditorTogglePinDesignatorVisible(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| {
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| {
                     pin.designator_visible = !pin.designator_visible;
                 })
             }
             PanelMsg::SymEditorTogglePinNameVisible(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| {
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| {
                     pin.name_visible = !pin.name_visible;
                 })
             }
             PanelMsg::SymEditorTogglePinHidden(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.hidden = !pin.hidden)
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| pin.hidden = !pin.hidden)
             }
             PanelMsg::SymEditorTogglePinLocked(pin_idx) => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.locked = !pin.locked)
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| pin.locked = !pin.locked)
             }
             PanelMsg::SymEditorSetPinSymbol {
                 pin_idx,
@@ -623,7 +678,7 @@ impl Signex {
             } => {
                 let slot = *slot;
                 let value = *value;
-                self.sym_editor_mutate_pin(*pin_idx, move |pin| match slot {
+                self.sym_editor_mutate_pin(*pin_idx, None, move |pin| match slot {
                     0 => pin.inside_symbol = value,
                     1 => pin.inside_edge_symbol = value,
                     2 => pin.outside_edge_symbol = value,
@@ -632,15 +687,15 @@ impl Signex {
                 })
             }
             PanelMsg::SymEditorSetPinPartNumber { pin_idx, value } => {
-                self.sym_editor_mutate_pin(*pin_idx, |pin| pin.part_number = *value)
+                self.sym_editor_mutate_pin(*pin_idx, None, |pin| pin.part_number = *value)
             }
             PanelMsg::SymEditorSelectGraphic(idx) => self.sym_editor_select_graphic(*idx),
             PanelMsg::SymEditorSelectPart(part) => self.sym_editor_select_part(*part),
             PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
-                self.sym_editor_mutate_graphic(*idx, |g| apply_graphic_field(g, *field, *value))
+                self.sym_editor_set_graphic_field(*idx, *field, *value)
             }
             PanelMsg::SymEditorSetGraphicText { idx, value } => {
-                self.sym_editor_mutate_graphic(*idx, |g| {
+                self.sym_editor_mutate_graphic(*idx, Some(("graphic_text", 0)), |g| {
                     if let signex_library::SymbolGraphicKind::Text { content, .. } = &mut g.kind {
                         *content = value.clone();
                     }
@@ -662,19 +717,18 @@ impl Signex {
                 self.sym_editor_set_graphic_fill(*idx, None)
             }
             PanelMsg::SymEditorSetSymbolDesignator(value) => {
-                self.sym_editor_mutate_symbol(|s| s.designator = value.clone())
+                self.sym_editor_mutate_symbol(Some("designator"), |s| s.designator = value.clone())
             }
             PanelMsg::SymEditorSetSymbolComment(value) => {
-                self.sym_editor_mutate_symbol(|s| s.comment = value.clone())
+                self.sym_editor_mutate_symbol(Some("comment"), |s| s.comment = value.clone())
             }
-            PanelMsg::SymEditorSetSymbolDescription(value) => {
-                self.sym_editor_mutate_symbol(|s| s.description = value.clone())
-            }
+            PanelMsg::SymEditorSetSymbolDescription(value) => self
+                .sym_editor_mutate_symbol(Some("description"), |s| s.description = value.clone()),
             PanelMsg::SymEditorSetSymbolType(value) => {
-                self.sym_editor_mutate_symbol(|s| s.component_type = *value)
+                self.sym_editor_mutate_symbol(None, |s| s.component_type = *value)
             }
             PanelMsg::SymEditorToggleSymbolMirrored => {
-                self.sym_editor_mutate_symbol(|s| s.mirrored = !s.mirrored)
+                self.sym_editor_mutate_symbol(None, |s| s.mirrored = !s.mirrored)
             }
             PanelMsg::SymEditorToggleLocalColorPicker(slot) => {
                 self.sym_editor_toggle_local_color_picker(*slot)
@@ -729,7 +783,7 @@ pub(super) fn fp_parse_optional_mm(value: &str) -> Option<f64> {
     if s.is_empty() {
         return None;
     }
-    s.parse::<f64>().ok()
+    crate::numeric_field::parse_field_f64(s)
 }
 
 fn apply_graphic_field(
@@ -816,6 +870,7 @@ mod arc_field_edit_tests {
     #[test]
     fn arc_degree_edits_stay_in_range_and_preserve_sweep() {
         let mut g = SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Arc {
                 center: [0.0, 0.0],
                 radius: 5.0,

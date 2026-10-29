@@ -11,6 +11,7 @@ repository.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+toml_edit = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 sha2 = { workspace = true }
@@ -53,11 +54,33 @@ dirs = { version = "5", optional = true }
 # kept un-feature-gated so every adapter can `tracing::warn!` consistently.
 tracing = { workspace = true }
 
+# OS-keychain backends (#976). keyring 3.x ships NO default backend: without one
+# every OS silently falls back to its in-memory mock and nothing is persisted.
+# Features are enabled per target and unify with the optional `keyring` dep above.
+# Linux uses the pure-Rust zbus Secret Service client (`async-secret-service` +
+# `crypto-rust`), so no libdbus / libsecret / OpenSSL is needed at build time.
+# Deliberately NOT `linux-native-*-persistent`: its keyutils layer would keep
+# working with no Secret Service and silently lose secrets on reboot.
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true, features = ["async-secret-service", "crypto-rust", "async-io"], optional = true }
+
 [features]
 default = []
 ai-stub = ["dep:pdf-extract", "dep:regex"]
 search-tantivy = ["dep:tantivy"]
-local-git = ["dep:git2", "dep:walkdir"]
+local-git = ["dep:git2", "dep:walkdir", "dep:dirs"]
+# Hermetic commit identity for tests that make real git commits; see
+# `git_identity::test_identity`. Enabled only through dev-dependencies.
+test-identity = ["local-git"]
+# Exposes seams that bypass the OS keyring (injected token sink). Enabled only
+# through dev-dependencies; never part of a shipped build.
+test-support = []
 database = ["dep:reqwest"]
 distributors-community = [
     "dep:keyring",
@@ -68,7 +91,21 @@ distributors-community = [
 ]
 
 [dev-dependencies]
+signex-library = { path = ".", features = ["test-identity", "test-support"] }
 tempfile = "3"
 pdf-writer = { workspace = true }
 tokio = { workspace = true }
 wiremock = "0.6"
+
+# Skipped loudly, not compiled to 0 tests, when `local-git` is off.
+[[test]]
+name = "local_git_adapter"
+required-features = ["local-git"]
+
+[[test]]
+name = "pricing_refresh"
+required-features = ["local-git"]
+
+# GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
+[lints]
+workspace = true

@@ -2,7 +2,7 @@
 //!
 //! Every primitive lives inside a single library and is identified
 //! by its UUID *within that library*. Cross-library references
-//! compose the library UUID (from `library.toml::library_id`) with
+//! compose the library UUID (the `library_id` at the root of the `.snxlib` document) with
 //! the primitive UUID. [`crate::adapters::library_set::LibrarySet`]
 //! resolves these tuples back to the actual primitive struct.
 
@@ -15,7 +15,7 @@ use uuid::Uuid;
 /// which `WhereUsedIndex` and the resolver both need.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PrimitiveRef {
-    /// Stable UUID from the source library's `library.toml::id`.
+    /// Stable UUID from the source library's `.snxlib` manifest's `library_id`.
     pub library_id: Uuid,
     /// Primitive UUID within that library.
     pub uuid: Uuid,

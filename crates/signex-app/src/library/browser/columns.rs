@@ -6,14 +6,18 @@
 //! search-filter predicate. Extracted verbatim from the former
 //! single-file `browser` module.
 
+use super::sort::CellSortKey;
 use super::*;
+use signex_types::object_id::short_id;
 
+#[derive(Debug, Clone)]
 pub(super) struct GridColumn {
     pub(super) label: String,
     pub(super) kind: ColumnKind,
     pub(super) width: f32,
 }
 
+#[derive(Debug, Clone)]
 pub(super) enum ColumnKind {
     InternalPn,
     Manufacturer,
@@ -21,7 +25,7 @@ pub(super) enum ColumnKind {
     /// Stage 14 — combined version + released indicator. Renders as
     /// `🔒 1.2.3` for released rows, `1.2.3` for unreleased. Sorts
     /// against the row's `version` cell so semver patterns sort
-    /// numerically (1.0.2 vs 1.0.10 — `compare_cells` handles the
+    /// numerically (1.0.2 vs 1.0.10 — `CellSortKey` handles the
     /// pure-number case; mixed `1.0.2` strings fall back to lexical
     /// which still works for short major.minor.patch strings).
     Rev,
@@ -42,6 +46,9 @@ pub(super) enum ColumnKind {
     /// is deferred to a polish pass; for now the canonical edit point
     /// is the Edit Component Details modal.
     Tags,
+    /// Read-only cached distributor price (qty-1 break, currency, age).
+    /// Present only when some row of the table has a cached price.
+    Price,
     Parameter(String),
 }
 
@@ -58,8 +65,46 @@ impl ColumnKind {
             ColumnKind::Symbol => "symbol_ref".to_string(),
             ColumnKind::Footprint => "footprint_ref".to_string(),
             ColumnKind::Tags => "parameters.tags".to_string(),
+            ColumnKind::Price => "price".to_string(),
             ColumnKind::Parameter(key) => format!("parameters.{key}"),
         }
+    }
+
+    /// The row's sort key for this column. A parameter orders by its
+    /// `ParamValue` (a measurement by base-unit quantity); every other
+    /// column orders by its cell text.
+    pub(super) fn sort_key_for(&self, r: &ComponentRow) -> CellSortKey {
+        match self {
+            ColumnKind::Parameter(key) => match r.parameters.get(key) {
+                Some(value) => CellSortKey::from_param(value),
+                None => CellSortKey::from_cell(""),
+            },
+            _ => CellSortKey::from_cell(&self.cell_value(r)),
+        }
+    }
+
+    /// What pressing this column's cell does for `r`: a measurement opens
+    /// the Edit Component Details modal (it needs the SI-prefix picker and
+    /// the unit, which a grid cell has no room for), so the cell is a
+    /// button and never a raw text input. `None` for every other cell.
+    pub(super) fn measurement_press(
+        &self,
+        r: &ComponentRow,
+        library_path: &std::path::Path,
+        table: &str,
+    ) -> Option<LibraryMessage> {
+        let ColumnKind::Parameter(key) = self else {
+            return None;
+        };
+        matches!(
+            r.parameters.get(key),
+            Some(signex_library::ParamValue::Measurement { .. })
+        )
+        .then(|| LibraryMessage::BrowserOpenEditModal {
+            library_path: library_path.to_path_buf(),
+            table: table.to_string(),
+            row_id: RowId::from_uuid(r.row_id),
+        })
     }
 
     /// Extract the row's cell value for this column. Empty string when
@@ -74,18 +119,18 @@ impl ColumnKind {
             ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
             ColumnKind::Rev => r.version.clone(),
             ColumnKind::Symbol => {
-                if r.symbol_ref.uuid == uuid::Uuid::nil() {
+                if r.is_symbol_unbound() {
                     "—".to_string()
                 } else {
                     // Surface the short uuid prefix so the user has an
                     // at-a-glance signal without bloating the column
                     // width. Full path/name is in the Properties panel.
-                    format!("• {:.8}", r.symbol_ref.uuid)
+                    format!("• {}", short_id(&r.symbol_ref.uuid))
                 }
             }
             ColumnKind::Footprint => match &r.footprint_ref {
-                Some(fp) if fp.uuid != uuid::Uuid::nil() => {
-                    format!("• {:.8}", fp.uuid)
+                Some(fp) if !r.is_footprint_unbound() => {
+                    format!("• {}", short_id(&fp.uuid))
                 }
                 _ => "—".to_string(),
             },
@@ -93,26 +138,15 @@ impl ColumnKind {
                 Some(v) => v.display(),
                 None => String::new(),
             },
+            // The price lives in the pricing cache, not on the row; see
+            // `PriceView`.
+            ColumnKind::Price => String::new(),
             ColumnKind::Parameter(key) => match r.parameters.get(key) {
                 Some(v) => v.display(),
                 None => String::new(),
             },
         }
     }
-}
-
-/// Comparator for two cell strings with auto-detected numeric
-/// fallback. If both values parse as `f64`, sort numerically;
-/// otherwise sort case-insensitively. This is Stage 8's answer to
-/// the Altium "lexical sort on numeric columns" pain — we don't
-/// need a typed schema lookup at compare time, and untyped legacy
-/// columns get the right behaviour automatically when their cells
-/// happen to be numeric.
-pub(super) fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
-    if let (Ok(na), Ok(nb)) = (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
-        return na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal);
-    }
-    a.to_lowercase().cmp(&b.to_lowercase())
 }
 
 /// Resolve the column list. Always: Internal PN / Manufacturer / MPN /
@@ -138,6 +172,7 @@ pub(super) fn derive_columns(
     library_id: uuid::Uuid,
     registry: &signex_library::TemplateRegistry,
     table_name: &str,
+    prices: &super::price::PriceView<'_>,
 ) -> Vec<GridColumn> {
     let mut columns: Vec<GridColumn> = Vec::with_capacity(4 + MAX_PARAM_COLUMNS);
     columns.push(GridColumn {
@@ -173,13 +208,22 @@ pub(super) fn derive_columns(
     columns.push(GridColumn {
         label: "Symbol".to_string(),
         kind: ColumnKind::Symbol,
-        width: 120.0,
+        width: 140.0,
     });
     columns.push(GridColumn {
         label: "Footprint".to_string(),
         kind: ColumnKind::Footprint,
-        width: 120.0,
+        width: 140.0,
     });
+
+    // Cached distributor price, once Refresh All Pricing has stored one.
+    if prices.any(rows) {
+        columns.push(GridColumn {
+            label: "Price".to_string(),
+            kind: ColumnKind::Price,
+            width: 210.0,
+        });
+    }
 
     // F19 — template-derived basic-parameter columns. Resolve unique
     // classes from the rows; for empty tables, strip a trailing "s"
@@ -191,10 +235,10 @@ pub(super) fn derive_columns(
     // classes.
     let mut classes: std::collections::BTreeSet<String> =
         rows.iter().map(|r| r.class.as_str().to_string()).collect();
-    if classes.is_empty() {
-        if let Some(stem) = table_name.strip_suffix('s') {
-            classes.insert(stem.to_string());
-        }
+    if classes.is_empty()
+        && let Some(stem) = table_name.strip_suffix('s')
+    {
+        classes.insert(stem.to_string());
     }
     for class in &classes {
         if let Some(tmpl) = registry.resolve(library_id, class) {
@@ -291,7 +335,7 @@ fn shorten_label(key: &str) -> String {
     if key.len() <= 14 {
         key.to_string()
     } else {
-        format!("{}…", &key[..13])
+        format!("{}…", crate::text_trunc::prefix_within_bytes(key, 13))
     }
 }
 
@@ -306,4 +350,156 @@ pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str) -> bool {
         return true;
     }
     false
+}
+
+#[cfg(test)]
+mod sort_tests {
+    use super::*;
+    use signex_library::{
+        ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
+        ParamValue, PlmReserved, PrimitiveRef,
+    };
+
+    fn row_with(value: f64, unit: &str) -> ComponentRow {
+        let now = chrono::Utc::now();
+        let mut parameters = ParamMap::new();
+        parameters.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value,
+                unit: unit.into(),
+            },
+        );
+        ComponentRow {
+            alternate_symbols: Vec::new(),
+            row_id: uuid::Uuid::now_v7(),
+            internal_pn: InternalPn::new("R1"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
+            state: LifecycleState::Draft,
+            symbol_ref: PrimitiveRef::new(uuid::Uuid::nil(), uuid::Uuid::nil()),
+            footprint_ref: None,
+            alternate_footprints: Vec::new(),
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Acme", "MPN"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters,
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: now,
+            updated: now,
+            content_hash: [0u8; 32],
+            server_revision: None,
+        }
+    }
+
+    fn param_row(value: ParamValue) -> ComponentRow {
+        let mut r = row_with(0.0, "ohm");
+        r.parameters.insert("value".into(), value);
+        r
+    }
+
+    fn measured(value: f64, unit: &str) -> ParamValue {
+        ParamValue::Measurement {
+            value,
+            unit: unit.into(),
+        }
+    }
+
+    /// Sort `values` through the browser's own key path and return the
+    /// display text of each, in order.
+    fn sorted_display(values: Vec<ParamValue>) -> Vec<String> {
+        let column = ColumnKind::Parameter("value".into());
+        let mut rows: Vec<ComponentRow> = values.into_iter().map(param_row).collect();
+        super::super::sort::sort_by_cell_key(&mut rows, |r| column.sort_key_for(r), false);
+        rows.iter().map(|r| column.cell_value(r)).collect()
+    }
+
+    #[test]
+    fn two_kilohm_sorts_before_ten_kilohm() {
+        let out = sorted_display(vec![
+            measured(10.0, "kΩ"),
+            measured(900.0, "ohm"),
+            measured(2000.0, "ohm"),
+        ]);
+        assert_eq!(out, ["900 Ω", "2 kΩ", "10 kΩ"]);
+    }
+
+    #[test]
+    fn a_hundred_nanofarad_sorts_before_a_microfarad() {
+        let out = sorted_display(vec![measured(1.0, "µF"), measured(100.0, "nF")]);
+        assert_eq!(out, ["100 nF", "1 µF"]);
+        let out = sorted_display(vec![measured(1.0, "µF"), measured(10.0, "nF")]);
+        assert_eq!(out, ["10 nF", "1 µF"]);
+    }
+
+    #[test]
+    fn legacy_and_canonical_measurements_sit_together() {
+        let out = sorted_display(vec![
+            measured(10_000.0, "ohm"),
+            measured(4700.0, "ohm"),
+            measured(4.7, "kΩ"),
+            measured(900.0, "ohm"),
+        ]);
+        assert_eq!(out, ["900 Ω", "4.7 kΩ", "4.7 kΩ", "10 kΩ"]);
+    }
+
+    #[test]
+    fn numbers_precede_measurements_and_text_comes_last() {
+        let out = sorted_display(vec![
+            ParamValue::Text("R10".into()),
+            measured(5.0, "V"),
+            ParamValue::Text("R2".into()),
+            ParamValue::Number(100.0),
+        ]);
+        assert_eq!(out, ["100", "5 V", "R2", "R10"]);
+    }
+
+    #[test]
+    fn mixed_unit_families_cluster() {
+        let out = sorted_display(vec![
+            measured(1.0, "µF"),
+            measured(10.0, "kΩ"),
+            measured(100.0, "nF"),
+            measured(900.0, "ohm"),
+        ]);
+        assert_eq!(out, ["900 Ω", "10 kΩ", "100 nF", "1 µF"]);
+    }
+
+    /// A measurement cell is a button that opens the Edit Component
+    /// Details modal for its row; it is never a raw text input.
+    #[test]
+    fn a_measurement_cell_opens_the_edit_modal() {
+        let key = ColumnKind::Parameter("value".into());
+        let r = row_with(4700.0, "ohm");
+        let msg = key.measurement_press(&r, std::path::Path::new("lib.snxlib"), "Resistors");
+        match msg {
+            Some(LibraryMessage::BrowserOpenEditModal { table, row_id, .. }) => {
+                assert_eq!(table, "Resistors");
+                assert_eq!(row_id, RowId::from_uuid(r.row_id));
+            }
+            other => panic!("expected the edit modal to open, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_and_fixed_cells_stay_inline() {
+        let r = param_row(ParamValue::Text("X7R".into()));
+        let path = std::path::Path::new("lib.snxlib");
+        assert!(
+            ColumnKind::Parameter("value".into())
+                .measurement_press(&r, path, "T")
+                .is_none()
+        );
+        assert!(ColumnKind::Mpn.measurement_press(&r, path, "T").is_none());
+    }
 }

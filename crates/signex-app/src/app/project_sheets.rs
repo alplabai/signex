@@ -1,7 +1,7 @@
 //! Shared assembly of the project's sheet view — [`assemble_project_sheets`]
-//! answers "what sheets does this project consist of", and
-//! [`project_children_map`] keys that answer the way
-//! [`signex_net::build_project_netlist`] and ERC read it (ADR-0002 D8).
+//! answers "what sheets does this project consist of", and `project_graph`
+//! re-keys that answer by resolved path the way
+//! [`signex_net::build_project_netlist`] and ERC read it (ADR-0002 D8, #466).
 //!
 //! There is exactly one assembler on purpose. Five operations ask this
 //! question — the export scope, the cached canvas/ERC netlist, the ERC run,
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::SchematicSheet;
 
 use crate::app::state::DocumentState;
-use crate::app::state::scope::path_key;
+use crate::app::state::scope::{CaseFold, path_key_with};
 
 /// The sheets a project consists of, plus what could not be made sense of
 /// while assembling them.
@@ -37,6 +37,11 @@ pub(crate) struct ProjectSheetSet {
     /// The sheet this set was rooted at — what the netlist stitcher starts
     /// from. Carried here so no caller re-derives it and drifts.
     pub(crate) root: Option<PathBuf>,
+    /// The owning project's key rules, chosen once by whoever picked the
+    /// project. Every key built from this set (graph, roots, ERC lookups) uses
+    /// THIS fold, so a set can never be assembled under one rule and keyed
+    /// under another.
+    pub(crate) fold: CaseFold,
 }
 
 impl ProjectSheetSet {
@@ -47,8 +52,24 @@ impl ProjectSheetSet {
             pages_outside_the_hierarchy: Vec::new(),
             unreadable: Vec::new(),
             root: None,
+            fold: CaseFold::host_default(),
         }
     }
+}
+
+/// The page paths the project owning the active document declares.
+pub(crate) fn declared_pages(document_state: &DocumentState) -> Vec<PathBuf> {
+    document_state
+        .active_document_project()
+        .map(|p| {
+            let dir = p.dir();
+            p.data
+                .sheets
+                .iter()
+                .map(|s| dir.join(&s.filename))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// The declared page paths of the project owning the active document, plus
@@ -62,8 +83,35 @@ impl ProjectSheetSet {
 pub(crate) fn assemble_active_project_sheets(
     document_state: &DocumentState,
 ) -> (Vec<PathBuf>, ProjectSheetSet) {
-    let pages: Vec<PathBuf> = document_state
-        .active_document_project()
+    let Some(active_path) = document_state.active_path.as_deref() else {
+        let project = document_state.active_document_project();
+        return (
+            project_pages(project),
+            ProjectSheetSet {
+                fold: crate::app::state::project_case::fold_of(project),
+                ..ProjectSheetSet::empty()
+            },
+        );
+    };
+    assemble_project_sheets_for(document_state, active_path)
+}
+
+/// [`assemble_active_project_sheets`] for an explicit `source` document rather
+/// than the active tab (#852).
+pub(crate) fn assemble_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> (Vec<PathBuf>, ProjectSheetSet) {
+    let project = document_state.document_project(source);
+    let fold = crate::app::state::project_case::fold_of(project);
+    let pages = project_pages(project);
+    let root = resolve_netlist_root_for(document_state, source);
+    let set = assemble_project_sheets(document_state, &pages, &root, fold);
+    (pages, set)
+}
+
+pub(crate) fn project_pages(project: Option<&crate::app::state::LoadedProject>) -> Vec<PathBuf> {
+    project
         .map(|p| {
             let dir = p.dir();
             p.data
@@ -72,16 +120,7 @@ pub(crate) fn assemble_active_project_sheets(
                 .map(|s| dir.join(&s.filename))
                 .collect()
         })
-        .unwrap_or_default();
-    let Some(active_path) = document_state.active_path.clone() else {
-        return (pages, ProjectSheetSet::empty());
-    };
-    let root = document_state
-        .active_document_project()
-        .and_then(project_root_sheet_path)
-        .unwrap_or(active_path);
-    let set = assemble_project_sheets(document_state, &pages, &root);
-    (pages, set)
+        .unwrap_or_default()
 }
 
 /// The sheet-walk order every whole-project Annotate operation must agree
@@ -109,38 +148,88 @@ pub(crate) fn ordered_project_sheet_paths(
     paths
 }
 
-/// Absolute path of a project's root schematic — its declared
-/// `schematic_root`, falling back to the first entry in the sheet list.
+/// Absolute path of a project's declared root schematic (`schematic_root`
+/// joined to the project directory). `None` when the project declares none.
 pub(crate) fn project_root_sheet_path(
     project: &crate::app::state::LoadedProject,
 ) -> Option<PathBuf> {
-    let filename = project
-        .data
-        .schematic_root
-        .clone()
-        .or_else(|| project.data.sheets.first().map(|s| s.filename.clone()))?;
+    let filename = project.data.schematic_root.as_ref()?;
     Some(project.dir().join(filename))
+}
+
+/// The single answer to "which sheet roots the project netlist": the owning
+/// project's declared `schematic_root`, never the focused tab, so a child
+/// sheet in focus still yields the whole-design netlist (#338).
+///
+/// The explicit fallback is the active document, used only when there is no
+/// owning project (a loose schematic) or the project declares no root.
+/// Shared by the cached canvas/ERC netlist and the export scope.
+pub(crate) fn resolve_netlist_root(document_state: &DocumentState) -> Option<PathBuf> {
+    document_state
+        .active_document_project()
+        .and_then(project_root_sheet_path)
+        .or_else(|| document_state.active_path.clone())
+}
+
+/// [`resolve_netlist_root`] for an explicit `source` document.
+pub(crate) fn resolve_netlist_root_for(document_state: &DocumentState, source: &Path) -> PathBuf {
+    document_state
+        .document_project(source)
+        .and_then(project_root_sheet_path)
+        .unwrap_or_else(|| source.to_path_buf())
+}
+
+/// The warning to surface when [`resolve_netlist_root_for`] had to fall back to
+/// `source` *inside a project* because the project declares no root sheet
+/// (#338). `None` for a declared root and for a loose document, where rooting
+/// at the document is the whole scope rather than a degradation.
+pub(crate) fn netlist_root_fallback_warning_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> Option<String> {
+    let project = document_state.document_project(source)?;
+    if project.data.schematic_root.is_some() {
+        return None;
+    }
+    Some(format!(
+        "Netlist: project '{}' declares no root sheet; rooting at the active sheet '{}'",
+        project.data.name,
+        source.display()
+    ))
 }
 
 /// Read one sheet: the live engine snapshot when the file is open as a tab (so
 /// unsaved edits are in the answer), a disk parse otherwise.
 ///
 /// `Ok(None)` means genuinely absent; `Err` means present but unusable.
-fn load_sheet(
+pub(crate) fn load_sheet(
     document_state: &DocumentState,
     path: &Path,
 ) -> Result<Option<SchematicSheet>, String> {
-    if let Some(engine) = document_state.engines.get(path) {
-        return Ok(Some(engine.document().clone()));
+    load_sheet_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        path,
+    )
+}
+
+/// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
+/// can read from a snapshot of the open sheets instead of borrowing the live
+/// [`DocumentState`].
+fn load_sheet_with(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    path: &Path,
+) -> Result<Option<SchematicSheet>, String> {
+    if let Some(sheet) = open(path) {
+        return Ok(Some(sheet));
     }
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("could not be read: {e}")),
+        Err(e) => return Err(format!("could not be read ({e})")),
     };
     match signex_types::format::SnxSchematic::parse(&text) {
         Ok(parsed) => Ok(Some(parsed.sheet)),
-        Err(e) => Err(format!("could not be parsed: {e}")),
+        Err(e) => Err(format!("could not be parsed ({e})")),
     }
 }
 
@@ -163,12 +252,102 @@ pub(crate) fn assemble_project_sheets(
     document_state: &DocumentState,
     pages: &[PathBuf],
     root_path: &Path,
+    fold: CaseFold,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(
+        &|p| document_state.engines.get(p).map(|e| e.document().clone()),
+        pages,
+        root_path,
+        fold,
+    )
+}
+
+/// The open sheets' documents, keyed by path: the part of [`DocumentState`] the
+/// assembler reads, cloned out so the (disk-reading) assembly can run on a
+/// blocking thread.
+pub(crate) type OpenSheets = HashMap<PathBuf, SchematicSheet>;
+
+/// Snapshot every open engine's document.
+pub(crate) fn open_sheets_snapshot(document_state: &DocumentState) -> OpenSheets {
+    document_state
+        .engines
+        .iter()
+        .map(|(path, engine)| (path.clone(), engine.document().clone()))
+        .collect()
+}
+
+/// Snapshot the documents of the open engines at `paths`. Cloning is the cost
+/// of leaving the UI thread, so a caller names only the sheets its job reads.
+pub(crate) fn open_sheets_snapshot_of(
+    document_state: &DocumentState,
+    paths: &[PathBuf],
+) -> OpenSheets {
+    paths
+        .iter()
+        .filter_map(|path| {
+            let engine = document_state.engines.get(path)?;
+            Some((path.clone(), engine.document().clone()))
+        })
+        .collect()
+}
+
+/// Everything the assembler needs for one source document's project, owned,
+/// so the (disk-reading) assembly can run on a blocking thread.
+pub(crate) struct ProjectSheetPlan {
+    open: OpenSheets,
+    pages: Vec<PathBuf>,
+    root: PathBuf,
+    fold: CaseFold,
+}
+
+impl ProjectSheetPlan {
+    pub(crate) fn assemble(&self) -> ProjectSheetSet {
+        assemble_project_sheets_from(&self.open, &self.pages, &self.root, self.fold)
+    }
+}
+
+/// The plan for `source`'s project. Every open engine is snapshotted, so a
+/// sheet the hierarchy walk reaches that is open (declared or not, whoever
+/// owns it) counts with its unsaved edits; only sheets that are not open are
+/// read from disk.
+pub(crate) fn plan_project_sheets_for(
+    document_state: &DocumentState,
+    source: &Path,
+) -> ProjectSheetPlan {
+    let project = document_state.document_project(source);
+    let fold = crate::app::state::project_case::fold_of(project);
+    let pages = project_pages(project);
+    let root = resolve_netlist_root_for(document_state, source);
+    ProjectSheetPlan {
+        open: open_sheets_snapshot(document_state),
+        pages,
+        root,
+        fold,
+    }
+}
+
+/// [`assemble_project_sheets`] over a snapshot instead of the live state.
+pub(crate) fn assemble_project_sheets_from(
+    open: &OpenSheets,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
+) -> ProjectSheetSet {
+    assemble_project_sheets_with(&|p| open.get(p).cloned(), pages, root_path, fold)
+}
+
+fn assemble_project_sheets_with(
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    pages: &[PathBuf],
+    root_path: &Path,
+    fold: CaseFold,
 ) -> ProjectSheetSet {
     let mut set = ProjectSheetSet {
         sheets: HashMap::new(),
         pages_outside_the_hierarchy: Vec::new(),
         unreadable: Vec::new(),
         root: Some(root_path.to_path_buf()),
+        fold,
     };
     let mut visited: HashSet<String> = HashSet::new();
 
@@ -176,18 +355,19 @@ pub(crate) fn assemble_project_sheets(
     // the assembled set — is what the netlist stitcher will actually traverse,
     // so it is the only honest answer to "is this page in the netlist?".
     let reachable = walk(
-        document_state,
+        open,
         &[root_path.to_path_buf()],
         &mut visited,
         &mut set,
+        fold,
     );
     // Then the declared pages and their own subtrees, so ERC and the children
     // map see the whole project even where the hierarchy does not connect it.
-    walk(document_state, pages, &mut visited, &mut set);
+    walk(open, pages, &mut visited, &mut set, fold);
 
     set.pages_outside_the_hierarchy = pages
         .iter()
-        .filter(|p| !reachable.contains(&path_key(p)))
+        .filter(|p| !reachable.contains(&path_key_with(p, fold)))
         .cloned()
         .collect();
     set.pages_outside_the_hierarchy.sort();
@@ -195,17 +375,18 @@ pub(crate) fn assemble_project_sheets(
 }
 
 /// Breadth-first load of `seeds` and their `child_sheets` descendants into
-/// `set`. Returns the `path_key`s actually loaded by this walk.
+/// `set`. Returns the path keys actually loaded by this walk.
 fn walk(
-    document_state: &DocumentState,
+    open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     seeds: &[PathBuf],
     visited: &mut HashSet<String>,
     set: &mut ProjectSheetSet,
+    fold: CaseFold,
 ) -> HashSet<String> {
     let mut loaded: HashSet<String> = HashSet::new();
     let mut queue: Vec<PathBuf> = seeds.to_vec();
     while let Some(path) = queue.pop() {
-        let key = path_key(&path);
+        let key = path_key_with(&path, fold);
         if !visited.insert(key.clone()) {
             // Already handled by this walk or an earlier one. Still counts as
             // covered *by this walk* if it is in the set.
@@ -214,7 +395,7 @@ fn walk(
             }
             continue;
         }
-        let sheet = match load_sheet(document_state, &path) {
+        let sheet = match load_sheet_with(open, &path) {
             Ok(Some(sheet)) => sheet,
             // Absent: the stitcher reports this as the MissingChild it is.
             Ok(None) => continue,
@@ -225,7 +406,14 @@ fn walk(
         };
         let dir = path.parent().unwrap_or_else(|| Path::new("")).to_path_buf();
         for child in &sheet.child_sheets {
-            queue.push(dir.join(&child.filename));
+            // The same resolver the netlist uses: a `..`-spelled reference
+            // names the file it really names (so a cycle written through `..`
+            // revisits an already-visited key instead of minting a new path
+            // each lap), and a reference escaping the sheet's folder is not
+            // loaded (#463).
+            if let Some(resolved) = resolve_child_reference(&dir, &child.filename) {
+                queue.push(resolved);
+            }
         }
         loaded.insert(key);
         set.sheets.insert(path, sheet);
@@ -233,78 +421,233 @@ fn walk(
     loaded
 }
 
-/// Build the project's child sheet-map keyed by the exact `ChildSheet.filename`
-/// string each parent uses to reference a child — the key both
-/// [`signex_net::build_project_netlist`] and ERC's `BadHierSheetPin` look
-/// children up by.
+/// The result of `project_graph` re-keying [`ProjectSheetSet::sheets`]
+/// (`PathBuf -> SchematicSheet`) into [`signex_net::ProjectGraph`]'s `sheets`
+/// / `resolved` inputs — plus what went wrong while re-keying, and the
+/// reverse map back to a path for navigation / `unreadable` messages.
+pub(crate) struct AssembledGraph {
+    /// Every sheet, keyed by its [`signex_net::SheetKey`] (root included).
+    pub(crate) sheets: HashMap<signex_net::SheetKey, SchematicSheet>,
+    /// Per-parent resolution: `resolved[parent_key][cs.filename]` is the
+    /// child's key — the shape [`signex_net::ProjectGraph::resolved`] and
+    /// [`signex_erc::run_with_project`] (as `resolutions`) both take.
+    pub(crate) resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>>,
+    /// Structural problems found while assembling the graph.
+    pub(crate) issues: Vec<signex_net::StitchIssue>,
+    /// The path each key in `sheets` was read from: the collision winner.
+    pub(crate) paths: HashMap<signex_net::SheetKey, PathBuf>,
+}
+
+/// The entry points [`signex_net::build_project_netlist`] must walk: the
+/// project root first, then every declared page the root's hierarchy does not
+/// reach (#430).
 ///
-/// Each parent's `ChildSheet.filename` is resolved against that parent's own
-/// directory to locate the child in `sheets` (the app's already-loaded
-/// `path → sheet` set: live engine snapshots for open tabs, disk parses for the
-/// rest). Keying on the reference string — not the bare basename the app used to
-/// strip to — is what stops two sheets that share a basename in different
-/// directories from silently overwriting each other.
+/// A flat project's second, third, … page has no `ChildSheet` reference
+/// pointing at it — `Add Existing Sheet` produces exactly that — so it is
+/// invisible to the stitcher unless it is named as a root in its own right.
+/// Without this the netlist silently covers only the root's subtree: the
+/// `.net` export refuses as incomplete, and the PDF still prints every page
+/// while resolving `NET_NAME()` against a netlist those pages are absent from.
 ///
-/// Parents are visited in path order. Two loaded parents in *different*
-/// directories can still reference the same filename string, and the map has
-/// one slot for it; iterating a `HashMap` there made the winner — i.e. the
-/// connectivity written into a machine-consumed `.net` — depend on hash order.
-/// First-wins by sorted path is arbitrary but at least the same every run.
+/// Every root walks with an empty name chain — a page is a *peer* of the root,
+/// not nested under it, so its labels stay unqualified and a `VCC` on page two
+/// is the same net as a `VCC` on page one. That is the whole point of stitching
+/// the pages into one netlist, and it is why `ProjectRoot` carries no name
+/// seed.
 ///
-/// When two parents' filename strings resolve to two genuinely *different*
-/// files (not just the same file reached two ways), keeping the first winner
-/// silently would stitch the second parent's subtree from the wrong file with
-/// no trace of it — that collision is returned as a
-/// [`signex_net::StitchIssue::AmbiguousChildFilename`] alongside the map.
-pub(crate) fn project_children_map(
+/// A page that another page *does* reach is still on this list, because
+/// `pages_outside_the_hierarchy` means "not reachable **from the root**".
+/// Listing it is *mostly* harmless: the stitcher's visited set walks it once
+/// when the page referencing it sorts first, but twice in the reverse order
+/// (#540, inherited from #430 and not introduced by the re-key).
+///
+/// Order is the caller's contract — it decides occurrence numbering and hence
+/// `NetId` assignment, so it is part of the exported `.net` — and pages are
+/// therefore sorted by their own [`signex_net::SheetKey`], the identity every
+/// other part of the graph is keyed by (#541).
+///
+/// Sorting `pages_outside_the_hierarchy` directly would be the obvious
+/// shortcut and is wrong twice over. That `Vec` holds *absolute* paths
+/// (`dir.join(&s.filename)`), and `Path`'s `Ord` is **component-wise** where
+/// `SheetKey`'s is byte-wise over the whole string — a different comparison
+/// function, not merely a different string. They disagree on an ordinary
+/// nested project, no exotic input required: for `sub/a.snxsch` against
+/// `sub-b.snxsch`, `Path` compares the component `sub` against `sub-b.snxsch`
+/// and puts the nested page first, while the byte-wise compare reaches `-`
+/// (`0x2d`) before `/` (`0x2f`) and puts the sibling first.
+///
+/// Keying the order to `SheetKey` also reproduces the pre-#466 order, which
+/// sorted the children-map key `String`s — so an existing project's `.net` is
+/// unchanged by the re-key rather than silently renumbered. And a relative,
+/// base-anchored key cannot make net numbering depend on where the project
+/// directory happens to sit on disk, which an absolute-path sort can for any
+/// page declared outside it.
+pub(crate) fn project_roots(
+    root_key: signex_net::SheetKey,
+    project_set: &ProjectSheetSet,
+    graph: &AssembledGraph,
+    base_dir: Option<&Path>,
+    fold: CaseFold,
+) -> Vec<signex_net::ProjectRoot> {
+    let mut page_keys: Vec<signex_net::SheetKey> = project_set
+        .pages_outside_the_hierarchy
+        .iter()
+        .map(|page| sheet_key_with(page, base_dir, fold))
+        // A page that is absent or unreadable stays diagnosed as such rather
+        // than stitched from nothing; only keys that actually assembled are
+        // walkable.
+        .filter(|key| *key != root_key && graph.sheets.contains_key(key))
+        .collect();
+    page_keys.sort();
+
+    let mut roots = vec![signex_net::ProjectRoot {
+        key: root_key.clone(),
+    }];
+    roots.extend(
+        page_keys
+            .into_iter()
+            .map(|key| signex_net::ProjectRoot { key }),
+    );
+    roots
+}
+
+/// [`sheet_key_with`] under the host-default rules, for tests.
+#[cfg(test)]
+pub(crate) fn sheet_key(path: &Path, base: Option<&Path>) -> signex_net::SheetKey {
+    sheet_key_with(path, base, CaseFold::host_default())
+}
+
+/// The [`signex_net::SheetKey`] for `path` under the project's `fold` — its
+/// path relative to `base`, normalized by [`path_key_with`], falling back to
+/// the bare basename when `path` does not live under `base` (or there is no
+/// `base` — a loose document with no project). Keying a project by resolved
+/// path rather than by the bare reference string is the correctness #466 is
+/// after: two parents in different directories may name a child by the
+/// identical string and mean two different files.
+///
+/// Case and separators follow `fold`, the project's probed volume rules
+/// (#694), not the host family: `A.snxsch` and `a.snxsch` share a key exactly
+/// when the volume says they are one file.
+pub(crate) fn sheet_key_with(
+    path: &Path,
+    base: Option<&Path>,
+    fold: CaseFold,
+) -> signex_net::SheetKey {
+    let relative = base
+        .and_then(|dir| path.strip_prefix(dir).ok())
+        .map(Path::to_path_buf)
+        .or_else(|| path.file_name().map(PathBuf::from))
+        .unwrap_or_else(|| path.to_path_buf());
+    signex_net::SheetKey::new(path_key_with(&relative, fold))
+}
+
+/// [`project_graph_with`] under the host-default rules, for tests.
+#[cfg(test)]
+pub(crate) fn project_graph(
     sheets: &HashMap<PathBuf, SchematicSheet>,
-) -> (
-    HashMap<String, SchematicSheet>,
-    Vec<signex_net::StitchIssue>,
-) {
-    let mut children: HashMap<String, SchematicSheet> = HashMap::new();
-    let mut resolved_from: HashMap<String, PathBuf> = HashMap::new();
-    // Collisions already reported, keyed by (filename, losing path): a third
-    // (or fourth) parent resolving the same filename string to the *same*
-    // losing file would otherwise push a content-identical
-    // `AmbiguousChildFilename` — the Messages panel has no dedupe and evicts
-    // oldest at 200, so repeats crowd out other diagnostics. Distinct losing
-    // paths still each get their own issue.
-    let mut reported: std::collections::HashSet<(String, PathBuf)> =
-        std::collections::HashSet::new();
+    base_dir: Option<&Path>,
+    root: Option<&Path>,
+) -> AssembledGraph {
+    project_graph_with(sheets, base_dir, root, CaseFold::host_default())
+}
+
+/// Re-key `sheets` (the app's `path → SchematicSheet` set) into the
+/// [`signex_net::ProjectGraph`] shape — every sheet under its own
+/// [`signex_net::SheetKey`], plus a per-parent `ChildSheet.filename ->
+/// SheetKey` resolution map — so a cross-directory same-filename child
+/// stitches from its own file instead of colliding with another parent's
+/// (#466).
+///
+/// `base_dir` is the fixed base every key is made relative to: the project
+/// directory when the sheet set belongs to one, else the root sheet's own
+/// directory (a loose document still keys its children relative to itself).
+///
+/// Two distinct loaded paths can still collapse onto the same `SheetKey` —
+/// `sheet_key_with` normalizes, and under a case-folding `fold` it also folds
+/// case, so `A.snxsch` and `a.snxsch` assemble to one key. Sorted-path
+/// first-wins keeps which one survives deterministic; the loser is reported as
+/// [`signex_net::StitchIssue::SheetKeyCollision`] and contributes nothing to
+/// the netlist, which is silent without that issue.
+///
+/// `root` is the path the caller is about to stitch from, and it is exempt
+/// from losing such a collision (#536). Sorted-path first-wins had no notion
+/// of a root, so `/proj/Top.snxsch` beat `/proj/top.snxsch` on a plain byte
+/// compare (`T` = `0x54` sorts before `t` = `0x74`) and evicted the root — at
+/// which point both netlist callers found no root key and bailed, producing
+/// no `.net`, no connectivity for `NET_NAME()`, and no explanation. A root
+/// that loses to a stray case-variant copy is never what the user meant, so
+/// the copy is dropped instead; it is still reported as a collision, and the
+/// project still exports. Pass `None` only when the assembly has no single
+/// entry point; the ERC job passes its `project_set.root` so it too is exempt
+/// from the collision.
+pub(crate) fn project_graph_with(
+    sheets: &HashMap<PathBuf, SchematicSheet>,
+    base_dir: Option<&Path>,
+    root: Option<&Path>,
+    fold: CaseFold,
+) -> AssembledGraph {
+    let mut keyed_sheets: HashMap<signex_net::SheetKey, SchematicSheet> = HashMap::new();
+    let mut key_to_path: HashMap<signex_net::SheetKey, PathBuf> = HashMap::new();
     let mut issues: Vec<signex_net::StitchIssue> = Vec::new();
-    let mut parents: Vec<(&PathBuf, &SchematicSheet)> = sheets.iter().collect();
-    parents.sort_by(|a, b| a.0.cmp(b.0));
-    for (parent_path, sheet) in parents {
+
+    // Root first, then sorted-path order for everything else. First-wins
+    // below then cannot evict the root, and the tie-break is still a total
+    // order, so which non-root path survives a collision stays as
+    // deterministic as it was before.
+    let mut paths: Vec<&PathBuf> = sheets.keys().collect();
+    paths.sort_by(|a, b| {
+        let a_is_root = root == Some(a.as_path());
+        let b_is_root = root == Some(b.as_path());
+        b_is_root.cmp(&a_is_root).then_with(|| a.cmp(b))
+    });
+    for path in paths {
+        let key = sheet_key_with(path, base_dir, fold);
+        if let Some(existing) = key_to_path.get(&key) {
+            issues.push(signex_net::StitchIssue::SheetKeyCollision {
+                key: key.to_string(),
+                kept: existing.display().to_string(),
+                dropped: path.display().to_string(),
+            });
+            continue;
+        }
+        key_to_path.insert(key.clone(), path.clone());
+        keyed_sheets.insert(key, sheets[path].clone());
+    }
+
+    // Built from `key_to_path` (the post-collision winners), not the raw
+    // `sheets` input — a case-fold-collision loser must not clobber the
+    // winner's resolution submap by sorting later here than it did above.
+    let mut resolved: HashMap<signex_net::SheetKey, HashMap<String, signex_net::SheetKey>> =
+        HashMap::new();
+    let mut winners: Vec<(&signex_net::SheetKey, &PathBuf)> = key_to_path.iter().collect();
+    winners.sort_by(|a, b| a.1.cmp(b.1));
+    for (parent_key, parent_path) in winners {
+        let sheet = &keyed_sheets[parent_key];
         let dir = parent_path.parent().unwrap_or_else(|| Path::new(""));
+        let mut submap: HashMap<String, signex_net::SheetKey> = HashMap::new();
         for cs in &sheet.child_sheets {
             let Some(child_path) = resolve_child_reference(dir, &cs.filename) else {
                 continue;
             };
-            if let Some(existing_path) = resolved_from.get(&cs.filename) {
-                if *existing_path != child_path
-                    && reported.insert((cs.filename.clone(), child_path.clone()))
-                {
-                    issues.push(signex_net::StitchIssue::AmbiguousChildFilename {
-                        filename: cs.filename.clone(),
-                        path_a: existing_path.display().to_string(),
-                        path_b: child_path.display().to_string(),
-                    });
-                }
-                continue;
-            }
-            if let Some(child) = sheets.get(&child_path) {
-                children.insert(cs.filename.clone(), child.clone());
-                resolved_from.insert(cs.filename.clone(), child_path);
+            let child_key = sheet_key_with(&child_path, base_dir, fold);
+            if keyed_sheets.contains_key(&child_key) {
+                submap.insert(cs.filename.clone(), child_key);
             }
         }
+        resolved.insert(parent_key.clone(), submap);
     }
-    (children, issues)
+
+    AssembledGraph {
+        sheets: keyed_sheets,
+        resolved,
+        issues,
+        paths: key_to_path,
+    }
 }
 
 /// Resolve a `ChildSheet.filename` reference against the directory of the sheet
 /// that carries it — the single definition of child-reference resolution shared
-/// by the project children-map assembly ([`project_children_map`]) and in-app
+/// by the project graph assembly (`project_graph`) and in-app
 /// Open Child Sheet navigation (`resolve_child_sheet_path`). Sharing one
 /// definition is what keeps navigation landing on the same file the netlist
 /// stitched for a given reference, instead of the two agreeing only by
@@ -335,9 +678,53 @@ pub(crate) fn project_children_map(
 ///   requires an attacker who can already write inside the project
 ///   directory.
 pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -> Option<PathBuf> {
+    match resolve_child_reference_quiet(parent_dir, child_filename) {
+        Ok(path) => Some(path),
+        Err(ChildReferenceRefusal::Empty) => None,
+        Err(ChildReferenceRefusal::Escapes {
+            reference,
+            resolved,
+            root,
+        }) => {
+            crate::diagnostics::log_error(
+                "Rejected child-sheet reference outside its resolution root",
+                &anyhow::anyhow!(
+                    "'{reference}' resolves to {} which escapes {}",
+                    resolved.display(),
+                    if root.as_os_str().is_empty() {
+                        "an empty resolution root".to_string()
+                    } else {
+                        root.display().to_string()
+                    }
+                ),
+            );
+            None
+        }
+    }
+}
+
+/// Why [`resolve_child_reference_quiet`] gave no path.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ChildReferenceRefusal {
+    /// Blank after trimming.
+    Empty,
+    /// The normalized path leaves the resolution root.
+    Escapes {
+        reference: String,
+        resolved: PathBuf,
+        root: PathBuf,
+    },
+}
+
+/// [`resolve_child_reference`] without the error log: the one resolution
+/// rule, for a caller that only asks where a reference leads.
+pub(crate) fn resolve_child_reference_quiet(
+    parent_dir: &Path,
+    child_filename: &str,
+) -> Result<PathBuf, ChildReferenceRefusal> {
     let trimmed = child_filename.trim();
     if trimmed.is_empty() {
-        return None;
+        return Err(ChildReferenceRefusal::Empty);
     }
     let raw = PathBuf::from(trimmed);
     let resolved = lexically_normalize(&parent_dir.join(&raw));
@@ -358,22 +745,53 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
         && resolved.starts_with(&root);
 
     if contained {
-        Some(resolved)
+        Ok(resolved)
     } else {
-        crate::diagnostics::log_error(
-            "Rejected child-sheet reference outside its resolution root",
-            &anyhow::anyhow!(
-                "'{trimmed}' resolves to {} which escapes {}",
-                resolved.display(),
-                if root.as_os_str().is_empty() {
-                    "an empty resolution root".to_string()
-                } else {
-                    root.display().to_string()
-                }
-            ),
-        );
-        None
+        Err(ChildReferenceRefusal::Escapes {
+            reference: trimmed.to_string(),
+            resolved,
+            root,
+        })
     }
+}
+
+/// The path a child-sheet reference names, for OWNERSHIP questions: which
+/// open project reaches this file. Unlike [`resolve_child_reference`], which
+/// refuses to open a file outside its parent's directory, ownership follows
+/// EVERY reference, absolute and `../` alike: a sheet one project reaches
+/// through an escape is still that project's, and under-claiming it is the
+/// data-loss direction (#741). The path is joined to `parent_dir`, normalized
+/// with `..` clamped at the filesystem root (`/..` is `/`), so a chain of
+/// `..` cannot grow the path without bound and a loop folds onto a key
+/// already seen. `None` only for an empty reference.
+pub(crate) fn ownership_reference(parent_dir: &Path, reference: &str) -> Option<PathBuf> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(normalize_clamped(&parent_dir.join(PathBuf::from(trimmed))))
+}
+
+/// [`lexically_normalize`] that drops a `..` standing directly on a root or
+/// drive prefix instead of keeping it, matching how the OS resolves `/..`.
+/// A `..` at the head of a *relative* path is still kept: there is no root
+/// to clamp against.
+pub(crate) fn normalize_clamped(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => match out.components().next_back() {
+                Some(std::path::Component::Normal(_)) => {
+                    out.pop();
+                }
+                Some(std::path::Component::RootDir | std::path::Component::Prefix(_)) => {}
+                _ => out.push(".."),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Lexically normalize `path` — resolve `.` and `..` components without
@@ -381,7 +799,7 @@ pub(crate) fn resolve_child_reference(parent_dir: &Path, child_filename: &str) -
 /// path to exist). A `..` with nothing left to pop is kept as a literal `..`
 /// component, so a reference that escapes its root still fails the caller's
 /// `starts_with(root)` check instead of silently collapsing onto the root.
-fn lexically_normalize(path: &Path) -> PathBuf {
+pub(crate) fn lexically_normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {
@@ -396,18 +814,6 @@ fn lexically_normalize(path: &Path) -> PathBuf {
         }
     }
     out
-}
-
-/// The filename string the root sheet is referenced by — its path relative to
-/// `project_dir`, falling back to the bare basename. Passed to
-/// [`signex_net::build_project_netlist`] as `root_filename` so a child that
-/// re-references the root is reported as a cycle rather than recursed into.
-pub(crate) fn root_reference_name(root_path: &Path, project_dir: Option<&Path>) -> Option<String> {
-    project_dir
-        .and_then(|dir| root_path.strip_prefix(dir).ok())
-        .map(Path::to_path_buf)
-        .or_else(|| root_path.file_name().map(PathBuf::from))
-        .and_then(|p| p.to_str().map(str::to_string))
 }
 
 /// A one-line, user-facing message for a cross-sheet stitch issue (ADR-0002 D7,
@@ -448,19 +854,42 @@ pub(crate) fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
                 "Netlist: two distinct nets are both named '{name}'; the later one was suffixed"
             )
         }
-        I::AmbiguousChildFilename {
-            filename,
-            path_a,
-            path_b,
-        } => format!(
-            "Netlist: child reference '{filename}' resolves to two different files ('{path_a}' \
-             and '{path_b}'); the netlist used '{path_a}'"
+        // Deliberately names the two FILES, not the derived key: the key is
+        // normalized (and case-folded on a case-insensitive host), so it is a
+        // string the user never typed and cannot search for. The paths are.
+        I::SheetKeyCollision { kept, dropped, .. } => format!(
+            "Netlist: '{dropped}' and '{kept}' are indistinguishable to this project \
+             (same path once normalized for this filesystem); only '{kept}' is in the \
+             netlist — rename one of them so both are included"
         ),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_quiet_child_resolution_says_why_without_logging() {
+        let dir = Path::new("/p");
+        assert_eq!(
+            resolve_child_reference_quiet(dir, "  sub/../b.snxsch "),
+            Ok(PathBuf::from("/p/b.snxsch"))
+        );
+        assert_eq!(
+            resolve_child_reference_quiet(dir, "   "),
+            Err(ChildReferenceRefusal::Empty)
+        );
+        assert!(matches!(
+            resolve_child_reference_quiet(dir, "../x.snxsch"),
+            Err(ChildReferenceRefusal::Escapes { .. })
+        ));
+        // The logging wrapper agrees on every answer.
+        assert_eq!(
+            resolve_child_reference(dir, "sub/../b.snxsch"),
+            Some(PathBuf::from("/p/b.snxsch"))
+        );
+        assert_eq!(resolve_child_reference(dir, ""), None);
+    }
+
     use super::*;
     use signex_types::schematic::{ChildSheet, FillType, Point};
     use uuid::Uuid;
@@ -482,36 +911,26 @@ mod tests {
         }
     }
 
+    /// A [`signex_net::SheetKey`] from a literal already in the normalized
+    /// form `sheet_key` produces — for asserting against an assembled graph.
+    fn key(k: &str) -> signex_net::SheetKey {
+        signex_net::SheetKey::new(k)
+    }
+
     fn sheet(uuid: u128, children: &[&str]) -> SchematicSheet {
         SchematicSheet {
             uuid: Uuid::from_u128(uuid),
-            version: 0,
-            generator: String::new(),
-            generator_version: String::new(),
-            paper_size: String::new(),
             root_sheet_page: String::new(),
-            symbols: Vec::new(),
-            wires: Vec::new(),
-            junctions: Vec::new(),
-            labels: Vec::new(),
             child_sheets: children.iter().map(|f| child_ref(f)).collect(),
-            no_connects: Vec::new(),
-            text_notes: Vec::new(),
-            buses: Vec::new(),
-            bus_entries: Vec::new(),
-            drawings: Vec::new(),
-            no_erc_directives: Vec::new(),
-            title_block: HashMap::new(),
-            lib_symbols: HashMap::new(),
+            ..Default::default()
         }
     }
 
     #[test]
     fn same_basename_children_in_different_dirs_do_not_collide() {
         // A root references two children that share a basename but live in
-        // different directories, via distinct relative filenames. The old
-        // basename key ("power.snxsch" for both) overwrote one; keying by the
-        // reference string keeps both distinct.
+        // different directories, via distinct relative filenames. Keyed by
+        // resolved path, both are distinct entries.
         let mut sheets = HashMap::new();
         sheets.insert(
             PathBuf::from("/proj/root.snxsch"),
@@ -520,24 +939,41 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
 
-        let (children, issues) = project_children_map(&sheets);
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
-        assert_eq!(children.len(), 2, "both same-basename children present");
-        assert_eq!(children["a/power.snxsch"].uuid, Uuid::from_u128(0xA));
-        assert_eq!(children["b/power.snxsch"].uuid, Uuid::from_u128(0xB));
+        assert_eq!(graph.sheets.len(), 3, "root + both same-basename children");
+        assert_eq!(
+            graph.sheets[&key("a/power.snxsch")].uuid,
+            Uuid::from_u128(0xA)
+        );
+        assert_eq!(
+            graph.sheets[&key("b/power.snxsch")].uuid,
+            Uuid::from_u128(0xB)
+        );
         assert!(
-            issues.is_empty(),
-            "distinct reference strings, no collision"
+            graph.issues.is_empty(),
+            "distinct resolved paths, no collision"
+        );
+        let root_key = sheet_key(Path::new("/proj/root.snxsch"), Some(Path::new("/proj")));
+        assert_eq!(
+            graph.resolved[&root_key]["a/power.snxsch"],
+            key("a/power.snxsch")
+        );
+        assert_eq!(
+            graph.resolved[&root_key]["b/power.snxsch"],
+            key("b/power.snxsch")
         );
     }
 
     #[test]
-    fn same_reference_string_across_different_dirs_is_a_stitch_issue_not_silent() {
-        // Two parents in *different* directories both reference a child by
-        // the SAME relative filename string ("power.snxsch"), so it resolves
-        // to two different files. The map has one slot for the string; the
-        // second parent's subtree must not be silently dropped without a
-        // trace — it has to surface as a StitchIssue.
+    fn same_reference_string_across_different_parent_dirs_stitches_each_from_its_own_file() {
+        // #466 — the bug this replaces: two parents in *different*
+        // directories both reference a child by the SAME relative filename
+        // string ("power.snxsch"). The old bare-filename map had one slot
+        // for that string, so one parent's subtree was silently stitched
+        // from the wrong file. Keyed by resolved path, each parent's OWN
+        // submap resolves the string against its OWN directory, landing on
+        // its OWN file — no ambiguity at all.
         let mut sheets = HashMap::new();
         sheets.insert(
             PathBuf::from("/proj/a/root.snxsch"),
@@ -550,18 +986,23 @@ mod tests {
         sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
         sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
 
-        let (children, issues) = project_children_map(&sheets);
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
-        // Sorted-path first-wins: "/proj/a/root.snxsch" sorts before
-        // "/proj/b/root.snxsch", so its resolution keeps the slot.
-        assert_eq!(children.len(), 1);
-        assert_eq!(children["power.snxsch"].uuid, Uuid::from_u128(0xA));
-        assert_eq!(issues.len(), 1, "the collision must not be silent");
-        assert!(matches!(
-            &issues[0],
-            signex_net::StitchIssue::AmbiguousChildFilename { filename, .. }
-                if filename == "power.snxsch"
-        ));
+        assert!(
+            graph.issues.is_empty(),
+            "each parent resolves its own file, no ambiguity: {:?}",
+            graph.issues
+        );
+        let a_root_key = sheet_key(Path::new("/proj/a/root.snxsch"), Some(Path::new("/proj")));
+        let b_root_key = sheet_key(Path::new("/proj/b/root.snxsch"), Some(Path::new("/proj")));
+        let a_power_key = graph.resolved[&a_root_key]["power.snxsch"].clone();
+        let b_power_key = graph.resolved[&b_root_key]["power.snxsch"].clone();
+        assert_ne!(
+            a_power_key, b_power_key,
+            "the two parents resolve \"power.snxsch\" to two different children"
+        );
+        assert_eq!(graph.sheets[&a_power_key].uuid, Uuid::from_u128(0xA));
+        assert_eq!(graph.sheets[&b_power_key].uuid, Uuid::from_u128(0xB));
     }
 
     #[test]
@@ -582,52 +1023,75 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/shared.snxsch"), sheet(0xC, &[]));
 
-        let (children, issues) = project_children_map(&sheets);
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
-        assert_eq!(children.len(), 1);
-        assert_eq!(children["shared.snxsch"].uuid, Uuid::from_u128(0xC));
+        let a_key = sheet_key(Path::new("/proj/a.snxsch"), Some(Path::new("/proj")));
+        let b_key = sheet_key(Path::new("/proj/b.snxsch"), Some(Path::new("/proj")));
+        let shared_key = sheet_key(Path::new("/proj/shared.snxsch"), Some(Path::new("/proj")));
+        assert_eq!(graph.resolved[&a_key]["shared.snxsch"], shared_key);
+        assert_eq!(graph.resolved[&b_key]["shared.snxsch"], shared_key);
+        assert_eq!(graph.sheets[&shared_key].uuid, Uuid::from_u128(0xC));
         assert!(
-            issues.is_empty(),
-            "the same file reached from two parents is not a collision: {issues:?}"
+            graph.issues.is_empty(),
+            "the same file reached from two parents is not a collision: {:?}",
+            graph.issues
         );
     }
 
     #[test]
-    fn a_repeated_collision_on_the_same_losing_file_is_reported_once() {
-        // Three parents reference "power.snxsch". The sorted-first parent
-        // (/proj/a) wins; the two /proj/b parents both resolve it to the SAME
-        // losing file (/proj/b/power.snxsch). The collision must surface, but
-        // as ONE issue — not one per losing parent (the Messages panel has no
-        // dedupe and would crowd out other diagnostics).
+    fn case_fold_collision_between_two_loaded_paths_is_the_remaining_ambiguity() {
+        // The only ambiguity left after keying by resolved path: two DISTINCT
+        // loaded paths that differ only in case collapse onto one `SheetKey`
+        // where the policy folds — one sheet loses the slot entirely, so the
+        // caller must be told. Both policies run on every host (#543); see
+        // `sheet_key` for why the host-family default is only a proxy.
         let mut sheets = HashMap::new();
-        sheets.insert(
-            PathBuf::from("/proj/a/root.snxsch"),
-            sheet(1, &["power.snxsch"]),
-        );
-        sheets.insert(
-            PathBuf::from("/proj/b/root1.snxsch"),
-            sheet(2, &["power.snxsch"]),
-        );
-        sheets.insert(
-            PathBuf::from("/proj/b/root2.snxsch"),
-            sheet(3, &["power.snxsch"]),
-        );
-        sheets.insert(PathBuf::from("/proj/a/power.snxsch"), sheet(0xA, &[]));
-        sheets.insert(PathBuf::from("/proj/b/power.snxsch"), sheet(0xB, &[]));
+        sheets.insert(PathBuf::from("/proj/A.snxsch"), sheet(0xA, &[]));
+        sheets.insert(PathBuf::from("/proj/a.snxsch"), sheet(0xB, &[]));
+        let base = Some(Path::new("/proj"));
 
-        let (_children, issues) = project_children_map(&sheets);
-
+        let folded = project_graph_with(&sheets, base, None, CaseFold::FOLD);
+        assert_eq!(folded.sheets.len(), 1, "one key wins the collision");
+        assert_eq!(folded.issues.len(), 1, "the collision must not be silent");
+        assert!(matches!(
+            &folded.issues[0],
+            signex_net::StitchIssue::SheetKeyCollision { .. }
+        ));
+        // Sorted-path first-wins: "/proj/A.snxsch" < "/proj/a.snxsch".
         assert_eq!(
-            issues.len(),
-            1,
-            "the same losing file reported once, not per parent: {issues:?}"
+            folded.sheets.values().next().unwrap().uuid,
+            Uuid::from_u128(0xA)
+        );
+
+        let preserved = project_graph_with(&sheets, base, None, CaseFold::PRESERVE);
+        assert_eq!(preserved.sheets.len(), 2, "case-sensitive: two files");
+        assert!(preserved.issues.is_empty());
+    }
+
+    #[test]
+    fn sheet_key_identity_follows_the_injected_case_policy() {
+        let base = Some(Path::new("/proj"));
+        let upper = Path::new("/proj/Top.snxsch");
+        let lower = Path::new("/proj/top.snxsch");
+        assert_eq!(
+            sheet_key_with(upper, base, CaseFold::FOLD),
+            sheet_key_with(lower, base, CaseFold::FOLD)
+        );
+        assert_ne!(
+            sheet_key_with(upper, base, CaseFold::PRESERVE),
+            sheet_key_with(lower, base, CaseFold::PRESERVE)
+        );
+        // The host-default wrapper must agree with its own policy.
+        assert_eq!(
+            sheet_key(upper, base),
+            sheet_key_with(upper, base, CaseFold::host_default())
         );
     }
 
     #[test]
     fn resolves_a_bare_child_reference_against_the_parent_dir() {
         // The common flat case: a root in /proj references "child.snxsch",
-        // which lives beside it. Keyed by the bare reference string.
+        // which lives beside it.
         let mut sheets = HashMap::new();
         sheets.insert(
             PathBuf::from("/proj/root.snxsch"),
@@ -635,17 +1099,19 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/child.snxsch"), sheet(2, &[]));
 
-        let (children, issues) = project_children_map(&sheets);
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
 
-        assert_eq!(children.len(), 1);
-        assert_eq!(children["child.snxsch"].uuid, Uuid::from_u128(2));
-        assert!(issues.is_empty());
+        let root_key = sheet_key(Path::new("/proj/root.snxsch"), Some(Path::new("/proj")));
+        let child_key = graph.resolved[&root_key]["child.snxsch"].clone();
+        assert_eq!(graph.sheets[&child_key].uuid, Uuid::from_u128(2));
+        assert!(graph.issues.is_empty());
     }
 
     #[test]
-    fn unreferenced_and_unloadable_sheets_are_absent() {
-        // A reference whose file isn't in the loaded set is skipped (no panic,
-        // no phantom entry); a sheet nobody references is not added either.
+    fn unreferenced_and_unloadable_sheets_are_absent_from_resolution() {
+        // A reference whose file isn't in the loaded set resolves to nothing
+        // (no panic, no phantom entry); a sheet nobody references is still
+        // loaded into `sheets` — only its resolution is empty.
         let mut sheets = HashMap::new();
         sheets.insert(
             PathBuf::from("/proj/root.snxsch"),
@@ -653,23 +1119,26 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/orphan.snxsch"), sheet(3, &[]));
 
-        let (children, issues) = project_children_map(&sheets);
-        assert!(children.is_empty());
-        assert!(issues.is_empty());
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
+        let root_key = sheet_key(Path::new("/proj/root.snxsch"), Some(Path::new("/proj")));
+        assert!(graph.resolved[&root_key].is_empty());
+        assert!(graph.issues.is_empty());
+        let orphan_key = sheet_key(Path::new("/proj/orphan.snxsch"), Some(Path::new("/proj")));
+        assert!(graph.sheets.contains_key(&orphan_key));
     }
 
     #[test]
-    fn root_reference_name_is_relative_to_project_dir() {
+    fn sheet_key_is_relative_to_the_base_dir() {
         assert_eq!(
-            root_reference_name(Path::new("/proj/sub/root.snxsch"), Some(Path::new("/proj"))),
-            Some("sub/root.snxsch".to_string())
+            sheet_key(Path::new("/proj/sub/root.snxsch"), Some(Path::new("/proj"))),
+            key("sub/root.snxsch")
         );
         assert_eq!(
-            root_reference_name(
+            sheet_key(
                 Path::new("/elsewhere/root.snxsch"),
                 Some(Path::new("/proj"))
             ),
-            Some("root.snxsch".to_string())
+            key("root.snxsch")
         );
     }
 
@@ -748,11 +1217,12 @@ mod tests {
     }
 
     #[test]
-    fn navigation_and_children_map_agree_on_the_same_reference() {
-        // The children map stitches "leaf.snxsch" from a parent in /proj/sub to
-        // the loaded /proj/sub/leaf.snxsch; the shared helper (what navigation
-        // now uses) resolves the same reference against the same parent dir to
-        // that exact path, so navigation opens the file the netlist stitched.
+    fn navigation_and_project_graph_agree_on_the_same_reference() {
+        // The graph stitches "leaf.snxsch" from a parent in /proj/sub to the
+        // loaded /proj/sub/leaf.snxsch; the shared helper (what navigation
+        // now uses) resolves the same reference against the same parent dir
+        // to that exact path, and it keys to the same `SheetKey` the graph
+        // resolved — so navigation opens the file the netlist stitched.
         let mut sheets = HashMap::new();
         sheets.insert(
             PathBuf::from("/proj/sub/mid.snxsch"),
@@ -760,15 +1230,281 @@ mod tests {
         );
         sheets.insert(PathBuf::from("/proj/sub/leaf.snxsch"), sheet(0x222, &[]));
 
-        let (children, _issues) = project_children_map(&sheets);
-        assert_eq!(children["leaf.snxsch"].uuid, Uuid::from_u128(0x222));
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
+        let mid_key = sheet_key(Path::new("/proj/sub/mid.snxsch"), Some(Path::new("/proj")));
+        let leaf_key = graph.resolved[&mid_key]["leaf.snxsch"].clone();
+        assert_eq!(graph.sheets[&leaf_key].uuid, Uuid::from_u128(0x222));
 
         let nav = resolve_child_reference(Path::new("/proj/sub"), "leaf.snxsch")
             .expect("relative reference resolves");
         assert_eq!(nav, PathBuf::from("/proj/sub/leaf.snxsch"));
-        assert!(
-            sheets.contains_key(&nav),
-            "navigation lands on the loaded child, not a phantom sibling"
+        assert_eq!(
+            sheet_key(&nav, Some(Path::new("/proj"))),
+            leaf_key,
+            "navigation lands on the key the graph resolved"
         );
+    }
+
+    #[test]
+    fn pages_are_ordered_by_sheet_key_not_by_absolute_path() {
+        // Occurrence order is NetId order, so root order is part of the
+        // exported `.net`. `Path`'s Ord is component-wise and `SheetKey`'s is
+        // byte-wise over the whole string, and they disagree on an ordinary
+        // nested project: `Path` compares the component "sub" against
+        // "sub-b.snxsch" and puts the nested page first, while the byte-wise
+        // compare reaches '-' (0x2d) before '/' (0x2f) and puts the sibling
+        // first. The byte-wise one is what the pre-#466 children-map keys
+        // produced, so keying the order to `SheetKey` leaves an existing
+        // project's netlist unrenumbered (#541).
+        let base = Path::new("/proj");
+        let root_path = PathBuf::from("/proj/root.snxsch");
+        let nested = PathBuf::from("/proj/sub/a.snxsch");
+        let sibling = PathBuf::from("/proj/sub-b.snxsch");
+
+        let mut sheets = HashMap::new();
+        sheets.insert(root_path.clone(), sheet(0x1, &[]));
+        sheets.insert(nested.clone(), sheet(0x2, &[]));
+        sheets.insert(sibling.clone(), sheet(0x3, &[]));
+
+        let mut pages = vec![nested, sibling];
+        pages.sort();
+        assert_eq!(
+            pages[0],
+            PathBuf::from("/proj/sub/a.snxsch"),
+            "sorted absolute paths put the nested page first — the order NOT to inherit"
+        );
+
+        let set = ProjectSheetSet {
+            sheets: sheets.clone(),
+            pages_outside_the_hierarchy: pages,
+            unreadable: Vec::new(),
+            root: Some(root_path.clone()),
+            fold: CaseFold::host_default(),
+        };
+        let graph = project_graph(&sheets, Some(base), None);
+        let root_key = sheet_key(&root_path, Some(base));
+        let roots = project_roots(
+            root_key.clone(),
+            &set,
+            &graph,
+            Some(base),
+            CaseFold::host_default(),
+        );
+
+        assert_eq!(
+            roots.into_iter().map(|r| r.key).collect::<Vec<_>>(),
+            vec![root_key, key("sub-b.snxsch"), key("sub/a.snxsch")],
+            "root first, then pages in SheetKey order"
+        );
+    }
+
+    /// #536 — the root must survive a `SheetKey` collision.
+    ///
+    /// Reproducible on EVERY platform, not just Windows as the issue
+    /// first read. The host-default fold only folds case under `cfg!(windows)`, but
+    /// `sheet_key` relativizes against `base` and falls back to the bare
+    /// `file_name()` when a path is not under it. A sheet living outside
+    /// the project directory therefore keys as `top.snxsch` and collides
+    /// with the project's own `/proj/top.snxsch`, case-folding or not.
+    ///
+    /// Sorted first-wins then handed the slot to the outsider — `/other`
+    /// sorts before `/proj` — and both netlist callers, finding no root
+    /// key, bailed without a word.
+    #[test]
+    fn an_out_of_tree_namesake_cannot_evict_the_root() {
+        let root_path = PathBuf::from("/proj/top.snxsch");
+        let mut sheets = HashMap::new();
+        sheets.insert(root_path.clone(), sheet(0x0777, &[]));
+        sheets.insert(PathBuf::from("/other/top.snxsch"), sheet(0x0BAD, &[]));
+
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), Some(&root_path));
+
+        assert_eq!(
+            graph.sheets[&key("top.snxsch")].uuid,
+            Uuid::from_u128(0x0777),
+            "the root must own its key, not the out-of-tree namesake"
+        );
+    }
+
+    /// The exemption does not hide the collision — the outsider is still
+    /// reported, just as `dropped` rather than `kept`. Silently preferring
+    /// the root would trade one invisible failure for another.
+    #[test]
+    fn the_namesake_the_root_displaces_is_still_reported() {
+        let root_path = PathBuf::from("/proj/top.snxsch");
+        let mut sheets = HashMap::new();
+        sheets.insert(root_path.clone(), sheet(0x0777, &[]));
+        sheets.insert(PathBuf::from("/other/top.snxsch"), sheet(0x0BAD, &[]));
+
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), Some(&root_path));
+
+        assert!(
+            matches!(
+                graph.issues.as_slice(),
+                [signex_net::StitchIssue::SheetKeyCollision { key, kept, dropped }]
+                    if key == "top.snxsch"
+                        && kept == "/proj/top.snxsch"
+                        && dropped == "/other/top.snxsch"
+            ),
+            "expected one collision naming the root as kept, got {:?}",
+            graph.issues
+        );
+    }
+
+    /// `None` is what ERC passes, and it must keep the old rule exactly:
+    /// sorted-path first-wins, no notion of a root. Without this the
+    /// exemption could quietly become "whichever path the caller happened
+    /// to mention", which is not a total order.
+    #[test]
+    fn without_a_root_the_winner_is_still_sorted_first_wins() {
+        let mut sheets = HashMap::new();
+        sheets.insert(PathBuf::from("/proj/top.snxsch"), sheet(0x0777, &[]));
+        sheets.insert(PathBuf::from("/other/top.snxsch"), sheet(0x0BAD, &[]));
+
+        let graph = project_graph(&sheets, Some(Path::new("/proj")), None);
+
+        assert_eq!(
+            graph.sheets[&key("top.snxsch")].uuid,
+            Uuid::from_u128(0x0BAD),
+            "/other sorts before /proj, so it wins when no root is named"
+        );
+    }
+    fn project_of(
+        id: crate::app::state::ProjectId,
+        dir: &str,
+        sheets: &[&str],
+    ) -> crate::app::state::LoadedProject {
+        crate::app::state::LoadedProject {
+            id,
+            path: PathBuf::from(dir).join("p.snxprj"),
+            data: signex_types::project::ProjectData {
+                description: None,
+                name: dir.to_owned(),
+                dir: dir.to_owned(),
+                schematic_root: sheets.first().map(|s| (*s).to_owned()),
+                pcb_file: None,
+                sheets: sheets
+                    .iter()
+                    .map(|name| signex_types::project::SheetEntry {
+                        name: (*name).to_owned(),
+                        filename: (*name).to_owned(),
+                        symbols_count: 0,
+                        wires_count: 0,
+                        labels_count: 0,
+                        unknown: Default::default(),
+                    })
+                    .collect(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: HashMap::new(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        }
+    }
+
+    /// A sheet holding one part `reference` and one child reference per name
+    /// in `children`.
+    fn sheet_with(reference: &str, children: &[&str]) -> SchematicSheet {
+        let mut sheet = SchematicSheet {
+            uuid: Uuid::now_v7(),
+            paper_size: "A4".to_owned(),
+            ..Default::default()
+        };
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: Uuid::now_v7(),
+            lib_id: "lib:r".to_owned(),
+            reference: reference.to_owned(),
+            unit: 1,
+            ..Default::default()
+        });
+        sheet.child_sheets = children.iter().map(|name| child_ref(name)).collect();
+        sheet
+    }
+
+    fn write_to_disk(dir: &Path, name: &str, sheet: &SchematicSheet) {
+        let text = signex_types::format::SnxSchematic::new(sheet.clone())
+            .write_string()
+            .expect("write");
+        std::fs::write(dir.join(name), text).expect("write sheet");
+    }
+
+    fn references_seen(plan: &ProjectSheetPlan) -> Vec<String> {
+        let set = plan.assemble();
+        let mut all: Vec<String> = set
+            .sheets
+            .values()
+            .flat_map(|sheet| sheet.symbols.iter().map(|s| s.reference.clone()))
+            .collect();
+        all.sort();
+        all
+    }
+
+    fn open_with(app: &mut crate::app::Signex, path: PathBuf, sheet: SchematicSheet) {
+        app.document_state
+            .engines
+            .insert(path, signex_engine::Engine::new(sheet).expect("engine"));
+    }
+
+    /// a (open) -> mid (closed) -> leaf (open, unsaved R50; disk says R2):
+    /// the leaf has no owner, and the walk still reaches it.
+    #[test]
+    fn an_open_grandchild_behind_a_closed_parent_counts_with_its_unsaved_edits() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(dir, "a.snxsch", &sheet_with("R1", &["mid.snxsch"]));
+        write_to_disk(dir, "mid.snxsch", &sheet_with("R3", &["leaf.snxsch"]));
+        write_to_disk(dir, "leaf.snxsch", &sheet_with("R2", &[]));
+        let (mut app, _task) = crate::app::Signex::new();
+        let id = app.document_state.mint_project_id();
+        app.document_state
+            .projects
+            .push(project_of(id, &dir.to_string_lossy(), &["a.snxsch"]));
+        open_with(
+            &mut app,
+            dir.join("a.snxsch"),
+            sheet_with("R1", &["mid.snxsch"]),
+        );
+        open_with(&mut app, dir.join("leaf.snxsch"), sheet_with("R50", &[]));
+
+        let plan = plan_project_sheets_for(&app.document_state, &dir.join("a.snxsch"));
+        assert!(references_seen(&plan).contains(&"R50".to_owned()));
+        assert!(!references_seen(&plan).contains(&"R2".to_owned()));
+    }
+
+    /// p1 and p2 both list `s`; ownership goes to p1, the paste is on p2's
+    /// `b`, and `s` has an unsaved R50.
+    #[test]
+    fn a_sheet_listed_by_two_projects_counts_for_the_one_pasted_into() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path();
+        write_to_disk(dir, "b.snxsch", &sheet_with("R1", &[]));
+        write_to_disk(dir, "s.snxsch", &sheet_with("R2", &[]));
+        let (mut app, _task) = crate::app::Signex::new();
+        let (p1, p2) = (
+            app.document_state.mint_project_id(),
+            app.document_state.mint_project_id(),
+        );
+        let dir_text = dir.to_string_lossy();
+        app.document_state
+            .projects
+            .push(project_of(p1, &dir_text, &["s.snxsch"]));
+        app.document_state
+            .projects
+            .push(project_of(p2, &dir_text, &["b.snxsch", "s.snxsch"]));
+        open_with(&mut app, dir.join("b.snxsch"), sheet_with("R1", &[]));
+        open_with(&mut app, dir.join("s.snxsch"), sheet_with("R50", &[]));
+
+        let plan = plan_project_sheets_for(&app.document_state, &dir.join("b.snxsch"));
+        let seen = references_seen(&plan);
+        assert!(seen.contains(&"R50".to_owned()), "{seen:?}");
     }
 }

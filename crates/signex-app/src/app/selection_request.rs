@@ -1,6 +1,8 @@
 #[derive(Debug, Clone)]
 pub enum SelectionRequest {
     SelectAll,
+    /// Empty the selection (`unselect_all`).
+    ClearAll,
     StoreSlot {
         slot: usize,
     },
@@ -16,6 +18,7 @@ pub enum SelectionRequest {
         y1: f64,
         x2: f64,
         y2: f64,
+        direction: crate::canvas::BoxDirection,
     },
     /// Click-hit a wire/bus; expand to every wire/bus/junction/label that is
     /// connected to it by shared endpoints (transitive). Labels attached to a
@@ -28,4 +31,15 @@ pub enum SelectionRequest {
     /// lands on an already-selected item — used for the Active Bar "Drag"
     /// action. Cleared on Escape or after the next click commits.
     ArmDrag,
+    /// `drag_keep_connections` (G): the next object picked is dragged with
+    /// its wires attached, whatever "Keep wires connected when moving" says.
+    DragKeepingConnections,
+    /// The Find Similar Objects dialog (#1257).
+    FindSimilar(crate::find_similar::FindSimilarMsg),
+    /// Cycle the rubber-band selection mode (Inside / Touching). Bound
+    /// to Shift+S.
+    CycleMode,
+    /// Enter key: commit the armed multi-click buffer (polyline or
+    /// lasso polygon).
+    LassoCommit,
 }

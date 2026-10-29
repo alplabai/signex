@@ -1,3 +1,4 @@
+// Standalone binary: declared as a `[[test]]` with `required-features` in Cargo.toml.
 //! Integration tests for the local + git library adapter.
 //!
 //! Per `v0.9-refactor-2-plan.md` §7, this exercise covers both flows the
@@ -14,7 +15,7 @@ use std::path::{Path, PathBuf};
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::library_set::LibrarySet;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
-use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::component::{ComponentRow, DatasheetDoc, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::lifecycle::LifecycleState;
@@ -22,12 +23,13 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, Workflo
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
-    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+    Body3D, BodyShape, Footprint, FootprintFile, LayerId, Pad, PadKind, PadShape, PinDirection,
+    Polygon, PrimitiveKind, PrimitiveRef, SimFile, SimKind, SimModel, Symbol, SymbolPin,
 };
 use uuid::Uuid;
 
 fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
@@ -49,6 +51,7 @@ fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
 /// down (`dir/<name>/<name>.snxlib`) so each test gets its own
 /// directory for the parent-keyed git repo.
 fn snxlib_path(dir: &Path, name: &str) -> PathBuf {
+    signex_library::git_identity::test_identity::install();
     dir.join(name).join(format!("{name}.snxlib"))
 }
 
@@ -174,6 +177,7 @@ fn fixture_footprint(name: &str) -> Footprint {
         updated: now,
         schema_version: 2,
         sketch: None,
+        load_repairs: Vec::new(),
         pours: Vec::new(),
         keepouts: Vec::new(),
         cutouts: Vec::new(),
@@ -249,6 +253,99 @@ fn save_then_get_symbol_round_trip() {
     let reopened = LocalGitAdapter::open(&file).unwrap();
     let got = reopened.get_symbol(uuid).unwrap();
     assert_eq!(got, sym);
+}
+
+// ── Symbol uuid index (#1362) ────────────────────────────────────────────
+
+fn symbols_dir(file: &Path) -> PathBuf {
+    file.parent().unwrap().join("symbols")
+}
+
+/// A lookup served from the index reads one container: a broken sibling
+/// container is not even opened, so no scan problem is recorded.
+#[test]
+fn symbol_lookup_uses_index_instead_of_scanning() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let sym = fixture_symbol("Alpha");
+    adapter.save_symbol(sym.clone(), "add").unwrap();
+    std::fs::write(symbols_dir(&file).join("broken.snxsym"), b"not toml {{").unwrap();
+    assert_eq!(adapter.get_symbol(sym.uuid).unwrap().uuid, sym.uuid);
+    assert!(adapter.symbol_file_problems().is_empty());
+}
+
+#[test]
+fn symbol_lookup_follows_save_and_resave() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "idx", false);
+    let a = fixture_symbol("Alpha");
+    let b = fixture_symbol("Beta");
+    adapter.save_symbol(a.clone(), "a").unwrap();
+    adapter.save_symbol(b.clone(), "b").unwrap();
+    let mut a2 = a.clone();
+    a2.description = "changed".into();
+    adapter.save_symbol(a2, "a2").unwrap();
+    assert_eq!(adapter.get_symbol(a.uuid).unwrap().description, "changed");
+    assert_eq!(adapter.get_symbol(b.uuid).unwrap().name, "Beta");
+}
+
+/// Container renamed outside the app: the stale index entry must fall back
+/// to a rescan and return the symbol from its new file.
+#[test]
+fn symbol_lookup_survives_external_rename() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let sym = fixture_symbol("Alpha");
+    adapter.save_symbol(sym.clone(), "add").unwrap();
+    let old = symbols_dir(&file).join("alpha.snxsym");
+    let new = symbols_dir(&file).join("renamed.snxsym");
+    std::fs::rename(&old, &new).unwrap();
+    assert_eq!(adapter.get_symbol(sym.uuid).unwrap().uuid, sym.uuid);
+    // A re-save must update the renamed file, not recreate the old one.
+    adapter.save_symbol(sym.clone(), "again").unwrap();
+    assert!(new.exists());
+    assert!(!old.exists());
+}
+
+#[test]
+fn symbol_lookup_after_external_delete_is_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let sym = fixture_symbol("Alpha");
+    adapter.save_symbol(sym.clone(), "add").unwrap();
+    std::fs::remove_file(symbols_dir(&file).join("alpha.snxsym")).unwrap();
+    assert!(matches!(
+        adapter.get_symbol(sym.uuid),
+        Err(LibraryError::NotFound(_))
+    ));
+}
+
+/// Another tool rewrites the container with different symbols: the indexed
+/// file no longer holds the uuid, so the lookup must not return it.
+#[test]
+fn symbol_lookup_after_external_edit_moves_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "idx", false);
+    let a = fixture_symbol("Alpha");
+    let b = fixture_symbol("Beta");
+    adapter.save_symbol(a.clone(), "a").unwrap();
+    adapter.save_symbol(b.clone(), "b").unwrap();
+    let alpha = symbols_dir(&file).join("alpha.snxsym");
+    let beta = symbols_dir(&file).join("beta.snxsym");
+    // Swap contents: each uuid now lives in the other file.
+    let (ta, tb) = (
+        std::fs::read(&alpha).unwrap(),
+        std::fs::read(&beta).unwrap(),
+    );
+    std::fs::write(&alpha, tb).unwrap();
+    std::fs::write(&beta, ta).unwrap();
+    assert_eq!(adapter.get_symbol(a.uuid).unwrap().name, "Alpha");
+    assert_eq!(adapter.get_symbol(b.uuid).unwrap().name, "Beta");
+    // A new symbol added externally is found after an index miss.
+    let c = fixture_symbol("Gamma");
+    let other = LocalGitAdapter::open(&file).unwrap();
+    other.save_symbol(c.clone(), "c").unwrap();
+    assert_eq!(adapter.get_symbol(c.uuid).unwrap().name, "Gamma");
 }
 
 #[test]
@@ -333,7 +430,6 @@ fn history_returns_per_primitive_commits() {
     let dir = tempfile::tempdir().unwrap();
     let (file, adapter) = init_adapter(&dir, "Hist", false);
     let mut sym = fixture_symbol("OPAMP-DUAL-8");
-    let uuid = sym.uuid;
     adapter
         .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
         .unwrap();
@@ -379,7 +475,6 @@ fn history_returns_per_primitive_commits() {
     let rel = std::path::PathBuf::from("symbols").join("opamp-dual-8.snxsym");
     let entries_rel = adapter.history(&rel).unwrap();
     assert_eq!(entries_rel.len(), entries.len());
-    let _ = uuid; // uuid retained for clarity; not asserted on.
 }
 
 /// `list_symbols` / `list_footprints` / `list_sims` walk the per-kind dir,
@@ -409,6 +504,137 @@ fn list_primitives_returns_alphabetic_summaries() {
     assert_eq!(fps.len(), 1);
     assert_eq!(fps[0].kind, PrimitiveKind::Footprint);
     assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// `list_footprints` / `list_sims` read the name out of every
+/// `<uuid>.<ext>` envelope in the per-kind directory, tag each summary
+/// with the right [`PrimitiveKind`], and hand the whole list back
+/// sorted by name — not by uuid and not in directory-walk order.
+///
+/// The save order below is deliberately not alphabetic, and the uuids
+/// are `now_v7` so filename order tracks save order: a listing that
+/// forgot to sort would come back in save order and fail here.
+#[test]
+fn list_footprints_and_sims_are_name_sorted() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Listing", false);
+
+    for name in ["QFN-32", "SOIC-8", "0402", "TSSOP-20"] {
+        adapter
+            .save_footprint(fixture_footprint(name), "add")
+            .unwrap();
+    }
+    for name in ["LM358", "2N3904", "TL072"] {
+        adapter.save_sim(fixture_sim(name), "add").unwrap();
+    }
+
+    let fps = adapter.list_footprints().unwrap();
+    let fp_names: Vec<&str> = fps.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(fp_names, vec!["0402", "QFN-32", "SOIC-8", "TSSOP-20"]);
+    for s in &fps {
+        assert_eq!(s.kind, PrimitiveKind::Footprint);
+        assert_eq!(s.used_by_count, 0);
+    }
+
+    let sims = adapter.list_sims().unwrap();
+    let sim_names: Vec<&str> = sims.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(sim_names, vec!["2N3904", "LM358", "TL072"]);
+    for s in &sims {
+        assert_eq!(s.kind, PrimitiveKind::Sim);
+        assert_eq!(s.used_by_count, 0);
+    }
+
+    // Every summary's uuid must be the one the primitive was saved
+    // under — the listing parses it out of the filename stem, so a
+    // uuid/name mismatch here means the two halves drifted apart.
+    for summary in fps.iter().chain(sims.iter()) {
+        let fetched_name = match summary.kind {
+            PrimitiveKind::Footprint => adapter.get_footprint(summary.uuid).unwrap().name,
+            PrimitiveKind::Sim => adapter.get_sim(summary.uuid).unwrap().name,
+            _ => unreachable!("only footprints and sims in this listing"),
+        };
+        assert_eq!(fetched_name, summary.name);
+    }
+}
+
+/// Files whose stem is not a uuid, and files with a foreign extension,
+/// are skipped rather than surfaced or errored on. A `README.md` or a
+/// stray editor backup dropped into `footprints/` must not break the
+/// Library Browser.
+#[test]
+fn list_primitives_skips_non_uuid_and_foreign_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Skip", false);
+    adapter
+        .save_footprint(fixture_footprint("SOIC-8"), "add")
+        .unwrap();
+
+    let fpt_dir = file.parent().unwrap().join("footprints");
+    std::fs::write(fpt_dir.join("README.md"), b"not a footprint").unwrap();
+    std::fs::write(fpt_dir.join("notauuid.snxfpt"), b"garbage").unwrap();
+
+    let fps = adapter.list_footprints().unwrap();
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// A well-formed envelope carrying *zero* primitives is a corrupt
+/// library, not an empty one: the listing must fail loudly with the
+/// `empty .snxfpt <file>` / `empty .snxsim <file>` diagnostic rather
+/// than silently dropping the entry.
+#[test]
+fn list_primitives_rejects_zero_primitive_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Envelope", false);
+    let root = file.parent().unwrap();
+    let now = chrono::Utc::now();
+
+    let fpt_uuid = Uuid::now_v7();
+    let empty_fpt = FootprintFile {
+        format: "snxfpt/1".into(),
+        file_uuid: Uuid::now_v7(),
+        display_name: "empty".into(),
+        copied_from: None,
+        footprints: Vec::new(),
+        created: now,
+        updated: now,
+    };
+    let fpt_dir = root.join("footprints");
+    std::fs::create_dir_all(&fpt_dir).unwrap();
+    std::fs::write(
+        fpt_dir.join(format!("{fpt_uuid}.snxfpt")),
+        empty_fpt.to_toml_string().unwrap(),
+    )
+    .unwrap();
+
+    let err = adapter.list_footprints().unwrap_err();
+    let LibraryError::Backend(msg) = &err else {
+        panic!("expected Backend, got {err:?}");
+    };
+    assert_eq!(msg, &format!("empty .snxfpt {fpt_uuid}.snxfpt"));
+
+    let sim_uuid = Uuid::now_v7();
+    let empty_sim = SimFile {
+        format: "snxsim/v1".into(),
+        file_uuid: Uuid::now_v7(),
+        display_name: "empty".into(),
+        models: Vec::new(),
+        created: now,
+        updated: now,
+    };
+    let sim_dir = root.join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{sim_uuid}.snxsim")),
+        empty_sim.to_toml_string().unwrap(),
+    )
+    .unwrap();
+
+    let err = adapter.list_sims().unwrap_err();
+    let LibraryError::Backend(msg) = &err else {
+        panic!("expected Backend, got {err:?}");
+    };
+    assert_eq!(msg, &format!("empty .snxsim {sim_uuid}.snxsim"));
 }
 
 /// LibrarySet integration test — mount two LocalGit libraries and resolve a
@@ -471,32 +697,188 @@ fn library_set_resolves_across_two_local_libs() {
     // Cross-library resolution: refs disambiguated by library_id.
     let from_a = set
         .resolve_symbol(&PrimitiveRef::new(lib_a, shared_uuid))
+        .expect("lib A lookup succeeds")
         .expect("symbol from lib A resolves");
     assert_eq!(from_a.name, "OPAMP-IN-A");
     let from_b = set
         .resolve_symbol(&PrimitiveRef::new(lib_b, shared_uuid))
+        .expect("lib B lookup succeeds")
         .expect("symbol from lib B resolves");
     assert_eq!(from_b.name, "OPAMP-IN-B");
 
     // Footprint only resolves through lib B's id; lib A returns None.
     assert!(
         set.resolve_footprint(&PrimitiveRef::new(lib_b, fp_b_uuid))
+            .expect("lib B lookup succeeds")
             .is_some()
     );
     assert!(
         set.resolve_footprint(&PrimitiveRef::new(lib_a, fp_b_uuid))
+            .expect("lib A lookup succeeds")
             .is_none()
     );
 
-    // unresolved_refs filters down to misses across both libs.
+    // unresolved_refs filters down to misses across both libs. Nothing
+    // is unreadable here, so `undetermined` must stay empty — an entry
+    // there would mean a good binding was about to be reported wrong.
     let bogus_lib = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
     let bogus_uuid = PrimitiveRef::new(lib_a, Uuid::now_v7());
     let resolves = PrimitiveRef::new(lib_a, shared_uuid);
     let unresolved = set.unresolved_refs([&bogus_lib, &bogus_uuid, &resolves]);
-    assert_eq!(unresolved.len(), 2);
-    assert!(unresolved.contains(&bogus_lib));
-    assert!(unresolved.contains(&bogus_uuid));
-    assert!(!unresolved.contains(&resolves));
+    assert_eq!(unresolved.missing.len(), 2);
+    assert!(unresolved.missing.contains(&bogus_lib));
+    assert!(unresolved.missing.contains(&bogus_uuid));
+    assert!(!unresolved.missing.contains(&resolves));
+    assert!(
+        unresolved.undetermined.is_empty(),
+        "unexpected read failures: {:?}",
+        unresolved.undetermined
+    );
+}
+
+/// A corrupt `.snxsym` on disk must not read as "this row's symbol_ref
+/// points at a UUID that isn't in the library". The resolver hands the
+/// caller the parse error so the UI can say what actually happened.
+#[test]
+fn corrupt_symbol_file_resolves_to_an_error_not_a_missing_uuid() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "corrupt");
+    let manifest = empty_snx_manifest("corrupt", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let sym = fixture_symbol("U1");
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym, "add U1").unwrap();
+
+    // Truncate the on-disk container mid-record — exactly what a half
+    // written file or a bad merge leaves behind.
+    let symbols_dir = file.parent().expect("library dir").join("symbols");
+    let written = std::fs::read_dir(&symbols_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.extension().and_then(|s| s.to_str()) == Some("snxsym"))
+        .expect("symbol file written");
+    std::fs::write(&written, b"format = \"snxsym/").unwrap();
+
+    let mut set = LibrarySet::new();
+    set.mount(Box::new(adapter)).unwrap();
+
+    let r = PrimitiveRef::new(lib_id, sym_uuid);
+    let err = set
+        .resolve_symbol(&r)
+        .expect_err("a corrupt symbol container must not read as an absent UUID");
+    assert!(
+        !matches!(err, signex_library::LibraryError::NotFound(_)),
+        "corrupt file reported as NotFound: {err}"
+    );
+
+    let sweep = set.unresolved_refs([&r]);
+    assert!(
+        sweep.missing.is_empty(),
+        "corrupt file filed as a wrong binding: {:?}",
+        sweep.missing
+    );
+    assert_eq!(sweep.undetermined.len(), 1);
+    assert_eq!(sweep.undetermined[0].0, r);
+}
+
+/// #690 — one unparseable `.snxsym` must affect only itself. Saving a
+/// different symbol succeeds and the bad file is left byte-for-byte alone.
+#[test]
+fn corrupt_symbol_file_does_not_block_saving_another_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Bad", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let bad_path = symbols_dir.join("a-broken.snxsym");
+    let bad_bytes = b"format = \"signex.symbol/99\"\nthis is = [not valid toml".to_vec();
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let good = fixture_symbol("GOOD");
+    let uuid = good.uuid;
+    adapter.save_symbol(good.clone(), "add GOOD").unwrap();
+    assert_eq!(adapter.get_symbol(uuid).unwrap(), good);
+    assert_eq!(adapter.list_symbols().unwrap().len(), 1);
+    assert_eq!(
+        std::fs::read(&bad_path).unwrap(),
+        bad_bytes,
+        "the unreadable container must never be rewritten"
+    );
+
+    // The update path (symbol already in a healthy container) works too.
+    adapter.save_symbol(good, "touch GOOD").unwrap();
+    assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+}
+
+/// #690 — the skipped file is named with its path and parse error, once.
+#[test]
+fn corrupt_symbol_file_is_reported_with_path_and_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Rep", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let bad_path = symbols_dir.join("broken.snxsym");
+    std::fs::write(&bad_path, b"not = [valid").unwrap();
+
+    adapter.save_symbol(fixture_symbol("A"), "add A").unwrap();
+    adapter.save_symbol(fixture_symbol("B"), "add B").unwrap();
+
+    let problems = adapter.symbol_file_problems();
+    assert_eq!(problems.len(), 1);
+    assert_eq!(problems[0].path, bad_path);
+    assert!(!problems[0].error.is_empty());
+    assert!(problems[0].error.chars().count() <= 400, "error is bounded");
+}
+
+/// #690 — a skipped file that mentions the uuid being saved may already
+/// hold that symbol; the save refuses rather than fork a second copy.
+#[test]
+fn save_refuses_when_unreadable_file_may_hold_the_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Fork", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let sym = fixture_symbol("X");
+    let bad_bytes = format!("format = \"newer/9\"\nuuid = \"{}\"\n", sym.uuid).into_bytes();
+    let bad_path = symbols_dir.join("x.snxsym");
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let err = adapter.save_symbol(sym, "add X").unwrap_err();
+    assert!(err.to_string().contains("x.snxsym"), "{err}");
+    assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+}
+
+#[test]
+fn save_refuses_when_unreadable_file_holds_the_uuid_in_another_spelling() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "ForkCase", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    let sym = fixture_symbol("Y");
+    let spellings = [
+        sym.uuid.hyphenated().to_string().to_uppercase(),
+        sym.uuid.simple().to_string(),
+    ];
+    for (i, spelled) in spellings.iter().enumerate() {
+        let bad_path = symbols_dir.join(format!("y{i}.snxsym"));
+        let bad_bytes = format!("format = \"newer/9\"\nuuid = \"{spelled}\"\n").into_bytes();
+        std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+        let err = adapter.save_symbol(sym.clone(), "add Y").unwrap_err();
+        assert!(err.to_string().contains(&format!("y{i}.snxsym")), "{err}");
+        assert_eq!(std::fs::read(&bad_path).unwrap(), bad_bytes);
+        std::fs::remove_file(&bad_path).unwrap();
+    }
 }
 
 // ── Row CRUD ──────────────────────────────────────────────────────────────
@@ -508,13 +890,18 @@ fn library_set_resolves_across_two_local_libs() {
 fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
+        alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(internal_pn),
         class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
+        datasheet_label: String::new(),
+        description: String::new(),
+        more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", internal_pn),
@@ -530,6 +917,7 @@ fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
         created: now,
         updated: now,
         content_hash: [0u8; 32],
+        server_revision: None,
     }
 }
 
@@ -565,13 +953,17 @@ fn local_git_round_trip_row() {
         "expected [tables.resistors] in {file:?}"
     );
 
-    let got = adapter.read_row("resistors", row_id).unwrap();
+    // A read carries the row's base (#1108); everything else round-trips.
+    let mut got = adapter.read_row("resistors", row_id).unwrap();
+    assert!(got.server_revision.is_some());
+    got.server_revision = None;
     assert_eq!(got, row);
 
     // Mutate a non-key field; update_row must keep the same row_id.
     let mut modified = row.clone();
     modified.internal_pn = InternalPn::new("R10K_RENAMED");
-    adapter
+    // The base returned by the write is the base a fresh read carries.
+    modified.server_revision = adapter
         .update_row("resistors", modified.clone(), "rename")
         .unwrap();
     let after_update = adapter.read_row("resistors", row_id).unwrap();
@@ -579,9 +971,51 @@ fn local_git_round_trip_row() {
     assert_eq!(after_update.internal_pn.as_str(), "R10K_RENAMED");
 
     // Delete + read returns NotFound.
-    adapter.delete_row("resistors", row_id, "drop").unwrap();
+    adapter
+        .delete_row("resistors", row_id, None, "drop")
+        .unwrap();
     let err = adapter.read_row("resistors", row_id).unwrap_err();
     assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+/// Several labelled documents round-trip through the `.snxlib` itself,
+/// including labels holding a tab, a newline, a quote and a leading `[`
+/// (#1231).
+#[test]
+fn local_git_round_trip_documents_with_awkward_labels() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "Docs");
+    let manifest = empty_snx_manifest("Docs", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let mut row = fixture_row("U1", "opamp", lib_id);
+    row.set_documents(vec![
+        DatasheetDoc::new(
+            "[TI]\tdatasheet",
+            DatasheetRef::url("https://ti.example/u1.pdf"),
+        ),
+        DatasheetDoc::new(
+            "Errata \"rev B\"\nsee p. 3",
+            DatasheetRef::hash_pinned("ab12", "errata.pdf"),
+        ),
+    ]);
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("ics", row.clone(), "docs").unwrap();
+
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let mut got = reopened.read_row("ics", row_id).unwrap();
+    got.server_revision = None;
+    assert_eq!(got.documents(), row.documents());
+    assert_eq!(got, row);
 }
 
 /// `iter_rows` walks every `[tables.<name>]` inside the `.snxlib` and
@@ -658,8 +1092,9 @@ fn local_git_read_row_by_pn() {
     adapter.insert_row("resistors", other, "other").unwrap();
 
     let pn: InternalPn = "R10K".parse().unwrap();
-    let (table, row) = adapter.read_row_by_pn(&pn).unwrap();
+    let (table, mut row) = adapter.read_row_by_pn(&pn).unwrap();
     assert_eq!(table, "resistors");
+    row.server_revision = None;
     assert_eq!(row, target);
 
     // Missing PN returns NotFound, not a panic.
@@ -691,7 +1126,7 @@ fn local_git_commits_with_message() {
 
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
-    assert_eq!(head.summary(), Some("msg-XYZ"));
+    assert_eq!(head.summary().unwrap(), Some("msg-XYZ"));
 }
 
 // ── Cascade engine (Stage 15) ────────────────────────────────────────────
@@ -700,6 +1135,7 @@ fn local_git_commits_with_message() {
 /// behaviour gates on this — Personal silently bumps every bound row,
 /// Team leaves released rows stale.
 fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
+    signex_library::git_identity::test_identity::install();
     SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id: Uuid::now_v7(),
@@ -919,4 +1355,233 @@ fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
     // Symbol pin must NOT have moved — cascade stays scoped to the
     // primitive kind that was saved.
     assert_eq!(after.symbol_version, row.symbol_version);
+}
+
+fn commit_count(file: &Path) -> usize {
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    walk.count()
+}
+
+fn add_class(adapter: &LocalGitAdapter, key: &str, label: &str) {
+    use signex_library::library_file::ClassEntry;
+    adapter
+        .add_library_class(
+            ClassEntry {
+                key: key.into(),
+                label: label.into(),
+            },
+            &format!("add {key}"),
+        )
+        .unwrap();
+}
+
+/// Removing an absent class is an idempotent no-op: `Ok`, the `.snxlib`
+/// stays byte-identical, and no commit lands.
+#[test]
+fn remove_absent_library_class_adds_no_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Cls", false);
+    add_class(&adapter, "res", "Resistors");
+    let bytes_before = std::fs::read(&file).unwrap();
+    let commits_before = commit_count(&file);
+
+    adapter
+        .remove_library_class("missing", "delete class missing")
+        .unwrap();
+
+    assert_eq!(std::fs::read(&file).unwrap(), bytes_before);
+    assert_eq!(commit_count(&file), commits_before);
+}
+
+/// Removing a present class still removes it and still commits; a
+/// repeated remove (double-click on `×`) then adds nothing.
+#[test]
+fn remove_present_library_class_commits_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Cls2", false);
+    add_class(&adapter, "res", "Resistors");
+    let commits_before = commit_count(&file);
+
+    adapter
+        .remove_library_class("res", "delete class res")
+        .unwrap();
+    assert!(adapter.library_classes().iter().all(|c| c.key != "res"));
+    assert_eq!(commit_count(&file), commits_before + 1);
+
+    adapter
+        .remove_library_class("res", "delete class res")
+        .unwrap();
+    assert_eq!(commit_count(&file), commits_before + 1);
+}
+
+/// #924 — one `.snxfpt` holding `nan` is skipped; the listing survives and
+/// the bad file is left untouched.
+#[test]
+fn non_finite_footprint_file_is_skipped_not_fatal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "FpNan", false);
+    adapter
+        .save_footprint(fixture_footprint("GOOD"), "add GOOD")
+        .unwrap();
+    let fp_dir = file.parent().unwrap().join("footprints");
+    let bad_path = fp_dir.join(format!("{}.snxfpt", Uuid::now_v7()));
+    let good_path = std::fs::read_dir(&fp_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "snxfpt"))
+        .expect("saved footprint file");
+    let text = std::fs::read_to_string(&good_path).unwrap();
+    let bad_bytes = text.replacen(
+        "anchor = [
+    0.0,",
+        "anchor = [
+    nan,",
+        1,
+    );
+    assert_ne!(bad_bytes, text, "fixture must contain the anchor line");
+    std::fs::write(&bad_path, &bad_bytes).unwrap();
+
+    let fps = adapter.list_footprints().expect("listing survives");
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].name, "GOOD");
+    assert_eq!(std::fs::read_to_string(&bad_path).unwrap(), bad_bytes);
+}
+
+/// #924 — `.snxsim` listing stays strict: an unparseable sim is an `Err`.
+#[test]
+fn non_finite_sim_file_still_fails_listing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "SimNan", false);
+    let sim_dir = file.parent().unwrap().join("sims");
+    std::fs::create_dir_all(&sim_dir).unwrap();
+    std::fs::write(
+        sim_dir.join(format!("{}.snxsim", Uuid::now_v7())),
+        "format = \"snxsim/v1\"
+x = nan
+",
+    )
+    .unwrap();
+    assert!(matches!(adapter.list_sims(), Err(LibraryError::Backend(_))));
+}
+
+/// #1056: a NaN parameter is refused on both insert and update, the error
+/// names the row and the key, and the `.snxlib` bytes are unchanged.
+#[test]
+fn non_finite_parameter_is_refused_and_snxlib_unchanged() {
+    use signex_library::param::ParamValue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "NanRow");
+    let manifest = empty_snx_manifest("NanRow", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: false,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    let good = fixture_row("R1", "resistor", lib_id);
+    adapter
+        .insert_row("resistors", good.clone(), "good")
+        .unwrap();
+    let before = std::fs::read(&file).unwrap();
+
+    let mut bad = fixture_row("R_BAD", "resistor", lib_id);
+    bad.parameters
+        .insert("tolerance".into(), ParamValue::Number(f64::NAN));
+    let err = adapter
+        .insert_row("resistors", bad.clone(), "bad")
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("R_BAD") && msg.contains("tolerance"), "{msg}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+
+    let mut updated = good.clone();
+    updated.parameters.insert(
+        "voltage".into(),
+        ParamValue::Measurement {
+            value: f64::INFINITY,
+            unit: "V".into(),
+        },
+    );
+    let err = adapter.update_row("resistors", updated, "bad").unwrap_err();
+    assert!(err.to_string().contains("voltage"), "{err}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+}
+
+/// Adding the first alternate symbol to a row of a 21-column table must
+/// declare the column: a cell outside the declared columns is dropped on
+/// save, which would lose the alternate silently.
+#[test]
+fn update_row_adding_an_alternate_symbol_to_a_legacy_table_keeps_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Alt", false);
+    let lib_id = adapter.manifest().library.library_id;
+    let row = fixture_row("R-ALT", "resistor", lib_id);
+    adapter
+        .insert_row("resistors", row.clone(), "seed")
+        .unwrap();
+    assert!(
+        !std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("alternate_symbols"),
+        "a table without alternates stays 21 columns"
+    );
+
+    let mut edited = adapter
+        .read_row("resistors", RowId::from_uuid(row.row_id))
+        .unwrap();
+    edited
+        .alternate_symbols
+        .push(signex_library::AlternateSymbol::new(
+            PrimitiveRef::new(lib_id, Uuid::now_v7()),
+            "0.0.1",
+            "IEC",
+        ));
+    adapter
+        .update_row("resistors", edited.clone(), "add alt")
+        .unwrap();
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let back = reopened
+        .read_row("resistors", RowId::from_uuid(row.row_id))
+        .unwrap();
+    assert_eq!(back.alternate_symbols, edited.alternate_symbols);
+}
+
+/// A row re-bound after the caller's snapshot is not stamped with a
+/// version of a primitive it no longer binds.
+#[test]
+fn bind_row_primitive_version_skips_a_row_that_no_longer_binds_the_primitive() {
+    use signex_library::cascade::{CascadeKind, PrimitiveSave};
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Rebind", false);
+    let lib_id = adapter.manifest().library.library_id;
+    let mut row = fixture_row("R-REBIND", "resistor", lib_id);
+    row.footprint_ref = Some(PrimitiveRef::new(lib_id, Uuid::now_v7()));
+    row.footprint_version = "0.0.1".into();
+    adapter
+        .insert_row("resistors", row.clone(), "seed")
+        .unwrap();
+    let id = RowId::from_uuid(row.row_id);
+
+    let stale_target = PrimitiveSave {
+        kind: CascadeKind::Footprint,
+        library_id: lib_id,
+        uuid: Uuid::now_v7(),
+        version: "0.0.9".into(),
+    };
+    let changed = adapter
+        .bind_row_primitive_version("resistors", id, &stale_target, "stamp")
+        .unwrap();
+    assert!(!changed);
+    let after = adapter.read_row("resistors", id).unwrap();
+    assert_eq!(after.footprint_version, "0.0.1");
+    assert_eq!(after.version, row.version);
 }

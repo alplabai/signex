@@ -42,6 +42,7 @@
 
 use crate::expr::ExprError;
 use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
+use crate::expr::{MAX_EXPR_CHAIN, MAX_EXPR_DEPTH, MAX_EXPR_LEN};
 use crate::unit::parse_quantity;
 
 // =========================================================================
@@ -339,13 +340,56 @@ struct Parser<'a> {
     lexer: Lexer<'a>,
     /// One-token look-ahead.
     peek: Spanned,
+    /// Current recursion depth, bounded by [`MAX_EXPR_DEPTH`].
+    depth: usize,
+    /// Left-associative operators consumed so far; bounded by
+    /// [`MAX_EXPR_CHAIN`] because each one adds a tree level.
+    links: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(src: &'a str) -> Result<Self, ExprError> {
         let mut lexer = Lexer::new(src);
         let peek = lexer.next_token()?;
-        Ok(Self { lexer, peek })
+        Ok(Self {
+            lexer,
+            peek,
+            depth: 0,
+            links: 0,
+        })
+    }
+
+    /// Run `body` one nesting level deeper, failing with
+    /// [`ExprError::TooDeep`] instead of recursing past the cap.
+    fn nested<T>(
+        &mut self,
+        body: impl FnOnce(&mut Self) -> Result<T, ExprError>,
+    ) -> Result<T, ExprError> {
+        if self.depth >= MAX_EXPR_DEPTH {
+            return Err(ExprError::TooDeep {
+                max: MAX_EXPR_DEPTH,
+            });
+        }
+        self.depth += 1;
+        let result = body(self);
+        self.depth -= 1;
+        result
+    }
+
+    /// Consume a left-associative binary operator, failing with
+    /// [`ExprError::ChainTooLong`] once the expression holds more than
+    /// [`MAX_EXPR_CHAIN`] of them. A flat `1+1+1+...` builds a left-nested
+    /// tree in a loop, so only this count keeps the evaluator and the
+    /// recursive `Drop` of the AST bounded.
+    fn chain_link(&mut self) -> Result<(), ExprError> {
+        if self.links >= MAX_EXPR_CHAIN {
+            return Err(ExprError::ChainTooLong {
+                max: MAX_EXPR_CHAIN,
+            });
+        }
+        self.links += 1;
+        self.bump()?;
+        Ok(())
     }
 
     /// Consume the current look-ahead and refill from the lexer.
@@ -371,7 +415,7 @@ impl<'a> Parser<'a> {
     // -- expr ----------------------------------------------------------
 
     fn parse_expr(&mut self) -> Result<ExprNode, ExprError> {
-        self.parse_ternary()
+        self.nested(Self::parse_ternary)
     }
 
     // -- ternary -------------------------------------------------------
@@ -398,7 +442,7 @@ impl<'a> Parser<'a> {
     fn parse_or(&mut self) -> Result<ExprNode, ExprError> {
         let mut node = self.parse_and()?;
         while matches!(self.peek.tok, Token::OrOr) {
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_and()?;
             node = ExprNode::Binary(BinOp::Or, Box::new(node), Box::new(rhs));
         }
@@ -408,7 +452,7 @@ impl<'a> Parser<'a> {
     fn parse_and(&mut self) -> Result<ExprNode, ExprError> {
         let mut node = self.parse_equality()?;
         while matches!(self.peek.tok, Token::AndAnd) {
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_equality()?;
             node = ExprNode::Binary(BinOp::And, Box::new(node), Box::new(rhs));
         }
@@ -425,7 +469,7 @@ impl<'a> Parser<'a> {
                 Token::NotEq => BinOp::Ne,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_comparison()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -442,7 +486,7 @@ impl<'a> Parser<'a> {
                 Token::Ge => BinOp::Ge,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_sum()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -459,7 +503,7 @@ impl<'a> Parser<'a> {
                 Token::Minus => BinOp::Sub,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_product()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -475,7 +519,7 @@ impl<'a> Parser<'a> {
                 Token::Percent => BinOp::Mod,
                 _ => break,
             };
-            self.bump()?;
+            self.chain_link()?;
             let rhs = self.parse_power()?;
             node = ExprNode::Binary(op, Box::new(node), Box::new(rhs));
         }
@@ -489,8 +533,9 @@ impl<'a> Parser<'a> {
             self.bump()?;
             // Recurse into parse_power (not parse_unary) so the
             // right-hand side also folds further `^` operators
-            // right-to-left.
-            let rhs = self.parse_power()?;
+            // right-to-left. The recursion goes through `nested` so a
+            // `1^1^1^...` chain hits the depth cap instead of the stack.
+            let rhs = self.nested(Self::parse_power)?;
             Ok(ExprNode::Binary(BinOp::Pow, Box::new(lhs), Box::new(rhs)))
         } else {
             Ok(lhs)
@@ -500,6 +545,10 @@ impl<'a> Parser<'a> {
     // -- unary ---------------------------------------------------------
 
     fn parse_unary(&mut self) -> Result<ExprNode, ExprError> {
+        self.nested(Self::parse_unary_inner)
+    }
+
+    fn parse_unary_inner(&mut self) -> Result<ExprNode, ExprError> {
         match self.peek.tok {
             Token::Minus => {
                 self.bump()?;
@@ -613,6 +662,15 @@ impl<'a> Parser<'a> {
 /// On success the returned tree has been fully consumed — any trailing
 /// junk produces [`ExprError::Parse`].
 pub fn parse(src: &str) -> Result<ExprNode, ExprError> {
+    // A long flat chain (`1+1+1+...`) builds an equally deep left-nested
+    // tree that the evaluator and `Drop` walk recursively, so bound the
+    // source length as well as the parser's own recursion.
+    if src.len() > MAX_EXPR_LEN {
+        return Err(ExprError::TooLong {
+            max: MAX_EXPR_LEN,
+            len: src.len(),
+        });
+    }
     let mut p = Parser::new(src)?;
     let node = p.parse_expr()?;
     if !matches!(p.peek.tok, Token::Eof) {
@@ -626,7 +684,7 @@ pub fn parse(src: &str) -> Result<ExprNode, ExprError> {
 
 // =========================================================================
 // Smoke tests — keep these light; the heavy suite lives in
-// `tests/expr_parser.rs`.
+// `tests/integration/expr_parser.rs`.
 // =========================================================================
 
 #[cfg(test)]

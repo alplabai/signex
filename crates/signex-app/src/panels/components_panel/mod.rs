@@ -9,8 +9,8 @@
 //! 2. **Installed** — session-scoped, opened via the "+ Add Library…"
 //!    button on the Installed section header. Wiped on app close.
 //! 3. **Global** — persisted across launches via
-//!    `<config_dir>/signex/global_libraries.toml`. Loaded + mounted at
-//!    startup by [`global_prefs::load_and_mount_all`].
+//!    `<config_dir>/signex/global_libraries.toml`. Loaded at startup by
+//!    [`global_prefs::load`] and mounted off the UI thread.
 //!
 //! All three sources read from the same `LibraryState::open_libraries`
 //! Vec — `LibraryState::mount_source_for` does the bucketing at view
@@ -25,9 +25,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{
-    Column, Space, button, column, container, row, scrollable, svg, text, text_input,
-};
+use iced::widget::{Column, Space, button, column, container, row, svg, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use signex_library::ComponentRow;
@@ -36,12 +34,20 @@ use signex_widgets::theme_ext;
 
 use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsMountSource, LibraryState, OpenLibrary};
+use crate::styles::Spacing;
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const SP: Spacing = Spacing::DEFAULT;
 
 pub mod global_prefs;
+pub mod stock;
 
 const PANEL_TEXT_SIZE: f32 = 11.0;
 const SECTION_HEADER_TEXT_SIZE: f32 = 12.0;
 const ROW_TEXT_SIZE: f32 = 10.0;
+/// Most rows built per library per frame; the rest are summarised by a
+/// "N more — refine search" row so a huge library cannot stall the view.
+const MAX_ROWS_PER_LIBRARY: usize = 200;
 
 const SVG_CHEVRON_RIGHT: &[u8] =
     br#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l5 4-5 4z" fill="currentColor"/></svg>"#;
@@ -69,17 +75,16 @@ pub fn view<'a>(
     ctx: &'a crate::panels::PanelContext,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border_c = theme_ext::border_color(tokens);
 
     // ── Header: filter input ─────────────────────────────────────
     let filter = text_input("Filter components…", &state.components_panel.filter)
         .on_input(LibraryMessage::ComponentsPanelSetFilter)
-        .padding(4)
+        .padding(SP.s)
         .size(PANEL_TEXT_SIZE);
 
-    let filter_row = container(filter).padding([4, 6]);
+    let filter_row = container(filter).padding([SP.s, 6.0]);
 
     // ── Three collapsible source sections ────────────────────────
     let mut col: Column<'a, LibraryMessage> =
@@ -96,13 +101,14 @@ pub fn view<'a>(
         .iter()
         .flat_map(|p| p.libraries.iter().map(|l| l.root.clone()))
         .collect();
-    let mut bucketed: [Vec<&'a OpenLibrary>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    let mut bucketed: [Vec<&'a OpenLibrary>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for lib in &state.open_libraries {
         let src = state.mount_source_for(&lib.root, &project_paths);
         let idx = match src {
             ComponentsMountSource::Project => 0,
             ComponentsMountSource::Installed => 1,
             ComponentsMountSource::Global => 2,
+            ComponentsMountSource::Stock => 3,
         };
         bucketed[idx].push(lib);
     }
@@ -121,13 +127,11 @@ pub fn view<'a>(
                     .size(PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([10, 8]),
+            .padding([10.0, SP.m]),
         );
     }
 
-    let _ = text_c; // currently unused; reserved for future row colouring
-
-    container(scrollable(col).width(Length::Fill).height(Length::Fill))
+    container(crate::panels::panel_scrollable(col).height(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -151,9 +155,9 @@ fn view_section<'a>(
         ComponentsMountSource::Project => state.components_panel.collapsed_project,
         ComponentsMountSource::Installed => state.components_panel.collapsed_installed,
         ComponentsMountSource::Global => state.components_panel.collapsed_global,
+        ComponentsMountSource::Stock => state.components_panel.collapsed_stock,
     };
 
-    let _ = state; // kept for future per-state colouring
     let count = libs_for_source.len();
 
     // ── Section header ───────────────────────────────────────────
@@ -171,7 +175,7 @@ fn view_section<'a>(
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 8])
+    .padding([6.0, SP.m])
     .width(Length::Fill)
     .on_press(LibraryMessage::ComponentsPanelToggleSection(src))
     .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -194,7 +198,7 @@ fn view_section<'a>(
         ComponentsMountSource::Installed | ComponentsMountSource::Global
     ) {
         let add_btn = button(text("+ Add Library…").size(ROW_TEXT_SIZE).color(text_c))
-            .padding([2, 8])
+            .padding([SP.xs, SP.m])
             .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
             .style(crate::styles::menu_item(tokens));
         header_row = header_row.push(container(add_btn).padding([0, 6]));
@@ -215,13 +219,22 @@ fn view_section<'a>(
                 ComponentsMountSource::Global => {
                     "No global libraries. Click \"+ Add Library…\" or promote an installed library."
                 }
+                ComponentsMountSource::Stock => {
+                    "Stock library not found. Reinstall Signex to restore the bundled parts."
+                }
             };
-            section_col = section_col
-                .push(container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6, 16]));
+            section_col = section_col.push(
+                container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6.0, SP.xl]),
+            );
         } else {
             let needle = state.components_panel.filter.trim().to_lowercase();
             for lib in libs_for_source.iter().copied() {
-                section_col = section_col.push(view_library_block(lib, &needle, tokens));
+                section_col = section_col.push(view_library_block(
+                    lib,
+                    &state.components_panel,
+                    &needle,
+                    tokens,
+                ));
                 section_col = section_col.push(thin_sep(border_c));
             }
         }
@@ -237,6 +250,7 @@ fn view_section<'a>(
 /// Preview tab opens — same flow the project tree uses.
 fn view_library_block<'a>(
     lib: &'a OpenLibrary,
+    panel: &'a crate::library::state::ComponentsPanelState,
     needle: &str,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -258,61 +272,61 @@ fn view_library_block<'a>(
                     .size(ROW_TEXT_SIZE)
                     .color(muted),
             ]
-            .spacing(4)
+            .spacing(SP.s)
             .align_y(iced::Alignment::Center),
         )
-        .padding([4, 16]),
+        .padding([SP.s, SP.xl]),
     );
 
-    // Flatten every cached row across every table.
-    let mut rendered = 0usize;
-    for (table, rows) in &lib.tables {
-        for r in rows {
-            if !row_matches(r, &lib.display_name, needle) {
-                continue;
-            }
-            rendered += 1;
-            col = col.push(view_row_button(
-                lib.root.clone(),
-                table.clone(),
-                r,
-                text_c,
-                muted,
-                hover_c,
-            ));
-        }
+    // Rows come from the cache `update` keeps current (lowercase keys and
+    // the filtered list), so a frame does no per-row string work and
+    // builds widgets for at most `MAX_ROWS_PER_LIBRARY` rows (#1353).
+    let rows = &panel.rows;
+    let matched = rows.visible_count(&lib.root);
+    for (table, index) in rows.visible_rows(&lib.root, MAX_ROWS_PER_LIBRARY) {
+        let Some(r) = lib.tables.get(table).and_then(|t| t.get(index)) else {
+            continue;
+        };
+        col = col.push(view_row_button(
+            lib.root.clone(),
+            table.to_owned(),
+            r,
+            text_c,
+            muted,
+            hover_c,
+        ));
     }
 
-    if rendered == 0 && !needle.is_empty() {
+    if matched > MAX_ROWS_PER_LIBRARY {
+        col = col.push(
+            container(
+                text(format!(
+                    "{} more — refine search",
+                    matched - MAX_ROWS_PER_LIBRARY
+                ))
+                .size(ROW_TEXT_SIZE)
+                .color(muted),
+            )
+            .padding([SP.xs, 28.0]),
+        );
+    }
+
+    if matched == 0 && !needle.is_empty() {
         col = col.push(
             container(
                 text("(no matches in this library)")
                     .size(ROW_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([2, 28]),
+            .padding([SP.xs, 28.0]),
         );
     }
 
     col.into()
 }
 
-/// Substring filter — case-insensitive match on mpn / manufacturer /
-/// internal_pn / library name. Empty needle = match everything.
-/// Stage 9 deliberately keeps this trivial; the rich `mpn:` /
-/// `lifecycle:` syntax is a follow-up.
-fn row_matches(row: &ComponentRow, library_name: &str, needle: &str) -> bool {
-    if needle.is_empty() {
-        return true;
-    }
-    let n = needle.to_lowercase();
-    row.primary_mpn.mpn.to_lowercase().contains(&n)
-        || row.primary_mpn.manufacturer.to_lowercase().contains(&n)
-        || row.internal_pn.as_str().to_lowercase().contains(&n)
-        || library_name.to_lowercase().contains(&n)
-}
-
-/// One row button — fires `OpenComponentRow` on click. Mirrors the
+/// One row — the label button fires `OpenComponentRow` on click; the
+/// trailing "Place" button fires `ComponentsPanelPlace` (#1160). Mirrors the
 /// row layout of the existing legacy Components panel so users see
 /// the same `(internal_pn — mpn)  manufacturer` shape.
 fn view_row_button<'a>(
@@ -330,8 +344,13 @@ fn view_row_button<'a>(
         row_data.primary_mpn.mpn
     );
     let label_right = row_data.primary_mpn.manufacturer.clone();
+    let place = LibraryMessage::ComponentsPanelPlace {
+        library_path: library_path.clone(),
+        table: table.clone(),
+        row_id,
+    };
 
-    button(
+    let label_button = button(
         row![
             text(label_left)
                 .size(ROW_TEXT_SIZE)
@@ -344,9 +363,9 @@ fn view_row_button<'a>(
                 .width(Length::FillPortion(2))
                 .wrapping(iced::widget::text::Wrapping::None),
         ]
-        .spacing(4),
+        .spacing(SP.s),
     )
-    .padding([2, 28])
+    .padding([SP.xs, 28.0])
     .width(Length::Fill)
     .on_press(LibraryMessage::OpenComponentRow {
         library_path,
@@ -364,8 +383,32 @@ fn view_row_button<'a>(
             border: Border::default(),
             ..iced::widget::button::Style::default()
         }
-    })
-    .into()
+    });
+
+    let place_button = button(text("Place").size(ROW_TEXT_SIZE).color(text_c))
+        .padding([ROW_TEXT_SIZE * 0.2, ROW_TEXT_SIZE * 0.8])
+        .on_press(place)
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                text_color: text_c,
+                border: Border {
+                    color: muted,
+                    width: 1.0,
+                    radius: (ROW_TEXT_SIZE * 0.3).into(),
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+
+    row![label_button, place_button]
+        .align_y(iced::Alignment::Center)
+        .spacing(ROW_TEXT_SIZE * 0.4)
+        .into()
 }
 
 fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
@@ -391,13 +434,18 @@ mod tests {
     fn fixture_row(pn: &str, mpn: &str, mfr: &str) -> ComponentRow {
         let _ = (PinPadOverride::new("1", "1"),);
         ComponentRow {
-            row_id: Uuid::new_v4(),
+            alternate_symbols: Vec::new(),
+            row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
+            datasheet_label: String::new(),
+            description: String::new(),
+            more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
+            symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
             footprint_ref: None,
+            alternate_footprints: Vec::new(),
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft(mfr, mpn),
@@ -413,50 +461,71 @@ mod tests {
             created: chrono::Utc::now(),
             updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
+            server_revision: None,
         }
     }
 
+    /// More rows than the cap: the view builds the cap's worth and says how
+    /// many it left out; the rest stay reachable by narrowing the filter.
     #[test]
-    fn row_matches_empty_needle_passes_everything() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", ""));
+    fn rows_beyond_the_cap_collapse_into_a_refine_search_row() {
+        let total = 250;
+        let mut state = LibraryState::default();
+        let rows = (0..total)
+            .map(|i| fixture_row(&format!("PN-{i}"), "MPN", "Mfr"))
+            .collect();
+        state.open_libraries.push(OpenLibrary {
+            root: PathBuf::from("/tmp/big.snxlib"),
+            display_name: "big".into(),
+            library_id: uuid::Uuid::now_v7(),
+            tables: std::collections::HashMap::from([("t".to_owned(), rows)]),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: Default::default(),
+        });
+        state.touch_data();
+        state.sync_view_caches();
+
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let window = iced::Size::new(600.0, 100_000.0);
+        fn build<'a>(
+            state: &'a LibraryState,
+            tokens: &'a ThemeTokens,
+        ) -> Element<'a, LibraryMessage> {
+            view_library_block(
+                &state.open_libraries[0],
+                &state.components_panel,
+                "",
+                tokens,
+            )
+        }
+        let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
+        let places = texts.iter().filter(|t| t.text == "Place").count();
+        assert_eq!(places, 200);
+        crate::layout_probe::find(&texts, "50 more — refine search");
+
+        // Narrowing the filter below the cap removes the summary row.
+        state.components_panel.filter = "pn-7".into();
+        state.sync_view_caches();
+        let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
+        assert!(texts.iter().all(|t| !t.text.contains("refine search")));
+        assert_eq!(texts.iter().filter(|t| t.text == "Place").count(), 11);
     }
 
     #[test]
-    fn row_matches_mpn_substring() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", "era"));
-        assert!(row_matches(&row, "MyLib", "3aed"));
-    }
-
-    #[test]
-    fn row_matches_manufacturer_case_insensitive() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", "panasonic"));
-        assert!(row_matches(&row, "MyLib", "PANA"));
-    }
-
-    #[test]
-    fn row_matches_internal_pn() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "MyLib", "0805"));
-    }
-
-    #[test]
-    fn row_matches_library_name() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(row_matches(&row, "Passives_Lib", "passives"));
-    }
-
-    #[test]
-    fn row_matches_no_hit_returns_false() {
-        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
-        assert!(!row_matches(&row, "MyLib", "zzz_no_such_thing"));
-    }
-
-    #[test]
-    fn mount_source_order_is_three_sections() {
-        assert_eq!(ComponentsMountSource::ORDER.len(), 3);
+    fn mount_source_order_is_four_sections() {
+        assert_eq!(ComponentsMountSource::ORDER.len(), 4);
+        assert_eq!(
+            ComponentsMountSource::ORDER[3],
+            ComponentsMountSource::Stock
+        );
         assert_eq!(
             ComponentsMountSource::ORDER[0],
             ComponentsMountSource::Project
@@ -465,6 +534,62 @@ mod tests {
             ComponentsMountSource::ORDER[2],
             ComponentsMountSource::Global
         );
+    }
+
+    /// Click the row's "Place" button the way the runtime would and check
+    /// the message it publishes. Dropping `on_press` leaves it empty.
+    #[test]
+    fn clicking_a_row_place_button_publishes_the_place_message() {
+        use iced::advanced::clipboard;
+        use iced::{Event, Point, Size, mouse};
+        use iced_runtime::UserInterface;
+        use iced_runtime::user_interface::Cache;
+
+        let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
+        let row_id = signex_library::RowId::from_uuid(row.row_id);
+        let window = Size::new(600.0, 200.0);
+        let build = || {
+            view_row_button(
+                PathBuf::from("lib.snxlib"),
+                "Passives".to_owned(),
+                &row,
+                Color::WHITE,
+                Color::WHITE,
+                Color::BLACK,
+            )
+        };
+
+        let texts = crate::layout_probe::lay_out_texts(build(), window);
+        let place = crate::layout_probe::find(&texts, "Place").bounds;
+        let at = Point::new(place.x + place.width / 2.0, place.y + place.height / 2.0);
+
+        let mut renderer = crate::layout_probe::headless_renderer();
+        let mut ui = UserInterface::build(build(), window, Cache::default(), &mut renderer);
+        let mut published = Vec::new();
+        let _ = ui.update(
+            &[
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            ],
+            mouse::Cursor::Available(at),
+            &mut renderer,
+            &mut clipboard::Null,
+            &mut published,
+        );
+
+        assert_eq!(published.len(), 1, "one click, one message");
+        match &published[0] {
+            LibraryMessage::ComponentsPanelPlace {
+                library_path,
+                table,
+                row_id: id,
+            } => {
+                assert_eq!(library_path, &PathBuf::from("lib.snxlib"));
+                assert_eq!(table, "Passives");
+                assert_eq!(*id, row_id);
+            }
+            _ => panic!("expected ComponentsPanelPlace"),
+        }
     }
 
     #[test]

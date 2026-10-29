@@ -7,9 +7,12 @@ use signex_types::schematic::{SelectedItem, SelectedKind};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::{StatusBarRequest, Tool};
-use crate::styles;
+use crate::styles::{self, Spacing, TypeScale};
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
-pub const STATUS_BAR_HORIZONTAL_PADDING: u16 = 8;
+pub const STATUS_BAR_HORIZONTAL_PADDING: f32 = SP.m;
 
 /// Format a one-line breakdown of the active canvas selection.
 /// Returns `None` when the selection is empty (status bar omits the segment).
@@ -50,7 +53,10 @@ fn selection_summary(selected: &[SelectedItem]) -> Option<String> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "13 arguments: the status bar reads thirteen independent slices of app state and owns none of them"
+)]
 pub fn view<'a>(
     x: f64,
     y: f64,
@@ -63,6 +69,8 @@ pub fn view<'a>(
     selected: &[SelectedItem],
     tokens: &ThemeTokens,
     pending_git_commits: usize,
+    altium_import: Option<&str>,
+    activity: Option<&str>,
 ) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
@@ -82,21 +90,21 @@ pub fn view<'a>(
     let text_c = styles::ti(tokens.text);
     let muted_c = styles::ti(tokens.text_secondary);
 
-    let sep = move || text("|").size(10).color(border_c);
-    let lbl = move |s: String| text(s).size(11).color(text_c);
-    let dim = move |s: &'static str| text(s).size(11).color(muted_c);
+    let sep = move || text("|").size(TS.caption).color(border_c);
+    let lbl = move |s: String| text(s).size(TS.body).color(text_c);
+    let dim = move |s: &'static str| text(s).size(TS.body).color(muted_c);
 
     let mut bar = row![
         lbl(coord_text),
         sep(),
         dim("Grid:"),
-        button(text(grid_text).size(11).color(text_c))
-            .padding([1, 4])
+        button(text(grid_text).size(TS.body).color(text_c))
+            .padding([1.0, SP.s])
             .style(button::text)
             .on_press(StatusBarRequest::ToggleGrid),
         sep(),
-        button(text(snap_label).size(11).color(text_c))
-            .padding([1, 4])
+        button(text(snap_label).size(TS.body).color(text_c))
+            .padding([1.0, SP.s])
             .style(button::text)
             .on_press(StatusBarRequest::ToggleSnap),
         sep(),
@@ -104,11 +112,17 @@ pub fn view<'a>(
         sep(),
         lbl(format!("{tool}")),
     ];
+    // What the active tool wants said: the Measure prompt or result (#1256),
+    // the drag behaviour (#1266).
+    if let Some(activity) = activity {
+        bar = bar.push(sep());
+        bar = bar.push(text(activity.to_owned()).size(TS.body).color(muted_c));
+    }
     if let Some(summary) = selection_summary(selected) {
         bar = bar.push(sep());
         bar = bar.push(
-            button(text(summary).size(11).color(text_c))
-                .padding([1, 4])
+            button(text(summary).size(TS.body).color(text_c))
+                .padding([1.0, SP.s])
                 .style(button::text)
                 .on_press(StatusBarRequest::OpenPropertiesForSelection),
         );
@@ -123,31 +137,46 @@ pub fn view<'a>(
             format!("Saving {pending_git_commits}…")
         };
         bar = bar.push(sep());
-        bar = bar.push(text(label).size(11).color(muted_c));
+        bar = bar.push(text(label).size(TS.body).color(muted_c));
+    }
+    // A running Altium import is shown until it finishes; clicking it
+    // cancels (#1123).
+    if let Some(name) = altium_import {
+        bar = bar.push(sep());
+        bar = bar.push(
+            button(
+                text(format!("Importing {name}… ✕"))
+                    .size(TS.body)
+                    .color(text_c),
+            )
+            .padding([1.0, SP.s])
+            .style(button::text)
+            .on_press(StatusBarRequest::CancelAltiumImport),
+        );
     }
     let bar = bar
         .push(space::horizontal())
         .push(lbl(format!("{zoom:.0}%")))
         .push(sep())
         .push(
-            button(text(format!("{unit}")).size(11).color(text_c))
-                .padding([1, 4])
+            button(text(format!("{unit}")).size(TS.body).color(text_c))
+                .padding([1.0, SP.s])
                 .style(button::text)
                 .on_press(StatusBarRequest::CycleUnit),
         )
         .push(sep())
         .push(
-            button(text("Panels").size(11).color(text_c))
+            button(text("Panels").size(TS.body).color(text_c))
                 .padding([1, 6])
                 .style(button::text)
                 .on_press(StatusBarRequest::TogglePanelList),
         )
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center);
 
     container(bar)
         .width(Length::Fill)
-        .padding([2, STATUS_BAR_HORIZONTAL_PADDING])
+        .padding([SP.xs, STATUS_BAR_HORIZONTAL_PADDING])
         .style(styles::status_bar(tokens))
         .into()
 }

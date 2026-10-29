@@ -28,18 +28,10 @@ impl SymbolCanvas<'_> {
         let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
         match self.tool {
             SymbolTool::Select => {
-                // Resize handles win over everything else.
-                // Use a screen-pixel-based tolerance so handles are
-                // equally easy to hit at any zoom level.
-                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((idx, handle)) = state::hit_test_graphic_handle(
-                    self.symbol,
-                    ux,
-                    uy,
-                    tol_mm,
-                    self.active_part,
-                    &self.selected,
-                ) {
+                // One shared priority (pin, selected graphic's handle,
+                // graphic body) so the hover cursor agrees with the press.
+                let target = self.press_target(ux, uy);
+                if let Some(PressTarget::Handle(idx, handle)) = target {
                     state.dragging_handle = Some((idx, handle));
                     state.dragging = false;
                     state.drag_anchor_offset = None;
@@ -48,13 +40,12 @@ impl SymbolCanvas<'_> {
                     state.box_select_current = None;
                     return Some(canvas::Action::capture());
                 }
-                // Pin tip + graphic hit-test wins; a click on a pin's
-                // name/number label is a fallback so the pin is grabbable
-                // by its text, not only its ~1.5 mm tip.
-                let sel = state::hit_test(self.symbol, ux, uy, self.active_part).or_else(|| {
-                    self.pin_hit_by_label(ux, uy)
-                        .map(state::SymbolSelection::Pin)
-                });
+                let sel = match target {
+                    Some(PressTarget::Pin(idx)) => Some(state::SymbolSelection::Pin(idx)),
+                    Some(PressTarget::Graphic(idx)) => Some(state::SymbolSelection::Graphic(idx)),
+                    Some(PressTarget::Field(key)) => Some(state::SymbolSelection::Field(key)),
+                    _ => None,
+                };
                 if let Some(sel) = sel {
                     state.box_select_origin = None;
                     state.box_select_current = None;
@@ -64,7 +55,7 @@ impl SymbolCanvas<'_> {
                     let in_group = self
                         .selected
                         .as_ref()
-                        .map_or(false, |s| item_in_selection(s, &sel));
+                        .is_some_and(|s| item_in_selection(s, &sel));
                     if in_group {
                         state.dragging = true;
                         state.last_drag_world_pos = Some((wx, wy));
@@ -77,8 +68,9 @@ impl SymbolCanvas<'_> {
                     let is_delta = matches!(effective_sel, SymbolSelection::All);
                     state.dragging = true;
                     state.last_drag_world_pos = if is_delta { Some((wx, wy)) } else { None };
-                    state.drag_anchor_offset = selection_anchor(self.symbol, &effective_sel)
-                        .map(|(ax, ay)| (ax - wx, ay - wy));
+                    state.drag_anchor_offset =
+                        selection_anchor(self.symbol, &effective_sel, self.view)
+                            .map(|(ax, ay)| (ax - wx, ay - wy));
 
                     if self.selected.as_ref() == Some(&effective_sel) {
                         return Some(canvas::Action::capture());
@@ -96,7 +88,11 @@ impl SymbolCanvas<'_> {
                 }
             }
             SymbolTool::AddPin => {
-                Some(canvas::Action::publish(CanvasAction::AddPin { x: wx, y: wy }).and_capture())
+                // Arm only: the pin lands where the button is released
+                // (`on_left_release`), so press-drag-release positions it.
+                state.pin_armed = true;
+                state.pin_cursor = Some((wx, wy));
+                Some(canvas::Action::capture())
             }
             SymbolTool::PlaceRectangle => {
                 if let Some((from_x, from_y)) = state.rect_from.take() {
@@ -229,7 +225,7 @@ impl SymbolCanvas<'_> {
 
     /// Click-collect gesture for the `PlacePolygon` tool. The vertex
     /// stash itself (`self.polygon_vertices`) lives on
-    /// `SymbolEditorState`, not this Program's `CanvasState` — a
+    /// `SymbolDocument`, not this Program's `CanvasState` — a
     /// document-scoped Vec, not per-widget-slot ephemeral state, so a
     /// tab switch mid-placement can't leak an in-flight vertex list
     /// into a different document (see `CanvasAction::PolygonClick`'s

@@ -1,64 +1,148 @@
 use super::*;
 
+mod body_style_info;
+mod designators;
+#[cfg(test)]
+pub(crate) mod designators_tests;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod label_class_pick;
+mod navigator_ctx;
+pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
+mod sheet_frame;
+mod sheet_tree;
+#[cfg(test)]
+pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 
 impl Signex {
-    /// Resolved `.snxlib` paths referenced by every loaded project's
-    /// `Project.libraries` list — reserved for callers outside the
-    /// Components Panel that still need a flat slice (the panel itself
-    /// derives the same Vec from `ctx.projects[].libraries[].root`).
-    #[allow(dead_code)]
-    pub(crate) fn collect_project_library_paths(&self) -> Vec<std::path::PathBuf> {
-        let mut out: Vec<std::path::PathBuf> = Vec::new();
-        for p in &self.document_state.projects {
-            for entry in &p.data.libraries {
-                let resolved = p.data.resolve_library_path(entry);
-                if !out.contains(&resolved) {
-                    out.push(resolved);
-                }
-            }
-        }
-        out
-    }
-
-    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        let (visible, visible_grid_mm) = (
+            self.ui_state.grid_visible,
+            self.ui_state.visible_grid_mm as f64,
+        );
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_grid(visible, visible_grid_mm);
+        }
+        self.sync_zoom_step();
+    }
+
+    /// Push the effective "Zoom speed" into the canvases that hold their
+    /// own copy: every PCB canvas and the symbol / footprint editor tabs
+    /// (the schematic reads it per frame through `CanvasViewPrefs`). Also
+    /// called from the Preferences draft / discard paths, which do not run
+    /// `finish_update`.
+    pub(in crate::app) fn sync_zoom_step(&mut self) {
+        let zoom_step = self.ui_state.effective_zoom_step();
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.symbol_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
+        for editor in self.document_state.footprint_editors.values_mut() {
+            editor.zoom_step = zoom_step;
+        }
+    }
+
+    pub(crate) fn finish_update(&mut self) -> Task<Message> {
+        self.refresh_placement_reference();
+        self.sync_panel_ctx_mirrors();
+        let shown_browser = match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) => match &tab.kind {
+                crate::app::TabKind::LibraryBrowser(path) => Some(path.clone()),
+                _ => None,
+            },
+            None => None,
+        };
+        self.library.note_shown_browser(shown_browser.as_deref());
+        self.library.sync_view_caches();
+        let class_styles = self.refresh_net_class_styles();
+        let net_nav = self.refresh_net_nav();
+        self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
+        self.refresh_command_palette_if_stale();
 
         // Re-resolve the History panel's active path; on change, bump
         // the generation counter and kick off an async load. Stale
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
         let history = self.refresh_history_panel();
+        let dir_probes = self.warm_document_dir_probes();
         // v0.23 — Drain any queued git commits onto the iced task
         // pool so they run off the update thread. The "Saving…" pill
         // in the status bar reads from `inflight_git_commits` until
         // each Task::perform completion fires `ProjectGitCommitDone`.
         let commits = self.drain_pending_git_commits();
-        Task::batch([history, commits])
+        let drift = self.drain_pending_drift_check();
+        // Reload the Annotate preview if the documents changed under an open
+        // dialog (a no-op while it is closed or already current).
+        let annotate_preview = self.refresh_annotate_preview();
+        let reprefix_window = self.drain_reprefix_window_close();
+        let instance_note = if std::mem::take(&mut self.document_state.instance_note_due) {
+            self.begin_instance_note()
+        } else {
+            Task::none()
+        };
+        Task::batch([
+            history,
+            dir_probes,
+            commits,
+            drift,
+            annotate_preview,
+            reprefix_window,
+            instance_note,
+            class_styles,
+            net_nav,
+        ])
     }
 
-    fn sync_diagnostics_panel_ctx(&mut self) {
+    /// Republish the diagnostics ring buffer into the Messages panel.
+    ///
+    /// `finish_update` calls this, but not every dispatcher calls
+    /// `finish_update` — `dispatch_preferences_message` deliberately does
+    /// not, because reloading the History panel and draining git commits
+    /// on every keystroke in a modal is not what that dispatcher is for.
+    /// Those dispatchers call this directly instead, so a record they
+    /// emit is on screen in the same frame rather than whenever some
+    /// unrelated later message happens to run `finish_update`.
+    pub(in crate::app) fn sync_diagnostics_panel_ctx(&mut self) {
         self.document_state.panel_ctx.diagnostics_level =
             crate::diagnostics::configured_level_label().to_string();
+        // Ids are monotonic and eviction only happens on push, so an
+        // unchanged newest id means the ring is unchanged: skip the clone.
+        let held = self
+            .document_state
+            .panel_ctx
+            .diagnostics
+            .last()
+            .map(|e| e.id);
+        if held.is_some() && held == crate::diagnostics::newest_entry_id() {
+            return;
+        }
         self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
+        // A tab switch ends every Project tab's typing run: what is typed
+        // after coming back is its own undo step.
+        for tab in self.document_state.project_tabs.values_mut() {
+            tab.general_history.close_run();
+        }
         // Follow the focused tab into its project: the Projects-panel
         // accent and active_project-scoped handlers (ERC / annotate /
         // save-all) should track the user's tab focus, not the most
         // recently opened project. Tabs with no `project_id` (loose
-        // schematics opened without a `.standard_pro`) leave the pointer
+        // schematics opened without a `.snxprj`) leave the pointer
         // alone so the panel keeps showing whichever project was last
         // active. (#54 phase 2.4)
         if let Some(pid) = self
@@ -67,10 +151,22 @@ impl Signex {
             .get(self.document_state.active_tab)
             .and_then(|t| t.project_id)
         {
+            if self.document_state.active_project != Some(pid) {
+                // A Re-prefix request is for one project (#1315).
+                self.invalidate_reprefix();
+            }
             self.document_state.active_project = Some(pid);
+            self.drop_pending_profile_update_for_other_project();
         }
 
         self.sync_visible_document_from_active_tab();
+        // The sheet now in view is the history's current one, and the net
+        // highlight follows the tab (#1271, #1272).
+        self.note_sheet_focused();
+        // A move armed or floating on the previous tab must not drop here.
+        self.cancel_move_pick();
+        // A half-placed two-click shape belongs to the tab it was started in.
+        self.clear_shape_anchors();
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self
@@ -112,10 +208,19 @@ impl Signex {
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
+        self.document_state.panel_ctx.symbol_choices.clear();
         self.document_state.panel_ctx.selected_uuid = None;
         self.document_state.panel_ctx.selected_kind = None;
         self.document_state.panel_ctx.selected_drawing = None;
+        self.document_state.panel_ctx.selected_drawing_placement = Default::default();
         self.document_state.panel_ctx.selected_child_sheet = None;
+        self.document_state.panel_ctx.multi_draft = None;
+        self.document_state.panel_ctx.multi_groups = match self.document_state.active_engine() {
+            Some(engine) if selected.len() > 1 => {
+                signex_engine::selection_groups(engine.document(), selected)
+            }
+            _ => Default::default(),
+        };
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -139,6 +244,82 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // A tab opened through a placement shows, and edits, that
+            // placement's designator (#1151).
+            if let Some(designator) = self
+                .interaction_state
+                .active_canvas()
+                .designators
+                .get(&details.selected_uuid)
+            {
+                let is_ref_field =
+                    details.selected_kind == signex_types::schematic::SelectedKind::SymbolRefField;
+                for (key, value) in &mut self.document_state.panel_ctx.selection_info {
+                    use signex_engine::info_keys;
+                    if key == info_keys::REFERENCE || (is_ref_field && key == info_keys::TEXT) {
+                        value.clone_from(designator);
+                    }
+                }
+            }
+            // The drawings a placed symbol's row offers (#1230).
+            let choices = engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == details.selected_uuid)
+                .map(|s| self.symbol_choices_for(s))
+                .unwrap_or_default();
+            self.document_state.panel_ctx.symbol_choices = choices;
+            // Library name + drift for a placed library symbol (#912).
+            if let Some(lib_id) = self
+                .document_state
+                .panel_ctx
+                .selection_info
+                .iter()
+                .find(|(k, _)| k == "Library ID")
+                .map(|(_, v)| v.clone())
+            {
+                let drift = &self.library.drift;
+                if let Some(name) = drift.names.get(&lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library".into(), name.clone()));
+                }
+                if drift.is_drifted(&path, &lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library Drift".into(), "Yes".into()));
+                }
+            }
+            self.document_state
+                .panel_ctx
+                .selection_info
+                .extend(body_style_info::body_style_info(
+                    engine.document(),
+                    details.selected_uuid,
+                ));
+            // The library row's documents for a placed symbol (#1231).
+            if details.selected_kind == signex_types::schematic::SelectedKind::Symbol
+                && let Some(symbol) = engine
+                    .document()
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == details.selected_uuid)
+            {
+                // One equal to the symbol's own Datasheet field is already
+                // shown as that field.
+                let own = symbol.datasheet.trim();
+                let rows = crate::library::row_documents::document_rows(
+                    &self.library.open_libraries,
+                    symbol.library_id,
+                    symbol.row_id,
+                )
+                .into_iter()
+                .filter(|(_, value)| value != own);
+                self.document_state.panel_ctx.selection_info.extend(rows);
+            }
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
             if matches!(
@@ -146,6 +327,8 @@ impl Signex {
                 signex_types::schematic::SelectedKind::Drawing
             ) {
                 use signex_types::schematic::SchDrawing;
+                self.document_state.panel_ctx.selected_drawing_placement =
+                    engine.document().drawing_placement(details.selected_uuid);
                 self.document_state.panel_ctx.selected_drawing = engine
                     .document()
                     .drawings
@@ -176,30 +359,284 @@ impl Signex {
         }
     }
 
-    pub(crate) fn update_canvas_theme(&mut self) {
-        let colors = if self.ui_state.theme_id == ThemeId::Custom {
+    /// Canvas colours for a given theme id — the one derivation shared by
+    /// `update_canvas_theme` (pushes them into the PCB canvas) and
+    /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
+    /// each frame). `Custom` reads the loaded
+    /// custom theme and falls back to Signex when none is loaded.
+    pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
+        if id == ThemeId::Custom {
             self.ui_state
                 .custom_theme
                 .as_ref()
                 .map(|custom_theme| custom_theme.canvas)
                 .unwrap_or_else(|| signex_types::theme::canvas_colors(ThemeId::Signex))
         } else {
-            signex_types::theme::canvas_colors(self.ui_state.theme_id)
+            signex_types::theme::canvas_colors(id)
+        }
+    }
+
+    /// UI chrome tokens for a given theme id. `Custom` reads the loaded
+    /// custom theme and falls back to Signex when none is loaded — the
+    /// token twin of [`Self::canvas_colors_for`], so a panel refresh
+    /// cannot reset a Custom theme to defaults (#110).
+    pub(crate) fn tokens_for(&self, id: ThemeId) -> signex_types::theme::ThemeTokens {
+        if id == ThemeId::Custom {
+            self.ui_state
+                .custom_theme
+                .as_ref()
+                .map(|custom_theme| custom_theme.tokens)
+                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+        } else {
+            signex_types::theme::theme_tokens(id)
+        }
+    }
+
+    /// Settings the schematic canvas renders with, read fresh from app
+    /// state on every frame (#631).
+    ///
+    /// Every field here used to be a copy on the canvas struct, pushed by
+    /// hand from whichever handler changed it. Most of those sites wrote
+    /// the *active* canvas only, so an undocked window kept rendering the
+    /// value it was created with — the staleness the issue predicted.
+    /// Reading them here means every window draws from one source.
+    ///
+    /// `grid_style` comes from the draft field on purpose: that is the
+    /// effective value, carrying the Preferences live preview while the
+    /// dialog is open and equal to the committed one otherwise (#630).
+    pub(crate) fn canvas_view_prefs(&self) -> crate::canvas::CanvasViewPrefs<'_> {
+        // The DRAFT theme, not the committed one: picking a theme in
+        // Preferences previews it on the canvas immediately, which is
+        // what the `PrefMsg::DraftTheme` arm used to push by hand.
+        let colors = self.canvas_colors_for(self.ui_state.preferences_draft_theme);
+        crate::canvas::CanvasViewPrefs {
+            grid_visible: self.ui_state.grid_visible,
+            theme_bg: crate::render_config::to_iced(&colors.background),
+            theme_grid: crate::render_config::to_iced(&colors.grid),
+            theme_paper: crate::render_config::to_iced(&colors.paper),
+            canvas_colors: colors,
+            snap_enabled: self.ui_state.snap_enabled,
+            snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+            snap_hotspots: self.ui_state.snap_hotspots,
+            unit: self.ui_state.unit,
+            wire_tool_active: self.interaction_state.current_tool == crate::app::Tool::Wire,
+            visible_grid_mm: self.ui_state.visible_grid_mm as f64,
+            grid_style: self.ui_state.preferences_draft_grid_style,
+            auto_focus: self.ui_state.auto_focus,
+            zoom_step: self.ui_state.effective_zoom_step(),
+            move_keeps_wires: self.ui_state.move_keeps_wires,
+            draw_mode: self.interaction_state.draw_mode,
+            current_tool: self.interaction_state.current_tool,
+            window_width: self.ui_state.window_size.0,
+            wire_color_overrides: &self.ui_state.wire_color_overrides,
+            wire_class_styles: self.ui_state.net_class_styles.styles(),
+            wire_class_revision: self.ui_state.net_class_styles.revision(),
+            selection_filters: &self.interaction_state.selection_filters,
+            placement: None,
+        }
+    }
+
+    pub(crate) fn update_canvas_theme(&mut self) {
+        let colors = self.canvas_colors_for(self.ui_state.theme_id);
+        for canvas in self.interaction_state.all_pcb_canvases_mut() {
+            canvas.set_theme_colors(
+                crate::render_config::to_iced(&colors.background),
+                crate::render_config::to_iced(&colors.grid),
+            );
+            canvas.canvas_colors = colors;
+            canvas.clear_content_cache();
+        }
+        for canvas in self.interaction_state.all_schematic_canvases_mut() {
+            canvas.clear_content_cache();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1350 - theme, grid and net-colour changes reach undocked schematic
+    /// canvases, not just the main one.
+    #[test]
+    fn appearance_changes_invalidate_undocked_schematic_canvases() {
+        let (mut app, _t) = Signex::new();
+        let win = iced::window::Id::unique();
+        app.interaction_state
+            .canvases
+            .insert(win, crate::canvas::CanvasSlot::new());
+
+        app.update_canvas_theme();
+        let _ = app.update(Message::Ui(UiMsg::GridToggle));
+
+        let slot = &app.interaction_state.canvases[&win];
+        assert_eq!(slot.content_cache_clears, 1);
+        assert_eq!(slot.bg_cache_clears, 1);
+
+        let _ = app.update(Message::NetColor(NetColorMsg::Set {
+            net: "N1".into(),
+            color: None,
+        }));
+        assert_eq!(app.interaction_state.canvases[&win].content_cache_clears, 2);
+    }
+
+    /// #682 — bootstrap seeds the PCB canvas from the loaded grid state, so
+    /// a saved grid-off (or a non-default size) holds before any update.
+    #[test]
+    fn bootstrap_seeds_pcb_canvas_grid_from_ui_state() {
+        let (app, _t) = Signex::new();
+
+        assert_eq!(
+            app.interaction_state.pcb_canvas.grid_visible,
+            app.ui_state.grid_visible
+        );
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            app.ui_state.visible_grid_mm as f64
+        );
+    }
+
+    /// #682 — the PCB canvas used to keep its own grid fields that nothing
+    /// ever wrote after construction, so the Grid Toggle and Visible Grid
+    /// Size never reached it. `finish_update` now hands them over.
+    #[test]
+    fn pcb_canvas_follows_grid_toggle_and_visible_size() {
+        let (mut app, _t) = Signex::new();
+        app.ui_state.grid_visible = false;
+        app.ui_state.visible_grid_mm = 5.08;
+
+        let _ = app.finish_update();
+
+        assert!(!app.interaction_state.pcb_canvas.grid_visible);
+        assert_eq!(
+            app.interaction_state.pcb_canvas.visible_grid_mm,
+            5.08_f32 as f64
+        );
+    }
+
+    /// #631 — the canvas used to own copies of these settings, written by
+    /// whichever handler changed them. Most of those sites wrote
+    /// `active_canvas_mut()` only, so an undocked window kept rendering
+    /// the value it was created with. `canvas_view_prefs` is now the only
+    /// path from `UiState` to the renderer, so a change has to show up
+    /// there with nothing else called in between.
+    #[test]
+    fn grid_settings_reach_the_renderer_with_no_sync_step() {
+        // Arrange
+        let (mut app, _t) = Signex::new();
+        // Copy the scalars out so the prefs borrow of `app` ends here —
+        // it borrows `wire_color_overrides`, so holding it would block the
+        // mutations below.
+        let (visible_before, grid_visible_before, snap_before) = {
+            let before = app.canvas_view_prefs();
+            (
+                before.visible_grid_mm,
+                before.grid_visible,
+                before.snap_enabled,
+            )
         };
-        self.interaction_state.active_canvas_mut().set_theme_colors(
-            crate::render_config::to_iced(&colors.background),
-            crate::render_config::to_iced(&colors.grid),
-            crate::render_config::to_iced(&colors.paper),
+        let wanted_visible = visible_before + 1.0;
+
+        // Act — mutate app state directly, exactly as a handler would,
+        // and call nothing else.
+        app.ui_state.visible_grid_mm = wanted_visible as f32;
+        app.ui_state.grid_visible = !grid_visible_before;
+        app.ui_state.snap_enabled = !snap_before;
+
+        // Assert
+        let after = app.canvas_view_prefs();
+        assert_eq!(after.visible_grid_mm, wanted_visible);
+        assert_eq!(after.grid_visible, !grid_visible_before);
+        assert_eq!(after.snap_enabled, !snap_before);
+    }
+
+    /// Picking a theme in Preferences previews it on the canvas before
+    /// Save. That preview used to be a hand-written push of the computed
+    /// colours onto the canvas from the `DraftTheme` arm; it is now the
+    /// draft field itself feeding `canvas_view_prefs`. If this reverted to
+    /// reading the committed `theme_id`, the picker would look dead.
+    #[test]
+    fn the_canvas_previews_the_draft_theme_not_the_committed_one() {
+        // Arrange
+        let (mut app, _t) = Signex::new();
+        let committed = app.ui_state.theme_id;
+        let other = if committed == ThemeId::Nord {
+            ThemeId::SolarizedLight
+        } else {
+            ThemeId::Nord
+        };
+
+        // Act
+        app.ui_state.preferences_draft_theme = other;
+
+        // Assert
+        assert_eq!(
+            app.canvas_view_prefs().canvas_colors,
+            signex_types::theme::canvas_colors(other),
+            "the canvas must render the previewed theme"
         );
-        self.interaction_state.pcb_canvas.set_theme_colors(
-            crate::render_config::to_iced(&colors.background),
-            crate::render_config::to_iced(&colors.grid),
+        assert_eq!(
+            app.ui_state.theme_id, committed,
+            "a preview must not commit the theme"
         );
-        self.interaction_state.active_canvas_mut().canvas_colors = colors;
-        self.interaction_state.pcb_canvas.canvas_colors = colors;
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
+    }
+
+    /// #631 — `preferences_draft_theme` was hardcoded to `Signex` at boot
+    /// rather than seeded from the saved preference. That was invisible
+    /// while nothing read it before the Preferences dialog first opened
+    /// (`seed_preferences_drafts_from_live` repaired it there). The canvas
+    /// reads it now, so a user whose saved theme is not Signex would have
+    /// opened to the wrong canvas colours.
+    #[test]
+    fn boot_seeds_the_draft_theme_from_the_saved_theme() {
+        // Arrange / Act
+        let (app, _t) = Signex::new();
+
+        // Assert
+        assert_eq!(
+            app.ui_state.preferences_draft_theme, app.ui_state.theme_id,
+            "the previewed theme must start equal to the saved one"
+        );
+        assert_eq!(
+            app.canvas_view_prefs().canvas_colors,
+            app.canvas_colors_for(app.ui_state.theme_id),
+            "so the first frame renders the saved theme's canvas colours"
+        );
+    }
+
+    /// The wire-colour overrides are borrowed, not cloned onto the canvas.
+    /// The old copy was cleared in parallel with `ui_state`'s at each
+    /// mutation site — one missed site and the canvas kept painting a
+    /// colour the user had cleared.
+    #[test]
+    fn wire_colour_overrides_are_read_from_ui_state() {
+        // Arrange
+        let (mut app, _t) = Signex::new();
+        let uuid = uuid::Uuid::now_v7();
+        let color = signex_types::theme::Color {
+            r: 1,
+            g: 2,
+            b: 3,
+            a: 255,
+        };
+
+        // Act
+        app.ui_state.wire_color_overrides.insert(uuid, color);
+
+        // Assert
+        assert_eq!(
+            app.canvas_view_prefs().wire_color_overrides.get(&uuid),
+            Some(&color),
+            "the renderer must see the override without a copy step"
+        );
+
+        // Act — and clearing `ui_state` is the whole operation.
+        app.ui_state.wire_color_overrides.clear();
+
+        // Assert
+        assert!(
+            app.canvas_view_prefs().wire_color_overrides.is_empty(),
+            "a cleared override must not survive on a canvas copy"
+        );
     }
 }

@@ -151,11 +151,32 @@ pub struct SymbolPin {
     /// to. `1` is the default (single-part components); `0` is the
     /// special "Part Zero" Altium uses for pins that appear on every
     /// part (typically power / ground). Higher numbers (`2..=N`)
-    /// scope the pin to a specific part. The canvas + SCH Library
-    /// panel will honour this in a future commit; for now every pin
-    /// is rendered regardless of part_number.
+    /// scope the pin to a specific part. The canvas gates the pin
+    /// draw on this via `pin_visible_on_active_part`, and the SCH
+    /// Library panel renders a per-part tree-expander so only pins
+    /// on the selected part show.
     #[serde(default = "default_part_number")]
     pub part_number: u8,
+    /// Which body of a De Morgan symbol this pin belongs to: `0` common to
+    /// both bodies, `1` normal (default), `2` alternate. Maps onto
+    /// `LibPin::body_style` unchanged.
+    #[serde(default = "default_body_style", skip_serializing_if = "is_normal_body")]
+    pub body_style: u8,
+}
+
+/// Body-style tag shared by items drawn on both bodies.
+pub const BODY_COMMON: u8 = 0;
+/// Body-style tag of the normal body (the default).
+pub const BODY_NORMAL: u8 = 1;
+/// Body-style tag of the alternate (De Morgan) body.
+pub const BODY_ALTERNATE: u8 = 2;
+
+fn default_body_style() -> u8 {
+    BODY_NORMAL
+}
+
+fn is_normal_body(body_style: &u8) -> bool {
+    *body_style == BODY_NORMAL
 }
 
 fn default_visibility_true() -> bool {
@@ -189,6 +210,7 @@ impl SymbolPin {
             hidden: false,
             locked: false,
             part_number: 1,
+            body_style: BODY_NORMAL,
         }
     }
 }
@@ -290,6 +312,14 @@ pub struct SymbolGraphic {
     /// as before, so no `.snxsym` format-token bump is required.
     #[serde(default)]
     pub part_number: u8,
+    /// Which body this graphic belongs to: `0` common to both bodies, `1`
+    /// normal (default), `2` alternate (De Morgan). Written only when not 1,
+    /// and a file that holds any non-normal item is written as
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V3`], a token builds that predate body
+    /// styles do not accept, so they cannot open the file, draw both bodies
+    /// and drop these tags on their next save.
+    #[serde(default = "default_body_style", skip_serializing_if = "is_normal_body")]
+    pub body_style: u8,
 }
 
 /// Altium "Component Type" — drives BOM rules and schematic
@@ -334,6 +364,16 @@ pub struct Symbol {
     /// `"100k"` for a fixed resistor symbol.
     #[serde(default = "default_comment")]
     pub comment: String,
+    /// Where the designator text sits, in symbol-local mm (Y-up).
+    /// `None` = the editor's default placement relative to the body
+    /// bbox. Additive: files without the key load as `None` and
+    /// re-save without it, so untouched symbols stay byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub designator_pos: Option<[f64; 2]>,
+    /// Where the comment (value) text sits; same contract as
+    /// [`Self::designator_pos`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment_pos: Option<[f64; 2]>,
     /// Free-text component description — surfaced in tooltips and
     /// the Properties panel.
     #[serde(default)]
@@ -413,6 +453,8 @@ impl Symbol {
             schematic_params: ParamMap::new(),
             designator: default_designator(),
             comment: default_comment(),
+            designator_pos: None,
+            comment_pos: None,
             description: String::new(),
             component_type: ComponentType::default(),
             mirrored: false,
@@ -456,6 +498,12 @@ pub struct SymbolFile {
     /// Defaults to the file stem when empty.
     #[serde(default)]
     pub display_name: String,
+    /// The `file_uuid` of the stock file this one was copied from (#813).
+    /// Lets opening the same stock primitive again find the copy. Absent
+    /// from files that are not copies, so they stay byte-identical; older
+    /// builds ignore the key when loading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copied_from: Option<Uuid>,
     /// All symbols in this file. Order is the SCH-Library panel order.
     pub symbols: Vec<Symbol>,
     pub created: DateTime<Utc>,
@@ -496,9 +544,19 @@ const SYMBOL_FILE_FORMAT_TOKEN: &str = "snxsym/v1";
 /// token per actually-incompatible addition, not one per PR.
 const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 
+/// Written when any pin or graphic is off the normal body (`body_style` 0 or
+/// 2, #1233). Unlike a field addition this must not be readable by a build
+/// that predates it: such a build accepts v1 and v2, ignores the unknown
+/// graphic key, hard-codes body 1 and would drop every tag on its next save.
+/// A v3 file is refused there with `UnsupportedFormat`. This build reads v1,
+/// v2 and v3.
+const SYMBOL_FILE_FORMAT_TOKEN_V3: &str = "snxsym/v3";
+
 /// Stable column layout for the per-symbol `pins_tsv` block. Adding
 /// or reordering columns is a wire-format break — bump
-/// [`SYMBOL_FILE_FORMAT_TOKEN`].
+/// [`SYMBOL_FILE_FORMAT_TOKEN`]. This is the legacy 20-column layout,
+/// still written when every pin is on the normal body so such files stay
+/// byte-identical and readable by older builds; see [`PIN_TSV_BODY_COLUMN`].
 const PIN_TSV_COLUMNS: &[&str] = &[
     "number",
     "name",
@@ -522,6 +580,12 @@ const PIN_TSV_COLUMNS: &[&str] = &[
     "part_number",
 ];
 
+/// Trailing column appended to [`PIN_TSV_COLUMNS`] (21 columns in all) when
+/// any pin of the symbol is not on the normal body. The reader takes either
+/// layout (a missing column means body 1); the file's token is then
+/// [`SYMBOL_FILE_FORMAT_TOKEN_V3`].
+const PIN_TSV_BODY_COLUMN: &str = "body_style";
+
 /// Sentinel string substituted for each symbol's `pins_tsv` field
 /// before TOML serialise; replaced post-emit with the literal multi-
 /// line `'''…'''` block. The long random suffix prevents collision
@@ -541,6 +605,8 @@ struct SymbolFileWire {
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    copied_from: Option<Uuid>,
     created: DateTime<Utc>,
     updated: DateTime<Utc>,
     #[serde(default)]
@@ -563,6 +629,10 @@ struct SymbolWire {
     designator: String,
     #[serde(default = "default_comment")]
     comment: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    designator_pos: Option<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    comment_pos: Option<[f64; 2]>,
     #[serde(default)]
     description: String,
     #[serde(default)]
@@ -659,6 +729,7 @@ impl SymbolFile {
             format: default_format(),
             file_uuid: Uuid::now_v7(),
             display_name: symbol.name.clone(),
+            copied_from: None,
             symbols: vec![symbol],
             created: now,
             updated: now,
@@ -699,7 +770,7 @@ impl SymbolFile {
 
     /// Parse the TOML+TSV wire format. The format-token check accepts
     /// either [`SYMBOL_FILE_FORMAT_TOKEN`] or
-    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]; any other token surfaces
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] or [`SYMBOL_FILE_FORMAT_TOKEN_V3`]; any other token surfaces
     /// [`SymbolFileError::UnsupportedFormat`].
     ///
     /// Every loaded `Arc` graphic passes through
@@ -710,8 +781,14 @@ impl SymbolFile {
     /// data regardless of entry point, and the next save re-emits the
     /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
-        let wire: SymbolFileWire = toml::from_str(text)?;
-        if wire.format != SYMBOL_FILE_FORMAT_TOKEN && wire.format != SYMBOL_FILE_FORMAT_TOKEN_V2 {
+        let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
+        if ![
+            SYMBOL_FILE_FORMAT_TOKEN,
+            SYMBOL_FILE_FORMAT_TOKEN_V2,
+            SYMBOL_FILE_FORMAT_TOKEN_V3,
+        ]
+        .contains(&wire.format.as_str())
+        {
             return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
         }
         let mut symbols = Vec::with_capacity(wire.symbols.len());
@@ -722,6 +799,18 @@ impl SymbolFile {
             // before `part_count` existed, defaulting to 1) keep all
             // their units instead of collapsing to one.
             let pin_max = pins.iter().map(|p| p.part_number).max().unwrap_or(1).max(1);
+            // Same handling as a pin's `body_style` cell: a tag that names no
+            // body would load as an item nothing shows or selects.
+            if let Some(bad) = sw
+                .graphics
+                .iter()
+                .find(|g| !matches!(g.body_style, BODY_COMMON | BODY_NORMAL | BODY_ALTERNATE))
+            {
+                return Err(SymbolFileError::InvalidNumericCell {
+                    column: "graphic body_style",
+                    value: bad.body_style.to_string(),
+                });
+            }
             let graphics = sw
                 .graphics
                 .into_iter()
@@ -739,6 +828,8 @@ impl SymbolFile {
                 schematic_params: sw.schematic_params,
                 designator: sw.designator,
                 comment: sw.comment,
+                designator_pos: sw.designator_pos,
+                comment_pos: sw.comment_pos,
                 description: sw.description,
                 component_type: sw.component_type,
                 mirrored: sw.mirrored,
@@ -756,6 +847,7 @@ impl SymbolFile {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
+            copied_from: wire.copied_from,
             created: wire.created,
             updated: wire.updated,
             symbols,
@@ -767,8 +859,9 @@ impl SymbolFile {
     /// strings so the bulk data is line-diffable in git output.
     ///
     /// The written `format` token is computed fresh from content —
-    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] iff any symbol contains a
-    /// [`SymbolGraphicKind::Polygon`] graphic, else
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V3`] iff any pin / graphic is off the normal
+    /// body (De Morgan, #1233), else [`SYMBOL_FILE_FORMAT_TOKEN_V2`] iff any
+    /// symbol contains a [`SymbolGraphicKind::Polygon`] graphic, else
     /// [`SYMBOL_FILE_FORMAT_TOKEN`] — not copied from `self.format`
     /// (which may be stale, e.g. right after loading a v1 file that
     /// has since gained a `Polygon` in this session, or a v2 file
@@ -776,12 +869,20 @@ impl SymbolFile {
     /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]'s doc comment for why this
     /// stays maximally backward-compatible.
     pub fn to_toml_string(&self) -> Result<String, SymbolFileError> {
-        let format = if self
+        let has_polygon = self
             .symbols
             .iter()
             .flat_map(|s| &s.graphics)
-            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }))
-        {
+            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }));
+        // Body 0 alone counts too: a v3 token is the cheap conservative gate,
+        // and an older build would drop the tag on its next save.
+        let has_body_styles = self.symbols.iter().any(|s| {
+            s.pins.iter().any(|p| p.body_style != BODY_NORMAL)
+                || s.graphics.iter().any(|g| g.body_style != BODY_NORMAL)
+        });
+        let format = if has_body_styles {
+            SYMBOL_FILE_FORMAT_TOKEN_V3.to_string()
+        } else if has_polygon {
             SYMBOL_FILE_FORMAT_TOKEN_V2.to_string()
         } else {
             SYMBOL_FILE_FORMAT_TOKEN.to_string()
@@ -808,6 +909,8 @@ impl SymbolFile {
                 schematic_params: sym.schematic_params.clone(),
                 designator: sym.designator.clone(),
                 comment: sym.comment.clone(),
+                designator_pos: sym.designator_pos,
+                comment_pos: sym.comment_pos,
                 description: sym.description.clone(),
                 component_type: sym.component_type,
                 mirrored: sym.mirrored,
@@ -825,10 +928,18 @@ impl SymbolFile {
             format,
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
+            copied_from: self.copied_from,
             created: self.created,
             updated: self.updated,
             symbols: wire_symbols,
         };
+        // #828: graphics and parameters are written by serde, and TOML
+        // spells NaN / infinity `nan` / `inf`; refuse them by key path.
+        if let Some(field) = signex_types::numeric::first_non_finite_path(&wire)
+            .map_err(SymbolFileError::TomlSerialize)?
+        {
+            return Err(SymbolFileError::NonFiniteField { field });
+        }
         let mut out = toml::to_string_pretty(&wire).map_err(SymbolFileError::TomlSerialize)?;
         for (idx, payload) in tsv_payloads.iter().enumerate() {
             let needle = format!("\"{PINS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");
@@ -848,10 +959,12 @@ pub enum SymbolFileError {
     Utf8(#[from] std::str::Utf8Error),
     #[error("TOML deserialise failed: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
+    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
+    NonFiniteNumber { path: String },
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
     #[error(
-        "unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\" or \"snxsym/v2\""
+        "unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\", \"snxsym/v2\" or \"snxsym/v3\""
     )]
     UnsupportedFormat { got: String },
     #[error(
@@ -859,6 +972,10 @@ pub enum SymbolFileError {
          {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""
     )]
     InvalidTsvCell { column: &'static str, value: String },
+    /// A pin function name containing `|`, which separates a pin's
+    /// functions on disk, so it would reload as two functions.
+    #[error("pin function {value:?} contains '|', which separates pin functions; rename it")]
+    PipeInPinFunction { value: String },
     #[error("pins_tsv block is empty (no header row)")]
     EmptyPinsTsv,
     #[error("pins_tsv header does not match the expected schema; got columns {got:?}")]
@@ -873,6 +990,11 @@ pub enum SymbolFileError {
     UnknownEnumToken { kind: &'static str, got: String },
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
     InvalidNumericCell { column: &'static str, value: String },
+    /// #828: a NaN or infinite number cannot be written to a `.snxsym`.
+    /// `field` names where it sits (a pin cell or a key path), so the
+    /// save fails loudly instead of writing an empty cell or panicking.
+    #[error("{field} holds a non-finite number (NaN or infinity); it cannot be saved")]
+    NonFiniteField { field: String },
     #[error(
         "invalid boolean cell in column {column:?}: {value:?} (expected \"true\" or \"false\")"
     )]
@@ -884,12 +1006,27 @@ pub enum SymbolFileError {
     InvalidPinsTsv { symbol_index: usize },
 }
 
+impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
+    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
+        use signex_types::numeric::TomlFiniteError as E;
+        match e {
+            E::Toml(e) => Self::TomlDeserialize(e),
+            E::NonFinite { path } => Self::NonFiniteNumber { path },
+        }
+    }
+}
+
+#[cfg(test)]
+mod body_style_tests;
 mod chain;
 #[cfg(test)]
 mod chain_tests;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
+mod to_lib_symbol;
+#[cfg(test)]
+mod to_lib_symbol_tests;
 
 pub use chain::{
     CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,

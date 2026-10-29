@@ -1,10 +1,8 @@
 //! Disk JSON cache for `DistributorPart` records.
 //!
 //! - Layout: `<root>/<provider>/<mpn>.json` (one JSON file per part).
-//! - Default TTL: **24 hours** for metadata. Datasheet URLs cached
-//!   indefinitely (the URL is stored as part of the same JSON; the
-//!   indefinite-ness is a property of the URL not changing — we re-read
-//!   stale entries explicitly when the caller wants a refresh).
+//! - Default TTL: **24 hours**. The whole entry (datasheet URL included,
+//!   it is part of the same JSON) expires at the TTL.
 //! - Tests use a temp dir, never `~/.signex/`.
 //!
 //! `DistributorCache::with_root` is the test-friendly constructor;
@@ -56,33 +54,31 @@ impl DistributorCache {
 
     /// Compute the on-disk path for a `(provider, mpn)` entry.
     ///
-    /// M2: directory-traversal hardening. The MPN is partially trusted
-    /// (vendor-supplied via API responses we don't control), so we:
-    /// 1. Replace path separators with `_` (preserves the original `/`/`\`
-    ///    sanitisation that allowed legitimate slashes in MPNs).
-    /// 2. Reject any MPN containing `..` (parent-dir escape).
-    /// 3. Verify the canonicalised result still lives under `self.root`.
-    ///
-    /// On rejection the path can't be derived; callers should treat the
-    /// error as "this MPN cannot be cached" and return live results
-    /// without persisting them.
+    /// The MPN is partially trusted (vendor-supplied), so it is encoded
+    /// injectively: every byte outside `[A-Za-z0-9-._]` becomes `%XX`. That
+    /// keeps `A/B` and `A_B` distinct, makes the name valid on Windows
+    /// (no `:*?"<>|`), and cannot contain a path separator, so no traversal
+    /// check on the MPN is needed. Callers should go through `put`/`get`,
+    /// which also verify the result stays under `self.root`.
     pub fn entry_path(&self, provider: &str, mpn: &str) -> PathBuf {
-        let safe_mpn = mpn.replace(['/', '\\'], "_");
-        // Path is always derived from `self.root`; `validate_entry_path`
-        // surfaces the rejection. Production callers must invoke `put`/`get`
-        // which run the validation check, but we keep the bare path-builder
-        // pure (no Result) to preserve the existing public surface.
+        let mut safe_mpn = String::with_capacity(mpn.len());
+        for b in mpn.bytes() {
+            if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_') {
+                safe_mpn.push(b as char);
+            } else {
+                safe_mpn.push_str(&format!("%{b:02X}"));
+            }
+        }
         self.root.join(provider).join(format!("{safe_mpn}.json"))
     }
 
-    /// M2: enforce that `mpn` produces a path strictly inside `self.root`.
-    /// Any rejection bubbles up as `CacheError::Io(InvalidInput)` so callers
-    /// can branch on it without parsing strings.
+    /// Enforce that the entry lies strictly inside `self.root`. Rejection
+    /// bubbles up as `CacheError::Io(InvalidInput)`.
     fn validate_entry_path(&self, provider: &str, mpn: &str) -> Result<PathBuf, CacheError> {
-        if mpn.contains("..") || provider.contains("..") {
+        if provider.contains("..") {
             return Err(CacheError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "cache key contains parent-directory traversal token (..)",
+                "cache provider contains parent-directory traversal token (..)",
             )));
         }
         let path = self.entry_path(provider, mpn);
@@ -108,7 +104,7 @@ impl DistributorCache {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_vec_pretty(part)?;
-        std::fs::write(&path, json)?;
+        signex_types::atomic_io::atomic_write(&path, &json)?;
         Ok(())
     }
 
@@ -126,6 +122,10 @@ impl DistributorCache {
         }
         let bytes = std::fs::read(&path)?;
         let part: DistributorPart = serde_json::from_slice(&bytes)?;
+        // A file under this key holding a different part is a miss, not a hit.
+        if part.mpn != mpn {
+            return Ok(None);
+        }
 
         // TTL check based on `captured_at`. If TTL is zero, every entry is
         // considered expired — useful for forcing a refresh.
@@ -135,6 +135,25 @@ impl DistributorCache {
             return Ok(None);
         }
         Ok(Some(part))
+    }
+
+    /// [`get`](Self::get) for adapter read paths: an unreadable entry (corrupt
+    /// JSON, permission error, rejected path) is logged at `warn` and treated
+    /// as a miss, so the caller falls through to a live fetch. Mirrors the
+    /// write side, which warns on a failed `put` rather than dropping it.
+    pub fn get_or_warn(&self, provider: &str, mpn: &str, ttl: Duration) -> Option<DistributorPart> {
+        match self.get(provider, mpn, ttl) {
+            Ok(hit) => hit,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    provider = %provider,
+                    mpn = %mpn,
+                    "distributor cache read failed; treating as a miss",
+                );
+                None
+            }
+        }
     }
 
     /// Delete a cached entry, if present. Idempotent.
@@ -175,12 +194,56 @@ mod tests {
         }
     }
 
+    /// `A/B` and `A_B` are different parts and must not share a cache file;
+    /// a mislabelled file under a key is a miss.
+    #[test]
+    fn distinct_mpns_do_not_collide_and_mismatch_is_a_miss() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let ttl = Duration::from_secs(60);
+        cache.put("p", &part("A/B")).unwrap();
+        assert!(cache.get("p", "A_B", ttl).unwrap().is_none());
+        assert!(cache.get("p", "A/B", ttl).unwrap().is_some());
+        std::fs::copy(cache.entry_path("p", "A/B"), cache.entry_path("p", "C")).unwrap();
+        assert!(cache.get("p", "C", ttl).unwrap().is_none());
+    }
+
+    /// Overwriting an existing entry replaces it and leaves no `*.tmp`
+    /// sibling behind. (Crash-safety itself is not observable in a unit test.)
+    #[test]
+    fn put_replaces_entry_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        cache.put("lcsc", &part("R1")).unwrap();
+        let mut newer = part("R1");
+        newer.description = "newer".into();
+        cache.put("lcsc", &newer).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        let back: DistributorPart = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(back.description, "newer");
+        let stray = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().is_some_and(|x| x == "tmp"));
+        assert!(!stray);
+    }
+
     #[test]
     fn entry_path_sanitises_slashes() {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
         let p = cache.entry_path("digikey", "311-10.0K/CRCT");
-        assert_eq!(p.file_name().unwrap(), "311-10.0K_CRCT.json");
+        assert_eq!(p.file_name().unwrap(), "311-10.0K%2FCRCT.json");
+    }
+
+    /// Windows-reserved characters round-trip through `put`/`get`.
+    #[test]
+    fn windows_reserved_chars_are_cacheable() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let mpn = "A:B*C?D<E>F|G..H";
+        cache.put("p", &part(mpn)).unwrap();
+        assert!(cache.get("p", mpn, DEFAULT_TTL).unwrap().is_some());
     }
 
     #[test]
@@ -198,20 +261,104 @@ mod tests {
     /// vendor-supplied response can't escape the cache root and overwrite
     /// arbitrary files.
     #[test]
-    fn entry_path_rejects_parent_dir_traversal() {
+    fn entry_path_contains_parent_dir_traversal() {
         let dir = tempfile::tempdir().unwrap();
         let cache = DistributorCache::with_root(dir.path()).unwrap();
 
-        // Direct check via `put`: rejection surfaces as InvalidInput.
-        let err = cache.put("lcsc", &part("../../etc/passwd")).unwrap_err();
-        match err {
-            CacheError::Io(e) => assert_eq!(e.kind(), std::io::ErrorKind::InvalidInput),
-            other => panic!("expected Io(InvalidInput), got {other:?}"),
+        // A hostile MPN is encoded into a single file name under the root.
+        let evil = "../../etc/passwd";
+        cache.put("lcsc", &part(evil)).unwrap();
+        let path = cache.entry_path("lcsc", evil);
+        assert_eq!(path.parent().unwrap(), dir.path().join("lcsc"));
+        assert!(cache.get("lcsc", evil, DEFAULT_TTL).unwrap().is_some());
+
+        // A traversing provider is rejected on every op.
+        assert!(cache.get("..", "x", DEFAULT_TTL).is_err());
+        assert!(cache.invalidate("..", "anything").is_err());
+    }
+
+    /// Collects the `warn!` events emitted on the current thread while `f`
+    /// runs, each rendered as `message key=value ...`. A tiny hand-written
+    /// subscriber, so the crate needs no `tracing-subscriber` dev-dependency
+    /// (#830 review).
+    fn warnings(f: impl FnOnce()) -> Vec<String> {
+        use std::fmt::Write as _;
+        use std::sync::{Arc, Mutex};
+        use tracing::field::{Field, Visit};
+        use tracing::span::{Attributes, Id, Record};
+        use tracing::{Event, Level, Metadata, Subscriber};
+
+        struct Render(String);
+        impl Visit for Render {
+            fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{value:?}");
+                } else {
+                    let _ = write!(self.0, " {}={value:?}", field.name());
+                }
+            }
         }
 
-        // The same protection applies to reads and invalidations so
-        // attackers can't probe filesystem state through a cache miss.
-        assert!(cache.get("lcsc", "..", DEFAULT_TTL).is_err());
-        assert!(cache.invalidate("..", "anything").is_err());
+        struct Collect(Arc<Mutex<Vec<String>>>);
+        impl Subscriber for Collect {
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                true
+            }
+            fn new_span(&self, _: &Attributes<'_>) -> Id {
+                Id::from_u64(1)
+            }
+            fn record(&self, _: &Id, _: &Record<'_>) {}
+            fn record_follows_from(&self, _: &Id, _: &Id) {}
+            fn event(&self, event: &Event<'_>) {
+                if *event.metadata().level() == Level::WARN {
+                    let mut render = Render(String::new());
+                    event.record(&mut render);
+                    self.0.lock().unwrap().push(render.0);
+                }
+            }
+            fn enter(&self, _: &Id) {}
+            fn exit(&self, _: &Id) {}
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        tracing::subscriber::with_default(Collect(seen.clone()), f);
+        seen.lock().unwrap().clone()
+    }
+
+    /// #806: a corrupt entry is a miss, and the read failure is logged
+    /// instead of being dropped.
+    #[test]
+    fn get_or_warn_logs_corrupt_entry_and_misses() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let path = cache.entry_path("lcsc", "R1");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"{").unwrap();
+
+        let mut hit = Some(part("sentinel"));
+        let warned = warnings(|| hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(hit.is_none());
+        assert_eq!(warned.len(), 1);
+        assert!(
+            warned[0].contains("distributor cache read failed"),
+            "message text missing: {}",
+            warned[0]
+        );
+        assert!(warned[0].contains("R1"), "MPN missing: {}", warned[0]);
+    }
+
+    /// An absent entry is an ordinary miss: no warning.
+    #[test]
+    fn get_or_warn_is_silent_on_plain_miss_and_returns_hits() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DistributorCache::with_root(dir.path()).unwrap();
+        let mut miss = Some(part("sentinel"));
+        let warned = warnings(|| miss = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL));
+        assert!(miss.is_none());
+        assert!(warned.is_empty());
+
+        cache.put("lcsc", &part("R1")).unwrap();
+        let hit = cache.get_or_warn("lcsc", "R1", DEFAULT_TTL).unwrap();
+        assert_eq!(hit.mpn, "R1");
     }
 }

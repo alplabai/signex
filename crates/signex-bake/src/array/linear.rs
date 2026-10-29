@@ -1,28 +1,31 @@
 //! Linear array baking —  instances stepped by
 //!  from the source pad.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{ArrayKind, NumberingScheme};
+use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{EvalContext, eval};
+use signex_sketch::expr::eval::EvalContext;
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::unit::Quantity;
 
 use crate::pad::bake_one_pad;
 
-use super::numbering::{derive_pad_number, linear_increment_number, strip_eq_prefix};
+use super::numbering::derive_pad_number;
+use crate::eval_util::strip_eq_prefix;
 
 /// One LinearArray expansion. Steps `0..count`, evaluating `dx_expr`
 /// / `dy_expr` once per step (each in its own `EvalContext` with the
 /// instance index), and dispatches per-instance to
 /// [`bake_one_pad`].
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "linear-array placement takes the whole geometry + numbering spec at once"
+)]
 pub(super) fn bake_linear(
     source: SketchEntityId,
     count_expr: &str,
@@ -67,12 +70,15 @@ pub(super) fn bake_linear(
     // Evaluate count once with array_index = (0, 0) — the count must
     // be a constant or parameter; the spec doesn't carry per-step
     // counts.
-    let setup_ctx = EvalContext {
+    let mut ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count_q = eval(&count_ast, &setup_ctx).map_err(SketchError::Expr)?;
-    let count = count_q.value.round() as i64;
+    let Some(count) =
+        super::eval_count("linear", "count_expr", source, &count_ast, &ctx, warnings)?
+    else {
+        return Ok(());
+    };
     if count <= 0 {
         warnings.push(format!(
             "linear array source {source}: count_expr resolved to {count} — array skipped"
@@ -80,35 +86,29 @@ pub(super) fn bake_linear(
         return Ok(());
     }
     let count = count as usize;
+    if !super::within_instance_cap("linear", source, Some(count), warnings) {
+        return Ok(());
+    }
 
     for i in 0..count {
-        // MD-2: re-evaluating dx/dy needs only the `array_index` change,
-        // but `EvalContext.params` is owned by value, so this still
-        // clones the full `BTreeMap` on every iteration — `O(count ×
-        // params)` work. Not hoisted: array counts are small (pad
-        // arrays, not bulk geometry), so this hasn't been worth the
-        // added complexity of an index-swappable `EvalContext`.
-        let step_ctx = EvalContext {
-            params: params_ast.clone(),
-            array_index: Some((i, 0)),
-        };
+        // One context for the whole array: only `array_index` changes
+        // between instances, so the parameter table is cloned once.
+        ctx.array_index = Some((i, 0));
 
         // dx / dy are length expressions in mm.
-        let dx_q = eval(&dx_ast, &step_ctx).map_err(SketchError::Expr)?;
-        let dy_q = eval(&dy_ast, &step_ctx).map_err(SketchError::Expr)?;
-        let dx_mm = dx_q.as_mm().map_err(SketchError::Unit)?;
-        let dy_mm = dy_q.as_mm().map_err(SketchError::Unit)?;
+        let dx_mm = crate::params::eval_length_mm(&dx_ast, &ctx)?;
+        let dy_mm = crate::params::eval_length_mm(&dy_ast, &ctx)?;
 
         let extra_dx = i as f64 * dx_mm;
         let extra_dy = i as f64 * dy_mm;
 
-        let pad_number = derive_pad_number(numbering, i, params_ast, warnings, source);
+        let pad_number = derive_pad_number(numbering, i, &mut ctx, warnings, source);
+        ctx.array_index = Some((i, 0));
 
         let pad = bake_one_pad(
             source,
             pad_attr,
-            params_ast,
-            Some((i, 0)),
+            &ctx,
             extra_dx,
             extra_dy,
             Some(pad_number),

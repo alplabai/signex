@@ -11,9 +11,8 @@
 //!
 //! Mounted as a full-screen overlay backdrop via
 //! `app/view/mod.rs::collect_overlays` when
-//! `LibraryState::create_options.is_some()`. The matching
-//! `needs_overlay` predicate must include the same flag (memory
-//! note `[needs_overlay predicate gates modal rendering]`).
+//! `LibraryState::create_options.is_some()`; `create_options_overlay`
+//! owns that guard.
 
 use iced::widget::{Space, button, checkbox, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
@@ -23,11 +22,14 @@ use signex_widgets::theme_ext;
 use super::messages::LibraryMessage;
 use super::state::LibraryCreateOptionsState;
 
-const MODAL_W: f32 = 480.0;
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 pub fn view<'a>(
     state: &'a LibraryCreateOptionsState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -42,9 +44,9 @@ pub fn view<'a>(
 
     let header = container(
         row![
-            text("Library Options").size(14).color(text_c),
+            text("Library Options").size(TS.heading).color(text_c),
             Space::new().width(Length::Fill),
-            text(lib_label).size(11).color(muted),
+            text(lib_label).size(TS.body).color(muted),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -55,24 +57,26 @@ pub fn view<'a>(
     // library lives on disk as plain files; opting in runs `git init`
     // at the parent directory and stages an initial commit.
     let git_check: Element<'a, LibraryMessage> = checkbox(state.enable_git)
-        .size(14)
+        .size(TS.heading)
         .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
         .into();
 
-    let git_label = text("Enable version control (Git)").size(12).color(text_c);
+    let git_label = text("Enable version control (Git)")
+        .size(TS.label)
+        .color(text_c);
     let git_help = text(
         "Initialise a Git repository at the library's parent directory and \
          commit on every save. Off by default — leave plain files unless \
          you plan to track history or collaborate. Can be enabled later.",
     )
-    .size(10)
+    .size(TS.caption)
     .color(muted);
 
     let git_row = container(
         row![
             git_check,
             Space::new().width(8),
-            column![git_label, git_help].spacing(4),
+            column![git_label, git_help].spacing(SP.s),
         ]
         .align_y(iced::Alignment::Start),
     )
@@ -83,41 +87,41 @@ pub fn view<'a>(
     // Greyed out otherwise (no `on_toggle` so the checkbox is inert).
     let lfs_check: Element<'a, LibraryMessage> = if state.enable_git {
         checkbox(state.use_lfs)
-            .size(14)
+            .size(TS.heading)
             .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleLfs)
             .into()
     } else {
         // Inert checkbox — same footprint, can't be clicked.
-        checkbox(false).size(14).into()
+        checkbox(false).size(TS.heading).into()
     };
 
     let lfs_text_color = if state.enable_git { text_c } else { muted };
     let lfs_label = text("Use Git LFS for binary 3D models")
-        .size(12)
+        .size(TS.label)
         .color(lfs_text_color);
     let lfs_help = text(
         "Tracks `*.step`, `*.stp`, `*.wrl`, `*.iges` via Git LFS \
          (recommended for production libraries). Requires `git lfs` \
          to be installed locally. Only available with version control on.",
     )
-    .size(10)
+    .size(TS.caption)
     .color(muted);
 
     let lfs_row = container(
         row![
             lfs_check,
             Space::new().width(8),
-            column![lfs_label, lfs_help].spacing(4),
+            column![lfs_label, lfs_help].spacing(SP.s),
         ]
         .align_y(iced::Alignment::Start),
     )
     .padding([10, 14])
     .width(Length::Fill);
 
-    let body = column![git_row, lfs_row].spacing(2);
+    let body = column![git_row, lfs_row].spacing(SP.xs);
 
-    let cancel = button(text("Cancel").size(11).color(text_c))
-        .padding([4, 14])
+    let cancel = button(text("Cancel").size(TS.body).color(text_c))
+        .padding([SP.s, 14.0])
         .on_press(LibraryMessage::LibraryCreateOptionsCancel)
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -131,21 +135,25 @@ pub fn view<'a>(
             },
             ..iced::widget::button::Style::default()
         });
-    let create = button(text("Create Library").size(11).color(iced::Color::WHITE))
-        .padding([4, 14])
-        .on_press(LibraryMessage::LibraryCreateOptionsConfirm)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgb(
-                0.00, 0.47, 0.84,
-            ))),
-            text_color: iced::Color::WHITE,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        });
+    let create = button(
+        text("Create Library")
+            .size(TS.body)
+            .color(iced::Color::WHITE),
+    )
+    .padding([SP.s, 14.0])
+    .on_press(LibraryMessage::LibraryCreateOptionsConfirm)
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgb(
+            0.00, 0.47, 0.84,
+        ))),
+        text_color: iced::Color::WHITE,
+        border: Border {
+            width: 0.0,
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..iced::widget::button::Style::default()
+    });
 
     let footer = container(
         row![
@@ -160,7 +168,10 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([6, 0]), footer].width(Length::Fixed(MODAL_W)),
+        column![header, container(body).padding([6, 0]), footer].width(super::card_len(
+            windowed,
+            super::modal_chrome::CREATE_OPTIONS_W,
+        )),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

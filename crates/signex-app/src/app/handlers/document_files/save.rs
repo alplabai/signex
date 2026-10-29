@@ -6,8 +6,74 @@ use anyhow::{Context, Result};
 
 use super::super::super::*;
 
+/// Messages trims an entry to this many bytes.
+const MESSAGES_ENTRY_BYTES: usize = 160;
+
+/// The advice leads each per-object line so a long object description is
+/// the part that gets cut, never the instruction.
+const OFFENDER_LINE_PREFIX: &str = "Save blocked, delete column past limit: ";
+
+/// How a file is named in a Messages line: the bare file name, since the
+/// panel keeps ~157 bytes and a full path alone can use them up.
+pub(super) fn file_label(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
+/// `text` cut to at most `max_bytes`, on a char boundary.
+fn clip_to_bytes(text: &str, max_bytes: usize) -> &str {
+    let mut end = text.len().min(max_bytes);
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+/// A save refused for too many foreign TSV columns gets one Messages
+/// line per object that carries a column past the cap, since a single
+/// entry is trimmed to 160 bytes and would lose the names.
+pub(crate) fn log_foreign_column_offenders(error: &anyhow::Error) {
+    use signex_types::format::FormatError;
+    let Some(FormatError::TsvTooManyForeignColumns {
+        objects,
+        more_objects,
+        ..
+    }) = error.chain().find_map(|cause| {
+        if let Some(format_error) = cause.downcast_ref::<FormatError>() {
+            return Some(format_error);
+        }
+        cause
+            .downcast_ref::<std::io::Error>()?
+            .get_ref()?
+            .downcast_ref::<FormatError>()
+    })
+    else {
+        return;
+    };
+    let room = MESSAGES_ENTRY_BYTES - OFFENDER_LINE_PREFIX.len();
+    for object in objects {
+        crate::diagnostics::log_warning(format!(
+            "{OFFENDER_LINE_PREFIX}{}",
+            clip_to_bytes(object, room)
+        ));
+    }
+    if *more_objects > 0 {
+        crate::diagnostics::log_warning(format!(
+            "Save blocked: {more_objects} more objects carry a column past the limit"
+        ));
+    }
+}
+
 impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
+            // Refused before any branch below could ask for a Save As dialog
+            // for a path that is only missing because it is being renamed.
+            self.refuse_while_path_op(&tab.path, "saved")?;
+            self.refuse_save_while_restoring(&tab.path)?;
+        }
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens
         // before the generic schematic-save handler runs (it would
@@ -22,18 +88,26 @@ impl Signex {
         // re-keys the editor + tab and writes the file.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             match &active_tab.kind {
+                // A Project tab writes its `.snxprj` off the UI thread.
+                super::super::super::TabKind::Project(project_id) => {
+                    let project_id = *project_id;
+                    return self.begin_project_save(project_id);
+                }
                 super::super::super::TabKind::SymbolEditor(path)
                 | super::super::super::TabKind::FootprintEditor(path) => {
                     let path = path.clone();
                     if !path.exists() {
-                        return Ok(super::spawn_save_as_for_new_primitive(path));
+                        return Ok(super::spawn_save_as_for_primitive(path));
                     }
-                    match self.save_primitive_tab_at(&path) {
-                        Ok(()) => {
-                            crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()))
+                    // The write runs off the UI thread; the completion logs
+                    // it, clears the dirty marker and queues the git commit.
+                    let task = match self.save_primitive_tab_at(&path) {
+                        Ok(task) => task,
+                        Err(e) => {
+                            self.report_save_failure("Save failed", &e);
+                            iced::Task::none()
                         }
-                        Err(e) => crate::diagnostics::log_error("Save failed", &e),
-                    }
+                    };
                     // v0.14.2: also save the active project's
                     // `.snxprj` if it's dirty + refresh panel ctx so
                     // the project-root red dot drops. Adding a
@@ -44,59 +118,50 @@ impl Signex {
                     // save even though the primitive's row is clean.
                     self.save_active_project_if_dirty();
                     self.refresh_panel_ctx();
-                    return Ok(iced::Task::none());
+                    return Ok(task);
                 }
                 _ => {}
             }
         }
-        if let Some(result) = self.with_active_schematic_session_mut(|session| session.save()) {
-            result.context("save active schematic session")?;
-            let path = self.active_tab_path().unwrap_or_default();
-            crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
-            // v0.22 Phase 8.4 — auto-commit the saved schematic into
-            // the owning project's git repo when enable_git is on.
-            // Best-effort; failure logged + ignored (user data is on
-            // disk regardless).
-            if !path.as_os_str().is_empty() {
-                let label = path
-                    .file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| path.display().to_string());
-                let msg = format!("Save {label}");
-                self.commit_save_to_project_git(&path, &msg);
+        // The write runs off the UI thread; the git auto-commit and the
+        // dirty-marker clear follow its completion (`handle_document_saved`).
+        let mut saves = Vec::new();
+        if let Some(path) = self.document_state.active_path.clone()
+            && self.document_state.engines.contains_key(&path)
+        {
+            // Another spelling of this file held open must not be overwritten
+            // by this write (#1447).
+            match self.guard_spelling_save(&path)? {
+                super::dir_case::SaveGuard::Clear => {
+                    saves.push(self.begin_schematic_save(path, None)?);
+                }
+                super::dir_case::SaveGuard::Waiting(probe) => saves.push(probe),
             }
         }
-        // v0.23 — PCB save-hook auto-commit. The PCB editor doesn't
-        // own a save-back-to-disk path yet (Pcb tabs render from
-        // `cached_document` and never mutate the parsed `.snxpcb`
-        // through this dispatcher). When the PCB save path lands as
-        // part of future PCB-editor work, wire the same
-        // `commit_save_to_project_git` call here so PCB edits get
-        // captured by the v0.22 project-git pipeline:
-        //
-        //     if let TabKind::Pcb = active_tab.kind {
-        //         pcb_session.save()?;
-        //         let label = path.file_name()…;
-        //         self.commit_save_to_project_git(&path, &format!("Save {label}"));
-        //     }
-        //
-        // Tracked in PROJECT_GIT_PLAN.md "Deferred to v0.23" → "PCB
-        // save-hook wiring".
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && matches!(tab.kind, super::super::super::TabKind::Pcb)
+        {
+            let path = tab.path.clone();
+            match self.begin_pcb_save(path) {
+                Ok(task) => saves.extend(task),
+                Err(e) => self.report_save_failure("Failed to save PCB", &e),
+            }
+        }
         // Save the active project's `.snxprj` if it's dirty (right-
         // click → Add Existing flips the dirty bit). Best-effort: a
         // failure here is logged but doesn't block the schematic save.
         self.save_active_project_if_dirty();
         // Refresh the panel context so the project-tree red dirty dot
         // (which reads `panel_ctx.projects[*].sheets[*].is_dirty`)
-        // sees the updated `dirty_paths` set after the save. Without
-        // this the tree row stays red even though the title (which
-        // reads `dirty_paths.len()` directly each frame) clears.
+        // sees the cleared dirty mark after the save. Without this the
+        // tree row stays red even though the title (which counts the
+        // dirty documents directly each frame) clears.
         self.refresh_panel_ctx();
-        Ok(iced::Task::none())
+        Ok(iced::Task::batch(saves))
     }
 
     /// Persist the active project's `.snxprj` JSON when its dirty bit
-    /// is set in `dirty_paths`. No-op if no project is active or the
+    /// is dirty. No-op if no project is active or the
     /// project file isn't dirty.
     ///
     /// Pending libraries (registered via the New Library flow) are
@@ -125,16 +190,31 @@ impl Signex {
             Some(p) => p.path.clone(),
             None => return,
         };
-        if !self.document_state.dirty_paths.contains(&project_path) {
+        if !self.document_state.is_document_dirty(&project_path) {
             return;
         }
         if let Err(error) = self.persist_project_by_id(project_id) {
-            crate::diagnostics::log_error("Failed to save project file", &error);
+            self.report_save_failure("Failed to save project file", &error);
+        }
+    }
+
+    /// A save failed: log it and raise the Save Failed card. A log line
+    /// alone is invisible, and the dirty marker stays set, so the user
+    /// would believe Ctrl+S worked (#110).
+    pub(crate) fn report_save_failure(&mut self, context: &str, error: &anyhow::Error) {
+        crate::diagnostics::log_error(context, error);
+        log_foreign_column_offenders(error);
+        // The first failure of a save sequence is the one that explains it;
+        // a follow-up write (e.g. the project file) must not replace it.
+        if self.document_state.error_notice.is_none() {
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
+                "{context}: {error:#}"
+            )));
         }
     }
 
     /// Save the loaded project whose `.snxprj` sits at `path`. Thin
-    /// path-keyed wrapper over [`persist_project_by_id`] used by the
+    /// path-keyed wrapper over [`Self::persist_project_by_id`] used by the
     /// Save-All-on-close/exit dispatcher, which iterates dirty paths and
     /// cannot assume the dirty `.snxprj` belongs to the *active*
     /// project. Returns an error when no loaded project owns `path`, or
@@ -150,124 +230,67 @@ impl Signex {
         self.persist_project_by_id(project_id)
     }
 
-    /// Materialise any pending libraries, then write the identified
-    /// project's `.snxprj` to disk. On success clears the project's
-    /// dirty marker, auto-commits to the project git repo, and
-    /// refreshes the panel context. Returns the *write* failure (the
-    /// per-library materialise errors are logged and the entry re-
-    /// stashed for retry, matching the historical behaviour) so callers
-    /// can surface a real save failure instead of swallowing it.
-    fn persist_project_by_id(&mut self, project_id: crate::app::state::ProjectId) -> Result<()> {
-        let project_path = match self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-        {
-            Some(p) => p.path.clone(),
-            None => anyhow::bail!("project {project_id} is no longer loaded"),
-        };
-
-        // Drain the pending-library map first so the snxprj save below
-        // captures the freshly-materialised LibraryEntry rows.
-        let pending: Vec<(uuid::Uuid, crate::library::commands::PendingLibrarySpec)> = self
-            .document_state
-            .projects
-            .iter_mut()
-            .find(|p| p.id == project_id)
-            .map(|p| p.pending_libraries.drain().collect())
-            .unwrap_or_default();
-        for (library_id, spec) in pending {
-            // Re-borrow per iteration so the materialise call owns
-            // the project + library state mutably without aliasing.
-            let project_path_log;
-            let result = if let Some(loaded) = self
-                .document_state
-                .projects
-                .iter_mut()
-                .find(|p| p.id == project_id)
-            {
-                project_path_log = loaded.path.clone();
-                crate::library::commands::materialize_pending_library(
-                    &mut self.library,
-                    &mut loaded.data,
-                    library_id,
-                    &spec,
-                )
-            } else {
-                continue;
-            };
-            match result {
-                Ok(()) => {
-                    tracing::info!(
-                        target: "signex::library",
-                        project = %project_path_log.display(),
-                        library = %spec.lib_path.display(),
-                        library_id = %library_id,
-                        "materialised pending library"
-                    );
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        project = %project_path_log.display(),
-                        library = %spec.lib_path.display(),
-                        library_id = %library_id,
-                        error = %error,
-                        "materialise_pending_library failed; keeping entry pending for retry"
-                    );
-                    // Re-stash so the user can fix + retry next Save.
-                    if let Some(loaded) = self
-                        .document_state
-                        .projects
-                        .iter_mut()
-                        .find(|p| p.id == project_id)
-                    {
-                        loaded.pending_libraries.insert(library_id, spec);
-                    }
-                }
-            }
+    /// Schematic Save As. `from_path` is the tab the dialog was opened
+    /// for; the dialog is not modal, so refuse when the active tab is no
+    /// longer that schematic instead of writing another document to
+    /// `path`. Symbol / footprint tabs go through `handle_save_primitive_as`.
+    pub(crate) fn save_active_document_as(
+        &mut self,
+        from_path: &std::path::Path,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>> {
+        self.refuse_save_while_restoring(from_path)?;
+        // The target may be a document whose restore is still running (even
+        // one cancelled): the restore would overwrite what this writes.
+        self.refuse_save_while_restoring(&path)?;
+        match self.document_state.tabs.get(self.document_state.active_tab) {
+            Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
+            _ => anyhow::bail!(
+                "save as {}: the active tab is no longer the schematic {} (it was \
+                 switched or closed while the dialog was open) — nothing was written",
+                path.display(),
+                from_path.display()
+            ),
         }
-
-        let data = match self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-        {
-            Some(p) => p.data.clone(),
-            None => anyhow::bail!("project {project_id} vanished before write"),
-        };
-        signex_types::project::write_project(&project_path, &data)
-            .with_context(|| format!("write project {}", project_path.display()))?;
-
-        self.document_state.dirty_paths.remove(&project_path);
-        crate::diagnostics::log_info(format!("[save] Wrote project {}", project_path.display()));
-        // v0.22 Phase 8.4 — auto-commit the .snxprj file into
-        // its own project git repo when enable_git is on.
-        let label = project_path
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| project_path.display().to_string());
-        let msg = format!("Save {label}");
-        self.commit_save_to_project_git(&project_path, &msg);
-        // Rebuild the panel ctx so the project root row drops
-        // its dirty marker. Without this, the cached
-        // `ProjectPanelInfo.is_dirty` snapshot stays `true`
-        // until the next user action triggers a refresh and
-        // the red dot lingers despite the file being clean.
-        self.refresh_panel_ctx();
-        Ok(())
+        if self.save_as_target_is_other_open_document(&path) {
+            // Reason first and the bare file name: the Messages panel keeps
+            // ~157 bytes, which a full path alone can use up.
+            anyhow::bail!(
+                "that file is open, still opening, or holds unsaved edits; nothing was \
+                 written: {}",
+                file_label(&path)
+            );
+        }
+        if self.document_state.document_saves.is_saving(&path) {
+            anyhow::bail!(
+                "a write to that file (or a case variant of its name) is still running; try \
+                 again once it finishes: {}",
+                file_label(&path)
+            );
+        }
+        // The tab keeps its old path and title until the write succeeds.
+        self.begin_schematic_save(path, Some(from_path.to_path_buf()))
     }
 
-    pub(crate) fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
-        if let Some(result) =
-            self.with_active_schematic_session_mut(|session| session.save_as(path.clone()))
+    /// Whether `path` is hosted by another open tab or parked engine, or
+    /// its open is still in flight: re-keying onto it would replace that
+    /// engine and discard its unsaved edits, or let the late open result
+    /// replace the re-keyed engine (#1089).
+    pub(super) fn save_as_target_is_other_open_document(&self, path: &std::path::Path) -> bool {
+        let active = self.document_state.active_path.as_deref();
+        // Another spelling of the same file counts (`lib.snxsch` vs the open
+        // `Lib.snxsch` on a case-insensitive volume): re-keying onto it would
+        // leave two documents on one file.
+        if self
+            .held_spelling(path)
+            .is_some_and(|held| Some(held.as_path()) != active)
         {
-            result.with_context(|| format!("save active schematic as {}", path.display()))?;
-            crate::diagnostics::log_info(format!("[save-as] Wrote {}", path.display()));
+            return true;
         }
-        Ok(())
+        active != Some(path)
+            && (self.document_state.engines.contains_key(path)
+                || self.document_state.tabs.iter().any(|tab| tab.path == path)
+                || self.document_state.pending_opens.contains(path))
     }
 
     /// Resolve `Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })` —
@@ -279,95 +302,120 @@ impl Signex {
     pub(crate) fn handle_save_primitive_as(
         &mut self,
         from_path: &std::path::Path,
-        to_path: &std::path::Path,
-    ) {
-        // Reject re-keying onto a path that already hosts a different
-        // open editor — would clobber the other editor's state.
-        if from_path != to_path
-            && (self.document_state.symbol_editors.contains_key(to_path)
-                || self.document_state.footprint_editors.contains_key(to_path))
-        {
-            tracing::warn!(
-                target: "signex::library",
-                from = %from_path.display(),
-                to = %to_path.display(),
-                "save-as: target path already hosts another open editor — refusing"
-            );
-            return;
+        picked_path: &std::path::Path,
+    ) -> Result<iced::Task<Message>> {
+        self.refuse_while_path_op(from_path, "saved")?;
+        self.refuse_while_path_op(picked_path, "saved")?;
+        // The OS dialog only confirmed overwriting the name the user
+        // typed. When we append the extension the target is a different
+        // file the user was never asked about, so refuse if it exists.
+        let resolved = super::with_primitive_extension(
+            picked_path.to_path_buf(),
+            super::primitive_extension(from_path),
+        );
+        let to_path = resolved.as_path();
+        // Re-keying onto a file whose restore is still running (even a
+        // cancelled one) would let the restore overwrite this save; say so
+        // before the generic "already open" refusal can.
+        self.refuse_save_while_restoring(to_path)?;
+        if to_path != picked_path {
+            if to_path.exists() {
+                crate::diagnostics::log_warning(format!(
+                    "[save-as] {} already exists and was not overwritten; \
+                     pick the full file name including the extension to replace it",
+                    to_path.display()
+                ));
+                return Ok(iced::Task::none());
+            }
+            crate::diagnostics::log_info(format!(
+                "[save-as] No file extension given; saving as {}",
+                to_path.display()
+            ));
         }
 
-        // Move the SymbolEditorState (or FootprintEditorState) to the
-        // new key. The editor's internal `path` field is updated to
-        // match so commit-through-adapter / refresh-cache callers see
-        // the right path.
-        if let Some(mut editor) = self.document_state.symbol_editors.remove(from_path) {
-            editor.path = to_path.to_path_buf();
+        // Re-key first so the save (keyed by the editor's path) writes the
+        // new file. The write runs off the UI thread; if it fails the
+        // completion undoes the re-key, so a tab never points at a file
+        // that does not exist. On success the completion runs the
+        // library-tracking step (`attach_library_for_path`): mount a
+        // `.snxlib` the file landed in and bind it to the active project.
+        let previous_title = self.retarget_primitive(from_path, to_path, None)?;
+        let origin = crate::persist::SaveAsOrigin {
+            from: from_path.to_path_buf(),
+            title: previous_title,
+        };
+        match self.save_primitive_tab_replacing(to_path, origin.clone()) {
+            Ok(task) => Ok(task),
+            Err(error) => {
+                self.retarget_primitive(to_path, from_path, origin.title)
+                    .context("roll back Save As re-key")?;
+                Err(error.context(format!(
+                    "save as {}: write failed, document left at {}",
+                    to_path.display(),
+                    from_path.display()
+                )))
+            }
+        }
+    }
+
+    /// Move the symbol / footprint editor, its tab(s) and the dirty
+    /// marker from `from` to `to`. `title` overrides the tab title (used
+    /// by the rollback); `None` derives it from `to`'s file stem.
+    /// Returns the title the first moved tab had before the move.
+    ///
+    /// Refuses, moving nothing, when `to` already hosts another editor or
+    /// tab: overwriting it would drop that editor's edits and leave two
+    /// tabs on one file.
+    pub(crate) fn retarget_primitive(
+        &mut self,
+        from: &std::path::Path,
+        to: &std::path::Path,
+        title: Option<String>,
+    ) -> Result<Option<String>> {
+        if from != to
+            && (self
+                .held_spelling(to)
+                .is_some_and(|held| held.as_path() != from)
+                || self.document_state.symbol_editors.contains_key(to)
+                || self.document_state.footprint_editors.contains_key(to)
+                || self.document_state.tabs.iter().any(|tab| tab.path == to))
+        {
+            anyhow::bail!("{} is already open in another tab", to.display());
+        }
+        if let Some(mut editor) = self.document_state.symbol_editors.remove(from) {
+            editor.path = to.to_path_buf();
             self.document_state
                 .symbol_editors
-                .insert(to_path.to_path_buf(), editor);
-        } else if let Some(mut editor) = self.document_state.footprint_editors.remove(from_path) {
-            editor.path = to_path.to_path_buf();
+                .insert(to.to_path_buf(), editor);
+        } else if let Some(mut editor) = self.document_state.footprint_editors.remove(from) {
+            editor.path = to.to_path_buf();
             self.document_state
                 .footprint_editors
-                .insert(to_path.to_path_buf(), editor);
+                .insert(to.to_path_buf(), editor);
         } else {
-            tracing::warn!(
-                target: "signex::library",
-                from = %from_path.display(),
-                "save-as: no editor at source path — was the tab closed?"
-            );
-            return;
+            anyhow::bail!("no editor at {} — was the tab closed?", from.display());
         }
 
-        // Update the tab(s) — title, path, kind variant.
-        let new_title = to_path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| to_path.display().to_string());
+        let new_title = title.unwrap_or_else(|| {
+            to.file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| to.display().to_string())
+        });
+        let mut previous_title = None;
         for tab in self.document_state.tabs.iter_mut() {
-            if tab.path == from_path {
-                tab.path = to_path.to_path_buf();
+            if tab.path == from {
+                previous_title.get_or_insert_with(|| tab.title.clone());
+                tab.path = to.to_path_buf();
                 tab.title = new_title.clone();
                 tab.kind = match tab.kind {
-                    super::super::super::TabKind::SymbolEditor(_) => {
-                        super::super::super::TabKind::SymbolEditor(to_path.to_path_buf())
-                    }
-                    super::super::super::TabKind::FootprintEditor(_) => {
-                        super::super::super::TabKind::FootprintEditor(to_path.to_path_buf())
-                    }
+                    TabKind::SymbolEditor(_) => TabKind::SymbolEditor(to.to_path_buf()),
+                    TabKind::FootprintEditor(_) => TabKind::FootprintEditor(to.to_path_buf()),
                     _ => tab.kind.clone(),
                 };
             }
         }
-
-        // Migrate the dirty marker too — `dirty_paths` is keyed on
-        // path so it has to follow the rename.
-        if self.document_state.dirty_paths.remove(from_path) {
-            self.document_state
-                .dirty_paths
-                .insert(to_path.to_path_buf());
-        }
-
-        // Now write the file at the new path. `atomic_write` inside
-        // `save_primitive_tab_at` handles `create_dir_all(parent)` so
-        // saving into a fresh `<lib>/symbols/` directory just works.
-        match self.save_primitive_tab_at(to_path) {
-            Ok(()) => {
-                crate::diagnostics::log_info(format!("[save-as] Wrote {}", to_path.display()))
-            }
-            Err(e) => crate::diagnostics::log_error("Save As failed", &e),
-        }
-
-        // Library-tracking step. If the user saved into a `.snxlib`
-        // directory that isn't mounted yet, mount it so the project
-        // tree picks it up; if it isn't yet a member of the active
-        // project's `libraries`, append it (project-local for paths
-        // inside the project dir, Shared for paths outside) and
-        // mark the project file dirty. The `.snxprj` itself isn't
-        // re-serialised here — that's a separate persistence flow —
-        // but the dirty marker means the next project-close prompt
-        // will surface the unsaved library binding.
-        self.attach_library_for_path(to_path);
+        self.document_state.rekey_document_dirty(from, to);
+        Ok(previous_title)
     }
 
     /// Walk `path`'s ancestors looking for a `.snxlib` directory and,
@@ -376,7 +424,7 @@ impl Signex {
     /// not mounted yet. Logs and skips when there's no `.snxlib`
     /// ancestor (loose-file save outside the library system) or when
     /// no project is active to attach to.
-    fn attach_library_for_path(&mut self, path: &std::path::Path) {
+    pub(crate) fn attach_library_for_path(&mut self, path: &std::path::Path) {
         let lib_dir = path.ancestors().find(|p| {
             p.extension()
                 .and_then(|e| e.to_str())
@@ -384,29 +432,25 @@ impl Signex {
                 .unwrap_or(false)
         });
         let Some(lib_dir) = lib_dir else {
-            tracing::warn!(
-                target: "signex::library",
-                path = %path.display(),
-                "save-as: file is outside any `.snxlib/` — not attached to a library"
-            );
+            crate::diagnostics::log_warning(format!(
+                "[save-as] {} is outside any `.snxlib/` — not attached to a library",
+                path.display()
+            ));
             return;
         };
 
         // Mount through `state.open_library` (idempotent — re-opening a
         // mounted library is a no-op). Bail on failure: an invalid
         // library directory shouldn't poison the project's library list.
-        if self.library.library_at(lib_dir).is_none() {
-            if let Err(e) =
+        if self.library.library_at(lib_dir).is_none()
+            && let Err(e) =
                 crate::library::commands::open_library(&mut self.library, lib_dir.to_path_buf())
-            {
-                tracing::warn!(
-                    target: "signex::library",
-                    path = %lib_dir.display(),
-                    error = %e,
-                    "save-as: open_library failed — leaving project untouched"
-                );
-                return;
-            }
+        {
+            crate::diagnostics::log_warning(format!(
+                "[save-as] could not open library {} ({e}) — project left untouched",
+                lib_dir.display()
+            ));
+            return;
         }
         let library_id = self.library.library_at(lib_dir).map(|l| l.library_id);
 
@@ -425,24 +469,27 @@ impl Signex {
             None => None,
         };
         let Some(project_idx) = project_idx else {
-            tracing::warn!(
-                target: "signex::library",
-                path = %lib_dir.display(),
-                "save-as: no active project to attach the library to"
-            );
+            crate::diagnostics::log_warning(format!(
+                "[save-as] no active project to attach library {} to",
+                lib_dir.display()
+            ));
             return;
         };
 
         let loaded = &mut self.document_state.projects[project_idx];
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+        let fold = loaded.case_fold;
 
         // Already in the project? Match by library_id when we have one
         // (handles renames); otherwise compare resolved paths.
+        use crate::app::state::library_entry::library_entry_location;
+        use crate::app::state::scope::path_key_with;
+        let wanted = path_key_with(lib_dir, fold);
         let already_attached = loaded.data.libraries.iter().any(|entry| {
             if let (Some(eid), Some(lid)) = (entry.library_id, library_id) {
                 eid == lid
             } else {
-                loaded.data.resolve_library_path(entry) == lib_dir
+                path_key_with(&loaded.data.resolve_library_path(entry), fold) == wanted
             }
         });
         if already_attached {
@@ -453,17 +500,7 @@ impl Signex {
         // Project-local when the library lives inside the project dir,
         // Shared otherwise. Project-local stores the path relative to
         // the project so a project move doesn't break the binding.
-        let (kind, stored_path) = if let Ok(rel) = lib_dir.strip_prefix(&project_dir) {
-            (
-                signex_types::project::LibraryEntryKind::ProjectLocal,
-                rel.to_path_buf(),
-            )
-        } else {
-            (
-                signex_types::project::LibraryEntryKind::Shared,
-                lib_dir.to_path_buf(),
-            )
-        };
+        let (stored_path, kind) = library_entry_location(&project_dir, lib_dir, fold);
 
         loaded
             .data
@@ -472,22 +509,24 @@ impl Signex {
                 path: stored_path,
                 kind,
                 library_id,
+                unknown: Default::default(),
             });
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights
         // up and the project-close prompt asks the user to persist the
-        // new binding. (The actual `.snxprj` write isn't wired yet — a
-        // follow-up commit will plumb that through Ctrl+S; for now the
-        // in-session view is correct, persistence is best-effort.)
+        // new binding.
         let project_path = loaded.path.clone();
-        self.document_state.dirty_paths.insert(project_path);
 
-        tracing::info!(
-            target: "signex::library",
-            project = %loaded.path.display(),
-            library = %lib_dir.display(),
-            "save-as: attached library to active project"
-        );
+        let scope = match kind {
+            signex_types::project::LibraryEntryKind::Shared => "Shared",
+            _ => "project-local",
+        };
+        crate::diagnostics::log_info(format!(
+            "[save-as] Attached library {} to project {} as {scope}",
+            lib_dir.display(),
+            loaded.path.display()
+        ));
+        self.document_state.mark_document_dirty(&project_path);
 
         self.refresh_panel_ctx();
     }

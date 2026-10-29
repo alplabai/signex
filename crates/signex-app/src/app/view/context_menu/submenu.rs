@@ -10,17 +10,66 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg};
+use super::items::{
+    command_text, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_kb, dd_msg, dd_planned,
+    tag_command,
+};
+use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
+/// A flyout row for an Active Bar action. With a command id the label and
+/// shortcut `hint` come from the catalog (#271); the literal `fallback` is
+/// only for an action that has no id. A disabled row keeps its hint in the
+/// right-hand column.
+fn active_bar_row(
+    icon: iced::widget::svg::Handle,
+    fallback: &'static str,
+    action: crate::active_bar::ActiveBarAction,
+    enabled: bool,
+    planned: bool,
+    hint: &dyn Fn(&str) -> String,
+) -> DropdownEntry<Message> {
+    // Net Label's id is bridged to the tool picker rather than listed in the
+    // Active Bar table, so the flyout names it here.
+    let id = id_for_action(&action).or(match action {
+        crate::active_bar::ActiveBarAction::PlaceNetLabel => Some("place_net_label"),
+        _ => None,
+    });
+    let Some(id) = id else {
+        return if !enabled {
+            dd_disabled(Some(icon), fallback, None)
+        } else if planned {
+            dd_planned(Some(icon), fallback, None)
+        } else {
+            dd_kb(Some(icon), fallback, "", ContextAction::ActiveBar(action))
+        };
+    };
+    let shortcut = hint(id);
+    let right = (!shortcut.is_empty()).then_some(shortcut.as_str());
+    if planned {
+        // A planned tool is shown but cannot be armed (#1249).
+        tag_command(dd_planned(Some(icon), &command_text(id), right), id)
+    } else if enabled {
+        dd_cmd_action(Some(icon), id, &shortcut, ContextAction::ActiveBar(action))
+    } else {
+        dd_cmd_disabled(Some(icon), id, &shortcut)
+    }
+}
+
 /// Place submenu — wires, buses, ports, power, directives, harness, sheet
-/// symbols, component, and text. Every row is always enabled.
-pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
+/// symbols, component, and text. Rows for planned tools are greyed with a
+/// tooltip; every other row is always enabled. `hint` resolves a command id
+/// to its keymap shortcut.
+pub(super) fn place_entries(
+    tid: ThemeId,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
-    let ab = |icon, label: &str, action: A| {
-        dd_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
+    let ab = |icon, label: &'static str, action: A| {
+        let planned = crate::active_bar::is_planned(&action);
+        active_bar_row(icon, label, action, true, planned, hint)
     };
     vec![
         // Wires + buses + entries
@@ -28,6 +77,7 @@ pub(super) fn place_entries(tid: ThemeId) -> Vec<DropdownEntry<Message>> {
         ab(ic::icon_dd_bus(tid), "Bus", A::DrawBus),
         ab(ic::icon_dd_bus_entry(tid), "Bus Entry", A::PlaceBusEntry),
         ab(ic::icon_dd_net_label(tid), "Net Label", A::PlaceNetLabel),
+        ab(ic::icon_dd_junction(tid), "Junction", A::PlaceJunction),
         DropdownEntry::Separator,
         // Ports
         ab(ic::icon_dd_port(tid), "Port", A::PlacePort),
@@ -124,15 +174,15 @@ pub(super) fn align_gate(selected: usize) -> (bool, bool) {
 
 /// Align submenu — pairwise aligns + distribute (gated by selection
 /// count) and the always-on Align To Grid.
-pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<Message>> {
+pub(super) fn align_entries(
+    tid: ThemeId,
+    selected: usize,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
     use crate::active_bar::ActiveBarAction as A;
     let (pair, dist) = align_gate(selected);
-    let row = |icon, label: &str, action: A, enabled: bool| {
-        if enabled {
-            dd_kb(Some(icon), label, "", ContextAction::ActiveBar(action))
-        } else {
-            dd_disabled(Some(icon), label, None)
-        }
+    let row = |icon, label: &'static str, action: A, enabled: bool| {
+        active_bar_row(icon, label, action, enabled, false, hint)
     };
     vec![
         row(
@@ -180,20 +230,40 @@ pub(super) fn align_entries(tid: ThemeId, selected: usize) -> Vec<DropdownEntry<
             dist,
         ),
         DropdownEntry::Separator,
-        dd_kb(
-            Some(ic::icon_dd_align_grid(tid)),
+        row(
+            ic::icon_dd_align_grid(tid),
             "Align To Grid",
-            "",
-            ContextAction::ActiveBar(A::AlignToGrid),
+            A::AlignToGrid,
+            true,
         ),
     ]
+}
+
+/// Arrange submenu — order the selected drawings (#1583). Offered only while
+/// the selection holds a drawing, so every row is live.
+pub(super) fn arrange_entries(hint: &dyn Fn(&str) -> String) -> Vec<DropdownEntry<Message>> {
+    use signex_engine::DrawingArrange as D;
+    [
+        ("bring_drawings_to_front", D::ToFront),
+        ("send_drawings_to_back", D::ToBack),
+        ("bring_drawings_forward", D::Forward),
+        ("send_drawings_backward", D::Backward),
+    ]
+    .into_iter()
+    .map(|(id, arrange)| {
+        dd_cmd_action(None, id, &hint(id), ContextAction::ArrangeDrawings(arrange))
+    })
+    .collect()
 }
 
 /// Add New to Project submenu — the master "Add New" picker for the
 /// right-clicked project (resolved as `target`). Schematic / Component
 /// Library / Symbol Library are wired; the rest stay version-badged stubs
 /// until their editors land.
-pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownEntry<Message>> {
+pub(super) fn add_new_entries(
+    tid: ThemeId,
+    target: signex_widgets::tree_view::TreeKey,
+) -> Vec<DropdownEntry<Message>> {
     use crate::app::ProjectTreeAction as P;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(12);
 
@@ -223,7 +293,7 @@ pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownE
             P::AddProjectSymbolLibrary(target.clone()),
         )),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "PCB",
         Some("v2.0"),
@@ -241,23 +311,23 @@ pub(super) fn add_new_entries(tid: ThemeId, target: Vec<usize>) -> Vec<DropdownE
         ));
     }
     v.push(DropdownEntry::Separator);
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Output Job",
         Some("v1.3"),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_frame(tid)),
         "Design Notebook",
         Some("v1.4"),
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "Constraint File",
         Some("v3.x"),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_text_string(tid)),
         "VHDL File",
         Some("v3.x"),
@@ -278,10 +348,13 @@ impl Signex {
         let tid = self.ui_state.theme_id;
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = match kind {
-            ContextSubmenu::Place => place_entries(tid),
+            ContextSubmenu::Place => place_entries(tid, &|id| self.keymap_shortcut_label(id)),
             ContextSubmenu::Align => {
-                align_entries(tid, self.interaction_state.canvas.selected.len())
+                align_entries(tid, self.interaction_state.canvas.selected.len(), &|id| {
+                    self.keymap_shortcut_label(id)
+                })
             }
+            ContextSubmenu::Arrange => arrange_entries(&|id| self.keymap_shortcut_label(id)),
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —
                 // resolve it off the captured menu state so the action
@@ -290,7 +363,7 @@ impl Signex {
                     .interaction_state
                     .project_tree_context_menu
                     .as_ref()
-                    .and_then(|m| m.path.clone())
+                    .and_then(|m| m.key.clone())
                     .unwrap_or_default();
                 add_new_entries(tid, target)
             }

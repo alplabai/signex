@@ -4,17 +4,20 @@
 //! rows, individual data cells) — used by `pad_form::render_pad_form_pad_stack`
 //! to compose the COPPER / HOLE / PASTE / SOLDER rows.
 
-use iced::widget::{
-    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
-};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{container, pick_list, text, text_input};
+use iced::{Color, Length, Theme};
 
-use super::super::super::PanelMsg;
+use super::super::super::{PanelMsg, PanelPalette};
 use super::form::{
     PadEditTarget, PadFormValues, pad_shape_msg, pad_size_x_msg, pad_size_y_msg,
     pad_thermal_relief_msg,
 };
 use super::stack_preview::PadShapeChoice;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 /// v0.20 — Altium-style table header row. Renders the column titles
 /// in muted small text with the same FillPortion layout the data
@@ -27,7 +30,7 @@ pub(super) fn pad_table_header<'a>(
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     let mut row = iced::widget::Row::new()
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     for (i, label) in cols.iter().enumerate() {
         let portion = portions.get(i).copied().unwrap_or(1);
@@ -39,7 +42,7 @@ pub(super) fn pad_table_header<'a>(
         );
     }
     container(row)
-        .padding([4, 8])
+        .padding([SP.s, SP.m])
         .width(Length::Fill)
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -62,18 +65,16 @@ pub(super) fn pad_table_row<'a>(
     label: &'a str,
     cells: Vec<iced::Element<'a, PanelMsg>>,
     portions: &[u16],
-    muted: Color,
     primary: Color,
     _border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    let _ = muted;
     let label_portion = 3_u16;
     let mut row = iced::widget::Row::new()
-        .spacing(4)
+        .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     row = row.push(
         text(label.to_string())
-            .size(10)
+            .size(TS.caption)
             .color(primary)
             .width(Length::FillPortion(label_portion)),
     );
@@ -81,7 +82,10 @@ pub(super) fn pad_table_row<'a>(
         let portion = portions.get(i).copied().unwrap_or(1);
         row = row.push(container(cell).width(Length::FillPortion(portion)));
     }
-    container(row).padding([3, 8]).width(Length::Fill).into()
+    container(row)
+        .padding([3.0, SP.m])
+        .width(Length::Fill)
+        .into()
 }
 
 /// v0.20 — text_input cell with the same chrome as `pad_input_row`'s
@@ -95,8 +99,8 @@ pub(super) fn pad_table_input_cell<'a>(
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
     text_input(placeholder, &value)
-        .size(10)
-        .padding(2)
+        .size(TS.caption)
+        .padding(SP.xs)
         .style(move |_: &Theme, _| iced::widget::text_input::Style {
             background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
             border: iced::Border {
@@ -124,7 +128,7 @@ where
 {
     pick_list(options, Some(selected), on_change)
         .text_size(10)
-        .padding([2, 6])
+        .padding([SP.xs, 6.0])
         .width(Length::Fill)
         .into()
 }
@@ -137,10 +141,10 @@ pub(super) fn pad_table_check_cell<'a>(
     container(
         iced::widget::checkbox(on)
             .on_toggle(on_toggle)
-            .size(12)
+            .size(TS.label)
             .spacing(0),
     )
-    .padding([2, 4])
+    .padding([SP.xs, SP.s])
     .into()
 }
 
@@ -153,7 +157,7 @@ pub(super) fn pad_table_disabled_cell<'a>(
     muted: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    container(text(value.into()).size(10).color(muted))
+    container(text(value.into()).size(TS.caption).color(muted))
         .padding([3, 6])
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -177,7 +181,7 @@ pub(super) fn pad_table_static_cell<'a>(
     value: impl Into<String>,
     muted: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    container(text(value.into()).size(10).color(muted))
+    container(text(value.into()).size(TS.caption).color(muted))
         .padding([3, 6])
         .width(Length::Fill)
         .into()
@@ -191,11 +195,15 @@ pub(super) fn pad_copper_row<'a>(
     values: &PadFormValues,
     current_shape: PadShapeChoice,
     target: PadEditTarget,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     is_authoritative: bool,
 ) -> iced::Element<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     // v0.25 polish — render empty when the value is effectively
     // zero so the user can clear the input by deleting all
     // characters. With format!("{:.3}", 0.0) the field rebuilds to
@@ -242,11 +250,11 @@ pub(super) fn pad_copper_row<'a>(
     } else {
         // Mid / Bottom rows mirror Top — no per-layer overrides yet.
         vec![
-            pad_table_disabled_cell(&format!("{:.3}", values.size_x_mm), muted, border_c),
-            pad_table_disabled_cell(&format!("{:.3}", values.size_y_mm), muted, border_c),
-            pad_table_static_cell(&format!("{current_shape}"), muted),
+            pad_table_disabled_cell(format!("{:.3}", values.size_x_mm), muted, border_c),
+            pad_table_disabled_cell(format!("{:.3}", values.size_y_mm), muted, border_c),
+            pad_table_static_cell(format!("{current_shape}"), muted),
             pad_table_disabled_cell("", muted, border_c),
         ]
     };
-    pad_table_row(label, cells, &[2, 2, 3, 1], muted, primary, border_c)
+    pad_table_row(label, cells, &[2, 2, 3, 1], primary, border_c)
 }

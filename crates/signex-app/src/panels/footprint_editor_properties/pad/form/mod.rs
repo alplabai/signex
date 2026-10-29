@@ -17,16 +17,14 @@ use iced::widget::{Column, container, pick_list, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{
-    CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg,
+    CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
 };
 use super::super::{fp_is_collapsed, props_section_header};
-use super::stack_preview::{
-    ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
-};
-use super::table::{
-    pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
-    pad_table_input_cell, pad_table_picklist_cell, pad_table_row, pad_table_static_cell,
-};
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 #[derive(Debug, Clone, Copy)]
 pub(in crate::panels::footprint_editor_properties) enum PadEditTarget {
@@ -129,7 +127,7 @@ impl PadFormValues {
             // is intentional anchor for v0.22 cleanup.)
             size_y_mm: pad.size_mm[1],
             drill_diameter_mm: pad.drill_diameter_mm,
-            drill_slot_length_mm: None, // selected-pad slot_length follow-up in v0.21
+            drill_slot_length_mm: pad.drill_slot_length_mm,
             stack: pad.stack.clone(),
             feature_top: pad.feature_top,
             feature_bottom: pad.feature_bottom,
@@ -230,12 +228,12 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     container(
         row![
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
             text_input(placeholder, &value)
-                .size(10)
-                .padding(2)
+                .size(TS.caption)
+                .padding(SP.xs)
                 .style(move |_: &Theme, _| iced::widget::text_input::Style {
                     background: iced::Background::Color(iced::Color::from_rgba(
                         1.0, 1.0, 1.0, 0.04,
@@ -255,7 +253,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
         .spacing(6)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([SP.xs, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -274,18 +272,18 @@ where
     container(
         row![
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
             pick_list(options, Some(selected), on_change)
                 .text_size(10)
-                .padding([3, 8])
+                .padding([3.0, SP.m])
                 .width(Length::Fill),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([SP.xs, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -302,18 +300,18 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
     container(
         row![
             text(label)
-                .size(10)
+                .size(TS.caption)
                 .color(if on { primary } else { muted })
                 .width(Length::Fixed(110.0)),
             iced::widget::checkbox(on)
                 .on_toggle(on_toggle)
-                .size(12)
+                .size(TS.label)
                 .spacing(0),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
     )
-    .padding([2, 8])
+    .padding([SP.xs, SP.m])
     .width(Length::Fill)
     .into()
 }
@@ -327,11 +325,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
     values: &PadFormValues,
     target: PadEditTarget,
     placement_paused: bool,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     col = col.push(props_section_header(
         "Properties",
         "fp_pad_properties",
@@ -349,20 +351,20 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
             col = col.push(
                 container(
                     text("PAUSED — TAB to resume placement")
-                        .size(10)
+                        .size(TS.caption)
                         .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill),
             );
         } else {
             col = col.push(
                 container(
                     text("TAB to pause placement and edit defaults")
-                        .size(10)
+                        .size(TS.caption)
                         .color(muted),
                 )
-                .padding([2, 8])
+                .padding([SP.xs, SP.m])
                 .width(Length::Fill),
             );
         }
@@ -451,11 +453,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
     target: PadEditTarget,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
+    palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
 ) -> Column<'a, PanelMsg> {
+    let PanelPalette {
+        muted,
+        primary,
+        border: border_c,
+        ..
+    } = palette;
     col = col.push(props_section_header(
         "Pad Features",
         "fp_pad_features",
@@ -485,7 +491,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
 
     col = col.push(
         container(text("Testpoint").size(9).color(muted))
-            .padding([8, 8])
+            .padding([SP.m, SP.m])
             .width(Length::Fill),
     );
     col = col.push(pad_check_row(
@@ -516,7 +522,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
         muted,
         primary,
     ));
-    let _ = border_c;
     col
 }
 

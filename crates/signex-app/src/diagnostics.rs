@@ -86,6 +86,27 @@ pub fn recent_entries() -> Vec<DiagnosticEntry> {
         .collect()
 }
 
+/// How many logged entries contain `needle`, installing the logger first.
+/// Tests share one ring, so they compare counts before and after with a
+/// needle unique to the test.
+#[cfg(test)]
+pub(crate) fn logged_count(needle: &str) -> usize {
+    let _ = init_logging();
+    recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(needle))
+        .count()
+}
+
+/// Id of the most recent entry in the ring, without cloning it.
+pub fn newest_entry_id() -> Option<u64> {
+    entries()
+        .lock()
+        .expect("diagnostics mutex poisoned")
+        .back()
+        .map(|e| e.id)
+}
+
 pub fn configured_level() -> LevelFilter {
     *CONFIGURED_LEVEL.get_or_init(resolve_configured_level)
 }
@@ -113,12 +134,7 @@ impl Log for SignexLogger {
 
         let rendered = format!("{}", record.args());
         let (code, message) = summarize_record(record.target(), &rendered);
-        push_entry(DiagnosticEntry {
-            id: NEXT_ENTRY_ID.fetch_add(1, Ordering::Relaxed),
-            level: DiagnosticLevel::from(record.level()),
-            code,
-            message,
-        });
+        push_entry(DiagnosticLevel::from(record.level()), code, message);
 
         eprintln!("[{}] {rendered}", record.level());
     }
@@ -134,12 +150,34 @@ fn entries() -> &'static Mutex<VecDeque<DiagnosticEntry>> {
     DIAGNOSTIC_ENTRIES.get_or_init(|| Mutex::new(VecDeque::with_capacity(MAX_DIAGNOSTIC_ENTRIES)))
 }
 
-fn push_entry(entry: DiagnosticEntry) {
-    let mut entries = entries().lock().expect("diagnostics mutex poisoned");
+/// Append an entry to the ring. The id is taken while the ring is locked,
+/// so ring order is id order: a reader that remembers the newest id and
+/// later keeps entries with a larger one sees exactly the entries logged
+/// after that point. Taking the id before the lock let a thread that was
+/// preempted in between push an older id after a newer one.
+fn push_entry(level: DiagnosticLevel, code: String, message: String) {
+    push_to_ring(entries(), &NEXT_ENTRY_ID, level, code, message);
+}
+
+/// [`push_entry`] against a given ring and id counter, so a test can hammer
+/// a private ring instead of the one every other test reads.
+fn push_to_ring(
+    ring: &Mutex<VecDeque<DiagnosticEntry>>,
+    next_id: &AtomicU64,
+    level: DiagnosticLevel,
+    code: String,
+    message: String,
+) {
+    let mut entries = ring.lock().expect("diagnostics mutex poisoned");
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
         entries.pop_front();
     }
-    entries.push_back(entry);
+    entries.push_back(DiagnosticEntry {
+        id: next_id.fetch_add(1, Ordering::Relaxed),
+        level,
+        code,
+        message,
+    });
 }
 
 fn resolve_configured_level() -> LevelFilter {
@@ -233,7 +271,7 @@ fn summarize_graphics_record(rendered: &str) -> Option<(String, String)> {
     None
 }
 
-fn diagnostic_code_from_target(target: &str) -> String {
+pub(crate) fn diagnostic_code_from_target(target: &str) -> String {
     let normalized = target
         .split("::")
         .flat_map(|part| part.split(':'))
@@ -255,7 +293,10 @@ fn compact_message(rendered: &str) -> String {
     if compact.len() <= 160 {
         compact
     } else {
-        format!("{}...", &compact[..157])
+        format!(
+            "{}...",
+            crate::text_trunc::prefix_within_bytes(&compact, 157)
+        )
     }
 }
 
@@ -294,4 +335,90 @@ fn join_preview(items: &[String], max_items: usize) -> String {
         .cloned()
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+#[cfg(test)]
+mod compact_message_tests {
+    use super::compact_message;
+
+    const LIMIT: usize = 160;
+
+    #[test]
+    fn short_message_is_unchanged() {
+        assert_eq!(compact_message("a  b\nc"), "a b c");
+    }
+
+    #[test]
+    fn multibyte_char_straddling_byte_157_does_not_panic() {
+        // 156 ASCII bytes, then 'ç' (2 bytes) at bytes 156..158, so byte 157
+        // is inside the character.
+        let msg = format!("{}ç{}", "a".repeat(156), "b".repeat(20));
+        let out = compact_message(&msg);
+        assert!(out.len() <= LIMIT, "len {}", out.len());
+        assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn emoji_straddling_the_cut_does_not_panic() {
+        // 155 ASCII bytes, then a 4-byte emoji at bytes 155..159.
+        let msg = format!("{}😀{}", "a".repeat(155), "b".repeat(20));
+        let out = compact_message(&msg);
+        assert!(out.len() <= LIMIT, "len {}", out.len());
+        assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn ascii_truncation_keeps_the_same_visible_limit() {
+        let out = compact_message(&"x".repeat(500));
+        assert_eq!(out.len(), LIMIT);
+        assert!(out.ends_with("..."));
+    }
+
+    #[test]
+    fn a_rebound_row_line_keeps_its_outcome_after_compaction() {
+        use crate::library::drift::{VERSION_NOT_STAMPED, rebound_row_warning};
+        let lib_id = format!("{}:{}", uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        let line = rebound_row_warning("U100", uuid::Uuid::now_v7(), &lib_id, VERSION_NOT_STAMPED);
+        assert!(line.len() > LIMIT, "worst case must need compacting");
+        let out = compact_message(&line);
+        assert!(out.contains(VERSION_NOT_STAMPED), "{out}");
+    }
+}
+
+#[cfg(test)]
+mod ring_order_tests {
+    use super::*;
+
+    /// Tests remember `newest_entry_id()` and then count entries with a
+    /// larger id. That only works if the ring is in id order even when many
+    /// threads log at once (#1452). Runs on a private ring so it cannot
+    /// evict entries other tests are waiting to read.
+    #[test]
+    fn ring_order_is_id_order_under_concurrent_logging() {
+        let ring = Mutex::new(VecDeque::with_capacity(MAX_DIAGNOSTIC_ENTRIES));
+        let next_id = AtomicU64::new(1);
+        std::thread::scope(|scope| {
+            for t in 0..8 {
+                let (ring, next_id) = (&ring, &next_id);
+                scope.spawn(move || {
+                    for i in 0..2_000 {
+                        push_to_ring(
+                            ring,
+                            next_id,
+                            DiagnosticLevel::Warning,
+                            "test".to_owned(),
+                            format!("ring-order {t}/{i}"),
+                        );
+                    }
+                });
+            }
+        });
+        let ring = ring.lock().expect("ring");
+        let ids: Vec<u64> = ring.iter().map(|e| e.id).collect();
+        assert_eq!(ids.len(), MAX_DIAGNOSTIC_ENTRIES);
+        assert!(
+            ids.windows(2).all(|pair| pair[0] < pair[1]),
+            "the ring must be in strictly increasing id order"
+        );
+    }
 }

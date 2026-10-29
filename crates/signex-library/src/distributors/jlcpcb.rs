@@ -28,7 +28,7 @@ pub struct JlcpcbAdapter {
     base_url: String,
     cache: Option<DistributorCache>,
     throttle: Mutex<Option<Instant>>,
-    http: reqwest::blocking::Client,
+    http: super::http::LazyClient,
 }
 
 impl JlcpcbAdapter {
@@ -37,10 +37,7 @@ impl JlcpcbAdapter {
             base_url: JLCPCB_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::LazyClient::standard(),
         }
     }
 
@@ -49,24 +46,12 @@ impl JlcpcbAdapter {
             base_url: base_url.into(),
             cache,
             throttle: Mutex::new(None),
-            http: reqwest::blocking::Client::builder()
-                .user_agent("signex-library/0.9 (+https://signex.dev)")
-                .build()
-                .expect("reqwest::blocking::Client::build is infallible with default opts"),
+            http: super::http::LazyClient::standard(),
         }
     }
 
     fn polite_wait(&self) {
-        let mut guard = self.throttle.lock().expect("throttle mutex poisoned");
-        if let Some(prev) = *guard {
-            let elapsed = prev.elapsed();
-            if elapsed < THROTTLE_INTERVAL {
-                drop(guard);
-                std::thread::sleep(THROTTLE_INTERVAL - elapsed);
-                guard = self.throttle.lock().expect("throttle mutex poisoned");
-            }
-        }
-        *guard = Some(Instant::now());
+        super::throttle::polite_wait(&self.throttle, THROTTLE_INTERVAL);
     }
 
     fn http_post_json<B: serde::Serialize, T: for<'de> Deserialize<'de>>(
@@ -77,6 +62,7 @@ impl JlcpcbAdapter {
         self.polite_wait();
         let resp = self
             .http
+            .get()?
             .post(url)
             .json(body)
             .send()
@@ -124,7 +110,7 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn lookup_by_url(&self, url: &Url) -> Result<Option<DistributorPart>, DistributorError> {
         let host = url.host_str().unwrap_or("");
-        if !host.ends_with("jlcpcb.com") {
+        if !super::host_in_domain(host, "jlcpcb.com") {
             return Ok(None);
         }
         // JLCPCB part URLs include the LCSC code as a query param `partno=Cxxxx`
@@ -144,13 +130,17 @@ impl DistributorAdapter for JlcpcbAdapter {
         if token.is_empty() {
             return Ok(None);
         }
-        let mut hits = self.search_by_keyword(&token)?;
-        Ok(hits.pop())
+        let hits = self.search_by_keyword(&token)?;
+        Ok(super::price::pick_url_hit(
+            hits,
+            &token,
+            &["jlcpcb_component_code"],
+        ))
     }
 
     fn lookup_by_mpn(&self, mpn: &str) -> Result<Vec<DistributorPart>, DistributorError> {
         if let Some(cache) = &self.cache
-            && let Ok(Some(hit)) = cache.get(JLCPCB_PROVIDER_KEY, mpn, DEFAULT_TTL)
+            && let Some(hit) = cache.get_or_warn(JLCPCB_PROVIDER_KEY, mpn, DEFAULT_TTL)
         {
             return Ok(vec![hit]);
         }
@@ -170,11 +160,11 @@ impl DistributorAdapter for JlcpcbAdapter {
 
     fn refresh_pricing(
         &self,
-        part: &DistributorPart,
+        _part: &DistributorPart,
     ) -> Result<crate::distributor::PricingSnapshot, DistributorError> {
-        let mut hits = self.search_by_keyword(&part.mpn)?;
-        let fresh = hits.pop().ok_or(DistributorError::NotFound)?;
-        fresh.pricing.ok_or(DistributorError::NotFound)
+        // The search response has no price fields, so there is nothing to
+        // refresh from; say so instead of reporting "not found".
+        Err(super::price::pricing_unavailable(JLCPCB_NAME))
     }
 }
 
@@ -260,6 +250,14 @@ mod tests {
     fn lookup_by_url_rejects_non_jlcpcb_host() {
         let a = JlcpcbAdapter::with_base_url("http://unused.invalid", None);
         let url = Url::parse("https://example.com/parts/C123").unwrap();
+        assert!(a.lookup_by_url(&url).unwrap().is_none());
+    }
+
+    #[test]
+    fn lookup_by_url_rejects_lookalike_host_offline() {
+        // Dot-anchored host check returns before any network call.
+        let a = JlcpcbAdapter::with_base_url("http://unused.invalid", None);
+        let url = Url::parse("https://eviljlcpcb.com/parts?partno=C123").unwrap();
         assert!(a.lookup_by_url(&url).unwrap().is_none());
     }
 }

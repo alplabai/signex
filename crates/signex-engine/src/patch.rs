@@ -12,6 +12,10 @@ pub enum SemanticPatch {
     SelectionMirrored,
     ObjectPlaced,
     SheetPinsReconciled,
+    /// A hierarchical child-sheet reference was re-pointed at a renamed file.
+    SheetFileRenamed,
+    /// A placed sheet symbol's name and / or file reference was edited.
+    ChildSheetIdentityEdited,
     /// MD-11: a `SchDrawing::*` (line/rect/circle/arc/polyline) was
     /// edited. Distinct from `TextUpdated` so consumers branching on
     /// "did the user change a TextProp" don't take the wrong reflow
@@ -40,7 +44,25 @@ impl DocumentPatch {
     pub const DRAWINGS: Self = Self(1 << 9);
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
+    pub const NO_ERC_DIRECTIVES: Self = Self(1 << 12);
+    /// The sheet-wide default font family changed: every text item that
+    /// inherits it redraws.
+    pub const FONT_FAMILY: Self = Self(1 << 13);
     pub const FULL: Self = Self(u16::MAX);
+    /// Every collection a net is derived from: pins (symbols and the library
+    /// parts they instantiate), wires, labels, junctions, no-connects, buses
+    /// and sheet entries. An edit outside this set cannot change connectivity.
+    pub const ELECTRICAL: Self = Self(
+        Self::SYMBOLS.0
+            | Self::WIRES.0
+            | Self::LABELS.0
+            | Self::BUSES.0
+            | Self::BUS_ENTRIES.0
+            | Self::JUNCTIONS.0
+            | Self::NO_CONNECTS.0
+            | Self::CHILD_SHEETS.0
+            | Self::LIB_SYMBOLS.0,
+    );
 
     pub fn contains(self, other: Self) -> bool {
         (self.0 & other.0) == other.0
@@ -60,6 +82,7 @@ impl DocumentPatch {
             SelectedKind::BusEntry => Self::BUS_ENTRIES,
             SelectedKind::Junction => Self::JUNCTIONS,
             SelectedKind::NoConnect => Self::NO_CONNECTS,
+            SelectedKind::NoErcDirective => Self::NO_ERC_DIRECTIVES,
             SelectedKind::Label => Self::LABELS,
             SelectedKind::SheetPin => Self::CHILD_SHEETS,
             SelectedKind::TextNote => Self::TEXT_NOTES,

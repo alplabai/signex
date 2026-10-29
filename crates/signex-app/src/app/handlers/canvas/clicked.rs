@@ -11,14 +11,7 @@ impl Signex {
         // click closes the polygon and commits. Escape /
         // right-click cancels.
         if self.ui_state.lasso_polygon.is_some() {
-            let (vx, vy) = if self.interaction_state.active_canvas_mut().snap_enabled
-                && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
-            {
-                let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
-                ((world_x / g).round() * g, (world_y / g).round() * g)
-            } else {
-                (world_x, world_y)
-            };
+            let (vx, vy) = self.snap_to_grid(world_x, world_y);
             let has_start = self
                 .ui_state
                 .lasso_polygon
@@ -72,10 +65,8 @@ impl Signex {
             // coords can land a full grid cell off the nearest
             // wire — the visible pen snaps, but the hit target
             // was being missed.
-            let (hit_x, hit_y) = if self.interaction_state.active_canvas_mut().snap_enabled
-                && self.interaction_state.active_canvas_mut().snap_grid_mm > 0.0
-            {
-                let g = self.interaction_state.active_canvas_mut().snap_grid_mm;
+            let (hit_x, hit_y) = if self.ui_state.snap_enabled && self.ui_state.grid_size_mm > 0.0 {
+                let g = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
                 ((world_x / g).round() * g, (world_y / g).round() * g)
             } else {
                 (world_x, world_y)
@@ -169,10 +160,7 @@ impl Signex {
                         }
                     }
                 }
-                if diff {
-                    self.ui_state
-                        .net_color_undo
-                        .push(self.ui_state.wire_color_overrides.clone());
+                if diff && self.record_net_color_undo() {
                     for uuid in net_wire_uuids {
                         if pending.a == 0 {
                             self.ui_state.wire_color_overrides.remove(&uuid);
@@ -180,9 +168,6 @@ impl Signex {
                             self.ui_state.wire_color_overrides.insert(uuid, pending);
                         }
                     }
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .wire_color_overrides = self.ui_state.wire_color_overrides.clone();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_content_cache();
@@ -203,7 +188,13 @@ impl Signex {
         // Altium's "click the object to reference" convention.
         if let Some(picker) = self.ui_state.reorder_picker {
             if let Some(snapshot) = self.active_render_snapshot() {
-                let hit = crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
+                let hit = crate::schematic_runtime::hit_test::hit_test_styled(
+                    snapshot,
+                    &self.interaction_state.active_canvas().designators,
+                    world_x,
+                    world_y,
+                    self.ui_state.net_class_styles.styles(),
+                );
                 if let Some(reference) = hit {
                     let direction = match picker {
                         super::super::super::state::ReorderPicker::Above => {
@@ -245,35 +236,19 @@ impl Signex {
         // and returns to normal selection — same convention as most
         // IDEs (Escape cancels, click elsewhere confirms).
         if let Some(state) = self.interaction_state.editing_text.take() {
-            if state.text != state.original_text {
-                let stored = crate::schematic_runtime::text::escape_for_standard(&state.text);
-                let cmd = match state.kind {
-                    signex_types::schematic::SelectedKind::Label => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::Label(state.uuid),
-                            value: stored,
-                        })
-                    }
-                    signex_types::schematic::SelectedKind::TextNote => {
-                        Some(signex_engine::Command::UpdateText {
-                            target: signex_engine::TextTarget::TextNote(state.uuid),
-                            value: stored,
-                        })
-                    }
-                    _ => None,
-                };
-                if let Some(cmd) = cmd {
-                    self.apply_engine_command(cmd, false, true);
-                }
-            }
+            self.commit_text_edit(state);
             return Task::none();
         }
-        let (wx, wy) = if self.ui_state.snap_enabled {
-            let gs = self.ui_state.grid_size_mm as f64;
-            ((world_x / gs).round() * gs, (world_y / gs).round() * gs)
+        let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
+            self.snap_wire_point(world_x, world_y)
         } else {
-            (world_x, world_y)
+            self.snap_to_grid(world_x, world_y)
         };
+
+        // A part on the cursor: the click places it, whatever tool is shown.
+        if self.interaction_state.placement.is_some() {
+            return self.handle_placement_click(wx, wy);
+        }
 
         match self.interaction_state.current_tool {
             Tool::Wire => {
@@ -285,18 +260,18 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().wire_preview =
                         self.interaction_state.wire_points.clone();
                     self.interaction_state.active_canvas_mut().drawing_mode = true;
-                    self.interaction_state.active_canvas_mut().draw_mode =
-                        self.interaction_state.draw_mode;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
                     let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
                     let mut wire_commands = Vec::new();
                     for seg in &segments {
                         let wire = signex_types::schematic::Wire {
-                            uuid: uuid::Uuid::new_v4(),
+                            unknown_columns: Default::default(),
+                            uuid: uuid::Uuid::now_v7(),
                             start: seg.0,
                             end: seg.1,
                             stroke_width: 0.0,
+                            locked: false,
                         };
                         wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
                     }
@@ -317,15 +292,13 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().wire_preview =
                         self.interaction_state.wire_points.clone();
                     self.interaction_state.active_canvas_mut().drawing_mode = true;
-                    self.interaction_state.active_canvas_mut().draw_mode =
-                        self.interaction_state.draw_mode;
                     self.interaction_state.active_canvas_mut().tool_preview = None;
                 } else if let Some(&start) = self.interaction_state.wire_points.last() {
                     let segments = constrain_segments(start, pt, self.interaction_state.draw_mode);
                     let mut bus_commands = Vec::new();
                     for seg in &segments {
                         let bus = signex_types::schematic::Bus {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start: seg.0,
                             end: seg.1,
                         };
@@ -342,7 +315,9 @@ impl Signex {
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((ref net_name, ref lib_id)) = self.interaction_state.pending_power {
                     let sym = signex_types::schematic::Symbol {
-                        uuid: uuid::Uuid::new_v4(),
+                        unknown_columns: Default::default(),
+                        unknown: Default::default(),
+                        uuid: uuid::Uuid::now_v7(),
                         lib_id: lib_id.clone(),
                         reference: "#PWR?".to_string(),
                         value: net_name.clone(),
@@ -353,6 +328,7 @@ impl Signex {
                         mirror_x: false,
                         mirror_y: false,
                         unit: 1,
+                        body_style: Default::default(),
                         is_power: true,
                         ref_text: None,
                         val_text: Some(signex_types::schematic::TextProp {
@@ -362,6 +338,7 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Center,
                             justify_v: signex_types::schematic::VAlign::default(),
                             hidden: false,
+                            font_family: None,
                         }),
                         fields_autoplaced: true,
                         fields_user_placed: false,
@@ -378,19 +355,12 @@ impl Signex {
                         row_id: None,
                         library_version: String::new(),
                     };
-                    self.apply_engine_command(
-                        signex_engine::Command::PlaceSymbol { symbol: sym },
-                        false,
-                        false,
-                    );
+                    self.apply_engine_commands(signex_engine::place_power_port(sym), false, false);
                 }
-            }
-            Tool::Component => {
-                let _ = self.place_selected_component(wx, wy);
             }
             Tool::NoConnect => {
                 let nc = signex_types::schematic::NoConnect {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(wx, wy),
                 };
                 self.apply_engine_command(
@@ -399,11 +369,64 @@ impl Signex {
                     false,
                 );
             }
-            Tool::BusEntry => {
-                let be = signex_types::schematic::BusEntry {
-                    uuid: uuid::Uuid::new_v4(),
+            // Placed where clicked, like the other one-click placements. The
+            // net builder accepts a dot anywhere; one off a wire joins nothing.
+            Tool::Junction => {
+                // A second dot on the same point (the net builder's 1 um key)
+                // joins nothing new and would only stack in the file.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let already_there = self.document_state.active_engine().is_some_and(|engine| {
+                    engine
+                        .document()
+                        .junctions
+                        .iter()
+                        .any(|j| signex_net::pt_key(&j.position) == signex_net::pt_key(&at))
+                });
+                if !already_there {
+                    let junction = signex_types::schematic::Junction {
+                        uuid: uuid::Uuid::now_v7(),
+                        position: signex_types::schematic::Point::new(wx, wy),
+                        diameter: 0.0,
+                        minted: false,
+                        unknown_columns: Default::default(),
+                    };
+                    self.apply_engine_command(
+                        signex_engine::Command::PlaceJunction { junction },
+                        false,
+                        false,
+                    );
+                }
+            }
+            Tool::NoErcDirective => {
+                let directive = signex_types::schematic::NoConnect {
+                    uuid: uuid::Uuid::now_v7(),
                     position: signex_types::schematic::Point::new(wx, wy),
-                    size: (2.54, 2.54),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceNoErcDirective { directive },
+                    false,
+                    false,
+                );
+            }
+            Tool::BusEntry => {
+                // The bus end snaps onto the nearest bus within one grid step
+                // of the click; off a bus the entry lands on the grid point.
+                let at = signex_types::schematic::Point::new(wx, wy);
+                let position = self
+                    .document_state
+                    .active_engine()
+                    .and_then(|engine| {
+                        signex_types::schematic::snap_to_bus(
+                            &engine.document().buses,
+                            at,
+                            crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
+                        )
+                    })
+                    .unwrap_or(at);
+                let be = signex_types::schematic::BusEntry {
+                    uuid: uuid::Uuid::now_v7(),
+                    position,
+                    size: self.interaction_state.bus_entry_size,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceBusEntry { bus_entry: be },
@@ -429,11 +452,12 @@ impl Signex {
                     }
                     Some(start) => {
                         let drawing = signex_types::schematic::SchDrawing::Line {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start,
                             end: p,
                             width: pp_w,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -452,6 +476,10 @@ impl Signex {
                     }
                 }
             }
+            Tool::Sheet => self.place_sheet_click(wx, wy),
+            Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
+            Tool::Measure => self.measure_click(wx, wy),
+            Tool::BreakWire => self.break_wire_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the
@@ -469,12 +497,13 @@ impl Signex {
                     }
                     Some(start) => {
                         let drawing = signex_types::schematic::SchDrawing::Rect {
-                            uuid: uuid::Uuid::new_v4(),
+                            uuid: uuid::Uuid::now_v7(),
                             start,
                             end: p,
                             width: pp_w,
                             fill: pp_fill,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -509,12 +538,13 @@ impl Signex {
                         let radius = (dx * dx + dy * dy).sqrt();
                         if radius > 0.01 {
                             let drawing = signex_types::schematic::SchDrawing::Circle {
-                                uuid: uuid::Uuid::new_v4(),
+                                uuid: uuid::Uuid::now_v7(),
                                 center,
                                 radius,
                                 width: pp_w,
                                 fill: pp_fill,
                                 stroke_color: None,
+                                locked: false,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -538,13 +568,14 @@ impl Signex {
                 if self.interaction_state.arc_points.len() >= 3 {
                     let pts = std::mem::take(&mut self.interaction_state.arc_points);
                     let drawing = signex_types::schematic::SchDrawing::Arc {
-                        uuid: uuid::Uuid::new_v4(),
+                        uuid: uuid::Uuid::now_v7(),
                         start: pts[0],
                         mid: pts[1],
                         end: pts[2],
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -577,19 +608,23 @@ impl Signex {
                     .map(|pp| pp.label_text.clone())
                     .unwrap_or_else(|| "Text".to_string());
                 let tn = signex_types::schematic::TextNote {
-                    uuid: uuid::Uuid::new_v4(),
-                    text: note_text,
+                    uuid: uuid::Uuid::now_v7(),
+                    text: note_text.clone(),
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: 0.0,
                     font_size: signex_types::schematic::SCHEMATIC_TEXT_MM,
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
+                    font_family: None,
+                    locked: false,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
                     false,
                     false,
-                );
+                ) {
+                    self.text_note_placed(&note_text);
+                }
                 self.interaction_state.current_tool = Tool::Select;
             }
             Tool::Label => {
@@ -640,8 +675,10 @@ impl Signex {
                         signex_types::schematic::HAlign::Left,
                         signex_types::schematic::VAlign::Bottom,
                     ));
+                let placed_text = text.clone();
                 let label = signex_types::schematic::Label {
-                    uuid: uuid::Uuid::new_v4(),
+                    unknown_columns: Default::default(),
+                    uuid: uuid::Uuid::now_v7(),
                     text,
                     position: signex_types::schematic::Point::new(wx, wy),
                     rotation: pp_rot,
@@ -650,12 +687,16 @@ impl Signex {
                     font_size: pp_fs_mm,
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
+                    font_family: None,
+                    locked: false,
                 };
-                self.apply_engine_command(
+                if self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },
                     false,
                     false,
-                );
+                ) {
+                    self.label_placed(&placed_text);
+                }
             }
             _ => {
                 return self.handle_selection_request(selection_request::SelectionRequest::HitAt {

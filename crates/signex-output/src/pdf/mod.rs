@@ -4,20 +4,14 @@
 //! render target for the schematic — wires, symbols, labels, title block.
 //! Screen (Iced Canvas) and PDF share one source of truth for page layout.
 //!
-//! ## Font Strategy (v0.8)
+//! ## Fonts
 //!
-//! Roboto + Iosevka TTFs are embedded at compile time (see `font.rs`) but
-//! NOT yet emitted as Type0 composite fonts in the PDF — that's a v0.9 job.
-//! For v0.8 every text operator references one of four aliases `/F1`–`/F4`
-//! pointing at the PDF standard-14 Type1 fonts (Helvetica variants for
-//! Roboto, Courier variants for Iosevka). Those standard fonts ship with
-//! every PDF reader by spec, so exported PDFs always render text correctly
-//! even though the glyphs come from Helvetica/Courier rather than the
-//! bundled TTFs.
-//!
-//! TODO(v0.9): Emit Type0 CIDFontType2 dicts with `/FontFile2` streams
-//! pointing at the embedded TTF bytes so the exported PDFs render in the
-//! intended Roboto/Iosevka typeface.
+//! Roboto + Iosevka TTFs (see `font.rs`) are embedded as Type0 composite fonts
+//! (`embed.rs`): `Identity-H` encoding, a `CIDFontType2` descendant with a
+//! `/W` array, and a `/FontFile2` stream subset (`subset.rs`) to the glyphs
+//! the document actually shows, plus a `/ToUnicode` CMap so the text stays
+//! selectable and searchable. Content streams address fonts through the
+//! aliases `/F1`-`/F4` and show text as 2-byte glyph ids.
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
 use signex_types::markup::{
@@ -31,19 +25,30 @@ use crate::{ExportContext, Exporter, SubstitutionContext};
 
 mod bookmarks;
 mod colour;
+mod embed;
 mod font;
+pub(crate) mod frame;
 pub(crate) mod layout;
 mod page;
+mod page_setup;
 pub mod palette;
+mod subset;
 mod surface;
+pub(crate) mod text_document;
 
+pub use page_setup::{
+    MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM, MarginEdge,
+    MarginUpdate, PageSetupError, PageSizeKind, PdfScaleMode, parse_custom_edge_mm, parse_mm,
+    parse_percent,
+};
 pub use palette::SchematicPalette;
 
 use crate::svg::{
     SvgElement, SvgEvaluatorInputs, SvgPathCommand, SvgRenderContext, SvgTextAlign, SvgTextVAlign,
 };
 use colour::ColourMap;
-use font::{PdfFont, best_alias_for_text, sanitize_pdf_text, text_advance_pt};
+use embed::{FontUsage, REFS_PER_FONT, write_fonts};
+use font::{PdfFont, best_alias_for_text, normalize_pdf_text, text_advance_pt};
 use surface::PdfSurface;
 
 /// 1 mm in PDF points (1 pt = 1/72 inch).
@@ -101,7 +106,9 @@ pub struct PdfOptions {
     /// include" checklist verbatim.
     ///
     /// Live toggles (renderer honours the value):
-    ///   `include_no_erc_markers`, `include_notes`.
+    ///   `include_no_erc_markers` (No-ERC directives),
+    ///   `include_no_connect_markers` (no-connect X marks),
+    ///   `include_notes`.
     ///
     /// Dormant toggles — Standard's schema has no equivalent concept,
     /// so these are stored for Altium-import parity but produce no
@@ -113,6 +120,9 @@ pub struct PdfOptions {
     /// project keeps the user's intent — when the corresponding
     /// signex-types feature lands the gating is one-line.
     pub include_no_erc_markers: bool,
+    /// Draws the no-connect X marks. Separate from the No-ERC
+    /// directive toggle above: they are different schematic objects.
+    pub include_no_connect_markers: bool,
     pub include_parameter_sets: bool,
     pub include_probes: bool,
     pub include_blankets: bool,
@@ -140,12 +150,20 @@ pub struct PdfOptions {
     /// blue wires) so existing direct-export callers keep their
     /// historical look.
     pub palette: SchematicPalette,
+    /// Net-class style per wire and junction uuid, resolved by the caller from
+    /// the project's class table and the sheets' netlists. Empty (the default)
+    /// draws every wire in the palette colour at its own width, solid.
+    pub net_class_styles:
+        std::collections::HashMap<uuid::Uuid, signex_types::net_class::NetClassStyle>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PdfOutput {
     pub bytes: Vec<u8>,
     pub page_count: usize,
+    /// Characters none of the bundled fonts cover. They are drawn as the
+    /// font's `.notdef` box; the caller should warn the user. Sorted, unique.
+    pub uncovered_chars: Vec<char>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -228,6 +246,7 @@ impl Default for PdfOptions {
             physical_sheet_number: true,
             physical_document_number: true,
             include_no_erc_markers: true,
+            include_no_connect_markers: true,
             include_parameter_sets: true,
             include_probes: true,
             include_blankets: true,
@@ -241,6 +260,7 @@ impl Default for PdfOptions {
             include_component_parameters: true,
             global_bookmarks: false,
             palette: SchematicPalette::classic(),
+            net_class_styles: std::collections::HashMap::new(),
         }
     }
 }
@@ -252,6 +272,11 @@ pub enum PdfError {
 
     #[error("page range references sheet {0} but project only has {1} sheets")]
     OutOfRange(usize, usize),
+
+    /// A sheet number inside the project's count that no exported page
+    /// prints (a gap, or a page left out of the export).
+    #[error("page range references sheet {0}, which no exported page prints")]
+    NotPrinted(usize),
 
     #[error("font subsetting failed: {0}")]
     Font(String),
@@ -277,7 +302,8 @@ impl Exporter for PdfExporter {
             return Err(PdfError::NoSheets);
         }
 
-        let sheet_indices = resolve_page_range(&opts.page_range, ctx.sheets.len())?;
+        let sheet_indices =
+            resolve_page_range(&opts.page_range, &ctx.sheets, ctx.current_sheet_index())?;
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;
@@ -308,14 +334,10 @@ impl Exporter for PdfExporter {
             .map(|i| Ref::new(3 + sheet_indices.len() as i32 + i as i32))
             .collect();
 
-        // Reserve one font ref per PdfFont variant after the content stream
-        // refs. Allocated up front so page resources can point at them.
+        // Reserve REFS_PER_FONT refs per PdfFont variant after the content
+        // stream refs. Only the fonts the document uses are written.
         let font_base: i32 = 3 + 2 * sheet_indices.len() as i32;
-        let font_refs: Vec<(font::PdfFont, Ref)> = font::PdfFont::ALL
-            .iter()
-            .enumerate()
-            .map(|(i, &f)| (f, Ref::new(font_base + i as i32)))
-            .collect();
+        let font_ref_count = font::PdfFont::ALL.len() as i32 * REFS_PER_FONT;
 
         // Build bookmark items up front so the catalog can decide
         // whether to write `/Outlines` and how many `Ref` slots to
@@ -323,7 +345,7 @@ impl Exporter for PdfExporter {
         let pending_bookmarks =
             bookmarks::build_bookmarks(ctx, opts, &sheet_indices, page_w_mm, page_h_mm, page_h_pt);
         let bookmarks_active = !pending_bookmarks.is_empty();
-        let outline_root_id = Ref::new(font_base + font_refs.len() as i32);
+        let outline_root_id = Ref::new(font_base + font_ref_count);
         let bookmark_id_base = outline_root_id.get() + 1;
 
         let mut catalog = pdf.catalog(catalog_id);
@@ -337,25 +359,27 @@ impl Exporter for PdfExporter {
             .kids(page_refs.iter().copied())
             .count(page_refs.len() as i32);
 
-        // Emit a minimal Type1 font dict for each bundled font, using the
-        // PDF standard-14 name as the BaseFont. Every reader ships these,
-        // so text always renders even though we're not (yet) embedding the
-        // TTF bytes as a Type0 composite font.
-        for (font, font_ref) in &font_refs {
-            pdf.type1_font(*font_ref)
-                .base_font(Name(font.standard_ps_name().as_bytes()));
-        }
+        // Build every page's content first: encoding text is what discovers
+        // the glyphs each embedded font must carry.
+        let mut fonts = FontUsage::new();
+        let contents = sheet_indices
+            .iter()
+            .map(|&sheet_idx| {
+                build_page_content(
+                    &ctx.sheets[sheet_idx],
+                    opts,
+                    ctx,
+                    page_h_pt,
+                    &expr_tables,
+                    &mut fonts,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let embedded = write_fonts(&mut pdf, &fonts, font_base)?;
 
-        // Build each page with content.
-        for (idx, &sheet_idx) in sheet_indices.iter().enumerate() {
-            let sheet = &ctx.sheets[sheet_idx];
+        for (idx, content_bytes) in contents.iter().enumerate() {
             let content_ref = content_refs[idx];
-
-            // Emit content stream for this page.
-            let content_bytes =
-                build_page_content(sheet, opts, ctx, page_w_pt, page_h_pt, &expr_tables)?;
-
-            pdf.stream(content_ref, &content_bytes);
+            pdf.stream(content_ref, content_bytes);
 
             // Create the page object referencing the content stream.
             let mut page = pdf.page(page_refs[idx]);
@@ -364,13 +388,13 @@ impl Exporter for PdfExporter {
                 .contents(content_ref);
 
             // /Font resources dict — maps the F1-F4 aliases used in the
-            // content streams to the font objects emitted above.
+            // content streams to the embedded Type0 font objects.
             let mut resources = page.resources();
-            let mut fonts = resources.fonts();
-            for (font, font_ref) in &font_refs {
-                fonts.pair(Name(font.alias().as_bytes()), *font_ref);
+            let mut font_dict = resources.fonts();
+            for f in &embedded {
+                font_dict.pair(Name(f.font.alias().as_bytes()), f.type0);
             }
-            fonts.finish();
+            font_dict.finish();
             resources.finish();
 
             page.finish();
@@ -394,12 +418,20 @@ impl Exporter for PdfExporter {
         Ok(PdfOutput {
             bytes,
             page_count: page_refs.len(),
+            uncovered_chars: fonts.uncovered_chars(),
         })
     }
 }
 
 mod content;
+pub(crate) mod page_range;
 #[cfg(test)]
-mod tests;
+mod page_range_tests;
+#[cfg(test)]
+pub(crate) mod tests;
+#[cfg(test)]
+mod unicode_tests;
 
-use content::{build_page_content, resolve_page_range};
+use content::build_page_content;
+pub use page_range::check_page_range;
+use page_range::resolve_page_range;

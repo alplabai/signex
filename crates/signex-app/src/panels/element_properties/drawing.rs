@@ -5,6 +5,11 @@
 
 use super::super::*;
 use super::drawing_preview::DrawingPreview;
+use crate::styles::{Spacing, TypeScale};
+
+/// Default type / spacing scales; equal to the old literals at the default size.
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 pub(in crate::panels) fn view_drawing_properties<'a>(
     ctx: &'a PanelContext,
@@ -24,15 +29,15 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         let parts: Vec<&str> = s.split(',').collect();
         let x = parts
             .first()
-            .and_then(|p| p.trim().parse::<f64>().ok())
+            .and_then(|p| crate::numeric_field::parse_field_f64(p))
             .unwrap_or(0.0);
         let y = parts
             .get(1)
-            .and_then(|p| p.trim().parse::<f64>().ok())
+            .and_then(|p| crate::numeric_field::parse_field_f64(p))
             .unwrap_or(0.0);
         (x, y)
     };
-    let parse_f64 = |s: &str| -> f64 { s.trim().parse::<f64>().ok().unwrap_or(0.0) };
+    let parse_f64 = |s: &str| -> f64 { crate::numeric_field::parse_field_f64(s).unwrap_or(0.0) };
     let parse_fill = |s: &str| -> FillType {
         match s {
             "Outline" => FillType::Outline,
@@ -62,19 +67,23 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             row![
                 iced::widget::svg(icon).width(16).height(16),
                 text(elem_type.clone())
-                    .size(11)
+                    .size(TS.body)
                     .color(Color::from_rgb(0.90, 0.90, 0.92)),
             ]
-            .spacing(8)
+            .spacing(SP.m)
             .align_y(iced::Alignment::Center)
             .into()
         } else {
             text(elem_type.clone())
-                .size(11)
+                .size(TS.body)
                 .color(Color::from_rgb(0.90, 0.90, 0.92))
                 .into()
         };
-    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
+    col = col.push(
+        container(header_row)
+            .padding([6.0, SP.m])
+            .width(Length::Fill),
+    );
     col = col.push(thin_sep(border_c));
 
     // Live preview canvas — shows the selected shape at panel scale
@@ -94,7 +103,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             .into();
         col = col.push(
             container(canvas_w)
-                .padding([8, 12])
+                .padding([SP.m, SP.l])
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
                     background: Some(Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 0.6))),
@@ -377,6 +386,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
         });
         col = col.push(drawing_stroke_color_row(current_color, muted));
+        col = col.push(drawing_placement_row(ctx.selected_drawing_placement, muted));
     }
     col.into()
 }
@@ -399,11 +409,11 @@ fn drawing_num_row<'a>(
         .unwrap_or_else(|| format!("{stored_value:.3}"));
     row![
         text(label)
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
         text_input("", &display)
-            .size(11)
+            .size(TS.body)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
             .width(Length::FillPortion(3)),
     ]
@@ -459,7 +469,7 @@ fn drawing_stroke_color_row<'a>(
     let theme_active = current.is_none();
     row![
         text("Color")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
@@ -500,7 +510,58 @@ fn drawing_stroke_color_row<'a>(
                 Color::from_rgb(0.88, 0.88, 0.88),
             ),
         ]
-        .spacing(4)
+        .spacing(SP.s)
+        .width(Length::FillPortion(3)),
+    ]
+    .padding([4, PROPERTY_ROW_PAD_X])
+    .spacing(6)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// Behind / Above the circuit. Drawings default to behind, so a highlight or
+/// callout laid over symbols and wires is the one that needs choosing (#1583).
+fn drawing_placement_row<'a>(
+    current: signex_types::schematic::DrawingPlacement,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    use crate::app::contracts::DrawingFieldEdit as E;
+    use signex_types::schematic::DrawingPlacement;
+    let tile = |label: &'static str, placement: DrawingPlacement| -> Element<'a, PanelMsg> {
+        let active = current == placement;
+        iced::widget::button(text(label).size(TS.caption))
+            .padding([3.0, SP.m])
+            .on_press(PanelMsg::UpdateDrawingEdit(E::Placement(placement)))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(Background::Color(if active {
+                    Color::from_rgb(0.20, 0.36, 0.58)
+                } else {
+                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
+                })),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: Color::from_rgb(0.28, 0.28, 0.32),
+                },
+                text_color: if active {
+                    Color::from_rgb(1.0, 1.0, 1.0)
+                } else {
+                    muted
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    row![
+        text("Placement")
+            .size(TS.caption)
+            .color(muted)
+            .width(Length::FillPortion(2)),
+        row![
+            tile("Behind circuit", DrawingPlacement::Behind),
+            tile("Above circuit", DrawingPlacement::Above),
+        ]
+        .spacing(SP.s)
         .width(Length::FillPortion(3)),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])
@@ -517,8 +578,8 @@ fn drawing_fill_row<'a>(
     use crate::app::contracts::DrawingFieldEdit as E;
     use signex_types::schematic::FillType;
     let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        iced::widget::button(text(label).size(10))
-            .padding([3, 8])
+        iced::widget::button(text(label).size(TS.caption))
+            .padding([3.0, SP.m])
             .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: Some(Background::Color(if active {
@@ -542,7 +603,7 @@ fn drawing_fill_row<'a>(
     };
     row![
         text("Fill")
-            .size(10)
+            .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
         row![
@@ -554,7 +615,7 @@ fn drawing_fill_row<'a>(
                 current == FillType::Background,
             ),
         ]
-        .spacing(4)
+        .spacing(SP.s)
         .width(Length::FillPortion(3)),
     ]
     .padding([4, PROPERTY_ROW_PAD_X])

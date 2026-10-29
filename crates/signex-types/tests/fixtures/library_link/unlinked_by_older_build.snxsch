@@ -1,0 +1,30 @@
+format = "snxsch/1"
+schematic_id = "00000000-0000-0000-0000-000000000064"
+version = 0
+generator = ""
+generator_version = ""
+paper_size = ""
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library  pos_x  pos_y  rotation  value  mpn
+00000000-0000-0000-0000-000000000002  C2   ""       0      0      0         ""     ""
+00000000-0000-0000-0000-000000000003  C3   ""       0      0      0         ""     ""
+"""
+
+[sheets.wires]
+content = """
+uuid  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid  text  pos_x  pos_y  rotation  kind  shape  font_size  justify  justify_v
+"""
