@@ -28,10 +28,32 @@ pub(super) fn bake_solution(
     resolved: &HashMap<String, f64>,
     out: FullSolveOutput,
 ) -> Result<(), SketchError> {
+    bake_solution_with(state, footprint, resolved, out, BakedFields::bake)
+}
+
+/// [`bake_solution`] with the field bake passed in, so a test can make it
+/// fail.
+pub(super) fn bake_solution_with(
+    state: &mut FootprintEditorState,
+    footprint: &mut Footprint,
+    resolved: &HashMap<String, f64>,
+    out: FullSolveOutput,
+    bake_fields: impl FnOnce(
+        &signex_sketch::SketchData,
+        &FullSolveOutput,
+        &HashMap<String, f64>,
+        &mut Vec<String>,
+    ) -> Result<BakedFields, SketchError>,
+) -> Result<(), SketchError> {
     let Some(sketch) = footprint.sketch.as_ref() else {
         return Ok(());
     };
     state.conflict.clear();
+    for warning in &out.warnings {
+        if !state.solve_warnings.contains(warning) {
+            state.solve_warnings.push(warning.clone());
+        }
+    }
     // Phase 7.3 — bake pads + arrays into the footprint, but
     // skip the overwrite on an empty sketch: a fresh
     // SetMode(Sketch) toggle on a footprint with literal pads
@@ -59,15 +81,21 @@ pub(super) fn bake_solution(
         )?;
         let pads_baked = !baked.is_empty();
         footprint.pads = baked;
-
-        // Every other baked field: see `sketch_bake_fields`.
-        let fields = BakedFields::bake(sketch, &out, resolved, &mut state.solve_warnings)?;
-        fields.apply(footprint, &mut state.solve_warnings);
+        // Recorded before the fallible field bake: the pads above are the
+        // sketch's from here on, and a failed bake must not leave them
+        // unowned (a later delete-all would keep them).
         let Some(sketch) = footprint.sketch.as_mut() else {
             return Ok(());
         };
         sketch.record_baked(BakedKind::Pads, pads_baked);
         let sketch = &*sketch;
+
+        // Every other baked field: see `sketch_bake_fields`.
+        let fields = bake_fields(sketch, &out, resolved, &mut state.solve_warnings)?;
+        fields.apply(footprint, &mut state.solve_warnings);
+        let Some(sketch) = footprint.sketch.as_ref() else {
+            return Ok(());
+        };
 
         // v0.14.1 — 3D extrude profile from a BodyTop plane
         // enriches the existing body_3d.outline + offset_z_mm.
