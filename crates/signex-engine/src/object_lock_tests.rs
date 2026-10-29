@@ -458,3 +458,52 @@ fn a_rubber_band_leg_is_not_born_locked() {
         }
     }
 }
+
+/// R1 at (50, 50): pin 1 (45, 50). W1 runs from (30, 50) to the pin; W2 hangs
+/// from W1's far end, (30, 50)-(30, 70), and is locked.
+fn elbow_with_a_locked_leg() -> (Engine, Uuid, Uuid) {
+    use crate::rubber_band_tests::{add_resistor, add_wire};
+    let mut sheet = SchematicSheet::default();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    let w2 = add_wire(&mut sheet, (30.0, 50.0), (30.0, 70.0));
+    sheet.wires[1].locked = true;
+    (Engine::new(sheet).expect("engine"), r1, w2)
+}
+
+#[test]
+fn a_keep_wires_move_does_not_slide_a_locked_elbow_leg() {
+    let (mut engine, r1, w2) = elbow_with_a_locked_leg();
+    let leg_before = engine.document().wires[1].clone();
+    let result = engine.execute(Command::MoveSelection {
+        items: vec![item(r1.as_u128(), SelectedKind::Symbol)],
+        dx: 0.0,
+        dy: 5.0,
+        keep_wires: true,
+    });
+    assert!(result.is_ok_and(|r| r.changed));
+    let leg = engine
+        .document()
+        .wires
+        .iter()
+        .find(|w| w.uuid == w2)
+        .unwrap();
+    assert_eq!(*leg, leg_before, "the locked leg did not move");
+    let pin = engine.document().symbols[0].position;
+    assert_eq!(pin, Point::new(50.0, 55.0), "the symbol did move");
+}
+
+#[test]
+fn the_skip_and_refuse_paths_agree_on_a_locked_elbow_leg() {
+    let (engine, r1, _) = elbow_with_a_locked_leg();
+    let command = Command::MoveSelection {
+        items: vec![item(r1.as_u128(), SelectedKind::Symbol)],
+        dx: 0.0,
+        dy: 5.0,
+        keep_wires: true,
+    };
+    // Neither path objects: the leg is simply not slid.
+    let (pruned, skipped) = engine.without_locked(command);
+    assert!(pruned.is_some(), "the move is kept whole");
+    assert!(skipped.is_empty());
+}

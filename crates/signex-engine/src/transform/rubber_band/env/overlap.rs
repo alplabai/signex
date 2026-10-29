@@ -21,7 +21,12 @@ impl Env {
                     continue;
                 }
                 for (j, other) in self.live() {
-                    if j != i && overlap_span(&self.wires[i], other).is_some() {
+                    // A locked wire is never re-cut: an overlap with one stays.
+                    if j != i
+                        && !other.locked
+                        && !self.wires[i].locked
+                        && overlap_span(&self.wires[i], other).is_some()
+                    {
                         found = Some((i, j));
                         break 'search;
                     }
@@ -97,4 +102,60 @@ fn overlap_pieces(a: &Wire, b: &Wire) -> Vec<(Point, Point)> {
 #[cfg(test)]
 pub(crate) fn wires_overlap(a: &Wire, b: &Wire) -> bool {
     overlap_span(a, b).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transform::rubber_band::Policy;
+    use signex_types::schematic::SchematicSheet;
+    use std::collections::HashSet;
+
+    fn horizontal(a: f64, b: f64, locked: bool) -> Wire {
+        Wire {
+            uuid: Uuid::new_v4(),
+            start: Point::new(a, 0.0),
+            end: Point::new(b, 0.0),
+            locked,
+            ..Default::default()
+        }
+    }
+
+    /// An edited wire (5..15) over the stretch 0..10 of another wire.
+    fn env_over(other_locked: bool) -> Env {
+        let sheet = SchematicSheet {
+            wires: vec![
+                horizontal(5.0, 15.0, false),
+                horizontal(0.0, 10.0, other_locked),
+            ],
+            ..Default::default()
+        };
+        let mut env = Env::new(
+            &sheet,
+            HashSet::new(),
+            HashSet::new(),
+            HashSet::new(),
+            Policy::default(),
+        );
+        env.edited.insert(0);
+        env
+    }
+
+    #[test]
+    fn an_overlap_is_merged_into_the_unlocked_survivor() {
+        let mut env = env_over(false);
+        env.merge_overlaps(&mut Follow::default());
+        assert!(!env.removed.is_empty(), "the control merges");
+    }
+
+    #[test]
+    fn a_locked_wire_is_never_re_cut_by_an_overlap() {
+        let mut env = env_over(true);
+        let before = env.wires.clone();
+        let mut out = Follow::default();
+        env.merge_overlaps(&mut out);
+        assert_eq!(env.wires, before, "no wire changed and none was minted");
+        assert!(env.removed.is_empty());
+        assert!(out.touched.is_empty());
+    }
 }

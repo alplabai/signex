@@ -165,7 +165,9 @@ impl Env {
         };
         let free = !self.placed.contains(&(leg, true))
             && !self.placed.contains(&(leg, false))
-            && !self.selected.contains(&wire.uuid);
+            && !self.selected.contains(&wire.uuid)
+            // A locked leg is not slid; the elbow bends on a new leg instead.
+            && !wire.locked;
         free.then_some((leg, far))
     }
 
