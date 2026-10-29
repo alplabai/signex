@@ -22,7 +22,7 @@ tab with one section, General.
 
 The `.snxprj` has been edited in place all along: `LoadedProject::data` is the
 in-memory document, its dirty bit is `dirty_paths.contains(project.path)`, and
-Save writes the whole `data` (`persist_project_by_id`, synchronous until now).
+Save writes the whole `data` (`begin_project_save`, off the UI thread).
 Net classes (#1042) already edit `data.net_classes` through a
 `signex_engine::NetClassHistory` keyed by `ProjectId`.
 
@@ -90,31 +90,32 @@ an undocked window act on the main window's active tab, so Ctrl+Z / Ctrl+S
 there would reach another document. Open In New Window is greyed for it and
 `handle_undock_tab` refuses it.
 
-**Save.**
-- Ctrl+S in a Project tab: `begin_project_save(id)`. On the UI thread it
-  materialises pending libraries (unchanged behaviour) and encodes the bytes (`signex_types::project::encode_project`, split out of
-  `write_project`); `DocumentSaves::begin` hands out the ledger-ordered job, which
-  runs under `spawn_blocking`. The completion `ProjectMsg::FileSaved` frees the
-  slot (`finish`), and clears the dirty marker only if the project with that id
-  is still loaded at that path, has no pending library, its current data
-  encodes to exactly the bytes written, and this job is the newest begun for
-  the file (`DocumentSaves::is_newest_begun`, by ledger sequence). A failure, or a lost task (`JoinError`),
-  reaches the Messages panel and is recorded for Save All (D5).
-- The other `.snxprj` saves (Ctrl+S in a schematic / primitive tab when the
-  project is dirty, Save All on close / quit) stay synchronous, as before, but now
-  write through the same ledger (`begin(..).run()`), so a later synchronous write
-  always wins over an earlier off-thread one, whatever order they finish in.
+**Save.** Every `.snxprj` save (Ctrl+S in the Project tab, Ctrl+S in a
+document tab, Save All on close / quit) is `begin_project_save(id)`: `update`
+plans the write, one worker job creates the pending libraries and writes the
+file that lists them, and `ProjectMsg::FileSaved` applies the result. There is
+one writer per file: a save asked for while one runs queues a single follow-up
+(`DocumentSaves::queue_follow_up`) that starts when the first completion is
+handled. The mechanics, ordering and the stale-completion rules are in
+`docs/architecture/path-ops.md`, "Project file save".
+- The completion frees the slot (`finish`) and clears the dirty marker only if
+  the project with that id is still loaded at that path, has no pending
+  library, its current data encodes to exactly the bytes written, and this job
+  is the newest begun for the file (`DocumentSaves::is_newest_begun`). A
+  failure, or a lost task (`JoinError`), reaches the Messages panel and is
+  recorded for Save All (D5).
 - Save All needs no new branch: the project's dirty marker is in `dirty_paths`.
+  One that finds a project write already running does not wait for it: the
+  settle step sees the project unsaved and keeps the window open with the
+  "still running" reason.
 
 Why bytes and not a revision counter: `ProjectData` has no mutation gateway yet;
 every writer listed in §3 mutates it directly. A revision counter would miss every
 writer that does not bump it. Equality of the persisted form catches every
 edit made since the snapshot, and "memory encodes to what is on disk" is the
-definition of clean. Equality alone is not enough with two writes in flight:
-an edit reverted to an older snapshot's bytes matches that snapshot while a
-newer write, holding the edit, still lands on disk. So only the newest write
-begun for the file may clear the marker; an older completion never does, and
-a failed newest write leaves it dirty.
+definition of clean. Only the newest write begun for the file may clear the marker, and a
+failed write leaves it dirty. With one writer per file the older-write cases
+are defensive.
 
 ## 3. The `.snxprj` concurrent-writer rule
 
@@ -157,7 +158,10 @@ it follows the same rule, with its own field-scoped history.
 4. **Late result:** id + path + exact bytes + newest-begun sequence, else the
    marker stays.
 5. **Lost result:** `JoinError` maps to `Err`, reported to Messages and recorded
-   for Save All; the job's `InFlight` guard frees the barrier when dropped.
+   for Save All; the job's `InFlight` guard frees the barrier when dropped. A
+   library the worker created before it was lost stays pending, and the retry
+   adopts it (`create_pending_library` accepts the same `library_id` at the
+   path, once its git repo and LFS rules match the request).
 6. **One authority:** one rename flow (`handle_project_rename_submit`) for the tree and
    the tab; the write goes through the one ledger.
 

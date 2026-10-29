@@ -22,6 +22,8 @@ mod open_read;
 #[cfg(test)]
 mod open_read_tests;
 mod project_save;
+#[cfg(test)]
+mod project_save_tests;
 mod recent;
 #[cfg(test)]
 mod restore_cancel_tests;

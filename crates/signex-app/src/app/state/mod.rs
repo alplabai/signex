@@ -244,7 +244,7 @@ pub struct LoadedProject {
     /// Libraries the user has authored via the New Library flow but not
     /// yet committed to disk. The Library Options modal's Create button
     /// only registers an entry here + flips the project dirty bit;
-    /// `commands::materialize_pending_library` runs at project-save time
+    /// `commands::create_pending_library` runs at project-save time
     /// to actually write the `.snxlib`. Closes
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
     /// explicit user save" invariant. Keyed by a temporary handle that

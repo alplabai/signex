@@ -13,7 +13,7 @@ pub use document_save::{
     SameFile, SaveBarrier, SaveOutcome, SharedBytes,
 };
 pub use primitive_save::{PrimitiveSaveDone, PrimitiveWritten, SaveAsOrigin, WrittenContainer};
-pub use project_save::ProjectSaveDone;
+pub use project_save::{LibraryCreated, ProjectSaveDone, ProjectWritePlan, run_project_write};
 pub use search_prefs::{
     SEARCH_PREFS_SAVE_DEBOUNCE, SearchPrefsChange, SearchPrefsMsg, SearchPrefsSync,
     SearchPrefsWrite,

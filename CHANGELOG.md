@@ -601,6 +601,8 @@ All entries folded from the per-PR fragments for 1.0.0-rc.1. They sit under thei
 
 ### Changed
 
+- **Saving a project's `.snxprj` no longer freezes the window (#859)** — Ctrl+S in the Project tab, Ctrl+S in a document tab, and Save All on close and quit now create the libraries added with New Library (their git setup included) and write the project file on one background job, in that order, so the file never lists a library that was not created. The project is marked saved only when the bytes written are still what it encodes to; an edit made while the write runs keeps it modified. A save asked for while one runs is queued once and runs when the first finishes, and a retry after an interrupted save adopts the library it left behind, finishing its version control first (or refusing with the reason). A library that could not be created stays pending and the failure reaches the Messages panel, as before. Close Project and Quit wait for a write they start themselves and stay open if it fails; a Save All issued while a project write is already running keeps the window open with the "still running" reason.
+
 - **Test fixtures build core types from defaults (#749)** — `SchematicSheet`, `Symbol`, `Wire` and `Junction` gain a `Default` (equal to a deserialized minimal manifest, pinned by a test) and `signex_erc::Violation` gains `Violation::new`, so tests write only the fields they care about and adding a field no longer breaks every test in every open PR. Production literals stay exhaustive on purpose.
 - **The god-file cap is now 1200 lines**, up from 1000. It still counts physical lines, comments included. Long explanations belong in `docs/` with a one-line pointer in the code (CONTRIBUTING.md, "Code Style"), so a documented file is not forced into a split it does not need.
 - **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
@@ -699,6 +701,10 @@ All entries folded from the per-PR fragments for 1.0.0-rc.1. They sit under thei
 
 - **Library server hardening (#115)** — the server compares the bearer token in constant time, the database client refuses to send a token over cleartext HTTP to a non-loopback host (redirect hops included) and rejects an unresolved `@signex-keychain:` sigil, and distributor URL host checks are dot-anchored so look-alike domains no longer match. TLS must be terminated by a reverse proxy.
 - **Library server refuses plaintext on a non-loopback bind (#115)** — `signex-library-server` now exits at startup unless `--allow-insecure-bind` (or `SIGNEX_ALLOW_INSECURE_BIND=1`/`true`/`yes`) is given, since it has no TLS and must sit behind a TLS-terminating proxy. `SIGNEX_TRUSTED_PROXIES` lets the rate limiter key by the real client behind a trusted reverse proxy rather than sharing one bucket; when it is set, `SIGNEX_TRUSTED_PROXY_HEADER` (`x-forwarded-for` or `forwarded`) is required and names the single header the proxy overwrites or appends to. The other header is ignored, so a client cannot forge hops through it. IPv4-mapped peers (`::ffff:10.0.0.1`) match IPv4 proxies and hops may carry a port. The `@signex-keychain:<name>` library `auth` sigil stays refused (OS keychain resolution is tracked in #976).
+
+### Fixed — release
+
+- **The release workflow's test step runs like CI** — release.yml ran `cargo test --workspace`, which runs a test binary's tests as threads of one process; the wgpu canvas tests crashed (SIGSEGV) that way and stopped the first v1.0.0-rc.1 release run before any build; the tag was re-cut after the fix. It now runs `cargo nextest run --workspace --profile ci` plus doctests, exactly as ci.yml's `test · workspace` does.
 
 [Full changelog](https://github.com/alplabai/signex/compare/v0.15.0...v1.0.0-rc.1)
 
