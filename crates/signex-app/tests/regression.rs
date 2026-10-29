@@ -273,6 +273,8 @@ mod library_place_designator_standard;
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
+#[path = "regression/library_stock_copy.rs"]
+mod library_stock_copy;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]

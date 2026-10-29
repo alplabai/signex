@@ -33,6 +33,32 @@ pub fn write_first_run_tour_dismissed(dismissed: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Stock primitive copy target (#813)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// The `.snxlib` the user last chose to receive copies of stock symbols and
+/// footprints, from `prefs.json`'s `stock_copy_library`. `None` when never
+/// chosen or not a non-empty string.
+pub fn read_stock_copy_target_pref_from(json: Option<&serde_json::Value>) -> Option<PathBuf> {
+    let text = json?["stock_copy_library"].as_str()?;
+    (!text.is_empty()).then(|| PathBuf::from(text))
+}
+
+/// Persist the stock-copy target without clobbering other keys.
+pub fn write_stock_copy_target_pref(target: &Path) {
+    write_stock_copy_target_pref_at(&prefs_path(), target)
+}
+
+pub fn write_stock_copy_target_pref_at(path: &Path, target: &Path) {
+    update_prefs_json(path, "stock_copy_library", |prefs| {
+        prefs.insert(
+            "stock_copy_library".to_string(),
+            serde_json::Value::String(target.display().to_string()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Persistent search queries (UX_IMPROVEMENTS_OVER_ALTIUM §1.1)
 // ──────────────────────────────────────────────────────────────────────────
 

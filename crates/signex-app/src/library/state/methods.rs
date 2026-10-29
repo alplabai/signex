@@ -93,6 +93,9 @@ impl Default for LibraryState {
             pending_follow_ups: HashMap::new(),
             data_version: 0,
             new_library_defaults: NewLibraryDefaults::default(),
+            stock_copy: None,
+            stock_copy_target: None,
+            stock_copies_in_flight: Default::default(),
         }
     }
 }

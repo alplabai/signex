@@ -310,7 +310,7 @@ fn a_batch_row_update_with_a_failed_commit_is_a_save() {
                 row.description = "batch".into();
                 true
             },
-            "batch",
+            &|_| "batch".to_string(),
         )?;
         assert!(matches!(outcomes[0].1, Ok(true)));
         Ok(())
@@ -465,7 +465,7 @@ fn a_stale_index_lock_gives_the_same_result_in_every_path() {
                             r.description = "d".into();
                             true
                         },
-                        "batch",
+                        &|_| "batch".to_string(),
                     )
                     .map(|_| outcome_of(l))
             }),

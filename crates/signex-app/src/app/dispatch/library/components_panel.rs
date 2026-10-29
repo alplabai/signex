@@ -113,7 +113,11 @@ impl Signex {
     /// `global_libraries.toml` could not be written, so the change did not
     /// stick. The caller leaves the in-memory library lists as they were,
     /// and the user has to be told.
-    fn report_global_libraries_save_failure(&mut self, action: &str, err: &dyn std::fmt::Display) {
+    pub(super) fn report_global_libraries_save_failure(
+        &mut self,
+        action: &str,
+        err: &dyn std::fmt::Display,
+    ) {
         tracing::warn!(
             target: "signex::library",
             error = %err,

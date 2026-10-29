@@ -128,12 +128,12 @@ pub(crate) fn check_param_map_finite(params: &ParamMap) -> Result<(), LibraryErr
     for (key, value) in params {
         match value {
             ParamValue::Number(n) if !n.is_finite() => {
-                return Err(LibraryError::Backend(format!(
+                return Err(LibraryError::InvalidData(format!(
                     "parameter {key:?} is non-finite ({n}); refused: NaN / Infinity cannot be stored"
                 )));
             }
             ParamValue::Measurement { value: n, .. } if !n.is_finite() => {
-                return Err(LibraryError::Backend(format!(
+                return Err(LibraryError::InvalidData(format!(
                     "parameter {key:?} measurement value is non-finite ({n}); refused: NaN / Infinity cannot be stored"
                 )));
             }
@@ -342,7 +342,7 @@ mod tests {
     }
 
     /// `serde_json` cannot encode `NaN` / `±Infinity`. The hash function
-    /// surfaces that as `LibraryError::Backend` instead of panicking.
+    /// surfaces that as `LibraryError::InvalidData` instead of panicking.
     #[test]
     fn hash_returns_backend_error_on_non_finite_float() {
         use crate::param::ParamValue;
@@ -350,12 +350,12 @@ mod tests {
         row.parameters
             .insert("bad".into(), ParamValue::Number(f64::NAN));
         let err = hash_row_content(&row).unwrap_err();
-        assert!(matches!(err, LibraryError::Backend(_)), "got {err:?}");
+        assert!(matches!(err, LibraryError::InvalidData(_)), "got {err:?}");
 
         let mut row = fixture_row();
         row.parameters
             .insert("bad".into(), ParamValue::Number(f64::INFINITY));
         let err = hash_row_content(&row).unwrap_err();
-        assert!(matches!(err, LibraryError::Backend(_)), "got {err:?}");
+        assert!(matches!(err, LibraryError::InvalidData(_)), "got {err:?}");
     }
 }

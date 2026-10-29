@@ -140,6 +140,8 @@ impl LocalGitAdapter {
         *known = Some(fresh);
         // The cached row lines belong to the rows just replaced; let them go.
         self.row_lines().clear();
+        // So are the converted rows built from them.
+        self.row_reads.clear();
         Ok(())
     }
 

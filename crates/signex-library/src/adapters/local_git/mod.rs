@@ -135,6 +135,9 @@ pub struct LocalGitAdapter {
     row_lines: Mutex<crate::library_file::RowLines>,
     /// Files saved whose commit failed (#858); see `uncommitted`.
     uncommitted: Mutex<uncommitted::UncommittedLedger>,
+    /// Converted rows served to readers (#1437). Lock order: after
+    /// `library_file`.
+    row_reads: read_cache::RowReads,
 }
 
 impl LocalGitAdapter {
@@ -241,6 +244,7 @@ impl LocalGitAdapter {
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
             uncommitted: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -289,6 +293,7 @@ impl LocalGitAdapter {
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
             uncommitted: Mutex::default(),
+            row_reads: Default::default(),
         };
         adapter.seed_uncommitted_from_working_tree();
         Ok(adapter)
@@ -400,6 +405,7 @@ impl LocalGitAdapter {
             plain_token_warnings: Default::default(),
             row_lines: Mutex::default(),
             uncommitted: Mutex::default(),
+            row_reads: Default::default(),
         })
     }
 
@@ -453,6 +459,7 @@ pub use helpers::component_to_library_row;
 pub(crate) mod lfs;
 mod pinned_assets;
 mod primitives;
+mod read_cache;
 mod row_edit;
 mod uncommitted;
 #[cfg(test)]
@@ -470,6 +477,8 @@ mod insert_row_tests;
 mod plain_token;
 #[cfg(test)]
 mod plain_token_tests;
+#[cfg(test)]
+mod read_cache_tests;
 
 #[cfg(test)]
 mod tests {

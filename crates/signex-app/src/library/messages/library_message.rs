@@ -526,6 +526,8 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         outcome: std::sync::Arc<Result<signex_library::PricingRefreshReport, String>>,
     },
+    /// The Copy to Library dialog, or the copy it started (#813).
+    StockCopy(crate::library::stock_copy::StockCopyMsg),
 }
 
 /// What the off-thread read of a library row hands back to `update`:

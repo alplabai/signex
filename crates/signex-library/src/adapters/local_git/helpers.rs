@@ -434,7 +434,7 @@ pub(super) fn legacy_columns() -> Vec<String> {
 pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
     let names: Vec<&str> = columns.iter().map(String::as_str).collect();
     crate::tables::check_columns(&names)
-        .map_err(|e| LibraryError::Backend(format!("table {table:?} schema mismatch: {e}")))?;
+        .map_err(|e| LibraryError::InvalidData(format!("table {table:?} schema mismatch: {e}")))?;
     Ok(())
 }
 
