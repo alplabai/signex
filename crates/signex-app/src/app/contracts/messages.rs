@@ -320,6 +320,9 @@ pub enum UiMsg {
             >,
         >,
     ),
+    /// Cross-sheet net navigation family (#1270-#1272): partner jumps, sheet
+    /// history, net highlight and the hover insight.
+    NetNav(super::net_nav::NetNavMsg),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -575,4 +578,7 @@ pub enum InputMsg {
     /// sets the mode only when the active tab is a footprint editor, so
     /// the keys don't steal text input on other tabs.
     FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// The "recompute courtyard outline" command (palette, #1473). Acts on
+    /// the active footprint editor tab; a no-op on any other tab.
+    FootprintCourtyardOutlineRequested,
 }

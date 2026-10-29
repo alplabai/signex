@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use crate::app::command::CommandContext;
+use crate::panels::PanelKind;
 
 use super::{ActionMap, NativeMenu, NativeMenuSpec, NativeNode};
 
@@ -13,9 +14,18 @@ use super::{ActionMap, NativeMenu, NativeMenuSpec, NativeNode};
 pub(crate) enum Refresh {
     Unchanged,
     /// Same rows, only enablement moved: `(id, enabled)` for each that did.
-    Enablement(Vec<(String, bool)>),
+    Enablement(Vec<ItemChange>),
     /// Rows, labels or accelerators changed: build the menu anew.
     Rebuild,
+}
+
+/// One row whose enablement or check mark moved.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // only the macOS sync reads it
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ItemChange {
+    pub id: String,
+    pub enabled: bool,
+    pub checked: Option<bool>,
 }
 
 /// How `next` differs from the spec on screen. Pure.
@@ -35,7 +45,7 @@ pub(crate) fn plan_refresh(applied: Option<&NativeMenuSpec>, next: &NativeMenuSp
     }
 }
 
-fn same_shape(a: &[NativeMenu], b: &[NativeMenu], changes: &mut Vec<(String, bool)>) -> bool {
+fn same_shape(a: &[NativeMenu], b: &[NativeMenu], changes: &mut Vec<ItemChange>) -> bool {
     a.len() == b.len()
         && a.iter().zip(b).all(|(a, b)| {
             a.title == b.title
@@ -47,12 +57,16 @@ fn same_shape(a: &[NativeMenu], b: &[NativeMenu], changes: &mut Vec<(String, boo
         })
 }
 
-fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<(String, bool)>) -> bool {
+fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<ItemChange>) -> bool {
     match (a, b) {
         (NativeNode::Item(a), NativeNode::Item(b)) => {
             let same = a.id == b.id && a.label == b.label && a.accelerator == b.accelerator;
-            if same && a.enabled != b.enabled {
-                changes.push((b.id.clone(), b.enabled));
+            if same && (a.enabled != b.enabled || a.checked != b.checked) {
+                changes.push(ItemChange {
+                    id: b.id.clone(),
+                    enabled: b.enabled,
+                    checked: b.checked,
+                });
             }
             same
         }
@@ -77,15 +91,22 @@ pub(crate) struct MenuInputs {
     commands: CommandContext,
     recent: Vec<PathBuf>,
     locked: bool,
+    open_panels: Vec<PanelKind>,
 }
 
 impl MenuInputs {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // built by the macOS sync
-    pub(crate) fn new(commands: CommandContext, recent: &[PathBuf], locked: bool) -> Self {
+    pub(crate) fn new(
+        commands: CommandContext,
+        recent: &[PathBuf],
+        locked: bool,
+        open_panels: Vec<PanelKind>,
+    ) -> Self {
         Self {
             commands,
             recent: recent.to_vec(),
             locked,
+            open_panels,
         }
     }
 
@@ -97,6 +118,11 @@ impl MenuInputs {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) fn commands(&self) -> CommandContext {
         self.commands
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn open_panels(&self) -> &[PanelKind] {
+        &self.open_panels
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -135,6 +161,33 @@ impl NativeMenuState {
     #[cfg(test)]
     pub(crate) fn mark_failed_for_test(&mut self) {
         self.failed = true;
+    }
+
+    /// A row with a check mark was chosen: the OS has already flipped it,
+    /// which may disagree with the panel (choosing an open panel that was
+    /// hidden only reveals it). Forget what is on screen so the next sync
+    /// redraws every mark from the Model.
+    pub(crate) fn invalidate(&mut self) {
+        self.applied = None;
+        self.applied_inputs = None;
+    }
+
+    /// Pretend a menu is on screen (activation tests).
+    #[cfg(test)]
+    pub(crate) fn seed_applied_for_test(&mut self) {
+        self.applied = Some(NativeMenuSpec::default());
+        self.applied_inputs = Some(MenuInputs::new(
+            CommandContext::default(),
+            &[],
+            false,
+            Vec::new(),
+        ));
+    }
+
+    /// Whether any applied spec or inputs are remembered (tests).
+    #[cfg(test)]
+    pub(crate) fn is_applied_for_test(&self) -> bool {
+        self.applied.is_some() || self.applied_inputs.is_some()
     }
 
     /// Whether `inputs` differ from the last sync and the menu is live.

@@ -157,6 +157,11 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Show the net name, class and pins after a short dwell over a wire, pin
+    /// or label (#1270). On by default.
+    pub net_hover_enabled: bool,
+    /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
+    pub preferences_draft_net_hover_enabled: bool,
     /// Saved "Select by drag direction" preference (#1257): a box drag to
     /// the right selects what it fully contains, to the left what it touches.
     /// Off falls back to the global `selection_mode`. Default on.
@@ -595,6 +600,7 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
             || self.preferences_draft_drag_direction_select != self.drag_direction_select
             || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled

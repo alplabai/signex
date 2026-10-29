@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use super::*;
+use crate::app::state::WindowKind;
 use crate::keymap::AppCommandId;
+use crate::menu_bar::panel_check_tests::{context, view_row_checked};
 use crate::panels::PanelKind;
 
 fn run(app: &mut Signex, id: &str) {
@@ -154,4 +156,20 @@ fn previous_tab_goes_backwards_and_wraps_to_the_last() {
         run(&mut app, "previous_document_tab");
         assert_eq!(app.document_state.active_tab, expected);
     }
+}
+
+/// #103 - a panel in a window of its own counts as open, so its View-menu
+/// row stays checked.
+#[test]
+fn the_menu_check_counts_a_detached_panel_window_counts_as_open() {
+    let (mut app, _task) = Signex::new();
+    app.document_state.dock.close_panel(PanelKind::Messages);
+    assert_eq!(view_row_checked(&context(&app), "Messages"), Some(false));
+
+    app.ui_state.windows.insert(
+        iced::window::Id::unique(),
+        WindowKind::DetachedPanel(PanelKind::Messages),
+    );
+
+    assert_eq!(view_row_checked(&context(&app), "Messages"), Some(true));
 }

@@ -153,10 +153,12 @@ impl Message {
 
 mod dialogs;
 mod messages;
+mod net_nav;
 mod state;
 
 pub use dialogs::*;
 pub use messages::*;
+pub use net_nav::NetNavMsg;
 pub use state::*;
 
 #[cfg(test)]

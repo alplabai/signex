@@ -68,7 +68,45 @@ fn shortcuts() -> CanvasShortcuts {
         copy: "Ctrl+C".into(),
         paste: "Ctrl+V".into(),
         smart_paste: "Shift+Ctrl+V".into(),
+        rotate: "Space".into(),
+        mirror_x: "X".into(),
+        mirror_y: "Y".into(),
+        delete: "Del".into(),
     }
+}
+
+#[test]
+fn edit_rows_show_the_resolved_keymap_shortcuts() {
+    let mut sc = shortcuts();
+    sc.rotate = "R".into();
+    sc.delete = "Delete".into();
+    sc.mirror_x = "Shift+X".into();
+    sc.mirror_y = "Shift+Y".into();
+    let tokens = theme_tokens(TID);
+    let entries = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
+    let shortcut_of = |label: &str| {
+        entries.iter().find_map(|e| match e {
+            DropdownEntry::Item(it) if it.label == label => Some(it.shortcut.clone()),
+            _ => None,
+        })
+    };
+    assert_eq!(shortcut_of("Rotate").flatten().as_deref(), Some("R"));
+    assert_eq!(shortcut_of("Delete").flatten().as_deref(), Some("Delete"));
+    let mirror_x = crate::menu_bar::cmd_label("mirror_x", "Mirror X");
+    let mirror_y = crate::menu_bar::cmd_label("mirror_y", "Mirror Y");
+    assert_eq!(shortcut_of(&mirror_x).flatten().as_deref(), Some("Shift+X"));
+    assert_eq!(shortcut_of(&mirror_y).flatten().as_deref(), Some("Shift+Y"));
+}
+
+#[test]
+fn classic_profile_resolves_rotate_through_the_real_lookup() {
+    // The same `Signex::keymap_shortcut_label` `view_context_menu` calls,
+    // fed by a keymap compiled from the bundled Classic profile.
+    let (mut app, _boot) = crate::app::Signex::new();
+    let mut set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-ins parse");
+    set.set_active_profile("classic").expect("classic exists");
+    app.ui_state.active_keymap = std::sync::Arc::new(set.compile_active());
+    assert_eq!(app.keymap_shortcut_label("rotate_counterclockwise"), "R");
 }
 
 #[test]

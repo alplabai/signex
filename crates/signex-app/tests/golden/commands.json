@@ -365,9 +365,19 @@
     "category": "library"
   },
   {
+    "id": "footprint_recompute_courtyard_outline",
+    "group": "ThreeD",
+    "category": "library"
+  },
+  {
     "id": "force_annotate_all_schematics",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "go_to_net_partner",
+    "group": "Schematic",
+    "category": "navigation"
   },
   {
     "id": "highlight_net_under_cursor",

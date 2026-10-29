@@ -65,6 +65,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "go_to_net_partner",
+        category: "navigation",
+        label: "Go to net partner on another sheet",
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "highlight_net_under_cursor",
         category: "select",
         label: "Highlight net under cursor",

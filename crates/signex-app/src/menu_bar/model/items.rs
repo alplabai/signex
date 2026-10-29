@@ -27,6 +27,7 @@ fn plain(label: &str, state: ItemState) -> MenuEntry {
         label: label.to_owned(),
         shortcut: None,
         state,
+        checked: None,
     })
 }
 
@@ -37,6 +38,23 @@ fn live(action: MenuMessage, is_enabled: bool) -> ItemState {
 /// An always-enabled row.
 pub(super) fn item(label: &str, action: MenuMessage) -> MenuEntry {
     plain(label, live(action, true))
+}
+
+/// An always-enabled panel row, checked while `kind` is open (the same
+/// answer as the status-bar panel list, via [`MenuContext::open_panels`]).
+pub(super) fn panel_item(
+    ctx: &MenuContext,
+    label: &str,
+    kind: crate::panels::PanelKind,
+    action: MenuMessage,
+) -> MenuEntry {
+    debug_assert!(action.is_panel_row());
+    MenuEntry::Item(MenuItem {
+        label: label.to_owned(),
+        shortcut: None,
+        state: live(action, true),
+        checked: Some(ctx.open_panels.contains(&kind)),
+    })
 }
 
 /// A live row, greyed out unless `is_enabled`.
@@ -64,6 +82,7 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, state: ItemState) -> MenuEntry {
         label: cmd_label(cmd.id, cmd.label),
         shortcut,
         state,
+        checked: None,
     })
 }
 
