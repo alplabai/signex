@@ -175,7 +175,7 @@ carry those fixes on a named branch. Public forks:
 | [alplabai/elmerfem](https://github.com/alplabai/elmerfem) | ElmerCSC/elmerfem | mixed; consult upstream | Branch `signex-pcb`: VectorHelmholtz segfault plus four HIGH-severity fixes in `Load.c` / `cholmod.c` |
 | [alplabai/AppCSXCAD](https://github.com/alplabai/AppCSXCAD) | thliebig/AppCSXCAD | GPL-3.0 | Qt GUI for CSXCAD |
 | [alplabai/QCSXCAD](https://github.com/alplabai/QCSXCAD) | thliebig/QCSXCAD | LGPL-3.0 | Qt GUI library for CSXCAD |
-| [alplabai/signex-kicad-import](https://github.com/alplabai/signex-kicad-import) | — (ours) | GPL-3.0-or-later | The one-way KiCad → Signex migration companion. Not a fork; a deliberately separate GPL repo. See [`docs/LICENSING.md`](LICENSING.md). |
+| [import companion repository](https://github.com/alplabai/signex-kicad-import) | — (ours) | GPL-3.0-or-later | The one-way migration companion from GPL-based EDA tools to Signex. Not a fork; a deliberately separate GPL repo. See [`docs/LICENSING.md`](LICENSING.md). |
 | [alplabai/signex-altium-import](https://github.com/alplabai/signex-altium-import) | — (ours) | Apache-2.0 | The one-way Altium → Signex importer: a clean-room reader for `.PrjPcb` / `.SchDoc` / `.PcbDoc` / `.SchLib` / `.PcbLib`. File › Import › Altium Project runs it as a subprocess (`crates/signex-app/src/altium_import.rs`); nothing of it is linked in. |
 
 GMSH is used from upstream unmodified. Our ngspice fork is not public;
@@ -215,11 +215,11 @@ with a contemporaneous audit trail. Sources are cited in the source
 comments. If you are improving the solver, cite the maths, never another
 tool's implementation.
 
-**KiCad — no code, in either direction.** This repository is Apache-clean
-and CI enforces it. KiCad interoperability ships as a separate
-GPL-3.0-or-later companion, `signex-kicad-import`. The full history is in
+**GPL-based EDA tools — no code, in either direction.** This repository is Apache-clean
+and CI enforces it. Interoperability with those tools ships as a separate
+GPL-3.0-or-later import companion repository. The full history is in
 [`docs/LICENSING.md`](LICENSING.md); read it before proposing anything
-that touches KiCad formats.
+that touches their formats.
 
 **Formulas — not MathJax, not KaTeX.** Both are JavaScript. Using either
 means a JS engine in the build graph or in the runtime, and neither is
