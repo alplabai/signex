@@ -6,7 +6,8 @@ set -euo pipefail
 CEILING="${GLIBC_CEILING:-2.35}"
 bin="${1:?usage: check_glibc_ceiling.sh <binary>}"
 
-# Every versioned glibc symbol the binary imports, newest last.
+# GLIBCXX_/CXXABI_ are not checked: the 22.04 libstdc++ is older than any
+# supported distribution's. Every versioned glibc symbol the binary imports, newest last.
 newest="$(objdump -T "$bin" | { grep -o 'GLIBC_[0-9][0-9.]*' || true; } | sed 's/GLIBC_//' | sort -Vu | tail -n 1)"
 if [[ -z "$newest" ]]; then
   echo "::error::no GLIBC symbol versions found in $bin"

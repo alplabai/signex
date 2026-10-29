@@ -216,6 +216,12 @@ jobs:
         if: runner.os != 'macOS'
         run: cargo build --release --target ${{ matrix.target }} -p signex-app
 
+      # Every Linux artifact ships this one binary; fail before packaging
+      # if it imports a glibc symbol newer than the supported floor (#1688).
+      - name: Check Linux glibc ceiling
+        if: runner.os == 'Linux'
+        run: bash scripts/check_glibc_ceiling.sh "target/${{ matrix.target }}/release/signex"
+
       # ─── macOS: two slices -> one universal binary ────────────────
       - name: Build macOS slices and lipo into a universal binary
         if: runner.os == 'macOS'
@@ -305,7 +311,6 @@ jobs:
             || { echo "::error::the tarball carries no font licenses"; exit 1; }
           rm -f deb-contents.txt tar-contents.txt
           bash scripts/smoke_release_artifact.sh "$V" /usr/bin/signex
-          bash scripts/check_glibc_ceiling.sh "target/${{ matrix.target }}/release/signex"
           # --appimage-extract-and-run: no FUSE needed on the runner.
           bash scripts/smoke_release_artifact.sh "$V" \
             "./Signex-${V}-${{ matrix.arch_suffix }}.AppImage" --appimage-extract-and-run

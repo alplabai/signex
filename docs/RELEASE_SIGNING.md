@@ -18,7 +18,9 @@ version -> sbom (read-only token)      -> release (tags only)
 The Linux legs are x86_64 (`ubuntu-22.04`) and aarch64 (`ubuntu-22.04-arm`,
 built natively, not cross-compiled). They stay on 22.04 so the binary needs
 glibc 2.35 at most; `scripts/check_glibc_ceiling.sh` fails the leg if a newer
-glibc symbol slips in (#1688). They sign nothing; `SHA256SUMS.txt` is the
+glibc symbol slips in (#1688). When GitHub retires the 22.04 images, move to
+the next oldest image and raise `GLIBC_CEILING`, the `.deb`'s `libc6 (>= 2.35)`
+and the changelog note together. They sign nothing; `SHA256SUMS.txt` is the
 only integrity artifact.
 
 `build` compiles (every dependency `build.rs` runs there) and only hands the
