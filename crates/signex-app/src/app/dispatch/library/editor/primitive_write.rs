@@ -14,11 +14,13 @@ pub(super) enum Snapshot {
         file: SymbolFile,
         baseline: SymbolFile,
         name: String,
+        owed: Vec<Uuid>,
     },
     Footprint {
         file: FootprintFile,
         baseline: FootprintFile,
         name: String,
+        owed: Vec<Uuid>,
     },
 }
 
@@ -57,12 +59,14 @@ impl PrimitiveWrite {
                 file,
                 baseline,
                 name,
-            } => write_symbol(&context, file, &baseline, &name),
+                owed,
+            } => write_symbol(&context, file, &baseline, &name, &owed),
             Snapshot::Footprint {
                 file,
                 baseline,
                 name,
-            } => write_footprint(&context, file, &baseline, &name),
+                owed,
+            } => write_footprint(&context, file, &baseline, &name, &owed),
         };
         // The reason leads: the Messages panel cuts long lines.
         written.map_err(|e| format!("{e} (writing {})", self.path.display()))
@@ -74,6 +78,7 @@ fn write_symbol(
     mut file: SymbolFile,
     baseline: &SymbolFile,
     name: &str,
+    owed: &[Uuid],
 ) -> Result<PrimitiveWritten, LibraryError> {
     let save = container_save::save_symbol_container(
         context.library,
@@ -97,17 +102,18 @@ fn write_symbol(
     // that use them onto the new version (#832), after the library lock
     // was released.
     cascade::apply_symbol_versions(&mut file, &save.versions);
-    let cascaded_rows = cascade::cascade_after_container_save(
+    let outcome = cascade::cascade_after_container_save(
         context.library,
         context.options.mode,
         SavedKind::Symbol,
-        &cascade::saved_symbols(&file, &save.merge.changed),
+        &cascade::saved_symbols(&file, &with_owed(&save.merge.changed, owed)),
     );
     Ok(PrimitiveWritten {
         file: WrittenContainer::Symbol(file),
         versions: save.versions,
         commit_message: format!("Save symbol {name}"),
-        cascaded_rows,
+        cascaded_rows: outcome.bumped,
+        cascade_owed: outcome.owed,
     })
 }
 
@@ -116,6 +122,7 @@ fn write_footprint(
     mut file: FootprintFile,
     baseline: &FootprintFile,
     name: &str,
+    owed: &[Uuid],
 ) -> Result<PrimitiveWritten, LibraryError> {
     let save = container_save::save_footprint_container(
         context.library,
@@ -140,18 +147,30 @@ fn write_footprint(
         |uuid| name_in(baseline, uuid),
     );
     cascade::apply_footprint_versions(&mut file, &save.versions);
-    let cascaded_rows = cascade::cascade_after_container_save(
+    let outcome = cascade::cascade_after_container_save(
         context.library,
         context.options.mode,
         SavedKind::Footprint,
-        &cascade::saved_footprints(&file, &save.merge.changed),
+        &cascade::saved_footprints(&file, &with_owed(&save.merge.changed, owed)),
     );
     Ok(PrimitiveWritten {
         file: WrittenContainer::Footprint(file),
         versions: save.versions,
         commit_message: format!("Save footprint {name}"),
-        cascaded_rows,
+        cascaded_rows: outcome.bumped,
+        cascade_owed: outcome.owed,
     })
+}
+
+/// The primitives the save changed plus those a failed cascade still owes.
+fn with_owed(changed: &[Uuid], owed: &[Uuid]) -> Vec<Uuid> {
+    let mut all = changed.to_vec();
+    for uuid in owed {
+        if !all.contains(uuid) {
+            all.push(*uuid);
+        }
+    }
+    all
 }
 
 /// Name the primitives whose on-disk copy another writer had changed and

@@ -1015,6 +1015,8 @@ pub enum PanelMsg {
     CommitTitleBlockField(super::TitleBlockField),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
+    /// The multi-selection form of the Properties panel (#1258).
+    MultiEdit(super::MultiEditMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

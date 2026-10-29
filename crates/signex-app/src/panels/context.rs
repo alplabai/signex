@@ -91,6 +91,11 @@ pub struct PanelContext {
     pub selected_kind: Option<signex_types::schematic::SelectedKind>,
     /// Description of the selected item (for single selection).
     pub selection_info: Vec<(String, String)>,
+    /// The fields a multi-selection shares, per kind (#1258); empty unless
+    /// more than one object is selected.
+    pub multi_groups: signex_engine::SelectionGroups,
+    /// The multi-selection text box being typed in, with its text.
+    pub multi_draft: Option<(super::MultiField, String)>,
     /// The drawings the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1230).
     pub symbol_choices: Vec<SymbolChoiceItem>,

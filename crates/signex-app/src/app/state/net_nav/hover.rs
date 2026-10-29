@@ -27,6 +27,8 @@ pub struct HoverCandidate {
     pub since: Instant,
     /// The dwell was answered (a card shown, or nothing to show): stop asking.
     pub settled: bool,
+    /// The dwell is up and the answer waits for the index: no more ticks.
+    pub waiting: bool,
 }
 
 impl HoverCandidate {
@@ -126,6 +128,7 @@ impl HoverState {
             screen,
             since: now,
             settled: false,
+            waiting: false,
         });
         self.card = None;
         had_card
@@ -133,7 +136,9 @@ impl HoverState {
 
     /// The dwell timer has work only while a candidate is unanswered.
     pub fn needs_ticks(&self) -> bool {
-        self.candidate.as_ref().is_some_and(|c| !c.settled)
+        self.candidate
+            .as_ref()
+            .is_some_and(|c| !c.settled && !c.waiting)
     }
 }
 

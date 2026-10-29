@@ -487,6 +487,8 @@ impl Signex {
                     selected_uuid: None,
                     selected_kind: None,
                     selection_info: vec![],
+                    multi_groups: Default::default(),
+                    multi_draft: None,
                     symbol_choices: vec![],
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
@@ -615,6 +617,7 @@ impl Signex {
                     pin_selection: symbol_pin_selection,
                     component_classes,
                 },
+                stock_copy_target: crate::fonts::read_stock_copy_target_pref_from(prefs),
                 ..Default::default()
             },
             native_menu: Default::default(),
