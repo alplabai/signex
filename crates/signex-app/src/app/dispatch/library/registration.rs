@@ -156,8 +156,8 @@ impl Signex {
     /// **registers** a pending library — no disk writes here. The
     /// actual `.snxlib/` directory + manifest + git scaffolding land
     /// at project-save time via
-    /// `commands::materialize_pending_library`, called from
-    /// `save_active_project_if_dirty`. Closes
+    /// `commands::create_pending_library`, called from
+    /// `begin_project_save`. Closes
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
     /// explicit user save" invariant. `use_lfs` carries the modal's
     /// checkbox state — when on, the eventual adapter writes

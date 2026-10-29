@@ -316,8 +316,10 @@ impl Signex {
     /// path backs:
     ///
     /// * a live schematic **engine** → `engine.save()`;
-    /// * an open **symbol/footprint primitive editor** → `save_primitive_tab_at`;
-    /// * the project's own **`.snxprj`** → `save_project_at_path`.
+    /// * an open **symbol/footprint primitive editor** → `save_primitive_tab_at`.
+    ///
+    /// A project's own `.snxprj` is not saved here: it writes off the UI
+    /// thread through `begin_project_save`.
     ///
     /// Both Save-All loops previously handled *only* engines, so a dirty
     /// `.snxsym`/`.snxfpt` draft (e.g. a freshly-added symbol library
@@ -500,12 +502,7 @@ impl Signex {
         {
             return self.save_primitive_tab_blocking(path);
         }
-        if self.document_state.projects.iter().any(|p| p.path == path) {
-            return self.save_project_at_path(path);
-        }
-        anyhow::bail!(
-            "no open editor, engine, or project backs this file — it can't be saved automatically"
-        )
+        anyhow::bail!("no open editor or engine backs this file — it can't be saved automatically")
     }
 
     /// Resolve the user's Save All / Discard All / Cancel choice on

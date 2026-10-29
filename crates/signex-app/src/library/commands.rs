@@ -63,7 +63,7 @@ pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), Libra
 /// to disk yet. Lives on `LoadedProject.pending_libraries` between
 /// the user clicking "Create Library" on the Library Options modal
 /// and the next successful project save (which materialises the
-/// `.snxlib` via `materialize_pending_library`). Closes
+/// `.snxlib` via `create_pending_library`). Closes
 /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
 /// explicit user save" invariant — modal confirm flips the project
 /// dirty bit but leaves disk untouched; only `Ctrl+S` actually
@@ -136,7 +136,7 @@ pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryEr
 /// [`PendingLibrarySpec`] under that id on the caller-provided
 /// pending map. The actual `.snxlib` directory + manifest +
 /// optional `git init` happen at project-save time via
-/// [`materialize_pending_library`].
+/// [`create_pending_library`].
 ///
 /// Returns the pre-minted `library_id`. Caller is responsible for:
 ///   1. Storing the `(library_id, PendingLibrarySpec)` on the
@@ -164,41 +164,44 @@ pub fn register_pending_library(
     Ok((library_id, spec))
 }
 
-/// Materialise a previously-registered pending library: do the
-/// `.snxlib/` directory + manifest + git scaffolding + project
-/// registration, using the pre-minted `library_id` so the on-disk
-/// manifest matches whatever the user already has staged in
+/// Create a previously-registered pending library on disk: the `.snxlib/`
+/// directory, manifest and git scaffolding, under the pre-minted
+/// `library_id` so the manifest matches what the project already stages in
 /// `LoadedProject.pending_libraries`.
 ///
-/// This is the disk-write side of the deferred flow. Called from
-/// `save_active_project_if_dirty` once per pending entry; on
-/// success the caller drains the entry from the pending map. On
-/// failure the entry stays pending so the user can retry on next
-/// save (e.g. they free up the target path).
-///
-/// Atomic-with-rollback discipline matches the original
-/// `create_library_at` (single library fn, never split across app +
-/// lib layers — `feedback_no_disk_writes_without_user_save.md`).
-pub fn materialize_pending_library(
-    state: &mut LibraryState,
-    project: &mut ProjectData,
+/// Blocking IO and no state: the project save runs it on a worker, then
+/// `update` registers and mounts the library only if the project still wants
+/// it (`docs/architecture/path-ops.md`, "Project file save"). On failure the
+/// entry stays pending so the user can retry on the next save.
+pub(crate) fn create_pending_library(
     library_id: Uuid,
     spec: &PendingLibrarySpec,
-    fold: CaseFold,
+    defaults: &super::state::NewLibraryDefaults,
 ) -> Result<(), LibraryError> {
     if spec.lib_path.exists() {
+        // A failed or interrupted init leaves this exact library behind.
+        // Adopt it only once its version control is what was asked for:
+        // finish the missing steps, or refuse and say why. Anything else at
+        // the path is not ours to touch.
+        if existing_library_id(&spec.lib_path) == Some(library_id) {
+            let opts = LibraryInitOptions {
+                enable_git: spec.enable_git,
+                use_lfs: spec.enable_git && spec.use_lfs,
+            };
+            return LocalGitAdapter::complete_init(&spec.lib_path, opts).map_err(|e| {
+                LibraryError::Conflict(format!(
+                    "a partly created library is at {}: version control was not set up ({e})",
+                    spec.lib_path.display()
+                ))
+            });
+        }
         return Err(LibraryError::Conflict(format!(
             "{} already exists (pending materialise)",
             spec.lib_path.display()
         )));
     }
-
-    let manifest = seed_manifest(
-        library_id,
-        spec.display_name.clone(),
-        &state.new_library_defaults,
-    );
-    let _adapter = LocalGitAdapter::init(
+    let manifest = seed_manifest(library_id, spec.display_name.clone(), defaults);
+    LocalGitAdapter::init(
         &spec.lib_path,
         manifest,
         LibraryInitOptions {
@@ -206,31 +209,15 @@ pub fn materialize_pending_library(
             use_lfs: spec.enable_git && spec.use_lfs,
         },
     )?;
-
-    register_library_entry(project, &spec.lib_path, library_id, fold);
-
-    // No `refresh_components` chaser here (#530). This mount is
-    // provably cold and the library is provably empty, so a refresh
-    // could only recompute what `open_library` just cached:
-    //
-    // - `spec.lib_path` was rejected above if it existed on disk, and
-    //   `LocalGitAdapter::init` created it moments ago. A path that did
-    //   not exist cannot have been mounted, because mounting requires
-    //   `LocalGitAdapter::open` on an existing path — so the warm branch
-    //   that keeps the refresh alive in `open_library` is unreachable.
-    // - The library `init` writes has zero rows and no `symbols/` /
-    //   `footprints/` / `sims/` entries, so every cache it primes is
-    //   empty by construction.
-    if let Err(e) = state.open_library(spec.lib_path.clone()) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %spec.lib_path.display(),
-            error = %e,
-            "freshly-materialised library failed initial open — entry registered, retry from tree"
-        );
-    }
-
     Ok(())
+}
+
+/// The `library_id` of the library file already at `path`, if it parses as
+/// one. Read from the file alone: a half-made repo beside it must not hide it.
+fn existing_library_id(path: &Path) -> Option<Uuid> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let file = signex_library::library_file::LibraryFile::parse(&text).ok()?;
+    Some(file.manifest.library_id)
 }
 
 /// Create a library on its own at `lib_path`, not attached to any project:
@@ -286,7 +273,7 @@ pub(crate) fn seed_manifest(
 
 /// Register `lib_path` on the project as ProjectLocal or Shared
 /// (decided by `library_entry_location`).
-fn register_library_entry(
+pub(crate) fn register_library_entry(
     project: &mut ProjectData,
     lib_path: &Path,
     library_id: Uuid,
@@ -368,7 +355,7 @@ pub fn create_library_at(
     // later.
     //
     // No `refresh_components` chaser (#530) — same proof as
-    // `materialize_pending_library`: `lib_path` was rejected above if it
+    // `create_pending_library`: `lib_path` was rejected above if it
     // existed, `LocalGitAdapter::init` created it moments ago, and a path
     // that did not exist cannot already be mounted. So the mount is
     // provably cold (the warm branch in `open_library` is unreachable)

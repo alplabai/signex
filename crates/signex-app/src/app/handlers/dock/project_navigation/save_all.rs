@@ -76,12 +76,12 @@ impl Signex {
     /// * a live schematic **engine** → an off-thread schematic save;
     /// * an open **symbol/footprint primitive editor** → an off-thread
     ///   container save;
-    /// * the project's own **`.snxprj`** → `save_project_at_path`, which
-    ///   still writes inline (it materialises pending libraries first).
+    /// * the project's own **`.snxprj`** → an off-thread project save, which
+    ///   creates pending libraries first.
     ///
     /// A dirty `.snxsym`/`.snxfpt` draft or `.snxprj` has no engine, so a
     /// loop that only knew engines would fail on them (#104). `Ok(None)`
-    /// means the write already finished inline. The error says WHY a file
+    /// means there was nothing to start. The error says WHY a file
     /// cannot be saved.
     fn begin_held_path_save(
         &mut self,
@@ -100,7 +100,7 @@ impl Signex {
             return self.save_primitive_tab_at(path).map(Some);
         }
         if self.document_state.projects.iter().any(|p| p.path == path) {
-            return self.save_project_at_path(path).map(|()| None);
+            return self.save_project_at_path(path).map(Some);
         }
         anyhow::bail!(
             "no open editor, engine, or project backs this file — it can't be saved automatically"

@@ -376,7 +376,7 @@ fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
     assert!(!fx.app.document_state.project_folder_renames.is_empty());
 
     // The `.snxprj` writer (Ctrl+S, Save All, Close Project).
-    assert!(fx.app.persist_project_by_id(project_id).is_err());
+    assert!(fx.app.begin_project_save(project_id).is_err());
     assert_eq!(std::fs::read(&old_file).expect("project file"), b"{}");
     assert!(fx.app.document_state.is_document_dirty(&old_file));
 
@@ -415,6 +415,8 @@ fn writes_after_the_disk_move_but_before_it_is_reported_do_not_recreate_the_old_
     let mut fx = fixture(root.path(), "Foo", false);
     let job = move_on_disk_without_reporting(&mut fx, "Bar");
     assert!(!fx.folder.exists(), "the move has landed");
+    let old_file = fx.folder.join("Foo.snxprj");
+    fx.app.document_state.mark_document_dirty(&old_file);
 
     // Every writer is refused in this window.
     let refusals = [
@@ -427,7 +429,7 @@ fn writes_after_the_disk_move_but_before_it_is_reported_do_not_recreate_the_old_
             .err()
             .map(|e| e.to_string()),
         fx.app
-            .persist_project_by_id(job.project_id)
+            .begin_project_save(job.project_id)
             .err()
             .map(|e| e.to_string()),
     ];

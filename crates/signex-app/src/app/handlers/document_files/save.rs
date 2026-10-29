@@ -116,9 +116,9 @@ impl Signex {
                     // primitive itself; without these calls the
                     // project-root row stays red after a primitive
                     // save even though the primitive's row is clean.
-                    self.save_active_project_if_dirty();
+                    let project_save = self.save_active_project_if_dirty();
                     self.refresh_panel_ctx();
-                    return Ok(task);
+                    return Ok(iced::Task::batch([task, project_save]));
                 }
                 _ => {}
             }
@@ -150,7 +150,7 @@ impl Signex {
         // Save the active project's `.snxprj` if it's dirty (right-
         // click → Add Existing flips the dirty bit). Best-effort: a
         // failure here is logged but doesn't block the schematic save.
-        self.save_active_project_if_dirty();
+        saves.push(self.save_active_project_if_dirty());
         // Refresh the panel context so the project-tree red dirty dot
         // (which reads `panel_ctx.projects[*].sheets[*].is_dirty`)
         // sees the cleared dirty mark after the save. Without this the
@@ -160,41 +160,24 @@ impl Signex {
         Ok(iced::Task::batch(saves))
     }
 
-    /// Persist the active project's `.snxprj` JSON when its dirty bit
-    /// is dirty. No-op if no project is active or the
-    /// project file isn't dirty.
+    /// Save the active project's `.snxprj` when it is dirty, off the UI
+    /// thread. No-op if no project is active or the file isn't dirty.
     ///
-    /// Pending libraries (registered via the New Library flow) are
-    /// materialised to disk **first** — `commands::materialize_pending_library`
-    /// runs `LocalGitAdapter::init` for each entry. Successful
-    /// materialisations push their `LibraryEntry` onto
-    /// `project.libraries` so the subsequent `.snxprj` write captures
-    /// them. Failures (e.g. target path now exists, permission glitch)
-    /// keep the entry pending so the user can fix the underlying
-    /// problem and retry on the next Save.
-    ///
-    /// Closes `feedback_no_disk_writes_without_user_save.md`'s "wait
-    /// for explicit user save" invariant: modal confirm registered the
-    /// pending entry; this Ctrl+S is the explicit save that actually
-    /// commits to disk.
-    fn save_active_project_if_dirty(&mut self) {
+    /// Pending libraries (registered via the New Library flow) are created
+    /// by the same worker job, before the file that lists them
+    /// (`begin_project_save`). A failure is reported and the project stays
+    /// dirty so the user can fix the cause and save again; it never blocks
+    /// the document save this runs beside.
+    fn save_active_project_if_dirty(&mut self) -> iced::Task<Message> {
         let Some(project_id) = self.document_state.active_project else {
-            return;
+            return iced::Task::none();
         };
-        let project_path = match self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-        {
-            Some(p) => p.path.clone(),
-            None => return,
-        };
-        if !self.document_state.is_document_dirty(&project_path) {
-            return;
-        }
-        if let Err(error) = self.persist_project_by_id(project_id) {
-            self.report_save_failure("Failed to save project file", &error);
+        match self.begin_project_save(project_id) {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_save_failure("Failed to save project file", &error);
+                iced::Task::none()
+            }
         }
     }
 
@@ -213,13 +196,17 @@ impl Signex {
         }
     }
 
-    /// Save the loaded project whose `.snxprj` sits at `path`. Thin
-    /// path-keyed wrapper over [`Self::persist_project_by_id`] used by the
-    /// Save-All-on-close/exit dispatcher, which iterates dirty paths and
-    /// cannot assume the dirty `.snxprj` belongs to the *active*
-    /// project. Returns an error when no loaded project owns `path`, or
-    /// when the underlying `.snxprj` write fails.
-    pub(crate) fn save_project_at_path(&mut self, path: &std::path::Path) -> Result<()> {
+    /// Start the off-thread save of the loaded project whose `.snxprj` sits
+    /// at `path`. Path-keyed for the Save-All-on-close/exit dispatcher, which
+    /// iterates dirty paths and cannot assume the dirty `.snxprj` belongs to
+    /// the *active* project. Errs when no loaded project owns `path` or the
+    /// save cannot start; the write's own failure is reported by its
+    /// completion and leaves the file dirty, which the Save All settle step
+    /// reads.
+    pub(crate) fn save_project_at_path(
+        &mut self,
+        path: &std::path::Path,
+    ) -> Result<iced::Task<Message>> {
         let project_id = self
             .document_state
             .projects
@@ -227,7 +214,7 @@ impl Signex {
             .find(|p| p.path == path)
             .map(|p| p.id)
             .with_context(|| format!("no loaded project at {}", path.display()))?;
-        self.persist_project_by_id(project_id)
+        self.begin_project_save(project_id)
     }
 
     /// Schematic Save As. `from_path` is the tab the dialog was opened

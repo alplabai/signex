@@ -1,0 +1,537 @@
+//! #859 — the `.snxprj` save runs off `update`: nothing is created or written
+//! until the returned task runs, and its completion applies the result only
+//! to the project that asked.
+
+use std::path::{Path, PathBuf};
+
+use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::app::state::ProjectId;
+use crate::app::{Message, ProjectCloseChoice, ProjectMsg, Signex};
+use crate::library::commands::PendingLibrarySpec;
+use crate::persist::run_task::outputs;
+
+struct Fx {
+    app: Signex,
+    id: ProjectId,
+    prj: PathBuf,
+    lib: PathBuf,
+    lib_id: uuid::Uuid,
+}
+
+/// A dirty project with one pending library `New.snxlib` beside it.
+fn fixture(dir: &Path) -> Fx {
+    let mut app = app_workspace(dir.to_str().expect("utf8"), &[]);
+    let id = app.document_state.projects[0].id;
+    let prj = app.document_state.projects[0].path.clone();
+    let lib = dir.join("New.snxlib");
+    let lib_id = uuid::Uuid::now_v7();
+    app.document_state.projects[0].pending_libraries.insert(
+        lib_id,
+        PendingLibrarySpec {
+            lib_path: lib.clone(),
+            enable_git: false,
+            use_lfs: false,
+            display_name: "New".into(),
+        },
+    );
+    app.document_state.mark_document_dirty(&prj);
+    Fx {
+        app,
+        id,
+        prj,
+        lib,
+        lib_id,
+    }
+}
+
+/// Run a save task to completion and return what it reported, undelivered.
+fn run(task: iced::Task<Message>) -> Message {
+    let mut messages = outputs(task);
+    assert_eq!(messages.len(), 1, "one completion per save");
+    messages.remove(0)
+}
+
+fn deliver(app: &mut Signex, message: Message) -> iced::Task<Message> {
+    app.update(message)
+}
+
+/// A needle for the Messages ring that is unique to this test's directory
+/// and sits early in the line (the ring keeps 157 bytes of each entry).
+fn dir_needle(dir: &Path) -> String {
+    dir.file_name()
+        .expect("dir name")
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn is_dirty(fx: &Fx) -> bool {
+    fx.app.document_state.is_document_dirty(&fx.prj)
+}
+
+#[test]
+fn begin_creates_and_writes_nothing_until_the_task_runs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    assert!(!fx.lib.exists(), "no git init inside update");
+    assert!(!fx.prj.exists(), "no project write inside update");
+    assert!(fx.app.document_state.document_saves.is_saving(&fx.prj));
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .contains_key(&fx.lib_id),
+        "the model is untouched until the completion"
+    );
+    drop(task);
+}
+
+#[test]
+fn the_completion_registers_the_library_and_cleans_the_project() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    let done = run(task);
+    // The worker has run; the model has not heard about it yet.
+    assert!(fx.lib.exists() && fx.prj.exists());
+    assert!(fx.app.document_state.projects[0].data.libraries.is_empty());
+    assert!(is_dirty(&fx));
+
+    drop(deliver(&mut fx.app, done));
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.is_empty());
+    assert_eq!(project.data.libraries.len(), 1);
+    assert_eq!(project.data.libraries[0].library_id, Some(fx.lib_id));
+    assert!(!is_dirty(&fx), "clean after the confirmed write");
+    assert!(!fx.app.document_state.document_saves.is_saving(&fx.prj));
+    let on_disk = signex_types::project::parse_project(&fx.prj).unwrap();
+    assert_eq!(on_disk.libraries.len(), 1, "the file lists the library");
+}
+
+#[test]
+fn an_edit_while_the_write_is_in_flight_keeps_the_project_dirty() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+    let done = run(task);
+
+    fx.app.document_state.projects[0].data.description = Some("typed meanwhile".into());
+    drop(deliver(&mut fx.app, done));
+
+    assert!(is_dirty(&fx), "the bytes on disk lack the edit");
+    assert_eq!(fx.app.document_state.projects[0].data.libraries.len(), 1);
+    let on_disk = signex_types::project::parse_project(&fx.prj).unwrap();
+    assert_eq!(on_disk.description, None);
+}
+
+#[test]
+fn a_library_that_cannot_be_created_stays_pending_and_is_reported() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    std::fs::create_dir_all(&fx.lib).unwrap();
+    let needle = dir_needle(tmp.path());
+    let before = crate::diagnostics::logged_count(&needle);
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    drop(deliver(&mut fx.app, run(task)));
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.contains_key(&fx.lib_id));
+    assert!(project.data.libraries.is_empty());
+    assert!(is_dirty(&fx), "never clean while a library is pending");
+    assert!(fx.app.document_state.error_notice.is_some());
+    assert!(
+        crate::diagnostics::logged_count(&needle) > before,
+        "the failure reaches the Messages panel"
+    );
+}
+
+/// Close Project through its real gate, discarding, while a write runs.
+fn close_project_discarding(fx: &mut Fx) {
+    use crate::app::{ContextMenuMsg, ProjectTreeAction};
+    let _ = fx
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::CloseProject(vec![fx.id.to_string()]),
+        )));
+    let result = fx.app.resolve_sheet_refs_blocking();
+    let _ = fx
+        .app
+        .update(Message::Project(ProjectMsg::CloseRefsResolved {
+            project_id: fx.id,
+            result,
+        }));
+    let _ = fx.app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+}
+
+#[test]
+fn a_completion_for_a_closed_project_changes_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let needle = dir_needle(tmp.path());
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+    let done = run(task);
+
+    close_project_discarding(&mut fx);
+    assert!(fx.app.document_state.projects.is_empty(), "really closed");
+    drop(deliver(&mut fx.app, done));
+
+    assert!(fx.app.document_state.projects.is_empty());
+    assert!(!fx.app.document_state.document_saves.is_saving(&fx.prj));
+    let reported = crate::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains("was created, but project") && e.message.contains(&needle));
+    assert!(reported, "the orphaned library is reported");
+}
+
+#[test]
+fn a_completion_for_a_reopened_project_does_not_touch_the_new_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+    let done = run(task);
+
+    // Open is refused while a write runs, so this cannot happen today; it
+    // pins that a completion never reaches a project it did not start from.
+    let mut reopened = fx.app.document_state.projects.remove(0);
+    reopened.id = fx.app.document_state.mint_project_id();
+    reopened.pending_libraries.clear();
+    fx.app.document_state.projects.push(reopened);
+    drop(deliver(&mut fx.app, done));
+
+    assert!(fx.app.document_state.projects[0].data.libraries.is_empty());
+}
+
+#[test]
+fn a_save_while_one_is_running_queues_one_follow_up_and_never_a_second_writer() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let first = fx.app.begin_project_save(fx.id).expect("planned");
+
+    let second = fx.app.begin_project_save(fx.id).expect("queued");
+    let third = fx.app.begin_project_save(fx.id).expect("coalesced");
+    assert!(outputs(second).is_empty() && outputs(third).is_empty());
+
+    let done = run(first);
+    fx.app.document_state.projects[0].data.description = Some("later".into());
+    let follow_up = deliver(&mut fx.app, done);
+
+    let messages = outputs(follow_up);
+    let writes = messages
+        .iter()
+        .filter(|m| matches!(m, Message::Project(ProjectMsg::FileSaved(_))))
+        .count();
+    assert_eq!(writes, 1, "exactly one follow-up write");
+    for message in messages {
+        drop(deliver(&mut fx.app, message));
+    }
+    assert!(!is_dirty(&fx));
+    let on_disk = signex_types::project::parse_project(&fx.prj).unwrap();
+    assert_eq!(on_disk.description.as_deref(), Some("later"));
+}
+
+#[test]
+fn a_project_save_refused_by_a_path_op_starts_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    fx.app.document_state.pending_path_ops.begin(
+        crate::app::path_ops::PathOpKind::Delete,
+        vec![fx.prj.clone()],
+        crate::app::state::CaseFold::PRESERVE,
+    );
+
+    assert!(fx.app.begin_project_save(fx.id).is_err());
+
+    assert!(!fx.app.document_state.document_saves.is_saving(&fx.prj));
+    assert!(!fx.lib.exists());
+}
+
+#[test]
+fn a_successful_write_moves_the_documents_epoch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let before = fx.app.document_state.documents_epoch;
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    drop(deliver(&mut fx.app, run(task)));
+
+    assert!(fx.app.document_state.documents_epoch > before);
+}
+
+/// Quit with Save All settles only after the project write completed: the
+/// project is clean and the library exists when the quit is decided.
+#[test]
+fn quit_save_all_waits_for_the_project_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let _ = fx.app.handle_app_quit_requested();
+    let task = fx.app.handle_app_quit_confirm(ProjectCloseChoice::SaveAll);
+
+    let messages = outputs(task);
+    let saved = messages
+        .iter()
+        .position(|m| matches!(m, Message::Project(ProjectMsg::FileSaved(_))))
+        .expect("the project write completes inside the Save All task");
+    let settled = messages
+        .iter()
+        .position(|m| matches!(m, Message::File(crate::app::FileMsg::SaveAllSettled(_))))
+        .expect("settle");
+    assert!(saved < settled, "settle comes after the write");
+    for message in messages {
+        drop(deliver(&mut fx.app, message));
+    }
+
+    assert!(fx.app.document_state.error_notice.is_none());
+    assert!(!is_dirty(&fx));
+    assert!(fx.lib.exists());
+}
+
+/// A Save All issued while a project write is still running does not decide
+/// the quit on that write: it keeps Signex open and says why.
+#[test]
+fn quit_save_all_with_a_write_in_flight_stays_open() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    let running = fx.app.begin_project_save(fx.id).expect("planned");
+    let _ = fx.app.handle_app_quit_requested();
+    let task = fx.app.handle_app_quit_confirm(ProjectCloseChoice::SaveAll);
+    for message in outputs(task) {
+        drop(deliver(&mut fx.app, message));
+    }
+    assert!(fx.app.document_state.error_notice.is_some(), "stays open");
+    assert!(is_dirty(&fx));
+
+    drop(deliver(&mut fx.app, run(running)));
+    assert!(!is_dirty(&fx), "the running write still lands");
+}
+
+/// A pending library `New` of `fx`, created on disk the way a worker that
+/// crashed before the project file was written would have left it.
+fn leave_created_library_behind(fx: &Fx, id: uuid::Uuid) {
+    let spec = fx.app.document_state.projects[0].pending_libraries[&fx.lib_id].clone();
+    crate::library::commands::create_pending_library(id, &spec, &Default::default())
+        .expect("created");
+}
+
+#[test]
+fn a_retry_adopts_the_library_a_crashed_save_left_behind() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    leave_created_library_behind(&fx, fx.lib_id);
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    drop(deliver(&mut fx.app, run(task)));
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.is_empty(), "no longer stuck");
+    assert_eq!(project.data.libraries.len(), 1);
+    assert!(!is_dirty(&fx));
+}
+
+#[test]
+fn another_library_at_the_path_is_still_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    leave_created_library_behind(&fx, uuid::Uuid::now_v7());
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    drop(deliver(&mut fx.app, run(task)));
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.contains_key(&fx.lib_id));
+    assert!(project.data.libraries.is_empty());
+    assert!(is_dirty(&fx));
+}
+
+#[test]
+fn an_edit_reverted_while_a_save_is_queued_ends_clean_with_no_extra_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    fx.app.document_state.projects[0].data.description = Some("a".into());
+    let first = fx.app.begin_project_save(fx.id).expect("planned");
+    fx.app.document_state.projects[0].data.description = Some("ab".into());
+    assert!(outputs(fx.app.begin_project_save(fx.id).expect("queued")).is_empty());
+    fx.app.document_state.projects[0].data.description = Some("a".into());
+
+    let follow_up = deliver(&mut fx.app, run(first));
+
+    let writes = outputs(follow_up)
+        .iter()
+        .filter(|m| matches!(m, Message::Project(ProjectMsg::FileSaved(_))))
+        .count();
+    assert_eq!(writes, 0, "memory already equals what was written");
+    assert!(!is_dirty(&fx));
+    let on_disk = signex_types::project::parse_project(&fx.prj).unwrap();
+    assert_eq!(on_disk.description.as_deref(), Some("a"));
+}
+
+fn head_blob(dir: &Path, rel: &str) -> Vec<u8> {
+    let repo = git2::Repository::open(dir).expect("repo");
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let entry = tree.get_path(Path::new(rel)).expect("entry");
+    repo.find_blob(entry.id()).unwrap().content().to_vec()
+}
+
+/// #1512: the "Save" commit records the bytes the write put on disk, not
+/// whatever the file holds when the commit worker reads it.
+#[test]
+fn the_save_commit_records_the_written_bytes_not_a_later_edit_of_the_file() {
+    use super::restore_commit_tests::{commit_revision, run_task};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    fx.app.document_state.projects[0].pending_libraries.clear();
+    commit_revision(tmp.path(), &fx.prj, "{}");
+    fx.app.document_state.projects[0].data.enable_git = true;
+    fx.app.document_state.projects[0].data.description = Some("saved".into());
+    fx.app.document_state.mark_document_dirty(&fx.prj);
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+
+    // Not `update`: it would drain the commit queue before we look at it.
+    let Message::Project(ProjectMsg::FileSaved(done)) = run(task) else {
+        panic!("a save completion");
+    };
+    let written = done.bytes.clone();
+    drop(fx.app.handle_project_file_saved(*done));
+    assert_eq!(fx.app.document_state.pending_git_commits.len(), 1);
+
+    std::fs::write(&fx.prj, b"someone else's edit").unwrap();
+    let commits = fx.app.drain_pending_git_commits();
+    run_task(&mut fx.app, commits);
+
+    let rel = fx.prj.file_name().unwrap().to_string_lossy().into_owned();
+    assert_eq!(head_blob(tmp.path(), &rel), written);
+}
+
+/// A pending library that asks for version control (and LFS), with the
+/// library an earlier init left behind: plain files only, same id.
+fn partly_created(fx: &mut Fx, use_lfs: bool) {
+    signex_library::git_identity::test_identity::install();
+    leave_created_library_behind(fx, fx.lib_id);
+    let spec = fx.app.document_state.projects[0]
+        .pending_libraries
+        .get_mut(&fx.lib_id)
+        .unwrap();
+    spec.enable_git = true;
+    spec.use_lfs = use_lfs;
+}
+
+fn retry(fx: &mut Fx) {
+    let task = fx.app.begin_project_save(fx.id).expect("planned");
+    drop(deliver(&mut fx.app, run(task)));
+}
+
+fn head_commit_exists(dir: &Path) -> bool {
+    git2::Repository::open(dir)
+        .ok()
+        .and_then(|repo| repo.head().ok()?.peel_to_commit().ok().map(|_| ()))
+        .is_some()
+}
+
+#[test]
+fn a_left_behind_library_gets_the_git_repo_that_was_asked_for() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    assert!(!tmp.path().join(".git").exists());
+
+    retry(&mut fx);
+
+    assert!(head_commit_exists(tmp.path()), "git init and a commit");
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .is_empty()
+    );
+    assert_eq!(fx.app.document_state.projects[0].data.libraries.len(), 1);
+}
+
+#[test]
+fn a_left_behind_library_gets_the_lfs_rules_that_were_asked_for() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    // The first init got as far as the commit, without LFS.
+    let spec = fx.app.document_state.projects[0].pending_libraries[&fx.lib_id].clone();
+    let repo = git2::Repository::init(tmp.path()).unwrap();
+    signex_library::adapters::local_git::LocalGitAdapter::complete_init(
+        &spec.lib_path,
+        signex_library::adapters::local_git::LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    drop(repo);
+    assert!(!tmp.path().join(".gitattributes").exists());
+    fx.app.document_state.projects[0]
+        .pending_libraries
+        .get_mut(&fx.lib_id)
+        .unwrap()
+        .use_lfs = true;
+
+    retry(&mut fx);
+
+    let attrs = std::fs::read_to_string(tmp.path().join(".gitattributes")).unwrap();
+    assert!(attrs.contains("*.step filter=lfs"), "{attrs}");
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_left_behind_library_with_an_unborn_repo_gets_its_initial_commit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    git2::Repository::init(tmp.path()).unwrap();
+    assert!(!head_commit_exists(tmp.path()));
+
+    retry(&mut fx);
+
+    assert!(head_commit_exists(tmp.path()));
+    assert!(
+        fx.app.document_state.projects[0]
+            .pending_libraries
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
+    let _ = crate::diagnostics::init_logging();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut fx = fixture(tmp.path());
+    partly_created(&mut fx, false);
+    // A `.git` that is not a repository: neither opened nor initialised.
+    std::fs::write(tmp.path().join(".git"), b"not a repository").unwrap();
+    let needle = dir_needle(tmp.path());
+    let before = crate::diagnostics::logged_count(&needle);
+
+    retry(&mut fx);
+
+    let project = &fx.app.document_state.projects[0];
+    assert!(project.pending_libraries.contains_key(&fx.lib_id));
+    assert!(project.data.libraries.is_empty());
+    let notice = fx.app.document_state.error_notice.clone().expect("card");
+    assert!(
+        notice.detail.contains("partly created library"),
+        "{}",
+        notice.detail
+    );
+    assert!(crate::diagnostics::logged_count(&needle) > before);
+}
