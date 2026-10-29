@@ -885,6 +885,8 @@ pub enum Tool {
     Component,
     Text,
     NoConnect,
+    /// One click drops a junction dot at the snapped point.
+    Junction,
     /// Generic No-ERC directive (Altium's "Place No ERC").
     NoErcDirective,
     BusEntry,
@@ -913,6 +915,7 @@ impl std::fmt::Display for Tool {
             Tool::Component => write!(f, "Place Component"),
             Tool::Text => write!(f, "Place Text"),
             Tool::NoConnect => write!(f, "Place No Connect"),
+            Tool::Junction => write!(f, "Place Junction"),
             Tool::NoErcDirective => write!(f, "Place No ERC"),
             Tool::BusEntry => write!(f, "Place Bus Entry"),
             Tool::Line => write!(f, "Draw Line"),

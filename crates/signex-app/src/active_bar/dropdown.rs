@@ -314,6 +314,11 @@ const WIRING: &[EntrySpec] = &[
         "Net Label",
         ActiveBarAction::PlaceNetLabel,
     ),
+    EntrySpec::item(
+        ic::icon_dd_junction,
+        "Junction",
+        ActiveBarAction::PlaceJunction,
+    ),
 ];
 
 const POWER: &[EntrySpec] = &[
@@ -970,9 +975,12 @@ mod tests {
     }
 
     #[test]
-    fn wiring_menu_is_four_ungated_items() {
+    fn wiring_menu_is_five_ungated_items() {
         let e = render(WIRING, TID, false, false);
-        assert_eq!(labels(&e), ["Wire", "Bus", "Bus Entry", "Net Label"]);
+        assert_eq!(
+            labels(&e),
+            ["Wire", "Bus", "Bus Entry", "Net Label", "Junction"]
+        );
         assert!(items(&e).iter().all(|(_, d)| !d)); // wiring is never gated
         assert_eq!(seps(&e), 0);
     }
@@ -1301,6 +1309,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1312,6 +1321,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1323,6 +1333,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (
@@ -1334,6 +1345,7 @@ mod tests {
                 "ITEM:Bus|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Bus Entry|disabled=false|icon=true|checked=false|shortcut=None",
                 "ITEM:Net Label|disabled=false|icon=true|checked=false|shortcut=None",
+                "ITEM:Junction|disabled=false|icon=true|checked=false|shortcut=None",
             ],
         ),
         (

@@ -31,6 +31,7 @@ pub mod dangling;
 pub mod document_options;
 pub mod drift;
 pub mod edit_row_modal;
+mod edit_row_params;
 pub mod editor;
 pub mod external_poll;
 pub mod messages;
@@ -40,6 +41,7 @@ pub mod panel;
 pub mod picker;
 pub mod place;
 pub mod placed_part;
+pub(crate) mod prefix_picker;
 pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;
@@ -52,6 +54,7 @@ pub mod settings;
 pub mod state;
 #[cfg(test)]
 pub(crate) mod test_adapters;
+pub(crate) mod unit_picker;
 pub mod updates_dialog;
 #[cfg(test)]
 mod view_purity_tests;

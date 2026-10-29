@@ -314,6 +314,8 @@ mod surface_failures;
 #[path = "regression/text_font_family.rs"]
 mod text_font_family;
 
+#[path = "regression/junction_tool.rs"]
+mod junction_tool;
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
 

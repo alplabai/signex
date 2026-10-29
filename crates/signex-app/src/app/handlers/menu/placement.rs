@@ -19,6 +19,7 @@ impl Signex {
             MenuMessage::PlaceComponent => Tool::Component,
             MenuMessage::PlaceText => Tool::Text,
             MenuMessage::PlaceNoConnect => Tool::NoConnect,
+            MenuMessage::PlaceJunction => Tool::Junction,
             _ => return None,
         };
         // Same path as the toolbar: buffer reset, cursor tag, ghost cleanup.

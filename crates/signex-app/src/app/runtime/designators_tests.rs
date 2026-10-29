@@ -516,3 +516,51 @@ fn a_commit_after_the_placement_changed_underneath_is_refused_and_logged() {
                 && e.message.contains("placement"))
     );
 }
+
+/// A child opened from the Projects panel records no placement. While a
+/// Navigator rebuild is pending, a designator edit there must still land in a
+/// placement's entry, never in the `reference` the other placement reads.
+#[test]
+fn a_designator_edit_on_a_projects_panel_child_while_rebuilding_writes_the_default_entry() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _top, child) = placed_twice_on_disk(&dir);
+    app.open_or_focus_sheet_path(child.clone());
+    app.refresh_panel_ctx();
+    app.settle_navigator();
+    assert_eq!(app.document_state.tab_placements.get(&child), None);
+
+    // A page is added to the project: the hierarchy on screen is now stale.
+    app.document_state.projects[0]
+        .data
+        .sheets
+        .push(signex_types::project::SheetEntry {
+            name: "T".into(),
+            filename: "T.snxsch".into(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+    app.refresh_panel_ctx();
+    assert!(!app.navigator_is_settled(), "precondition: rebuild pending");
+
+    let id = child_symbol(&app);
+    let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::EditSymbolDesignator(id, "R9".into()),
+    )));
+
+    let symbol = app.active_render_snapshot().unwrap().symbols[0].clone();
+    let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
+    let b = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)]);
+    assert_eq!(symbol.reference, "R1", "the shared reference is untouched");
+    assert_eq!(
+        symbol.designator_in(&a),
+        "R9",
+        "the default placement took it"
+    );
+    assert_eq!(
+        symbol.designator_in(&b),
+        "R101",
+        "the other placement did not"
+    );
+}
