@@ -1,6 +1,6 @@
 # Alternate footprints — overloaded `footprint_ref` cell
 
-Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 4 marks the field (2 = alternate symbols, 3 = labelled documents). The library server refuses a row write from a client below the current schema (code `row_schema_too_old`), and a client refuses to write to a server that reports a lower `row_schema`, so neither side drops alternates. As a last line, a client that sees a server echo different alternates **reports** the error. **Do not downgrade the library server once rows carry alternates**: a downgraded server has no schema guard for the field and drops it silently on the next write.
+Issue #1234. Status: codec in `signex-library::footprint_binding`, wired into `ComponentRow.alternate_footprints` (skipped while empty, so old rows keep their bytes and hash). `ROW_SCHEMA` 5 marks the field (2 = alternate symbols, 3 = labelled documents, 4 = description). The library server refuses a row write from a client below the current schema (code `row_schema_too_old`), and a client refuses to write to a server that reports a lower `row_schema`, so neither side drops alternates. As a last line, a client that sees a server echo different alternates **reports** the error. **Do not downgrade the library server once rows carry alternates**: a downgraded server has no schema guard for the field and drops it silently on the next write.
 
 ## Cell shapes
 

@@ -37,6 +37,7 @@ fn row(pn: &str, value: Option<ParamValue>) -> ComponentRow {
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(Uuid::nil(), Uuid::nil()),
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", "MPN"),

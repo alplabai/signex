@@ -27,6 +27,7 @@ fn full_row_round_trip_via_snxlib() {
         state: LifecycleState::Released,
         symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
         footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Yageo", "RC0805FR-0710KL"),

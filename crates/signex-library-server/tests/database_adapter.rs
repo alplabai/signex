@@ -430,7 +430,7 @@ fn send_row(
             server.url
         )
     };
-    server._runtime.block_on(async {
+    server.runtime.block_on(async {
         let mut req = reqwest::Client::new()
             .request(verb, url)
             .header("if-match", "\"1\"")
