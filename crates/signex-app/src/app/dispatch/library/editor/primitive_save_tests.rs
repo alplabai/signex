@@ -548,3 +548,117 @@ fn the_blocking_save_does_not_discard_a_task() {
         "settle through settle_primitive_save instead of dropping a Task"
     );
 }
+
+fn app_with_dirty_footprint(dir: &Path) -> (Signex, PathBuf) {
+    let mut app = app_workspace(&dir.to_string_lossy(), &[]);
+    let path = dir.join("Lib.snxfpt");
+    let file = signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("F"));
+    let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
+    editor.mark_dirty();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "Lib".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    (app, path)
+}
+
+/// Every reader that asks "is anything unsaved?" says so for exactly `path`.
+fn assert_unsaved_in_every_reader(app: &Signex, path: &Path) {
+    let d = &app.document_state;
+    assert!(d.is_document_dirty(path));
+    assert!(d.has_dirty_documents());
+    assert_eq!(d.dirty_document_count(), 1);
+    assert!(d.dirty_document_paths().contains(path));
+}
+
+fn assert_clean_in_every_reader(app: &Signex) {
+    let d = &app.document_state;
+    assert!(!d.has_dirty_documents());
+    assert_eq!(d.dirty_document_count(), 0);
+}
+
+#[test]
+fn a_failed_footprint_write_leaves_the_draft_unsaved_in_every_reader() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_footprint(dir.path());
+    // A directory where the file belongs: Save does not divert to Save As,
+    // and the atomic write into it fails.
+    std::fs::create_dir(&path).expect("blocker");
+
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+    assert_unsaved_in_every_reader(&app, &path);
+    land(&mut app, task);
+
+    assert_unsaved_in_every_reader(&app, &path);
+    assert!(app.document_state.footprint_editors[&path].is_dirty());
+    assert!(app.document_state.document_saves.failure(&path).is_some());
+}
+
+#[test]
+fn a_tab_parked_while_its_write_is_in_flight_is_dropped_once_the_write_lands() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(
+        app.document_state.symbol_editors.contains_key(&path),
+        "a draft still being written stays parked"
+    );
+    assert_unsaved_in_every_reader(&app, &path);
+
+    land(&mut app, task);
+    assert!(path.exists());
+    assert_clean_in_every_reader(&app);
+    assert!(
+        !app.document_state.symbol_editors.contains_key(&path),
+        "nothing holds the clean draft open"
+    );
+}
+
+#[test]
+fn a_tab_discarded_while_its_write_is_in_flight_leaves_no_mark_behind() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_symbol(dir.path());
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+
+    let _ = app.close_tab_now(0);
+    assert!(!app.document_state.symbol_editors.contains_key(&path));
+    assert_clean_in_every_reader(&app);
+
+    land(&mut app, task);
+    assert_clean_in_every_reader(&app);
+    assert!(!app.document_state.symbol_editors.contains_key(&path));
+}
+
+/// Save, a drag starts and ticks, the write lands for the older snapshot,
+/// then the drag is rejected and gives the flag back as it was before.
+#[test]
+fn a_rejection_after_a_mid_edit_completion_leaves_the_draft_clean() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = app_with_dirty_footprint(dir.path());
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+    // The drag's first tick: the pre-edit flag was false (the snapshot reset
+    // it), the tick sets it.
+    let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    let dirty_before = editor.is_dirty();
+    editor.mark_dirty();
+
+    land(&mut app, task);
+    assert_unsaved_in_every_reader(&app, &path);
+
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .set_dirty(dirty_before);
+    assert_clean_in_every_reader(&app);
+}

@@ -335,8 +335,8 @@ impl Signex {
     /// For the one edit path that mutates the engine through a method that
     /// is not a `Command` — `Engine::annotate_with_seed_and_locks`, which
     /// records its own history entry — so it cannot go through
-    /// [`Signex::apply_engine_command`] but still has to reach
-    /// `dirty_paths` (#585). Everything else should use the gateway, which
+    /// [`Signex::apply_engine_command`] but still has to be
+    /// marked dirty (#585). Everything else should use the gateway, which
     /// calls this as part of `finish_schematic_mutation`.
     ///
     /// Returns `false` when there is no active schematic session to mark.

@@ -385,7 +385,7 @@ impl Signex {
         self.ui_state.move_selection.open = false;
         // Through the mutation gateway, not `engine.execute` directly: the
         // gateway consumes the `CommandResult` this used to discard, so the
-        // sheet reaches `dirty_paths` — without it the quit guard sees a
+        // sheet is marked dirty — without it the quit guard sees a
         // clean workspace and the move goes out with the process (#585) —
         // and it re-derives the project netlist and invalidates only what
         // the move touched instead of the whole canvas.

@@ -321,6 +321,76 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
     );
 }
 
+/// A dirty symbol draft at `<library>/symbols/d.snxsym`, behind its tab.
+fn open_dirty_draft_in(f: &mut Fixture, library: &Path) -> PathBuf {
+    use signex_app::app::SymbolDocument;
+    use signex_library::{Symbol, SymbolFile};
+
+    let path = library.join("symbols").join("d.snxsym");
+    let mut editor = SymbolDocument::new(path.clone(), SymbolFile::from_symbol(Symbol::empty("D")));
+    editor.mark_dirty();
+    f.app
+        .document_state
+        .symbol_editors
+        .insert(path.clone(), editor);
+    f.app.document_state.tabs.push(TabInfo {
+        title: "d".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: Some(f.project_id),
+        kind: TabKind::SymbolEditor(path.clone()),
+    });
+    f.app.document_state.active_tab = f.app.document_state.tabs.len() - 1;
+    path
+}
+
+#[test]
+fn renaming_a_library_keeps_a_dirty_draft_inside_it_dirty_at_the_new_path() {
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let alpha = f.alpha.clone();
+    let old = open_dirty_draft_in(&mut f, &alpha);
+    let new = renamed.join("symbols").join("d.snxsym");
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let d = &f.app.document_state;
+    assert!(d.symbol_editors.contains_key(&new), "the editor moved");
+    assert!(!d.symbol_editors.contains_key(&old));
+    assert!(d.is_document_dirty(&new), "the draft is still unsaved");
+    assert!(!d.is_document_dirty(&old));
+    assert_eq!(d.dirty_document_count(), 1);
+    let tab = d.tabs.iter().find(|t| t.path == new).expect("tab moved");
+    assert!(
+        matches!(&tab.kind, TabKind::SymbolEditor(p) if *p == new),
+        "the tab's kind follows the editor, or Save All writes the old folder"
+    );
+    assert!(d.is_document_dirty(&tab.path), "the tab dot stays on");
+}
+
+#[test]
+fn a_library_rename_waits_for_a_draft_inside_it_that_is_being_saved() {
+    let mut f = fixture();
+    let alpha = f.alpha.clone();
+    let old = open_dirty_draft_in(&mut f, &alpha);
+    // A write of the draft is in flight; the guard keeps it so.
+    let _in_flight = f.app.document_state.document_saves.begin_work(old.clone());
+    assert!(f.app.document_state.document_saves.is_saving(&old));
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert!(f.alpha.exists(), "nothing moved");
+    assert!(
+        f.app.ui_state.rename_dialog.is_some(),
+        "the dialog stays open"
+    );
+    assert!(
+        f.app.document_state.symbol_editors.contains_key(&old),
+        "the draft stays where its write will land"
+    );
+    assert!(f.app.document_state.is_document_dirty(&old));
+}
+
 #[test]
 fn a_failed_file_rename_changes_nothing_and_is_logged() {
     let _ = diagnostics::init_logging();

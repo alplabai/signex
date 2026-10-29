@@ -15,7 +15,7 @@ impl Signex {
     /// Projects-panel right-click → Close Project.
     ///
     /// If any file in the project's directory has unsaved edits
-    /// (`dirty_paths` intersects the project dir), opens the
+    /// (a dirty document lies in the project dir), opens the
     /// `ProjectCloseConfirm` modal first instead of closing
     /// immediately. The modal's choice handler
     /// (`handle_project_close_confirm`) calls back into this method
@@ -112,7 +112,7 @@ impl Signex {
         // scan walks ancestors rather than the immediate parent, and the
         // project's own `.snxprj` sits at the root and is picked up too.
         // Component Preview rows are keyed by row, not file, so they are
-        // among the dirty paths; the scan places them too (#666): a row is
+        // not among the dirty paths; the scan places them too (#666): a row is
         // the project's only when its library is the project's own.
         let scan = self.current_close_scan(project_idx, &sheet_refs);
         if let Some(line) = scan.warning(&project_name) {
@@ -155,7 +155,7 @@ impl Signex {
     /// Inner close-project flow that actually drops tabs + the
     /// project entry. Called either directly (clean project) or via
     /// the project-close confirm modal once the user picks Save All
-    /// or Discard All. Trusts that `dirty_paths` for this project is
+    /// or Discard All. Trusts that the dirty marks for this project are
     /// already empty apart from `kept` (callers ensure this).
     ///
     /// `kept` are dirty documents another open project claims: their tabs
@@ -222,9 +222,9 @@ impl Signex {
         }
 
         // Drop the project's parked engines too — without this, an
-        // engine that was kept alive by `dirty_paths` would leak
+        // engine that was kept alive by its dirty mark would leak
         // through project close. Save All / Discard All have already
-        // pruned `dirty_paths` for the project, so this loop just
+        // pruned the dirty marks for the project, so this loop just
         // sweeps the engine map for paths directly in this project's
         // directory or reached through its sheet hierarchy.
         if let Some(project) = self.document_state.projects.get(project_idx) {
@@ -645,7 +645,7 @@ impl Signex {
 
     /// Entry point for every app-exit request — chrome ✕, File ▸ Exit,
     /// and OS close (Alt+F4) all funnel here. If any document in the
-    /// workspace has unsaved edits (`dirty_paths` non-empty, or a dirty
+    /// workspace has unsaved edits (a dirty document, or a dirty
     /// Component Preview row), opens the
     /// app-quit confirmation modal instead of exiting; otherwise closes
     /// the main window, which the daemon turns into process exit via

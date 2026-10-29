@@ -175,7 +175,7 @@ impl Signex {
             // If we parked an engine for this file (closed while dirty),
             // restore it instead of reparsing — Altium parity. Re-parsing
             // would silently discard the user's in-memory edits, which is
-            // exactly what `dirty_paths` was built to prevent.
+            // exactly what the dirty mark exists to prevent.
             if self.document_state.engines.contains_key(&file_path)
                 && self.document_state.is_document_dirty(&file_path)
             {

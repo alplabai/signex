@@ -368,7 +368,7 @@ pub struct UiState {
     pub remove_dialog: Option<crate::app::RemoveDialogState>,
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`
     /// while the user is being asked to save / discard / cancel a
-    /// close request that intersects `dirty_paths`. Cleared on any
+    /// close request that touches a dirty document. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
     /// "Create the missing sheet?" confirm; `Some` while it is up.
@@ -378,7 +378,7 @@ pub struct UiState {
     pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
-    /// request that intersects `dirty_paths`. Cleared on any of the
+    /// request that touches a dirty document. Cleared on any of the
     /// three button choices.
     pub app_quit_confirm: Option<crate::app::AppQuitConfirmState>,
     /// v0.11 Enable Version Control modal — opened from the

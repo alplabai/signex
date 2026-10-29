@@ -407,8 +407,10 @@ impl Signex {
                     editor.is_dirty()
                 }),
         };
-        if edited_since == Some(false) {
-            self.mark_primitive_clean(path);
+        match edited_since {
+            Some(false) => self.mark_primitive_clean(path),
+            Some(true) => self.document_state.release_save_hold(path),
+            None => {}
         }
     }
 

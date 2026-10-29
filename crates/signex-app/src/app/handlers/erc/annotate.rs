@@ -309,8 +309,8 @@ impl Signex {
 
         let mut resets = 0_usize;
         // Active engine — goes through ReplaceDocument so undo records the
-        // snapshot, and through the mutation gateway so the sheet reaches
-        // `dirty_paths` (#585). The clone is taken first and the engine
+        // snapshot, and through the mutation gateway so the sheet is
+        // marked dirty (#585). The clone is taken first and the engine
         // borrow released, because the gateway needs `&mut self`.
         let reset_sheet = self.document_state.active_engine().and_then(|engine| {
             if engine.document().is_read_only() {

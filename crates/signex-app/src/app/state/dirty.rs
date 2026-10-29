@@ -80,6 +80,16 @@ impl DocumentState {
         self.dirty_docs.paths.insert(path.to_path_buf());
     }
 
+    /// A save landed for a snapshot older than the draft's newest edit: the
+    /// editor flag now carries the dirt, so release the hold. A later
+    /// rejected edit that gives the flag back as clean then makes the draft
+    /// clean. A path no draft backs keeps its entry.
+    pub fn release_save_hold(&mut self, path: &Path) {
+        if self.symbol_editors.contains_key(path) || self.footprint_editors.contains_key(path) {
+            self.dirty_docs.paths.remove(path);
+        }
+    }
+
     /// The document at `path` matches the disk (a save landed) or its edits
     /// were discarded: clear every place that knew it dirty.
     pub fn mark_document_clean(&mut self, path: &Path) {

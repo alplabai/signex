@@ -1,5 +1,7 @@
 # Project document tab, shell + General section (#1202, epic #1084)
 
+> Note (#661): the dirty-state names below (`dirty_paths`, `TabInfo::dirty`, `sync_editor_dirty_paths`) are superseded. A document's unsaved state is `DocumentState::is_document_dirty`; see `docs/DIRTY_STATE.md`.
+
 Status: implemented in `feat/1202-project-tab-shell`. Scope: the first slice of
 #1084. The read-only Project Options modal is replaced by a **Project** document
 tab with one section, General.
