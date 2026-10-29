@@ -18,6 +18,8 @@ mod update;
 mod view;
 
 #[cfg(test)]
+mod open_command_tests;
+#[cfg(test)]
 mod undo_routing_tests;
 
 pub use general::ProjectGeneralFacts;

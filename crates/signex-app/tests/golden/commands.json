@@ -660,27 +660,7 @@
     "category": "place"
   },
   {
-    "id": "place_power_gnd",
-    "group": "Schematic",
-    "category": "place"
-  },
-  {
-    "id": "place_power_plus12",
-    "group": "Schematic",
-    "category": "place"
-  },
-  {
-    "id": "place_power_plus5",
-    "group": "Schematic",
-    "category": "place"
-  },
-  {
     "id": "place_power_symbol",
-    "group": "Schematic",
-    "category": "place"
-  },
-  {
-    "id": "place_power_vcc",
     "group": "Schematic",
     "category": "place"
   },
@@ -767,11 +747,6 @@
   {
     "id": "print",
     "group": "General",
-    "category": "file"
-  },
-  {
-    "id": "print_active_document",
-    "group": "Schematic",
     "category": "file"
   },
   {

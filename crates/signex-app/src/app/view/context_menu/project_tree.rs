@@ -7,9 +7,7 @@
 
 use super::*;
 
-use super::items::{
-    dd_cmd, dd_cmd_disabled, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher,
-};
+use super::items::{dd_cmd, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
@@ -417,18 +415,14 @@ impl Signex {
                 // whenever a schematic tab is open, regardless of which
                 // tree row was clicked.
                 v.push(if has_schematic {
-                    dd_cmd(
+                    dd_msg(
                         None,
-                        "print_active_document",
-                        &self.keymap_shortcut_label("print_active_document"),
+                        "Print...",
+                        "",
                         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::PrintActive)),
                     )
                 } else {
-                    dd_cmd_disabled(
-                        None,
-                        "print_active_document",
-                        &self.keymap_shortcut_label("print_active_document"),
-                    )
+                    dd_disabled(None, "Print...", None)
                 });
                 v.push(dd_planned(None, "Show Differences...", Some("v4.3")));
             }

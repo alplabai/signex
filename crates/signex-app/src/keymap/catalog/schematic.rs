@@ -415,56 +415,6 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
-        id: "print_active_document",
-        category: "file",
-        label: "Print the active document",
-        menu_label: Some("Print..."),
-        group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_ONLY,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
-        id: "place_power_gnd",
-        category: "place",
-        label: "Place GND power port",
-        menu_label: Some("Place GND power port"),
-        group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
-        id: "place_power_plus12",
-        category: "place",
-        label: "Place +12 power port",
-        menu_label: Some("Place +12 power port"),
-        group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
-        id: "place_power_plus5",
-        category: "place",
-        label: "Place +5 power port",
-        menu_label: Some("Place +5 power port"),
-        group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
-        id: "place_power_vcc",
-        category: "place",
-        label: "Place VCC power port",
-        menu_label: Some("Place VCC power port"),
-        group: CommandGroup::Schematic,
-        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
-        ..CommandMetadata::DEFAULT
-    },
-    CommandMetadata {
         id: "update_pcb_from_schematic",
         category: "pcb_sync",
         label: "Update PCB from schematic",

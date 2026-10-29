@@ -22,6 +22,27 @@ const TID: ThemeId = ThemeId::CatppuccinMocha;
 /// Rows that run no catalog command, with the reason each stays local.
 /// A row not listed here and carrying no command id fails the walk.
 const SURFACE_LOCAL: &[(&str, &str)] = &[
+    // Place flyout power ports: the PlacePower* family becomes one
+    // `place_power_port(style)` command (audit §4), so no per-row ids.
+    (
+        "GND Power Port",
+        "power-port family, awaiting place_power_port(style)",
+    ),
+    (
+        "VCC Power Port",
+        "power-port family, awaiting place_power_port(style)",
+    ),
+    (
+        "+5 Power Port",
+        "power-port family, awaiting place_power_port(style)",
+    ),
+    (
+        "+12 Power Port",
+        "power-port family, awaiting place_power_port(style)",
+    ),
+    // Project tree: the Print row keeps its own wording (menu text per
+    // surface is a later concern).
+    ("Print...", "tree-addressed wording, no per-surface id"),
     // Canvas: planned stubs that run nothing yet.
     ("Clear Filter", "planned, no behaviour"),
     ("Part Actions", "planned submenu stub"),

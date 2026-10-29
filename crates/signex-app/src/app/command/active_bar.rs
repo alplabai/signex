@@ -12,6 +12,10 @@
 //!   - `ActiveBarAction::OutsideArea`
 //!   - `ActiveBarAction::TouchingRectangle`
 //!   - `ActiveBarAction::TouchingLine`
+//!   - `ActiveBarAction::PlacePowerGND`
+//!   - `ActiveBarAction::PlacePowerVCC`
+//!   - `ActiveBarAction::PlacePowerPlus12`
+//!   - `ActiveBarAction::PlacePowerPlus5`
 //!   - `ActiveBarAction::PlacePowerMinus5`
 //!   - `ActiveBarAction::PlacePowerArrow`
 //!   - `ActiveBarAction::PlacePowerWave`
@@ -111,10 +115,6 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ("place_parameter_set", ActiveBarAction::PlaceParameterSet),
     ("place_port", ActiveBarAction::PlacePort),
     ("place_reuse_block", ActiveBarAction::PlaceReuseBlock),
-    ("place_power_gnd", ActiveBarAction::PlacePowerGND),
-    ("place_power_plus12", ActiveBarAction::PlacePowerPlus12),
-    ("place_power_plus5", ActiveBarAction::PlacePowerPlus5),
-    ("place_power_vcc", ActiveBarAction::PlacePowerVCC),
     ("place_sheet_entry", ActiveBarAction::PlaceSheetEntry),
     ("place_sheet_symbol", ActiveBarAction::PlaceSheetSymbol),
     ("place_signal_harness", ActiveBarAction::PlaceSignalHarness),
@@ -233,6 +233,10 @@ mod tests {
         ActiveBarAction::OutsideArea,
         ActiveBarAction::TouchingRectangle,
         ActiveBarAction::TouchingLine,
+        ActiveBarAction::PlacePowerGND,
+        ActiveBarAction::PlacePowerVCC,
+        ActiveBarAction::PlacePowerPlus12,
+        ActiveBarAction::PlacePowerPlus5,
         ActiveBarAction::PlacePowerMinus5,
         ActiveBarAction::PlacePowerArrow,
         ActiveBarAction::PlacePowerWave,
