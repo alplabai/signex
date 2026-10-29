@@ -45,7 +45,7 @@ fn sheet_with_units(units: &[u32]) -> SchematicSheet {
         symbols: units
             .iter()
             .map(|&unit| Symbol {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::now_v7(),
                 lib_id: LIB.into(),
                 reference: "U1".into(),
                 unit,
@@ -113,7 +113,7 @@ fn the_project_pass_uses_placement_designators_and_no_erc_directives() {
     );
 
     sheet.no_erc_directives.push(NoConnect {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         position: Point::new(25.4, 25.4),
     });
     assert!(project_units_not_placed(&[("s", &sheet)]).is_empty());
