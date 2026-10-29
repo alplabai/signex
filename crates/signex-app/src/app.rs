@@ -28,6 +28,9 @@ mod load_gateway;
 mod mutation_gateway;
 mod project_tab;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
+pub(crate) mod designator_scan;
+#[cfg(test)]
+mod designator_scan_tests;
 pub mod palette_index;
 #[cfg(test)]
 mod palette_index_tests;

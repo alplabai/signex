@@ -199,6 +199,10 @@ impl Signex {
                 library_path,
                 result,
             ),
+            LibraryMessage::DesignatorsScanned { generation, result } => {
+                self.apply_designator_scan(generation, &result);
+                Task::none()
+            }
             LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
             LibraryMessage::SymbolChoiceResolved {
                 target_sheet,

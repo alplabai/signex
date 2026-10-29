@@ -446,6 +446,9 @@ pub struct DocumentState {
     /// first and applies its result only if it is unchanged, so it never
     /// installs bytes a later open, save or close has already superseded.
     pub documents_epoch: u64,
+    /// Designators used on the sheets of the project a part is placed in,
+    /// scanned off-thread; see `designator_scan.rs`.
+    pub(crate) designator_cache: crate::app::designator_scan::DesignatorCache,
     /// Last board revision handed out; see `state/pcb_revision.rs`. Never reused.
     pub next_pcb_revision: u64,
     /// The current board revision per PCB path; a PCB save completion only
