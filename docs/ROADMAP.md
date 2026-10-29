@@ -50,7 +50,7 @@ have this section and drifted six versions away from reality as a result.
 |------|--------------------|
 | Latest tagged release | **v0.15.0** (2026-07-23) |
 | Next tag | **v1.0.0-rc.1**, the first release candidate of v1.0.0. It publishes as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 until v1.0.0 |
-| `workspace.package.version` | **0.15.0** |
+| `workspace.package.version` | **1.0.0-rc.1** |
 | Latest CHANGELOG section | **0.15.0** — shipped 2026-07-23; everything since is in `[Unreleased]` and `changelog.d/` (folded in by release prep) |
 | Current work | v0.16.0 milestone: one open issue left, #271 (menu rows keyed off one label/shortcut table). v1.0.0 milestone: #859 (synchronous IO still in `update`), #661 (one document model epic), #322 (this user guide). Release prep for rc.1 follows |
 
