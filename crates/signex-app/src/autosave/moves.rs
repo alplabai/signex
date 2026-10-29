@@ -182,6 +182,30 @@ impl AutosaveState {
         None
     }
 
+    /// Drop each released move of this run whose old key a document took
+    /// over (renamed onto it): the copy there is that document's now, and
+    /// moving it would carry it to the wrong document. The released move's
+    /// own document writes fresh copies at `new` instead. Whatever sits at
+    /// the old key is left there, never removed: if that document had no
+    /// copy of its own and never writes one, the stale copy stays at its key
+    /// and may be offered when it is next opened.
+    fn drop_released_from_reused_keys(&mut self) {
+        let reused: Vec<bool> = self
+            .moves
+            .iter()
+            .map(|m| m.released && m.this_run && self.key_in_use(&m.old))
+            .collect();
+        let mut reused = reused.into_iter();
+        let journal_clears = &mut self.journal_clears;
+        self.moves.retain(|m| {
+            let dropped = reused.next().unwrap_or(false);
+            if dropped {
+                journal_clears.push((m.old.clone(), m.targets.clone()));
+            }
+            !dropped
+        });
+    }
+
     /// Whether `path`'s key belongs to a document again: a copy tracked,
     /// offered, kept, checked or restored there, or a write, removal or
     /// rename into it owed or running.
@@ -284,6 +308,7 @@ impl AutosaveState {
     /// keys of obsolete copies to remove instead. A rename whose source is
     /// itself the target of a rename still running waits for it.
     pub fn take_moves(&mut self) -> (Vec<SidecarMove>, Vec<PathBuf>) {
+        self.drop_released_from_reused_keys();
         let (mut start, mut obsolete, mut wait) = (Vec::new(), Vec::new(), Vec::new());
         for mut owed in std::mem::take(&mut self.moves) {
             // The copy is still being written or moved into `old`.
@@ -359,28 +384,54 @@ mod tests {
         let mut state = tracked_at(&[a, b]);
         state.rekey(a, t);
         released(&mut state);
-        // Document b is renamed to a: its copy lands at key(a).
+        // Document b is renamed to a: its copy is owed to key(a). t's fresh
+        // copy lands before the next tick.
         state.rekey(b, a);
+        fresh_copy_lands(&mut state, t);
+        assert_eq!(
+            state.take_obsolete_released(t),
+            None,
+            "key(a) is b's only copy"
+        );
+        assert!(state.written.contains_key(a), "b's copy stays tracked");
+        assert_eq!(state.take_journal_clears(), [(a.into(), vec![t.into()])]);
         let (start, obsolete) = state.take_moves();
         assert!(obsolete.is_empty());
         let started: Vec<_> = start
             .iter()
             .map(|m| (m.old.clone(), m.new.clone()))
             .collect();
-        assert_eq!(started, [(b.into(), a.into())], "a -> t waits for b -> a");
+        assert_eq!(started, [(b.into(), a.into())], "a -> t is settled");
         state.move_landed(&start[0]);
-        fresh_copy_lands(&mut state, t);
-        assert_eq!(
-            state.take_obsolete_released(t),
-            None,
-            "key(a) is b's only copy now"
-        );
+        assert!(!state.has_owed_moves());
+    }
+
+    #[test]
+    fn a_tick_after_a_rename_onto_the_old_key_never_moves_that_copy_away() {
+        let (a, b, t) = (Path::new("a"), Path::new("b"), Path::new("t"));
+        let mut state = tracked_at(&[a, b]);
+        state.rekey(a, t);
+        released(&mut state);
+        // Document b is renamed to a: its copy lands at key(a).
+        state.rekey(b, a);
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty());
+        state.move_landed(&start[0]);
+        // A tick before t's fresh copy lands.
+        let (start, obsolete) = state.take_moves();
+        assert!(obsolete.is_empty(), "b's copy at a is never removed");
+        let started: Vec<_> = start
+            .iter()
+            .map(|m| (m.old.clone(), m.new.clone()))
+            .collect();
+        assert!(started.is_empty(), "b's copy is not carried to t");
+        assert!(!state.has_owed_moves());
         assert!(state.written.contains_key(a), "b's copy stays tracked");
         assert!(
-            !state.has_owed_moves(),
-            "the settled move never brings b's copy over to t"
+            state
+                .take_journal_clears()
+                .contains(&(a.into(), vec![t.into()]))
         );
-        assert_eq!(state.take_journal_clears(), [(a.into(), vec![t.into()])]);
     }
 
     #[test]
