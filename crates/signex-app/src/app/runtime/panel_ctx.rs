@@ -36,11 +36,19 @@ impl Signex {
         // off to re-bind a perfectly good UUID, so the error arm gets
         // its own wording and a Messages-panel record.
         let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
-            Ok(Some(s)) => format!(
-                "Symbol bound — {} pin{}",
-                s.pins.len(),
-                if s.pins.len() == 1 { "" } else { "s" }
-            ),
+            Ok(Some(s)) => {
+                // The alternate (De Morgan) body redraws the same pins, so
+                // counting it too would double them.
+                let pins = s
+                    .pins
+                    .iter()
+                    .filter(|p| p.body_style != signex_library::BODY_ALTERNATE)
+                    .count();
+                format!(
+                    "Symbol bound — {pins} pin{}",
+                    if pins == 1 { "" } else { "s" }
+                )
+            }
             Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
             Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
             Err(e) => {
@@ -121,6 +129,10 @@ impl Signex {
                 request.exists.push(resolved);
             }
         }
+        request.hierarchy = self.hierarchy_request();
+        request.exists.extend(self.hierarchy_exists_paths());
+        request.exists.sort();
+        request.exists.dedup();
         request
     }
 
@@ -399,26 +411,15 @@ impl Signex {
                     pcb_file_dirty,
                     pcb_file_active,
                     pcb_file_missing,
-                    sheets: p
-                        .data
-                        .sheets
-                        .iter()
-                        .map(|sheet| {
-                            let (is_open, is_dirty, is_active) = lookup(&sheet.filename);
-                            let missing = !exists(&sheet.filename);
-                            crate::panels::SheetInfo {
-                                name: sheet.name.clone(),
-                                filename: sheet.filename.clone(),
-                                sym_count: sheet.symbols_count,
-                                wire_count: sheet.wires_count,
-                                label_count: sheet.labels_count,
-                                is_open,
-                                is_dirty,
-                                is_active,
-                                missing,
-                            }
-                        })
-                        .collect(),
+                    sheets: super::sheet_tree::project_sheet_rows(
+                        p,
+                        fs_facts,
+                        &super::sheet_tree::RowMarks {
+                            open: &open_paths,
+                            dirty: &dirty_paths,
+                            active: active_path_ref,
+                        },
+                    ),
                     libraries,
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),

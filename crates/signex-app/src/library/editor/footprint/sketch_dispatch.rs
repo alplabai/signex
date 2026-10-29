@@ -268,7 +268,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
             });
         }
         RoleTag::Courtyard => {
-            entity.courtyard = Some(CourtyardAttr);
+            entity.courtyard = Some(CourtyardAttr {});
         }
         RoleTag::Keepout => {
             entity.keepout = Some(KeepoutAttr {

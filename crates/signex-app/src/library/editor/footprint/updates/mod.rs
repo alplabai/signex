@@ -21,6 +21,7 @@ mod selection;
 mod sketch;
 mod view;
 
+pub(crate) use active_bar::{apply_filter_preset, capture_filter_preset};
 pub(crate) use sketch::solved::settle_pending_inline;
 
 use crate::library::editor::footprint::sketch_solve_task;

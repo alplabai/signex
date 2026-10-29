@@ -54,7 +54,7 @@ fn press_space(editor: &mut SymbolDocument, shift: bool) {
         editor.selected.clone(),
         editor.tool,
         &editor.polygon_vertices,
-        editor.active_part,
+        editor.view(),
         false,
         &editor.camera,
         1.27,
@@ -98,6 +98,7 @@ fn right_pin_symbol() -> Symbol {
 fn rect_symbol() -> Symbol {
     let mut s = Symbol::empty("T");
     s.graphics.push(SymbolGraphic {
+        body_style: 1,
         kind: SymbolGraphicKind::Rectangle {
             from: [1.0, 2.0],
             to: [3.0, 4.0],

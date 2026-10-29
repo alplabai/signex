@@ -134,6 +134,16 @@ impl Signex {
         schematic_path: std::path::PathBuf,
         only: Option<uuid::Uuid>,
     ) {
+        // A read-only sheet (written by a newer Signex) takes no update, not
+        // even a silent Personal one: it would turn dirty on open (#1402).
+        let read_only = self
+            .document_state
+            .engines
+            .get(&schematic_path)
+            .is_some_and(|engine| engine.document().is_read_only());
+        if read_only {
+            return;
+        }
         let mut placed = self.placed_library_symbols(&schematic_path);
         if let Some(only) = only {
             // Every instance of a `lib_id` shares one embedded copy, so the

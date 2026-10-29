@@ -33,6 +33,7 @@
 //!    copy is older than the file. From open until that check resolves, and
 //!    while its offer is unanswered, no write may replace the copy.
 
+mod keys;
 pub mod pending_move;
 pub mod recovery;
 pub mod sidecar;

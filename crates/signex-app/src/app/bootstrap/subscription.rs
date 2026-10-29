@@ -3,6 +3,7 @@
 
 use super::super::*;
 
+use super::window_subscriptions;
 use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
 
@@ -26,6 +27,7 @@ use iced::Subscription;
 #[derive(Clone, Default)]
 struct OpenOverlays {
     find_replace_open: bool,
+    find_similar_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -48,6 +50,7 @@ struct OpenOverlays {
     reprefix_confirm_open: bool,
     app_quit_confirm_open: bool,
     project_close_confirm_open: bool,
+    create_child_sheet_confirm_open: bool,
     grid_properties_open: bool,
     selection_filter_custom_open: bool,
     library_picker_open: bool,
@@ -63,7 +66,10 @@ struct OpenOverlays {
     /// the three dialogs' own Cancel-choice messages.
     recovery_kind: Option<RecoveryKind>,
     error_notice_open: bool,
+    /// The notice lives in its own window: it no longer blocks the stack here.
+    error_notice_detached: bool,
     netlist_incomplete_prompt_open: bool,
+    netlist_prompt_detached: bool,
     print_preview_open: bool,
     bom_preview_open: bool,
     net_color_custom_open: bool,
@@ -147,10 +153,28 @@ impl OpenOverlays {
     /// painting. The painter now carries the same filter and the terms
     /// match one for one.
     fn has_blocking_modal(&self) -> bool {
-        self.error_notice_open
-            || self.netlist_incomplete_prompt_open
+        (self.error_notice_open && !self.error_notice_detached)
+            || (self.netlist_incomplete_prompt_open && !self.netlist_prompt_detached)
             || self.print_preview_open
             || self.net_color_custom_open
+    }
+
+    /// Whether a confirm or warning dialog is open, the class that locks
+    /// the system menu bar's model rows. Tool windows (ERC, BOM, Preferences,
+    /// Annotate, Print Preview, calculator, find/replace, shortcuts) do not.
+    fn has_locking_confirm(&self) -> bool {
+        self.error_notice_open
+            || self.netlist_incomplete_prompt_open
+            || self.app_quit_confirm_open
+            || self.project_close_confirm_open
+            || self.create_child_sheet_confirm_open
+            || self.rename_open
+            || self.remove_open
+            || self.annotate_reset_confirm_open
+            || self.close_library_confirm_open
+            || self.delete_confirm.is_some()
+            || self.recovery_kind.is_some()
+            || self.autosave_recovery_open
     }
 
     /// The Cancel/Close message `id` claims for Esc, or `None` when that
@@ -227,6 +251,13 @@ impl OpenOverlays {
             OverlayId::FindReplace => self
                 .find_replace_open
                 .then(|| Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)),
+            OverlayId::FindSimilar => self.find_similar_open.then(|| {
+                Message::Selection(
+                    crate::app::selection_request::SelectionRequest::FindSimilar(
+                        crate::find_similar::FindSimilarMsg::Closed,
+                    ),
+                )
+            }),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
@@ -250,6 +281,9 @@ impl OpenOverlays {
             OverlayId::ProjectCloseConfirm => self
                 .project_close_confirm_open
                 .then(|| Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel))),
+            OverlayId::CreateChildSheetConfirm => self
+                .create_child_sheet_confirm_open
+                .then(|| Message::Project(ProjectMsg::CreateChildSheetAnswered { create: false })),
             OverlayId::AppQuitConfirm => self
                 .app_quit_confirm_open
                 .then(|| Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel))),
@@ -378,7 +412,7 @@ impl OpenOverlays {
 /// `ParameterManager` have no `OverlayId` and no `OpenOverlays` field —
 /// they are part of the `every_modal_claims_escape` gap, and Esc does
 /// nothing over their in-window cards either.
-fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
+pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     use crate::app::state::ModalId;
     match modal {
         ModalId::AnnotateDialog => Some(OverlayId::AnnotateDialog),
@@ -394,6 +428,26 @@ fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
         ModalId::EnableVersionControl => Some(OverlayId::EnableVersionControl),
         ModalId::GridProperties => Some(OverlayId::GridProperties),
         ModalId::SelectionFilterCustom => Some(OverlayId::SelectionFilterCustom),
+        ModalId::About => Some(OverlayId::About),
+        ModalId::KeyboardShortcuts => Some(OverlayId::KeyboardShortcuts),
+        ModalId::PassiveCalculator => Some(OverlayId::PassiveCalculator),
+        ModalId::FirstRunTour => Some(OverlayId::FirstRunTour),
+        ModalId::CreateChildSheet => Some(OverlayId::CreateChildSheetConfirm),
+        ModalId::ErrorNotice => Some(OverlayId::ErrorNotice),
+        ModalId::NetlistIncompletePrompt => Some(OverlayId::NetlistIncompletePrompt),
+        ModalId::AutosaveRecovery => Some(OverlayId::AutosaveRecovery),
+        ModalId::ProjectCloseConfirm => Some(OverlayId::ProjectCloseConfirm),
+        ModalId::AppQuitConfirm => Some(OverlayId::AppQuitConfirm),
+        ModalId::LibraryPicker => Some(OverlayId::LibraryPicker),
+        ModalId::LibraryEditRow => Some(OverlayId::EditRowModal),
+        ModalId::LibraryPrimitivePicker => Some(OverlayId::PrimitivePicker),
+        ModalId::LibraryDocumentOptions => Some(OverlayId::DocumentOptions),
+        ModalId::LibraryCreateOptions => Some(OverlayId::CreateOptions),
+        ModalId::LibraryUpdates => Some(OverlayId::LibraryUpdates),
+        ModalId::LibraryCloseConfirm => Some(OverlayId::CloseLibraryConfirm),
+        ModalId::LibraryDeleteConfirm => Some(OverlayId::DeleteConfirm),
+        ModalId::LibraryRecovery => Some(OverlayId::LibraryRecovery),
+        ModalId::NetColorCustom => Some(OverlayId::NetColorCustom),
         ModalId::MoveSelection | ModalId::NetColorPalette | ModalId::ParameterManager => None,
     }
 }
@@ -437,6 +491,18 @@ impl Signex {
         self.open_overlays(Some(modal)).rung(id)
     }
 
+    /// The one decision "a confirm or warning dialog owns the user's
+    /// attention": the system menu bar greys its model rows and refuses them
+    /// while it holds. Read from the same snapshot the Esc ladder uses, so
+    /// both see the same open dialogs (docs/MENU_BAR.md, "Native macOS menu").
+    ///
+    /// The annotate-reset confirm is the one locking dialog the snapshot
+    /// hides while detached; naming it as the Esc source keeps it counted.
+    pub(crate) fn has_locking_confirm_modal(&self) -> bool {
+        self.open_overlays(Some(crate::app::state::ModalId::AnnotateResetConfirm))
+            .has_locking_confirm()
+    }
+
     /// Snapshot the open overlays for Esc resolution, from live state.
     ///
     /// Called from the `Message::EscapePressed` handler in
@@ -467,10 +533,15 @@ impl Signex {
         };
 
         OpenOverlays {
-            find_replace_open: self.ui_state.find_replace.open,
-            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
-            about_open: self.ui_state.about_open,
-            first_run_tour_open: self.ui_state.first_run_tour_open,
+            find_replace_open: self.ui_state.find_replace.open
+                && !modal_detached(crate::app::state::ModalId::FindReplace),
+            find_similar_open: self.ui_state.find_similar.is_some(),
+            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
+                && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
+            about_open: self.ui_state.about_open
+                && !modal_detached(crate::app::state::ModalId::About),
+            first_run_tour_open: self.ui_state.first_run_tour_open
+                && !modal_detached(crate::app::state::ModalId::FirstRunTour),
             autosave_recovery_open: self.document_state.autosave.current_offer().is_some(),
             prefs_open: self.ui_state.preferences_open
                 && !modal_detached(crate::app::state::ModalId::Preferences),
@@ -481,21 +552,31 @@ impl Signex {
             erc_save_profile_open: self.ui_state.save_profile_dialog.is_some(),
             rename_open: self.ui_state.rename_dialog.is_some(),
             remove_open: self.ui_state.remove_dialog.is_some(),
-            enable_vc_open: self.ui_state.enable_version_control.is_some(),
-            library_create_options_open: self.library.create_options.is_some(),
-            passive_calculator_open: self.ui_state.passive_calculator_open,
+            enable_vc_open: self.ui_state.enable_version_control.is_some()
+                && !modal_detached(crate::app::state::ModalId::EnableVersionControl),
+            library_create_options_open: self.library.create_options.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryCreateOptions),
+            passive_calculator_open: self.ui_state.passive_calculator_open
+                && !modal_detached(crate::app::state::ModalId::PassiveCalculator),
             annotate_reset_confirm_open: self.ui_state.annotate_reset_confirm
                 && !modal_detached(crate::app::state::ModalId::AnnotateResetConfirm),
             reprefix_confirm_open: self.ui_state.reprefix_confirm.is_some()
                 && !modal_detached(crate::app::state::ModalId::ReprefixConfirm),
             app_quit_confirm_open: self.ui_state.app_quit_confirm.is_some(),
             project_close_confirm_open: self.ui_state.project_close_confirm.is_some(),
-            grid_properties_open: self.ui_state.grid_properties.is_some(),
-            selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some(),
-            library_picker_open: self.library.picker.is_some(),
-            library_document_options_open: self.library.document_options.is_some(),
-            library_updates_open: self.library.library_updates.is_some(),
-            library_primitive_picker_open: self.library.primitive_picker.is_some(),
+            create_child_sheet_confirm_open: self.ui_state.create_child_sheet_confirm.is_some(),
+            grid_properties_open: self.ui_state.grid_properties.is_some()
+                && !modal_detached(crate::app::state::ModalId::GridProperties),
+            selection_filter_custom_open: self.ui_state.selection_filter_custom.is_some()
+                && !modal_detached(crate::app::state::ModalId::SelectionFilterCustom),
+            library_picker_open: self.library.picker.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryPicker),
+            library_document_options_open: self.library.document_options.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryDocumentOptions),
+            library_updates_open: self.library.library_updates.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryUpdates),
+            library_primitive_picker_open: self.library.primitive_picker.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryPrimitivePicker),
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
             recovery_kind: self
                 .library
@@ -513,12 +594,17 @@ impl Signex {
                     }
                 }),
             error_notice_open: self.document_state.error_notice.is_some(),
+            error_notice_detached: modal_detached(crate::app::state::ModalId::ErrorNotice),
             netlist_incomplete_prompt_open: self.document_state.netlist_incomplete_prompt.is_some(),
+            netlist_prompt_detached: modal_detached(
+                crate::app::state::ModalId::NetlistIncompletePrompt,
+            ),
             print_preview_open: self.document_state.preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::PrintPreview),
             bom_preview_open: self.document_state.bom_preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::BomPreview),
-            net_color_custom_open: self.ui_state.net_color_custom.show,
+            net_color_custom_open: self.ui_state.net_color_custom.show
+                && !modal_detached(crate::app::state::ModalId::NetColorCustom),
             // MUST mirror `delete_confirm_overlay`'s pick
             // (`view/overlays/modals.rs:291-316`): it iterates
             // `library_browsers` and returns on the FIRST entry with a
@@ -756,6 +842,8 @@ impl Signex {
         };
 
         Subscription::batch([
+            window_subscriptions::window_focus(),
+            window_subscriptions::native_menu_activations(),
             chord_cancel,
             chord_timeout,
             kbd,
@@ -931,6 +1019,14 @@ mod tests {
             only(|o| o.find_replace_open = true),
             Some(Message::FindReplaceMsg(
                 crate::find_replace::FindReplaceMsg::Close
+            ))
+        ));
+        assert!(matches!(
+            only(|o| o.find_similar_open = true),
+            Some(Message::Selection(
+                crate::app::selection_request::SelectionRequest::FindSimilar(
+                    crate::find_similar::FindSimilarMsg::Closed
+                )
             ))
         ));
         assert!(matches!(
@@ -1484,6 +1580,7 @@ mod tests {
         }
         let field_names = open_overlays_field_names![
             find_replace_open,
+            find_similar_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -1501,6 +1598,7 @@ mod tests {
             reprefix_confirm_open,
             app_quit_confirm_open,
             project_close_confirm_open,
+            create_child_sheet_confirm_open,
             grid_properties_open,
             selection_filter_custom_open,
             library_picker_open,
@@ -1510,7 +1608,9 @@ mod tests {
             close_library_confirm_open,
             recovery_kind,
             error_notice_open,
+            error_notice_detached,
             netlist_incomplete_prompt_open,
+            netlist_prompt_detached,
             print_preview_open,
             bom_preview_open,
             net_color_custom_open,
@@ -1525,6 +1625,7 @@ mod tests {
         // entries collapse to one name, same as any other field.
         let setters: &[(&str, EscapeSetter)] = &[
             ("find_replace_open", |o| o.find_replace_open = true),
+            ("find_similar_open", |o| o.find_similar_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
@@ -1554,6 +1655,9 @@ mod tests {
             ("app_quit_confirm_open", |o| o.app_quit_confirm_open = true),
             ("project_close_confirm_open", |o| {
                 o.project_close_confirm_open = true
+            }),
+            ("create_child_sheet_confirm_open", |o| {
+                o.create_child_sheet_confirm_open = true
             }),
             ("grid_properties_open", |o| o.grid_properties_open = true),
             ("selection_filter_custom_open", |o| {
@@ -1598,7 +1702,11 @@ mod tests {
             }),
         ];
 
-        let macro_fields: std::collections::BTreeSet<&str> = field_names.into_iter().collect();
+        // Where a notice lives, not a modal of its own: no rung.
+        let macro_fields: std::collections::BTreeSet<&str> = field_names
+            .into_iter()
+            .filter(|name| !matches!(*name, "error_notice_detached" | "netlist_prompt_detached"))
+            .collect();
         let claims_escape: std::collections::BTreeSet<&str> =
             setters.iter().map(|(name, _)| *name).collect();
 

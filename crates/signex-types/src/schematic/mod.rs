@@ -670,6 +670,11 @@ pub struct Symbol {
     pub mirror_y: bool,
     #[serde(default = "default_unit")]
     pub unit: u32,
+    /// Which body of the library symbol this instance shows. `Alternate`
+    /// (De Morgan) only takes effect when the library symbol has one for
+    /// `unit`; otherwise the normal body is drawn and wired.
+    #[serde(default)]
+    pub body_style: BodyStyle,
     #[serde(default)]
     pub is_power: bool,
     pub ref_text: Option<TextProp>,
@@ -761,6 +766,7 @@ impl Default for Symbol {
             mirror_x: false,
             mirror_y: false,
             unit: default_unit(),
+            body_style: BodyStyle::Normal,
             is_power: false,
             ref_text: None,
             val_text: None,
@@ -786,6 +792,8 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod body_style;
+pub use body_style::{BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, BodyStyle, item_shown, shown_on};
 mod bus_entry;
 pub use bus_entry::*;
 mod bus_name;
@@ -796,6 +804,8 @@ pub use field_style::{field_effective_style, readable_text_style};
 pub use instance_path::InstancePath;
 mod parts;
 pub use parts::*;
+mod pin_map;
+pub use pin_map::{PinMapping, PinMatchedBy, PinPair, map_pins, pin_key};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;

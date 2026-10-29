@@ -48,7 +48,7 @@ pub struct DatabaseAdapter {
     row_schema: RowSchemaGuard,
 }
 
-use crate::manifest::KEYCHAIN_SIGIL;
+use crate::manifest::{KEYCHAIN_SIGIL, resolve_auth};
 
 /// Refuse to send a bearer token over cleartext HTTP to a non-loopback host.
 /// Loopback http (local dev server) and any https URL pass.
@@ -172,8 +172,8 @@ fn write_error(
 }
 
 impl DatabaseAdapter {
-    /// Construct from a manifest. The manifest's `auth` field is treated as
-    /// the bearer token.
+    /// Construct from a manifest. The manifest's `auth` field is the bearer
+    /// token, or an `${env:NAME}` reference to the variable that holds it.
     pub fn new(manifest: Manifest) -> Result<Self, LibraryError> {
         let (base_url, auth) = match &manifest.mode {
             LibraryMode::Database { url, auth } => {
@@ -191,6 +191,8 @@ impl DatabaseAdapter {
              refusing to send the sigil as a bearer token (OS keychain resolution: #976)"
             )));
         }
+        let auth =
+            resolve_auth(&auth, |name| std::env::var(name).ok()).map_err(LibraryError::Backend)?;
         check_transport_security(&base_url, !auth.is_empty())?;
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(HTTP_CONNECT_TIMEOUT)
@@ -658,15 +660,7 @@ impl LibraryAdapter for DatabaseAdapter {
             .send()
             .map_err(|e| self.row_write_transport_error(e))?;
         if !resp.status().is_success() {
-            let status = resp.status();
-            let body: serde_json::Value = resp.json().unwrap_or_default();
-            if let Some(refusal) = schema_refusal(&body) {
-                self.row_schema.forget();
-                return Err(refusal);
-            }
-            return Err(LibraryError::Backend(format!(
-                "insert_row {table}: {status}"
-            )));
+            return Err(write_error(resp, "insert_row", table, &self.row_schema));
         }
         let stored = resp
             .json::<ComponentRow>()

@@ -12,10 +12,14 @@ use crate::app::FileMsg;
 use crate::app::contracts::{
     CaseVariants, PinnedSpelling, SaveAllNext, SaveAllPlan, SaveAllSettle,
 };
+use crate::app::handlers::document_files::FoldAnswer;
 use crate::app::state::project_case::CaseProbeOutcome;
 use crate::app::state::scope::path_key_with;
 use crate::app::state::volume_case::probe_directory_case;
 use std::collections::HashMap;
+
+/// The reason Save All records for a spelling it kept unsaved.
+const CASE_RULE_UNKNOWN_REASON: &str = "folder case rule unknown, save it separately";
 
 impl Signex {
     /// Start the write of one dirty file, matching `path` to the spelling it
@@ -178,8 +182,17 @@ impl Signex {
         // One file reached under several spellings is written once.
         let mut begun = std::collections::HashSet::new();
         let mut case_variants = Vec::new();
+        // The case-spelling reason an earlier pass left must not outlive it:
+        // this pass records its own. Any other reason (say, a Ctrl+S that
+        // failed) is not Save All's to clear.
         for path in paths {
-            let fold = self.identity_fold_for(path);
+            let saves = &mut self.document_state.document_saves;
+            if saves.failure(path) == Some(CASE_RULE_UNKNOWN_REASON) {
+                saves.clear_failure(path);
+            }
+        }
+        for path in paths {
+            let FoldAnswer { fold, decided } = self.identity_decision(path);
             if !begun.insert(path_key_with(path, fold)) {
                 continue;
             }
@@ -191,7 +204,19 @@ impl Signex {
                     // clean; a refused one leaves every marker (#1423). Each
                     // other is pinned now: one edited while the write runs
                     // is not on disk and stays dirty.
-                    if held.len() > 1 {
+                    if held.len() > 1 && !decided {
+                        // The spellings may be two files and only `target`
+                        // was written: the others stay dirty, and the
+                        // settle step names them.
+                        if let Some((kept, message)) = self.unsaved_spellings(&held, &target) {
+                            crate::diagnostics::log_warning(message);
+                            for path in kept {
+                                self.document_state
+                                    .document_saves
+                                    .record_failure(path, CASE_RULE_UNKNOWN_REASON.into());
+                            }
+                        }
+                    } else if held.len() > 1 {
                         let others = held
                             .iter()
                             .filter(|p| **p != target)

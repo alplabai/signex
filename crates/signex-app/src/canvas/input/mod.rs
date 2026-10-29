@@ -26,7 +26,19 @@ impl SchematicCanvas<'_> {
             return Some(action);
         }
 
-        // Dispatch each input event to its handler, in the original order.
+        let action = self.route_event(state, event, bounds, cursor);
+        self.publish_move_behaviour(state);
+        action
+    }
+
+    /// Dispatch each input event to its handler, in the original order.
+    fn route_event(
+        &self,
+        state: &mut CanvasState,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
                 let action = self.update_wheel_scrolled(delta, bounds, cursor);

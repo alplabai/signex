@@ -6,26 +6,29 @@
 //! byte-identical (the #323 idempotency rule).
 
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::sync::Arc;
 
+use signex_library::adapters::local_git::component_to_library_row;
 use signex_library::library_file::{
-    ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibrarySection, LibraryTable,
-    SnxlibManifest,
+    ClassEntry, FORMAT_TOKEN, LibraryFile, LibrarySection, LibraryTable, SnxlibManifest,
 };
 use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, WorkflowMode};
 use signex_library::tables::TABLE_HEADER;
 use uuid::Uuid;
 
 use super::ids::STOCK_LIBRARY_ID;
+use super::rows::stock_rows;
 
 /// File name of the library entry point inside `assets/stock-library/`.
 pub const SNXLIB_FILE_NAME: &str = "Stock.snxlib";
 
-/// Name of the component table. It ships with the full column schema
-/// and zero rows; the pairing task fills the rows.
+/// Name of the component table: the full column schema plus one row per
+/// placeable stock part (see [`super::rows`]).
 const COMPONENT_TABLE: &str = "components";
 
-/// Class taxonomy for the New Component modal, scoped to what a
-/// footprint-only stock library can usefully classify.
+/// Class taxonomy for the New Component modal, scoped to the parts
+/// the stock library ships.
 const STOCK_CLASSES: &[(&str, &str)] = &[
     ("resistor", "Resistor"),
     ("capacitor", "Capacitor"),
@@ -43,8 +46,8 @@ const STOCK_CLASSES: &[(&str, &str)] = &[
 ];
 
 /// Assemble the stock library file: constant identity, `local_git`
-/// mode, personal workflow, seeded classes, one empty component table.
-pub fn stock_library_file() -> LibraryFile {
+/// mode, personal workflow, seeded classes, one component table.
+pub fn stock_library_file() -> Result<LibraryFile, Box<dyn Error>> {
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.to_string(),
         library_id: Uuid::parse_str(STOCK_LIBRARY_ID)
@@ -67,20 +70,24 @@ pub fn stock_library_file() -> LibraryFile {
             })
             .collect(),
     };
+    let rows = stock_rows()?
+        .iter()
+        .map(|row| component_to_library_row(row).map(Arc::new))
+        .collect::<Result<Vec<_>, _>>()?;
     let table = LibraryTable {
         columns: TABLE_HEADER.iter().map(|c| (*c).to_string()).collect(),
-        rows: Vec::new(),
+        rows,
         column_types: BTreeMap::new(),
         pricing: Default::default(),
     };
-    LibraryFile {
+    Ok(LibraryFile {
         layout: Default::default(),
         manifest,
         tables: BTreeMap::from([(COMPONENT_TABLE.to_string(), table)]),
-    }
+    })
 }
 
 /// Render the `Stock.snxlib` text.
-pub fn render_manifest() -> Result<String, LibraryFileError> {
-    stock_library_file().write()
+pub fn render_manifest() -> Result<String, Box<dyn Error>> {
+    Ok(stock_library_file()?.write()?)
 }

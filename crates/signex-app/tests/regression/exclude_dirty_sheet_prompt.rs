@@ -3,7 +3,7 @@
 
 use signex_app::app::{
     ExcludeDirtyChoice, LoadedProject, Message, ProjectCloseChoice, ProjectId, ProjectMsg,
-    RemoveChoice, RemoveDialogState, RemoveMsg, Signex, TabInfo, TabKind, WindowMsg,
+    RemoveChoice, RemoveDialogState, RemoveMsg, Signex, TabInfo, TabKind, UiMsg, WindowMsg,
 };
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::SchematicSheet;
@@ -95,9 +95,13 @@ fn fixture(dirty: bool) -> (Signex, TempDir, PathBuf) {
 }
 
 fn exclude(app: &mut Signex, target: &Path) {
+    exclude_at(app, target, vec![0, 0]);
+}
+
+fn exclude_at(app: &mut Signex, target: &Path, tree_path: Vec<usize>) {
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         target_path: target.to_path_buf(),
-        tree_path: vec![0, 0],
+        tree_path,
         project_id: app.document_state.projects.first().map(|p| p.id),
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
@@ -117,7 +121,7 @@ fn project_lists_sheet(app: &Signex) -> bool {
         .data
         .sheets
         .iter()
-        .any(|s| s.filename == "X.snxsch")
+        .any(|s| s.filename.ends_with("X.snxsch"))
 }
 
 #[test]
@@ -222,9 +226,30 @@ fn a_failed_save_keeps_the_prompt_and_does_not_exclude() {
     std::fs::write(&blocker, b"not a directory").expect("write blocker");
     let sheet = blocker.join("X.snxsch");
     let (mut app, _task) = Signex::new();
-    let id = add_project(&mut app, tmp.path(), "X.snxsch");
+    // The project lists the sheet where it lives, and the dialog targets its
+    // real row, so the Save path is reached on purpose.
+    let id = add_project(&mut app, tmp.path(), "blocker/X.snxsch");
     open_sheet(&mut app, &sheet, id, true);
-    exclude(&mut app, &sheet);
+    // Any message that republishes the panel context builds the tree.
+    let _ = app.update(Message::Ui(UiMsg::GridPickerSelect(1.0)));
+    let key = vec![
+        id.to_string(),
+        "Source Documents".to_string(),
+        "blocker/X.snxsch".to_string(),
+    ];
+    let row = signex_widgets::tree_view::resolve_path(
+        app.document_state.panel_ctx.project_tree.as_slice(),
+        &key,
+    )
+    .expect("the sheet has a row");
+    exclude_at(&mut app, &sheet, row);
+    assert!(
+        app.ui_state
+            .remove_dialog
+            .as_ref()
+            .is_some_and(|d| d.unsaved_prompt),
+        "the unsaved-edits prompt is up before Save"
+    );
 
     choose(&mut app, ExcludeDirtyChoice::Save);
 

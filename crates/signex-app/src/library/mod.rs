@@ -41,6 +41,7 @@ pub mod panel;
 pub mod picker;
 pub mod place;
 pub(crate) mod prefix_picker;
+pub mod placed_part;
 pub mod preview_refresh;
 pub mod pricing;
 pub mod primitive_picker;
@@ -65,10 +66,21 @@ mod view_purity_tests;
 // the app crate to warrant a flat re-export, even where the only
 // current consumer is the dispatcher (Phase 2 widens the surface).
 pub use messages::{
-    BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PrimitivePickerMsg, SettingsMsg,
+    BrowserEditMsg, EditorMsg, LibraryMessage, PickerMsg, PlacedPartAction, PlacedPartMsg,
+    PrimitivePickerMsg, SettingsMsg,
 };
 pub use state::{
     ComponentPreviewState, ComponentsMountSource, ComponentsPanelState, DeleteConfirmState,
-    EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab,
-    PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, LibraryBrowserState, LibraryState, NewLibraryDefaults, OpenLibrary,
+    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };
+
+/// A dialog card's length: `px` in the main window, the whole window in the
+/// dialog's own window (the window is the frame; docs/DETACHED_MODALS.md).
+pub(crate) fn card_len(windowed: bool, px: f32) -> iced::Length {
+    if windowed {
+        iced::Length::Fill
+    } else {
+        iced::Length::Fixed(px)
+    }
+}

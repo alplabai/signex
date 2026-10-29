@@ -34,9 +34,11 @@ use iced::{Color, Rectangle, Renderer, Theme};
 
 pub use camera::Camera;
 pub use erc_marker::{ErcMarker, ErcMarkerSeverity};
+mod move_connections;
+pub use move_connections::{FLIP_WIRES_MODIFIER, MoveConnections};
 pub use move_pick::MovePick;
 pub use placement_ghost::PlacementGhost;
-pub use shape_preview::ShapePreviewKind;
+pub use shape_preview::{BoxDirection, MeasureOverlay, ShapePreviewKind};
 pub use special_strings::SpecialStrings;
 
 use crate::schematic_runtime::SchematicSheetExt as _;
@@ -58,6 +60,8 @@ pub struct CanvasState {
     pub ctrl_held: bool,
     /// Whether Shift is currently held (for multi-select add).
     pub shift_held: bool,
+    /// Whether Alt is held (flips wire behaviour for a drag, #1266).
+    pub alt_held: bool,
     /// Drag-to-select: start position in world coordinates.
     select_drag_start: Option<(f64, f64)>,
     /// Drag-to-select: current end position in world coordinates.
@@ -207,6 +211,14 @@ pub struct CanvasSlot {
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+    /// The last finished Measure-tool result (#1256).
+    pub measure: Option<MeasureOverlay>,
+    /// The next click-click move keeps wires whatever the preference says
+    /// (`drag_keep_connections`, #1266); consumed by the picking press.
+    pub keep_connections_next: bool,
+    /// Whether the move drag in flight keeps wires, written by the canvas
+    /// after each event for the status bar; `None` outside a drag.
+    pub move_behaviour: std::cell::Cell<Option<bool>>,
     /// Test-only: how often the drawn content was invalidated.
     #[cfg(test)]
     pub content_cache_clears: u32,
@@ -270,6 +282,9 @@ impl CanvasSlot {
             move_pick: None,
             move_epoch: 0,
             shape_anchor: None,
+            measure: None,
+            keep_connections_next: false,
+            move_behaviour: std::cell::Cell::new(None),
             #[cfg(test)]
             content_cache_clears: 0,
             #[cfg(test)]
@@ -410,6 +425,8 @@ pub struct CanvasViewPrefs<'a> {
     pub snap_grid_mm: f64,
     /// Wire clicks jump to the nearest pin end, wire end or junction (Shift+E).
     pub snap_hotspots: bool,
+    /// Display unit; the Measure overlay's readout follows it.
+    pub unit: signex_types::coord::Unit,
     /// The Wire tool is the active tool. Only wire clicks snap to hotspots
     /// (a Bus click snaps to the grid), so the hotspot marker and the
     /// rubber-band follow hotspots under this tool alone.
@@ -566,7 +583,7 @@ impl<'a> SchematicCanvas<'a> {
             return;
         };
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
-        if !self.prefs.move_keeps_wires || self.selected.is_empty() || too_big {
+        if !self.keeps_wires(state) || self.selected.is_empty() || too_big {
             return;
         }
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
@@ -754,6 +771,8 @@ pub enum CanvasEvent {
     },
     CursorMoved,
     FitAll,
+    /// Frame the current selection (`zoom_to_selection_area`, #1256).
+    FitSelection,
     /// Recentre on the last reported cursor position, keeping the zoom.
     CenterAtCursor,
     /// Left-click at world coordinates — triggers hit-testing or tool action.
@@ -779,11 +798,15 @@ pub enum CanvasEvent {
         y1: f64,
         x2: f64,
         y2: f64,
+        /// Which way the box was dragged (#1257).
+        direction: BoxDirection,
     },
     /// Drag-move completed — move all selected items by delta (world coords).
     MoveSelected {
         dx: f64,
         dy: f64,
+        /// How this gesture treats wires (#1266).
+        connections: MoveConnections,
     },
     /// Click-click move picked up at this world point (#271).
     MovePicked {
@@ -836,6 +859,7 @@ mod tests {
             snap_enabled: true,
             snap_grid_mm: 1.27,
             snap_hotspots: false,
+            unit: signex_types::coord::Unit::Mm,
             wire_tool_active: false,
             visible_grid_mm: 1.27,
             grid_style: crate::render_config::GridStyle::Dots,

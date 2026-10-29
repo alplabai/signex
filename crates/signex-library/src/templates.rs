@@ -7,11 +7,12 @@
 //! each carries.
 //!
 //! Resolution order (§4.3):
-//! 1. per-library override (`<class>.toml` templates, supplied by the
-//!    caller),
-//! 2. global override (`<config_dir>/signex/templates/<class>.toml`) — *not
-//!    loaded by this crate; the app shell registers these at start-up*,
+//! 1. per-library override ([`TemplateRegistry::insert_for_library`]),
+//! 2. global override ([`TemplateRegistry::insert_global`]),
 //! 3. the bundled built-in.
+//!
+//! This crate reads no template files; the caller parses a
+//! [`ParameterTemplate`] and registers it.
 //!
 //! `TemplateRegistry::new_with_builtins` ships with five starter classes:
 //! resistor, capacitor, inductor, opamp, generic. Anything else falls through
@@ -147,9 +148,9 @@ impl std::fmt::Display for TemplateViolation {
 /// Per-library + global template registry.
 ///
 /// `global` keeps one entry per class — populated by `new_with_builtins` and
-/// optionally augmented by `load_global_dir`.
-/// `per_lib` overrides per `(library_id, class)` pair — populated by
-/// `LibrarySet` when a library exposes its own `templates/<class>.toml`.
+/// optionally replaced through `insert_global`.
+/// `per_lib` overrides per `(library_id, class)` pair — populated through
+/// `insert_for_library`.
 #[derive(Clone, Debug, Default)]
 pub struct TemplateRegistry {
     global: HashMap<String, ParameterTemplate>,

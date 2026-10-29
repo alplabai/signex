@@ -101,6 +101,7 @@ mod tests {
     fn delete_selected_closes_open_fill_picker() {
         let mut sym = Symbol::empty("T");
         sym.graphics.push(SymbolGraphic {
+            body_style: 1,
             kind: SymbolGraphicKind::Rectangle {
                 from: [0.0, 0.0],
                 to: [2.0, 1.0],
@@ -160,7 +161,12 @@ mod tests {
     #[test]
     fn align_selected_to_grid_snaps_the_selected_pin_and_dirties_once() {
         let mut sym = Symbol::empty("T");
-        let idx = crate::library::editor::symbol::state::add_pin(&mut sym, 1.0, 1.0, 1);
+        let idx = crate::library::editor::symbol::state::add_pin(
+            &mut sym,
+            1.0,
+            1.0,
+            crate::library::editor::symbol::state::PartView::normal(1),
+        );
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));
@@ -225,8 +231,18 @@ mod tests {
     #[test]
     fn align_selected_to_grid_with_all_selection_snaps_every_pin() {
         let mut sym = Symbol::empty("T");
-        crate::library::editor::symbol::state::add_pin(&mut sym, 1.0, 1.0, 1);
-        crate::library::editor::symbol::state::add_pin(&mut sym, 2.5, 2.5, 1);
+        crate::library::editor::symbol::state::add_pin(
+            &mut sym,
+            1.0,
+            1.0,
+            crate::library::editor::symbol::state::PartView::normal(1),
+        );
+        crate::library::editor::symbol::state::add_pin(
+            &mut sym,
+            2.5,
+            2.5,
+            crate::library::editor::symbol::state::PartView::normal(1),
+        );
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::All);
@@ -250,7 +266,12 @@ mod tests {
     #[test]
     fn align_selected_to_grid_with_already_aligned_pin_stays_clean() {
         let mut sym = Symbol::empty("T");
-        let idx = crate::library::editor::symbol::state::add_pin(&mut sym, 1.27, 1.27, 1);
+        let idx = crate::library::editor::symbol::state::add_pin(
+            &mut sym,
+            1.27,
+            1.27,
+            crate::library::editor::symbol::state::PartView::normal(1),
+        );
         let mut editor =
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(sym));
         editor.selected = Some(SymbolSelection::Pin(idx));

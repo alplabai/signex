@@ -157,6 +157,12 @@ pub struct UiState {
     pub move_keeps_wires: bool,
     /// Draft mirror of [`Self::move_keeps_wires`] for the Preferences dialog.
     pub preferences_draft_move_keeps_wires: bool,
+    /// Saved "Select by drag direction" preference (#1257): a box drag to
+    /// the right selects what it fully contains, to the left what it touches.
+    /// Off falls back to the global `selection_mode`. Default on.
+    pub drag_direction_select: bool,
+    /// Draft mirror of [`Self::drag_direction_select`] for Preferences.
+    pub preferences_draft_drag_direction_select: bool,
     /// Saved "Window controls" placement (where min/max/close go).
     pub window_controls_placement: crate::chrome::controls::WindowControlsPlacement,
     /// Draft mirror of [`Self::window_controls_placement`] for Preferences.
@@ -170,6 +176,29 @@ pub struct UiState {
     pub desktop_button_layout: Option<crate::chrome::desktop::DesktopButtonLayout>,
     /// Last known mode of the main window (fullscreen hides the macOS inset).
     pub main_window_mode: iced::window::Mode,
+    /// The window that has keyboard focus, `None` while none of ours does.
+    /// The system menu bar acts on it (docs/MENU_BAR.md, "Native macOS menu").
+    pub focused_window: Option<iced::window::Id>,
+    /// The main window has opened (`MainWindowOpened`): dialogs may open
+    /// their own windows from here on.
+    pub main_window_opened: bool,
+    /// Text inputs were unfocused for the confirm dialog that now locks the
+    /// main window (once per lock).
+    pub lock_unfocused: bool,
+    /// The size each content-sized dialog window was last given.
+    pub modal_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
+    /// The quit confirm was refreshed because the unsaved list changed after it
+    /// opened (Discard All discarded nothing); the dialog says so.
+    pub quit_confirm_refreshed: bool,
+    /// How often an Edit Component Details window vanished unanswered, per
+    /// browser; after two it stays in the window so typed text is not lost.
+    pub edit_row_window_vanished: std::collections::HashMap<std::path::PathBuf, u8>,
+    /// How often a recovery prompt's window vanished without being answered;
+    /// after two it stays in the main window instead of reopening.
+    pub recovery_window_vanished: u8,
+    /// Which library browser opened each per-browser dialog window (edit row,
+    /// delete confirm): the window reads and answers for THAT browser.
+    pub library_modal_owners: std::collections::HashMap<iced::window::Id, std::path::PathBuf>,
     /// Logical size of the monitor holding the main window, when known.
     pub main_window_monitor_size: Option<iced::Size>,
     /// Opt-in autosave of recovery copies (#104). Off by default.
@@ -328,6 +357,11 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// "Create the missing sheet?" confirm; `Some` while it is up.
+    pub create_child_sheet_confirm: Option<crate::app::contracts::CreateChildSheetConfirmState>,
+    /// A Create Sheet request from the Projects tree waiting for its parent
+    /// sheet to open: `(parent sheet, missing child file)` (#1618).
+    pub pending_create_sheet: Option<(std::path::PathBuf, std::path::PathBuf)>,
     /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
     /// the user is being asked to save / discard / cancel an app-exit
     /// request that intersects `dirty_paths`. Cleared on any of the
@@ -342,6 +376,11 @@ pub struct UiState {
     /// carries the in-flight Step X / Step Y / link buffers so
     /// keystrokes don't immediately mutate the active editor.
     pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// The Find Similar Objects dialog, while open (#1257).
+    pub find_similar: Option<crate::find_similar::FindSimilarState>,
+    /// Token of the newest Find Similar project search. Lives outside the
+    /// dialog state so a reopened dialog never reuses an old token.
+    pub find_similar_generation: u64,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel.
@@ -556,6 +595,7 @@ impl UiState {
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
+            || self.preferences_draft_drag_direction_select != self.drag_direction_select
             || self.preferences_draft_window_controls_placement != self.window_controls_placement
             || self.preferences_draft_autosave_enabled != self.autosave_enabled
             || self.preferences_draft_symbol_grid_style != self.symbol_grid_style

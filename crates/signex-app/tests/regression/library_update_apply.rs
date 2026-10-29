@@ -374,6 +374,32 @@ fn personal_auto_apply_at_open_leaves_no_undo_step() {
     );
 }
 
+/// A sheet from a newer Signex is read-only: the open-time scan must not
+/// auto-apply a stale library symbol and so dirty it on open (#1402).
+#[test]
+fn opening_a_read_only_sheet_applies_no_library_update() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let before = pin_count(&app);
+    make_version_stale(&mut app);
+    edit_library_symbol(&f, add_pin);
+    let engine = app.document_state.active_engine_mut().unwrap();
+    let mut read_only = engine.document().clone();
+    read_only.unknown.newer_minor_source = Some("snxsch/1.7".into());
+    engine.set_document(read_only);
+    // Placing the symbol dirtied the fixture; only the scan's effect counts.
+    app.document_state.dirty_paths.clear();
+    for tab in &mut app.document_state.tabs {
+        tab.dirty = false;
+    }
+    scan(&mut app);
+    assert_eq!(pin_count(&app), before, "the copy must stay as written");
+    assert_eq!(version(&app), "0.0.1");
+    assert!(app.document_state.dirty_paths.is_empty());
+    assert!(app.document_state.tabs.iter().all(|t| !t.dirty));
+}
+
 // ---- #950 round 3: off-thread Apply, re-bound rows, parked sheets ----
 
 /// Apply returns a `Task` and reads nothing inline; the update lands when the

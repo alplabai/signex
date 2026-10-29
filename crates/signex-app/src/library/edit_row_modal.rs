@@ -57,6 +57,7 @@ pub fn view<'a>(
     library_path: &'a std::path::Path,
     edit: &'a EditRowModalState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
     classes: Vec<crate::fonts::ComponentClassEntry>,
     template: Option<&'a ParameterTemplate>,
 ) -> Element<'a, LibraryMessage> {
@@ -398,8 +399,8 @@ pub fn view<'a>(
 
     container(
         column![header, body, error_row, footer]
-            .width(Length::Fixed(super::modal_chrome::EDIT_ROW_W))
-            .height(Length::Fixed(super::modal_chrome::EDIT_ROW_H)),
+            .width(super::card_len(windowed, super::modal_chrome::EDIT_ROW_W))
+            .height(super::card_len(windowed, super::modal_chrome::EDIT_ROW_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
@@ -417,6 +418,7 @@ pub fn view_delete_confirm<'a>(
     library_path: &'a std::path::Path,
     confirm: &'a DeleteConfirmState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -501,8 +503,8 @@ pub fn view_delete_confirm<'a>(
 
     container(
         column![header, body, footer]
-            .width(Length::Fixed(CONFIRM_W))
-            .height(Length::Fixed(CONFIRM_H)),
+            .width(super::card_len(windowed, CONFIRM_W))
+            .height(super::card_len(windowed, CONFIRM_H)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

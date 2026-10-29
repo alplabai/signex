@@ -5,6 +5,11 @@ pub mod autosave_primitives;
 pub mod autosave_recovery;
 pub mod canvas;
 pub mod clipboard_workflows;
+#[cfg(test)]
+mod detached_confirm_tests;
+#[cfg(test)]
+mod detached_library_tests;
+pub mod detached_modals;
 pub mod dock;
 pub mod document_files;
 pub mod document_tabs;
@@ -12,11 +17,15 @@ pub mod drawing_order;
 pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
+pub mod find_similar;
 pub mod library_drift;
 pub mod library_place;
 pub mod library_symbol_choice;
 pub mod menu;
 pub mod missing_fonts;
+pub(crate) mod modal_sizing;
+pub mod native_menu;
+pub mod placed_part;
 pub mod placement_session;
 pub mod preferences;
 pub mod project_case;

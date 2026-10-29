@@ -594,6 +594,36 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(changed)
     }
 
+    /// The whole batch in one `.snxlib` write and one commit. A target
+    /// that is missing or unreadable is that target's `Err` and the rest
+    /// still land; a failed write or commit refuses the whole batch.
+    fn update_rows(
+        &self,
+        targets: &[(String, RowId)],
+        edit: &mut crate::adapter::RowEdit<'_>,
+        message: &str,
+    ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
+        let mut outcomes: Vec<crate::adapter::RowEditOutcome> = Vec::with_capacity(targets.len());
+        let fallback = format!("update {} rows", targets.len());
+        self.mutate_library_file_if_changed(
+            |lf| {
+                // Rows are found and edited under the write lock, after the
+                // reload, so a field another writer changed since the
+                // caller's scan is kept.
+                let mut any = false;
+                for (table, row_id) in targets {
+                    let outcome = edit_one_row(lf, table, *row_id, edit);
+                    any |= matches!(outcome, Ok(true));
+                    outcomes.push((*row_id, outcome));
+                }
+                Ok(any)
+            },
+            message,
+            &fallback,
+        )?;
+        Ok(outcomes)
+    }
+
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root_dir.clone())
     }
@@ -676,45 +706,7 @@ impl LibraryAdapter for LocalGitAdapter {
         }
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-
-        let mut walk = repo
-            .revwalk()
-            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
-        // Topological + time so that on equal-second timestamps (the
-        // common case in tests + back-to-back saves on Windows where
-        // git2 stamps to one-second precision) child commits still
-        // come before parents — matches `git log`'s default visual
-        // order.
-        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
-            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
-
-        // Unborn HEAD (fresh repo, no commits yet) is a legitimate
-        // "no history" answer rather than an error — the editor
-        // should render an empty list, not a red banner.
-        match walk.push_head() {
-            Ok(()) => {}
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(Vec::new()),
-            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
-        }
-
-        let mut entries: Vec<HistoryEntry> = Vec::new();
-        for oid_res in walk {
-            if entries.len() >= MAX_ENTRIES {
-                break;
-            }
-            let oid =
-                oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
-            let commit = repo
-                .find_commit(oid)
-                .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
-
-            if !commit_touches_path(&repo, &commit, &rel_str)? {
-                continue;
-            }
-
-            entries.push(HistoryEntry::from_commit(&commit));
-        }
-        Ok(entries)
+        crate::git_history::path_history(&repo, &rel_str, MAX_ENTRIES)
     }
 }
 
@@ -737,4 +729,32 @@ fn check_table_name(name: &str) -> Result<(), LibraryError> {
         )));
     }
     Ok(())
+}
+
+/// Edit one row of an open library file for `update_rows`: `Ok(true)` when
+/// the edit changed it and the row was replaced, `Ok(false)` when it left
+/// the row alone.
+fn edit_one_row(
+    lf: &mut LibraryFile,
+    table: &str,
+    row_id: RowId,
+    edit: &mut crate::adapter::RowEdit<'_>,
+) -> Result<bool, LibraryError> {
+    let target = row_id.as_uuid().to_string();
+    let entry = lf
+        .tables
+        .get_mut(table)
+        .ok_or_else(|| LibraryError::NotFound(format!("table {table} not in library")))?;
+    validate_legacy_header(table, &entry.columns)?;
+    let index = entry
+        .rows
+        .iter()
+        .position(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(target.as_str()))
+        .ok_or_else(|| LibraryError::NotFound(format!("row {target} in table {table}")))?;
+    let mut row = library_row_to_component(&entry.rows[index])?;
+    if !edit(&mut row) {
+        return Ok(false);
+    }
+    entry.rows[index] = Arc::new(component_to_library_row(&row)?);
+    Ok(true)
 }

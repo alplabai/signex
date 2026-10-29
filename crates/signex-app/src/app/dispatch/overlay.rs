@@ -17,6 +17,10 @@ impl Signex {
                 self.ui_state.panel_list_open = false;
                 self.show_panel(kind)
             }
+            OverlayMsg::PanelToggled(kind) => {
+                self.ui_state.panel_list_open = false;
+                self.toggle_panel(kind)
+            }
             OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
             OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
             OverlayMsg::CloseKeyboardShortcuts => {
@@ -116,6 +120,26 @@ impl Signex {
                 self.handle_add_new_schematic_written(project_id, path, result);
                 Task::none()
             }
+            ProjectMsg::CreateChildSheetPathChanged(text) => {
+                self.handle_create_child_sheet_path_changed(text)
+            }
+            ProjectMsg::CreateChildSheetBrowse => self.handle_create_child_sheet_browse(),
+            ProjectMsg::CreateChildSheetBrowsed(picked) => {
+                self.handle_create_child_sheet_browsed(picked)
+            }
+            ProjectMsg::CreateChildSheetAnswered { create } => {
+                self.handle_create_child_sheet_answered(create)
+            }
+            ProjectMsg::CreateChildSheetOpenExisting => {
+                self.handle_create_child_sheet_open_existing()
+            }
+            ProjectMsg::ChildSheetCreated {
+                project_id,
+                parent,
+                symbol,
+                path,
+                result,
+            } => self.handle_child_sheet_created(project_id, &parent, symbol, path, result),
             ProjectMsg::AddNewSchematicPicked { project_id, path } => {
                 self.handle_add_new_schematic_picked(project_id, path)
             }
@@ -190,7 +214,8 @@ impl Signex {
                     return Task::none();
                 }
                 if self.interaction_state.active_bar_menu.is_none() {
-                    self.interaction_state.context_menu = Some(ContextMenuState { x, y });
+                    let world = self.cursor_world_now();
+                    self.interaction_state.context_menu = Some(ContextMenuState { x, y, world });
                 }
                 Task::none()
             }
@@ -320,7 +345,11 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::Action(action) => {
-                self.interaction_state.context_menu = None;
+                let opened_at = self
+                    .interaction_state
+                    .context_menu
+                    .take()
+                    .and_then(|menu| menu.world);
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
                 self.interaction_state.submenu_launcher_hovered = None;
@@ -335,6 +364,10 @@ impl Signex {
                         self.open_selected_child_sheet();
                         Task::none()
                     }
+                    ContextAction::CreateChildSheet => match self.selected_child_sheet() {
+                        Some((symbol, _)) => self.create_child_sheet_from_symbol(symbol),
+                        None => Task::none(),
+                    },
                     ContextAction::SyncSheetPins => {
                         self.sync_selected_sheet_pins();
                         // This dispatcher does not run `finish_update`; publish
@@ -356,9 +389,17 @@ impl Signex {
                     ContextAction::ArrangeDrawings(arrange) => {
                         self.dispatch_edit_message(EditMsg::ArrangeDrawings(arrange))
                     }
+                    ContextAction::PlacedPart(action) => {
+                        self.dispatch_library_message(crate::library::LibraryMessage::PlacedPart(
+                            crate::library::PlacedPartMsg::ActionRequested(action),
+                        ))
+                    }
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
+                    ContextAction::FindSimilar => self.handle_find_similar_message(
+                        crate::find_similar::FindSimilarMsg::OpenRequested { at: opened_at },
+                    ),
                 }
             }
         }

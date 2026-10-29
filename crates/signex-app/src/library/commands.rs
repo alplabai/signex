@@ -193,7 +193,11 @@ pub fn materialize_pending_library(
         )));
     }
 
-    let manifest = seed_manifest(library_id, spec.display_name.clone());
+    let manifest = seed_manifest(
+        library_id,
+        spec.display_name.clone(),
+        &state.new_library_defaults,
+    );
     let _adapter = LocalGitAdapter::init(
         &spec.lib_path,
         manifest,
@@ -233,9 +237,15 @@ pub fn materialize_pending_library(
 /// the user's `prefs.json::component_classes` so a fresh library starts
 /// with their preferred taxonomy (editable per-library afterwards);
 /// mode/workflow/users stay at their defaults.
-fn seed_manifest(library_id: Uuid, name: String) -> SnxlibManifest {
-    let classes = crate::fonts::read_component_classes_pref()
-        .into_iter()
+fn seed_manifest(
+    library_id: Uuid,
+    name: String,
+    defaults: &super::state::NewLibraryDefaults,
+) -> SnxlibManifest {
+    let classes = defaults
+        .component_classes
+        .iter()
+        .cloned()
         .map(|e| signex_library::ClassEntry {
             key: e.key,
             label: e.label,
@@ -305,7 +315,7 @@ pub fn create_library_at(
         .to_string();
 
     let library_id = Uuid::now_v7();
-    let manifest = seed_manifest(library_id, stem);
+    let manifest = seed_manifest(library_id, stem, &state.new_library_defaults);
 
     // LFS opt-in (Stage 11): the "Library Options" modal that pops up
     // after the New Library Save-As dialog feeds `use_lfs` here. The

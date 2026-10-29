@@ -15,6 +15,8 @@ pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
 pub mod history;
+mod scroll;
+pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
 mod symbol_editor_properties;
 
@@ -35,6 +37,12 @@ mod status;
 mod symbol_context;
 mod widgets;
 
+#[cfg(test)]
+mod planned_tests;
+
+pub(crate) use element_properties::{
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
+};
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
 };
@@ -69,8 +77,8 @@ pub use footprint_context::{
     FootprintEditorPanelContext, FootprintLibInternalRow, FootprintLibSibling, FootprintModeKind,
     FootprintPadSummary, FootprintSelectedSilkSummary, FootprintSketchEntitySummary,
     FootprintSolveSummary, KeepoutKindFlag, KeepoutSummary, NumberingSchemeKindUi,
-    OverConstraintSummary, PadShapeParamSummary, PourSummary, SilkKindGeometry,
-    SketchPadAttrSummary, SnapOptionFlag,
+    OverConstraintSummary, PadShapeParamSummary, PourSummary, RejectedConflictSummary,
+    SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
 pub use library::LibraryRowDetail;
 pub(super) use library::{view_footprint_library, view_library_row_properties, view_sch_library};
@@ -265,5 +273,5 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::History => return history::view_history(ctx),
     };
 
-    scrollable(content).width(Length::Fill).into()
+    panel_scrollable(content).into()
 }

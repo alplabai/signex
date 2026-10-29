@@ -22,7 +22,7 @@
 //! which routes through the same handler the project-tree double-click
 //! uses.
 
-use iced::widget::{Column, Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{Column, Space, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -125,7 +125,7 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     });
 
     column![
-        scrollable(body).width(Length::Fill).height(Length::Fill),
+        crate::panels::panel_scrollable(body).height(Length::Fill),
         Space::new().height(2),
         footer
     ]

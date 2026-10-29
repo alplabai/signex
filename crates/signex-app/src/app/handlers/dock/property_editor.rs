@@ -94,6 +94,18 @@ impl Signex {
                     );
                 }
             }
+            crate::panels::PanelMsg::SymbolBodyStylePicked(uuid, body_style) => {
+                // A refusal (a wired pin would move) is logged by the
+                // gateway, so it reaches the Messages panel.
+                self.apply_engine_command(
+                    signex_engine::Command::SetSymbolBodyStyle {
+                        symbol_id: *uuid,
+                        body_style: *body_style,
+                    },
+                    true,
+                    true,
+                );
+            }
             crate::panels::PanelMsg::EditSymbolRotation(uuid, deg) => {
                 self.apply_engine_command(
                     signex_engine::Command::SetSymbolRotation {

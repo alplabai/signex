@@ -1,5 +1,6 @@
 use super::*;
 
+mod body_style_info;
 mod designators;
 #[cfg(test)]
 pub(crate) mod designators_tests;
@@ -12,6 +13,9 @@ mod net_class_styles;
 mod panel_ctx;
 mod primitive_dirty;
 mod sheet_frame;
+mod sheet_tree;
+#[cfg(test)]
+pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 
 impl Signex {
@@ -278,6 +282,13 @@ impl Signex {
                         .push(("Library Drift".into(), "Yes".into()));
                 }
             }
+            self.document_state
+                .panel_ctx
+                .selection_info
+                .extend(body_style_info::body_style_info(
+                    engine.document(),
+                    details.selected_uuid,
+                ));
             // The library row's documents for a placed symbol (#1231).
             if details.selected_kind == signex_types::schematic::SelectedKind::Symbol
                 && let Some(symbol) = engine
@@ -396,6 +407,7 @@ impl Signex {
             snap_enabled: self.ui_state.snap_enabled,
             snap_grid_mm: crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm),
             snap_hotspots: self.ui_state.snap_hotspots,
+            unit: self.ui_state.unit,
             wire_tool_active: self.interaction_state.current_tool == crate::app::Tool::Wire,
             visible_grid_mm: self.ui_state.visible_grid_mm as f64,
             grid_style: self.ui_state.preferences_draft_grid_style,

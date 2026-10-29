@@ -1,13 +1,7 @@
-//! Tools ▸ Passive Network Calculator modal — the resistor / capacitor /
-//! inductor network calculator plus the RKM encoder, rendered as an
-//! in-app modal like every other Signex dialog.
-//!
-//! It deliberately does NOT open its own OS window. Signex runs
-//! borderless (`bootstrap/new.rs` — `decorations: false`, except the macOS
-//! native title bar),
-//! so a default `iced::window::open` would arrive wearing a native
-//! title bar that exists nowhere else in the app. Same chrome as
-//! `keyboard_shortcuts_modal`: header strip, close X, centred card.
+//! Tools ▸ Passive Network Calculator — the resistor / capacitor / inductor
+//! network calculator plus the RKM encoder. It opens in its own OS window
+//! like the other tool dialogs (docs/DETACHED_MODALS.md); the in-window card
+//! below is the fallback when that window is not available.
 
 use iced::widget::{Space, column, container, row, text};
 use iced::{Element, Length};
@@ -26,10 +20,31 @@ use crate::styles;
 const MODAL_W: f32 = 640.0;
 const MODAL_H: f32 = 520.0;
 
+/// The calculator painted as a card in the main window (the fallback when
+/// its own window is not available).
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     theme_id: ThemeId,
     control: &'a CalculatorControl,
+) -> Element<'a, Message> {
+    build(tokens, theme_id, control, false)
+}
+
+/// The calculator as the content of its own OS window: no header, filling
+/// the window.
+pub fn window_view<'a>(
+    tokens: &'a ThemeTokens,
+    theme_id: ThemeId,
+    control: &'a CalculatorControl,
+) -> Element<'a, Message> {
+    build(tokens, theme_id, control, true)
+}
+
+fn build<'a>(
+    tokens: &'a ThemeTokens,
+    theme_id: ThemeId,
+    control: &'a CalculatorControl,
+    windowed: bool,
 ) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
@@ -60,6 +75,13 @@ pub fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill);
 
+    if windowed {
+        return container(body)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(styles::modal_card(tokens))
+            .into();
+    }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(MODAL_W))
         .height(Length::Fixed(MODAL_H))

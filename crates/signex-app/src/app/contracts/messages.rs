@@ -81,6 +81,16 @@ pub enum WindowMsg {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
+    /// The locked main window (or an undocked tab) was clicked while a
+    /// confirm dialog in its own window is open: raise that dialog.
+    LockedWindowClicked,
+    /// A window gained keyboard focus.
+    WindowFocused(iced::window::Id),
+    /// A window lost keyboard focus.
+    WindowUnfocused(iced::window::Id),
+    /// A row of the macOS system menu bar was chosen; carries the row's
+    /// stable id (`menu_bar::native`). Only the macOS subscription sends it.
+    NativeMenuItemActivated(String),
     /// The Linux startup probe finished: the buttons the desktop lists, or
     /// `None` when it could not be read, or the probe's failure reason.
     ControlsLayoutDetected(Result<Option<crate::chrome::desktop::DesktopButtonLayout>, String>),
@@ -119,6 +129,14 @@ pub enum CommandPaletteMsg {
     /// Execute the currently selected entry. Wired to Enter and to
     /// `text_input::on_submit`.
     ExecuteSelected,
+    /// The project search index finished building off-thread. `generation`
+    /// is the request it answers; an older one is dropped.
+    IndexBuilt {
+        generation: u64,
+        result: std::sync::Arc<
+            Result<std::sync::Arc<crate::app::palette_index::ProjectSearchIndex>, String>,
+        >,
+    },
 }
 
 /// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
@@ -139,6 +157,9 @@ pub enum OverlayMsg {
     TogglePanelList,
     /// Open (dock) a panel of the given kind into the dock.
     OpenPanel(crate::panels::PanelKind),
+    /// A panel shortcut: open the panel, close it when it is open and in
+    /// front, or bring it forward when it is open but hidden.
+    PanelToggled(crate::panels::PanelKind),
     /// Open the Find modal (replace row hidden).
     OpenFind,
     /// Open the Find/Replace modal with the replace row visible.
@@ -206,6 +227,10 @@ pub enum UiMsg {
     /// Nothing to do. Produced by widgets / tasks that must emit a
     /// `Message` but carry no event.
     Noop,
+    /// A background `prefs.json` write finished (#1351). A failed write has
+    /// already logged its error; this republishes the Messages panel so the
+    /// record shows now rather than at the next unrelated message.
+    PrefWriteFinished,
     /// Edit → Undo / Redo clicked in an undocked tab's own menu bar. Runs
     /// the command against that window's document, as its shortcut does
     /// (#1550); every other menu row still arrives as `Message::Menu`.

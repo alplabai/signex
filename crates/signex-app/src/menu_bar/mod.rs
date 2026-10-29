@@ -185,6 +185,12 @@ pub enum MenuMessage {
     PlaceBus,
     PlaceLabel,
     PlaceComponent,
+    /// Place ▸ Power Port — arms the Active Bar's default (GND) power port.
+    PlacePowerPort,
+    /// Place ▸ Text — the text-note tool.
+    PlaceText,
+    /// Place ▸ No Connect — the no-connect tool.
+    PlaceNoConnect,
     // Design
     Annotate,
     AnnotateQuietly,
@@ -195,7 +201,6 @@ pub enum MenuMessage {
     AnnotateSheets,
     Erc,
     ToggleAutoFocus,
-    GenerateBom,
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
@@ -339,7 +344,11 @@ impl MenuColors {
 }
 
 pub mod model;
+pub(crate) mod native;
 mod view;
+
+#[cfg(test)]
+mod planned_tests;
 
 pub use view::view;
 

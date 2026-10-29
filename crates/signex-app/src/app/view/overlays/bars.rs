@@ -47,11 +47,14 @@ impl Signex {
     /// rather than live state. The two must agree term for term or Esc
     /// resolves against a stack that is not on screen.
     pub(crate) fn has_blocking_modal(&self) -> bool {
-        self.document_state.error_notice.is_some()
-            || self.document_state.netlist_incomplete_prompt.is_some()
+        (self.document_state.error_notice.is_some()
+            && !self.modal_detached(crate::app::state::ModalId::ErrorNotice))
+            || (self.document_state.netlist_incomplete_prompt.is_some()
+                && !self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt))
             || (self.document_state.preview.is_some()
                 && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
-            || self.ui_state.net_color_custom.show
+            || (self.ui_state.net_color_custom.show
+                && !self.modal_detached(crate::app::state::ModalId::NetColorCustom))
     }
 
     /// Export-error modal — appears when PDF / netlist / BOM export
@@ -59,7 +62,9 @@ impl Signex {
     /// empty schematic). Dismiss via OK button or clicking outside.
     /// Pushes the dismiss backdrop then the error card.
     pub(in crate::app::view) fn error_notice_overlay(&self) -> Vec<Element<'_, Message>> {
-        if self.document_state.error_notice.is_none() {
+        if self.document_state.error_notice.is_none()
+            || self.modal_detached(crate::app::state::ModalId::ErrorNotice)
+        {
             return Vec::new();
         }
         vec![
@@ -75,7 +80,9 @@ impl Signex {
     pub(in crate::app::view) fn netlist_incomplete_prompt_overlay(
         &self,
     ) -> Vec<Element<'_, Message>> {
-        if self.document_state.netlist_incomplete_prompt.is_none() {
+        if self.document_state.netlist_incomplete_prompt.is_none()
+            || self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt)
+        {
             return Vec::new();
         }
         vec![
@@ -112,7 +119,9 @@ impl Signex {
     /// precise RGB inputs side-by-side. Pushes the dismiss backdrop
     /// then the picker card.
     pub(in crate::app::view) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
-        if !self.ui_state.net_color_custom.show {
+        if !self.ui_state.net_color_custom.show
+            || self.modal_detached(crate::app::state::ModalId::NetColorCustom)
+        {
             return Vec::new();
         }
         vec![
@@ -656,31 +665,9 @@ impl Signex {
         let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
         let has_sch = document.panel_ctx.has_schematic;
         let has_pcb = document.panel_ctx.has_pcb;
-        // Build a lookup of currently-open panel kinds so each row
-        // can show a ✓ mark. A panel counts as "open" if it lives in
-        // any dock region, floats on top, or owns a detached OS
-        // window.
-        let docked: std::collections::HashSet<crate::panels::PanelKind> = [
-            crate::dock::PanelPosition::Left,
-            crate::dock::PanelPosition::Right,
-            crate::dock::PanelPosition::Bottom,
-        ]
-        .iter()
-        .flat_map(|pos| document.dock.panel_kinds(*pos).to_vec())
-        .collect();
-        let floating: std::collections::HashSet<crate::panels::PanelKind> =
-            document.dock.floating.iter().map(|fp| fp.kind).collect();
-        let detached: std::collections::HashSet<crate::panels::PanelKind> = ui
-            .windows
-            .values()
-            .filter_map(|w| match w {
-                crate::app::state::WindowKind::DetachedPanel(k) => Some(*k),
-                _ => None,
-            })
-            .collect();
-        let is_open = |k: crate::panels::PanelKind| {
-            docked.contains(&k) || floating.contains(&k) || detached.contains(&k)
-        };
+        // A panel counts as "open" if it lives in any dock region,
+        // floats on top, or owns a detached OS window.
+        let is_open = |k: crate::panels::PanelKind| self.is_panel_open(k);
         let panel_items: Vec<Element<'_, Message>> = crate::panels::ALL_PANELS
             .iter()
             .filter(|&&kind| (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb))

@@ -9,9 +9,7 @@ use super::*;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::widgets::{
-    close_x_button, draggable_header, primary_button, secondary_button, wrap_modal,
-};
+use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -30,7 +28,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
     }
 
-    fn view_remove_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_remove_dialog_body(&self) -> Element<'_, Message> {
         let Some(ref st) = self.ui_state.remove_dialog else {
             return container(Space::new()).into();
         };
@@ -59,10 +57,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RemoveDialog,
-            self.interaction_state.last_mouse_pos,
         );
 
         if st.unsaved_prompt {
@@ -120,21 +117,24 @@ impl Signex {
             )),
         );
         // Shared / Global libraries are owned by other projects too:
-        // never offer to delete them from disk (#139).
-        let remove_options: Element<'_, Message> = if st.is_outside_project {
-            column![exclude_card].spacing(SP.m).into()
-        } else {
-            column![
-                option_card(
-                    "Delete file",
-                    "File will be removed from project and permanently deleted.",
-                    Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
-                ),
-                exclude_card,
-            ]
-            .spacing(SP.m)
-            .into()
-        };
+        // never offer to delete them from disk (#139). A sheet other sheets
+        // place is not deleted either, and a sheet that is not a project page
+        // has nothing to exclude (#1618).
+        let blockers = self.remove_blockers(st);
+        // A `.snxlib` is a directory package: it is never a placed sheet.
+        let is_dir = st.target_path.extension().and_then(|e| e.to_str()) == Some("snxlib");
+        let mut remove_options = column![].spacing(SP.m);
+        if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
+            remove_options = remove_options.push(option_card(
+                "Delete file",
+                "File will be removed from project and permanently deleted.",
+                Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
+            ));
+        }
+        if !blockers.unlisted {
+            remove_options = remove_options.push(exclude_card);
+        }
+        let remove_options: Element<'_, Message> = remove_options.into();
 
         let mut prompt = column![
             text(format!(
@@ -145,6 +145,53 @@ impl Signex {
             .color(text_muted),
         ]
         .spacing(SP.s);
+        if !blockers.other_parents.is_empty() {
+            prompt = prompt.push(
+                text(format!(
+                    "It is also placed by {}, so it cannot be deleted from here.",
+                    blockers.parent_names()
+                ))
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_dir) {
+            prompt = prompt.push(
+                text(format!(
+                    "It cannot be deleted from here: whether another sheet places it is not \
+                     known yet ({why}). You can exclude it from the project."
+                ))
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if !blockers.blocks_delete(is_dir)
+            && !st.is_outside_project
+            && let Some(parent) = &blockers.own_parent
+        {
+            prompt = prompt.push(
+                text(format!("{} will show it as missing.", parent.display()))
+                    .size(TS.caption)
+                    .color(text_muted),
+            );
+        }
+        if blockers.placed && !blockers.unlisted {
+            prompt = prompt.push(
+                text(
+                    "Excluding it does not take it out of the design: a sheet symbol still \
+                     places it.",
+                )
+                .size(TS.caption)
+                .color(text_muted),
+            );
+        }
+        if blockers.unlisted {
+            prompt = prompt.push(
+                text("It is not a page of this project, so there is nothing to exclude.")
+                    .size(TS.caption)
+                    .color(text_muted),
+            );
+        }
         // Library names can repeat across folders; the full path says which
         // one is affected. Sheets and PCBs get no extra line.
         if st.display_name.ends_with(".snxlib") {
@@ -171,7 +218,7 @@ impl Signex {
                 ])
                 .padding([14, 14]),
             ]
-            .width(560),
+            .width(self.dialog_width(super::super::super::state::ModalId::RemoveDialog, 560.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -240,7 +287,7 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
     }
 
-    fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.project_close_confirm else {
             return container(Space::new()).into();
@@ -270,10 +317,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
-            super::super::super::state::ModalId::RenameDialog,
-            self.interaction_state.last_mouse_pos,
+            super::super::super::state::ModalId::ProjectCloseConfirm,
         );
 
         // List of dirty filenames, scrollable in case the project
@@ -282,7 +328,7 @@ impl Signex {
         // implies the parent dir.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
-            .height(Length::Fixed(160.0))
+            .height(Length::Shrink)
             .width(Length::Fill);
 
         // An unreadable sheet hides its children: no Discard All, and why.
@@ -335,15 +381,17 @@ impl Signex {
                 header,
                 container(
                     text(format!(
-                        "'{}' has {} unsaved item(s). What would you like to do?",
+                        "'{}' has {}. What would you like to do?",
                         st.project_name,
-                        st.dirty_paths.len() + st.dirty_rows.len()
+                        unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len())
                     ))
                     .size(TS.body)
                     .color(text_muted)
                 )
                 .padding([14, 14]),
-                container(file_list).padding([0, 14]),
+                container(file_list)
+                    .max_height(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT)
+                    .padding([0, 14]),
                 kept_note,
                 discard_note,
                 container(
@@ -370,7 +418,10 @@ impl Signex {
                 )
                 .padding([14, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(
+                super::super::super::state::ModalId::ProjectCloseConfirm,
+                520.0,
+            )),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -412,7 +463,7 @@ impl Signex {
             .collect()
     }
 
-    fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.app_quit_confirm else {
             return container(Space::new()).into();
@@ -426,9 +477,12 @@ impl Signex {
         let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Exit Signex — Unsaved Edits")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(format!(
+                    "{} Signex — Unsaved Edits",
+                    super::super::detached_title::quit_word()
+                ))
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(
                     Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
@@ -442,10 +496,9 @@ impl Signex {
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
         .into();
-        let header = draggable_header(
+        let header = self.modal_header(
             header_content,
-            super::super::super::state::ModalId::RenameDialog,
-            self.interaction_state.last_mouse_pos,
+            super::super::super::state::ModalId::AppQuitConfirm,
         );
 
         // List of dirty filenames across the whole workspace,
@@ -453,22 +506,41 @@ impl Signex {
         // full paths would overflow the modal.
         let file_rows = self.dirty_entry_rows(&st.dirty_paths, &st.dirty_rows, text_c);
         let file_list = scrollable(column(file_rows).spacing(0))
-            .height(Length::Fixed(160.0))
+            .height(Length::Shrink)
             .width(Length::Fill);
 
+        let refreshed_note: Element<'_, Message> = if self.ui_state.quit_confirm_refreshed {
+            container(
+                text("The unsaved list changed; review and confirm again.")
+                    .size(11)
+                    .color(iced::Color::from_rgb(0.90, 0.35, 0.30)),
+            )
+            .padding([10, 14])
+            .into()
+        } else {
+            Space::new().height(0).into()
+        };
         let dialog = container(
             column![
                 header,
+                refreshed_note,
                 container(
                     text(format!(
-                        "You have {} unsaved item(s). Save before exiting?",
-                        st.dirty_paths.len() + st.dirty_rows.len()
+                        "You have {}. Save before {}?",
+                        unsaved_phrase(st.dirty_paths.len(), st.dirty_rows.len()),
+                        if cfg!(target_os = "macos") {
+                            "quitting"
+                        } else {
+                            "exiting"
+                        }
                     ))
                     .size(TS.body)
                     .color(text_muted)
                 )
                 .padding([14, 14]),
-                container(file_list).padding([0, 14]),
+                container(file_list)
+                    .max_height(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT)
+                    .padding([0, 14]),
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -502,10 +574,35 @@ impl Signex {
                 )
                 .padding([14, 14]),
             ]
-            .width(520),
+            .width(self.dialog_width(super::super::super::state::ModalId::AppQuitConfirm, 520.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+/// "1 unsaved document", "2 unsaved documents"; with library rows in the mix,
+/// "3 unsaved items" (singular "1 unsaved item").
+pub(in crate::app::view) fn unsaved_phrase(documents: usize, rows: usize) -> String {
+    let (total, noun) = if rows == 0 {
+        (documents, "document")
+    } else {
+        (documents + rows, "item")
+    };
+    let plural = if total == 1 { "" } else { "s" };
+    format!("{total} unsaved {noun}{plural}")
+}
+
+#[cfg(test)]
+mod copy_tests {
+    use super::unsaved_phrase;
+
+    #[test]
+    fn the_unsaved_count_is_singular_or_plural_not_a_parenthesised_s() {
+        assert_eq!(unsaved_phrase(1, 0), "1 unsaved document");
+        assert_eq!(unsaved_phrase(2, 0), "2 unsaved documents");
+        assert_eq!(unsaved_phrase(1, 1), "2 unsaved items");
+        assert_eq!(unsaved_phrase(0, 1), "1 unsaved item");
     }
 }

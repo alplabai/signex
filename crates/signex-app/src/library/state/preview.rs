@@ -9,6 +9,8 @@ pub struct PickerState {
     pub selected: Option<(PathBuf, ComponentSummary)>,
     /// The list the picker draws; kept current by `sync_view_caches`.
     pub rows: PickerRows,
+    /// What the modal is for; see [`PickerMode`].
+    pub mode: super::placed_part::PickerMode,
 }
 
 /// Inline form state for "+ New Table…" on the Library Browser

@@ -19,6 +19,9 @@ pub(crate) enum DiscardBlock {
     /// Another open project has sheets that are not loaded, so whether it
     /// reaches the target cannot be told without reading disk.
     Unknown,
+    /// A sheet symbol still places the target, so excluding it does not take
+    /// it out of the design and its edits would be lost with it still shown.
+    Placed,
 }
 
 impl DiscardBlock {
@@ -28,6 +31,10 @@ impl DiscardBlock {
             Self::Unknown => {
                 "Another open project has sheets that are not loaded, so it cannot be ruled out \
                  that it uses this, and the edits cannot be discarded."
+            }
+            Self::Placed => {
+                "A sheet symbol still places it, so excluding it does not take it out of the \
+                 design, and the edits cannot be discarded."
             }
         }
     }
@@ -39,6 +46,7 @@ impl DiscardBlock {
                 "another open project has sheets that are not loaded, so shared use cannot be \
                  ruled out."
             }
+            Self::Placed => "a sheet symbol still places it.",
         }
     }
 }
@@ -158,6 +166,13 @@ impl Signex {
     /// treated as shared.
     pub(crate) fn discard_block(&self, state: &RemoveDialogState) -> Option<DiscardBlock> {
         let owner = state.tree_path.first().copied()?;
+        if !self
+            .sheet_users(&state.target_path, None)
+            .parents
+            .is_empty()
+        {
+            return Some(DiscardBlock::Placed);
+        }
         let docs = self.unsaved_documents(&state.target_path, self.dialog_fold(state));
         let share_fold = self.shared_use_fold(state);
         let reach = self.document_state.lexical_reach_sets(share_fold);
@@ -241,13 +256,21 @@ impl Signex {
             self.refresh_panel_ctx();
             return iced::Task::none();
         };
+        if self.refuse_remove(&state, crate::app::RemoveChoice::ExcludeFromProject) {
+            self.refresh_panel_ctx();
+            return iced::Task::none();
+        }
         self.sync_editor_dirty_paths();
+        // `docs` is listed under the project's fold (the host default while it
+        // is undecided) but each save below decides its own spelling. That is
+        // safe: a spelling the save keeps stays dirty, so the quit gate still
+        // asks about it.
         let fold = self.dialog_fold(&state);
         let docs = self.unsaved_documents(&state.target_path, fold);
         match choice {
             ExcludeDirtyChoice::Save => {
                 for doc_path in &docs {
-                    if let Err(err) = self.try_save_dirty_path_with(doc_path, fold) {
+                    if let Err(err) = self.try_save_dirty_path_with(doc_path) {
                         self.report_exclude_save_failure(&state, doc_path, &err);
                         // Keep the prompt so the user can retry or cancel.
                         self.ui_state.remove_dialog = Some(state);
@@ -289,6 +312,18 @@ impl Signex {
         failed: &std::path::Path,
         err: &anyhow::Error,
     ) {
+        if err
+            .downcast_ref::<super::close_project::SpellingsKept>()
+            .is_some()
+        {
+            // `failed` was written; the error names the spellings that were not.
+            crate::diagnostics::log_warning(format!("Exclude from Project: {err}"));
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(format!(
+                "\"{}\" was not excluded: {err}",
+                state.display_name
+            )));
+            return;
+        }
         let name = failed
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())

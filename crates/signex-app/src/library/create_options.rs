@@ -29,6 +29,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 pub fn view<'a>(
     state: &'a LibraryCreateOptionsState,
     tokens: &'a ThemeTokens,
+    windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -167,8 +168,10 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![header, container(body).padding([6, 0]), footer]
-            .width(Length::Fixed(super::modal_chrome::CREATE_OPTIONS_W)),
+        column![header, container(body).padding([6, 0]), footer].width(super::card_len(
+            windowed,
+            super::modal_chrome::CREATE_OPTIONS_W,
+        )),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

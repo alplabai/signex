@@ -13,7 +13,7 @@
 
 use super::*;
 
-use super::items::{dd_disabled, dd_kb, dd_msg, submenu_launcher};
+use super::items::{dd_disabled, dd_kb, dd_msg, dd_planned, submenu_launcher};
 use crate::icons as ic;
 use crate::menu_bar::cmd_label;
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -28,6 +28,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// the pure builder runs.
 pub(super) struct CanvasShortcuts {
     pub find: String,
+    pub find_similar: String,
     pub cut: String,
     pub copy: String,
     pub paste: String,
@@ -127,32 +128,34 @@ impl Signex {
     pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
         let tid = self.ui_state.theme_id;
         let canvas = self.interaction_state.active_canvas();
-        let has_selection = !canvas.selected.is_empty();
-        let child_sheet_selected = canvas
-            .selected
-            .iter()
-            .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet);
-        let drawing_selected = !self.selected_drawing_ids().is_empty();
+        let selection = CanvasSelection {
+            has_selection: !canvas.selected.is_empty(),
+            child_sheet_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
+            drawing_selected: !self.selected_drawing_ids().is_empty(),
+            placed_part_selected: self.has_placed_part_selected(),
+        };
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
         let sc = CanvasShortcuts {
             find: self.keymap_shortcut_label("find"),
+            find_similar: self.keymap_shortcut_label("find_similar_objects"),
             cut: self.keymap_shortcut_label("cut"),
             copy: self.keymap_shortcut_label("copy"),
             paste: self.keymap_shortcut_label("paste"),
             smart_paste: self.keymap_shortcut_label("smart_paste"),
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let entries = canvas_menu_entries(
-            tid,
-            tokens,
-            has_selection,
-            child_sheet_selected,
-            drawing_selected,
-            active_submenu,
-            &sc,
-        );
+        // The project row's tree key, the same one the project tree's own
+        // menu sends, so the action follows the project if rows reorder.
+        let project_key = self
+            .document_state
+            .active_document_project()
+            .map(|p| vec![p.id.to_string()]);
+        let entries = canvas_menu_entries(tid, tokens, selection, active_submenu, project_key, &sc);
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
 
@@ -186,24 +189,40 @@ impl Signex {
     }
 }
 
+/// What the canvas right-click landed on, for [`canvas_menu_entries`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct CanvasSelection {
+    pub(super) has_selection: bool,
+    pub(super) child_sheet_selected: bool,
+    pub(super) drawing_selected: bool,
+    /// One non-power symbol: the placed-part actions apply (#1260).
+    pub(super) placed_part_selected: bool,
+}
+
 /// Pure canvas-menu data builder. Rows and their enable state are derived
 /// only from the passed selection flags + shortcut hints, so the menu's
 /// shape is unit-testable without a window.
 pub(super) fn canvas_menu_entries(
     tid: ThemeId,
     tokens: &ThemeTokens,
-    has_selection: bool,
-    child_sheet_selected: bool,
-    drawing_selected: bool,
+    selection: CanvasSelection,
     active_submenu: Option<ContextSubmenu>,
+    project_key: Option<signex_widgets::tree_view::TreeKey>,
     sc: &CanvasShortcuts,
 ) -> Vec<DropdownEntry<Message>> {
+    let CanvasSelection {
+        has_selection,
+        child_sheet_selected,
+        drawing_selected,
+        placed_part_selected,
+    } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
-    v.push(dd_disabled(
+    v.push(dd_kb(
         Some(ic::icon_dd_find_similar(tid)),
         "Find Similar Objects...",
-        None,
+        &sc.find_similar,
+        ContextAction::FindSimilar,
     ));
     v.push(dd_msg(
         Some(ic::icon_chrome_search(tid)),
@@ -211,7 +230,7 @@ pub(super) fn canvas_menu_entries(
         &sc.find,
         Message::Overlay(OverlayMsg::OpenFind),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_clear_filter(tid)),
         "Clear Filter",
         Some("Shift+C"),
@@ -224,19 +243,19 @@ pub(super) fn canvas_menu_entries(
         ContextSubmenu::Place,
         active_submenu == Some(ContextSubmenu::Place),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_part_actions(tid)),
         "Part Actions",
         Some(SUBMENU_ARROW),
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_sheet_actions(tid)),
         "Sheet Actions",
         Some(SUBMENU_ARROW),
     ));
 
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_references(tid)),
             "References",
             Some(SUBMENU_ARROW),
@@ -257,12 +276,12 @@ pub(super) fn canvas_menu_entries(
                 active_submenu == Some(ContextSubmenu::Arrange),
             ));
         }
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_unions(tid)),
             "Unions",
             Some(SUBMENU_ARROW),
         ));
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_snippets(tid)),
             "Snippets",
             Some(SUBMENU_ARROW),
@@ -278,6 +297,12 @@ pub(super) fn canvas_menu_entries(
         ));
         v.push(dd_kb(
             None,
+            "Create Sheet From Sheet Symbol",
+            "",
+            ContextAction::CreateChildSheet,
+        ));
+        v.push(dd_kb(
+            None,
             "Sync Sheet Pins",
             "",
             ContextAction::SyncSheetPins,
@@ -285,7 +310,7 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_cross_probe(tid)),
         "Cross Probe",
         None,
@@ -345,21 +370,34 @@ pub(super) fn canvas_menu_entries(
         v.push(DropdownEntry::Separator);
     }
 
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_comment(tid)),
         "Comment...",
         None,
     ));
-    v.push(dd_disabled(
+    v.push(dd_planned(
         Some(ic::icon_dd_pin_mapping(tid)),
         "Pin Mapping...",
         None,
     ));
-    v.push(dd_disabled(
-        Some(ic::icon_dd_project_options(tid)),
-        "Project Options...",
-        None,
-    ));
+    // The project that owns the active sheet, addressed by its tree key the
+    // way the project tree's own menu addresses it. No project: greyed, no
+    // tooltip (the feature exists, there is just nothing to open it for).
+    v.push(match project_key {
+        Some(key) => dd_msg(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            "",
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenProjectOptions(key),
+            )),
+        ),
+        None => dd_disabled(
+            Some(ic::icon_dd_project_options(tid)),
+            "Project Options...",
+            None,
+        ),
+    });
     v.push(dd_msg(
         Some(ic::icon_dd_preferences(tid)),
         &cmd_label("open_preferences", "Preferences..."),
@@ -367,8 +405,27 @@ pub(super) fn canvas_menu_entries(
         Message::Preferences(PreferencesMsg::Open),
     ));
 
+    if placed_part_selected {
+        use crate::library::PlacedPartAction as A;
+        // Labels come from the catalog where the action has a command id, so
+        // the menu and the command palette cannot drift. Change Component
+        // has no command id yet.
+        for (label, action) in [
+            (
+                cmd_label("open_datasheet", "Open Datasheet"),
+                A::OpenDatasheet,
+            ),
+            (
+                cmd_label("edit_selected_symbol_in_symbol_editor", "Edit Symbol"),
+                A::EditSymbol,
+            ),
+            ("Change Component\u{2026}".to_string(), A::ChangeComponent),
+        ] {
+            v.push(dd_kb(None, &label, "", ContextAction::PlacedPart(action)));
+        }
+    }
     if has_selection {
-        v.push(dd_disabled(
+        v.push(dd_planned(
             Some(ic::icon_dd_supplier_links(tid)),
             "Supplier Links...",
             None,

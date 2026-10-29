@@ -32,6 +32,9 @@
     reason = "integration tests discard Results with `let _ = ...` routinely; this is test scaffolding, not a production `iced::Task` being dropped, and `[lints]` in Cargo.toml is package-scoped so each integration-test crate root needs its own"
 )]
 
+#[path = "support/drive.rs"]
+mod drive;
+
 #[path = "regression/close_support.rs"]
 mod close_support;
 
@@ -232,6 +235,8 @@ mod reload_and_switch_state;
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]
 mod stable_addressing;
+#[path = "regression/symbol_body_style.rs"]
+mod symbol_body_style;
 
 #[path = "regression/place_sheet_tool.rs"]
 mod place_sheet_tool;
@@ -249,8 +254,14 @@ mod library_place_designator_standard;
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
+#[path = "regression/library_stock_place.rs"]
+mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+// #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
+// on a placed part.
+#[path = "regression/placed_part_actions.rs"]
+mod placed_part_actions;
 // #1231 — Properties lists a placed symbol's library row documents.
 #[path = "regression/library_row_documents.rs"]
 mod library_row_documents;
@@ -330,6 +341,12 @@ mod bus_entry;
 
 // #1404 — the X / Y keys, context-menu Mirror X / Y and the active bar's
 // Flip Along X / Y all flip a symbol the same way.
+#[path = "regression/drag_direction_select.rs"]
+mod drag_direction_select;
+
+#[path = "regression/measure_and_zoom_selection.rs"]
+mod measure_and_zoom_selection;
+
 #[path = "regression/mirror_axis_entry_points.rs"]
 mod mirror_axis_entry_points;
 
@@ -351,6 +368,11 @@ mod net_classes_panel;
 // #1079 — the canvas draws the sheet frame, zones and title block.
 #[path = "regression/sheet_frame_canvas.rs"]
 mod sheet_frame_canvas;
+
+// #1249 / #1251 — planned Active Bar tools arm and place nothing; Generate
+// BOM opens the BOM dialog.
+#[path = "regression/planned_tools.rs"]
+mod planned_tools;
 
 // #1202 — the Project document tab replaces the Project Options modal.
 #[path = "regression/project_parameters.rs"]
