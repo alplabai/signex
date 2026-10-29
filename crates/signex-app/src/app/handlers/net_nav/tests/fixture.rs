@@ -147,8 +147,8 @@ impl Project {
         self.app.settle_net_index_blocking();
     }
 
-    pub fn focus(&mut self, path: &PathBuf) {
-        assert!(self.app.open_or_focus_sheet_path(path.clone()));
+    pub fn focus(&mut self, path: &std::path::Path) {
+        assert!(self.app.open_or_focus_sheet_path(path.to_path_buf()));
     }
 
     pub fn select(&mut self, uuid: u128, kind: SelectedKind) {
