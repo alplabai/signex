@@ -581,6 +581,7 @@ pub fn create_component_row(
         state: LifecycleState::Draft,
         symbol_ref: resolved_symbol,
         footprint_ref,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("", ""),

@@ -19,6 +19,8 @@ use crate::primitive::PrimitiveRef;
 pub enum RefSlot {
     Symbol,
     Footprint,
+    /// An alternate footprint (#1234), not the default.
+    AlternateFootprint,
     Sim,
 }
 
@@ -28,6 +30,7 @@ impl RefSlot {
         match self {
             RefSlot::Symbol => "symbol",
             RefSlot::Footprint => "footprint",
+            RefSlot::AlternateFootprint => "alternate footprint",
             RefSlot::Sim => "sim",
         }
     }
@@ -68,7 +71,12 @@ where
                 (RefSlot::Sim, row.sim_ref),
             ]
             .into_iter()
-            .chain(alternates);
+            .chain(alternates)
+            .chain(
+                row.alternate_footprints
+                    .iter()
+                    .map(|alt| (RefSlot::AlternateFootprint, Some(alt.footprint))),
+            );
             for (slot, target) in bindings {
                 let Some(target) = target else { continue };
                 if target.uuid.is_nil() || resolves(slot, &target) {
@@ -91,6 +99,39 @@ where
 mod tests {
     use super::*;
     use crate::alternate_symbol::AlternateSymbol;
+
+    /// A footprint that exists only as an alternate is reported when it is
+    /// gone, under its own slot; the default and live alternates are not
+    /// (#1234).
+    #[test]
+    fn a_missing_alternate_footprint_is_reported_per_alternate() {
+        use crate::footprint_binding::FootprintBinding;
+        let mut row = crate::component::tests::fixture_row();
+        let lib = row.symbol_ref.library_id;
+        let live = PrimitiveRef::new(lib, Uuid::from_u128(2));
+        let live_alt = PrimitiveRef::new(lib, Uuid::from_u128(5));
+        let gone = PrimitiveRef::new(lib, Uuid::from_u128(3));
+        let also_gone = PrimitiveRef::new(lib, Uuid::from_u128(4));
+        row.footprint_ref = Some(live);
+        row.alternate_footprints = vec![
+            FootprintBinding::new(gone),
+            FootprintBinding::new(live_alt),
+            FootprintBinding::new(also_gone),
+        ];
+        let rows = [row];
+        let found = dangling_row_refs([("t", &rows[..])], |slot, target| match slot {
+            RefSlot::Symbol => true,
+            _ => *target == live || *target == live_alt,
+        });
+        let slots: Vec<_> = found.iter().map(|d| (d.slot, d.target)).collect();
+        assert_eq!(
+            slots,
+            vec![
+                (RefSlot::AlternateFootprint, gone),
+                (RefSlot::AlternateFootprint, also_gone)
+            ]
+        );
+    }
 
     #[test]
     fn an_alternate_symbol_pointing_nowhere_is_dangling() {

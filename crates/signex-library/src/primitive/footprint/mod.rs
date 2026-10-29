@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::param::ParamMap;
 
 mod load_repair;
+mod mount_style;
 mod pad;
 mod pad_columns;
 mod serde_tsv;
@@ -25,6 +26,7 @@ mod serde_tsv;
 mod tests;
 
 pub use load_repair::LoadRepair;
+pub use mount_style::MountStyle;
 pub use pad::*;
 pub use serde_tsv::FootprintFileError;
 pub(crate) use serde_tsv::{pads_from_tsv, pads_to_tsv};

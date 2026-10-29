@@ -65,6 +65,7 @@ fn row(pn: &str, library_id: Uuid, symbol: Uuid) -> ComponentRow {
         state: LifecycleState::Draft,
         symbol_ref: PrimitiveRef::new(library_id, symbol),
         footprint_ref: None,
+        alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("Acme", pn),
