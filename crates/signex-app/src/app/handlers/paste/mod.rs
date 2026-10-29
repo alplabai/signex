@@ -128,9 +128,15 @@ impl Signex {
     /// and the in-app copy is used instead.
     fn adopt_clipboard_text(&mut self, text: Option<&str>) {
         let Some(text) = text else { return };
+        if self.interaction_state.clipboard_text.as_deref() == Some(text) {
+            return;
+        }
         let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
         match CopiedSelection::from_clipboard_text(text, grid) {
-            Ok(Some(copied)) => self.interaction_state.clipboard = Some(copied),
+            Ok(Some(copied)) => {
+                self.interaction_state.clipboard = Some(copied);
+                self.interaction_state.clipboard_text = Some(text.to_owned());
+            }
             Ok(None) => {}
             Err(error) => crate::diagnostics::log_warning(format!(
                 "Paste: the system clipboard holds a Signex fragment that could not be read ({error}); the copy made in this window is used instead."
@@ -147,13 +153,14 @@ impl Signex {
     }
 
     /// The system-clipboard side of a copy that returned `carried`.
-    pub(crate) fn mirror_copy_on_clipboard_task(&self, carried: bool) -> Task<Message> {
+    pub(crate) fn mirror_copy_on_clipboard_task(&mut self, carried: bool) -> Task<Message> {
         if carried {
             return self.clipboard_write_task();
         }
         let dropped = self.interaction_state.clipboard.is_none()
             && !self.interaction_state.active_canvas().selected.is_empty();
         if dropped {
+            self.interaction_state.clipboard_text = None;
             iced::clipboard::write(String::new())
         } else {
             Task::none()
@@ -164,13 +171,17 @@ impl Signex {
     /// When it cannot be serialised the clipboard is emptied instead, so an
     /// older fragment left there cannot be pasted in its place; the copy
     /// stays usable inside this window.
-    pub(crate) fn clipboard_write_task(&self) -> Task<Message> {
+    pub(crate) fn clipboard_write_task(&mut self) -> Task<Message> {
         let Some(copied) = self.interaction_state.clipboard.as_ref() else {
             return Task::none();
         };
         match copied.to_clipboard_text() {
-            Ok(text) => iced::clipboard::write(text),
+            Ok(text) => {
+                self.interaction_state.clipboard_text = Some(text.clone());
+                iced::clipboard::write(text)
+            }
             Err(error) => {
+                self.interaction_state.clipboard_text = None;
                 crate::diagnostics::log_warning(format!(
                     "Copy: the selection could not be written to the system clipboard ({error}); the clipboard was emptied so an older copy cannot be pasted instead, and this selection can still be pasted in this window."
                 ));

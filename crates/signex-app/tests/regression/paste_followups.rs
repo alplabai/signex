@@ -238,3 +238,50 @@ fn a_reset_paste_ghost_shows_the_unnumbered_designator() {
     crate::paste_support::paste(&mut app);
     assert_eq!(ghost_references(&app), ["R?"]);
 }
+
+fn app_with_part_at(x: f64) -> Signex {
+    let mut sheet = populated_sheet();
+    sheet.symbols = vec![part("R1", "lib:r", 1, (x, 10.16))];
+    sheet.labels.clear();
+    app_with_sheet(sheet)
+}
+
+#[test]
+fn a_paste_keeps_the_anchor_of_a_copy_made_under_another_grid() {
+    let mut app = app_with_part_at(14.0);
+    app.ui_state.grid_size_mm = 2.54;
+    select(&mut app, &[("R1", 1)], false);
+    let text = written_text(app.update(Message::Edit(EditMsg::Copy))).unwrap();
+    let anchor = app.interaction_state.clipboard.as_ref().unwrap().origin;
+
+    app.ui_state.grid_size_mm = 1.27;
+    crate::paste_support::paste_with_clipboard(&mut app, Some(&text));
+    let kept = app.interaction_state.clipboard.as_ref().unwrap().origin;
+    assert_eq!(kept, anchor, "the grid changed, the anchor must not");
+}
+
+#[test]
+fn a_foreign_fragment_replaces_the_copy_and_an_older_text_of_ours_is_read_again() {
+    let mut app = app_with_part_at(14.0);
+    select(&mut app, &[("R1", 1)], false);
+    let ours = written_text(app.update(Message::Edit(EditMsg::Copy))).unwrap();
+
+    let mut other = app_with_part_at(40.0);
+    select(&mut other, &[("R1", 1)], false);
+    let foreign = written_text(other.update(Message::Edit(EditMsg::Copy))).unwrap();
+    let foreign_origin = other.interaction_state.clipboard.as_ref().unwrap().origin;
+    let our_origin = app.interaction_state.clipboard.as_ref().unwrap().origin;
+    assert_ne!(foreign_origin, our_origin);
+
+    crate::paste_support::paste_with_clipboard(&mut app, Some(&foreign));
+    assert_eq!(
+        app.interaction_state.clipboard.as_ref().unwrap().origin,
+        foreign_origin
+    );
+
+    crate::paste_support::paste_with_clipboard(&mut app, Some(&ours));
+    assert_eq!(
+        app.interaction_state.clipboard.as_ref().unwrap().origin,
+        our_origin
+    );
+}

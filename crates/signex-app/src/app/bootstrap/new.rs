@@ -571,6 +571,7 @@ impl Signex {
                 polyline_points: Vec::new(),
                 shape_anchor: None,
                 clipboard: None,
+                clipboard_text: None,
                 draw_mode: DrawMode::default(),
                 editing_text: None,
                 context_menu: None,
