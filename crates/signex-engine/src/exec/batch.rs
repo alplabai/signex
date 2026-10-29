@@ -212,6 +212,7 @@ mod tests {
                 justify: HAlign::Left,
                 justify_v: VAlign::Bottom,
                 font_family: None,
+                locked: false,
             },
         }
     }

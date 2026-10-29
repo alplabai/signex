@@ -367,6 +367,7 @@ impl Signex {
                     Tool::Sheet => Some("Sheet".to_string()),
                     Tool::SheetEntry => Some("Sheet Entry".to_string()),
                     Tool::Measure => Some("Measure".to_string()),
+                    Tool::BreakWire => Some("Break Wire".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a
@@ -388,6 +389,7 @@ impl Signex {
                             justify_h: signex_types::schematic::HAlign::Left,
                             justify_v: signex_types::schematic::VAlign::default(),
                             font_family: None,
+                            locked: false,
                         });
                 }
                 if tool == Tool::BusEntry {

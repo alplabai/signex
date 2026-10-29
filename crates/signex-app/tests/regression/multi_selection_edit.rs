@@ -200,5 +200,5 @@ fn a_locked_part_is_skipped_and_the_log_says_so() {
         .map(|s| s.footprint.clone())
         .collect();
     assert_eq!(footprints, ["R_0402-8341", "R_0603", "R_0402-8341"]);
-    assert!(logged(&["Skipped 1 locked symbol(s)"]));
+    assert!(logged(&["Skipped 1 locked object(s)"]));
 }

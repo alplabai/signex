@@ -58,6 +58,8 @@ mod net_colors_tests;
 #[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
+mod object_lock_tests;
+#[cfg(test)]
 mod pcb_footprints_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
@@ -486,6 +488,12 @@ impl SnxSchematic {
 
         let net_colors = sheet_extras.parsed_net_colors();
         let drawing_placements = sheet_extras.parsed_drawing_placements();
+        // Ids naming an object that is gone match nothing and are dropped.
+        let locked_objects: std::collections::HashSet<&str> = sheet_extras
+            .locked_objects
+            .iter()
+            .map(String::as_str)
+            .collect();
         let sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -511,12 +519,21 @@ impl SnxSchematic {
                         .get(&note.uuid.to_string())
                         .cloned()
                         .or(note.font_family);
+                    note.locked = locked_objects.contains(note.uuid.to_string().as_str());
                     note
                 })
                 .collect(),
             buses: sheet_extras.buses,
             bus_entries: sheet_extras.bus_entries,
-            drawings: sheet_extras.drawings,
+            drawings: sheet_extras
+                .drawings
+                .into_iter()
+                .map(|mut drawing| {
+                    drawing
+                        .set_locked(locked_objects.contains(drawing.uuid().to_string().as_str()));
+                    drawing
+                })
+                .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),

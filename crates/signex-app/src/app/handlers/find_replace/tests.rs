@@ -536,7 +536,7 @@ fn a_shown_result_whose_rewrite_is_a_no_op_is_not_reported_as_changed() {
         .expect("a job");
     let listed = job.matches[0].sheet.clone().expect("a project hit");
 
-    let (commands, hits, left_alone) = super::project_replace::live_replacement(
+    let (commands, hits, left_alone, _locked) = super::project_replace::live_replacement(
         &app.document_state.engines[&top],
         &job,
         &prep,
@@ -994,4 +994,40 @@ fn an_unchanged_hierarchy_still_applies_the_replace() {
 
     assert!(app.document_state.engines.contains_key(&child), "applied");
     assert!(!app.document_state.undo_groups.is_empty());
+}
+
+/// A locked label is skipped and named; the rest of the project is replaced
+/// (it used to abort the whole run).
+#[test]
+fn project_replace_skips_a_locked_label_and_replaces_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, parent, child) = placed_twice_on_disk(&dir);
+    let label = app.document_state.engines[&parent].document().labels[0].uuid;
+    app.document_state
+        .engines
+        .get_mut(&parent)
+        .unwrap()
+        .execute(signex_engine::Command::SetItemLocked {
+            item: signex_types::schematic::SelectedItem::new(
+                label,
+                signex_types::schematic::SelectedKind::Label,
+            ),
+            locked: true,
+        })
+        .unwrap();
+
+    replace_in_project(&mut app, "net", "X");
+
+    assert_eq!(
+        first_label(&app, &parent),
+        "TOP_NET",
+        "the locked label stayed"
+    );
+    assert_eq!(
+        first_label(&app, &child),
+        "CHILD_X",
+        "the other sheet changed"
+    );
+    assert!(logged("locked object(s): label TOP_NET"));
+    assert!(!logged("Nothing was replaced"));
 }

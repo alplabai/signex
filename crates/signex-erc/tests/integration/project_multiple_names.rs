@@ -30,6 +30,7 @@ fn label(text: &str, at: Point, label_type: LabelType) -> Label {
         font_family: None,
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 

@@ -203,7 +203,9 @@ fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
         .last()
         .expect("a wire was placed")
         .clone();
-    assert_eq!((wire.start.x, wire.end.x), (5.08, 6.35));
+    // The second leg runs straight on from the first, so it folds into it
+    // (#1254): one wire from the first click to the grid point.
+    assert_eq!((wire.start.x, wire.end.x), (0.0, 6.35));
     assert_eq!(wire.end.y, 25.4);
 }
 
@@ -224,6 +226,7 @@ fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
         start: Point::new(50.0, 50.0),
         end: Point::new(25.4 + 0.3, 12.7 + 0.1),
         stroke_width: 0.0,
+        locked: false,
     };
     let (mut app, path) =
         app_with_symbol_and_wire(hotspots, Point::new(0.0, 0.0), symbol, Some(wire));

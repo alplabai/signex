@@ -449,6 +449,7 @@ fn a_late_mount_after_an_edit_lands_as_one_undo_step() {
         start: Point::new(10.0, 10.0),
         end: Point::new(30.0, 10.0),
         stroke_width: 0.0,
+        locked: false,
     });
     let pins_before = pins(&sheet);
     edit_library_symbol(&f, add_pin);

@@ -165,6 +165,7 @@ mod tests {
                 justify: Default::default(),
                 justify_v: Default::default(),
                 unknown_columns: Default::default(),
+                locked: false,
             });
         }
         let stepped = PlacementPayload::new(sheet).with_labels_stepped(3);

@@ -10,12 +10,24 @@ impl Engine {
     /// minted or removed. Shared by all five arms so none of them can drift
     /// back into leaving a junction-less T (issue #402) or a stale,
     /// silently net-merging dot (issue #422) behind.
-    fn reconciled_patch(&mut self, items: &[SelectedItem]) -> DocumentPatch {
+    pub(super) fn reconciled_patch(&mut self, items: &[SelectedItem]) -> DocumentPatch {
         let mut patch = DocumentPatch::from_selected_items(items);
         if self.reconcile_wire_junctions(items) {
             patch |= DocumentPatch::JUNCTIONS;
         }
         patch
+    }
+
+    /// Fold the wires the edit lined up end to end into one (see
+    /// `transform::merge`), inside the edit's own history step. `adjacent` is
+    /// what already met end to end before the edit. Returns the document
+    /// patch of the merge, empty when nothing merged.
+    fn merge_after_edit(&mut self, adjacent: &crate::TouchingPairs) -> DocumentPatch {
+        if self.merge_collinear_wires(adjacent) {
+            DocumentPatch::WIRES
+        } else {
+            DocumentPatch::NONE
+        }
     }
 
     /// Rubber-band the already moved `self.document` and reconcile junctions,
@@ -116,6 +128,8 @@ impl Engine {
         let items: Vec<SelectedItem> = moves.iter().map(|(item, _, _)| *item).collect();
         // Pin tips must be read before the symbols move.
         let tips = keep_wires.then(|| crate::moved_pin_tips(&self.document, &items));
+        // So must the wires already meeting end to end, which a merge leaves.
+        let adjacent = self.touching_wire_pairs();
 
         let mut changed = false;
         for (item, dx, dy) in &moves {
@@ -129,10 +143,11 @@ impl Engine {
         // and leave their pin end behind.
         let followed = self.follow_bus_entry_ends(&followers, &items);
 
-        let patch = match tips.filter(|tips| !tips.is_empty()) {
+        let mut patch = match tips.filter(|tips| !tips.is_empty()) {
             Some(tips) => self.rubber_band_guarded(&before, &tips, &items, &followed),
             None => self.reconciled_patch(&[items, followed].concat()),
         };
+        patch |= self.merge_after_edit(&adjacent);
         let patch_pair = PatchPair {
             semantic: SemanticPatch::SelectionMoved,
             document: patch,
@@ -155,18 +170,49 @@ impl Engine {
         before: SchematicSheet,
         items: &[SelectedItem],
         tips: Option<Vec<crate::PinTip>>,
+        adjacent: &crate::TouchingPairs,
         changed: bool,
         semantic: SemanticPatch,
     ) -> Result<CommandResult, EngineError> {
         if !changed {
             return Ok(CommandResult::unchanged());
         }
-        let patch = match tips.filter(|tips| !tips.is_empty()) {
+        let mut patch = match tips.filter(|tips| !tips.is_empty()) {
             Some(tips) => self.rubber_band_guarded(&before, &tips, items, &[]),
             None => self.reconciled_patch(items),
         };
+        patch |= self.merge_after_edit(adjacent);
         let patch_pair = PatchPair {
             semantic,
+            document: patch,
+        };
+        self.record_history(before, patch_pair);
+        Ok(CommandResult::changed(patch_pair))
+    }
+
+    /// Place one wire, reconcile its junctions, and (with `merges`) fold it
+    /// into a neighbour it now continues straight.
+    fn place_wire(
+        &mut self,
+        before: SchematicSheet,
+        wire: signex_types::schematic::Wire,
+        merges: bool,
+    ) -> Result<CommandResult, EngineError> {
+        let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+        let adjacent = self.touching_wire_pairs();
+        self.document.wires.push(wire);
+
+        // Reconcile through the same shared path move / rotate / mirror /
+        // delete use: mints the new wire's T both ways and drops any stale
+        // minted dot its placement would otherwise re-justify into merging
+        // two nets (issues #402, #422).
+        let mut patch = self.reconciled_patch(&[wire_item]);
+        // Then a wire drawn straight on from another folds into it.
+        if merges {
+            patch |= self.merge_after_edit(&adjacent);
+        }
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::ObjectPlaced,
             document: patch,
         };
         self.record_history(before, patch_pair);
@@ -215,6 +261,7 @@ impl Engine {
                 keep_wires,
             } => {
                 let tips = self.pin_tips_if(keep_wires, &items);
+                let adjacent = self.touching_wire_pairs();
                 let mut changed = false;
                 for item in &items {
                     changed |= self.rotate_selected_item(item, angle_degrees);
@@ -223,6 +270,7 @@ impl Engine {
                     before,
                     &items,
                     tips,
+                    &adjacent,
                     changed,
                     SemanticPatch::SelectionRotated,
                 )
@@ -234,12 +282,13 @@ impl Engine {
                 keep_wires,
             } => {
                 let tips = self.pin_tips_if(keep_wires, &items);
+                let adjacent = self.touching_wire_pairs();
                 let changed = self.transform_selection_about(&items, centre, transform)?;
                 let semantic = match transform {
                     SelectionTransform::Mirror(_) => SemanticPatch::SelectionMirrored,
                     _ => SemanticPatch::SelectionRotated,
                 };
-                self.finish_transform(before, &items, tips, changed, semantic)
+                self.finish_transform(before, &items, tips, &adjacent, changed, semantic)
             }
             Command::MirrorSelection {
                 items,
@@ -247,6 +296,7 @@ impl Engine {
                 keep_wires,
             } => {
                 let tips = self.pin_tips_if(keep_wires, &items);
+                let adjacent = self.touching_wire_pairs();
                 let mut changed = false;
                 for item in &items {
                     changed |= self.mirror_selected_item(item, axis);
@@ -255,10 +305,12 @@ impl Engine {
                     before,
                     &items,
                     tips,
+                    &adjacent,
                     changed,
                     SemanticPatch::SelectionMirrored,
                 )
             }
+            Command::BreakWire { wire, at } => self.break_wire(before, wire, at),
             Command::PlaceBus { bus } => {
                 self.document.buses.push(bus);
 
@@ -363,25 +415,8 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
-            Command::PlaceWireSegment { wire } => {
-                let wire_item = SelectedItem::new(wire.uuid, SelectedKind::Wire);
-                self.document.wires.push(wire);
-
-                // Reconcile through the same shared path move / rotate /
-                // mirror / delete use: mints the new wire's T both ways (its
-                // own endpoints landing on something, and something else's
-                // endpoint landing on its interior) and drops any stale
-                // minted dot the new wire's own placement would otherwise
-                // silently re-justify into merging two nets (issue #422).
-                let patch_pair = PatchPair {
-                    semantic: SemanticPatch::ObjectPlaced,
-                    document: self.reconciled_patch(&[wire_item]),
-                };
-
-                self.record_history(before, patch_pair);
-
-                Ok(CommandResult::changed(patch_pair))
-            }
+            Command::PlaceWireSegment { wire } => self.place_wire(before, wire, true),
+            Command::PlaceWireSegmentAsIs { wire } => self.place_wire(before, wire, false),
             Command::PlaceJunction { junction } => {
                 self.document.junctions.push(junction);
 

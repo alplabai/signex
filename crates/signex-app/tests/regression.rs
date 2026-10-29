@@ -128,6 +128,10 @@ mod single_dirty_source;
 #[path = "regression/symbol_locked_enforced.rs"]
 mod symbol_locked_enforced;
 
+// #1573 — locked wires, labels, notes and drawings refuse delete, with a note.
+#[path = "regression/object_locked_enforced.rs"]
+mod object_locked_enforced;
+
 // #768 — an over-cap foreign-column save names the objects to delete.
 #[path = "regression/foreign_column_save_blocked.rs"]
 mod foreign_column_save_blocked;

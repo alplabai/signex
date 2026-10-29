@@ -155,6 +155,7 @@ pub(crate) mod sheet {
             justify: Default::default(),
             justify_v: Default::default(),
             unknown_columns: Default::default(),
+            locked: false,
         }
     }
 

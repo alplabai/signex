@@ -355,6 +355,7 @@ mod tests {
             width: 0.2,
             fill: FillType::None,
             stroke_color: None,
+            locked: false,
         });
         let (x1, y1, x2, y2) = schematic_bbox(&sheet);
         assert!(x1 <= 10.0 && y1 <= 10.0 && x2 >= 452.0 && y2 >= 300.0);

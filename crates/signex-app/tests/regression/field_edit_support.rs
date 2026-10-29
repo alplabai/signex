@@ -54,6 +54,7 @@ pub(crate) fn label(text: &str, at: (f64, f64)) -> Label {
         justify: HAlign::Left,
         justify_v: Default::default(),
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -64,6 +65,7 @@ pub(crate) fn wire(a: (f64, f64), b: (f64, f64), width: f64) -> Wire {
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: width,
+        locked: false,
     }
 }
 

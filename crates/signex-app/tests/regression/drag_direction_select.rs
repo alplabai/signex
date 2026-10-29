@@ -16,6 +16,7 @@ fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
         start: Point::new(a.0, a.1),
         end: Point::new(b.0, b.1),
         stroke_width: 0.0,
+        locked: false,
     }
 }
 
