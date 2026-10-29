@@ -59,8 +59,8 @@ pub fn reconcile(
     now: SystemTime,
 ) -> Result<Option<Recoverable>, String> {
     // A copy a build before #1510 keyed by the raw spelling moves to the
-    // current key. Journalled moves are not replayed here: the live autosave
-    // state owns them once the app runs.
+    // current key. Moves journalled into `document` are finished first.
+    super::pending_move::finish_for(recovery_dir, document)?;
     sidecar::adopt_legacy(recovery_dir, document)?;
     sidecar::log_unmatched_spellings(recovery_dir, document);
     let sidecar_file = sidecar::sidecar_path(recovery_dir, document);

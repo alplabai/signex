@@ -245,6 +245,11 @@ impl Signex {
         if ok && nothing_to_recover {
             return self.start_remove(&dir, path);
         }
+        // The fresh copy at `path` is current, so the older copy a failing
+        // move still owes it is obsolete (#1433).
+        if ok && let Some(old) = self.document_state.autosave.take_obsolete_released(&path) {
+            return self.start_remove(&dir, old);
+        }
         Task::none()
     }
 
@@ -256,10 +261,12 @@ impl Signex {
         let Some(dir) = self.document_state.autosave.dir().map(Path::to_path_buf) else {
             return Task::none();
         };
-        if on_disk {
-            return self.start_remove(&dir, path.to_path_buf());
-        }
-        Task::none()
+        let remove = on_disk.then(|| self.start_remove(&dir, path.to_path_buf()));
+        // A copy of this run still owed a move into `path` is obsolete now
+        // that the file holds the content; settle it here, not on a timer
+        // that may never tick (autosave off, or the app quitting).
+        let moves = self.autosave_flush_moves();
+        Task::batch(remove.into_iter().chain([moves]))
     }
 
     /// The file at `path` was rewritten without going through a document
@@ -524,6 +531,37 @@ mod tests {
             Default::default(),
             "no entry left to resurrect it"
         );
+    }
+
+    /// A save of the new path while the rename into it runs: the task removes
+    /// what it moved, so no outdated copy is offered at the next open.
+    #[test]
+    fn a_save_during_a_running_move_leaves_no_copy_at_the_new_key() {
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (old, new) = (tmp.path().join("a.snxsch"), tmp.path().join("b.snxsch"));
+        sidecar::write(&dir, &old, b"outdated").unwrap();
+
+        let mut state = crate::autosave::AutosaveState::new(Some(dir.clone()));
+        state.begin(&old);
+        state.finish(&old, crate::autosave::DocStamp::of_bytes(b"outdated"), true);
+        state.rekey(&old, &new);
+        let (start, _) = state.take_moves();
+        let task = move_task(dir.clone(), start[0].clone(), state.track_job());
+        // The save lands while the rename is still to run; its removal of
+        // the new key finds nothing there yet.
+        state.saved(&new);
+        let mut stream = iced_runtime::task::into_stream(task).expect("stream");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert!(
+            !sidecar::sidecar_path(&dir, &new).exists(),
+            "no outdated copy"
+        );
+        assert!(!sidecar::sidecar_path(&dir, &old).exists());
     }
 
     /// The quit wait returns only once every tracked job is done: a held
