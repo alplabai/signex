@@ -367,8 +367,10 @@ Examples of good first contributions:
 
 ### Object ids
 
-Every new id is a UUID v7: call `Uuid::now_v7()`. The workspace builds `uuid`
-without the `v4` feature, so `Uuid::new_v4()` does not compile.
+Every new id is a UUID v7: call `Uuid::now_v7()`. `clippy.toml` disallows
+`Uuid::new_v4()`, and CI runs clippy with `-D warnings`, so a new v4 call fails
+the build. (The workspace lists `uuid` without `v4`, but a dependency turns
+that feature back on, so the lint is the real guard.)
 
 - **A v7 id carries its creation time.** Its first 48 bits are a millisecond
   Unix timestamp. `signex_types::object_id::created_at` reads it back, and
