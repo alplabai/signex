@@ -84,3 +84,36 @@ fn a_unit_placed_nowhere_is_filed_under_the_first_units_sheet() {
         found[0].1.message
     );
 }
+
+#[test]
+fn the_project_pass_uses_placement_designators_and_no_erc_directives() {
+    use signex_types::schematic::{NoConnect, SymbolInstance};
+    let placement = |n: u128| format!("/{}", Uuid::from_u128(n));
+    let mut sheet = sheet_with_units(&[1]);
+    sheet.symbols[0].reference = "U?".into();
+    sheet.symbols[0].instances = [(1, "U7"), (2, "U107")]
+        .into_iter()
+        .map(|(n, r)| SymbolInstance {
+            project: "p".into(),
+            path: placement(n),
+            reference: r.into(),
+            unit: 1,
+        })
+        .collect();
+    let found = project_units_not_placed(&[("s", &sheet)]);
+    let parts: Vec<&str> = found
+        .iter()
+        .map(|(_, v)| v.message.split(' ').nth(1).unwrap_or(""))
+        .collect();
+    assert_eq!(
+        parts,
+        ["U7", "U107"],
+        "one finding per placement, none for U?"
+    );
+
+    sheet.no_erc_directives.push(NoConnect {
+        uuid: Uuid::new_v4(),
+        position: Point::new(25.4, 25.4),
+    });
+    assert!(project_units_not_placed(&[("s", &sheet)]).is_empty());
+}

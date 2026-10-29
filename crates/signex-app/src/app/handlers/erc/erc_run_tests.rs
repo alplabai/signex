@@ -329,6 +329,7 @@ mod net_level {
                 reference: "R1".to_string(),
                 number: "1".to_string(),
                 position: pin_at,
+                direction: signex_types::schematic::PinDirection::Passive,
             }],
         });
         v

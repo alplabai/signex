@@ -10,6 +10,8 @@ use signex_types::schematic::LabelType;
 
 use crate::context::{ErcContext, ErcLabel, ErcPin, ErcSymbol, merged_connectivity};
 
+const UNNAMED: &str = "(unnamed)";
+
 /// The members of one net on this sheet.
 #[derive(Default)]
 pub(super) struct NetMembers<'a> {
@@ -28,6 +30,29 @@ pub(super) struct NetMembers<'a> {
 }
 
 impl NetMembers<'_> {
+    /// The net as a finding carries it: its name and every part pin.
+    pub fn finding(&self) -> crate::NetFinding {
+        let name = self.name();
+        let name = if name == UNNAMED { String::new() } else { name };
+        let pins = self
+            .pins
+            .iter()
+            .map(|(s, p)| crate::NetFindingPin {
+                symbol: s.uuid,
+                reference: s.reference.clone(),
+                number: p.number.clone(),
+                position: p.world_pos,
+                direction: p.electrical_type,
+            })
+            .collect();
+        crate::NetFinding::from_pins(name, pins)
+    }
+
+    /// Whether a local (Net) label names the net.
+    pub fn has_local_label(&self) -> bool {
+        self.labels.iter().any(|l| l.label_type == LabelType::Net)
+    }
+
     /// The name the netlist gives the net, or `(unnamed)`.
     pub fn name(&self) -> String {
         let power: Vec<&str> = self
@@ -41,7 +66,7 @@ impl NetMembers<'_> {
             &power,
         )
         .map(|(_, name)| name)
-        .unwrap_or_else(|| "(unnamed)".to_string())
+        .unwrap_or_else(|| UNNAMED.to_string())
     }
 }
 

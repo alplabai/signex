@@ -19,10 +19,10 @@ set predates these rules runs them at their defaults (`resolve` lists them as
 | `part_without_footprint` | Info | A part placed on the board (`on_board`) none of whose units has a footprint. |
 | `part_without_value` | Info | A part none of whose units has a value. |
 | `part_without_mpn` | Off | A part none of whose units carries an MPN field (`MPN`, `Manufacturer Part Number`, `Part Number`, the fields the BOM reads). |
-| `unannotated_designator` | Warning | A part whose designator is empty or ends in `?`. |
-| `single_pin_net` | Warning | A wired or labelled net with exactly one part pin. |
+| `unannotated_designator` | Warning | A part shown under a designator that is empty or ends in `?`. |
+| `single_pin_net` | Warning | A net named by a local label that reaches exactly one part pin. |
 | `net_with_no_driver` | Warning | A net with an input pin and no pin that can drive it. |
-| `power_input_not_driven` | Warning | A net with a power input pin and no power output, ground reference, power port or power flag. |
+| `power_input_not_driven` | Warning | A net with a power input pin, no power port or flag, and no pin that can drive it. |
 | `units_not_placed` | Warning | A multi-unit part with units placed on no sheet. |
 | `off_grid` | Info | A pin tip or wire end off the 1.27 mm (50 mil) connection grid. |
 | `labels_only_net` | Warning | A net with labels and wires but no pin. |
@@ -57,16 +57,36 @@ not counted.
 are given the benefit of the doubt, since a resistor pull-up or an
 unclassified library pin would otherwise flood the report.
 
-`power_input_not_driven` does not overlap `missing_power_flag`: that rule looks
-at power *ports* not cross-referenced by a label, and this one skips every net
+`power_input_not_driven` uses the same "can drive" set, so a rail fed through
+a `Passive` ferrite or 0R, or by a regulator whose output is typed `Output`,
+is not reported. It does not overlap `missing_power_flag`: that rule looks at
+power *ports* not cross-referenced by a label, and this one skips every net
 that carries a power port or flag.
+
+`single_pin_net` only looks at nets a local label names. A pin with a bare
+wire stub to nowhere is already a `dangling_wire` finding, so it is not
+reported twice.
+
+These rules attach the net to their finding (as net-level findings do), so a
+click highlights it and a waiver keys on its pins. The finding keeps its
+own location, so a No-ERC directive on it still suppresses it.
+
+### Designators of reused sheets
+
+The part rules and `units_not_placed` read the designator each placement
+shows: a symbol's instance entries (#829, what `designator_in` resolves to),
+or its `reference` when it has none. A symbol whose base reference is `R?`
+but whose placements are `R7` and `R107` is annotated. A sheet's own run does
+not know which placements exist, so a symbol with entries is judged by them.
 
 ### Units across sheets
 
 Units of one part are often on different sheets. A sheet checked on its own
 reports every unit it does not hold; the app's ERC run replaces those findings
-with one project-wide pass over every sheet of the run
-(`project_units_not_placed`), so a unit placed on another sheet counts.
+for the project's sheets with one pass over those sheets
+(`project_units_not_placed`), so a unit placed on another sheet counts. An
+open tab outside the project keeps its own findings, and a No-ERC directive
+at the part still suppresses the project finding.
 
 Unit numbers come from a file, so the rule never sizes a loop by them alone:
 a library symbol claiming more than 256 units (`MAX_UNITS_PER_PART`) is
@@ -93,9 +113,26 @@ provenance. Each entry holds:
 | `message` | The finding's text when waived, so a lapsed waiver still says what it was about. |
 
 The identity is `rule_id` + `objects`; positions are never part of it. The
-fingerprint is what makes a waiver lapse: editing, moving or deleting any
-involved object changes it, the finding shows again, and the panel marks the
-waiver "LAPSED". Waive again to accept the new state.
+fingerprint is what makes a waiver lapse, and it covers only what the rule
+depends on, so an unrelated edit never lapses a waiver:
+
+| Finding | Fingerprint covers |
+|---|---|
+| Part rules (footprint, value, MPN, annotation, duplicate designator, units not placed) | Each part's designators, library id, unit, value, footprint, `on_board` and fields. Not its position, rotation or text placement. |
+| Net-level findings (every finding that carries its net) | The net's name and pin set (designator, pin number, electrical type), plus any label or wire the finding names. Not the parts' other fields. |
+| Everything else (off-grid, dangling wire, pin conflicts, ...) | The involved objects with their geometry: for a part, the part fields above plus position, rotation, mirroring and body style. |
+
+Every number is hashed as the integer nanometres the file stores
+(`mm_as_stored_nm`), never as the raw `f64`: a length such as 3.81 mm reads
+back from disk as 3.8099999999999996, and a waiver must not lapse because the
+sheet was saved and reopened. When the covered content changes, the finding
+shows again and the panel marks the waiver "LAPSED". Waive again to accept
+the new state.
+
+If the first waiver goes into a project that stores no rule set, the project
+gets one copied from the machine's preferences (so the waiver has a place to
+live), and the Messages panel says so. Undo and redo of the rule set re-run
+ERC so the results match.
 
 Waived findings are never dropped silently: the ERC panel lists every stored
 waiver with its reason, author, date and status (waiving N findings, lapsed,

@@ -18,6 +18,8 @@ pub struct NetFindingPin {
     pub reference: String,
     pub number: String,
     pub position: Point,
+    /// Electrical type of the pin.
+    pub direction: signex_types::schematic::PinDirection,
 }
 
 /// The net a finding is about.
@@ -31,7 +33,7 @@ pub struct NetFinding {
 
 impl NetFinding {
     pub fn from_net(net: &ErcNet) -> Self {
-        let mut pins: Vec<NetFindingPin> = net
+        let pins = net
             .pins
             .iter()
             .map(|p| NetFindingPin {
@@ -39,8 +41,14 @@ impl NetFinding {
                 reference: p.reference.clone(),
                 number: p.number.clone(),
                 position: p.position,
+                direction: p.direction,
             })
             .collect();
+        Self::from_pins(net.name.clone(), pins)
+    }
+
+    /// A net named `name` holding `pins`, put in the stable order.
+    pub fn from_pins(name: String, mut pins: Vec<NetFindingPin>) -> Self {
         pins.sort_by(|a, b| {
             a.reference
                 .cmp(&b.reference)
@@ -49,10 +57,7 @@ impl NetFinding {
                 .then_with(|| a.position.x.total_cmp(&b.position.x))
                 .then_with(|| a.position.y.total_cmp(&b.position.y))
         });
-        Self {
-            name: net.name.clone(),
-            pins,
-        }
+        Self { name, pins }
     }
 
     /// The stable pin the marker is anchored at: lowest designator, then pin.

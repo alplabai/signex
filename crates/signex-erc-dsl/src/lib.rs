@@ -68,6 +68,7 @@ mod tests {
                     .parse()
                     .expect("valid uuid"),
                 reference: "U1".to_string(),
+                instance_designators: Vec::new(),
                 lib_id: String::new(),
                 unit: 1,
                 value: "MCU".to_string(),

@@ -127,14 +127,25 @@ fn unannotated_designator_flags_question_marks_and_blanks_only() {
 }
 
 #[test]
-fn single_pin_net_flags_a_lone_pin_on_a_wire() {
+fn single_pin_net_flags_a_named_net_with_one_pin() {
     let c = on_wire(
         vec![pin_at("U1", pt(0.0, 0.0), PinDirection::Passive)],
-        vec![],
+        vec![net_label("SENSE", pt(12.7, 0.0))],
     );
     let out = found(&c, RuleKind::SinglePinNet);
     assert_eq!(out.len(), 1, "{out:?}");
     assert!(out[0].message.contains("U1.1"), "{}", out[0].message);
+    assert_eq!(out[0].net.as_ref().map(|n| n.name.as_str()), Some("SENSE"));
+}
+
+#[test]
+fn a_bare_stub_is_left_to_dangling_wire() {
+    let c = on_wire(
+        vec![pin_at("U1", pt(0.0, 0.0), PinDirection::Passive)],
+        vec![],
+    );
+    assert!(found(&c, RuleKind::SinglePinNet).is_empty());
+    assert_eq!(found(&c, RuleKind::DanglingWire).len(), 1);
 }
 
 #[test]
@@ -144,7 +155,7 @@ fn single_pin_net_skips_two_pins_off_sheet_nets_and_no_connects() {
             pin_at("U1", pt(0.0, 0.0), PinDirection::Passive),
             pin_at("U2", pt(12.7, 0.0), PinDirection::Passive),
         ],
-        vec![],
+        vec![net_label("N", pt(0.0, 0.0))],
     );
     assert!(found(&two, RuleKind::SinglePinNet).is_empty());
     let global = on_wire(
@@ -218,15 +229,11 @@ fn power_input_not_driven_needs_a_source_on_the_net() {
     let bare = || {
         vec![
             pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput),
-            pin_at("C1", pt(12.7, 0.0), PinDirection::Passive),
+            pin_at("U3", pt(12.7, 0.0), PinDirection::PowerInput),
         ]
     };
     let out = found(&on_wire(bare(), vec![]), RuleKind::PowerInputNotDriven);
     assert_eq!(out.len(), 1, "{out:?}");
-
-    let mut regulated = bare();
-    regulated.push(pin_at("U2", pt(12.7, 0.0), PinDirection::PowerOutput));
-    assert!(found(&on_wire(regulated, vec![]), RuleKind::PowerInputNotDriven).is_empty());
 
     for (value, lib_id) in [("+3V3", "power:+3V3"), ("PWR_FLAG", "power:PWR_FLAG")] {
         let mut ported = bare();
@@ -240,6 +247,28 @@ fn power_input_not_driven_needs_a_source_on_the_net() {
     let mut pinless = bare();
     pinless.push(power_port("+5V", pt(12.7, 0.0)));
     assert!(found(&on_wire(pinless, vec![]), RuleKind::PowerInputNotDriven).is_empty());
+}
+
+#[test]
+fn a_supply_fed_through_a_ferrite_or_an_output_typed_regulator_is_driven() {
+    // VDDA behind a ferrite bead: the bead's Passive pin feeds the rail.
+    let ferrite = on_wire(
+        vec![
+            pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput),
+            pin_at("FB1", pt(12.7, 0.0), PinDirection::Passive),
+        ],
+        vec![net_label("VDDA", pt(0.0, 0.0))],
+    );
+    assert!(found(&ferrite, RuleKind::PowerInputNotDriven).is_empty());
+    // An LDO whose VOUT pin is typed Output rather than PowerOutput.
+    let ldo = on_wire(
+        vec![
+            pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput),
+            pin_at("U2", pt(12.7, 0.0), PinDirection::Output),
+        ],
+        vec![],
+    );
+    assert!(found(&ldo, RuleKind::PowerInputNotDriven).is_empty());
 }
 
 #[test]
@@ -330,6 +359,50 @@ fn units_not_placed_lists_at_most_eight_missing_units() {
         out[0]
             .message
             .ends_with("unit 2, 3, 4, 5, 6, 7, 8, 9, ... (+11 more)"),
+        "{}",
+        out[0].message
+    );
+}
+
+fn with_designators(reference: &str, designators: &[&str]) -> ErcSymbol {
+    let mut s = part(reference);
+    s.instance_designators = designators.iter().map(|d| d.to_string()).collect();
+    s
+}
+
+#[test]
+fn completeness_rules_judge_each_placement_designator() {
+    // Base `R?`, but both placements carry instance designators.
+    let annotated = with_symbols(vec![with_designators("R?", &["R7", "R107"])]);
+    assert!(found(&annotated, RuleKind::UnannotatedDesignator).is_empty());
+    // One placement still unannotated.
+    let partial = with_symbols(vec![with_designators("R1", &["R7", "R?"])]);
+    assert_eq!(found(&partial, RuleKind::UnannotatedDesignator).len(), 1);
+    // A missing footprint is reported once per placement designator.
+    let out = found(&annotated, RuleKind::PartWithoutFootprint);
+    let messages: Vec<&str> = out.iter().map(|d| d.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        ["Part R7 has no footprint", "Part R107 has no footprint"]
+    );
+}
+
+#[test]
+fn units_are_grouped_by_placement_designator() {
+    let unit = |n: u32, designators: &[&str]| {
+        let mut s = with_designators("U?", designators);
+        s.lib_id = "Amplifier:LM358".into();
+        s.unit = n;
+        s.unit_count = 2;
+        s
+    };
+    let both = with_symbols(vec![unit(1, &["U7", "U107"]), unit(2, &["U7", "U107"])]);
+    assert!(found(&both, RuleKind::UnitsNotPlaced).is_empty());
+    let one = with_symbols(vec![unit(1, &["U7", "U107"]), unit(2, &["U7"])]);
+    let out = found(&one, RuleKind::UnitsNotPlaced);
+    assert_eq!(out.len(), 1);
+    assert!(
+        out[0].message.starts_with("Part U107"),
         "{}",
         out[0].message
     );

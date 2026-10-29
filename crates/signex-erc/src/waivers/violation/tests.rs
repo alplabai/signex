@@ -145,3 +145,93 @@ fn adding_a_waiver_replaces_one_for_the_same_finding() {
     assert_eq!(list[0].reason, "updated");
     assert!(without_waiver(&list, &first.rule_id, &first.objects).is_empty());
 }
+
+fn key_of(v: &Violation, sheet: &SchematicSheet) -> WaiverKey {
+    waiver_key(v, sheet).expect("key")
+}
+
+#[test]
+fn a_waiver_survives_a_save_and_reload_of_the_sheet() {
+    // 3.81 mm reads back from its stored 3_810_000 nm as 3.8099999999999996.
+    let id = Uuid::new_v4();
+    let mut symbol = part(id);
+    symbol.position = Point::new(3.81, 1.27 * 7.0);
+    symbol.rotation = 90.0;
+    let sheet = sheet_with(symbol);
+    let text = signex_types::format::SnxSchematic::new(sheet.clone())
+        .write_string()
+        .expect("save");
+    let reloaded = signex_types::format::SnxSchematic::parse(&text)
+        .expect("load")
+        .sheet;
+    assert_ne!(
+        reloaded.symbols[0].position.x.to_bits(),
+        sheet.symbols[0].position.x.to_bits(),
+        "the probe must exercise a drifting coordinate"
+    );
+    for kind in [RuleKind::UnusedPin, RuleKind::PartWithoutFootprint] {
+        let v = finding_on(id, kind);
+        assert_eq!(key_of(&v, &sheet), key_of(&v, &reloaded), "{kind:?}");
+    }
+}
+
+#[test]
+fn a_field_rule_waiver_ignores_placement_but_not_the_field() {
+    let id = Uuid::new_v4();
+    let sheet = sheet_with(part(id));
+    let v = finding_on(id, RuleKind::PartWithoutFootprint);
+    let waivers = vec![waive(&v, &sheet)];
+    let mut moved = part(id);
+    moved.position = Point::new(50.8, 50.8);
+    moved.rotation = 180.0;
+    assert_eq!(
+        split(v.clone(), &sheet_with(moved), &waivers).waived.len(),
+        1
+    );
+    let mut fitted = part(id);
+    fitted.footprint = "R_0603".into();
+    let out = split(v, &sheet_with(fitted), &waivers);
+    assert!(out.lapsed.contains(&0));
+}
+
+fn net_finding(pins: &[(Uuid, &str)]) -> Violation {
+    let mut v = Violation::new(
+        RuleId::builtin(RuleKind::SinglePinNet),
+        RuleKind::SinglePinNet,
+        Severity::Warning,
+        "Net 'SENSE' connects only one pin",
+        Point::new(0.0, 0.0),
+    );
+    v.primary = Some(SelectedItem::new(pins[0].0, SelectedKind::Symbol));
+    v.net = Some(crate::NetFinding::from_pins(
+        "SENSE".into(),
+        pins.iter()
+            .map(|(id, reference)| crate::NetFindingPin {
+                symbol: *id,
+                reference: (*reference).into(),
+                number: "1".into(),
+                position: Point::new(0.0, 0.0),
+                direction: signex_types::schematic::PinDirection::Passive,
+            })
+            .collect(),
+    ));
+    v
+}
+
+#[test]
+fn a_net_waiver_ignores_part_values_but_not_the_pin_set() {
+    let (r1, c1) = (Uuid::new_v4(), Uuid::new_v4());
+    let sheet = |cap_value: &str| SchematicSheet {
+        symbols: vec![part(r1), {
+            let mut c = part(c1);
+            c.value = cap_value.into();
+            c
+        }],
+        ..Default::default()
+    };
+    let v = net_finding(&[(r1, "R1"), (c1, "C1")]);
+    let waivers = vec![waive(&v, &sheet("100n"))];
+    assert_eq!(split(v, &sheet("1u"), &waivers).waived.len(), 1);
+    let renamed = net_finding(&[(r1, "R1"), (c1, "C9")]);
+    assert!(split(renamed, &sheet("100n"), &waivers).lapsed.contains(&0));
+}

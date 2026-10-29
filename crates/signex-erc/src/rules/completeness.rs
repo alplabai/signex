@@ -2,7 +2,8 @@
 //!
 //! Each is judged per physical part, not per placed unit: a multi-unit part
 //! passes when any of its units carries the field, the way the BOM merges
-//! units. Power ports and `#` markers are not parts and are skipped.
+//! units. Power ports and `#` markers are not parts and are skipped. A
+//! symbol is judged under the designator each placement shows (#829).
 
 use signex_types::schematic::{PartKey, SelectedKind, group_into_parts, normalized_lib_id};
 
@@ -10,15 +11,21 @@ use crate::context::{ErcContext, ErcSymbol};
 use crate::diagnostic::Diagnostic;
 use crate::{RuleKind, sel};
 
-/// The parts on this sheet, each as its placed units.
-fn parts(ctx: &ErcContext) -> Vec<Vec<&ErcSymbol>> {
-    let eligible: Vec<&ErcSymbol> = ctx
+/// One placement of a symbol under the designator it shows there.
+type Placed<'a> = (&'a ErcSymbol, &'a str);
+
+/// The parts on this sheet, each as its placed units. A symbol placed more
+/// than once (a reused sheet) counts once per designator (#829).
+fn parts(ctx: &ErcContext) -> Vec<Vec<Placed<'_>>> {
+    let eligible: Vec<Placed> = ctx
         .symbols
         .iter()
-        .filter(|s| !s.is_power && !s.reference.trim().starts_with('#'))
+        .filter(|s| !s.is_power)
+        .flat_map(|s| s.placement_designators().into_iter().map(move |d| (s, d)))
+        .filter(|(_, d)| !d.trim().starts_with('#'))
         .collect();
-    group_into_parts(eligible.iter().map(|s| PartKey {
-        reference: s.reference.trim(),
+    group_into_parts(eligible.iter().map(|(s, d)| PartKey {
+        reference: d.trim(),
         lib_id: normalized_lib_id(&s.lib_id),
         unit: s.unit,
     }))
@@ -33,8 +40,8 @@ pub(crate) fn is_unannotated(reference: &str) -> bool {
     r.is_empty() || r.ends_with('?')
 }
 
-fn display_ref(s: &ErcSymbol) -> &str {
-    match s.reference.trim() {
+fn display(designator: &str) -> &str {
+    match designator.trim() {
         "" => "(unnamed)",
         r => r,
     }
@@ -44,18 +51,18 @@ fn display_ref(s: &ErcSymbol) -> &str {
 fn report_parts(
     ctx: &ErcContext,
     kind: RuleKind,
-    applies: impl Fn(&ErcSymbol) -> bool,
-    has: impl Fn(&ErcSymbol) -> bool,
+    applies: impl Fn(Placed) -> bool,
+    has: impl Fn(Placed) -> bool,
     message: impl Fn(&str) -> String,
     out: &mut Vec<Diagnostic>,
 ) {
     for part in parts(ctx) {
-        if !part.iter().any(|s| applies(s)) || part.iter().any(|s| has(s)) {
+        if !part.iter().any(|p| applies(*p)) || part.iter().any(|p| has(*p)) {
             continue;
         }
-        let first = part[0];
+        let (first, designator) = part[0];
         out.push(
-            Diagnostic::new(kind, message(display_ref(first)), first.position)
+            Diagnostic::new(kind, message(display(designator)), first.position)
                 .with_primary(sel(first.uuid, SelectedKind::Symbol)),
         );
     }
@@ -65,8 +72,8 @@ pub(crate) fn part_without_footprint(ctx: &ErcContext, out: &mut Vec<Diagnostic>
     report_parts(
         ctx,
         RuleKind::PartWithoutFootprint,
-        |s| s.on_board,
-        |s| !s.footprint.trim().is_empty(),
+        |(s, _)| s.on_board,
+        |(s, _)| !s.footprint.trim().is_empty(),
         |r| format!("Part {r} has no footprint"),
         out,
     );
@@ -77,7 +84,7 @@ pub(crate) fn part_without_value(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         ctx,
         RuleKind::PartWithoutValue,
         |_| true,
-        |s| !s.value.trim().is_empty(),
+        |(s, _)| !s.value.trim().is_empty(),
         |r| format!("Part {r} has no value"),
         out,
     );
@@ -85,7 +92,7 @@ pub(crate) fn part_without_value(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
 /// The MPN is read from the same fields the BOM reads it from.
 pub(crate) fn part_without_mpn(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let has_mpn = |s: &ErcSymbol| {
+    let has_mpn = |(s, _): Placed| {
         s.attrs.iter().any(|(key, value)| {
             signex_bom::MPN_FIELDS
                 .iter()
@@ -107,8 +114,8 @@ pub(crate) fn unannotated_designator(ctx: &ErcContext, out: &mut Vec<Diagnostic>
     report_parts(
         ctx,
         RuleKind::UnannotatedDesignator,
-        |s| is_unannotated(&s.reference),
-        |s| !is_unannotated(&s.reference),
+        |(_, d)| is_unannotated(d),
+        |(_, d)| !is_unannotated(d),
         |r| format!("Designator '{r}' is not annotated"),
         out,
     );

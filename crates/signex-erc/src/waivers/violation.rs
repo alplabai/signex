@@ -3,8 +3,9 @@
 //!
 //! A waiver names a finding by its rule id and the UUIDs of the objects it
 //! involves (never by position), and records a fingerprint of those objects'
-//! content. Editing, moving or deleting any of them changes the fingerprint,
-//! so the waiver lapses and the finding shows again. Design notes:
+//! content, limited to what the rule depends on. Changing that content (or
+//! deleting an object) lapses the waiver and the finding shows again. Design
+//! notes:
 //! `docs/ERC_RULES.md`, "Waivers".
 
 use std::collections::BTreeSet;
@@ -73,17 +74,79 @@ pub fn waiver_key(v: &Violation, sheet: &SchematicSheet) -> Option<WaiverKey> {
     let rule_id = v.rule_id.to_string();
     let mut hasher = Sha256::new();
     hasher.update(rule_id.as_bytes());
+    let scope = Scope::of(v);
+    if let (Scope::Net, Some(net)) = (scope, &v.net) {
+        hasher.update(b"\nnet:");
+        hasher.update(net_content(net).as_bytes());
+    }
     for item in &items {
+        // On a net finding the parts are covered by the net's pin set.
+        if scope == Scope::Net && is_symbol(item.kind) {
+            continue;
+        }
         hasher.update(b"\n");
         hasher.update(item.uuid.to_string().as_bytes());
         hasher.update(b":");
-        hasher.update(object_content(sheet, item)?.as_bytes());
+        hasher.update(object_content(sheet, item, scope)?.as_bytes());
     }
     Some(WaiverKey {
         rule_id,
         objects: items.iter().map(|i| i.uuid.to_string()).collect(),
         fingerprint: format!("{:x}", hasher.finalize()),
     })
+}
+
+/// What a finding's fingerprint covers: only what its rule depends on, so an
+/// unrelated edit never lapses a waiver. See `docs/ERC_RULES.md`, "Waivers".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    /// Rules about a part's fields: its designators, library id, unit,
+    /// value, footprint and fields, never where it sits.
+    PartFields,
+    /// Net-level findings: the net's name and pin set (designator, pin
+    /// number, electrical type), plus any label or wire involved.
+    Net,
+    /// Everything else: the involved objects with their geometry.
+    Geometry,
+}
+
+impl Scope {
+    fn of(v: &Violation) -> Self {
+        use crate::RuleKind as K;
+        if v.net.is_some() {
+            return Scope::Net;
+        }
+        match v.builtin_kind() {
+            Some(
+                K::PartWithoutFootprint
+                | K::PartWithoutValue
+                | K::PartWithoutMpn
+                | K::UnannotatedDesignator
+                | K::DuplicateRefDesignator
+                | K::UnitsNotPlaced,
+            ) => Scope::PartFields,
+            _ => Scope::Geometry,
+        }
+    }
+}
+
+fn is_symbol(kind: SelectedKind) -> bool {
+    matches!(
+        kind,
+        SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField
+    )
+}
+
+/// The net's name and its pins as (designator, number, type), sorted.
+fn net_content(net: &crate::NetFinding) -> String {
+    let mut pins: Vec<String> = net
+        .pins
+        .iter()
+        .map(|p| format!("{}.{}:{:?}", p.reference.trim(), p.number, p.direction))
+        .collect();
+    pins.sort();
+    pins.dedup();
+    format!("{}|{}", net.name, pins.join(","))
 }
 
 /// A new waiver for the finding keyed `key`. Reason and author are trimmed
@@ -183,13 +246,14 @@ pub fn stamp_keys(violations: &mut [Violation], sheet: &SchematicSheet) {
     }
 }
 
-/// Canonical JSON of the object `item` names on `sheet`: keys sorted, so the
-/// fingerprint does not depend on hash-map order.
-fn object_content(sheet: &SchematicSheet, item: &SelectedItem) -> Option<String> {
+/// Canonical text of the object `item` names on `sheet` for `scope`: JSON
+/// with keys sorted, every number in stored nanometre units (a raw `f64`
+/// changes across a save + load, see `mm_as_stored_nm`).
+fn object_content(sheet: &SchematicSheet, item: &SelectedItem, scope: Scope) -> Option<String> {
     let id = item.uuid;
     let value = match item.kind {
         SelectedKind::Symbol | SelectedKind::SymbolRefField | SelectedKind::SymbolValField => {
-            to_value(sheet.symbols.iter().find(|s| s.uuid == id)?)
+            symbol_view(sheet.symbols.iter().find(|s| s.uuid == id)?, scope)
         }
         SelectedKind::Wire => to_value(sheet.wires.iter().find(|w| w.uuid == id)?),
         SelectedKind::Bus => to_value(sheet.buses.iter().find(|b| b.uuid == id)?),
@@ -212,15 +276,43 @@ fn object_content(sheet: &SchematicSheet, item: &SelectedItem) -> Option<String>
         SelectedKind::Drawing => return None,
     }?;
     let mut out = String::new();
-    write_canonical(&value, &mut out);
+    write_canonical(&value, &mut out)?;
     Some(out)
+}
+
+/// The part of a symbol `scope` depends on. Field rules see its identity and
+/// fields; geometry rules add where it sits and how it is turned. Text
+/// placement and other cosmetics are never part of either.
+fn symbol_view(s: &signex_types::schematic::Symbol, scope: Scope) -> Option<serde_json::Value> {
+    use serde_json::json;
+    let designators = crate::context::placement_designators(s);
+    let fields: std::collections::BTreeMap<&String, &String> = s.fields.iter().collect();
+    let mut view = json!({
+        "lib_id": s.lib_id.trim(),
+        "designators": designators,
+        "unit": s.unit,
+        "value": s.value,
+        "footprint": s.footprint,
+        "on_board": s.on_board,
+        "is_power": s.is_power,
+        "fields": fields,
+    });
+    if scope == Scope::Geometry
+        && let Some(map) = view.as_object_mut()
+    {
+        map.insert("position".into(), to_value(&s.position)?);
+        map.insert("rotation".into(), json!(s.rotation));
+        map.insert("mirror".into(), json!([s.mirror_x, s.mirror_y]));
+        map.insert("body_style".into(), to_value(&s.body_style)?);
+    }
+    Some(view)
 }
 
 fn to_value(object: &impl Serialize) -> Option<serde_json::Value> {
     serde_json::to_value(object).ok()
 }
 
-fn write_canonical(value: &serde_json::Value, out: &mut String) {
+fn write_canonical(value: &serde_json::Value, out: &mut String) -> Option<()> {
     use serde_json::Value;
     match value {
         Value::Object(map) => {
@@ -233,7 +325,7 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) {
                 }
                 out.push_str(&Value::String(key.clone()).to_string());
                 out.push(':');
-                write_canonical(&map[key], out);
+                write_canonical(&map[key], out)?;
             }
             out.push('}');
         }
@@ -243,12 +335,19 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) {
                 if i > 0 {
                     out.push(',');
                 }
-                write_canonical(item, out);
+                write_canonical(item, out)?;
             }
             out.push(']');
         }
+        // A float is quantised the way the file stores lengths; an integer
+        // is written as is.
+        Value::Number(n) if n.is_f64() => {
+            let nm = signex_types::format::mm_as_stored_nm(n.as_f64()?)?;
+            out.push_str(&format!("{nm}q"));
+        }
         other => out.push_str(&other.to_string()),
     }
+    Some(())
 }
 
 #[cfg(test)]

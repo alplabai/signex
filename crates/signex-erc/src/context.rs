@@ -77,6 +77,9 @@ pub struct ErcPin {
 pub struct ErcSymbol {
     pub uuid: Uuid,
     pub reference: String,
+    /// Designators the symbol's instance entries give its placements (#829),
+    /// empty when it has none and every placement shows `reference`.
+    pub instance_designators: Vec<String>,
     /// Library symbol id; with `reference` and `unit` it decides which
     /// instances are units of one part.
     pub lib_id: String,
@@ -98,6 +101,34 @@ pub struct ErcSymbol {
     /// Component attributes / fields (from symbol properties).
     /// DSL: `component.attr("class")`.
     pub attrs: HashMap<String, String>,
+}
+
+impl ErcSymbol {
+    /// The designator of each placement of this symbol, see
+    /// [`placement_designators`].
+    pub fn placement_designators(&self) -> Vec<&str> {
+        if self.instance_designators.is_empty() {
+            vec![self.reference.as_str()]
+        } else {
+            self.instance_designators
+                .iter()
+                .map(String::as_str)
+                .collect()
+        }
+    }
+}
+
+/// The designator of each placement of `symbol`: its instance entries'
+/// designators (#829, the ones `designator_in` resolves to), or `reference`
+/// when it has none. A sheet's run does not know which placements exist, so
+/// a symbol with entries is judged by those.
+pub fn placement_designators(symbol: &signex_types::schematic::Symbol) -> Vec<&str> {
+    let entries: Vec<&str> = symbol.valid_instance_entries().map(|(_, r)| r).collect();
+    if entries.is_empty() {
+        vec![symbol.reference.as_str()]
+    } else {
+        entries
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +449,10 @@ impl ErcContext {
                 Some(ErcSymbol {
                     uuid: sym.uuid,
                     reference: sym.reference.clone(),
+                    instance_designators: sym
+                        .valid_instance_entries()
+                        .map(|(_, r)| r.to_string())
+                        .collect(),
                     lib_id: sym.lib_id.clone(),
                     unit: sym.unit,
                     value: sym.value.clone(),
@@ -659,6 +694,7 @@ mod tests {
         ErcSymbol {
             uuid: Uuid::nil(),
             reference: "U1".into(),
+            instance_designators: Vec::new(),
             lib_id: String::new(),
             unit: 1,
             value: String::new(),

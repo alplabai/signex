@@ -103,9 +103,10 @@ pub(crate) fn units_not_placed(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let units: Vec<PlacedUnit> = ctx
         .symbols
         .iter()
-        .filter(|s| PlacedUnit::is_eligible(&s.reference, s.is_power))
-        .map(|s| PlacedUnit {
-            reference: &s.reference,
+        .flat_map(|s| s.placement_designators().into_iter().map(move |d| (s, d)))
+        .filter(|(s, d)| PlacedUnit::is_eligible(d, s.is_power))
+        .map(|(s, d)| PlacedUnit {
+            reference: d,
             lib_id: &s.lib_id,
             unit: s.unit,
             unit_count: s.unit_count,

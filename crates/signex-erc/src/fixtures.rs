@@ -55,6 +55,7 @@ fn symbol(reference: &str, at: Point) -> ErcSymbol {
     ErcSymbol {
         uuid: Uuid::new_v4(),
         reference: reference.into(),
+        instance_designators: Vec::new(),
         lib_id: String::new(),
         unit: 1,
         value: String::new(),
@@ -235,6 +236,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::UnannotatedDesignator => c.symbols.push(symbol("R?", pt(10.0, 10.0))),
         RuleKind::SinglePinNet => {
             c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            c.labels.push(label("N", pt(10.0, 0.0), LabelType::Net));
             c.symbols
                 .push(with_pin("U1", pt(0.0, 0.0), PinDirection::Passive));
         }

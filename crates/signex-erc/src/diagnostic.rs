@@ -87,6 +87,14 @@ impl Diagnostic {
         self
     }
 
+    /// Attach the net a pin- or label-anchored finding is about, keeping its
+    /// own location (and so its No-ERC suppression). The app highlights the
+    /// net on click, and a per-finding waiver keys on the net's pins.
+    pub fn about_net(mut self, net: NetFinding) -> Self {
+        self.net = Some(net);
+        self
+    }
+
     /// Mark `location` as a placeholder or a foreign-sheet point so a No-ERC
     /// directive on this sheet never matches it.
     pub fn in_space(mut self, space: LocationSpace) -> Self {

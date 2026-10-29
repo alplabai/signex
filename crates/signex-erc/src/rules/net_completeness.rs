@@ -29,9 +29,17 @@ fn pin_name(symbol: &ErcSymbol, pin: &ErcPin) -> String {
     format!("{reference}.{}", pin.number)
 }
 
-fn at_pin(kind: RuleKind, message: String, symbol: &ErcSymbol, pin: &ErcPin) -> Diagnostic {
+/// A finding at `pin`, about `net`.
+fn at_pin(
+    kind: RuleKind,
+    message: String,
+    net: &NetMembers,
+    symbol: &ErcSymbol,
+    pin: &ErcPin,
+) -> Diagnostic {
     Diagnostic::new(kind, message, pin.world_pos)
         .with_primary(sel(symbol.uuid, SelectedKind::Symbol))
+        .about_net(net.finding())
 }
 
 fn single_pin_net(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
@@ -42,7 +50,9 @@ fn single_pin_net(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
         if net.leaves_sheet || !net.power_ports.is_empty() {
             continue;
         }
-        if net.wire_count == 0 && net.labels.is_empty() {
+        // Only a named net: a pin with a bare wire stub to nowhere is
+        // `DanglingWire`'s finding, not a second one here.
+        if !net.has_local_label() {
             continue;
         }
         let message = format!(
@@ -50,7 +60,7 @@ fn single_pin_net(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
             net.name(),
             pin_name(symbol, pin)
         );
-        out.push(at_pin(RuleKind::SinglePinNet, message, symbol, pin));
+        out.push(at_pin(RuleKind::SinglePinNet, message, net, symbol, pin));
     }
 }
 
@@ -87,21 +97,19 @@ fn net_with_no_driver(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
             net.name(),
             pin_name(symbol, pin)
         );
-        out.push(at_pin(RuleKind::NetWithNoDriver, message, symbol, pin));
+        out.push(at_pin(RuleKind::NetWithNoDriver, message, net, symbol, pin));
     }
 }
 
-/// Distinct from `MissingPowerFlag`, which checks power *ports*: this rule
-/// skips every net that carries a power port or flag, so the two never
-/// report one net.
+/// A power input on a net nothing can feed: every pin is an input, power
+/// input or no-connect. Distinct from `MissingPowerFlag`, which checks power
+/// *ports*: this rule skips every net that carries a power port or flag.
 fn power_input_not_driven(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
     for net in nets {
-        let sourced = net.pins.iter().any(|(_, p)| {
-            matches!(
-                p.electrical_type,
-                PinDirection::PowerOutput | PinDirection::GroundReference
-            )
-        });
+        // Any pin that may drive counts as a source, as for
+        // `NetWithNoDriver`: a regulator output typed `Output`, or a supply
+        // fed through a `Passive` ferrite or 0R.
+        let sourced = net.pins.iter().any(|(_, p)| can_drive(p.electrical_type));
         if fed_from_outside(net) || sourced {
             continue;
         }
@@ -117,7 +125,13 @@ fn power_input_not_driven(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
             pin_name(symbol, pin),
             net.name()
         );
-        out.push(at_pin(RuleKind::PowerInputNotDriven, message, symbol, pin));
+        out.push(at_pin(
+            RuleKind::PowerInputNotDriven,
+            message,
+            net,
+            symbol,
+            pin,
+        ));
     }
 }
 
@@ -135,7 +149,8 @@ fn labels_only_net(nets: &[NetMembers], out: &mut Vec<Diagnostic>) {
                 format!("Net '{}' carries only labels and wires, no pin", net.name()),
                 first.position,
             )
-            .with_primary(sel(first.uuid, SelectedKind::Label)),
+            .with_primary(sel(first.uuid, SelectedKind::Label))
+            .about_net(net.finding()),
         );
     }
 }
