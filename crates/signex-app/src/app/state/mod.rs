@@ -441,10 +441,11 @@ pub struct DocumentState {
     /// project-wide undo steps (an annotate run under "One step for the whole
     /// project"). Never reused.
     pub next_undo_group: u64,
-    /// Bumped whenever a document is opened, saved or closed (and when a
-    /// project closes). A background job that read sheets from disk records it
-    /// first and applies its result only if it is unchanged, so it never
-    /// installs bytes a later open, save or close has already superseded.
+    /// Bumped whenever a document is opened, saved or closed, when a project
+    /// closes, and when a rename, delete or project-folder move starts and
+    /// finishes. A background job that read sheets from disk records it first
+    /// and applies its result only if it is unchanged, so it never installs
+    /// bytes a later open, save, close, move or delete has already superseded.
     pub documents_epoch: u64,
     /// Designators used on the sheets of the project a part is placed in,
     /// scanned off-thread; see `designator_scan.rs`.
@@ -541,6 +542,10 @@ pub struct DocumentState {
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
     pub pending_restores: crate::app::document_read::InFlightReads,
+    /// #859 — renames and deletes whose disk work runs on a worker. Saves,
+    /// opens, restores and second moves of an overlapping path are refused
+    /// until the completion message drops the entry.
+    pub pending_path_ops: crate::app::path_ops::PendingPathOps,
     /// The Altium import still running, if any. A second import is
     /// refused while one runs: two converters writing the same output
     /// folder would interleave.

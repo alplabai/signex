@@ -188,6 +188,24 @@ impl Signex {
         true
     }
 
+    /// Refuse a project-wide rewrite up front when a rename or delete holds
+    /// any of its sheets, pages or folder: writing the rest would leave the
+    /// designators on disk inconsistent (#859). True when refused.
+    pub(super) fn refuse_annotate_while_path_op(
+        &mut self,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        what: &str,
+    ) -> bool {
+        let sheets = project_set.sheets.keys().map(std::path::PathBuf::as_path);
+        let Err(refusal) = self.refuse_project_wide_while_path_op(sheets, "rewritten") else {
+            return false;
+        };
+        let detail = format!("{what} was not run: {refusal}");
+        crate::diagnostics::log_warning(detail.clone());
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        true
+    }
+
     pub(crate) fn handle_annotate(&mut self, mode: signex_engine::AnnotateMode) -> Task<Message> {
         self.annotate_project(AnnotatePass {
             mode,
@@ -236,7 +254,9 @@ impl Signex {
         // survived into the netlist and onto the board (#406).
         let (_pages, project_set) =
             crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-        if self.refuse_annotate_while_project_moves(&project_set, "Reset Duplicate Designators") {
+        if self.refuse_annotate_while_project_moves(&project_set, "Reset Duplicate Designators")
+            || self.refuse_annotate_while_path_op(&project_set, "Reset Duplicate Designators")
+        {
             return Task::none();
         }
 

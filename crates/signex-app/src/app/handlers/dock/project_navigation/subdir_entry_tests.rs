@@ -38,7 +38,8 @@ fn submit_rename(app: &mut Signex, target: PathBuf, new_name: &str) {
         error: None,
         is_project_rename: false,
     });
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    // The move runs on a worker (#859); settle drives its completion.
+    crate::app::path_ops::settle(app, Message::Rename(RenameMsg::Submit));
 }
 
 fn confirm_remove(app: &mut Signex, target: PathBuf, choice: RemoveChoice) {
@@ -51,7 +52,8 @@ fn confirm_remove(app: &mut Signex, target: PathBuf, choice: RemoveChoice) {
         is_outside_project: false,
         unsaved_prompt: false,
     });
-    let _ = app.update(Message::Remove(RemoveMsg::Confirm(choice)));
+    // A delete runs on a worker (#859); settle drives its completion.
+    crate::app::path_ops::settle(app, Message::Remove(RemoveMsg::Confirm(choice)));
 }
 
 #[test]

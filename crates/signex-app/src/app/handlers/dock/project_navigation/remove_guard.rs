@@ -6,17 +6,7 @@
 
 use std::path::Path;
 
-/// Is `target` a path strictly inside `project_root`, after symlinks and
-/// `..` segments are resolved?
-///
-/// Both paths are canonicalised, so this fails closed: a target or root that
-/// cannot be resolved (missing, unreadable) is reported as not contained.
-pub(super) fn is_inside_project_root(target: &Path, project_root: &Path) -> bool {
-    let (Ok(target), Ok(root)) = (target.canonicalize(), project_root.canonicalize()) else {
-        return false;
-    };
-    target != root && target.starts_with(&root)
-}
+use crate::app::path_op_jobs::{is_inside_project_root, same_path};
 
 /// Should the dialog treat `target` as living outside the project? An
 /// orphan (missing) target has nothing on disk to delete, so it is not
@@ -44,12 +34,4 @@ pub(super) fn is_shared_or_global_library(
         entry.kind != LibraryEntryKind::ProjectLocal
             && same_path(&project.resolve_library_path(entry), target)
     })
-}
-
-fn same_path(a: &Path, b: &Path) -> bool {
-    a == b
-        || matches!(
-            (a.canonicalize(), b.canonicalize()),
-            (Ok(a), Ok(b)) if a == b
-        )
 }

@@ -32,6 +32,8 @@ mod nested_row_spelling_tests;
 #[cfg(test)]
 mod nested_row_tests;
 mod open_document;
+#[cfg(test)]
+mod path_op_guard_tests;
 mod project_actions;
 mod project_rename;
 #[cfg(test)]
@@ -46,6 +48,7 @@ mod project_rename_tests;
 mod remove;
 mod remove_guard;
 mod rename;
+mod rename_apply;
 mod rename_library;
 mod save_all;
 #[cfg(test)]

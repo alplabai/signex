@@ -238,6 +238,15 @@ pub enum RenameMsg {
     Submit,
     /// Dismiss the rename modal without applying.
     Close,
+    /// A sheet, PCB, primitive or project file was moved on disk (or the
+    /// move failed): re-key everything that knew the old path (#859).
+    FileRenamed(Box<crate::app::path_ops::FileRenameDone>),
+    /// A library was moved on disk and its saved project entry patched (or
+    /// not): re-point the mount and open documents (#859).
+    LibraryRenamed(Box<crate::app::path_ops::LibraryRenameDone>),
+    /// The worker that undid a library rename the app could not follow
+    /// finished (#859).
+    LibraryRenameRolledBack(Box<crate::app::path_ops::LibraryRollbackDone>),
 }
 
 /// Remove-from-project modal message family (ADR-0001 D3). Namespaced
@@ -250,6 +259,9 @@ pub enum RemoveMsg {
     ExcludeDirty(ExcludeDirtyChoice),
     /// Dismiss the Remove modal without applying.
     Close,
+    /// The delete worker finished: forget the documents of what it removed
+    /// (#859).
+    Deleted(Box<crate::app::path_ops::DeleteDone>),
 }
 
 /// Context-menu subsystem message family (ADR-0001 D3). Namespaced

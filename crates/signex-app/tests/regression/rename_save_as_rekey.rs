@@ -107,7 +107,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
         error: None,
         is_project_rename: false,
     });
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     let dirty = &app.document_state;
     assert!(
@@ -186,7 +186,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
         error: None,
         is_project_rename: false,
     });
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(
         dir.join("R0402.snxfpt").exists(),
