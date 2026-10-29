@@ -338,6 +338,20 @@ fn git_objects_growth_per_edit_by_library_size() {
             "adapter rows={size} snxlib_bytes={bytes} edits={EDITS} objects_growth={grown} per_edit={}",
             grown / EDITS as u64
         );
+        // What a repack would leave: the command-line `git gc` deltas the
+        // near-identical blobs. Skipped when `git` is not installed.
+        let root = dir.path().join("lib");
+        let gc = std::process::Command::new("git")
+            .args(["gc", "--quiet"])
+            .current_dir(&root)
+            .status();
+        if gc.is_ok_and(|s| s.success()) {
+            let packed = dir_bytes(&objects);
+            println!(
+                "adapter rows={size} after_gc_objects_bytes={packed} (was {})",
+                before + grown
+            );
+        }
     }
 }
 
