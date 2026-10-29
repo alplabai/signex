@@ -5578,6 +5578,8 @@ name = "signex-erc"
 version = "0.15.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "sha2",
  "signex-bom",
  "signex-net",
  "signex-types",

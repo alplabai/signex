@@ -294,6 +294,7 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
         },
         config: signex_erc::ErcConfig::default(),
         net_waivers: Default::default(),
+        violation_waivers: Vec::new(),
         fold: CaseFold::FOLD,
     };
     (inputs, root_path, child_path, loose_path)

@@ -11,6 +11,8 @@ signex-net.workspace = true
 signex-bom.workspace = true
 uuid.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]

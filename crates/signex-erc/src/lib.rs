@@ -311,6 +311,11 @@ pub struct Violation {
     /// For a net-level finding: the net it is about. Such a finding is
     /// waived per net, never by a No-ERC directive on one of its pins.
     pub net: Option<NetFinding>,
+    /// The key a per-finding waiver matches (#1285). Filled by the caller
+    /// that knows the sheet the finding is filed under
+    /// ([`waivers::violation::stamp_keys`]); `None` until then, or when the
+    /// finding names no object on that sheet.
+    pub waiver_key: Option<waivers::violation::WaiverKey>,
 }
 
 impl Violation {
@@ -335,6 +340,7 @@ impl Violation {
             primary: None,
             peer: None,
             net: None,
+            waiver_key: None,
         }
     }
 

@@ -627,6 +627,8 @@ pub enum PanelMsg {
         net: String,
         waive: bool,
     },
+    /// Per-finding waivers with a reason (#1285).
+    ErcWaiver(super::ErcWaiverMsg),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),

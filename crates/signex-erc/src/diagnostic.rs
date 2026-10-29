@@ -144,6 +144,7 @@ impl From<Diagnostic> for Violation {
             primary: d.primary,
             peer: d.peer,
             net: d.net,
+            waiver_key: None,
         }
     }
 }

@@ -31,6 +31,8 @@ pub(super) struct ErcRunInputs {
     pub config: signex_erc::ErcConfig,
     /// The project's net waivers (#1581); empty without stored rules.
     pub net_waivers: signex_erc::waivers::NetWaivers,
+    /// The project's per-finding waivers (#1285); empty without stored rules.
+    pub violation_waivers: Vec<signex_types::project::ErcWaiver>,
     /// The owning project's key rules, chosen once by whoever picked the project.
     pub fold: crate::app::state::scope::CaseFold,
 }
@@ -46,6 +48,20 @@ pub struct ErcRunOutcome {
     pub rule_set: signex_output::ErcReportRuleSet,
     /// Findings each waived (rule id, net) pair hid in this run (#1581).
     pub waived_hidden: std::collections::BTreeMap<(String, String), usize>,
+    /// Findings a per-finding waiver hid (#1285), kept so the panel and the
+    /// report still show them as waived.
+    pub waived_findings: Vec<WaivedFinding>,
+    /// (rule id, objects) of waivers whose finding came back because an
+    /// involved object changed.
+    pub lapsed_waivers: std::collections::BTreeSet<(String, Vec<String>)>,
+}
+
+/// A finding a per-finding waiver hid, with the waiver that hid it.
+#[derive(Debug, Clone)]
+pub struct WaivedFinding {
+    pub path: PathBuf,
+    pub violation: signex_erc::Violation,
+    pub waiver: signex_types::project::ErcWaiver,
 }
 
 pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
@@ -152,6 +168,9 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 
+    let (waived_findings, lapsed_waivers) =
+        apply_violation_waivers(&mut by_path, &snapshots, &inputs.violation_waivers);
+
     // Last, so every pass above (including the project-wide net-name pass)
     // is waivable. Hidden findings are counted, not lost: the panel lists
     // the waivers and offers to restore them.
@@ -176,7 +195,48 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         infos,
         rule_set: inputs_rule_set,
         waived_hidden,
+        waived_findings,
+        lapsed_waivers,
     }
+}
+
+/// Key every finding against the sheet it is filed under, then take out the
+/// ones a per-finding waiver hides (#1285). Returns those, and the identities
+/// of waivers that lapsed because an involved object changed.
+fn apply_violation_waivers(
+    by_path: &mut ViolationsByPath,
+    snapshots: &HashMap<PathBuf, SchematicRenderSnapshot>,
+    waivers: &[signex_types::project::ErcWaiver],
+) -> (
+    Vec<WaivedFinding>,
+    std::collections::BTreeSet<(String, Vec<String>)>,
+) {
+    let mut waived = Vec::new();
+    let mut lapsed = std::collections::BTreeSet::new();
+    let mut paths: Vec<PathBuf> = by_path.keys().cloned().collect();
+    paths.sort();
+    for path in paths {
+        let (Some(list), Some(sheet)) = (by_path.get_mut(&path), snapshots.get(&path)) else {
+            continue;
+        };
+        signex_erc::waivers::violation::stamp_keys(list, sheet);
+        let split = signex_erc::waivers::violation::split_waived(std::mem::take(list), waivers);
+        *list = split.kept;
+        for (violation, i) in split.waived {
+            waived.push(WaivedFinding {
+                path: path.clone(),
+                violation,
+                waiver: waivers[i].clone(),
+            });
+        }
+        lapsed.extend(
+            split
+                .lapsed
+                .into_iter()
+                .map(|i| (waivers[i].rule_id.clone(), waivers[i].objects.clone())),
+        );
+    }
+    (waived, lapsed)
 }
 
 /// The project-wide `NetMultipleNames` pass (#1061): names a net gets on other

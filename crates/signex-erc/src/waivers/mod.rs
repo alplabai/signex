@@ -12,6 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Violation;
 
+pub mod violation;
+
 /// Rule id -> names of the nets waived for that rule. The shape the project
 /// file stores (`ProjectRules::erc_net_waivers`).
 pub type NetWaivers = BTreeMap<String, BTreeSet<String>>;

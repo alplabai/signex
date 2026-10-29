@@ -16,6 +16,8 @@ fn outcome_for(path: &str) -> ErcRunOutcome {
             sha256: "outcome-set".into(),
         },
         waived_hidden: Default::default(),
+        waived_findings: Vec::new(),
+        lapsed_waivers: Default::default(),
     }
 }
 

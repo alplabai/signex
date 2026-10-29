@@ -72,3 +72,39 @@ Unit numbers come from a file, so the rule never sizes a loop by them alone:
 a library symbol claiming more than 256 units (`MAX_UNITS_PER_PART`) is
 reported once as likely corrupt instead of being enumerated, and a message
 lists at most eight missing units before "(+N more)".
+
+## Waivers
+
+Added for #1285. A designer can accept one finding with a reason instead of
+switching its rule off or dropping a position-based No-ERC marker on it.
+
+A waiver is stored in the project, in `rules.erc_waivers` of the `.snxprj`,
+beside the per-net waivers (`rules.erc_net_waivers`, #1581) and outside
+`rules.erc`, so waiving never changes the rule set's hash or its profile
+provenance. Each entry holds:
+
+| Field | Meaning |
+|---|---|
+| `rule_id` | Stable rule id, `builtin::...` or `user::...`. |
+| `objects` | Sorted UUIDs of the objects the finding involves: its primary and peer object, and every part on the net for a net-level finding. |
+| `fingerprint` | SHA-256 over the rule id and the canonical JSON (keys sorted) of each involved object. |
+| `reason`, `author` | Required; an entry missing either is kept on disk but never honoured. |
+| `date` | `YYYY-MM-DD` the waiver was made. |
+| `message` | The finding's text when waived, so a lapsed waiver still says what it was about. |
+
+The identity is `rule_id` + `objects`; positions are never part of it. The
+fingerprint is what makes a waiver lapse: editing, moving or deleting any
+involved object changes it, the finding shows again, and the panel marks the
+waiver "LAPSED". Waive again to accept the new state.
+
+Waived findings are never dropped silently: the ERC panel lists every stored
+waiver with its reason, author, date and status (waiving N findings, lapsed,
+matches no finding, or ignored as incomplete), each with a Restore button, and
+the ERC report lists them in its waivers section.
+
+Limits: a finding that names no object (a placeholder-located DSL finding) or
+whose objects are not on the sheet it is filed under cannot be waived. Two
+placements of one sheet file share object UUIDs, so a waiver covers both.
+Rule-specific No-ERC markers (an optional item of #1285) are not implemented.
+Per-net waivers keep their existing shape and carry no reason; adding one
+would change the stored format of `erc_net_waivers`.
