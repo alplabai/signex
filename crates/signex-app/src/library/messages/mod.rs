@@ -251,9 +251,26 @@ pub enum EditorMsg {
     ParamSetMeasurementBuf {
         name: String,
         buf: String,
+        /// The class-template slot behind the row, if any.
+        slot: Option<signex_library::ParamSlot>,
     },
     /// Commit the live buffer for a `ParamValue::Measurement` row.
     ParamCommitMeasurement {
+        name: String,
+        unit: String,
+    },
+    /// The user picked an SI prefix for a `ParamValue::Measurement` row.
+    /// `unit` is the slot's unit token; the pick commits the buffered
+    /// number (or the stored one) in that prefix.
+    ParamPrefixPicked {
+        name: String,
+        unit: String,
+        prefix: signex_types::quantity::SiPrefix,
+        slot: Option<signex_library::ParamSlot>,
+    },
+    /// The user picked a unit for a custom measurement row (a template
+    /// slot fixes its own unit). `unit` is the unit's canonical token.
+    ParamUnitPicked {
         name: String,
         unit: String,
     },
@@ -597,9 +614,16 @@ pub enum BrowserEditMsg {
         key: String,
         value: String,
     },
+    /// The user picked a unit for a parameter row: its canonical token,
+    /// or an empty string for no unit. Applied to the draft at once.
     SetParamUnit {
         key: String,
         unit: String,
+    },
+    /// The user picked an SI prefix for a measurement row's number.
+    ParamPrefixPicked {
+        key: String,
+        prefix: signex_types::quantity::SiPrefix,
     },
     /// Commit the live param buffer for `key` to the draft.
     CommitParam {

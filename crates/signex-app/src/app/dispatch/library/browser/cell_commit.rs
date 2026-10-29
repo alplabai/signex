@@ -62,7 +62,11 @@ impl Signex {
                 // existing value. A typed cell that cannot read the
                 // buffer refuses the commit rather than retyping the
                 // parameter to text and dropping its unit (#599).
-                match param_commit::param_value_for_commit(row.parameters.get(key), &buf) {
+                let in_slot = param_commit::is_measurement_slot(
+                    self.library.row_template(&library_path, row.class.as_str()),
+                    key,
+                );
+                match param_commit::param_value_for_commit(row.parameters.get(key), &buf, in_slot) {
                     Ok(new_value) => {
                         row.parameters.insert(key.to_string(), new_value);
                     }

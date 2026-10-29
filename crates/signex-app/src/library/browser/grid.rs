@@ -309,13 +309,46 @@ pub(super) fn view_grid<'a>(
                     continue;
                 }
 
+                // A measurement is edited as a number, an SI prefix and
+                // its unit. A 90-110 px column cannot hold the number
+                // field and the prefix picker beside the cell's text, so
+                // the cell opens the Edit Component Details modal, which
+                // has both, instead of taking raw text.
+                if let Some(open) = c.kind.measurement_press(r, &lib_pb, table) {
+                    let text_c = theme_ext::text_primary(tokens);
+                    let hover = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06);
+                    let cell = iced::widget::button(
+                        text(row_value)
+                            .size(BROWSER_TEXT_SIZE)
+                            .wrapping(iced::widget::text::Wrapping::None)
+                            .color(text_c),
+                    )
+                    .padding([2, 6])
+                    .width(Length::Fill)
+                    .on_press(open)
+                    .style(move |_: &Theme, status| {
+                        iced::widget::button::Style {
+                            background: matches!(status, iced::widget::button::Status::Hovered)
+                                .then_some(iced::Background::Color(hover)),
+                            text_color: text_c,
+                            ..iced::widget::button::Style::default()
+                        }
+                    });
+                    data_row = data_row.push(
+                        container(cell)
+                            .padding([2, 2])
+                            .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
                 // Buffer wins over row when active.
                 let buf_key = (row_id, column_key.clone());
                 let cell_value = browser
                     .cell_edit
                     .get(&buf_key)
                     .cloned()
-                    .unwrap_or_else(|| c.kind.edit_seed(r));
+                    .unwrap_or(row_value);
 
                 let library_for_input = lib_pb.clone();
                 let column_for_input = column_key.clone();
@@ -445,4 +478,24 @@ fn unbound_pick_button<'a>(
         ..iced::widget::button::Style::default()
     })
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    /// Measurement cells are routed through `ColumnKind::measurement_press`
+    /// (a button that opens the modal), not through the inline text input.
+    /// The behaviour of `measurement_press` is tested in `columns.rs`; this
+    /// pins that the grid still asks it.
+    #[test]
+    fn the_grid_routes_measurement_cells_through_measurement_press() {
+        let source = include_str!("grid.rs");
+        let code = source
+            .rsplit_once("mod tests {")
+            .map_or(source, |(code, _)| code);
+        let call = ["kind.measurement", "_press("].concat();
+        assert!(
+            code.contains(&call),
+            "grid.rs must send measurement cells to the edit modal"
+        );
+    }
 }

@@ -76,6 +76,14 @@ pub struct ParameterTemplate {
 }
 
 impl ParameterTemplate {
+    /// The slot named `name`, required or optional.
+    pub fn slot(&self, name: &str) -> Option<&ParamSlot> {
+        self.required_params
+            .iter()
+            .chain(self.optional_params.iter())
+            .find(|s| s.name == name)
+    }
+
     pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
         toml::from_str(text)
     }
@@ -230,6 +238,14 @@ impl TemplateRegistry {
         }
         out
     }
+}
+
+/// Every way `v` fails `slot` (kind, unit, sign), for editors that check a
+/// single value rather than a whole parameter map.
+pub fn slot_violations(slot: &ParamSlot, v: &ParamValue) -> Vec<TemplateViolation> {
+    let mut out = Vec::new();
+    check_slot(slot, v, &mut out);
+    out
 }
 
 fn kind_of(v: &ParamValue) -> ParamKind {
