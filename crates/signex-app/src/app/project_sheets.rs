@@ -306,61 +306,10 @@ impl ProjectSheetPlan {
     }
 }
 
-/// The open sheets the walk for `source`'s project can read: every open
-/// sheet except those another project owns and this one neither lists nor
-/// reaches through an open parent. Sheets no project owns stay in (a child
-/// behind a closed parent has no owner), and so do pages this project lists
-/// even when another project owns them. Tabs of unrelated projects are not
-/// cloned.
-fn open_paths_of_project_of(
-    document_state: &DocumentState,
-    source: &Path,
-    pages: &[PathBuf],
-    fold: CaseFold,
-) -> Vec<PathBuf> {
-    let id = document_state.document_project(source).map(|p| p.id);
-    let listed: HashSet<String> = pages.iter().map(|p| path_key_with(p, fold)).collect();
-    let mut included: HashSet<&PathBuf> = document_state
-        .engines
-        .keys()
-        .filter(|path| {
-            listed.contains(&path_key_with(path, fold))
-                || match document_state.document_project(path) {
-                    None => true,
-                    Some(owner) => Some(owner.id) == id,
-                }
-        })
-        .collect();
-    // A sheet an included open parent references belongs to the walk even
-    // when another project owns it.
-    let by_key: HashMap<String, &PathBuf> = document_state
-        .engines
-        .keys()
-        .map(|path| (path_key_with(path, fold), path))
-        .collect();
-    let mut queue: Vec<&PathBuf> = included.iter().copied().collect();
-    while let Some(parent) = queue.pop() {
-        let (Some(dir), Some(engine)) = (parent.parent(), document_state.engines.get(parent))
-        else {
-            continue;
-        };
-        for child in &engine.document().child_sheets {
-            let Ok(resolved) = resolve_child_reference_quiet(dir, &child.filename) else {
-                continue;
-            };
-            if let Some(path) = by_key.get(&path_key_with(&resolved, fold))
-                && included.insert(path)
-            {
-                queue.push(path);
-            }
-        }
-    }
-    included.into_iter().cloned().collect()
-}
-
-/// The plan for `source`'s project. The open sheets of that project are
-/// snapshotted, so a sheet the hierarchy walk reaches that is open (declared
-/// or not) counts with its unsaved edits; every other sheet is read from disk.
+/// The plan for `source`'s project. Every open engine is snapshotted, so a
+/// sheet the hierarchy walk reaches that is open (declared or not, whoever
+/// owns it) counts with its unsaved edits; only sheets that are not open are
+/// read from disk.
 pub(crate) fn plan_project_sheets_for(
     document_state: &DocumentState,
     source: &Path,
@@ -370,10 +319,7 @@ pub(crate) fn plan_project_sheets_for(
     let pages = project_pages(project);
     let root = resolve_netlist_root_for(document_state, source);
     ProjectSheetPlan {
-        open: open_sheets_snapshot_of(
-            document_state,
-            &open_paths_of_project_of(document_state, source, &pages, fold),
-        ),
+        open: open_sheets_snapshot(document_state),
         pages,
         root,
         fold,
@@ -1465,66 +1411,6 @@ mod tests {
         }
     }
 
-    fn open_engine(app: &mut crate::app::Signex, path: &str) {
-        let sheet = SchematicSheet {
-            uuid: Uuid::new_v4(),
-            paper_size: "A4".to_owned(),
-            ..Default::default()
-        };
-        app.document_state.engines.insert(
-            PathBuf::from(path),
-            signex_engine::Engine::new(sheet).expect("engine"),
-        );
-    }
-
-    #[test]
-    fn a_project_plan_leaves_out_other_projects_open_sheets() {
-        let (mut app, _task) = crate::app::Signex::new();
-        let (p1, p2) = (
-            app.document_state.mint_project_id(),
-            app.document_state.mint_project_id(),
-        );
-        app.document_state
-            .projects
-            .push(project_of(p1, "/p1", &["a.snxsch", "b.snxsch"]));
-        app.document_state
-            .projects
-            .push(project_of(p2, "/p2", &["c.snxsch"]));
-        for path in [
-            "/p1/a.snxsch",
-            "/p1/b.snxsch",
-            "/p2/c.snxsch",
-            "/loose/d.snxsch",
-        ] {
-            open_engine(&mut app, path);
-        }
-
-        let plan = plan_project_sheets_for(&app.document_state, Path::new("/p1/a.snxsch"));
-        let mut open: Vec<_> = plan.open.keys().cloned().collect();
-        open.sort();
-        assert_eq!(
-            open,
-            [
-                PathBuf::from("/loose/d.snxsch"),
-                PathBuf::from("/p1/a.snxsch"),
-                PathBuf::from("/p1/b.snxsch"),
-            ],
-            "its own sheets and the unowned ones, not /p2's"
-        );
-
-        open_engine(&mut app, "/loose/e.snxsch");
-        let loose = plan_project_sheets_for(&app.document_state, Path::new("/loose/d.snxsch"));
-        let mut open: Vec<_> = loose.open.keys().cloned().collect();
-        open.sort();
-        assert_eq!(
-            open,
-            [
-                PathBuf::from("/loose/d.snxsch"),
-                PathBuf::from("/loose/e.snxsch")
-            ],
-            "a loose document clones the loose tabs, not a project's"
-        );
-    }
     /// A sheet holding one part `reference` and one child reference per name
     /// in `children`.
     fn sheet_with(reference: &str, children: &[&str]) -> SchematicSheet {
