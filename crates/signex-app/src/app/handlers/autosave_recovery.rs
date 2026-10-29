@@ -38,7 +38,9 @@ impl Signex {
             return Task::none();
         };
         let guard = self.document_state.autosave.track_job();
-        check_task(dir, path.to_path_buf(), guard)
+        // A move the live state owns into this path finishes on its own.
+        let finish_owed = !self.document_state.autosave.move_owed(path);
+        check_task(dir, path.to_path_buf(), finish_owed, guard)
     }
 
     /// Start the recovery check of every schematic tab opened since the last
@@ -336,13 +338,13 @@ fn file_label(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
-fn check_task(dir: PathBuf, path: PathBuf, guard: InFlight) -> Task<Message> {
+fn check_task(dir: PathBuf, path: PathBuf, finish_owed: bool, guard: InFlight) -> Task<Message> {
     let target = path.clone();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                recovery::reconcile(&dir, &target, SystemTime::now())
+                recovery::reconcile_with(&dir, &target, SystemTime::now(), finish_owed)
             })
             .await
             .map_err(|e| format!("the recovery check failed: {e}"))

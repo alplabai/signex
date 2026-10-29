@@ -402,16 +402,20 @@ fn move_task(dir: PathBuf, owed: SidecarMove, guard: InFlight) -> Task<Message> 
         async move {
             tokio::task::spawn_blocking(move || {
                 let _guard = guard;
-                let moved = sidecar::rename(&dir, &owed.old, &owed.new);
-                // A discarding quit arrived while this ran: the copy goes,
-                // wherever it sits, and its journal entry with it.
+                let moved = sidecar::rename_landing(&dir, &owed.old, &owed.new);
+                // A save or a discarding quit arrived while this ran: the copy
+                // goes, wherever it sits, and its journal entry with it. The
+                // new key is removed only when this move brought the copy in:
+                // one already there (a fresh copy written after the save)
+                // won the collision and is not this move's to delete.
                 if owed.is_discarded() {
                     return match moved {
-                        Ok(()) => sidecar::remove(&dir, &owed.new),
+                        Ok(true) => sidecar::remove(&dir, &owed.new),
+                        Ok(false) => Ok(()),
                         Err(_) => sidecar::remove(&dir, &owed.old),
                     };
                 }
-                moved
+                moved.map(|_| ())
             })
             .await
             .map_err(|e| format!("the autosave move task failed: {e}"))
@@ -562,6 +566,43 @@ mod tests {
             "no outdated copy"
         );
         assert!(!sidecar::sidecar_path(&dir, &old).exists());
+    }
+
+    /// A released move (no hold on the new key) is still running when the
+    /// document is saved and autosave writes a fresh copy after the save: the
+    /// move resolves onto that copy and must not delete it.
+    #[test]
+    fn a_save_during_a_released_move_keeps_the_copy_written_after_the_save() {
+        use futures::StreamExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("recovery");
+        let (old, new) = (tmp.path().join("a.snxsch"), tmp.path().join("b.snxsch"));
+        sidecar::write(&dir, &old, b"outdated").unwrap();
+
+        let mut state = crate::autosave::AutosaveState::new(Some(dir.clone()));
+        state.begin(&old);
+        state.finish(&old, crate::autosave::DocStamp::of_bytes(b"outdated"), true);
+        state.rekey(&old, &new);
+        for _ in 0..2 {
+            let (mut start, _) = state.take_moves();
+            assert!(state.move_failed(start.remove(0)).is_none());
+        }
+        let (start, _) = state.take_moves();
+        assert!(start[0].is_released());
+        let task = move_task(dir.clone(), start[0].clone(), state.track_job());
+        state.saved(&new);
+        // Autosave writes after the save, before the slow rename runs.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        sidecar::write(&dir, &new, b"post-save edits").unwrap();
+        let mut stream = iced_runtime::task::into_stream(task).expect("stream");
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async { while stream.next().await.is_some() {} });
+
+        assert_eq!(
+            std::fs::read(sidecar::sidecar_path(&dir, &new)).unwrap(),
+            b"post-save edits"
+        );
     }
 
     /// The quit wait returns only once every tracked job is done: a held

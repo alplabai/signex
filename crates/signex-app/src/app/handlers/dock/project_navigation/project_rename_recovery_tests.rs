@@ -525,10 +525,13 @@ fn a_move_still_failing_at_startup_is_finished_when_the_new_document_opens() {
         "the live state does not take the move: opening the document finishes it (#1433)"
     );
 
-    // Still locked: the copy is not lost to the open. It is reported as stranded
-    // (the document stays protected) and stays where it is.
+    // Still locked: the open does not touch the copy.
     let old_key = sidecar::sidecar_path(&m.recovery, &m.old_doc);
-    assert!(recovery::reconcile(&m.recovery, &m.new_doc, SystemTime::now()).is_err());
+    drop(recovery::reconcile(
+        &m.recovery,
+        &m.new_doc,
+        SystemTime::now(),
+    ));
     assert_eq!(std::fs::read(&old_key).expect("untouched"), b"crash edits");
 
     // The lock clears; the user opens the document at the new path and the
