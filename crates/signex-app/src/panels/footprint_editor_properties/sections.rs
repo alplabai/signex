@@ -412,6 +412,7 @@ pub(super) fn view_sections<'a>(
                     "Over-constrained",
                     s.over_constraint_count.to_string(),
                 );
+                col = super::redundant::push_redundant_rows(col, s, muted, input_bg, input_bdr);
             } else {
                 col = col.push(
                     container(text("(no solve yet)").size(TS.caption).color(muted))

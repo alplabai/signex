@@ -237,10 +237,10 @@ pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("open_components_panel", "Component...", "P"),
             MenuMessage::PlaceComponent,
         ),
-        item_if(
-            "Power Port",
+        cmd_item_gated(
+            ctx,
+            cmd("place_power_symbol", "Power Port", "P"),
             MenuMessage::PlacePowerPort,
-            ctx.commands.has_schematic,
         ),
         SEP,
         item_if("Text", MenuMessage::PlaceText, ctx.commands.has_schematic),

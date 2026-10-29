@@ -575,4 +575,7 @@ pub enum InputMsg {
     /// sets the mode only when the active tab is a footprint editor, so
     /// the keys don't steal text input on other tabs.
     FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// The "recompute courtyard outline" command (palette, #1473). Acts on
+    /// the active footprint editor tab; a no-op on any other tab.
+    FootprintCourtyardOutlineRequested,
 }
