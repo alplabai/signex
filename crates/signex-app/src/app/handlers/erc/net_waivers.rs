@@ -60,7 +60,8 @@ impl Signex {
     }
 
     /// The active project's rule set to add a waiver to: the stored one, or a
-    /// snapshot of this machine's preferences when it stores none. `None`
+    /// snapshot of this machine's preferences when it stores none (said in
+    /// the Messages panel, since the project's rules now travel with it). `None`
     /// (logged) without a project, or when the project holds a rule set from
     /// a newer build that storing would replace.
     pub(super) fn rules_for_waiver_edit(&self) -> Option<ProjectRules> {
@@ -74,7 +75,14 @@ impl Signex {
                 );
                 None
             }
-            None => Some(self.seeded_project_rules()),
+            None => {
+                crate::diagnostics::log_info(format!(
+                    "ERC: project {} now stores its own ERC rules, copied from this \
+                     machine's preferences, so the waiver has a place to live.",
+                    project.data.name
+                ));
+                Some(self.seeded_project_rules())
+            }
         }
     }
 

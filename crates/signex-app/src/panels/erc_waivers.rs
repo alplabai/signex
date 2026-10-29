@@ -11,8 +11,13 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Messages of the per-finding waiver UI, nested under `PanelMsg`.
 #[derive(Debug, Clone)]
 pub enum ErcWaiverMsg {
-    /// The Waive chip on row `global_index` was pressed.
-    Started(usize),
+    /// The Waive chip was pressed on the finding keyed `key`. Carries the key,
+    /// not the row index, so a run that lands between render and click cannot
+    /// retarget it.
+    Started {
+        key: WaiverKey,
+        message: String,
+    },
     ReasonChanged(String),
     AuthorChanged(String),
     Confirmed,
@@ -58,6 +63,8 @@ pub struct ErcViolationWaiverEntry {
     pub author: String,
     pub date: String,
     pub status: ErcWaiverStatus,
+    /// Severity of the finding it hides in the newest run, if any.
+    pub severity: Option<ErcSeverityLite>,
 }
 
 /// "Waive" chip for a finding that names objects; nothing otherwise.
@@ -65,16 +72,17 @@ pub(super) fn waive_chip<'a>(
     entry: &ErcDiagnosticEntry,
     tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PanelMsg> {
-    if entry.waiver_key.is_none() {
+    let Some(key) = entry.waiver_key.clone() else {
         return Space::new().width(0).height(0).into();
-    }
+    };
     row![
         Space::new().width(6).height(Length::Shrink),
         iced::widget::button(text("Waive").size(9).color(theme_ext::text_primary(tokens)))
             .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Started(
-                entry.global_index
-            )))
+            .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
+                key,
+                message: entry.message.clone(),
+            }))
             .style(crate::styles::menu_item(tokens)),
     ]
     .into()

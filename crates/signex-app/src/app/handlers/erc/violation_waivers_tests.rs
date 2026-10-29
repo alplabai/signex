@@ -56,12 +56,18 @@ fn send(app: &mut Signex, msg: ErcWaiverMsg) {
 
 /// Waive the `NET_T` finding through the panel flow with `reason`.
 fn waive_net_t(app: &mut Signex, reason: &str) {
-    let index = app
+    let entry = app
         .build_erc_diagnostic_entries()
-        .iter()
-        .position(|e| e.rule_id == RULE && e.net.as_ref().is_some_and(|n| n.name == "NET_T"))
+        .into_iter()
+        .find(|e| e.rule_id == RULE && e.net.as_ref().is_some_and(|n| n.name == "NET_T"))
         .expect("NET_T row");
-    send(app, ErcWaiverMsg::Started(index));
+    send(
+        app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.expect("waivable"),
+            message: entry.message,
+        },
+    );
     send(app, ErcWaiverMsg::ReasonChanged(reason.into()));
     send(app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
     send(app, ErcWaiverMsg::Confirmed);
@@ -119,9 +125,17 @@ fn editing_an_involved_part_lapses_the_waiver() {
     waive_net_t(&mut app, "accepted");
     assert_eq!(flagged(&app), ["NET_C"]);
 
-    let mut edited = top;
-    edited.symbols[0].value = "22k".into();
+    // A value edit is outside what a net finding depends on.
     let top_path = dir.join("top.snxsch");
+    let mut revalued = top.clone();
+    revalued.symbols[0].value = "22k".into();
+    open_with(&mut app.document_state, &top_path, revalued);
+    app.run_erc_blocking();
+    assert_eq!(flagged(&app), ["NET_C"], "a value edit keeps the waiver");
+
+    // Renaming the part changes the net's pin set.
+    let mut edited = top;
+    edited.symbols[0].reference = "R_X".into();
     open_with(&mut app.document_state, &top_path, edited);
     app.run_erc_blocking();
     assert_eq!(flagged(&app), ["NET_C", "NET_T"], "the finding is back");
@@ -147,5 +161,62 @@ fn a_waiver_persists_through_save_and_load_and_undoes() {
 
     assert!(app.undo_project_rules());
     assert!(app.erc_violation_waiver_entries().is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_waiver_still_holds_after_the_sheet_is_saved_and_reloaded() {
+    let (mut app, dir, top) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    waive_net_t(&mut app, "accepted");
+    assert_eq!(flagged(&app), ["NET_C"]);
+
+    let text = SnxSchematic::new(top).write_string().expect("save sheet");
+    let reloaded = SnxSchematic::parse(&text).expect("load sheet").sheet;
+    open_with(&mut app.document_state, &dir.join("top.snxsch"), reloaded);
+    app.run_erc_blocking();
+    assert_eq!(flagged(&app), ["NET_C"], "no edit, so the waiver holds");
+    assert_eq!(
+        app.erc_violation_waiver_entries()[0].status,
+        ErcWaiverStatus::Waiving(1)
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_waive_started_before_a_rerun_still_targets_its_finding() {
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.net.as_ref().is_some_and(|n| n.name == "NET_T"))
+        .expect("NET_T row");
+    // A run lands between render and click; the message carries the key.
+    app.run_erc_blocking();
+    send(
+        &mut app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.clone().expect("waivable"),
+            message: entry.message.clone(),
+        },
+    );
+    send(&mut app, ErcWaiverMsg::ReasonChanged("ok".into()));
+    send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    app.run_erc_blocking();
+    assert_eq!(flagged(&app), ["NET_C"]);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn undoing_a_waiver_reruns_erc() {
+    use crate::app::contracts::{ErcMsg, Message};
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    waive_net_t(&mut app, "accepted");
+    assert!(!app.ui_state.erc_running);
+    let _ = app.update(Message::Erc(ErcMsg::RulesUndone));
+    assert!(app.ui_state.erc_running, "undo starts a fresh run");
     std::fs::remove_dir_all(&dir).ok();
 }

@@ -131,6 +131,10 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         .unwrap_or_default();
 
     // Loose open tabs are on screen, so their violations are wanted too.
+    // The project's own sheets, for the project-wide passes; loose tabs from
+    // elsewhere are checked on their own.
+    let project_paths: std::collections::HashSet<PathBuf> =
+        project_set.sheets.keys().cloned().collect();
     for (path, sheet) in project_set.sheets {
         snapshots.entry(path).or_insert(sheet);
     }
@@ -164,7 +168,7 @@ pub(super) fn run_erc_job(inputs: ErcRunInputs) -> ErcRunOutcome {
         fold,
         &inputs.overrides,
     );
-    add_project_units_not_placed(&mut by_path, &snapshots, &inputs.overrides);
+    add_project_units_not_placed(&mut by_path, &snapshots, &project_paths, &inputs.overrides);
     refile_child_sheet_violations(&mut by_path);
     dedupe_descendant_clashes(&mut by_path);
 
@@ -292,19 +296,26 @@ fn add_project_net_names(
 }
 
 /// The project-wide `UnitsNotPlaced` pass (#1286): units of one part are
-/// often split across sheets, so every per-sheet finding of the rule is
-/// replaced by one judged over all sheets of the run, in path order.
+/// often split across sheets, so the per-sheet findings of the project's
+/// sheets are replaced by one pass over those sheets, in path order. A loose
+/// tab outside the project keeps its own per-sheet findings.
 fn add_project_units_not_placed(
     by_path: &mut ViolationsByPath,
     snapshots: &HashMap<PathBuf, SchematicRenderSnapshot>,
+    project_paths: &std::collections::HashSet<PathBuf>,
     overrides: &HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) {
     let is_units =
         |v: &signex_erc::Violation| v.builtin_kind() == Some(signex_erc::RuleKind::UnitsNotPlaced);
-    for list in by_path.values_mut() {
-        list.retain(|v| !is_units(v));
+    for (path, list) in by_path.iter_mut() {
+        if project_paths.contains(path) {
+            list.retain(|v| !is_units(v));
+        }
     }
-    let mut sheets: Vec<(&PathBuf, &SchematicRenderSnapshot)> = snapshots.iter().collect();
+    let mut sheets: Vec<(&PathBuf, &SchematicRenderSnapshot)> = snapshots
+        .iter()
+        .filter(|(path, _)| project_paths.contains(*path))
+        .collect();
     sheets.sort_by(|a, b| a.0.cmp(b.0));
     for (path, violation) in signex_erc::project_units_not_placed(&sheets) {
         let mut list = by_path.remove(path).unwrap_or_default();

@@ -25,12 +25,19 @@ impl Signex {
             .erc_waivers
             .iter()
             .map(|w| {
-                let waived = self
+                let hidden: Vec<&signex_erc::Violation> = self
                     .ui_state
                     .erc_waived_findings
                     .iter()
                     .filter(|f| f.waiver.same_identity(&w.rule_id, &w.objects))
-                    .count();
+                    .map(|f| &f.violation)
+                    .collect();
+                let waived = hidden.len();
+                let severity = hidden.first().map(|v| match v.severity {
+                    signex_erc::Severity::Error => crate::panels::ErcSeverityLite::Error,
+                    signex_erc::Severity::Warning => crate::panels::ErcSeverityLite::Warning,
+                    _ => crate::panels::ErcSeverityLite::Info,
+                });
                 let identity = (w.rule_id.clone(), w.objects.clone());
                 let status = if !w.is_complete() {
                     ErcWaiverStatus::Incomplete
@@ -49,6 +56,7 @@ impl Signex {
                     author: w.author.clone(),
                     date: w.date.clone(),
                     status,
+                    severity,
                 }
             })
             .collect()
@@ -56,8 +64,8 @@ impl Signex {
 
     pub(crate) fn handle_erc_waiver(&mut self, msg: &ErcWaiverMsg) -> Task<Message> {
         let follow = match msg {
-            ErcWaiverMsg::Started(index) => {
-                self.start_erc_waiver(*index);
+            ErcWaiverMsg::Started { key, message } => {
+                self.start_erc_waiver(key.clone(), message.clone());
                 Task::none()
             }
             ErcWaiverMsg::ReasonChanged(reason) => {
@@ -85,16 +93,13 @@ impl Signex {
         follow
     }
 
-    /// Open the editor for row `index`. The author defaults to the last one
-    /// used, then to the OS login name.
-    fn start_erc_waiver(&mut self, index: usize) {
-        let entries = self.build_erc_diagnostic_entries();
-        let Some((entry, key)) = entries
-            .get(index)
-            .and_then(|e| e.waiver_key.clone().map(|k| (e, k)))
-        else {
-            return;
-        };
+    /// Open the editor for the finding keyed `key`. The author defaults to
+    /// the last one used, then to the OS login name.
+    fn start_erc_waiver(
+        &mut self,
+        key: signex_erc::waivers::violation::WaiverKey,
+        message: String,
+    ) {
         let author = self
             .ui_state
             .erc_waive_draft
@@ -104,7 +109,7 @@ impl Signex {
             .unwrap_or_else(default_author);
         self.ui_state.erc_waive_draft = Some(ErcWaiveDraft {
             key,
-            message: entry.message.clone(),
+            message,
             reason: String::new(),
             author,
             error: None,
