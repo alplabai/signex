@@ -25,7 +25,6 @@ fn symbol_app() -> (Signex, PathBuf) {
         title: "lib".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::SymbolEditor(path.clone()),
     });
@@ -256,13 +255,13 @@ fn undo_after_save_keeps_the_quit_gate_armed() {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
-        .dirty = false;
-    app.document_state.dirty_paths.remove(&path);
+        .set_dirty(false);
+    app.document_state.mark_document_clean(&path);
 
     undo(&mut app);
 
     assert!(
-        app.document_state.dirty_paths.contains(&path),
+        app.document_state.is_document_dirty(&path),
         "undo re-dirties the document, so the quit gate must see it"
     );
 }

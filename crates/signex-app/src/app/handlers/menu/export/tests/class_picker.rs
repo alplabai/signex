@@ -126,7 +126,7 @@ fn an_assignment_edits_the_labels_project_not_the_active_one() {
     let other_id = other.id;
     let other_path = other.path.clone();
     app.document_state.projects.push(other);
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
 
     assign(&mut app, other_id, "SIG", "Mine");
 
@@ -143,11 +143,10 @@ fn an_assignment_edits_the_labels_project_not_the_active_one() {
         table(active)[0].nets.is_empty(),
         "the active project is untouched"
     );
-    assert!(app.document_state.dirty_paths.contains(&other_path));
+    assert!(app.document_state.is_document_dirty(&other_path));
     assert!(
         !app.document_state
-            .dirty_paths
-            .contains(&app.document_state.projects[0].path),
+            .is_document_dirty(&app.document_state.projects[0].path),
         "and not dirtied"
     );
     assert_eq!(

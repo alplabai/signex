@@ -28,6 +28,7 @@ fn label(text: &str, label_type: LabelType) -> Label {
         justify: Default::default(),
         justify_v: Default::default(),
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -52,6 +53,7 @@ fn sheet() -> (SchematicSheet, [Symbol; 4]) {
         end: Point::new(1.0, 0.0),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     });
     (s, parts)
 }

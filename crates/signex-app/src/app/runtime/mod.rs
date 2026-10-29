@@ -11,7 +11,6 @@ mod label_class_pick;
 mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
-mod primitive_dirty;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]

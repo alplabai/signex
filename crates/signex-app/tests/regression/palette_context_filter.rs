@@ -34,7 +34,6 @@ fn open_footprint_tab(app: &mut Signex) {
         title: "f".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path),
     });
@@ -183,7 +182,6 @@ fn tab_switch_rebuilds_the_open_palette() {
         title: "board".into(),
         path: PathBuf::from("palette-context.snxpcb"),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Pcb,
     });

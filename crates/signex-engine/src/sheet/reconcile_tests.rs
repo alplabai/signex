@@ -199,6 +199,7 @@ fn hierarchical_label(text: &str, at: Point) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 

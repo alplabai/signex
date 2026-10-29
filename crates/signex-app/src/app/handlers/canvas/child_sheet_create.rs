@@ -470,7 +470,7 @@ impl Signex {
             return;
         }
         let project_path = project.path.clone();
-        self.document_state.dirty_paths.insert(project_path);
+        self.document_state.mark_document_dirty(&project_path);
         self.refresh_panel_ctx();
     }
 }

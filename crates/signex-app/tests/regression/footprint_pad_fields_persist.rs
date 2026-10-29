@@ -24,7 +24,6 @@ fn open_editor(stem: &str, file: FootprintFile) -> (Signex, PathBuf) {
         title: stem.into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });

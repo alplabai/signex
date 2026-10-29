@@ -161,3 +161,40 @@ fn a_git_failure_is_not_reported_as_paused() {
     assert!(app.document_state.error_notice.is_none());
     assert!(app.document_state.paused_git_projects.is_empty());
 }
+
+/// #858 / #893: a document commit that cannot take the repository commit lock
+/// (another process holds it past the wait) is a failed commit, not a failed
+/// save: the file is written and the Messages panel says the commit failed
+/// and why.
+#[test]
+fn a_commit_that_cannot_take_the_repository_lock_is_reported_not_committed() {
+    let _ = crate::diagnostics::init_logging();
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().expect("tempdir");
+    git2::Repository::init(dir.path()).expect("init");
+    let file = dir.path().join("a.snxsch");
+    std::fs::write(&file, b"saved").unwrap();
+    let mut app = git_app(dir.path());
+
+    let lock_path = dir.path().join(".git").join("signex").join("commit.lock");
+    std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+    let held = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .unwrap();
+    held.lock().unwrap();
+
+    app.commit_save_to_project_git(&file, "Save a");
+    let task = app.drain_pending_git_commits();
+    crate::app::handlers::menu::export::settle(&mut app, task);
+    drop(held);
+
+    assert_eq!(std::fs::read(&file).unwrap(), b"saved", "the save stands");
+    let reported = crate::diagnostics::recent_entries().iter().any(|e| {
+        e.message.contains("commit_path(a.snxsch) failed")
+            && e.message.contains("another Signex process is committing")
+    });
+    assert!(reported, "the failed commit reaches Messages");
+}

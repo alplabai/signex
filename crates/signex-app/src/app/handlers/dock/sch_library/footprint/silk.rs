@@ -57,7 +57,7 @@ impl Signex {
                         SilkLineEndpoint::ToX => to[0] = parsed,
                         SilkLineEndpoint::ToY => to[1] = parsed,
                     }
-                    editor.dirty = true;
+                    editor.mark_dirty();
                     editor.canvas_cache.clear();
                     return true;
                 }
@@ -96,7 +96,7 @@ impl Signex {
                             }
                         }
                     }
-                    editor.dirty = true;
+                    editor.mark_dirty();
                     editor.canvas_cache.clear();
                     return true;
                 }
@@ -122,7 +122,7 @@ impl Signex {
                         return false;
                     };
                     g.stroke_width = w;
-                    editor.dirty = true;
+                    editor.mark_dirty();
                     editor.canvas_cache.clear();
                     true
                 });
@@ -144,7 +144,7 @@ impl Signex {
                     return false;
                 };
                 g.filled = *on;
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 true
             });
@@ -173,7 +173,7 @@ impl Signex {
                     return false;
                 };
                 *content = value;
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 true
             });
@@ -207,7 +207,7 @@ impl Signex {
                         false
                     }
                 });
-                editor.dirty = true;
+                editor.mark_dirty();
                 editor.canvas_cache.clear();
                 removed
             });

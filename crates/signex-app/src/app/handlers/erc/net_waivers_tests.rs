@@ -79,7 +79,7 @@ fn a_waiver_persists_through_save_and_load() {
     let (mut app, dir) = app_with_two_failing_nets();
     waive(&mut app, "NET_T", true);
     let project = &app.document_state.projects[0];
-    assert!(app.document_state.dirty_paths.contains(&project.path));
+    assert!(app.document_state.is_document_dirty(&project.path));
 
     signex_types::project::write_project(&project.path, &project.data).expect("save");
     let loaded = signex_types::project::parse_project(&project.path).expect("load");

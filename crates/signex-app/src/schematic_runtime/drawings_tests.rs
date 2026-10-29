@@ -34,6 +34,7 @@ fn line(x: f64) -> SchDrawing {
         end: Point::new(x + 5.0, 10.0),
         width: 0.25,
         stroke_color: None,
+        locked: false,
     }
 }
 
@@ -45,6 +46,7 @@ fn rect(fill: FillType) -> SchDrawing {
         width: 0.25,
         fill,
         stroke_color: None,
+        locked: false,
     }
 }
 
@@ -56,6 +58,7 @@ fn circle(radius: f64, fill: FillType) -> SchDrawing {
         width: 0.25,
         fill,
         stroke_color: None,
+        locked: false,
     }
 }
 
@@ -95,6 +98,7 @@ fn an_arc_drawing_is_one_arc_item_and_a_collinear_one_two_lines() {
         width: 0.25,
         fill: FillType::None,
         stroke_color: None,
+        locked: false,
     };
 
     let bent = scene_of(vec![arc(3.0)]);
@@ -119,6 +123,7 @@ fn an_unfilled_polyline_is_its_segments_and_a_filled_one_a_polygon() {
         width: 0.25,
         fill,
         stroke_color: None,
+        locked: false,
     };
 
     let open = scene_of(vec![polyline(FillType::None)]);

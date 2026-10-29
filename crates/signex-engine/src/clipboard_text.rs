@@ -78,6 +78,7 @@ mod tests {
             end: Point::new(38.1, 25.4),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         };
         let label = Label {
             uuid: Uuid::new_v4(),
@@ -91,6 +92,7 @@ mod tests {
             justify: Default::default(),
             justify_v: Default::default(),
             unknown_columns: Default::default(),
+            locked: false,
         };
         let items = vec![
             SelectedItem::new(part.uuid, SelectedKind::Symbol),

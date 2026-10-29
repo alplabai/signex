@@ -21,7 +21,7 @@ fn workspace(tag: &str) -> crate::app::Signex {
 
 fn is_dirty(app: &crate::app::Signex) -> bool {
     let path = &app.document_state.projects[0].path;
-    app.document_state.dirty_paths.contains(path)
+    app.document_state.is_document_dirty(path)
 }
 
 #[test]

@@ -17,7 +17,7 @@ fn app_with_one_sheet(tmp: &TempDir) -> (Signex, uuid::Uuid, std::path::PathBuf)
     let mut app = app_with_sheet_tool(path.clone());
     drag(&mut app, (10.0, 10.0), (50.0, 40.0));
     let id = sheets(&app)[0].uuid;
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     (app, id, path)
 }
 
@@ -53,7 +53,7 @@ fn editing_the_name_is_dirty_undoable_and_redoable() {
 
     assert_eq!(identity(&app).0, "Power");
     assert_eq!(identity(&app).1, "sheet1.snxsch", "file is untouched");
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(app.document_state.error_notice.is_none());
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -71,7 +71,7 @@ fn editing_the_file_repoints_without_touching_the_disk() {
 
     assert_eq!(identity(&app).1, "sub/power.snxsch");
     assert_eq!(identity(&app).0, "sheet1", "name is untouched");
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(app.document_state.error_notice.is_none());
     assert!(!tmp.path().join("sub").exists(), "no folder is created");
     assert!(!tmp.path().join("sub/power.snxsch").exists());
@@ -99,7 +99,7 @@ fn an_invalid_filename_is_refused_with_a_visible_message() {
         assert!(!notice.detail.is_empty());
         assert_eq!(identity(&app), original(), "'{bad}' must not apply");
     }
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn a_path_escaping_the_sheets_folder_is_refused() {
         assert!(notice.detail.contains("folder"), "{notice:?}");
         assert_eq!(identity(&app), original(), "'{bad}' must not apply");
     }
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn committing_without_typing_changes_nothing() {
 
     assert_eq!(identity(&app), original());
     assert!(app.document_state.error_notice.is_none());
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -192,7 +192,6 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
         title: "other".to_string(),
         path: other.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -240,7 +239,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     drag(&mut app, (10.0, 10.0), (50.0, 40.0));
     let id = sheets(&app)[0].uuid;
     let before = identity(&app);
-    app.document_state.dirty_paths.clear();
+    app.document_state.mark_documents_clean_where(|_| true);
     app.document_state.error_notice = None;
 
     type_and_commit_file(&mut app, id, "sheet1.snxsch");
@@ -252,7 +251,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
         .expect("a file used by another sheet must raise a notice");
     assert!(notice.detail.contains("already references"), "{notice:?}");
     assert_eq!(identity(&app), before, "the edit must not apply");
-    assert!(!app.document_state.dirty_paths.contains(&other));
+    assert!(!app.document_state.is_document_dirty(&other));
 
     // A free file name is still accepted.
     app.document_state.error_notice = None;

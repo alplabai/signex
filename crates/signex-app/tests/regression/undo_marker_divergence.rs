@@ -73,7 +73,6 @@ fn add_tab(app: &mut Signex, path: &Path, sheet: SchematicSheet) {
         title: path.to_string_lossy().to_string(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -418,10 +417,14 @@ fn panel_locked_and_dnp_toggles_write_the_symbol_and_undo_once() {
     click(&mut app, PanelMsg::ToggleSymbolDnp(id));
     assert_eq!(flags(&app), (false, true));
     assert!(
-        app.document_state.dirty_paths.contains(&path),
+        app.document_state.is_document_dirty(&path),
         "a DNP toggle must dirty the sheet"
     );
-    assert!(app.document_state.tabs[0].dirty, "and the tab");
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
+        "and the tab"
+    );
     assert!(
         info_row(&app, "DNP", "Yes"),
         "the Properties selection info must show the new DNP state: {:?}",

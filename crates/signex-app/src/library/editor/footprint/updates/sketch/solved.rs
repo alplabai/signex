@@ -198,9 +198,6 @@ fn reject_conflicting_edit(
     }
     if let Some(dirty_before) = unsolved.dirty_before {
         let owes_rows = !editor.cascade_owed.is_empty();
-        editor.dirty = dirty_before || owes_rows;
-        if !dirty_before && !owes_rows {
-            editor.clean_mirror_owed = true;
-        }
+        editor.set_dirty(dirty_before || owes_rows);
     }
 }

@@ -165,7 +165,9 @@ impl Env {
         };
         let free = !self.placed.contains(&(leg, true))
             && !self.placed.contains(&(leg, false))
-            && !self.selected.contains(&wire.uuid);
+            && !self.selected.contains(&wire.uuid)
+            // A locked leg is not slid; the elbow bends on a new leg instead.
+            && !wire.locked;
         free.then_some((leg, far))
     }
 
@@ -233,6 +235,7 @@ impl Env {
         for (a, b) in segs {
             let mut wire = self.wires[template].clone();
             wire.uuid = Uuid::new_v4();
+            wire.locked = false;
             wire.start = a;
             wire.end = b;
             out.touched
@@ -252,5 +255,47 @@ impl Env {
                 self.placed.insert((index, is_start));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transform::rubber_band::Policy;
+    use signex_types::schematic::{SchematicSheet, Wire};
+    use std::collections::HashSet;
+
+    fn wire(a: (f64, f64), b: (f64, f64), locked: bool) -> Wire {
+        Wire {
+            uuid: Uuid::new_v4(),
+            start: Point::new(a.0, a.1),
+            end: Point::new(b.0, b.1),
+            locked,
+            ..Default::default()
+        }
+    }
+
+    fn env(leg_locked: bool) -> Env {
+        let sheet = SchematicSheet {
+            wires: vec![
+                wire((0.0, 0.0), (10.0, 0.0), false),
+                wire((10.0, 0.0), (10.0, 20.0), leg_locked),
+            ],
+            ..Default::default()
+        };
+        Env::new(
+            &sheet,
+            HashSet::new(),
+            HashSet::new(),
+            HashSet::new(),
+            Policy::default(),
+        )
+    }
+
+    #[test]
+    fn a_free_elbow_leg_can_slide_and_a_locked_one_cannot() {
+        let joint = key(&Point::new(10.0, 0.0));
+        assert_eq!(env(false).elbow_leg(0, joint).map(|(leg, _)| leg), Some(1));
+        assert!(env(true).elbow_leg(0, joint).is_none());
     }
 }

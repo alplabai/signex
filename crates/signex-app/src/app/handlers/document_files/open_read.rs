@@ -211,7 +211,6 @@ impl Signex {
             title,
             path,
             cached_document: None,
-            dirty: false,
             project_id,
             kind,
         });

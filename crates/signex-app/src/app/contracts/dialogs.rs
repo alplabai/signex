@@ -515,7 +515,7 @@ pub enum FileMsg {
 pub enum ProjectMsg {
     /// User picked an option in the project-close confirmation modal
     /// (Save All / Discard All / Cancel) shown when closing a
-    /// project that still has entries in `dirty_paths`.
+    /// project that still has dirty documents.
     CloseConfirm(ProjectCloseChoice),
     /// The off-thread child-sheet resolution that Close Project starts
     /// finished (#741). Carries the project by id, not index, because the
@@ -547,7 +547,7 @@ pub enum ProjectMsg {
     ),
     /// User choice (Save All / Discard All / Cancel) on the app-quit
     /// confirmation modal, shown when the user tries to exit Signex
-    /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
+    /// while any document is dirty. Reuses `ProjectCloseChoice`.
     AppQuitConfirm(ProjectCloseChoice),
     /// A Project tab message (#1202), routed to the `project_tab` slice.
     Tab(crate::app::ProjectTabMsg),

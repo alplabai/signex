@@ -188,6 +188,7 @@ impl LibraryState {
         }
         self.sync_panel_rows();
         self.sync_browser_caches();
+        self.sync_uncommitted();
     }
 }
 

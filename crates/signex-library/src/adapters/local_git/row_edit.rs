@@ -83,6 +83,7 @@ impl LocalGitAdapter {
             &|| message.to_string(),
             fallback,
         )
+        .map(drop)
     }
 }
 

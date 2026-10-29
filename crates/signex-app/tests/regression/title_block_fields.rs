@@ -16,7 +16,6 @@ fn open_sheet(app: &mut Signex, name: &str) -> PathBuf {
         title: name.to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -73,7 +72,8 @@ fn a_field_commits_on_enter_as_one_undo_step() {
     );
     assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
     assert!(
-        app.document_state.tabs[0].dirty,
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
         "a commit dirties the sheet"
     );
 

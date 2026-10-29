@@ -368,7 +368,7 @@ impl Signex {
     pub(crate) fn path_is_owned_by_open_document(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
             || (self.document_state.engines.contains_key(path)
-                && self.document_state.dirty_paths.contains(path))
+                && self.document_state.is_document_dirty(path))
     }
 
     /// The owner of a superseded schematic open result may be a dirty
@@ -496,7 +496,7 @@ impl Signex {
         // project-tree open path. Reparsing from disk would discard
         // edits the user made before closing the tab.
         if self.document_state.engines.contains_key(&path)
-            && self.document_state.dirty_paths.contains(&path)
+            && self.document_state.is_document_dirty(&path)
         {
             self.attach_parked_schematic_tab(path, title);
             return Ok(iced::Task::none());

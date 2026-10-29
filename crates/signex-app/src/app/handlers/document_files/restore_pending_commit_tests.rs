@@ -28,7 +28,6 @@ fn open_tab(dir: &Path, path: &Path) -> Signex {
         title: "part".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.to_path_buf()),
     });

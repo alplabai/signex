@@ -27,6 +27,7 @@ fn label(text: &str, font_size: f64) -> Label {
         justify_v: Default::default(),
         font_family: None,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
