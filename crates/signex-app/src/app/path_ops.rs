@@ -246,6 +246,34 @@ impl crate::app::Signex {
         }
     }
 
+    /// Refuse a project-wide rewrite (Annotate, project Replace) while a
+    /// rename or delete touches one of `sheets`, a declared page of the
+    /// active project, or anything under its folder: a sheet the worker has
+    /// already moved is in neither the scanned set nor its unreadable list.
+    pub(crate) fn refuse_project_wide_while_path_op<'a>(
+        &self,
+        sheets: impl IntoIterator<Item = &'a Path>,
+        outcome: &str,
+    ) -> anyhow::Result<()> {
+        for path in sheets {
+            self.refuse_while_path_op(path, outcome)?;
+        }
+        for path in crate::app::project_sheets::declared_pages(&self.document_state) {
+            self.refuse_while_path_op(&path, outcome)?;
+        }
+        let Some(dir) = self
+            .document_state
+            .active_document_project()
+            .map(|p| p.dir())
+        else {
+            return Ok(());
+        };
+        match self.document_state.pending_path_ops.blocking_start(dir) {
+            Some(conflict) => anyhow::bail!(refusal(&conflict, dir, outcome)),
+            None => Ok(()),
+        }
+    }
+
     /// Refuse to start a second operation (or open) on `path` while another
     /// one overlaps it.
     pub(crate) fn refuse_start_while_path_op(

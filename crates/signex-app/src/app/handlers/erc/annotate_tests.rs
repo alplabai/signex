@@ -557,3 +557,39 @@ fn annotate_is_refused_whole_while_a_rename_holds_a_sheet() {
 fn reset_duplicates_is_refused_whole_while_a_rename_holds_a_sheet() {
     assert_pass_refused_while_a_rename_holds_a_sheet(reset, "Reset Duplicate Designators");
 }
+
+/// Between the worker's move and its completion a moved page is in neither
+/// the parsed sheets nor the unreadable list; the declared pages and the
+/// project folder still see the rename, so the pass is refused.
+fn assert_annotate_refused_while(claimed: &str) {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project(vec![unit("U7", 1, 0.0)], vec![unit("U5", 1, 0.0)]);
+    let pages = &mut app.document_state.projects[0].data.sheets;
+    let mut moved = pages[0].clone();
+    moved.filename = "moved_page.snxsch".to_string();
+    pages.push(moved);
+    claim_rename(&mut app, dir.join(claimed));
+    run_annotate_expecting_refusal(&mut app, &dir);
+}
+
+fn run_annotate_expecting_refusal(app: &mut Signex, dir: &std::path::Path) {
+    let since = crate::diagnostics::newest_entry_id();
+    annotate(app);
+    let (root, child) = (root_refs(app, dir), child_refs(dir));
+    let notice = notice_detail(app);
+    std::fs::remove_dir_all(dir).ok();
+    assert_eq!(root, ["U7"], "the open sheet was not renumbered");
+    assert_eq!(child, ["U5"], "the unopened sheet was not rewritten");
+    assert!(notice.contains("Annotate was not run"), "{notice}");
+    assert!(logged_since(since, "Annotate was not run"));
+}
+
+#[test]
+fn annotate_is_refused_while_a_declared_page_is_mid_move() {
+    assert_annotate_refused_while("moved_page.snxsch");
+}
+
+#[test]
+fn annotate_is_refused_while_a_file_in_the_project_folder_moves() {
+    assert_annotate_refused_while("unlisted.snxsch");
+}

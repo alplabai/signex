@@ -202,18 +202,15 @@ impl Signex {
     }
 
     /// Refuse a project-wide rewrite up front when a rename or delete holds
-    /// any of its sheets: writing the rest would leave the designators on
-    /// disk inconsistent (#859). True when refused.
+    /// any of its sheets, pages or folder: writing the rest would leave the
+    /// designators on disk inconsistent (#859). True when refused.
     pub(super) fn refuse_annotate_while_path_op(
         &mut self,
         project_set: &crate::app::project_sheets::ProjectSheetSet,
         what: &str,
     ) -> bool {
-        let Some(refusal) = project_set
-            .sheets
-            .keys()
-            .find_map(|p| self.refuse_while_path_op(p, "rewritten").err())
-        else {
+        let sheets = project_set.sheets.keys().map(std::path::PathBuf::as_path);
+        let Err(refusal) = self.refuse_project_wide_while_path_op(sheets, "rewritten") else {
             return false;
         };
         let detail = format!("{what} was not run: {refusal}");

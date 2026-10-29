@@ -399,6 +399,8 @@ impl Signex {
         self.document_state
             .project_folder_renames
             .remove(&job.project_id);
+        // Sheets moved on disk with no engine behind them.
+        self.document_state.note_document_written_behind_engines();
         if let Err(reason) = result {
             crate::diagnostics::log_warning(format!(
                 "Rename of project {} cancelled: {reason}",

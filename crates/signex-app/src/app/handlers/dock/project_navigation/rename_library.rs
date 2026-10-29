@@ -82,6 +82,7 @@ impl Signex {
             vec![project_path.clone()],
             fold,
         );
+        self.document_state.note_documents_changed();
         let job = LibraryRenameJob {
             old: old_path.clone(),
             new: new_path.clone(),
@@ -123,6 +124,8 @@ impl Signex {
             );
             return iced::Task::none();
         }
+        // The worker may have moved the library and rewritten the `.snxprj`.
+        self.document_state.note_document_written_behind_engines();
         let (old, new) = (request.old.clone(), request.new.clone());
         let outcome = match io {
             LibraryRenameIo::Moved(outcome) => outcome,

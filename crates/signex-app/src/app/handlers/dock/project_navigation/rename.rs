@@ -278,6 +278,8 @@ impl Signex {
             parents_to_read.clone(),
             fold,
         );
+        // A background read of the old file (project Replace) is out of date.
+        self.document_state.note_documents_changed();
         let job = crate::app::path_op_jobs::RenameJob {
             from: from.clone(),
             to: new_path.clone(),

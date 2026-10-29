@@ -105,6 +105,28 @@ mod tests {
         );
     }
 
+    /// The refusal is a card as well as a Messages line, like every other
+    /// refusal while a path operation runs.
+    #[test]
+    fn a_refused_library_write_shows_a_card_and_reaches_messages() {
+        let _ = crate::diagnostics::init_logging();
+        let mut app = app_with_library_rename();
+        let since = crate::diagnostics::newest_entry_id();
+        let _task = app.update(crate::app::Message::Library(LibraryMessage::NewComponent));
+        let notice = app.document_state.error_notice.clone().expect("a card");
+        assert_eq!(notice.title, "Library Change Not Applied");
+        assert!(
+            notice
+                .detail
+                .starts_with("A library rename or delete is still running")
+        );
+        assert!(
+            crate::diagnostics::recent_entries()
+                .iter()
+                .any(|e| Some(e.id) > since && e.message.contains("library change was not applied"))
+        );
+    }
+
     #[test]
     fn a_write_to_an_unrelated_library_is_not_refused() {
         let app = app_with_library_rename();

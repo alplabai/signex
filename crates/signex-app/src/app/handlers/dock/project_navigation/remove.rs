@@ -176,6 +176,8 @@ impl Signex {
             vec![state.target_path.clone()],
             fold,
         );
+        // A background read of the file (project Replace) is out of date.
+        self.document_state.note_documents_changed();
         let job = DeleteJob {
             target: state.target_path.clone(),
             project_root: self.project_root_for_tree_path(&state.tree_path),

@@ -828,11 +828,15 @@ fn renaming_a_closed_sheet_mid_flight_refuses_the_replace() {
         is_project_rename: false,
     });
     let before = app.document_state.documents_epoch;
-    let _ = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
+    let rename = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
     assert_ne!(
         app.document_state.documents_epoch, before,
-        "a rename invalidates in-flight reads"
+        "a rename invalidates in-flight reads as it starts"
     );
+    // The move runs on a worker (#859); its completion lands next.
+    for message in crate::persist::run_task::outputs(rename) {
+        let _follow_up = app.update(message);
+    }
     let renamed = dir.path().join("power.snxsch");
     assert!(renamed.exists() && !child.exists(), "the file moved");
     deliver(&mut app, generation, prep);

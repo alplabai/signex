@@ -57,6 +57,8 @@ impl Signex {
             self.report_file_rename_failure(&request, &error);
             return iced::Task::none();
         }
+        // The file moved on disk: a background read of it is out of date.
+        self.document_state.note_document_written_behind_engines();
         match &request.kind {
             FileRenameKind::Document(plan) => self.apply_document_rename(&request, plan, parents),
         }

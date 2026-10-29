@@ -81,7 +81,9 @@ impl Signex {
     /// republish instead of the full `finish_update`.
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
         if let Some(refusal) = self.library_write_refusal(&msg) {
-            crate::diagnostics::log_warning(refusal);
+            crate::diagnostics::log_warning(&refusal);
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::library_change(refusal));
             return self.finish_update();
         }
         let per_event = matches!(

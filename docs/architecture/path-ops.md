@@ -19,6 +19,28 @@ Edits to an open document are not refused: the completion re-keys engines,
 tabs and dirty markers by moving them, so edits made meanwhile travel with
 the document.
 
+### The document epoch (#1401)
+
+A move or delete changes what is on disk behind the engines, so it obeys the
+`documents_epoch` contract in `state/mod.rs`: a background read of a sheet
+(project Replace's `prepare`) records the epoch and applies only if it is
+unchanged. Every operation moves the epoch twice. Starting it bumps it, so a
+read already in flight is out of date before the worker touches the file.
+Completing it bumps it again (`FileRenamed`, `LibraryRenamed`, a delete through
+`drop_deleted_documents`, a project-folder move), whether or not an engine was
+open for the path, and re-keyed or rewritten engines go through
+`insert_engine` / `remove_engine`. Otherwise a Replace whose read finished
+before the move would install a dirty tabless engine at the old path, and Save
+All would write the moved or deleted sheet back.
+
+A project-wide rewrite that starts while an operation runs is refused up front
+with a card and a Messages line: project Replace (`refuse_replace_while_path_op`)
+and Annotate / Reset Duplicate Designators (`refuse_annotate_while_path_op`).
+Both use `refuse_project_wide_while_path_op`, which checks the parsed sheets,
+the project's declared pages and its folder. Between the worker's move and the
+completion, a moved page is in neither the parsed sheets nor the unreadable
+list, so the sheets alone would miss it.
+
 ## Library rename (`handlers/dock/project_navigation/rename_library.rs`)
 
 Renaming a project library's `.snxlib` from the project tree (#739).
@@ -36,7 +58,8 @@ in-memory state stays on the old path throughout.
 While the rename runs the library is registered in `pending_path_ops`:
 saves, opens and a second move of it are refused, and library edits that
 write through the mounted adapter are refused (`library_write_refusal`),
-because the adapter still points at the old path until the re-point.
+because the adapter still points at the old path until the re-point. A refused
+edit shows a "Library Change Not Applied" card as well as a Messages line.
 
 The one library entry of the saved `.snxprj` is patched atomically on
 disk (so a Discard, quit or crash cannot leave the project listing a file
