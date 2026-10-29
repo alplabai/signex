@@ -387,6 +387,22 @@ impl Signex {
                     false,
                 );
             }
+            // Placed where clicked, like the other one-click placements. The
+            // net builder accepts a dot anywhere; one off a wire joins nothing.
+            Tool::Junction => {
+                let junction = signex_types::schematic::Junction {
+                    uuid: uuid::Uuid::new_v4(),
+                    position: signex_types::schematic::Point::new(wx, wy),
+                    diameter: 0.0,
+                    minted: false,
+                    unknown_columns: Default::default(),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceJunction { junction },
+                    false,
+                    false,
+                );
+            }
             Tool::NoErcDirective => {
                 let directive = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),

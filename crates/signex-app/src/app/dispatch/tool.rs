@@ -72,6 +72,12 @@ impl Signex {
                                 String::new(),
                                 String::new(),
                             ),
+                            Tool::Junction => (
+                                PrePlacementKind::Other,
+                                "Junction".to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
                             Tool::NoErcDirective => (
                                 PrePlacementKind::Other,
                                 "No ERC".to_string(),
@@ -384,6 +390,7 @@ impl Signex {
                     Tool::BusEntry => Some("Bus Entry".to_string()),
                     Tool::Text => Some("Text".to_string()),
                     Tool::NoConnect => Some("No Connect".to_string()),
+                    Tool::Junction => Some("Junction".to_string()),
                     Tool::NoErcDirective => Some("No ERC".to_string()),
                     Tool::Label => Some("Label".to_string()),
                     Tool::Component => Some("Component".to_string()),

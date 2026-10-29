@@ -198,7 +198,7 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         id: "place_junction",
         category: "place",
         label: "Place junction",
-        menu_label: None,
+        menu_label: Some("Junction"),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::GUI_MUTATES,

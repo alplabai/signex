@@ -393,7 +393,6 @@ mod tests {
     /// The ids listed there are a mix, and the distinction decides the fix:
     /// - **unimplemented** — the catalog entry and the binding are the only
     ///   occurrences in the tree (`break_wire`,
-    ///   `place_junction`,
     ///   `repeat_last_item`, `rubber_stamp_copy`). A feature, not an arm.
     ///   This is most of what is left. It also covers ids whose obvious
     ///   target turns out to be a STUB, where an arm would trade a logged
@@ -426,9 +425,6 @@ mod tests {
         "highlight_related_net_objects", "import_graphics",
         "next_highlighted_net_item",
         "place_design_block",
-        // No junction tool exists: junctions are derived from wire topology
-        // and the engine's PlaceJunction command has no UI tool (#1666).
-        "place_junction",
         "previous_highlighted_net_item",
         "refresh_view", "repeat_last_item",
         "reset_local_coordinates", "rubber_stamp_copy", "select_expand_connection",
@@ -527,6 +523,13 @@ mod tests {
             resolve("place_hierarchical_label"),
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
                 crate::active_bar::ActiveBarAction::PlaceOffSheetConnector
+            ))
+        ));
+        // The key reaches the Active Bar button, which arms Tool::Junction.
+        assert!(matches!(
+            resolve("place_junction"),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlaceJunction
             ))
         ));
         assert!(matches!(
