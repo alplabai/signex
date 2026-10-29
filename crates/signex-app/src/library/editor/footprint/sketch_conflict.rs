@@ -44,7 +44,14 @@ pub(super) fn mutate_solve_or_revert(
             let (rows, named_entities) = name_conflict(&ids, footprint.sketch.as_ref());
             footprint.sketch = before;
             drop_dangling_selection(state, footprint);
-            if let Err(e) = solve_and_bake(state, footprint) {
+            // The re-solve dedups against what is already logged, then the
+            // set is put back: it is the clean sketch's, without the
+            // conflict that is about to be reported, and keeping it would
+            // make the next identical rejection log again.
+            let logged = state.logged_solve_warnings.clone();
+            let resolved = solve_and_bake(state, footprint);
+            state.logged_solve_warnings = logged;
+            if let Err(e) = resolved {
                 tracing::warn!(
                     target: "signex::sketch",
                     error = %e,

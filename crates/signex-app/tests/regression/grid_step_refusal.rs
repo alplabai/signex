@@ -69,7 +69,7 @@ fn a_non_finite_grid_step_in_grid_properties_is_refused_out_loud() {
     let before = grid_step(&app, &path);
 
     let _ = app.update(Message::GridProperties(GridPropertiesMsg::Open));
-    let _ = app.update(Message::GridProperties(GridPropertiesMsg::SetStepX(
+    let _ = app.update(Message::GridProperties(GridPropertiesMsg::SetStep(
         NON_FINITE.into(),
     )));
     let _ = app.update(Message::GridProperties(GridPropertiesMsg::Apply));
@@ -95,7 +95,7 @@ fn a_valid_grid_step_still_applies() {
 
 fn apply_typed_step(app: &mut Signex, text: &str) {
     let _ = app.update(Message::GridProperties(GridPropertiesMsg::Open));
-    let _ = app.update(Message::GridProperties(GridPropertiesMsg::SetStepX(
+    let _ = app.update(Message::GridProperties(GridPropertiesMsg::SetStep(
         text.into(),
     )));
     let _ = app.update(Message::GridProperties(GridPropertiesMsg::Apply));

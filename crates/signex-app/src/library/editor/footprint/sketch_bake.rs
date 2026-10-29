@@ -13,6 +13,9 @@ use signex_library::primitive::footprint::Footprint;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::{SketchError, SolveError};
 
+use signex_sketch::baked_kinds::BakedKind;
+
+use super::sketch_bake_fields::BakedFields;
 use super::sketch_dispatch::take_unlogged_warnings;
 use super::state::FootprintEditorState;
 
@@ -25,10 +28,32 @@ pub(super) fn bake_solution(
     resolved: &HashMap<String, f64>,
     out: FullSolveOutput,
 ) -> Result<(), SketchError> {
+    bake_solution_with(state, footprint, resolved, out, BakedFields::bake)
+}
+
+/// [`bake_solution`] with the field bake passed in, so a test can make it
+/// fail.
+pub(super) fn bake_solution_with(
+    state: &mut FootprintEditorState,
+    footprint: &mut Footprint,
+    resolved: &HashMap<String, f64>,
+    out: FullSolveOutput,
+    bake_fields: impl FnOnce(
+        &signex_sketch::SketchData,
+        &FullSolveOutput,
+        &HashMap<String, f64>,
+        &mut Vec<String>,
+    ) -> Result<BakedFields, SketchError>,
+) -> Result<(), SketchError> {
     let Some(sketch) = footprint.sketch.as_ref() else {
         return Ok(());
     };
     state.conflict.clear();
+    for warning in &out.warnings {
+        if !state.solve_warnings.contains(warning) {
+            state.solve_warnings.push(warning.clone());
+        }
+    }
     // Phase 7.3 — bake pads + arrays into the footprint, but
     // skip the overwrite on an empty sketch: a fresh
     // SetMode(Sketch) toggle on a footprint with literal pads
@@ -54,103 +79,23 @@ pub(super) fn bake_solution(
             &mut baked,
             &mut state.solve_warnings,
         )?;
+        let pads_baked = !baked.is_empty();
         footprint.pads = baked;
+        // Recorded before the fallible field bake: the pads above are the
+        // sketch's from here on, and a failed bake must not leave them
+        // unowned (a later delete-all would keep them).
+        let Some(sketch) = footprint.sketch.as_mut() else {
+            return Ok(());
+        };
+        sketch.record_baked(BakedKind::Pads, pads_baked);
+        let sketch = &*sketch;
 
-        // v0.14 closed-profile bakes — silk / courtyard / mask /
-        // paste-aperture / pour. Each replaces its corresponding
-        // Footprint field (or appends, in the case of the
-        // multi-record Vec fields) so the sketch is the source
-        // of truth for any geometry it produces.
-        let mut silk_f = Vec::new();
-        let mut silk_b = Vec::new();
-        signex_bake::bake_silk(
-            sketch,
-            &out,
-            &mut silk_f,
-            &mut silk_b,
-            &mut state.solve_warnings,
-        )?;
-        if !silk_f.is_empty() {
-            footprint.silk_f = silk_f;
-        }
-        if !silk_b.is_empty() {
-            footprint.silk_b = silk_b;
-        }
-
-        let mut courtyard = signex_library::primitive::footprint::Polygon::default();
-        signex_bake::bake_courtyard(sketch, &out, &mut courtyard, &mut state.solve_warnings)?;
-        if !courtyard.points.is_empty() {
-            footprint.courtyard = courtyard;
-        }
-
-        let mut mask_openings = Vec::new();
-        let mut mask_excludes = Vec::new();
-        let mut paste_apertures = Vec::new();
-        let mut pours = Vec::new();
-        let mut keepouts = Vec::new();
-        let mut cutouts = Vec::new();
-        let mut v_scores = Vec::new();
-        signex_bake::bake_mask_openings(
-            sketch,
-            &out,
-            &mut mask_openings,
-            &mut state.solve_warnings,
-        )?;
-        signex_bake::bake_mask_excludes(
-            sketch,
-            &out,
-            &mut mask_excludes,
-            &mut state.solve_warnings,
-        )?;
-        signex_bake::bake_paste_apertures(
-            sketch,
-            &out,
-            &mut paste_apertures,
-            &mut state.solve_warnings,
-        )?;
-        signex_bake::bake_pours(
-            sketch,
-            &out,
-            resolved,
-            &mut pours,
-            &mut state.solve_warnings,
-        )?;
-        signex_bake::bake_keepouts(sketch, &out, &mut keepouts, &mut state.solve_warnings)?;
-        signex_bake::bake_cutouts(
-            sketch,
-            &out,
-            resolved,
-            &mut cutouts,
-            &mut state.solve_warnings,
-        )?;
-        signex_bake::bake_v_scores(
-            sketch,
-            &out,
-            resolved,
-            &mut v_scores,
-            &mut state.solve_warnings,
-        )?;
-        if !mask_openings.is_empty() {
-            footprint.mask_openings = mask_openings;
-        }
-        if !mask_excludes.is_empty() {
-            footprint.mask_excludes = mask_excludes;
-        }
-        if !paste_apertures.is_empty() {
-            footprint.paste_apertures = paste_apertures;
-        }
-        if !pours.is_empty() {
-            footprint.pours = pours;
-        }
-        if !keepouts.is_empty() {
-            footprint.keepouts = keepouts;
-        }
-        if !cutouts.is_empty() {
-            footprint.cutouts = cutouts;
-        }
-        if !v_scores.is_empty() {
-            footprint.v_scores = v_scores;
-        }
+        // Every other baked field: see `sketch_bake_fields`.
+        let fields = bake_fields(sketch, &out, resolved, &mut state.solve_warnings)?;
+        fields.apply(footprint, &mut state.solve_warnings);
+        let Some(sketch) = footprint.sketch.as_ref() else {
+            return Ok(());
+        };
 
         // v0.14.1 — 3D extrude profile from a BodyTop plane
         // enriches the existing body_3d.outline + offset_z_mm.
@@ -213,6 +158,16 @@ pub(super) fn bake_solution(
             super::pad_to_sketch::mirror_solve_to_round_rect_geometry(state, sketch, resolved);
             super::pad_to_sketch::mirror_solve_to_oval_geometry(state, sketch, resolved);
         }
+    } else if !sketch.baked_kinds.is_empty() {
+        // Every entity was deleted after the sketch baked: what it owned
+        // goes with them. (A sketch that never baked owns nothing.)
+        BakedFields::clear_owned(footprint, &mut state.solve_warnings);
+        for warning in
+            take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+        {
+            crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
+        }
+        state.refresh_pads_from_primitive(footprint);
     }
 
     state.last_solve = Some(out);

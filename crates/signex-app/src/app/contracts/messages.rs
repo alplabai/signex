@@ -320,6 +320,9 @@ pub enum UiMsg {
             >,
         >,
     ),
+    /// Cross-sheet net navigation family (#1270-#1272): partner jumps, sheet
+    /// history, net highlight and the hover insight.
+    NetNav(super::net_nav::NetNavMsg),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under
@@ -516,19 +519,12 @@ pub enum GridPropertiesMsg {
     /// Esc). Discards in-flight edits.
     Close,
     /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step X field. Strings are validated on Apply, not per
-    /// keystroke, so partial input doesn't fight the user.
-    SetStepX(String),
-    /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step Y field.
-    SetStepY(String),
-    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
-    /// When linked, editing Step X mirrors into Step Y.
-    ToggleLink,
+    /// Step field (one value for both axes). Strings are validated on
+    /// Apply, not per keystroke, so partial input doesn't fight the user.
+    SetStep(String),
     /// v0.18.11 — Grid Properties modal: Apply button. Validates +
     /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// (and Y if/when separate axes ship). v0.18.19: also commits
-    /// fine/coarse display + multiplier.
+    /// and commits fine/coarse display + multiplier.
     Apply,
     /// v0.18.19 — Grid Properties modal: Fine grid display style.
     SetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
@@ -575,4 +571,7 @@ pub enum InputMsg {
     /// sets the mode only when the active tab is a footprint editor, so
     /// the keys don't steal text input on other tabs.
     FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// The "recompute courtyard outline" command (palette, #1473). Acts on
+    /// the active footprint editor tab; a no-op on any other tab.
+    FootprintCourtyardOutlineRequested,
 }

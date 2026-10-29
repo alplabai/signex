@@ -19,6 +19,7 @@ pub(crate) mod gpu_mount;
 pub mod grid;
 mod input;
 mod move_pick;
+mod net_highlight;
 pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
@@ -134,6 +135,9 @@ pub struct CanvasSlot {
     pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
+    /// What the net highlight keeps bright on this sheet (#1271); see
+    /// [`CanvasSlot::set_net_highlight`].
+    net_highlight: Option<std::sync::Arc<std::collections::HashSet<uuid::Uuid>>>,
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
@@ -257,6 +261,7 @@ impl CanvasSlot {
             camera: std::cell::RefCell::new(Camera::default()),
             render_cache: None,
             selected: Vec::new(),
+            net_highlight: None,
             pending_fit: std::cell::Cell::new(None),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
@@ -615,14 +620,16 @@ impl<'a> SchematicCanvas<'a> {
     /// a `UiState` setting read through `prefs`, while `selected` is the
     /// window's own state reached through `Deref`.
     fn auto_focus_set(&self) -> Option<std::collections::HashSet<uuid::Uuid>> {
-        if !self.prefs.auto_focus {
-            return None;
+        let mut set = self
+            .prefs
+            .auto_focus
+            .then(|| self.selected.iter().map(|item| item.uuid).collect());
+        // A net highlight keeps its elements bright the same way.
+        if let Some(bright) = self.net_highlight() {
+            set.get_or_insert_with(std::collections::HashSet::new)
+                .extend(bright.iter().copied());
         }
-        let mut set = std::collections::HashSet::new();
-        for item in &self.selected {
-            set.insert(item.uuid);
-        }
-        Some(set)
+        set
     }
 }
 
