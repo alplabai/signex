@@ -107,7 +107,7 @@ impl Signex {
         // A dirty draft parked by a tab close wins over the disk copy, and
         // is reachable even if the file has since vanished or broke. A
         // parked editor that is clean is stale and is replaced below.
-        if self.primitive_draft_is_dirty(&path) {
+        if self.document_state.is_document_dirty(&path) {
             let parked_kind = if self.document_state.symbol_editors.contains_key(&path) {
                 Some(crate::app::TabKind::SymbolEditor(path.clone()))
             } else if self.document_state.footprint_editors.contains_key(&path) {
@@ -126,7 +126,6 @@ impl Signex {
                     title,
                     path: path.clone(),
                     cached_document: None,
-                    dirty: true,
                     project_id,
                     kind,
                 });

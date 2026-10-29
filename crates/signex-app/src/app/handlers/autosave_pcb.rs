@@ -41,10 +41,8 @@ impl Signex {
             .tabs
             .iter()
             .find(|tab| matches!(tab.kind, TabKind::Pcb) && tab.path == path)
-            .is_some_and(|tab| {
-                tab.dirty
-                    || document.dirty_paths.contains(path)
-                    || document.document_saves.is_saving(path)
+            .is_some_and(|_| {
+                document.is_document_dirty(path) || document.document_saves.is_saving(path)
             })
     }
 
@@ -118,8 +116,7 @@ impl Signex {
             return false;
         };
         self.document_state.set_pcb_board(idx, board);
-        self.document_state.tabs[idx].dirty = true;
-        self.document_state.dirty_paths.insert(path.to_path_buf());
+        self.document_state.mark_document_dirty(path);
         // Keep the camera: the user is looking at this board already.
         self.apply_loaded_pcb_document(false, false);
         true

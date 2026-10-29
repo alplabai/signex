@@ -200,7 +200,7 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
     edited.symbols[0].description = "edited in the symbol editor".into();
     let mut editor = SymbolDocument::new(symbol_path.clone(), file);
     editor.file = edited;
-    editor.dirty = true;
+    editor.mark_dirty();
     f.app
         .document_state
         .symbol_editors
@@ -209,7 +209,6 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
         title: "part".into(),
         path: symbol_path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path),
     });
@@ -285,7 +284,7 @@ fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
     edited.symbols[0].description = "edited in the other library".into();
     let mut editor = SymbolDocument::new(symbol_path.clone(), file);
     editor.file = edited;
-    editor.dirty = true;
+    editor.mark_dirty();
     f.app
         .document_state
         .symbol_editors
@@ -294,7 +293,6 @@ fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
         title: "far".into(),
         path: symbol_path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(symbol_path),
     });

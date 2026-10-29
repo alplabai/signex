@@ -103,7 +103,7 @@ pub fn restore_pad_stack_defaults(editor: &mut crate::app::FootprintDocument) ->
             }
             super::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
         });
-        editor.dirty = true;
+        editor.mark_dirty();
         editor.canvas_cache.clear();
         true
     })

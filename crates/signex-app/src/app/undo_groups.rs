@@ -283,12 +283,12 @@ impl Signex {
                         // A clean tabless engine would own the path and shadow
                         // the file; drop it so the next use re-reads the disk.
                         // Redo is then refused whole (`dropped`).
-                        self.document_state.dirty_paths.remove(path);
+                        self.document_state.mark_document_clean(path);
                         self.forget_net_colors_of(path);
                         self.document_state.engines.remove(path);
                         dropped_now.push(path.clone());
                     } else {
-                        self.mark_cached_sheet_dirty(path);
+                        self.document_state.mark_document_dirty(path);
                     }
                 }
                 Ok(None) => {}

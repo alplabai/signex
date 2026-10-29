@@ -130,11 +130,10 @@ fn history_reload_does_not_repeat_the_repair_warning_and_keeps_the_tab_dirty() {
         title: "arc".into(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     assert_eq!(repair_warnings(&marker), 1, "opening warns once");
 
@@ -162,9 +161,13 @@ fn history_reload_does_not_repeat_the_repair_warning_and_keeps_the_tab_dirty() {
         1,
         "the reload must not log the repair again"
     );
-    let editor_dirty = app.document_state.footprint_editors[&path].dirty;
+    let editor_dirty = app.document_state.footprint_editors[&path].is_dirty();
     assert!(editor_dirty, "the unsaved repair leaves the editor dirty");
     let tab_idx = app.document_state.active_tab;
-    assert_eq!(app.document_state.tabs[tab_idx].dirty, editor_dirty);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert_eq!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[tab_idx].path),
+        editor_dirty
+    );
+    assert!(app.document_state.is_document_dirty(&path));
 }

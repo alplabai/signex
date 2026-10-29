@@ -23,6 +23,7 @@ fn label(text: &str, label_type: LabelType) -> Label {
         justify: Default::default(),
         justify_v: signex_types::schematic::VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -137,6 +138,7 @@ fn sheet_entry_findings(child_labels: &[(&str, LabelType)]) -> Vec<Violation> {
         end,
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     };
     let pin_at = Point { x: 20.0, y: 10.0 };
     let mut top = sheet(&[("SDA", Net)]);

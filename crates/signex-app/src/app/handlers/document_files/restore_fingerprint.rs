@@ -18,8 +18,8 @@ fn feed<T: serde::Serialize>(hasher: &mut impl Hasher, value: &T) {
 impl Signex {
     /// Hash of everything an edit to `path` can change in memory: the engine
     /// document and its colours, the open editor's container and undo depth,
-    /// and a PCB tab's board. Dirty flags are left out (saving unchanged
-    /// content clears them and is not an edit), except on library tabs.
+    /// and a PCB tab's board. Dirty flags are left out: saving unchanged
+    /// content clears them and is not an edit.
     pub(crate) fn edit_stamp(&self, path: &std::path::Path) -> EditStamp {
         let ds = &self.document_state;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -40,14 +40,6 @@ impl Signex {
             editor.history.len().hash(&mut hasher);
         }
         for tab in ds.tabs.iter().filter(|t| t.path == path) {
-            // Library tabs hold no document hashed above, so their own flag
-            // is the only sign of an unsaved change.
-            if matches!(
-                tab.kind,
-                crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_)
-            ) {
-                tab.dirty.hash(&mut hasher);
-            }
             if let Some(crate::app::TabDocument::Pcb(board)) = &tab.cached_document {
                 feed(&mut hasher, board);
             }

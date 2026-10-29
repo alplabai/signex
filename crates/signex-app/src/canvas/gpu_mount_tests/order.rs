@@ -22,6 +22,7 @@ fn drawing_line(y: f64, width: f64) -> SchDrawing {
             b: 0,
             a: 255,
         }),
+        locked: false,
     }
 }
 
@@ -34,6 +35,7 @@ fn red_rect(y0: f64, y1: f64) -> SchDrawing {
         width: 0.25,
         fill: FillType::Outline,
         stroke_color: Some(RED),
+        locked: false,
     }
 }
 
@@ -51,6 +53,7 @@ fn wire_across(y: f64) -> Wire {
         end: Point::new(20.0, y),
         stroke_width: 0.4,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -136,6 +139,7 @@ fn a_filled_drawing_circle_has_separate_fill_and_stroke_colours() {
         width: 0.5,
         fill: FillType::Background,
         stroke_color: Some(RED),
+        locked: false,
     }]);
     let centre = world(15.0, 12.0);
     let rim = world(18.0, 12.0);

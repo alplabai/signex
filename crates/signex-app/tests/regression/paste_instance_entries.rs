@@ -32,7 +32,6 @@ fn a_pasted_symbol_does_not_inherit_the_originals_instance_entries() {
         title: "paste-instances".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });

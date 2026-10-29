@@ -129,7 +129,7 @@ fn fixture(stem: &str) -> Fixture {
         state.state.last_solve.is_some(),
         "the starting sketch solves"
     );
-    state.dirty = false;
+    state.set_dirty(false);
     write_to_disk(&mut state);
 
     let (mut app, _task) = Signex::new();
@@ -140,7 +140,6 @@ fn fixture(stem: &str) -> Fixture {
         title: stem.into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -270,7 +269,7 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
     } = fixture("undo-equiv");
     let original = editor(&app, &path).primitive().sketch.clone();
     assert_eq!(editor(&app, &path).history.len(), 0);
-    assert!(!editor(&app, &path).dirty);
+    assert!(!editor(&app, &path).is_dirty());
 
     for _ in 0..2 {
         dispatch(&mut app, &path, drag(p2, 0.5));
@@ -284,7 +283,7 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
         2,
         "applying a result adds no step of its own"
     );
-    assert!(e.dirty);
+    assert!(e.is_dirty());
 
     // The reference: the inline path — snapshot, edit and solve at once,
     // record the step, set the dirty flag — once per tick.
@@ -311,11 +310,11 @@ fn undo_history_and_dirty_flag_match_the_inline_path() {
                 dy: 0.0,
             },
         );
-        reference.dirty = true;
+        reference.set_dirty(true);
     }
     let moved = |sk: &Option<SketchData>, id| point(sk.as_ref().unwrap(), id);
     assert_eq!(e.history.len(), reference.history.len());
-    assert_eq!(e.dirty, reference.dirty);
+    assert_eq!(e.is_dirty(), reference.is_dirty());
     for (got, want) in e.history.iter().zip(&reference.history) {
         assert_eq!(
             moved(&got.file.footprints[0].sketch, p2),
@@ -421,7 +420,7 @@ fn a_conflicting_drag_is_rejected_like_the_inline_path_rejects_it() {
         "the sketch is back at its last good state"
     );
     assert_eq!(e.history.len(), 0, "a rejected drag leaves no undo step");
-    assert!(!e.dirty, "and does not dirty the document");
+    assert!(!e.is_dirty(), "and does not dirty the document");
     assert!(!e.state.conflict.is_empty(), "the conflict is highlighted");
     assert!(
         e.state
@@ -526,8 +525,8 @@ fn saving_while_a_rejected_drag_is_pending_writes_the_good_sketch() {
         point(e.primitive().sketch.as_ref().unwrap(), p2),
         (8.0, 0.0)
     );
-    assert!(!e.dirty, "the saved document is clean and stays so");
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!e.is_dirty(), "the saved document is clean and stays so");
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -556,11 +555,11 @@ fn saving_while_a_drag_solve_is_pending_writes_the_solved_geometry() {
         (saved_anchor.0 - 5.75).abs() < 1e-9 && (saved_anchor.1 - 2.5).abs() < 1e-9,
         "the saved chamfer anchor must ride the drag to (5.75, 2.5), got {saved_anchor:?}"
     );
-    assert!(!live.dirty);
+    assert!(!live.is_dirty());
     // The answer for the pre-save sketch must not touch the saved document.
     dispatch(&mut app, &path, stale);
     assert!(
-        !editor(&app, &path).dirty,
+        !editor(&app, &path).is_dirty(),
         "a stale answer must not dirty it"
     );
     drop(dir);
@@ -586,7 +585,10 @@ fn an_edit_between_a_rejected_drag_and_its_result_keeps_its_own_undo_step() {
 
     let e = editor(&app, &path);
     assert_eq!(e.primitive().name, "renamed");
-    assert!(e.dirty, "the rename is unsaved, so the document is dirty");
+    assert!(
+        e.is_dirty(),
+        "the rename is unsaved, so the document is dirty"
+    );
     assert_eq!(e.history.len(), 1, "exactly the rename's step is left");
     assert_eq!(
         e.history[0].file.footprints[0].name, "interleaved",
@@ -617,7 +619,7 @@ fn a_rejected_drag_gives_back_the_redo_stack_and_the_evicted_history() {
         let mut undone = e.history[0].clone();
         undone.file.footprints[0].name = "undone".into();
         e.redo.push(undone);
-        e.dirty = false;
+        e.set_dirty(false);
     }
     let (first, redo_name) = {
         let e = editor(&app, &path);
@@ -643,7 +645,7 @@ fn a_rejected_drag_gives_back_the_redo_stack_and_the_evicted_history() {
 }
 
 #[test]
-fn a_rejected_drag_leaves_dirty_paths_and_the_tab_clean_again() {
+fn a_rejected_drag_leaves_the_document_clean_for_every_reader() {
     let Fixture {
         mut app,
         path,
@@ -651,16 +653,13 @@ fn a_rejected_drag_leaves_dirty_paths_and_the_tab_clean_again() {
         _dir,
     } = fixture("dirty-mirror");
     dispatch(&mut app, &path, drag(p2, 12.0));
-    // The runtime mirrors "dirty" into the path set and the tab lazily.
-    app.document_state.dirty_paths.insert(path.clone());
-    app.document_state.tabs[0].dirty = true;
 
     let answer = solve_now(&app, &path);
     dispatch(&mut app, &path, answer);
 
-    assert!(!editor(&app, &path).dirty);
-    assert!(!app.document_state.dirty_paths.contains(&path));
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!editor(&app, &path).is_dirty());
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 #[test]
@@ -780,7 +779,6 @@ fn install(
         title: stem.into(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.clone()),
     });
@@ -999,7 +997,7 @@ fn a_long_drag_is_one_undo_step() {
         4,
         "three earlier steps and one for the drag"
     );
-    assert!(e.dirty);
+    assert!(e.is_dirty());
     let drag_step = &e.history[3];
     assert_eq!(
         point(drag_step.file.footprints[0].sketch.as_ref().unwrap(), p2),
@@ -1096,7 +1094,7 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
         let mut undone = e.history[0].clone();
         undone.file.footprints[0].name = "undone".into();
         e.redo.push(undone);
-        e.dirty = false;
+        e.set_dirty(false);
     }
     let before: Vec<String> = editor(&app, &path)
         .history
@@ -1134,11 +1132,11 @@ fn a_rejected_drag_longer_than_the_history_restores_the_pre_drag_history() {
         "no undo step holds the rejected geometry"
     );
     assert_eq!(e.redo.len(), 1, "the redo step is back");
-    assert!(!e.dirty);
+    assert!(!e.is_dirty());
 }
 
 #[test]
-fn a_rejection_settled_by_a_footprint_switch_clears_the_dirty_mirrors() {
+fn a_rejection_settled_by_a_footprint_switch_leaves_the_document_clean() {
     let Fixture {
         mut app,
         path,
@@ -1153,15 +1151,12 @@ fn a_rejection_settled_by_a_footprint_switch_clears_the_dirty_mirrors() {
         .footprints
         .push(Footprint::empty("other"));
     dispatch(&mut app, &path, drag(p2, 12.0));
-    // The runtime mirrors "dirty" into the path set and the tab lazily.
-    app.document_state.dirty_paths.insert(path.clone());
-    app.document_state.tabs[0].dirty = true;
 
     dispatch(&mut app, &path, FootprintEditorMsg::SelectActiveIdx(1));
 
-    assert!(!editor(&app, &path).dirty);
-    assert!(!app.document_state.dirty_paths.contains(&path));
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(!editor(&app, &path).is_dirty());
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert!(!app.document_state.has_dirty_documents());
 }
 
 // ---- ticks that change nothing, inside a drag batch ----
@@ -1179,7 +1174,7 @@ fn add_line(app: &mut Signex, path: &Path) -> SketchEntityId {
         plane,
         EntityKind::Line { start: p1, end: p3 },
     ));
-    e.dirty = false;
+    e.set_dirty(false);
     id
 }
 
@@ -1256,7 +1251,7 @@ fn a_drag_of_only_zero_motion_ticks_records_nothing() {
         ..
     } = fixture("idle-only");
     let line = add_line(&mut app, &path);
-    app.document_state.dirty_paths.remove(&path);
+    app.document_state.mark_document_clean(&path);
 
     for _ in 0..3 {
         dispatch(&mut app, &path, no_motion(line));
@@ -1268,7 +1263,7 @@ fn a_drag_of_only_zero_motion_ticks_records_nothing() {
         0,
         "no undo step for a drag that moved nothing"
     );
-    assert!(!e.dirty, "and the document stays clean");
+    assert!(!e.is_dirty(), "and the document stays clean");
     assert!(
         !e.state.sketch_solve.is_solve_owed(),
         "and nothing is solved"
@@ -1399,7 +1394,7 @@ fn a_mode_switch_during_a_conflicting_drag_rolls_the_drag_back() {
         e.push_history();
         assert!(e.undo());
         assert_eq!(e.redo.len(), 1);
-        e.dirty = false;
+        e.set_dirty(false);
     }
     let good = editor(&app, &path).primitive().sketch.clone();
     let history_before = editor(&app, &path).history.len();

@@ -156,9 +156,6 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
-        // Footprint edits reach `dirty_paths` lazily; settle that before
-        // deciding whether a draft is dirty.
-        self.sync_editor_dirty_paths();
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(
                 target: "signex::tabs",
@@ -209,11 +206,11 @@ impl Signex {
             })
             .collect();
 
-        // Park dirty engines: when the file is in `dirty_paths`, keep its
+        // Park dirty engines: when the file is dirty, keep its
         // engine entry alive so reopening the tab restores the in-memory
         // edits. Drop the engine only when the file is clean.
         self.document_state.note_documents_changed();
-        if !self.document_state.dirty_paths.contains(&closing_path) {
+        if !self.document_state.is_document_dirty(&closing_path) {
             self.forget_net_colors_of(&closing_path);
             self.document_state.remove_engine(&closing_path);
         }
@@ -266,25 +263,22 @@ impl Signex {
         // state on close, unless the user asked to close a dirty one: that
         // draft is parked with its dirty marker, so Save All can still
         // write it. A dropped draft takes its marker with it: a stale
-        // `dirty_paths` entry with no editor behind it would make quit's
-        // Save All fail on a file nobody can save.
+        // mark with no editor behind it would make quit's Save All fail on
+        // a file nobody can save.
         if let crate::app::TabKind::SymbolEditor(ref p)
         | crate::app::TabKind::FootprintEditor(ref p) = closing_kind
+            && !(park_dirty && self.document_state.is_document_dirty(p))
         {
-            if park_dirty && self.primitive_draft_is_dirty(p) {
-                self.document_state.dirty_paths.insert(p.clone());
-            } else {
-                self.warn_if_cascade_owed(p);
-                self.document_state.symbol_editors.remove(p);
-                self.document_state.footprint_editors.remove(p);
-                self.document_state.dirty_paths.remove(p);
-            }
+            self.warn_if_cascade_owed(p);
+            self.document_state.symbol_editors.remove(p);
+            self.document_state.footprint_editors.remove(p);
+            self.document_state.mark_document_clean(p);
         }
         // A PCB has no parked draft, so its marker must not outlive the tab:
         // Save All has no PCB branch and would fail on it.
         // ponytail: valid only while a PCB can't be edited; park or prompt once it can.
         if matches!(closing_kind, crate::app::TabKind::Pcb) {
-            self.document_state.dirty_paths.remove(&closing_path);
+            self.document_state.mark_document_clean(&closing_path);
         }
         // Library Browser tabs — drop the per-browser state on close.
         // The library itself stays mounted; only the tab-scoped UI
@@ -298,7 +292,7 @@ impl Signex {
         // once no tab holds the path any more it has nothing to restore into.
         // A dirty tab parked in the background comes back with its unsaved
         // edits when reopened, so it gets its page setup back too.
-        let parked_dirty = park_dirty && self.document_state.dirty_paths.contains(&closing_path);
+        let parked_dirty = park_dirty && self.document_state.is_document_dirty(&closing_path);
         let no_tab_left = !self
             .document_state
             .tabs
@@ -306,7 +300,7 @@ impl Signex {
             .any(|tab| tab.path == closing_path);
         // Nothing of the document is left: its save failure or queued save
         // must not name a later document at the same path.
-        if no_tab_left && !self.document_state.dirty_paths.contains(&closing_path) {
+        if no_tab_left && !self.document_state.is_document_dirty(&closing_path) {
             self.document_state
                 .document_saves
                 .forget_where(|p| p == closing_path);
@@ -327,7 +321,7 @@ impl Signex {
         }
         self.sync_active_tab();
         // Refresh so the open-dot drops immediately on tab close. The
-        // dirty dot stays since `dirty_paths` is untouched.
+        // dirty dot stays since the dirty mark is untouched.
         self.refresh_panel_ctx();
 
         // A document that is gone (or was discarded before the close) has

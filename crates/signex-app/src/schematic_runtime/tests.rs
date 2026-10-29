@@ -133,6 +133,7 @@ fn hit_test_polygon_selects_wire_and_label_by_anchor() {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
 
     let polygon = vec![(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0)];
@@ -458,6 +459,7 @@ fn anchored_label(label_type: LabelType, rotation: f64) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         font_family: None,
+        locked: false,
     }
 }
 

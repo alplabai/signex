@@ -56,16 +56,17 @@ impl Signex {
         let old_path = self.document_state.active_path.clone()?;
         let engine = self.document_state.engines.remove(&old_path)?;
 
-        let Some((title, _tab_path, dirty)) = self
+        let Some(title) = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .map(|tab| (tab.title.clone(), tab.path.clone(), tab.dirty))
+            .map(|tab| tab.title.clone())
         else {
             self.document_state.engines.insert(old_path, engine);
             return None;
         };
 
+        let dirty = self.document_state.is_document_dirty(&old_path);
         // Panic guard: the engine moves into `session`, so a panicking
         // closure drops it. We cannot get it back; catch the unwind only
         // to clear `active_path` (no dangling key) before re-raising.
@@ -85,27 +86,24 @@ impl Signex {
                 {
                     tab.title = title;
                     tab.path = new_path.clone();
-                    tab.dirty = dirty;
                 }
 
-                // Mirror tab dirty state into the project-scoped
-                // `dirty_paths` set so the Projects-panel red dot
-                // survives tab close and is single-source-of-truth
-                // for "the file has unsaved edits".
+                // The session carried the dirty flag in and out; write it
+                // back so the mark survives tab close.
                 if new_path != old_path {
                     // Save As re-keyed the document; the old key no longer
                     // has an engine, so a lingering dirty marker would make
                     // every later Save All fail on it.
-                    self.document_state.dirty_paths.remove(&old_path);
+                    self.document_state.mark_document_clean(&old_path);
                     self.rekey_page_setup(&old_path, &new_path);
                     // The new file is not what any sheet symbol places.
                     self.document_state.tab_placements.forget(&old_path);
                     self.rekey_undocked_windows(&old_path, &new_path);
                 }
                 if dirty {
-                    self.document_state.dirty_paths.insert(new_path.clone());
+                    self.document_state.mark_document_dirty(&new_path);
                 } else {
-                    self.document_state.dirty_paths.remove(&new_path);
+                    self.document_state.mark_document_clean(&new_path);
                 }
 
                 self.document_state.insert_engine(new_path.clone(), engine);
@@ -441,7 +439,6 @@ impl Signex {
             title,
             path,
             cached_document: None,
-            dirty: false,
             project_id,
             kind: super::TabKind::Schematic,
         });
@@ -486,21 +483,15 @@ impl Signex {
     ///
     /// Pre-condition: `document_state.engines.contains_key(&path)`.
     /// Post-condition: a new tab exists pointing at `path` with
-    /// `dirty: true`, the active engine is the parked entry, and the
+    /// the parked entry's dirty mark, the active engine is the parked entry, and the
     /// canvas reflects the parked sheet's current state.
     pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        // The parked engine is, by definition, dirty — `close_tab_now`
-        // only keeps engines for paths in `dirty_paths`. Mirror that
-        // into the new tab so the chrome (red dot, etc.) stays
-        // consistent the moment the tab opens.
-        let dirty = self.document_state.dirty_paths.contains(&path);
         self.document_state.tabs.push(TabInfo {
             title,
             path: path.clone(),
             cached_document: None,
-            dirty,
             project_id,
             kind: super::TabKind::Schematic,
         });
@@ -528,7 +519,6 @@ impl Signex {
             title,
             path,
             cached_document: Some(TabDocument::Pcb(board)),
-            dirty: false,
             project_id,
             kind: super::TabKind::Pcb,
         });

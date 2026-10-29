@@ -211,7 +211,7 @@ mod tests {
             1,
             "a readable dimension must still add the constraint"
         );
-        assert!(editor.dirty, "adding a constraint dirties the editor");
+        assert!(editor.is_dirty(), "adding a constraint dirties the editor");
     }
 
     /// #678 — `f64::from_str` accepts these, but a NaN / infinite target

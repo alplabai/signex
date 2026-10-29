@@ -60,6 +60,7 @@ impl Signex {
                         end: p,
                         width: pre_placement_shape(&self.document_state).0,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -90,6 +91,7 @@ impl Signex {
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -118,6 +120,7 @@ impl Signex {
                             width: pp_w,
                             fill: pp_fill,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -146,6 +149,7 @@ impl Signex {
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -195,6 +199,7 @@ impl Signex {
                     width: pp_w,
                     fill: pp_fill,
                     stroke_color: None,
+                    locked: false,
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceSchDrawing { drawing },

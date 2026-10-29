@@ -48,7 +48,7 @@ fn rebuild_sketch(editor: &mut FootprintDocument) {
     editor.with_parts(|state, primitive| {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
     });
-    editor.dirty = true;
+    editor.mark_dirty();
     editor.canvas_cache.clear();
 }
 

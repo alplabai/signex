@@ -195,7 +195,7 @@ fn bulk_passes_do_not_dirty_an_open_newer_minor_sheet() {
             .iter()
             .map(|s| s.reference.clone())
             .collect();
-        let dirty = app.document_state.dirty_paths.contains(&child_path);
+        let dirty = app.document_state.is_document_dirty(&child_path);
         let notice = notice_detail(&app);
         std::fs::remove_dir_all(&dir).ok();
         assert_eq!(child_refs, ["R1"], "reset={reset}");
@@ -252,7 +252,6 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
         title: "z_child".into(),
         path: child_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -306,7 +305,6 @@ fn open_and_check_recovery(app: &mut Signex, path: &std::path::Path) {
         title: "z_child".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
@@ -419,7 +417,7 @@ fn a_read_landing_on_a_dirty_parked_engine_keeps_its_edits() {
     edited.symbols[0].reference = "U9".into();
     let engine = signex_engine::Engine::new_with_path(edited, Some(child.clone())).unwrap();
     app.document_state.engines.insert(child.clone(), engine);
-    app.document_state.dirty_paths.insert(child.clone());
+    app.document_state.mark_document_dirty(&child);
 
     let _ = app.handle_document_read_finished(
         ReadRequest {

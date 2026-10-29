@@ -240,7 +240,7 @@ impl Signex {
             return;
         };
         if self.register_project_file(project_id, &path) {
-            self.document_state.dirty_paths.insert(project_path);
+            self.document_state.mark_document_dirty(&project_path);
         }
         self.refresh_panel_ctx();
     }
@@ -331,7 +331,7 @@ impl Signex {
             // file copy already touched disk (irreversible) but the
             // project's *list* of children only persists once Save
             // writes the JSON .snxprj.
-            self.document_state.dirty_paths.insert(project_path);
+            self.document_state.mark_document_dirty(&project_path);
         }
         self.refresh_panel_ctx();
         self.mount_added_libraries(new_libraries)

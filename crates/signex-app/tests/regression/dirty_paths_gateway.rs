@@ -24,7 +24,7 @@ use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::{Path, PathBuf};
 
-fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
+pub(crate) fn symbol(uuid: uuid::Uuid, reference: &str, x: f64) -> Symbol {
     Symbol {
         uuid,
         lib_id: "Device:R".to_string(),
@@ -48,7 +48,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
 /// `finish_schematic_mutation` reaches `dirty_paths` through
 /// `with_active_schematic_session_mut`, which needs a tab at
 /// `active_tab` or it silently no-ops.
-fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
+pub(crate) fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     let path = PathBuf::from("dirty-gateway.snxsch");
     let engine = signex_engine::Engine::new(sheet_with(symbols)).expect("engine");
 
@@ -58,7 +58,6 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
         title: "dirty-gateway".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -70,20 +69,16 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
 
 fn assert_dirty(app: &Signex, path: &Path, what: &str) {
     assert!(
-        app.document_state.dirty_paths.contains(path),
-        "{what} must put the sheet in `dirty_paths`; it is the only thing the quit \
-         guard (close_project.rs), the tab-close engine parking (document_tabs.rs), \
-         the title-bar unsaved count and Save-All read. dirty_paths = {:?}",
-        app.document_state.dirty_paths
-    );
-    assert!(
-        app.document_state.tabs[0].dirty,
-        "{what} must also flip the tab's own dirty flag"
+        app.document_state.is_document_dirty(path),
+        "{what} must mark the sheet dirty; the quit guard (close_project.rs), the \
+         tab-close engine parking (document_tabs.rs), the tab dot, the title-bar \
+         unsaved count and Save-All all read it. dirty = {:?}",
+        app.document_state.dirty_document_paths()
     );
 }
 
 /// Apply a non-zero Move Selection to `uuid` through the dialog.
-fn move_selection(app: &mut Signex, uuid: uuid::Uuid) {
+pub(crate) fn move_selection(app: &mut Signex, uuid: uuid::Uuid) {
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(uuid, SelectedKind::Symbol)];
     app.ui_state.move_selection.dx = "10".to_string();
@@ -267,12 +262,11 @@ fn app_with_parked_sheet(
     app.document_state
         .engines
         .insert(parked_path.clone(), parked);
-    app.document_state.dirty_paths.insert(parked_path.clone());
+    app.document_state.mark_document_dirty(&parked_path);
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "root".to_string(),
         path: root_path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: signex_app::app::TabKind::Schematic,
     });
@@ -341,7 +335,7 @@ fn parked_references(app: &Signex, parked_path: &Path) -> Vec<String> {
 
 fn assert_parked_untouched(app: &Signex, parked_path: &Path, saved_bytes: &[u8], what: &str) {
     assert!(
-        app.document_state.dirty_paths.contains(parked_path),
+        app.document_state.is_document_dirty(parked_path),
         "the parked sheet still holds unsaved edits and must stay in `dirty_paths`"
     );
     assert_eq!(

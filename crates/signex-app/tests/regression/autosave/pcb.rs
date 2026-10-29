@@ -86,11 +86,7 @@ fn thickness_in_tab(app: &Signex, doc: &Path) -> f64 {
 }
 
 fn is_dirty(app: &Signex, doc: &Path) -> bool {
-    app.document_state
-        .tabs
-        .iter()
-        .find(|tab| tab.path == doc)
-        .is_some_and(|tab| tab.dirty)
+    app.document_state.is_document_dirty(doc)
 }
 
 /// Change the open board and mark its tab dirty, as an edit would.
@@ -102,7 +98,7 @@ fn edit(app: &mut Signex, doc: &Path) {
         .find(|tab| tab.path == doc)
         .unwrap();
     tab.cached_document = Some(TabDocument::Pcb(board(EDITED_THICKNESS)));
-    tab.dirty = true;
+    app.document_state.mark_document_dirty(doc);
 }
 
 fn tick(app: &mut Signex) {
@@ -187,7 +183,7 @@ fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
 
     assert_eq!(thickness_in_tab(&next, &f.doc), EDITED_THICKNESS);
     assert!(is_dirty(&next, &f.doc), "restored content is unsaved");
-    assert!(next.document_state.dirty_paths.contains(&f.doc));
+    assert!(next.document_state.is_document_dirty(&f.doc));
     assert_eq!(std::fs::read(&f.doc).unwrap(), on_disk);
     assert!(sidecar_of(&f).exists(), "the copy stays until a save");
 
@@ -219,7 +215,7 @@ fn decide_later_keeps_the_copy_and_autosave_does_not_overwrite_it() {
         .find(|tab| tab.path == f.doc)
         .unwrap();
     tab.cached_document = Some(TabDocument::Pcb(board(3.2)));
-    tab.dirty = true;
+    next.document_state.mark_document_dirty(&f.doc);
     tick(&mut next);
     assert_eq!(std::fs::read(sidecar_of(&f)).unwrap(), copy);
 }

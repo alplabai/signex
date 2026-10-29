@@ -112,7 +112,8 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         | "place_off_sheet_connector"
         | "open_components_panel"
         | "place_symbol"
-        | "measure_distance" => ctx.has_schematic,
+        | "measure_distance"
+        | "break_wire" => ctx.has_schematic,
         // These assemble the project's sheets, not only the active tab's.
         "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
             ctx.has_schematic || ctx.has_sheets
@@ -293,7 +294,7 @@ impl Signex {
                 .projects
                 .iter()
                 .find(|p| p.id == id)
-                .is_some_and(|p| document.dirty_paths.contains(&p.path))
+                .is_some_and(|p| document.is_document_dirty(&p.path))
         })
     }
 }
@@ -318,7 +319,6 @@ mod tests {
             title: "doc".into(),
             path: path.to_path_buf(),
             cached_document: None,
-            dirty: false,
             project_id: None,
             kind,
         });
@@ -460,7 +460,7 @@ mod tests {
         app.document_state.active_project = Some(project);
         assert!(!enabled(&app, "save_document"));
 
-        app.document_state.dirty_paths.insert(path);
+        app.document_state.mark_document_dirty(&path);
         assert!(enabled(&app, "save_document"));
     }
 
@@ -522,6 +522,20 @@ mod tests {
         assert!(enabled(&app, "measure_distance"));
         let _ = app.dispatch_command(&id("measure_distance"), CommandArgs::none(), None);
         assert_eq!(app.interaction_state.current_tool, Tool::Measure);
+    }
+
+    /// #1254 - Break Wire arms its tool only with a schematic open.
+    #[test]
+    fn break_wire_needs_a_schematic() {
+        let (mut app, _task) = Signex::new();
+        assert!(!enabled(&app, "break_wire"));
+        let _ = app.dispatch_command(&id("break_wire"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
+
+        let mut app = with_schematic();
+        assert!(enabled(&app, "break_wire"));
+        let _ = app.dispatch_command(&id("break_wire"), CommandArgs::none(), None);
+        assert_eq!(app.interaction_state.current_tool, Tool::BreakWire);
     }
 
     /// Find, the grid toggle and AutoFocus act from any tab, so they stay
@@ -667,7 +681,6 @@ mod tests {
                 title: "undocked".into(),
                 path: path.clone(),
                 cached_document: None,
-                dirty: false,
                 project_id: None,
                 kind: TabKind::Schematic,
             },

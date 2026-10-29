@@ -37,7 +37,6 @@ fn open_tab(app: &mut Signex, path: &Path, kind: TabKind) {
         title: "pair".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind,
     });
@@ -62,7 +61,7 @@ fn logged(needles: &[&str]) -> bool {
 fn edit_symbol(app: &mut Signex, path: &Path, index: usize, description: &str) {
     let editor = app.document_state.symbol_editors.get_mut(path).unwrap();
     editor.file.symbols[index].description = description.into();
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 fn on_disk(path: &Path) -> SymbolFile {
@@ -153,7 +152,7 @@ fn two_windows_saving_different_footprints_of_one_container_keep_both_edits() {
     for (app, index, text) in [(&mut first, 0, "first"), (&mut second, 1, "second")] {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.file.footprints[index].description = text.into();
-        editor.dirty = true;
+        editor.mark_dirty();
     }
     save(&mut first);
     save(&mut second);
@@ -187,7 +186,7 @@ fn delete_symbol(app: &mut Signex, path: &Path, index: usize) {
     let editor = app.document_state.symbol_editors.get_mut(path).unwrap();
     editor.file.symbols.remove(index);
     editor.active_idx = 0;
-    editor.dirty = true;
+    editor.mark_dirty();
 }
 
 /// #902 review: each window deletes a different symbol of a two-symbol

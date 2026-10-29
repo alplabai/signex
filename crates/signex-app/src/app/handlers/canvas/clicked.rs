@@ -271,6 +271,7 @@ impl Signex {
                             start: seg.0,
                             end: seg.1,
                             stroke_width: 0.0,
+                            locked: false,
                         };
                         wire_commands.push(signex_engine::Command::PlaceWireSegment { wire });
                     }
@@ -456,6 +457,7 @@ impl Signex {
                             end: p,
                             width: pp_w,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -477,6 +479,7 @@ impl Signex {
             Tool::Sheet => self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
+            Tool::BreakWire => self.break_wire_click(wx, wy),
             Tool::Rectangle => {
                 // Two-click: corner → opposite-corner →
                 // SchDrawing::Rect. Rearms blank for the
@@ -500,6 +503,7 @@ impl Signex {
                             width: pp_w,
                             fill: pp_fill,
                             stroke_color: None,
+                            locked: false,
                         };
                         self.apply_engine_command(
                             signex_engine::Command::PlaceSchDrawing { drawing },
@@ -540,6 +544,7 @@ impl Signex {
                                 width: pp_w,
                                 fill: pp_fill,
                                 stroke_color: None,
+                                locked: false,
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSchDrawing { drawing },
@@ -570,6 +575,7 @@ impl Signex {
                         width: pp_w,
                         fill: pp_fill,
                         stroke_color: None,
+                        locked: false,
                     };
                     self.apply_engine_command(
                         signex_engine::Command::PlaceSchDrawing { drawing },
@@ -610,6 +616,7 @@ impl Signex {
                     justify_h: signex_types::schematic::HAlign::Left,
                     justify_v: signex_types::schematic::VAlign::default(),
                     font_family: None,
+                    locked: false,
                 };
                 if self.apply_engine_command(
                     signex_engine::Command::PlaceTextNote { text_note: tn },
@@ -681,6 +688,7 @@ impl Signex {
                     justify: pp_justify_h,
                     justify_v: pp_justify_v,
                     font_family: None,
+                    locked: false,
                 };
                 if self.apply_engine_command(
                     signex_engine::Command::PlaceLabel { label },

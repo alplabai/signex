@@ -20,6 +20,7 @@ fn label(n: u128, family: Option<&str>) -> Label {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     }
 }
 
@@ -33,6 +34,7 @@ fn note(n: u128, family: Option<&str>) -> TextNote {
         font_family: family.map(str::to_string),
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
+        locked: false,
     }
 }
 

@@ -170,6 +170,7 @@ fn a_label_on_a_pin_tip_counts_as_a_connection() {
         justify: signex_types::schematic::HAlign::Left,
         justify_v: signex_types::schematic::VAlign::Bottom,
         font_family: None,
+        locked: false,
     });
     let mut engine = Engine::new(sheet).unwrap();
     let fresh = lib_symbol("new", vec![lib_pin("2", 2.54)]);

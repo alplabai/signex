@@ -120,6 +120,7 @@ mod tests {
             start: Point::new(start.0, start.1),
             end: Point::new(end.0, end.1),
             stroke_width: 0.0,
+            locked: false,
         });
         sheet
     }

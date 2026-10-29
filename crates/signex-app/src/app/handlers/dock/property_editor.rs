@@ -82,6 +82,22 @@ impl Signex {
                     );
                 }
             }
+            crate::panels::PanelMsg::ToggleItemLocked(item) => {
+                let locked = self
+                    .document_state
+                    .active_engine()
+                    .and_then(|engine| engine.item_locked(item));
+                if let Some(locked) = locked {
+                    self.apply_engine_command(
+                        signex_engine::Command::SetItemLocked {
+                            item: *item,
+                            locked: !locked,
+                        },
+                        true,
+                        true,
+                    );
+                }
+            }
             crate::panels::PanelMsg::ToggleSymbolDnp(uuid) => {
                 if let Some(dnp) = self.active_symbol(*uuid).map(|s| s.dnp) {
                     self.apply_engine_command(
