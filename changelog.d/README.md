@@ -31,7 +31,7 @@ heading:
 At release time `scripts/changelog_assemble.sh` folds every fragment into
 `CHANGELOG.md` and deletes it. Validate yours with
 `scripts/changelog_assemble.sh --check`. `README.md` and `.gitkeep` are not
-fragments. CI (`changelog · fragments`) warns on PRs into `trunk` that edit
+fragments. The `lint · repo gates` CI job runs the `--check` on every PR and warns on PRs into `trunk` that edit
 `CHANGELOG.md` directly (it will become an error after a transition window),
 except same-repo release PRs (head branch `chore/release-*` or `release/*`).
 

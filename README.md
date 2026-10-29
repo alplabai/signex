@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/latest"><img src="https://img.shields.io/github/v/release/alplabai/signex?label=version" alt="Latest release"></a>
+  <a href="https://github.com/alplabai/signex/releases"><img src="https://img.shields.io/github/v/release/alplabai/signex?include_prereleases&label=version" alt="Latest release"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.97%2B-orange.svg" alt="Rust"></a>
   <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-user%20guide-blueviolet.svg" alt="User guide"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -29,10 +29,16 @@
 ---
 
 Signex is open-source EDA tooling built in Rust with GPU-accelerated
-rendering and an Altium Designer-quality UI — schematic + PCB editor,
-3D viewer, simulation, plugin system. Native file formats (`.snxsch`,
-`.snxpcb`) are line-diffable in git and ~5× smaller than the equivalent
-JSON.
+rendering and an Altium Designer-quality UI. Today it is a **schematic
+editor** with symbol, footprint and component-library editors, ERC,
+annotation, and PDF / BOM / netlist export. The PCB editor, 3D viewer,
+simulation and plugin system are on the [roadmap](docs/ROADMAP.md), not in
+the v1.0 Community Preview. Native file formats (`.snxsch`, `.snxpcb`) are
+line-diffable in git and ~5× smaller than the equivalent JSON.
+
+**New here?** Install a package (see [Download](#download)), then follow the
+**[User Guide](docs/USER_GUIDE.md)**: it takes you from **File ▸ New Project**
+to a saved schematic and an exported PDF.
 
 **Migrating from KiCad?** The optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
 companion tool (GPL-3.0-or-later, distributed independently) converts
@@ -50,29 +56,27 @@ board.
 
 **Two editions from one codebase:**
 
-- **Signex Community** (Apache-2.0, free forever) — full schematic + PCB
-  editor, 3D viewer, simulation, plugin system
-- **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
-  copilot), real-time collaboration, and Signex 365 cloud PLM
+- **Signex Community** (Apache-2.0, free forever) — the schematic editor
+  today; the PCB editor follows in v2.x (see the [roadmap](docs/ROADMAP.md))
+- **Signex Pro** (subscription, planned for v3.0) — adds Signal AI
+  (Claude-powered design copilot), plugins, real-time collaboration, and
+  Signex 365 cloud PLM
 
-> **Status:** Early development — **v0.15.0 shipped** — the **Editor
-> Fixes** milestone: footprint- and symbol-editor correctness, an
-> order-independent netlist derivation that ERC and BOM read from, crash-safe
-> persistence, and a pinned Rust 1.97.0 toolchain with enforced rustfmt and
-> god-file gates. The v0.14 **Footprint Editor** carries forward: the
-> `.snxfpt` pad + parametric-sketch editor is enabled: place pads, draw a parametric sketch driven by an
-> Apache-clean Newton-LM constraint solver (19 constraint kinds), and
-> bake to pads / silk / courtyard. v0.14 completes the active-bar tooling
-> (Align / Distribute, Move / Drag, Fill / Region, Text Frame, the
-> selection-filter All toggle) and exposes the full constraint set. The
-> v0.13 **clean-room schematic renderer** and the **Symbol & Library**
-> surfaces (unified Active Bar, `.snxsym` TOML envelope, Library Browser,
-> Pick Symbol / Footprint) carry forward.
+> **Status:** Early development, heading for the first release candidate.
+> **v0.15.0** (2026-07-23) is the latest tagged release; **v1.0.0-rc.1**, the
+> first release candidate of the **v1.0.0 Community Preview** (schematic-only),
+> is next. `trunk` already carries work past v0.15.0 that no release contains
+> yet: a stock library with placeable parts, typed component values with a
+> range filter, ERC completeness rules with waivers and an ERC report,
+> cross-sheet net navigation, project-wide Find and Replace, and in-place
+> text editing. The version axis and the v1.0 exit criteria are in
+> [docs/ROADMAP.md](docs/ROADMAP.md). Release candidates are published as
+> GitHub **pre-releases**; see [Download](#download).
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
 
-**What works today (v0.1–v0.15):**
+**What works today (v0.1–v0.15, plus the work on `trunk` since):**
 
 - Open native Signex schematics (`.snxsch`, `.snxsym`, `.snxprj`); migrate
   legacy KiCad files via the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
@@ -92,13 +96,19 @@ board.
 - **Multi-window editing (v0.7)** — undock any tab into its own OS window
   and edit it independently; each window keeps its own pan/zoom, selection,
   and undo/redo history
-- **ERC validation (v0.7)** — 11 Altium-style rules including cross-sheet
-  hierarchy checks and net-label conflicts; Messages panel with click-to-zoom
+- **ERC validation (v0.7, extended since)** — 31 built-in rules (`RuleKind` in
+  `crates/signex-erc/src/lib.rs`) including cross-sheet hierarchy checks,
+  net-label conflicts, bus checks and completeness checks (part without
+  footprint / value / MPN, unannotated designator, single-pin net, net with no
+  driver, off-grid, ...); per-finding waivers that carry a reason and an
+  author; File ▸ Export ▸ ERC Report as `.txt`, `.csv`, `.json`, `.html` or
+  `.pdf` ([docs/ERC_RULES.md](docs/ERC_RULES.md),
+  [docs/ERC_REPORT.md](docs/ERC_REPORT.md))
 - **Annotation (v0.7)** — four modes, review-and-confirm dialog,
   lock/unlock per designator, project-wide consistency
-- F5 net-color palette, F8 ERC, F9 AutoFocus (dim unrelated objects)
-- Pin connection matrix (12×12, per-cell severity override)
-- Lasso + Inside/Outside/TouchingLine selection modes (Shift+S to cycle)
+- F5 net-color palette (Altium profile), F8 ERC, F9 AutoFocus (dim unrelated objects)
+- Pin connection matrix (6×6 axes folding the 14 pin directions, per-cell severity override)
+- Lasso, Inside, Outside, Touching Rectangle and Touching Line selection modes (Active Bar select menu)
 - Native `.snxsch` / `.snxpcb` formats — TOML envelope + TSV bulk blocks,
   line-diffable, ~5× smaller than JSON, single file per design
 - 60fps pan/zoom on schematics with 500+ components
@@ -206,18 +216,25 @@ signex/
 
 Before downloading, check the [hardware requirements](#hardware-requirements).
 The [latest release](https://github.com/alplabai/signex/releases/latest)
-provides these packages:
+provides these packages. Release candidates such as `v1.0.0-rc.1` are
+published as GitHub **pre-releases**, which the `releases/latest` link skips:
+open the [Releases page](https://github.com/alplabai/signex/releases) to get
+one. Every release, pre-release or not, carries the same set of packages.
 
 | Platform | Package | Architecture | Use |
 |---|---|---|---|
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
-| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu: `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer): `sudo apt install ./signex_<version>_<arch>.deb` |
 | Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
 | Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
 | All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
+
+The Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
+need **glibc 2.35 or newer**, so they run on Ubuntu 22.04, Debian 12 and later
+distributions. Check yours with `ldd --version`.
 
 ### First launch
 
@@ -283,6 +300,21 @@ broken layout — these GPUs are not supported.
 installs it automatically; this is also the MSRV (we build and support exactly
 this toolchain) — and a GPU supporting Vulkan, Metal, or DX12.
 
+On Linux, install the development packages CI uses (Debian and Ubuntu names;
+`mesa-vulkan-drivers` supplies a software Vulkan driver for machines without a
+GPU):
+
+```bash
+sudo apt-get install -y \
+  libxkbcommon-dev libwayland-dev libvulkan-dev \
+  libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+  mesa-vulkan-drivers
+```
+
+A binary you build yourself links against your own glibc. The glibc 2.35
+floor applies to the release packages, which are built on Ubuntu 22.04 for
+that reason (`scripts/check_glibc_ceiling.sh`, #1688).
+
 ```bash
 git clone https://github.com/alplabai/signex.git
 cd signex
@@ -310,7 +342,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor, Newton-LM solver (19 constraints), Align/Distribute/Move/Fill/Text tooling | v0.14 | Done |
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
 | Command Registry & Symbol Units | v0.16 | In progress |
-| **Community Preview** — schematic-only editor | **v1.0** | |
+| **Community Preview** — schematic-only editor | **v1.0** | Release candidate `v1.0.0-rc.1` next |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
 | **Community Release** — full schematic + PCB editor | **v2.2** | |
@@ -331,7 +363,9 @@ reviewed in pull requests.
 In-repo reference docs live under [`docs/`](docs/): the
 [command reference](docs/COMMANDS.md),
 [keyboard shortcut file format](docs/KEYBOARD_SHORTCUTS.md),
-[ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md), and
+[main menu bar](docs/MENU_BAR.md), [ERC rules](docs/ERC_RULES.md),
+[ROADMAP.md](docs/ROADMAP.md), [LICENSING.md](docs/LICENSING.md),
+[RELEASE_SIGNING.md](docs/RELEASE_SIGNING.md), and
 [REPOSITORY_AND_CODEBASE.md](docs/REPOSITORY_AND_CODEBASE.md). The
 [wiki](https://github.com/alplabai/signex/wiki) is no longer the primary guide.
 
@@ -349,7 +383,7 @@ help build a better design tool.
 - Fix an [open issue](https://github.com/alplabai/signex/issues)
 - Improve documentation
 
-**Quick start:**
+**Build and run** (Linux needs the packages listed under [Building](#building)):
 
 ```bash
 git clone https://github.com/alplabai/signex.git

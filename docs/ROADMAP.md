@@ -1,7 +1,7 @@
 # Signex — Roadmap
 
 > **Status:** Living document. Updated quarterly. Last reconciled against
-> reality 2026-10-27.
+> reality 2026-10-29.
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
 > **Owns:** the version axis. Every version number Signex ships is defined
@@ -46,12 +46,13 @@ Two of them placed different features at v1.4 and v1.5. A fourth axis
 Honesty first, because the previous revision of this document did not
 have this section and drifted six versions away from reality as a result.
 
-| Fact | State (2026-10-27) |
+| Fact | State (2026-10-29) |
 |------|--------------------|
 | Latest tagged release | **v0.15.0** (2026-07-23) |
+| Next tag | **v1.0.0-rc.1**, the first release candidate of v1.0.0. It publishes as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 until v1.0.0 |
 | `workspace.package.version` | **0.15.0** |
-| Latest CHANGELOG section | **0.15.0** — shipped 2026-07-23 |
-| Current work | v0.16.0 tail (menu labels from the command catalog, table write cost), then the v1.0.0 Community Preview milestone |
+| Latest CHANGELOG section | **0.15.0** — shipped 2026-07-23; everything since is in `[Unreleased]` and `changelog.d/` (folded in by release prep) |
+| Current work | v0.16.0 milestone: one open issue left, #271 (menu rows keyed off one label/shortcut table). v1.0.0 milestone: #859 (synchronous IO still in `update`), #661 (one document model epic), #322 (this user guide). Release prep for rc.1 follows |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
 **shipped**. The work since v0.9 — the Apache-clean native-format
@@ -222,6 +223,26 @@ macOS, Linux.
 - A non-developer beta tester can install Signex, create or open a project,
   edit it, and save it without consulting a developer
 - Issue tracker has zero `tier: p0` bugs
+
+**Status against the criteria (2026-10-29), for the rc.1 decision:**
+
+- *Must-do items:* `MASTER_PLAN.md` is in the private `signex-internal` repo
+  and is not checked here. The open v1.0.0 milestone issues are listed in §2.
+- *Fixture corpus:* **open question.** `crates/signex-types/tests/corpus/`
+  holds 43 `.snxsch`, 36 `.snxpcb` and 8 `.snxprj` files, each a small
+  single-feature case, plus the bundled sample project. Whether those count as
+  "50+ native projects" is a product decision; as whole projects there are
+  8 `.snxprj`.
+- *Non-developer beta tester:* **not yet exercised.** The install-to-PDF
+  walkthrough in `docs/USER_GUIDE.md` has not been followed end to end by a
+  person with a fresh install. The release packages are unsigned
+  (`docs/RELEASE_SIGNING.md`), so Windows and macOS first-launch warnings apply.
+- *Zero `tier: p0` bugs:* no open issue carries both `tier: p0` and
+  `type: bug`. Open `tier: p0` issues exist that are not bugs (#859, #322,
+  #271, #278, #115).
+
+A release candidate is a tag of the form `v1.0.0-rc.N`; `release.yml` builds
+the same packages as a final release and publishes them as a pre-release.
 
 ### v1.x — Schematic Refinement
 
