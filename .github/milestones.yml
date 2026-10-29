@@ -31,7 +31,7 @@
   description: "iced shell, panels, themes, status bar, dock system."
   state: closed
 - title: "v0.2.0 — Parser"
-  description: "S-expression parse + write, domain types. (KiCad I/O; relocated to the signex-kicad-import companion at v0.9.0.)"
+  description: "S-expression parse + write, domain types. (External-format I/O; relocated to the import companion at v0.9.0.)"
   state: closed
 - title: "v0.3.0 — Canvas"
   description: "wgpu canvas, pan/zoom/grid, coordinate system."
@@ -52,7 +52,7 @@
   description: "PDF / BOM / netlist export, sheet templates, multi-project workspaces."
   state: closed
 - title: "v0.9.0 — Apache-Clean Cutover"
-  description: "Issue #62: native .snxsch/.snxpcb (TOML+TSV) become canonical; KiCad I/O moves to the GPL-3.0 signex-kicad-import companion. Shipped 2026-04-29."
+  description: "Issue #62: native .snxsch/.snxpcb (TOML+TSV) become canonical; external-format I/O moves to the GPL-3.0 import companion. Shipped 2026-04-29."
   state: closed
   aliases: ["v0.9.0 — Library & Polish"]
 - title: "v0.10.0 — Library Browser"

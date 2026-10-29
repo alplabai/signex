@@ -23,6 +23,20 @@ impl Signex {
                 self.interaction_state.context_menu = None;
                 Some(task)
             }
+            MenuMessage::OpenProjectOptions => {
+                let active = self.document_state.active_document_project().map(|p| p.id);
+                let index = active
+                    .and_then(|id| self.document_state.projects.iter().position(|p| p.id == id));
+                match index {
+                    Some(index) => self.open_project_tab(index),
+                    // Reported in Messages instead of a silent no-op.
+                    None => crate::diagnostics::log_warning(
+                        "Project Options: no project is open for the active document",
+                    ),
+                }
+                self.interaction_state.context_menu = None;
+                Some(Task::none())
+            }
             MenuMessage::OpenErcPanel => Some(self.show_panel(crate::panels::PanelKind::Erc)),
             MenuMessage::OpenMessagesPanel => {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))

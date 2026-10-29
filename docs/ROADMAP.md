@@ -50,8 +50,8 @@ have this section and drifted six versions away from reality as a result.
 |------|--------------------|
 | Latest tagged release | **v0.15.0** (2026-07-23) |
 | Next tag | **v1.0.0-rc.1**, the first release candidate of v1.0.0. It publishes as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 until v1.0.0 |
-| `workspace.package.version` | **0.15.0** |
-| Latest CHANGELOG section | **0.15.0** — shipped 2026-07-23; everything since is in `[Unreleased]` and `changelog.d/` (folded in by release prep) |
+| `workspace.package.version` | **1.0.0-rc.1** |
+| Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
 | Current work | v0.16.0 milestone: one open issue left, #271 (menu rows keyed off one label/shortcut table). v1.0.0 milestone: #859 (synchronous IO still in `update`), #661 (one document model epic), #322 (this user guide). Release prep for rc.1 follows |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
@@ -161,7 +161,7 @@ plan. Detail lives in `CHANGELOG.md`.
 | v0.1.0 – v0.6.4 | ✅ | Shell, canvas, schematic viewer, schematic editor, installers |
 | v0.7.x | ✅ | ERC (11 rules), annotation, pin matrix, multi-window |
 | v0.8.0 | ✅ | PDF / BOM / netlist export, multi-project workspaces |
-| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, KiCad I/O → companion repo |
+| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, external-format I/O → companion repo |
 | v0.10.0 – v0.11.0 | ✅ | Library browser, `.snxlib` classes, master-detail browser |
 | v0.12.0 | ⚠️ | Cleanroom renderer rewrite — merged, **never released** (see §2) |
 | v0.13.0 | ✅ | Sketch mode α — Newton-LM constraint solver, footprint pad-bake |
@@ -509,7 +509,7 @@ composition workspace separate from the schematic editor. See
 Each foreign-format importer is a **separate companion repo / binary**,
 licensed appropriately for its source-format constraints and distributed
 independently of the main workspace — the same architectural pattern as
-`signex-kicad-import` shipped at v0.9.0. One-way conversion to native
+the [import companion repository](https://github.com/alplabai/signex-kicad-import) shipped at v0.9.0. One-way conversion to native
 `.snx*`, no compile-time dependency from the main repo.
 
 | Version | Scope |

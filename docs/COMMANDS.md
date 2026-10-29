@@ -140,9 +140,11 @@ shrink.
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
+| `change_component` | Change the selected part's component | edit | — | — |
 | `clear_all_net_colors` | Clear all net colors | view | — | — |
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
+| `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |
 | `drag` | Drag | modify | — | — |
@@ -173,8 +175,10 @@ shrink.
 | `navigate_up_hierarchy` | Navigate up hierarchy | navigation | — | `Alt+Up` |
 | `next_highlighted_net_item` | Next item on highlighted net | select | — | `Tab` |
 | `next_sheet` | Next sheet | navigation | — | `PageDown` |
+| `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
+| `open_project_options` | Open Project Options for the active project | file | — | — |
 | `place_blanket` | Place blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | — | — |
@@ -219,6 +223,7 @@ shrink.
 | `send_to_back_of` | Send to back of | modify | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
+| `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
 

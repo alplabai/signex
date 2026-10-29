@@ -40,9 +40,9 @@ line-diffable in git and ~5× smaller than the equivalent JSON.
 **[User Guide](docs/USER_GUIDE.md)**: it takes you from **File ▸ New Project**
 to a saved schematic and an exported PDF.
 
-**Migrating from KiCad?** The optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-companion tool (GPL-3.0-or-later, distributed independently) converts
-`.kicad_sch` / `.kicad_pcb` / `.kicad_pro` files to Signex's native
+**Migrating from a GPL-based EDA tool?** The optional [import companion repository](https://github.com/alplabai/signex-kicad-import)
+(GPL-3.0-or-later, distributed independently) converts
+project files from GPL-based EDA tools to Signex's native
 formats one-way. Run it once against your project; open the resulting
 `.snxprj` in Signex.
 
@@ -79,8 +79,7 @@ board.
 **What works today (v0.1–v0.15, plus the work on `trunk` since):**
 
 - Open native Signex schematics (`.snxsch`, `.snxsym`, `.snxprj`); migrate
-  legacy KiCad files via the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-  companion tool
+  legacy files from GPL-based EDA tools via the [import companion repository](https://github.com/alplabai/signex-kicad-import)
 - Full schematic editing: select, move, wire (W), bus (B), label (L),
   component placement (P), delete, rotate (Space), mirror (X/Y)
 - Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
@@ -124,7 +123,7 @@ board.
 - **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
   inactive fill, drag accent from theme
 - **Apache-clean native formats (v0.9)** — `.snxsch` / `.snxpcb` are the
-  canonical format; KiCad I/O moved to the optional companion tool
+  canonical format; import of GPL-based EDA tool formats moved to the optional companion tool
 - **Component library subsystem (v0.10–v0.11)** — Library Browser tab, DBLib
   row model, SCH Library editor, Component Preview, Pick Symbol/Footprint +
   auto-mount, DigiKey / Mouser / LCSC / JLCPCB distributor adapters,
@@ -205,7 +204,7 @@ signex/
 
 **Design principles:**
 
-- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical formats (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON; the `.snxprj` project file is the one JSON exception, see [docs/architecture/snxprj-format.md](docs/architecture/snxprj-format.md)). One-way KiCad → Signex import is an optional, independently-distributed companion tool.
+- **Native `.snx*` formats first.** `.snxsch` / `.snxpcb` / `.snxprj` are the canonical formats (TOML envelope + TSV bulk blocks, line-diffable, ~5× smaller than JSON; the `.snxprj` project file is the one JSON exception, see [docs/architecture/snxprj-format.md](docs/architecture/snxprj-format.md)). One-way import from GPL-based EDA tools is an optional, independently-distributed companion tool.
 - **Elm architecture (MVU).** iced's `state → view → Message → update` cycle; `view` is pure, `update` is the only mutation site and never blocks — all IO returns as a `Task`. No process-global mutable state.
 - **Domain logic in domain crates.** Types and engines below `signex-app` carry zero `iced`/`wgpu` deps (Cargo-enforced); connectivity is derived once in `signex-net` and read everywhere else, never re-derived.
 - **Multi-window by default.** Built on `iced::daemon`; every undocked tab gets its own engine + canvas keyed by window id, so two schematics can be edited in parallel without cross-talk.
@@ -215,24 +214,25 @@ signex/
 ## Download
 
 Before downloading, check the [hardware requirements](#hardware-requirements).
-The [latest release](https://github.com/alplabai/signex/releases/latest)
-provides these packages. Release candidates such as `v1.0.0-rc.1` are
+These packages are published for every release from `v1.0.0-rc.1` on. Release candidates such as `v1.0.0-rc.1` are
 published as GitHub **pre-releases**, which the `releases/latest` link skips:
 open the [Releases page](https://github.com/alplabai/signex/releases) to get
-one. Every release, pre-release or not, carries the same set of packages.
+one. The latest stable release, `v0.15.0`, carries a smaller set (x86_64 Linux
+packages, the aarch64 macOS `.dmg`, the Windows installers and zips) and needs
+glibc 2.39.
 
 | Platform | Package | Architecture | Use |
 |---|---|---|---|
 | Windows | `signex-setup-<arch>-<version>.exe` | x86_64, ARM64 (`aarch64`) | Run for a guided installation |
 | Windows | `signex-windows-<arch>-<version>.zip` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | macOS | `signex-macos-universal-<version>.dmg` | Apple silicon and Intel | Open and drag Signex to Applications |
-| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer): `sudo apt install ./signex_<version>_<arch>.deb` |
+| Linux | `signex_<version>_<arch>.deb` | x86_64 (`amd64`), ARM64 (`arm64`) | Debian or Ubuntu (glibc 2.35 or newer from `v1.0.0-rc.1` on): `sudo apt install ./signex_<version>_<arch>.deb` |
 | Linux | `Signex-<version>-<arch>.AppImage` | x86_64, ARM64 (`aarch64`) | Most distributions: make executable with `chmod +x`, then run |
 | Linux | `signex-linux-<arch>-<version>.tar.gz` | x86_64, ARM64 (`aarch64`) | Extract and run without installing |
 | All | `signex-<version>.cdx.json` | n/a | CycloneDX SBOM: the `signex` binary's dependencies for every platform (a superset of any one build), with version and licence |
 | All | `SHA256SUMS.txt` | n/a | SHA-256 checksums of every file above |
 
-The Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
+From `v1.0.0-rc.1` on, the Linux packages (`.deb`, AppImage, tarball) are built on Ubuntu 22.04 and
 need **glibc 2.35 or newer**, so they run on Ubuntu 22.04, Debian 12 and later
 distributions. Check yours with `ldd --version`.
 
@@ -255,8 +255,8 @@ land.
 
 ### Verify a download
 
-Every release includes
-[`SHA256SUMS.txt`](https://github.com/alplabai/signex/releases/latest/download/SHA256SUMS.txt).
+Every release includes a `SHA256SUMS.txt`: take the one attached to the release
+you downloaded, from the [Releases page](https://github.com/alplabai/signex/releases).
 Download it next to the package you chose. The checksum file lists every
 release artifact, so the commands below select the one file you downloaded.
 
@@ -328,14 +328,14 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Milestone | Version | Status |
 |---|---|---|
 | Scaffold — Iced shell, panels, themes, dock system | v0.1 | Done |
-| Parser — KiCad format read/write, domain types | v0.2 | Done |
+| Parser — external format read/write, domain types | v0.2 | Done |
 | Canvas — wgpu pan/zoom/grid, Altium-style camera | v0.3 | Done |
 | Schematic Viewer — render all elements, multi-sheet nav | v0.4 | Done |
 | Schematic Editor — select, move, wire, undo/redo, save | v0.5 | Done |
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
 | Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
-| Native file formats — `.snxsch` / `.snxpcb` TOML+TSV; KiCad I/O via signex-kicad-import companion | v0.9 | Done |
+| Native file formats — `.snxsch` / `.snxpcb` TOML+TSV; external-format I/O via the import companion | v0.9 | Done |
 | Library Browser tab — read-only `.snxlib` table | v0.10 | Done |
 | Library & Polish — full DBLib model, SCH Library editor, Component Preview, picker + auto-mount, distributor adapters | v0.11 | Done |
 | Symbol & Library — clean-room schematic renderer, unified Active Bar in symbol editor, `.snxsym` TOML envelope | v0.13 | Done |
@@ -402,9 +402,9 @@ The main repository contains no GPL-derived code; Apache consumers (anyone
 embedding or linking against Signex) get a clean Apache codebase with no GPL
 aggregation in their build closure.
 
-KiCad migration is provided via the optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-companion tool, which is **GPL-3.0-or-later** because it implements KiCad's
-file format with structure derived from KiCad's GPL-3.0 source. The two
+Migration from GPL-based EDA tools is provided via the optional [import companion repository](https://github.com/alplabai/signex-kicad-import),
+which is **GPL-3.0-or-later** because it implements those tools'
+file formats with structure derived from their GPL-3.0 source. The two
 projects are distributed independently. See [docs/LICENSING.md](docs/LICENSING.md)
 for the full rationale and the audit trail behind the two-repo split.
 

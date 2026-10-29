@@ -90,6 +90,11 @@
     "category": "view"
   },
   {
+    "id": "change_component",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "clear_all_net_colors",
     "group": "Schematic",
     "category": "view"
@@ -118,6 +123,11 @@
     "id": "copy_attributes_or_add_vertex",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "create_sheet_from_sheet_symbol",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "cut",
@@ -470,6 +480,11 @@
     "category": "navigation"
   },
   {
+    "id": "open_child_sheet",
+    "group": "Schematic",
+    "category": "navigation"
+  },
+  {
     "id": "open_command_palette",
     "group": "General",
     "category": "commands"
@@ -508,6 +523,11 @@
     "id": "open_preferences",
     "group": "General",
     "category": "preferences"
+  },
+  {
+    "id": "open_project_options",
+    "group": "Schematic",
+    "category": "file"
   },
   {
     "id": "open_schematic_preferences",
@@ -878,6 +898,11 @@
     "id": "switch_segment_posture",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "sync_sheet_pins",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "toggle_auto_focus",

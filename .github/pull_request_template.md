@@ -20,8 +20,8 @@ from this source. Full list:
 [CONTRIBUTING.md](../CONTRIBUTING.md#license-compliance-for-contributions).
 Unsure about a source? [Ask in an issue](https://github.com/alplabai/signex/issues/new) —
 that's cheaper than finding out at review. If it *is* license-gated, add a line
-`License-gated sources: yes` and CI routes it to the GPL-3.0 companion repo
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import).
+`License-gated sources: yes` and CI routes it to the GPL-3.0
+[import companion repository](https://github.com/alplabai/signex-kicad-import).
 
 ## Labels
 

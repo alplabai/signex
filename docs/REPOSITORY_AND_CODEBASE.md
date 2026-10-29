@@ -53,9 +53,9 @@ This repository is responsible for:
 - Reusable widgets used by the editor UI
 - Product documentation and planning documents
 
-KiCad import is **not** part of this repository. It lives in the separate
-GPL-3.0 companion repo `signex-kicad-import`, which provides one-way
-`KiCad → Signex` conversion only. See the v0.9 Apache-clean cutover and
+Import from GPL-based EDA tools is **not** part of this repository. It lives in the separate
+GPL-3.0 import companion repository, which provides one-way
+conversion to Signex only. See the v0.9 Apache-clean cutover and
 issue #62 for the rationale, plus `docs/audit/cleanroom-rewrite-2026-05-01.md`
 for the cleanroom-rewrite audit trail.
 
@@ -138,10 +138,10 @@ signex/
 ```
 
 > **v0.9 cutover note:** earlier revisions of this document listed
-> `crates/kicad-parser/` and `crates/kicad-writer/` here. Both crates were
+> two external-format parser and writer crates here. Both crates were
 > removed from the main workspace in v0.9 (Apr 2026) as part of the
-> Apache-clean cutover for issue #62, and one-way KiCad → Signex import
-> now lives in the separate GPL-3.0 companion repo `signex-kicad-import`.
+> Apache-clean cutover for issue #62, and one-way import from GPL-based EDA tools
+> now lives in the separate GPL-3.0 import companion repository.
 
 This is the correct direction for the current phase of the project: small,
 focused crates with clear boundaries.
@@ -236,12 +236,12 @@ Responsibilities:
 - preserving unknown/forward-compatible nodes at the parse boundary
 
 > **Pre-v0.9 history:** earlier revisions of this document listed
-> `kicad-parser` and `kicad-writer` as Sections 5.5 and 5.6. Both crates
+> an external-format parser and writer as Sections 5.5 and 5.6. Both crates
 > were removed from this workspace in v0.9 as part of the Apache-clean
-> cutover for issue #62. KiCad I/O is now optional and lives in the
-> separate GPL-3.0 companion repo `signex-kicad-import` (one-way
-> KiCad → Signex import only). License Guard CI enforces that
-> `crates/` contains zero KiCad imports, dependencies, or shaped symbols.
+> cutover for issue #62. That I/O is now optional and lives in the
+> separate GPL-3.0 import companion repository (one-way
+> import only). License Guard CI enforces that
+> `crates/` contains zero imports, dependencies, or shaped symbols from GPL-based EDA tools.
 
 ---
 
@@ -302,7 +302,7 @@ The most likely additions are:
 - `signex-model` — semantic model layer
 - `signex-document` — raw native `.snx*` document representation with node
   identity and preservation of unknown constructs (would be extracted from
-  `signex-types/src/format`; pre-v0.9 plan named this `kicad-document`)
+  `signex-types/src/format`)
 - `signex-erc` — schematic rule check engine *(landed in v0.7)*
 - `signex-sketch` — 2D parametric sketch mode for footprint editor + PCB
   outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
@@ -344,11 +344,11 @@ writer, domain types, rendering assumptions, and editing behavior. Repository
 layout should continue to reflect that shared constraint.
 
 > **Pre-v0.9 framing:** earlier revisions of this section read "Preserve
-> KiCad compatibility as a repository-wide concern". After the v0.9
+> compatibility with a GPL-based EDA tool as a repository-wide concern". After the v0.9
 > Apache-clean cutover (issue #62), Signex's canonical formats are the
-> native `.snx*` family; KiCad I/O is optional and one-way via
-> `signex-kicad-import`, so the repo-wide constraint is now native
-> round-trip stability rather than KiCad compatibility.
+> native `.snx*` family; external-format I/O is optional and one-way via
+> the import companion repository, so the repo-wide constraint is now native
+> round-trip stability rather than external-tool compatibility.
 
 ---
 
@@ -393,5 +393,5 @@ change rather than by silent drift.
 This repository is the shared engineering home of Signex: an Apache-clean
 EDA editor core with native `.snx*` formats and a clean path to both an
 Apache-2.0 Community edition and a commercial Pro edition from the same
-codebase. Optional one-way KiCad import lives in the separate GPL-3.0
-companion repo `signex-kicad-import`.
+codebase. Optional one-way import from GPL-based EDA tools lives in the separate GPL-3.0
+import companion repository.

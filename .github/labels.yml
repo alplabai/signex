@@ -84,7 +84,7 @@
   description: "Bill of materials"
 - name: "area: output"
   color: "0e8a16"
-  description: "Exporters — PDF, netlist, non-KiCad formats"
+  description: "Exporters — PDF, netlist, native and neutral formats"
 - name: "area: rendering"
   color: "0e8a16"
   description: "Renderer + GPU (signex-renderer, signex-gfx)"
@@ -217,8 +217,8 @@
 #   pcb           → area: pcb
 #   rendering     → area: rendering   (in use: #199, #171, #169, #166)
 #   parser        → area: types
-#   kicad-compat  → obsolete since #62 moved KiCad I/O to the
-#                   signex-kicad-import companion repo; delete outright
+#   kicad-compat  → obsolete since #62 moved external-format I/O to the
+#                   import companion repo; delete outright
 #
 # Per label, to move issues across and remove the old one:
 #

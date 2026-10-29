@@ -90,6 +90,10 @@ where
     pub on_press: Option<M>,
     /// Hover text for a row that cannot be used yet (e.g. "Planned").
     pub tooltip: Option<String>,
+    /// Id of the command this row runs, when it runs one. The widget never
+    /// reads it; menu builders set it so a test can walk the rows and check
+    /// each command row's label and shortcut against the command catalog.
+    pub command_id: Option<&'static str>,
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
@@ -103,7 +107,14 @@ impl<M: 'static + Clone> DropdownItem<M> {
             disabled: false,
             on_press: Some(on_press),
             tooltip: None,
+            command_id: None,
         }
+    }
+
+    /// Builder: record the id of the command this row runs.
+    pub fn command(mut self, id: &'static str) -> Self {
+        self.command_id = Some(id);
+        self
     }
 
     /// Builder: attach a hover tooltip (shown on disabled rows too).
@@ -211,6 +222,7 @@ where
                     disabled,
                     on_press,
                     tooltip: tooltip_text,
+                    command_id: _,
                 } = item;
                 let row_text_c = if disabled { muted } else { primary };
                 // Match the schematic dropdown's vocabulary: 20×20
