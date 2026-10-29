@@ -140,3 +140,23 @@ fn a_lock_entry_for_a_deleted_object_is_not_written_back() {
 
     assert!(!save(&back).contains(&gone.to_string()));
 }
+
+/// A value other than `true` is not a lock this build wrote: it stays a
+/// foreign cell and is written back as it was.
+#[test]
+fn a_lock_cell_that_is_not_true_is_kept_as_a_foreign_column() {
+    let text = save(&sheet(true));
+    let odd = text.replace(
+        "true
+", "TRUE
+",
+    );
+    assert_ne!(odd, text, "the fixture has a lock cell to change");
+
+    let back = load(&odd);
+    assert!(back.wires.iter().all(|w| !w.locked));
+    assert!(back.labels.iter().all(|l| !l.locked));
+    let wire = &back.wires[1];
+    assert_eq!(wire.unknown_columns.get("locked"), Some("TRUE"));
+    assert_eq!(save(&back), odd, "the cell comes back as it was read");
+}

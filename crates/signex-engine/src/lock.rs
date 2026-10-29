@@ -252,11 +252,13 @@ impl Engine {
             .collect()
     }
 
-    /// Whether `item` is a symbol or sheet symbol with a pin where a locked wire ends, so the
+    /// Whether `item` is a symbol, sheet symbol or sheet pin at a pin where a locked wire ends, so the
     /// rubber band would drag that wire.
     fn held_by_locked_wire(&self, item: &SelectedItem, ends: &HashSet<Key>) -> bool {
-        matches!(item.kind, SelectedKind::Symbol | SelectedKind::ChildSheet)
-            && !ends.is_empty()
+        matches!(
+            item.kind,
+            SelectedKind::Symbol | SelectedKind::ChildSheet | SelectedKind::SheetPin
+        ) && !ends.is_empty()
             && crate::moved_pin_tips(&self.document, std::slice::from_ref(item))
                 .iter()
                 .any(|tip| ends.contains(&tip.old_key()))

@@ -229,16 +229,12 @@ fn draw_line_bucket<F>(
     F: Fn([f32; 2]) -> Point + Copy,
 {
     for line in lines {
-        let p0 = world_to_screen(line.p0);
-        let p1 = world_to_screen(line.p1);
-        let width = options.stroke_px(line.width);
+        let (p0, p1, width) = line_geometry(line, world_to_screen, options);
         let color = color_from_rgba(line.color);
 
         if let Some(pattern) = line.pattern_px() {
             draw_dashed_line(frame, p0, p1, width, color, pattern);
         } else {
-            // Whole-pixel hairlines, so thickness ignores orientation (#1654).
-            let (p0, p1, width) = crate::scene_line_snap::snap_hairline(p0, p1, width);
             let path = canvas::Path::line(p0, p1);
             frame.stroke(
                 &path,
@@ -249,6 +245,22 @@ fn draw_line_bucket<F>(
             );
         }
     }
+}
+
+/// Screen endpoints and stroke width of `line`, solid or dashed, with an
+/// axis-aligned hairline snapped to whole pixels so its thickness ignores
+/// orientation (#1654; see `scene_line_snap`).
+fn line_geometry<F>(
+    line: &LineSegment,
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) -> (Point, Point, f32)
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    let p0 = world_to_screen(line.p0);
+    let p1 = world_to_screen(line.p1);
+    crate::scene_line_snap::snap_hairline(p0, p1, options.stroke_px(line.width))
 }
 
 fn draw_circle_bucket<F>(
@@ -926,5 +938,58 @@ mod min_stroke_tests {
         assert_eq!(min_stroke_px(0.0), MIN_STROKE_PX);
         assert_eq!(min_stroke_px(0.2), 0.5);
         assert_eq!(min_stroke_px(2.5), 2.5);
+    }
+}
+
+#[cfg(test)]
+mod line_geometry_tests {
+    use super::*;
+
+    fn options() -> SceneDrawOptions {
+        SceneDrawOptions {
+            scale_px_per_mm: 12.8,
+            min_stroke_px: 0.6,
+            text_min_px: 1.0,
+            text_max_px: 100.0,
+        }
+    }
+
+    fn line(p0: [f32; 2], p1: [f32; 2], style: u32) -> LineSegment {
+        LineSegment {
+            p0,
+            p1,
+            width: 0.15,
+            color: [0.0, 0.0, 0.5, 1.0],
+            style,
+            _pad: 0,
+        }
+    }
+
+    /// The replay draws what `line_geometry` returns: a horizontal and a
+    /// vertical 0.15 mm wire come out the same whole-pixel width, solid or
+    /// dashed. Without the snap they are 1.92 px each and fall on 1 or 2 rows.
+    #[test]
+    fn a_horizontal_and_a_vertical_wire_get_the_same_whole_pixel_width() {
+        let to_screen = |p: [f32; 2]| Point::new(p[0] * 12.8 + 0.37, p[1] * 12.8 + 0.61);
+        for style in [0, LineSegment::STYLE_DASHED] {
+            let (h0, h1, hw) =
+                line_geometry(&line([1.0, 2.0], [9.0, 2.0], style), to_screen, options());
+            let (v0, v1, vw) =
+                line_geometry(&line([3.0, 1.0], [3.0, 9.0], style), to_screen, options());
+            assert_eq!(hw, 2.0, "style {style}");
+            assert_eq!(vw, 2.0, "style {style}");
+            assert_eq!(h0.y, h1.y);
+            assert_eq!(v0.x, v1.x);
+            assert_eq!(h0.y.fract(), 0.0, "an even width sits on a pixel edge");
+            assert_eq!(v0.x.fract(), 0.0);
+        }
+    }
+
+    #[test]
+    fn a_diagonal_keeps_its_exact_geometry() {
+        let to_screen = |p: [f32; 2]| Point::new(p[0] * 12.8, p[1] * 12.8);
+        let (p0, p1, w) = line_geometry(&line([0.0, 0.0], [5.0, 3.0], 0), to_screen, options());
+        assert_eq!((p0, p1), (Point::new(0.0, 0.0), Point::new(64.0, 38.4)));
+        assert!((w - 1.92).abs() < 1e-4);
     }
 }

@@ -412,3 +412,49 @@ fn the_selection_details_of_every_lockable_kind_carry_a_locked_row() {
         assert_eq!(row(free).as_deref(), Some("No"), "{:?}", free.kind);
     }
 }
+
+#[test]
+fn a_sheet_pin_whose_wire_is_locked_does_not_drag_it() {
+    let (mut engine, _, pin_id) = crate::rubber_band_tests::child_fixture();
+    let lock = SelectedItem::new(engine.document().wires[0].uuid, SelectedKind::Wire);
+    engine
+        .execute(Command::SetItemLocked {
+            item: lock,
+            locked: true,
+        })
+        .unwrap();
+    let wire_before = engine.document().wires[0].clone();
+    let slide = Command::MoveSelection {
+        items: vec![SelectedItem::new(pin_id, SelectedKind::SheetPin)],
+        dx: 0.0,
+        dy: 8.0,
+        keep_wires: true,
+    };
+    assert!(matches!(
+        engine.execute(slide.clone()),
+        Err(EngineError::ItemLocked { .. })
+    ));
+    let (pruned, skipped) = engine.without_locked(slide);
+    assert!(pruned.is_none());
+    assert_eq!(skipped.len(), 1);
+    assert_eq!(engine.document().wires, vec![wire_before]);
+}
+
+/// A leg the rubber band adds is a new wire: it never inherits a lock.
+#[test]
+fn a_rubber_band_leg_is_not_born_locked() {
+    let (engine, _, pin_id) = crate::rubber_band_tests::child_fixture();
+    let item = SelectedItem::new(pin_id, SelectedKind::SheetPin);
+    let tips = moved_pin_tips(engine.document(), &[item]);
+    let mut doc = engine.document().clone();
+    doc.wires[0].locked = true;
+    doc.child_sheets[0].pins[0].position.y += 8.0;
+    let follow = follow_moved_pins(&mut doc, &tips, &[item], &Policy::default());
+    assert!(!follow.touched.is_empty(), "the wire followed");
+    for touched in &follow.touched {
+        let wire = doc.wires.iter().find(|w| w.uuid == touched.uuid);
+        if let Some(wire) = wire.filter(|w| w.uuid != engine.document().wires[0].uuid) {
+            assert!(!wire.locked, "a new leg was born locked");
+        }
+    }
+}

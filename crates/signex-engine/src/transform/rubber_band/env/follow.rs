@@ -233,6 +233,7 @@ impl Env {
         for (a, b) in segs {
             let mut wire = self.wires[template].clone();
             wire.uuid = Uuid::new_v4();
+            wire.locked = false;
             wire.start = a;
             wire.end = b;
             out.touched

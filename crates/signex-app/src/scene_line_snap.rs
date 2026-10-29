@@ -1,10 +1,18 @@
 //! Pixel snapping for axis-aligned hairlines in the CPU scene replay.
 //!
+//! Snapping is to *logical* pixels, the unit the canvas frame is drawn in. At
+//! a fractional display scale (125 %, 150 %) a logical pixel is not a whole
+//! number of device pixels, so a snapped line can still land on a different
+//! number of device rows depending on position; the orientation-dependence
+//! this fixes is the integer-scale case. Dashed strokes are snapped the same
+//! way (the dash pattern runs along the line, so only the perpendicular
+//! position and the width move).
+//!
 //! The canvas rasteriser has no anti-aliasing, so a 1.9 px stroke covers one
 //! or two pixel rows depending on where its centre falls. Two segments of the
 //! same wire, one horizontal and one vertical, then differ in thickness (1 px
 //! vs 2 px) and the thinner one reads as a different colour (#1654). Snapping
-//! the width to whole pixels and the centre line to the pixel grid makes the
+//! the width to whole logical pixels and the centre line to the pixel grid makes the
 //! thickness independent of orientation and position.
 
 use iced::Point;
@@ -16,7 +24,7 @@ const SNAP_BELOW_PX: f32 = 4.0;
 /// Endpoints below this distance apart are treated as the same coordinate.
 const AXIS_EPS: f32 = 1e-3;
 
-/// A solid axis-aligned segment snapped to whole device pixels, or the input
+/// An axis-aligned segment snapped to whole logical pixels, or the input
 /// unchanged when it is diagonal or already wide.
 #[must_use]
 pub(crate) fn snap_hairline(p0: Point, p1: Point, width: f32) -> (Point, Point, f32) {

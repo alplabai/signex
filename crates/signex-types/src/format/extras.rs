@@ -314,7 +314,8 @@ pub(in crate::format) struct SheetExtras {
     /// objects, not in them, for the reason [`Self::note_font_families`] is:
     /// a build that predates the lock drops unknown keys nested in the typed
     /// arrays but keeps unknown keys of this table. Omitted when empty so a
-    /// sheet with nothing locked re-saves byte-identical.
+    /// sheet with nothing locked re-saves byte-identical. Format:
+    /// `docs/architecture/snxsch-object-lock.md`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(in crate::format) locked_objects: Vec<String>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a

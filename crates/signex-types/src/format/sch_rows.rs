@@ -396,6 +396,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
 /// Like [`LABEL_FONT_FAMILY_COLUMN`] it is not a known column: it rides the
 /// foreign-column path, so a block with no locked row has no such header and
 /// re-saves byte-identical, and a build that predates the lock keeps it.
+/// Format: `docs/architecture/snxsch-object-lock.md`.
 pub(in crate::format) const LOCKED_COLUMN: &str = "locked";
 
 /// The cell a locked row writes; every other row of the block writes empty.
@@ -409,12 +410,21 @@ fn with_locked_cell(mut columns: UnknownColumns, locked: bool) -> UnknownColumns
     columns
 }
 
-/// Take the lock cell out of a row's foreign columns. Only `true` locks: an
-/// empty cell is a row of the block that is not locked.
+/// Take the lock cell out of a row's foreign columns. `true` locks and an
+/// empty cell is a row of the block that is not locked; any other value is
+/// not ours to read, so it stays a foreign cell and round-trips untouched.
 fn take_locked_cell(columns: &mut UnknownColumns) -> bool {
-    columns
-        .take(LOCKED_COLUMN)
-        .is_some_and(|cell| cell == LOCKED_CELL)
+    match columns.get(LOCKED_COLUMN) {
+        Some(LOCKED_CELL) => {
+            columns.take(LOCKED_COLUMN);
+            true
+        }
+        Some("") => {
+            columns.take(LOCKED_COLUMN);
+            false
+        }
+        _ => false,
+    }
 }
 
 pub(in crate::format) fn wire_to_row(w: &Wire) -> Result<SchWireRow, NonFiniteField> {

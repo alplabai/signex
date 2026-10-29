@@ -496,3 +496,87 @@ fn a_fold_leaves_a_junctionless_t_at_the_far_end_alone() {
     assert!(engine.document().junctions.is_empty(), "no dot was minted");
     assert_eq!(net_shape(engine.document()), net_shape(&unmerged));
 }
+
+fn with_foreign_style(mut wire: Wire, value: &str) -> Wire {
+    wire.unknown_columns =
+        serde_json::from_value(serde_json::json!([["future_style", value]])).unwrap();
+    wire
+}
+
+/// Foreign columns belong to one wire; folding would silently drop one set.
+#[test]
+fn wires_with_different_foreign_columns_are_not_folded() {
+    let mut sheet = two_resistors();
+    add_wire(&mut sheet, (35.0, 50.0), (45.0, 50.0));
+    sheet.wires[0] = with_foreign_style(sheet.wires[0].clone(), "solid");
+    let mut engine = Engine::new(sheet).expect("engine");
+    let dashed = with_foreign_style(new_wire((45.0, 50.0), (55.0, 50.0)), "dashed");
+    place(&mut engine, dashed.clone());
+    assert_eq!(engine.document().wires.len(), 2);
+    assert_eq!(
+        engine.document().wires[1].unknown_columns,
+        dashed.unknown_columns
+    );
+}
+
+#[test]
+fn wires_with_equal_foreign_columns_still_fold() {
+    let mut sheet = two_resistors();
+    add_wire(&mut sheet, (35.0, 50.0), (45.0, 50.0));
+    sheet.wires[0] = with_foreign_style(sheet.wires[0].clone(), "dashed");
+    let mut engine = Engine::new(sheet).expect("engine");
+    place(
+        &mut engine,
+        with_foreign_style(new_wire((45.0, 50.0), (55.0, 50.0)), "dashed"),
+    );
+    assert_eq!(engine.document().wires.len(), 1);
+}
+
+/// Two wires ending on a third wire's side with no junction are not connected
+/// to it (#107). Folding them would still be safe, but the merge refuses any
+/// point another wire runs through.
+#[test]
+fn a_wire_running_through_the_shared_point_blocks_the_fold() {
+    let mut sheet = two_resistors();
+    add_wire(&mut sheet, (35.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (45.0, 50.0), (55.0, 50.0));
+    add_wire(&mut sheet, (45.0, 40.0), (45.0, 60.0));
+    let before = net_shape(&sheet);
+    let mut engine = Engine::new(sheet).expect("engine");
+
+    assert!(!engine.merge_collinear_wires(&crate::TouchingPairs::new()));
+    assert_eq!(engine.document().wires.len(), 3);
+    assert_eq!(net_shape(engine.document()), before);
+}
+
+fn red() -> signex_types::theme::Color {
+    signex_types::theme::Color::new(255, 0, 0, 255)
+}
+
+#[test]
+fn wires_of_different_net_colours_are_not_folded_and_equal_ones_are() {
+    for (first, second, folds) in [
+        (Some(red()), None, false),
+        (None, Some(red()), false),
+        (
+            Some(red()),
+            Some(signex_types::theme::Color::new(0, 255, 0, 255)),
+            false,
+        ),
+        (Some(red()), Some(red()), true),
+        (None, None, true),
+    ] {
+        let (mut engine, a) = engine_with_first_leg();
+        let b = new_wire((45.0, 50.0), (55.0, 50.0));
+        let mut colors = std::collections::HashMap::new();
+        colors.extend(first.map(|c| (a, c)));
+        colors.extend(second.map(|c| (b.uuid, c)));
+        engine.set_wire_colors(colors);
+        place(&mut engine, b);
+        assert_eq!(
+            engine.document().wires.len() == 1,
+            folds,
+            "{first:?} {second:?}"
+        );
+    }
+}

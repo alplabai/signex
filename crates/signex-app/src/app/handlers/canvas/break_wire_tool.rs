@@ -20,8 +20,41 @@ impl Signex {
             );
             return;
         };
+        let before: std::collections::HashSet<uuid::Uuid> =
+            engine.document().wires.iter().map(|w| w.uuid).collect();
         // A locked wire is refused with its own notice by the gateway.
         self.apply_engine_command(signex_engine::Command::BreakWire { wire, at }, true, true);
+        self.paint_new_half_like(wire, &before);
+    }
+
+    /// The half a break adds keeps the net colour of the wire it came from
+    /// (colours are kept per wire uuid, so the new uuid has none yet). An
+    /// engine undo drops the half and leaves this entry unused; a redo
+    /// brings the same uuid back, painted.
+    fn paint_new_half_like(
+        &mut self,
+        wire: uuid::Uuid,
+        before: &std::collections::HashSet<uuid::Uuid>,
+    ) {
+        let Some(color) = self.ui_state.wire_color_overrides.get(&wire).copied() else {
+            return;
+        };
+        let Some(engine) = self.document_state.active_engine() else {
+            return;
+        };
+        let added: Vec<uuid::Uuid> = engine
+            .document()
+            .wires
+            .iter()
+            .map(|w| w.uuid)
+            .filter(|id| !before.contains(id))
+            .collect();
+        for id in added {
+            self.ui_state.wire_color_overrides.insert(id, color);
+        }
+        if let Some(path) = self.document_state.active_path.clone() {
+            self.mark_net_colors_dirty(&path);
+        }
     }
 }
 

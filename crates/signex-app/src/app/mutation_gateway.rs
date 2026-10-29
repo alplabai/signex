@@ -150,12 +150,15 @@ impl Signex {
         if let Some(reason) = self.refuse_if_active_read_only() {
             return (CommandOutcome::Failed, Some(reason));
         }
+        // The engine keeps wires of different net colours apart when it merges.
+        let colors = self.ui_state.wire_color_overrides.clone();
         let Some(engine) = self.document_state.active_engine_mut() else {
             return (
                 CommandOutcome::Failed,
                 Some("There is no active schematic.".to_string()),
             );
         };
+        engine.set_wire_colors(colors);
 
         // A locked symbol is skipped, not allowed to cancel the batch.
         let (commands, skipped) = Self::without_locked_items(engine, commands);
@@ -255,12 +258,15 @@ impl Signex {
         if let Some(reason) = self.refuse_if_active_read_only() {
             return (CommandOutcome::Failed, Some(reason));
         }
+        // The engine keeps wires of different net colours apart when it merges.
+        let colors = self.ui_state.wire_color_overrides.clone();
         let Some(engine) = self.document_state.active_engine_mut() else {
             return (
                 CommandOutcome::Failed,
                 Some("There is no active schematic.".to_string()),
             );
         };
+        engine.set_wire_colors(colors);
         let mut failed = None;
 
         // The same rule as a batch: locked symbols are skipped and named. A
@@ -424,6 +430,23 @@ impl Signex {
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
     }
 
+    /// Drop selected wires the edit removed (a merge folds one wire into its
+    /// neighbour), so the selection never names a wire that is gone.
+    fn prune_selected_wires(&mut self) {
+        let Some(engine) = self.document_state.active_engine() else {
+            return;
+        };
+        let wires: std::collections::HashSet<uuid::Uuid> =
+            engine.document().wires.iter().map(|w| w.uuid).collect();
+        self.interaction_state
+            .active_canvas_mut()
+            .selected
+            .retain(|item| {
+                item.kind != signex_types::schematic::SelectedKind::Wire
+                    || wires.contains(&item.uuid)
+            });
+    }
+
     pub(super) fn finish_schematic_mutation(
         &mut self,
         invalidation: crate::schematic_runtime::RenderInvalidation,
@@ -461,6 +484,7 @@ impl Signex {
                 .active_canvas_mut()
                 .clear_overlay_cache();
         }
+        self.prune_selected_wires();
         if update_selection_info {
             self.update_selection_info();
         }

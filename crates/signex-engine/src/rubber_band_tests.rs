@@ -644,7 +644,7 @@ fn a_power_port_keeps_its_wire_and_its_net_name() {
     assert_clean(&mut engine, &before);
 }
 
-fn child_fixture() -> (Engine, Uuid, Uuid) {
+pub(crate) fn child_fixture() -> (Engine, Uuid, Uuid) {
     let mut sheet = test_sheet();
     let pin = SheetPin {
         uuid: Uuid::new_v4(),

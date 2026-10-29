@@ -207,6 +207,8 @@ impl Env {
                     locked: false,
                 });
                 wire.uuid = Uuid::new_v4();
+                // A new leg is a fresh wire; a lock stays on the wire it was set on.
+                wire.locked = false;
                 wire.start = a;
                 wire.end = b;
                 out.touched
