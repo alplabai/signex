@@ -12,6 +12,9 @@ impl Env {
     /// this pass touched and any other wire; the older or untouched wire
     /// survives with the union span.
     pub(in crate::transform::rubber_band) fn merge_overlaps(&mut self, out: &mut Follow) {
+        // A pair trimmed off a locked wire is looked at once, so a trim that
+        // changes nothing cannot make this loop spin.
+        let mut trimmed: std::collections::HashSet<(usize, usize)> = Default::default();
         loop {
             let mut found = None;
             let mut edited: Vec<usize> = self.edited.iter().copied().collect();
@@ -25,6 +28,7 @@ impl Env {
                     // only edits free wires); an overlap with one is trimmed
                     // off the other wire below.
                     if j != i
+                        && !trimmed.contains(&(i, j))
                         && !self.wires[i].locked
                         && overlap_span(&self.wires[i], other).is_some()
                     {
@@ -35,6 +39,7 @@ impl Env {
             }
             let Some((i, j)) = found else { return };
             if self.wires[j].locked {
+                trimmed.insert((i, j));
                 self.trim_off_locked(i, j, out);
                 continue;
             }
@@ -105,21 +110,6 @@ impl Env {
                 pieces.push((lhi, uhi));
             }
         }
-        // A pin tip that rested on the end of `free` and now falls inside the
-        // locked span would be left on the side of the locked wire.
-        if horizontal || vertical {
-            let at = |p: &Point| {
-                let k = key(p);
-                if horizontal { k.0 } else { k.1 }
-            };
-            let (a, b) = (at(&l.start).min(at(&l.end)), at(&l.start).max(at(&l.end)));
-            for end in [u.start, u.end] {
-                let inside = at(&end) > a && at(&end) < b;
-                if inside && self.tips.iter().any(|(_, k)| *k == key(&end)) {
-                    out.dots.push(end);
-                }
-            }
-        }
         let oriented = key(&u.start) <= key(&u.end);
         let mut pieces = pieces.into_iter();
         match pieces.next() {
@@ -174,7 +164,6 @@ fn overlap_pieces(a: &Wire, b: &Wire) -> Vec<(Point, Point)> {
     ends.windows(2).map(|pair| (pair[0], pair[1])).collect()
 }
 
-#[cfg(test)]
 pub(crate) fn wires_overlap(a: &Wire, b: &Wire) -> bool {
     overlap_span(a, b).is_some()
 }

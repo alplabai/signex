@@ -149,9 +149,6 @@ pub struct Follow {
     /// Old-tip keys whose handling edited something; the only tips the pass
     /// can be blamed for when a net difference names no moved pin.
     pub edited_tips: Vec<Key>,
-    /// Points where a pin now rests on the side of a locked wire the pass
-    /// would not edit; the pass puts a dot there so the pin stays connected.
-    pub dots: Vec<Point>,
 }
 
 /// Pin tips carried by `items`, read before they move.
@@ -292,23 +289,5 @@ pub fn follow_moved_pins(
     }
     env.merge_overlaps(&mut out);
     env.write_back(document);
-    for point in &out.dots {
-        let key = pt_key(point);
-        if !document
-            .junctions
-            .iter()
-            .any(|j| pt_key(&j.position) == key)
-        {
-            document.junctions.push(signex_types::schematic::Junction {
-                uuid: Uuid::new_v4(),
-                position: *point,
-                diameter: 0.0,
-                // Not minted: the reconcile pass would retire a minted dot
-                // here, where no wire ends.
-                minted: false,
-                unknown_columns: Default::default(),
-            });
-        }
-    }
     out
 }

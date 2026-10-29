@@ -203,6 +203,19 @@ impl Env {
     pub(super) fn collides(&self, seg: (Point, Point), allowed: &[Key], ignore: &[usize]) -> bool {
         let (a, b) = (key(&seg.0), key(&seg.1));
         let free = |k: Key| !allowed.contains(&k);
+        // A route lying along a locked wire would stack on it, or leave a pin
+        // on its side with no wire end there: not a route.
+        let probe = Wire {
+            start: seg.0,
+            end: seg.1,
+            ..Default::default()
+        };
+        if self
+            .live()
+            .any(|(_, wire)| wire.locked && overlap::wires_overlap(&probe, wire))
+        {
+            return true;
+        }
         for (index, wire) in self.live() {
             if ignore.contains(&index) {
                 continue;

@@ -533,34 +533,68 @@ fn overlapping_pairs(engine: &Engine) -> usize {
     n
 }
 
-/// The trimmed-remainder control is in `overlap::tests`: a plan that would
-/// overlap a shorter locked wire is not taken by the pass, so no move
-/// reaches that case.
+/// A route along a locked wire is not a route, so the pass cannot keep R1's
+/// pin on W1 here: it falls back to a plain move for that pin and says so.
+/// Nothing is stacked on L, no dot is added, and L is untouched. The
+/// trimmed-remainder control is in `overlap::tests`.
 #[test]
-fn a_wire_dragged_onto_a_locked_one_leaves_no_overlap_and_the_same_nets() {
-    let l_end_y = 70.0;
-    {
-        let (mut engine, r1, before) = wire_lands_on_a_locked_one(l_end_y);
-        let locked_before = engine.document().wires[1].clone();
-        engine
-            .execute(Command::MoveSelection {
-                items: vec![item(r1.as_u128(), SelectedKind::Symbol)],
-                dx: -15.0,
-                dy: 5.0,
-                keep_wires: true,
-            })
-            .unwrap();
-        let doc = engine.document();
-        assert_eq!(
-            doc.wires.iter().find(|w| w.uuid == locked_before.uuid),
-            Some(&locked_before),
-            "L is unchanged (L to {l_end_y})"
-        );
-        assert_eq!(overlapping_pairs(&engine), 0, "L to {l_end_y}");
-        assert_eq!(
-            crate::rubber_band_tests::net_shape(doc),
-            before,
-            "L to {l_end_y}"
-        );
-    }
+fn a_wire_dragged_onto_a_locked_one_falls_back_to_a_plain_move() {
+    let (mut engine, r1, _) = wire_lands_on_a_locked_one(70.0);
+    let wires_before = engine.document().wires.clone();
+    engine
+        .execute(Command::MoveSelection {
+            items: vec![item(r1.as_u128(), SelectedKind::Symbol)],
+            dx: -15.0,
+            dy: 5.0,
+            keep_wires: true,
+        })
+        .unwrap();
+    let doc = engine.document();
+    assert_eq!(doc.wires, wires_before, "no wire was rerouted or trimmed");
+    assert!(doc.junctions.is_empty(), "no dot was added");
+    assert_eq!(overlapping_pairs(&engine), 0);
+    assert_eq!(doc.symbols[0].position, Point::new(35.0, 55.0), "R1 moved");
+    let warnings = engine.take_warnings();
+    assert!(
+        warnings.iter().any(|w| w.contains("could not keep")),
+        "the detached pin is reported: {warnings:?}"
+    );
+}
+
+/// A dot left at the pin would outlive it: after R1 moved on, a wire crossing
+/// L at that point would join R2 and R3 into one net.
+#[test]
+fn moving_off_a_locked_wire_leaves_nothing_that_joins_nets_later() {
+    use crate::rubber_band_tests::{add_resistor, add_wire, net_shape};
+    let mut sheet = SchematicSheet::default();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
+    add_wire(&mut sheet, (30.0, 50.0), (30.0, 70.0));
+    sheet.wires[1].locked = true;
+    // R3's pin 1 sits on L's far end, R2's pin 1 at (105, 55).
+    let r3 = add_resistor(&mut sheet, "R3", Point::new(35.0, 70.0));
+    let r2 = add_resistor(&mut sheet, "R2", Point::new(110.0, 55.0));
+    let mut engine = Engine::new(sheet).expect("engine");
+    let mv = |dx, dy, keep_wires| Command::MoveSelection {
+        items: vec![item(r1.as_u128(), SelectedKind::Symbol)],
+        dx,
+        dy,
+        keep_wires,
+    };
+    engine.execute(mv(-15.0, 5.0, true)).unwrap();
+    engine.execute(mv(40.0, 40.0, false)).unwrap();
+    engine
+        .execute(Command::PlaceWireSegment {
+            wire: Wire {
+                uuid: Uuid::new_v4(),
+                start: Point::new(20.0, 55.0),
+                end: Point::new(105.0, 55.0),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    let joined = net_shape(engine.document())
+        .iter()
+        .any(|(_, pins)| pins.iter().any(|(u, _)| *u == r2) && pins.iter().any(|(u, _)| *u == r3));
+    assert!(!joined, "R2 and R3 stay in separate nets");
 }

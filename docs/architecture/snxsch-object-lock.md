@@ -67,5 +67,7 @@ A paste ghost is turned on a scratch engine that ignores locks, and the result
 keeps every lock. Pasted wires are placed as copied
 (`Command::PlaceWireSegmentAsIs`), so a split in the copy is not folded back.
 The rubber band never slides a locked elbow leg (it bends on a new leg
-instead) and never re-cuts a locked wire when it clears an overlap; an overlap
-with a locked wire stays as it is.
+instead) and never re-cuts a locked wire when it clears an overlap: a free
+wire lying on a locked one is trimmed off it, and a route that would run along
+a locked wire is not taken. When no route is left for a pin, that pin falls
+back to a plain move and the move reports it; no dot is added for it.
