@@ -380,7 +380,7 @@ impl Signex {
                 // the tree as un-mounted nodes with a "(pending)"
                 // suffix so the user can see what Save will create.
                 // Disk write happens at project-save time via
-                // `commands::materialize_pending_library`.
+                // `commands::create_pending_library`.
                 for spec in p.pending_libraries.values() {
                     libraries.push(crate::panels::LibraryNodeInfo {
                         display_name: format!("{} (pending)", spec.display_name),

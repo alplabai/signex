@@ -1,126 +1,276 @@
-//! Writing a project's `.snxprj` (#1202).
+//! Writing a project's `.snxprj` (#1202, #859).
 //!
-//! Every write goes through the document-save ledger, so a later write
-//! always wins over an earlier one whatever order they finish in. Ctrl+S in
-//! a Project tab writes off the UI thread ([`Signex::begin_project_save`]);
-//! the other project saves (Ctrl+S in a document tab, Save All on close and
-//! quit) still write inline ([`Signex::persist_project_by_id`]).
-//!
-//! Both materialise pending libraries, then encode the project as it is
-//! now. No save path renames the file: the name is the file stem, changed
-//! only by the Rename flow, so a save never waits on another write. The
-//! concurrent-writer rule this relies on is in
+//! Every save is planned in `update`, written by one worker job and applied
+//! by [`Signex::handle_project_file_saved`]; no filesystem or git work runs
+//! in `update`. The job creates the pending libraries first and then writes
+//! the project listing them (`persist::project_save`). Every write goes
+//! through the document-save ledger, so a later write always wins over an
+//! earlier one, and a save asked for while one runs queues one follow-up
+//! instead of starting a second writer. No save path renames the file: the
+//! name is the file stem, changed only by the Rename flow. The
+//! concurrent-writer rule is in
 //! `docs/superpowers/specs/2026-10-26-project-tab-shell-design.md` §3.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use iced::Task;
 
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
-use crate::persist::{ProjectSaveDone, SaveOutcome};
+use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
+use crate::persist::{
+    LibraryCreated, ProjectSaveDone, ProjectWritePlan, SaveOutcome, run_project_write,
+};
 
-/// A project encoded for one write.
-struct ProjectWrite {
-    path: PathBuf,
-    bytes: Vec<u8>,
-    /// Pending libraries that could not be created: the file is written
-    /// without them and the project stays dirty.
-    unmaterialised: Vec<String>,
-}
+/// The follow-up ledger's per-editor stamp; a project has one writer.
+const PROJECT_FOLLOW_UP: u64 = 0;
 
 impl Signex {
-    /// Ctrl+S in a Project tab: write the project's `.snxprj` off the UI
-    /// thread. A clean project is not rewritten.
+    /// Save the project's `.snxprj` off the UI thread. A clean project is
+    /// not rewritten. While a write of the file runs, one follow-up save is
+    /// queued for when it completes and no task is returned.
     pub(crate) fn begin_project_save(&mut self, project_id: ProjectId) -> Result<Task<Message>> {
         let project = self
             .document_state
             .project_by_id(project_id)
             .with_context(|| format!("project {project_id:?} is no longer loaded"))?;
-        if !self.document_state.is_document_dirty(&project.path) {
+        let path = project.path.clone();
+        if !self.document_state.is_document_dirty(&path) {
             return Ok(Task::none());
         }
-        let write = self.prepare_project_write(project_id)?;
-        if let Some(error) = unmaterialised_error(&write) {
-            // Reported now; the write still goes ahead, and the completion
-            // leaves the project dirty because the library is still pending.
-            self.report_save_failure("Failed to save project file", &error);
+        if self.document_state.document_saves.is_saving(&path) {
+            self.document_state
+                .document_saves
+                .queue_follow_up(path.clone(), PROJECT_FOLLOW_UP);
+            crate::diagnostics::log_info(format!(
+                "[save] {} is still being written; it saves again when that write finishes",
+                path.display()
+            ));
+            return Ok(Task::none());
         }
+        let plan = self.plan_project_write(project_id)?;
         let job = self
             .document_state
             .document_saves
-            .begin(write.path.clone(), write.bytes.clone());
+            .begin(path.clone(), Vec::new());
         let sequence = job.sequence();
-        let (path, bytes) = (write.path, write.bytes);
         Ok(Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || job.run())
+                tokio::task::spawn_blocking(move || run_project_write(plan, job))
                     .await
-                    .map_err(|join_error| format!("the save task failed: {join_error}"))
-                    .and_then(|result| result)
+                    .unwrap_or_else(|join_error| ProjectSaveDone {
+                        project_id,
+                        path,
+                        sequence,
+                        bytes: Vec::new(),
+                        libraries: Vec::new(),
+                        result: Err(format!("the save task failed: {join_error}")),
+                    })
             },
-            move |result| {
-                Message::Project(ProjectMsg::FileSaved(Box::new(ProjectSaveDone {
-                    project_id,
-                    path: path.clone(),
-                    sequence,
-                    bytes: bytes.clone(),
-                    result,
-                })))
-            },
+            |done| Message::Project(ProjectMsg::FileSaved(Box::new(done))),
         ))
     }
 
-    /// An off-thread `.snxprj` write finished. The project is marked clean
-    /// only if this was the newest write begun for the file, and it is still
-    /// the same loaded project at the same path encoding to exactly the
-    /// bytes written: another writer or edit meanwhile keeps it dirty
-    /// (design doc §3).
+    /// Everything a project write needs from the model, taken before the
+    /// worker starts. Also ends the Project tab's typing run, so what is
+    /// typed after a save is its own undo step.
+    fn plan_project_write(&mut self, project_id: ProjectId) -> Result<ProjectWritePlan> {
+        // The write would race a project folder move: it can land in the old
+        // folder before the re-key and never reach the new one.
+        let project_path = self
+            .document_state
+            .project_by_id(project_id)
+            .map(|project| project.path.clone())
+            .with_context(|| format!("project {project_id:?} is no longer loaded"))?;
+        self.refuse_while_project_moves(&project_path, "save")?;
+        self.refuse_while_path_op(&project_path, "saved")?;
+        self.refuse_project_while_delete_pending(project_id, "saved")?;
+        let project = self
+            .document_state
+            .project_by_id(project_id)
+            .with_context(|| format!("project {project_id:?} vanished before write"))?;
+        for spec in project.pending_libraries.values() {
+            self.refuse_while_path_op(&spec.lib_path, "created")?;
+        }
+        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+            tab.general_history.close_run();
+        }
+        let project = self
+            .document_state
+            .project_by_id(project_id)
+            .with_context(|| format!("project {project_id:?} vanished before write"))?;
+        let mut pending: Vec<_> = project
+            .pending_libraries
+            .iter()
+            .map(|(id, spec)| (*id, spec.clone()))
+            .collect();
+        // A stable order, so the entries land in the file the same way on
+        // every save.
+        pending.sort_by(|a, b| a.1.lib_path.cmp(&b.1.lib_path));
+        Ok(ProjectWritePlan {
+            project_id,
+            path: project.path.clone(),
+            snapshot: project.data.clone(),
+            fold: project.case_fold,
+            pending,
+            defaults: self.library.new_library_defaults.clone(),
+        })
+    }
+
+    /// An off-thread `.snxprj` write finished: apply what the worker did,
+    /// then start the follow-up save that was asked for meanwhile.
     pub(crate) fn handle_project_file_saved(&mut self, done: ProjectSaveDone) -> Task<Message> {
+        let (project_id, path) = (done.project_id, done.path.clone());
+        let mounts = self.apply_project_save_done(done);
+        let follow_up = self.start_project_follow_up(project_id, &path);
+        Task::batch([mounts, follow_up])
+    }
+
+    fn apply_project_save_done(&mut self, done: ProjectSaveDone) -> Task<Message> {
         let ProjectSaveDone {
             project_id,
             path,
             sequence,
             bytes,
+            libraries,
             result,
         } = done;
         self.document_state.document_saves.finish(&path);
+        // First, whatever the write's own result: a library the worker
+        // created is on disk, so the project must list it and drop it from
+        // the pending set, or the next save would fail on "already exists".
+        let (mounts, failed) = self.apply_created_libraries(project_id, &path, libraries);
+        self.settle_project_write(project_id, &path, sequence, &bytes, result);
+        if !failed.is_empty() {
+            let error = unmaterialised_error(&path, &failed);
+            // Save All names this reason for the file it kept unsaved.
+            self.document_state
+                .document_saves
+                .record_failure(path, format!("{error:#}"));
+            self.report_save_failure("Failed to save project file", &error);
+        }
+        self.refresh_panel_ctx();
+        mounts
+    }
+
+    /// Register and mount each library the worker created, if the project is
+    /// still the one that asked for it. Returns the mount task and the
+    /// libraries that could not be created (they stay pending).
+    fn apply_created_libraries(
+        &mut self,
+        project_id: ProjectId,
+        path: &Path,
+        libraries: Vec<LibraryCreated>,
+    ) -> (Task<Message>, Vec<String>) {
+        let mut failed = Vec::new();
+        let mut to_mount = Vec::new();
+        for LibraryCreated {
+            library_id,
+            spec,
+            result,
+        } in libraries
+        {
+            if let Err(error) = result {
+                tracing::warn!(
+                    target: "signex::library",
+                    project = %path.display(),
+                    library = %spec.lib_path.display(),
+                    library_id = %library_id,
+                    error = %error,
+                    "pending library not created; keeping entry pending for retry"
+                );
+                failed.push(format!("{} ({error})", spec.display_name));
+                continue;
+            }
+            let registered = self
+                .document_state
+                .project_by_id_mut(project_id)
+                .filter(|loaded| loaded.path == path)
+                .and_then(|loaded| {
+                    loaded.pending_libraries.remove(&library_id)?;
+                    crate::library::commands::register_library_entry(
+                        &mut loaded.data,
+                        &spec.lib_path,
+                        library_id,
+                        loaded.case_fold,
+                    );
+                    Some(())
+                });
+            if registered.is_none() {
+                crate::diagnostics::log_warning(format!(
+                    "[save] The library {} was created, but project {} no longer asks for it; \
+                     it is on disk and not in the project",
+                    spec.lib_path.display(),
+                    path.display()
+                ));
+                continue;
+            }
+            tracing::info!(
+                target: "signex::library",
+                project = %path.display(),
+                library = %spec.lib_path.display(),
+                library_id = %library_id,
+                "materialised pending library"
+            );
+            if matches!(
+                self.library
+                    .request_mount(&spec.lib_path, MountIntent::Silent),
+                MountRequest::Spawn
+            ) {
+                to_mount.push(spec.lib_path);
+            }
+        }
+        (spawn_pending_mounts(to_mount), failed)
+    }
+
+    /// Decide what the write's result means for the project: failures reach
+    /// the Messages panel, and the dirty marker clears only for the newest
+    /// write begun, of the same loaded project, whose bytes are exactly what
+    /// the project encodes to now (design doc §3).
+    fn settle_project_write(
+        &mut self,
+        project_id: ProjectId,
+        path: &Path,
+        sequence: u64,
+        bytes: &[u8],
+        result: Result<SaveOutcome, String>,
+    ) {
         match result {
             Ok(SaveOutcome::Written) => {}
             // A newer write of this file landed first; its own completion
-            // (or the inline save that made it) decides.
-            Ok(SaveOutcome::Superseded) => return Task::none(),
+            // decides.
+            Ok(SaveOutcome::Superseded) => return,
             // An older write failing late says nothing about the file now:
             // the newest write's completion decides, so only log it.
             Err(reason)
                 if !self
                     .document_state
                     .document_saves
-                    .is_newest_begun(&path, sequence) =>
+                    .is_newest_begun(path, sequence) =>
             {
                 crate::diagnostics::log_warning(format!(
                     "[save] An earlier write of project {} failed after a newer one began: {reason}",
                     path.display()
                 ));
-                return Task::none();
+                return;
             }
             Err(reason) => {
                 self.document_state
                     .document_saves
-                    .record_failure(path, reason.clone());
+                    .record_failure(path.to_path_buf(), reason.clone());
                 self.report_save_failure("Failed to save project file", &anyhow::anyhow!(reason));
-                return Task::none();
+                return;
             }
         }
-        self.document_state.document_saves.clear_failure(&path);
+        // The file on disk changed behind every engine (#1401).
+        self.document_state.note_documents_changed();
+        self.document_state.document_saves.clear_failure(path);
         crate::diagnostics::log_info(format!("[save] Wrote project {}", path.display()));
-        // An older write finishing proves nothing about edits made after a
-        // newer one began; the newest write's completion decides.
         let newest = self
             .document_state
             .document_saves
-            .is_newest_begun(&path, sequence);
+            .is_newest_begun(path, sequence);
         let unchanged = newest
             && self
                 .document_state
@@ -132,137 +282,41 @@ impl Signex {
                             .is_ok_and(|now| now == bytes)
                 });
         if unchanged {
-            self.finish_clean_project_save(&path);
-        } else if self.document_state.is_document_dirty(&path) {
+            self.finish_clean_project_save(path);
+        } else if self.document_state.is_document_dirty(path) {
             crate::diagnostics::log_info(format!(
                 "[save] {} changed while it was being written; it stays modified",
                 path.display()
             ));
         }
-        self.refresh_panel_ctx();
-        Task::none()
     }
 
-    /// Write the identified project's `.snxprj` inline, through the save
-    /// ledger. On success clears its dirty marker and queues the project
-    /// git commit. Errs for a failed write, and when a
-    /// pending library could not be created (the file is written without
-    /// it, the entry stays pending, and the project stays dirty, so Save All
-    /// callers never treat it as saved).
-    pub(crate) fn persist_project_by_id(&mut self, project_id: ProjectId) -> Result<()> {
-        let write = self.prepare_project_write(project_id)?;
-        let job = self
-            .document_state
-            .document_saves
-            .begin(write.path.clone(), write.bytes.clone());
-        let outcome = job.run();
-        self.document_state.document_saves.finish(&write.path);
-        if let Err(reason) = outcome {
-            self.document_state
-                .document_saves
-                .record_failure(write.path.clone(), reason.clone());
-            anyhow::bail!("write project {}: {reason}", write.path.display());
+    /// Run the save asked for while the write of `path` was running, if the
+    /// project is still loaded there and still unsaved.
+    fn start_project_follow_up(&mut self, project_id: ProjectId, path: &Path) -> Task<Message> {
+        if self.document_state.document_saves.is_saving(path) {
+            return Task::none();
         }
-        self.document_state
-            .document_saves
-            .clear_failure(&write.path);
-        if let Some(error) = unmaterialised_error(&write) {
-            return Err(error);
-        }
-        crate::diagnostics::log_info(format!("[save] Wrote project {}", write.path.display()));
-        self.finish_clean_project_save(&write.path);
-        Ok(())
-    }
-
-    /// Everything a project write does before the bytes: materialise
-    /// pending libraries, encode. Also ends the Project tab's typing run, so
-    /// what is typed after a save is its own undo step.
-    fn prepare_project_write(&mut self, project_id: ProjectId) -> Result<ProjectWrite> {
-        // The write would race a project folder move: it can land in the old
-        // folder before the re-key and never reach the new one.
-        let project_path = self
+        let asked = self.document_state.document_saves.take_follow_ups(path);
+        let still_loaded = self
             .document_state
             .project_by_id(project_id)
-            .map(|project| project.path.clone())
-            .with_context(|| format!("project {project_id:?} is no longer loaded"))?;
-        self.refuse_while_project_moves(&project_path, "save")?;
-        self.refuse_while_path_op(&project_path, "saved")?;
-        self.refuse_project_while_delete_pending(project_id, "saved")?;
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.general_history.close_run();
+            .is_some_and(|project| project.path == path);
+        if asked.is_empty() || !still_loaded {
+            return Task::none();
         }
-        let unmaterialised = self.materialise_pending_libraries(project_id);
-        let project = self
-            .document_state
-            .project_by_id(project_id)
-            .with_context(|| format!("project {project_id:?} vanished before write"))?;
-        let bytes = signex_types::project::encode_project(&project.data)
-            .with_context(|| format!("encode project {}", project.path.display()))?;
-        Ok(ProjectWrite {
-            path: project.path.clone(),
-            bytes,
-            unmaterialised,
-        })
-    }
-
-    /// Create the libraries registered through the New Library flow (they
-    /// exist only in memory until the user saves) and add their entries to
-    /// the project. Returns the ones that could not be created; they stay
-    /// pending for the next save.
-    fn materialise_pending_libraries(&mut self, project_id: ProjectId) -> Vec<String> {
-        let pending: Vec<(uuid::Uuid, crate::library::commands::PendingLibrarySpec)> = self
-            .document_state
-            .projects
-            .iter_mut()
-            .find(|p| p.id == project_id)
-            .map(|p| p.pending_libraries.drain().collect())
-            .unwrap_or_default();
-        let mut unmaterialised = Vec::new();
-        for (library_id, spec) in pending {
-            let Some(loaded) = self
-                .document_state
-                .projects
-                .iter_mut()
-                .find(|p| p.id == project_id)
-            else {
-                continue;
-            };
-            let project_path = loaded.path.clone();
-            let result = crate::library::commands::materialize_pending_library(
-                &mut self.library,
-                &mut loaded.data,
-                library_id,
-                &spec,
-                loaded.case_fold,
-            );
-            match result {
-                Ok(()) => tracing::info!(
-                    target: "signex::library",
-                    project = %project_path.display(),
-                    library = %spec.lib_path.display(),
-                    library_id = %library_id,
-                    "materialised pending library"
-                ),
-                Err(error) => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        project = %project_path.display(),
-                        library = %spec.lib_path.display(),
-                        library_id = %library_id,
-                        error = %error,
-                        "materialise_pending_library failed; keeping entry pending for retry"
-                    );
-                    unmaterialised.push(format!("{} ({error})", spec.display_name));
-                    loaded.pending_libraries.insert(library_id, spec);
-                }
+        match self.begin_project_save(project_id) {
+            Ok(task) => task,
+            Err(error) => {
+                self.report_save_failure("Failed to save project file", &error);
+                Task::none()
             }
         }
-        unmaterialised
     }
 
     /// The project's bytes on disk match it: clear the marker, queue the
     /// project git commit, refresh the tree's dirty dot.
-    fn finish_clean_project_save(&mut self, path: &std::path::Path) {
+    fn finish_clean_project_save(&mut self, path: &Path) {
         self.document_state.mark_document_clean(path);
         let label = path
             .file_name()
@@ -274,15 +328,12 @@ impl Signex {
 }
 
 /// The error for a project written without some of its new libraries.
-fn unmaterialised_error(write: &ProjectWrite) -> Option<anyhow::Error> {
-    let missing = &write.unmaterialised;
-    (!missing.is_empty()).then(|| {
-        anyhow::anyhow!(
-            "{} was written without {} new librar{} that could not be created: {}",
-            write.path.display(),
-            missing.len(),
-            if missing.len() == 1 { "y" } else { "ies" },
-            missing.join("; ")
-        )
-    })
+fn unmaterialised_error(path: &Path, missing: &[String]) -> anyhow::Error {
+    anyhow::anyhow!(
+        "{} was written without {} new librar{} that could not be created: {}",
+        path.display(),
+        missing.len(),
+        if missing.len() == 1 { "y" } else { "ies" },
+        missing.join("; ")
+    )
 }

@@ -155,8 +155,10 @@ fn a_project_save_is_refused_while_a_delete_under_it_is_pending() {
     let mut fx = fixture(root.path(), "Foo", false);
     delete_pending_under_project(&mut fx);
     let id = fx.app.document_state.projects[0].id;
+    let prj = fx.app.document_state.projects[0].path.clone();
+    fx.app.document_state.mark_document_dirty(&prj);
 
-    let err = fx.app.persist_project_by_id(id).unwrap_err();
+    let err = fx.app.begin_project_save(id).err().expect("refused");
 
     assert!(format!("{err:#}").contains("delete"), "{err:#}");
 }

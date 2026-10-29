@@ -78,3 +78,40 @@ needs saving.
 
 Only project-local libraries are renameable here. Shared and Global
 libraries live outside the project and stay refused (#657).
+
+## Project file save (`handlers/document_files/project_save.rs`)
+
+The `.snxprj` save runs no filesystem or git work in `update` (#859).
+`begin_project_save` plans the write from the model (`persist::ProjectWritePlan`:
+a snapshot of the project data, the pending libraries in a fixed order, the
+new-library defaults) and returns one `Task`. Its worker creates each pending
+library (`git init` included), lists the ones it created in a copy of the
+snapshot, encodes that and writes the file through the document-save ledger.
+`ProjectMsg::FileSaved` carries every result back.
+
+One job rather than two chained ones, because the file must come after the
+libraries it lists, and a single completion then holds both outcomes for one
+`update` to apply. It applies, in this order:
+
+1. Each created library, if the same loaded project (by `ProjectId`, not by
+   path) still has it pending: register the entry, drop it from
+   `pending_libraries`, and mount it through the usual off-thread
+   `request_mount`. This runs whatever the write's own result was, since the
+   library is on disk and a retry would fail on "already exists". A library
+   nothing asks for any more is reported and left on disk.
+2. A library that could not be created stays pending and is reported (Messages
+   panel and the Save Failed card); the file is still written without it and
+   the project stays modified.
+3. The write result. The project is marked clean only for the newest write
+   begun, when it has nothing pending and still encodes to exactly the bytes
+   written, so an edit made meanwhile keeps it dirty. A written file moves
+   `documents_epoch` (#1401).
+
+A save asked for while a write of the file runs (`is_saving`) queues one
+follow-up in the ledger instead of starting a second writer; it starts when the
+first completion is handled. Save All on close and quit starts the same job and
+waits for its completion through the `SaveAllSettle` chain; one that finds the
+write already running stays open and names it, as for a primitive. The quit
+barrier covers the job from `begin` until it is dropped. Saves are refused
+while a rename, delete or folder move touches the project or a pending
+library's path.
