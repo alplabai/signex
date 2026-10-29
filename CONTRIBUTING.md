@@ -151,9 +151,30 @@ what you found and where you left it. A stale claim blocks an issue just as
 much as a live one. A claim with no visible activity (no branch, no PR, no
 comment) for 7 days may be taken over after asking on the issue.
 
+**Filing a follow-up you mean to do yourself?** File and claim in the same
+step: assign yourself and comment "Taking this" when you open the issue. An
+unassigned issue is free for anyone to take, and someone may fix it before
+you get back to it.
+
+**Your fix also covers someone else's work?** If a change you are writing
+also fixes another person's claimed issue or overlaps an open PR, comment on
+that issue or PR before you push, so its owner can stop or narrow their scope.
+
 **Batch work counts too.** A script or an AI agent that works through several
 issues must run steps 1–2 for each issue before it starts on that issue —
 not once for the whole batch.
+
+### Claiming fixes on a reviewed PR
+
+When a review on a shared PR asks for changes, claim the fix work on the PR
+before pushing, the same way as a review, so two sessions don't push competing
+fixes to the same branch:
+
+```
+Fixing this (session <name>, head <short-sha>).
+```
+
+Pushing the fix and replying to the review releases the claim.
 
 ### Claiming a review
 
