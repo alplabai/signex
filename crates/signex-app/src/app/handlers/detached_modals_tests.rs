@@ -157,6 +157,15 @@ fn open(app: &mut Signex, modal: ModalId) {
                 draft: Default::default(),
             })
         }
+        ModalId::LibraryStockCopy => {
+            app.library.stock_copy = Some(crate::library::stock_copy::StockCopyState {
+                source: "/stock/symbols/R.snxsym".into(),
+                kind: crate::library::stock_copy::StockPrimitiveKind::Symbol,
+                label: "R".into(),
+                previous_unavailable: None,
+                error: None,
+            })
+        }
         ModalId::LibraryUpdates => {
             app.library.library_updates =
                 Some(crate::library::updates_dialog::LibraryUpdatesState::new(
@@ -655,6 +664,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
                     | ModalId::LibraryCreateOptions
                     | ModalId::LibraryDocumentOptions
                     | ModalId::LibraryRecovery
+                    | ModalId::LibraryStockCopy
                     | ModalId::LibraryUpdates
                     | ModalId::LibraryPicker
                     | ModalId::LibraryPrimitivePicker
