@@ -316,6 +316,10 @@ impl Engine {
                 lib_symbol,
                 library_versions,
             } => self.replace_lib_symbol(before, lib_symbol, library_versions),
+            Command::ChangeComponent {
+                symbol_id,
+                replacement,
+            } => self.change_component(before, symbol_id, replacement),
             Command::PlaceChildSheet { child_sheet } => {
                 // A sheet with no target file cannot be stitched or
                 // navigated, so a blank filename is rejected up front,

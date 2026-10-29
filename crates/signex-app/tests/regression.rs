@@ -269,6 +269,10 @@ mod library_stock_place;
 mod library_symbol_drift;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
+// #1301, #1262, #1260 — Open Datasheet, Edit Symbol and Change Component
+// on a placed part.
+#[path = "regression/placed_part_actions.rs"]
+mod placed_part_actions;
 // #1231 — Properties lists a placed symbol's library row documents.
 #[path = "regression/library_row_documents.rs"]
 mod library_row_documents;

@@ -199,6 +199,7 @@ impl Signex {
                 library_path,
                 result,
             ),
+            LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
             LibraryMessage::SymbolChoiceResolved {
                 target_sheet,
                 engine_instance,
