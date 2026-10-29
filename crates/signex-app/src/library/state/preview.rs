@@ -126,6 +126,23 @@ pub struct ComponentPreviewState {
     /// directly to `f64` fights typing.
     pub params_edit_buf: HashMap<String, String>,
 
+    /// The SI prefix picked next to a measurement's number buffer, by
+    /// parameter name. Absent = the prefix the stored value displays.
+    pub params_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
+
+    /// The class-template slot behind a measurement's pending edit, by
+    /// parameter name, so a commit (Enter, a prefix pick, Save) enforces
+    /// the slot's unit and sign rules.
+    pub params_slot: HashMap<String, signex_library::ParamSlot>,
+
+    /// Why a measurement's pending edit was refused, by parameter name.
+    /// Shown next to the field; Save is blocked while one is pending.
+    pub params_error: HashMap<String, String>,
+
+    /// A neutral one-line notice beside a measurement (not a refusal), by
+    /// parameter name: a unit change reinterprets the number.
+    pub params_note: HashMap<String, String>,
+
     /// Name typed into the "Add custom parameter" input, consumed by the
     /// kind pills.
     pub new_param_name: String,
@@ -187,6 +204,10 @@ impl ComponentPreviewState {
             sim_body: None,
             active_tab: PreviewTab::Preview,
             params_edit_buf: HashMap::new(),
+            params_prefix: HashMap::new(),
+            params_slot: HashMap::new(),
+            params_error: HashMap::new(),
+            params_note: HashMap::new(),
             new_param_name: String::new(),
             pin_map_state: PinMapInlineState::default(),
             alternate_error: None,
@@ -199,6 +220,22 @@ impl ComponentPreviewState {
             saving_generation: 0,
             saving_batch: None,
         }
+    }
+
+    /// The prefix the picker beside a measurement's number shows: the one
+    /// picked, else the one the stored value displays with, else none.
+    pub fn measurement_prefix(&self, name: &str) -> signex_types::quantity::SiPrefix {
+        self.params_prefix
+            .get(name)
+            .copied()
+            .or_else(|| {
+                self.row
+                    .parameters
+                    .get(name)
+                    .and_then(|v| v.measurement_parts())
+                    .map(|p| p.prefix)
+            })
+            .unwrap_or(signex_types::quantity::SiPrefix::One)
     }
 
     /// Unsaved work: the dirty flag, or a half-typed numeric value still in

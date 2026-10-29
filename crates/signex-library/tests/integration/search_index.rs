@@ -225,8 +225,9 @@ fn text_query_pinpoints_the_single_matching_part() {
     );
 }
 
-#[test]
-fn numeric_facet_lt_returns_only_sub_threshold_parts() {
+/// Run a numeric capacitance facet over the fixture corpus and check the hits
+/// are exactly the capacitors `keep` accepts.
+fn assert_capacitance_facet(op: FacetOp, value: &str, keep: impl Fn(f64) -> bool) {
     let _guard = serial_guard();
     let dir = tempfile::tempdir().unwrap();
     let idx = TantivySearchIndex::open(dir.path()).expect("open index");
@@ -242,28 +243,27 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
         category: Some("Capacitor".into()),
         facets: vec![Facet {
             field: "parameters.capacitance".into(),
-            op: FacetOp::Lt,
-            value: "1e-6".into(),
+            op,
+            value: value.into(),
         }],
         limit: 200,
     };
     let hits = idx.query(&q);
 
-    assert!(!hits.is_empty(), "expected sub-1µF capacitor hits");
-
     // Cross-check by re-running the predicate on the corpus.
     let mut expected: Vec<String> = corpus
         .iter()
-        .filter(|c| {
-            if c.class.as_str() != "Capacitor" {
-                return false;
-            }
-            let cap = c.parameters.get("capacitance");
-            matches!(cap, Some(ParamValue::Number(n)) if *n < 1e-6)
-        })
+        .filter(|c| c.class.as_str() == "Capacitor")
+        .filter(
+            |c| matches!(c.parameters.get("capacitance"), Some(ParamValue::Number(n)) if keep(*n)),
+        )
         .map(|c| c.internal_pn.0.clone())
         .collect();
     expected.sort();
+    assert!(
+        !expected.is_empty(),
+        "the corpus must contain matches for {value}"
+    );
 
     let mut got: Vec<String> = hits
         .iter()
@@ -273,9 +273,25 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
 
     assert_eq!(
         got, expected,
-        "Lt 1e-6 should return exactly sub-1µF caps (got {:?}, expected {:?})",
-        got, expected
+        "capacitance facet {value} returned the wrong parts"
     );
+}
+
+#[test]
+fn numeric_facet_lt_returns_only_sub_threshold_parts() {
+    assert_capacitance_facet(FacetOp::Lt, "1e-6", |n| n < 1e-6);
+}
+
+#[test]
+fn numeric_facet_eq_returns_only_parts_with_that_exact_value() {
+    assert_capacitance_facet(FacetOp::Eq, "1e-6", |n| n == 1e-6);
+}
+
+#[test]
+fn numeric_facet_gt_excludes_the_threshold_itself() {
+    // 1e-5 is the 10 µF target cap's own value: an exclusive lower bound
+    // must leave it out.
+    assert_capacitance_facet(FacetOp::Gt, "1e-5", |n| n > 1e-5);
 }
 
 #[test]

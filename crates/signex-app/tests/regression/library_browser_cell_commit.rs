@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 
 use signex_app::app::{Message, Signex};
-use signex_app::library::messages::LibraryMessage;
+use signex_app::library::messages::{BrowserEditMsg, LibraryMessage};
 use signex_app::library::state::LibraryBrowserState;
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
@@ -44,6 +44,32 @@ fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
 
 /// Same fixture with the stored measurement chosen by the caller.
 fn library_with_measurement(dir: &std::path::Path, value: f64, unit: &str) -> (PathBuf, RowId) {
+    library_with_param(dir, "IC", PARAM, value, unit)
+}
+
+/// The fixture for a row of `class` holding `param` as `{value, unit}`.
+fn library_with_param(
+    dir: &std::path::Path,
+    class: &str,
+    param: &str,
+    value: f64,
+    unit: &str,
+) -> (PathBuf, RowId) {
+    let stored = ParamValue::Measurement {
+        value,
+        unit: unit.into(),
+    };
+    library_with_stored(dir, class, param, Some(stored))
+}
+
+/// The fixture for a row of `class` holding `param` as `stored` (or not
+/// holding it at all).
+fn library_with_stored(
+    dir: &std::path::Path,
+    class: &str,
+    param: &str,
+    stored: Option<ParamValue>,
+) -> (PathBuf, RowId) {
     let snxlib = dir.join("cells.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -69,20 +95,16 @@ fn library_with_measurement(dir: &std::path::Path, value: f64, unit: &str) -> (P
     let lib_id = adapter.library_id();
 
     let mut parameters = ParamMap::new();
-    parameters.insert(
-        PARAM.into(),
-        ParamValue::Measurement {
-            value,
-            unit: unit.into(),
-        },
-    );
+    if let Some(stored) = stored {
+        parameters.insert(param.into(), stored);
+    }
 
     let now = chrono::Utc::now();
     let row = ComponentRow {
         alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("SNX-IC-00001"),
-        class: ComponentClass::new("IC"),
+        class: ComponentClass::new(class),
         datasheet: DatasheetRef::default(),
         datasheet_label: String::new(),
         description: String::new(),
@@ -227,73 +249,490 @@ fn a_refused_cell_commit_reaches_the_messages_panel() {
     );
 }
 
-/// Commit `typed` into the cell holding `{value, unit}` and return what
-/// the library holds afterwards.
-fn commit_into_measurement(value: f64, unit: &str, typed: &str) -> ParamValue {
-    let tmp = tempfile::Builder::new()
-        .prefix("signex-1572-cell-prefix-")
-        .tempdir()
-        .expect("tempdir");
-    let (snxlib, row_id) = library_with_measurement(tmp.path(), value, unit);
+/// The row as the library holds it on disk (hash included).
+fn row_on_disk(snxlib: &std::path::Path, row_id: RowId) -> signex_library::ComponentRow {
+    LocalGitAdapter::open(snxlib)
+        .expect("re-open library")
+        .read_row(TABLE, row_id)
+        .expect("read row")
+}
+
+/// An inline commit to a measurement cell is refused: the grid opens the
+/// edit modal for these, and a raw buffer cannot say which prefix it is
+/// in. A cell showing `4.7 kΩ` given `470` would store 470 kΩ (1000x off,
+/// #1572); instead nothing is stored and the buffer stays in the cell.
+#[test]
+fn an_inline_commit_to_a_measurement_cell_is_refused_and_stores_nothing() {
+    for (value, unit) in [(4700.0, "ohm"), (4.7, "kΩ"), (1.5, "furlong")] {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let (snxlib, row_id) = library_with_measurement(tmp.path(), value, unit);
+        let stored = ParamValue::Measurement {
+            value,
+            unit: unit.into(),
+        };
+        let before = row_on_disk(&snxlib, row_id).content_hash;
+
+        for typed in ["470", "4.7", "10"] {
+            let after = commit_into_measurement_at(&snxlib, row_id, typed);
+            assert_eq!(after, stored, "{value} {unit} typed {typed}");
+        }
+        assert_eq!(row_on_disk(&snxlib, row_id).content_hash, before);
+    }
+}
+
+fn commit_into_measurement_at(snxlib: &std::path::Path, row_id: RowId, typed: &str) -> ParamValue {
     let (mut app, _boot) = Signex::new();
     app.library
-        .open_library(snxlib.clone())
+        .open_library(snxlib.to_path_buf())
         .expect("mount library");
-    let mut browser = LibraryBrowserState::new(snxlib.clone());
+    let mut browser = LibraryBrowserState::new(snxlib.to_path_buf());
     browser.active_table = Some(TABLE.to_string());
     browser
         .cell_edit
         .insert((row_id, format!("parameters.{PARAM}")), typed.to_string());
-    app.library.library_browsers.insert(snxlib.clone(), browser);
+    app.library
+        .library_browsers
+        .insert(snxlib.to_path_buf(), browser);
     let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
-        library_path: snxlib.clone(),
+        library_path: snxlib.to_path_buf(),
         table: TABLE.to_string(),
         row_id,
         column: format!("parameters.{PARAM}"),
     }));
-    param_on_disk(&snxlib, row_id)
+    param_on_disk(snxlib, row_id)
 }
 
-/// #1572 phase 1 changes nothing about how a browser cell commits: the
-/// cell is seeded with the stored form (`4700 ohm`), the typed number is
-/// in the stored unit, and the stored unit string is kept.
+/// The Edit Component Details modal, opened on the row, driven by `steps`
+/// and saved. Returns what the modal seeded for the parameter (buffer and
+/// prefix) and the app, so a test can read the draft error.
+fn edit_in_modal(
+    snxlib: &std::path::Path,
+    row_id: RowId,
+    steps: Vec<BrowserEditMsg>,
+) -> (Signex, Option<(String, String)>) {
+    edit_param_in_modal(snxlib, row_id, PARAM, steps)
+}
+
+fn edit_param_in_modal(
+    snxlib: &std::path::Path,
+    row_id: RowId,
+    param: &str,
+    steps: Vec<BrowserEditMsg>,
+) -> (Signex, Option<(String, String)>) {
+    let (mut app, _boot) = Signex::new();
+    app.library
+        .open_library(snxlib.to_path_buf())
+        .expect("mount library");
+    let mut browser = LibraryBrowserState::new(snxlib.to_path_buf());
+    browser.active_table = Some(TABLE.to_string());
+    app.library
+        .library_browsers
+        .insert(snxlib.to_path_buf(), browser);
+    let _ = app.update(Message::Library(LibraryMessage::BrowserOpenEditModal {
+        library_path: snxlib.to_path_buf(),
+        table: TABLE.to_string(),
+        row_id,
+    }));
+    let seeded = app
+        .library
+        .library_browsers
+        .get(snxlib)
+        .and_then(|b| b.edit_modal.as_ref())
+        .and_then(|m| m.param_buf.get(param).cloned());
+    for msg in steps {
+        let _ = app.update(Message::Library(LibraryMessage::BrowserEdit {
+            library_path: snxlib.to_path_buf(),
+            msg,
+        }));
+    }
+    (app, seeded)
+}
+
+fn modal_error(app: &Signex, snxlib: &std::path::Path) -> Option<String> {
+    app.library
+        .library_browsers
+        .get(snxlib)
+        .and_then(|b| b.edit_modal.as_ref())
+        .and_then(|m| m.error.clone())
+}
+
+fn set_number(text: &str) -> BrowserEditMsg {
+    BrowserEditMsg::SetParamValue {
+        key: PARAM.into(),
+        value: text.into(),
+    }
+}
+
+fn commit_and_save() -> Vec<BrowserEditMsg> {
+    vec![
+        BrowserEditMsg::CommitParam { key: PARAM.into() },
+        BrowserEditMsg::Save,
+    ]
+}
+
+/// #1606: a legacy `{4.7, "kΩ"}` opens as 4.7 with the k prefix and the
+/// ohm unit. Retyping the same number changes nothing (bytes and hash);
+/// typing 10 stores 10000 ohm, not 10 ohm.
 #[test]
-fn a_number_typed_into_a_canonical_cell_is_in_the_stored_unit() {
-    let stored = commit_into_measurement(4700.0, "ohm", "5600");
+fn the_modal_edits_a_legacy_kilo_ohm_value_as_4_7_with_the_k_prefix() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 4.7, "kΩ");
+    let before = signex_library::hash_row_content(&row_on_disk(&snxlib, row_id)).expect("hash");
+
+    // Unchanged retype.
+    let mut steps = vec![set_number("4.7")];
+    steps.extend(commit_and_save());
+    let (_app, seeded) = edit_in_modal(&snxlib, row_id, steps);
+    assert_eq!(seeded, Some(("4.7".to_string(), "ohm".to_string())));
     assert_eq!(
-        stored,
+        param_on_disk(&snxlib, row_id),
         ParamValue::Measurement {
-            value: 5600.0,
+            value: 4.7,
+            unit: "kΩ".into()
+        }
+    );
+    assert_eq!(row_on_disk(&snxlib, row_id).content_hash, before);
+
+    // A real edit.
+    let mut steps = vec![set_number("10")];
+    steps.extend(commit_and_save());
+    let _ = edit_in_modal(&snxlib, row_id, steps);
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 10_000.0,
             unit: "ohm".into()
         }
     );
 }
 
-/// A legacy `{4.7, "kΩ"}` cell is seeded `4.7 kΩ`; typing 5.6 stores
-/// `{5.6, "kΩ"}`, not a rewritten base form.
+/// Canonical `{4700, "ohm"}`: 4.7 with the M picked stores 4.7e6 ohm.
 #[test]
-fn a_number_typed_into_a_legacy_cell_keeps_the_stored_unit_string() {
-    let stored = commit_into_measurement(4.7, "kΩ", "5.6");
+fn the_modal_stores_the_picked_prefix_as_a_base_value() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 4700.0, "ohm");
+    let steps = vec![
+        set_number("4.7"),
+        BrowserEditMsg::ParamPrefixPicked {
+            key: PARAM.into(),
+            prefix: signex_types::quantity::SiPrefix::Mega,
+        },
+        BrowserEditMsg::Save,
+    ];
+    let _ = edit_in_modal(&snxlib, row_id, steps);
     assert_eq!(
-        stored,
+        param_on_disk(&snxlib, row_id),
         ParamValue::Measurement {
-            value: 5.6,
-            unit: "kΩ".into()
+            value: 4_700_000.0,
+            unit: "ohm".into()
         }
     );
 }
 
-/// Retyping the seeded number leaves the row as stored.
+/// `4k7` is refused in the number field: nothing is stored, and the modal
+/// says why.
 #[test]
-fn retyping_the_seeded_number_leaves_the_row_as_stored() {
-    for (value, unit) in [(4700.0, "ohm"), (4.7, "kΩ"), (0.1, "uF")] {
-        let stored = commit_into_measurement(value, unit, &value.to_string());
-        assert_eq!(
-            stored,
-            ParamValue::Measurement {
-                value,
-                unit: unit.into()
-            }
+fn the_modal_refuses_a_prefix_typed_into_the_number_field() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 4700.0, "ohm");
+    let mut steps = vec![set_number("4k7")];
+    steps.extend(commit_and_save());
+    let (app, _) = edit_in_modal(&snxlib, row_id, steps);
+    assert!(modal_error(&app, &snxlib).is_some(), "the refusal is shown");
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 4700.0,
+            unit: "ohm".into()
+        }
+    );
+}
+
+/// An unknown unit opens as the raw number with its own unit text and no
+/// prefix, and keeps that string when the number changes.
+#[test]
+fn the_modal_keeps_the_text_editor_for_an_unknown_unit() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 1.5, "furlong");
+    let mut steps = vec![set_number("2")];
+    steps.extend(commit_and_save());
+    let (_app, seeded) = edit_in_modal(&snxlib, row_id, steps);
+    assert_eq!(seeded, Some(("1.5".to_string(), "furlong".to_string())));
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 2.0,
+            unit: "furlong".into()
+        }
+    );
+}
+
+/// The unit is picked, not typed: picking farad and saving stores the
+/// farad token with the number the field shows (the k prefix does not
+/// exist for farad, so the picker falls back to none).
+#[test]
+fn the_modal_stores_the_unit_that_was_picked() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 4700.0, "ohm");
+    let steps = vec![
+        BrowserEditMsg::SetParamUnit {
+            key: PARAM.into(),
+            unit: "F".into(),
+        },
+        BrowserEditMsg::Save,
+    ];
+    let _ = edit_in_modal(&snxlib, row_id, steps);
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 4.7,
+            unit: "F".into()
+        }
+    );
+}
+
+/// A unit string the editor does not know is shown read-only: saving the
+/// row without touching it keeps the string and the content hash.
+#[test]
+fn an_unknown_unit_row_saves_with_its_unit_untouched() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_measurement(tmp.path(), 1.5, "furlong");
+    let before = signex_library::hash_row_content(&row_on_disk(&snxlib, row_id)).expect("hash");
+    let _ = edit_in_modal(&snxlib, row_id, vec![BrowserEditMsg::Save]);
+    assert_eq!(
+        param_on_disk(&snxlib, row_id),
+        ParamValue::Measurement {
+            value: 1.5,
+            unit: "furlong".into()
+        }
+    );
+    assert_eq!(row_on_disk(&snxlib, row_id).content_hash, before);
+}
+
+/// The row `class` with `param` stored as `{value, unit}`, edited through
+/// the modal with `steps`; returns the app and the parameter on disk.
+fn class_row_edit(
+    class: &str,
+    stored: (f64, &str),
+    steps: Vec<BrowserEditMsg>,
+) -> (Signex, PathBuf, RowId, ParamValue) {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_param(tmp.path(), class, "value", stored.0, stored.1);
+    let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", steps);
+    let on_disk = LocalGitAdapter::open(&snxlib)
+        .expect("re-open library")
+        .read_row(TABLE, row_id)
+        .expect("read row")
+        .parameters["value"]
+        .clone();
+    // Keep the temp dir alive until the read above is done.
+    drop(tmp);
+    (app, snxlib, row_id, on_disk)
+}
+
+fn set_value(text: &str) -> BrowserEditMsg {
+    BrowserEditMsg::SetParamValue {
+        key: "value".into(),
+        value: text.into(),
+    }
+}
+
+fn ohms(value: f64) -> ParamValue {
+    ParamValue::Measurement {
+        value,
+        unit: "ohm".into(),
+    }
+}
+
+fn pick_unit_msg(unit: &str) -> BrowserEditMsg {
+    BrowserEditMsg::SetParamUnit {
+        key: "value".into(),
+        unit: unit.into(),
+    }
+}
+
+/// A resistor's value slot fixes its unit: picking F is refused, the
+/// resistance is stored as it was and the modal says why.
+#[test]
+fn a_resistor_value_slot_refuses_a_picked_unit() {
+    let (_, _, _, on_disk) = class_row_edit(
+        "resistor",
+        (4700.0, "ohm"),
+        vec![pick_unit_msg("F"), BrowserEditMsg::Save],
+    );
+    assert_eq!(on_disk, ohms(4700.0));
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_param(tmp.path(), "resistor", "value", 4700.0, "ohm");
+    let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", vec![pick_unit_msg("F")]);
+    let err = modal_error(&app, &snxlib).expect("the refusal is shown");
+    assert!(err.contains("fixes its unit"), "{err}");
+}
+
+/// Picking "no unit" cannot turn a slot measurement into a plain number.
+#[test]
+fn no_unit_cannot_turn_a_slot_measurement_into_a_number() {
+    let (_, _, _, on_disk) = class_row_edit(
+        "resistor",
+        (4700.0, "ohm"),
+        vec![pick_unit_msg(""), BrowserEditMsg::Save],
+    );
+    assert_eq!(on_disk, ohms(4700.0));
+}
+
+/// A negative resistance is refused at Enter and at Save; nothing is stored.
+#[test]
+fn a_negative_slot_value_is_refused_and_save_is_blocked() {
+    let (app, snxlib, _, on_disk) = class_row_edit(
+        "resistor",
+        (4700.0, "ohm"),
+        vec![set_value("-4.7"), BrowserEditMsg::Save],
+    );
+    assert_eq!(on_disk, ohms(4700.0));
+    let err = modal_error(&app, &snxlib).expect("the refusal is shown");
+    assert!(err.contains("negative not allowed"), "{err}");
+}
+
+/// Zero is not a capacitance: refused and Save blocked.
+#[test]
+fn a_zero_capacitance_is_refused_and_save_is_blocked() {
+    let (app, snxlib, _, on_disk) = class_row_edit(
+        "capacitor",
+        (1e-7, "F"),
+        vec![set_value("0"), BrowserEditMsg::Save],
+    );
+    assert_eq!(
+        on_disk,
+        ParamValue::Measurement {
+            value: 1e-7,
+            unit: "F".into()
+        }
+    );
+    let err = modal_error(&app, &snxlib).expect("the refusal is shown");
+    assert!(err.contains("zero not allowed"), "{err}");
+}
+
+/// A legacy wrong-unit value on a slot stays as it is when the row is
+/// saved without touching it.
+#[test]
+fn a_legacy_wrong_unit_slot_value_is_kept_when_untouched() {
+    let (_, _, _, on_disk) = class_row_edit("resistor", (4.7, "V"), vec![BrowserEditMsg::Save]);
+    assert_eq!(
+        on_disk,
+        ParamValue::Measurement {
+            value: 4.7,
+            unit: "V".into()
+        }
+    );
+}
+
+/// Editing it stores the number in the slot's unit.
+#[test]
+fn editing_a_legacy_wrong_unit_slot_value_stores_the_slot_unit() {
+    let (_, _, _, on_disk) = class_row_edit(
+        "resistor",
+        (4.7, "V"),
+        vec![
+            set_value("5.6"),
+            BrowserEditMsg::ParamPrefixPicked {
+                key: "value".into(),
+                prefix: signex_types::quantity::SiPrefix::Kilo,
+            },
+            BrowserEditMsg::Save,
+        ],
+    );
+    assert_eq!(on_disk, ohms(5600.0));
+}
+
+/// A number whose prefix overflows is refused and blocks Save.
+#[test]
+fn an_overflowing_slot_edit_is_refused_and_save_is_blocked() {
+    let (app, snxlib, _, on_disk) = class_row_edit(
+        "resistor",
+        (4700.0, "ohm"),
+        vec![
+            set_value("1e308"),
+            BrowserEditMsg::ParamPrefixPicked {
+                key: "value".into(),
+                prefix: signex_types::quantity::SiPrefix::Mega,
+            },
+            BrowserEditMsg::Save,
+        ],
+    );
+    assert_eq!(on_disk, ohms(4700.0));
+    assert!(modal_error(&app, &snxlib).is_some());
+}
+
+/// `4k7` shows its refusal as it is typed, before Enter or Save.
+#[test]
+fn a_prefix_typed_into_the_modal_number_is_flagged_at_once() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_param(tmp.path(), "resistor", "value", 4700.0, "ohm");
+    let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", vec![set_value("4k7")]);
+    assert!(modal_error(&app, &snxlib).is_some());
+}
+
+/// Typing in another field does not wipe a refusal that is showing.
+#[test]
+fn typing_elsewhere_keeps_a_pending_refusal() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (snxlib, row_id) = library_with_param(tmp.path(), "resistor", "value", 4700.0, "ohm");
+    let other = BrowserEditMsg::SetParamValue {
+        key: "other".into(),
+        value: "5".into(),
+    };
+    let (app, _) = edit_param_in_modal(&snxlib, row_id, "value", vec![pick_unit_msg("F"), other]);
+    let err = modal_error(&app, &snxlib).expect("the refusal is still showing");
+    assert!(err.contains("fixes its unit"), "{err}");
+}
+
+/// An inline commit to a template measurement slot whose cell holds text
+/// or nothing is refused through the real `update` path: nothing changes
+/// on disk, the buffer stays in the cell, and the Messages panel says so.
+/// This pins the `row_template(..)` lookup in the cell commit handler.
+#[test]
+fn an_inline_commit_to_a_slot_cell_without_a_measurement_is_refused() {
+    let _ = signex_app::diagnostics::init_logging();
+    for stored in [Some(ParamValue::Text("x".into())), None] {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let (snxlib, row_id) = library_with_stored(tmp.path(), "resistor", "value", stored.clone());
+        let before = row_on_disk(&snxlib, row_id);
+
+        let (mut app, _boot) = Signex::new();
+        app.library
+            .open_library(snxlib.clone())
+            .expect("mount library");
+        let mut browser = LibraryBrowserState::new(snxlib.clone());
+        browser.active_table = Some(TABLE.to_string());
+        browser
+            .cell_edit
+            .insert((row_id, "parameters.value".to_string()), "10".to_string());
+        app.library.library_browsers.insert(snxlib.clone(), browser);
+        let _ = app.update(Message::Library(LibraryMessage::BrowserCellCommit {
+            library_path: snxlib.clone(),
+            table: TABLE.to_string(),
+            row_id,
+            column: "parameters.value".to_string(),
+        }));
+
+        let after = row_on_disk(&snxlib, row_id);
+        assert_eq!(after.parameters, before.parameters, "{stored:?}");
+        assert_eq!(after.content_hash, before.content_hash, "{stored:?}");
+        let kept = app
+            .library
+            .library_browsers
+            .get(&snxlib)
+            .and_then(|b| b.cell_edit.get(&(row_id, "parameters.value".to_string())))
+            .map(String::as_str);
+        assert_eq!(kept, Some("10"), "{stored:?}");
+        let panel = &app.document_state.panel_ctx.diagnostics;
+        assert!(
+            panel
+                .iter()
+                .any(|e| e.message.contains("browser cell commit refused")
+                    && e.message.contains("parameter=value")),
+            "{stored:?}: {:?}",
+            panel.iter().map(|e| &e.message).collect::<Vec<_>>()
         );
     }
 }

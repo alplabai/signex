@@ -56,6 +56,11 @@ impl Signex {
     /// Single click highlights the row; a second click on it within 500 ms
     /// opens (or focuses) that sheet — the Projects tree's rule.
     fn navigator_row_clicked(&mut self, path: &[usize]) {
+        // A row of the previous hierarchy would record a placement the project
+        // may no longer have; the click is ignored until the rebuild lands.
+        if !self.navigator_is_settled() {
+            return;
+        }
         let navigator = &mut self.document_state.panel_ctx.navigator;
         let Some(node) = navigator.node_at(path) else {
             return;
@@ -319,6 +324,26 @@ mod tests {
             memo.1 = std::time::Instant::now() + std::time::Duration::from_secs(3600);
         }
         let _ = app.handle_dock_navigator_panel_message(&select);
+    }
+
+    #[test]
+    fn a_double_click_while_the_hierarchy_rebuilds_opens_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, [_, mid, _]) = three_level_project(&dir, &[]);
+        app.refresh_panel_ctx();
+        app.settle_navigator();
+
+        // Opening a tab changes what the Navigator is built from.
+        app.open_or_focus_sheet_path(dir.path().join("leaf.snxsch"));
+        app.refresh_panel_ctx();
+        assert!(!app.navigator_is_settled(), "precondition: rebuild pending");
+
+        double_click(&mut app, &[0, 0]);
+
+        assert!(
+            !app.document_state.engines.contains_key(&mid),
+            "the row of the previous hierarchy must not open a sheet"
+        );
     }
 
     #[test]
