@@ -124,5 +124,12 @@ pub(super) fn net_members(ctx: &ErcContext) -> Vec<NetMembers<'_>> {
             net.leaves_sheet = true;
         }
     }
-    nets.into_values().collect()
+    let mut nets: Vec<NetMembers> = nets.into_values().collect();
+    // Pins and ports by uuid, so the pin a finding is reported at does not
+    // depend on document order.
+    for net in &mut nets {
+        net.pins.sort_by_key(|(s, p)| (s.uuid, p.anchor()));
+        net.power_ports.sort_by_key(|s| s.uuid);
+    }
+    nets
 }

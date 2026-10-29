@@ -96,6 +96,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             let mut s = symbol("U1", pt(10.0, 10.0));
             s.pins.push(ErcPin {
                 world_pos: pt(10.0, 10.0),
+                local_pos: pt(10.0, 10.0),
                 number: "1".into(),
                 electrical_type: PinDirection::Passive,
                 required: true,
@@ -164,6 +165,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
                 let mut s = symbol(reference, at);
                 s.pins.push(ErcPin {
                     world_pos: at,
+                    local_pos: at,
                     number: "1".into(),
                     electrical_type: PinDirection::Output,
                     required: true,
@@ -206,6 +208,7 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
                 let mut s = symbol(r, pt(10.0, 10.0));
                 s.pins.push(ErcPin {
                     world_pos: pt(10.0, 10.0),
+                    local_pos: pt(10.0, 10.0),
                     number: "1".into(),
                     electrical_type: PinDirection::Passive,
                     required: true,
@@ -269,6 +272,7 @@ fn with_pin(reference: &str, at: Point, direction: PinDirection) -> ErcSymbol {
     let mut s = symbol(reference, at);
     s.pins.push(ErcPin {
         world_pos: at,
+        local_pos: at,
         number: "1".into(),
         electrical_type: direction,
         required: true,
@@ -289,6 +293,7 @@ pub(crate) fn net_of(symbols: &[ErcSymbol]) -> ErcNet {
                 reference: s.reference.clone(),
                 number: p.number.clone(),
                 position: p.world_pos,
+                local_pos: p.local_pos,
                 direction: p.electrical_type,
                 is_power_flag: s.is_power && signex_net::is_power_flag(&s.lib_id),
             })

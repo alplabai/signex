@@ -17,13 +17,16 @@ type Placed<'a> = (&'a ErcSymbol, &'a str);
 /// The parts on this sheet, each as its placed units. A symbol placed more
 /// than once (a reused sheet) counts once per designator (#829).
 fn parts(ctx: &ErcContext) -> Vec<Vec<Placed<'_>>> {
-    let eligible: Vec<Placed> = ctx
+    let mut eligible: Vec<Placed> = ctx
         .symbols
         .iter()
         .filter(|s| !s.is_power)
         .flat_map(|s| s.placement_designators().into_iter().map(move |d| (s, d)))
         .filter(|(_, d)| !d.trim().starts_with('#'))
         .collect();
+    // By uuid, so the unit a part is reported at does not depend on document
+    // order.
+    eligible.sort_by_key(|(s, d)| (s.uuid, *d));
     group_into_parts(eligible.iter().map(|(s, d)| PartKey {
         reference: d.trim(),
         lib_id: normalized_lib_id(&s.lib_id),
@@ -61,11 +64,16 @@ fn report_parts(
             continue;
         }
         let (first, designator) = part[0];
-        out.push(
-            Diagnostic::new(kind, message(display(designator)), first.position)
-                .with_primary(sel(first.uuid, SelectedKind::Symbol))
-                .tagged(designator.trim()),
-        );
+        let d = Diagnostic::new(kind, message(display(designator)), first.position)
+            .with_primary(sel(first.uuid, SelectedKind::Symbol));
+        // Only a symbol placed several times needs the designator to tell its
+        // findings apart; otherwise the uuid is the identity, and a
+        // re-annotation lapses a waiver instead of orphaning it.
+        out.push(if first.instance_designators.is_empty() {
+            d
+        } else {
+            d.tagged(designator.trim())
+        });
     }
 }
 

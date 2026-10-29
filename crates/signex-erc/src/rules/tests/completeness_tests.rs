@@ -216,6 +216,7 @@ fn port_on(value: &str, lib_id: &str, at: Point) -> ErcSymbol {
     p.lib_id = lib_id.into();
     p.pins.push(ErcPin {
         world_pos: at,
+        local_pos: at,
         number: "1".into(),
         electrical_type: PinDirection::PowerInput,
         required: true,
@@ -380,10 +381,11 @@ fn completeness_rules_judge_each_placement_designator() {
     assert_eq!(found(&partial, RuleKind::UnannotatedDesignator).len(), 1);
     // A missing footprint is reported once per placement designator.
     let out = found(&annotated, RuleKind::PartWithoutFootprint);
-    let messages: Vec<&str> = out.iter().map(|d| d.message.as_str()).collect();
+    let mut messages: Vec<&str> = out.iter().map(|d| d.message.as_str()).collect();
+    messages.sort_unstable();
     assert_eq!(
         messages,
-        ["Part R7 has no footprint", "Part R107 has no footprint"]
+        ["Part R107 has no footprint", "Part R7 has no footprint"]
     );
 }
 
@@ -413,6 +415,7 @@ fn two_power_pins_of_one_part_on_two_unnamed_nets_are_two_waiver_identities() {
     let mut u1 = pin_at("U1", pt(0.0, 0.0), PinDirection::PowerInput);
     u1.pins.push(ErcPin {
         world_pos: pt(0.0, 12.7),
+        local_pos: pt(0.0, 12.7),
         number: "2".into(),
         electrical_type: PinDirection::PowerInput,
         required: true,

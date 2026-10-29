@@ -34,10 +34,18 @@ pub fn project_units_not_placed<K: Clone>(sheets: &[(K, &SchematicSheet)]) -> Ve
                     unit_count,
                     uuid: symbol.uuid,
                     at: symbol.position,
+                    placed_several_times: symbol.valid_instance_entries().next().is_some(),
                 });
             }
         }
     }
+    // By uuid, so the unit (and sheet) a part is reported at does not depend
+    // on sheet or document order.
+    let mut order: Vec<usize> = (0..units.len()).collect();
+    order.sort_by_key(|&i| (units[i].uuid, units[i].reference));
+    let owners: Vec<(&K, &SchematicSheet)> = order.iter().map(|&i| owners[i]).collect();
+    let mut slots: Vec<Option<PlacedUnit>> = units.into_iter().map(Some).collect();
+    let units: Vec<PlacedUnit> = order.iter().filter_map(|&i| slots[i].take()).collect();
     missing_units(&units)
         .into_iter()
         .filter(|(first, _)| !has_no_erc_directive_at(owners[*first].1, &units[*first].at))

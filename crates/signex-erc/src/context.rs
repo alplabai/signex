@@ -55,6 +55,9 @@ impl PaperSize {
 #[derive(Debug, Clone)]
 pub struct ErcPin {
     pub world_pos: Point,
+    /// The pin's tip in the symbol's own (library) coordinates: stable when
+    /// the part moves, and distinct for two pins sharing a number or name.
+    pub local_pos: Point,
     /// Pin number (falls back to the name when the library pin has none) —
     /// the `pin` half of a `designator.pin` label in diagnostics.
     pub number: String,
@@ -101,6 +104,29 @@ pub struct ErcSymbol {
     /// Component attributes / fields (from symbol properties).
     /// DSL: `component.attr("class")`.
     pub attrs: HashMap<String, String>,
+}
+
+/// A pin's anchor for a waiver identity: `<number>@<x>,<y>`, the tip in the
+/// symbol's own coordinates in `pt_key` units, so two pins that share a
+/// number (or, unnumbered, a name) stay apart and moving the part changes
+/// nothing.
+pub fn pin_anchor(number: &str, local: &Point) -> String {
+    let (x, y) = pt_key(local);
+    format!("{number}@{x},{y}")
+}
+
+impl ErcPin {
+    /// See [`pin_anchor`].
+    pub fn anchor(&self) -> String {
+        pin_anchor(&self.number, &self.local_pos)
+    }
+}
+
+impl ErcNetPin {
+    /// See [`pin_anchor`].
+    pub fn anchor(&self) -> String {
+        pin_anchor(&self.number, &self.local_pos)
+    }
 }
 
 impl ErcSymbol {
@@ -236,6 +262,8 @@ pub struct ErcNetPin {
     pub number: String,
     /// World-space position of the pin tip.
     pub position: Point,
+    /// The tip in the symbol's own coordinates (see [`ErcPin::local_pos`]).
+    pub local_pos: Point,
     pub direction: PinDirection,
     /// `true` when the owning symbol is a power flag (`PWR_FLAG`), not an
     /// ordinary power port. A flag declares a rail driven without naming it,
@@ -439,6 +467,7 @@ impl ErcContext {
                         let world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         ErcPin {
                             world_pos: Point::new(world.x, world.y),
+                            local_pos: lp.pin.position,
                             number: if lp.pin.number.is_empty() {
                                 lp.pin.name.clone()
                             } else {
@@ -598,6 +627,7 @@ fn summarize_nets(
                 reference: sym.reference.clone(),
                 number: pin.number.clone(),
                 position: pin.world_pos,
+                local_pos: pin.local_pos,
                 direction: pin.electrical_type,
                 is_power_flag: sym.is_power && signex_net::is_power_flag(&sym.lib_id),
             });
@@ -691,6 +721,7 @@ mod tests {
     fn pin(pos: Point, dir: PinDirection) -> ErcPin {
         ErcPin {
             world_pos: pos,
+            local_pos: pos,
             number: "1".into(),
             electrical_type: dir,
             required: true,

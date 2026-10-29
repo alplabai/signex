@@ -134,7 +134,7 @@ pub(crate) fn unused_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     pin.world_pos,
                 )
                 .with_primary(sel(symbol.uuid, SelectedKind::Symbol))
-                .at_pin_number(pin.number.clone()),
+                .at_pin_number(pin.anchor()),
             );
         }
     }
@@ -167,9 +167,14 @@ pub(crate) fn duplicate_ref_designator(ctx: &ErcContext, out: &mut Vec<Diagnosti
             by_ref.entry(r).or_default().push((origin, *name, symbol));
         }
     }
-    // Sorted so the output order does not depend on hash iteration.
+    // Sorted so the output order does not depend on hash iteration, and each
+    // reference's entries by (sheet, uuid) so which part is reported against
+    // which (primary / peer) does not depend on document order.
     let mut by_ref: Vec<(&str, Vec<Entry>)> = by_ref.into_iter().collect();
     by_ref.sort_by(|a, b| a.0.cmp(b.0));
+    for (_, entries) in &mut by_ref {
+        entries.sort_by_key(|e| (e.0, e.2.uuid));
+    }
     for (reference, entries) in by_ref {
         let symbols: Vec<&crate::context::ErcSymbol> = entries.iter().map(|e| e.2).collect();
         // Units of one multi-unit part share a designator legitimately; only
@@ -755,11 +760,15 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     // the tip that put it there. Insertion order keeps the report stable.
     type RootPorts<'a> = ((i64, i64), Vec<(&'a crate::context::ErcSymbol, Point)>);
     let mut roots: Vec<RootPorts> = Vec::new();
-    for symbol in ctx
+    // By uuid, so which port speaks for a value does not depend on document
+    // order.
+    let mut ports_by_id: Vec<&crate::context::ErcSymbol> = ctx
         .symbols
         .iter()
         .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
-    {
+        .collect();
+    ports_by_id.sort_by_key(|s| s.uuid);
+    for symbol in ports_by_id {
         for tip in port_tips(symbol) {
             let root = conn.root_of(&tip);
             let slot = match roots.iter().position(|(r, _)| *r == root) {
@@ -776,7 +785,9 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         }
     }
 
-    for (_, ports) in roots {
+    for (_, mut ports) in roots {
+        // Rails in name order: the primary / peer pair is canonical.
+        ports.sort_by(|x, y| x.0.value.cmp(&y.0.value));
         let [(a, tip), (b, b_tip), rest @ ..] = ports.as_slice() else {
             continue;
         };
@@ -789,7 +800,7 @@ pub(crate) fn power_port_short(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             port.pins
                 .iter()
                 .find(|p| pt_key(&p.world_pos) == pt_key(at))
-                .map(|p| p.number.clone())
+                .map(|p| p.anchor())
                 .unwrap_or_default()
         };
         let mut names = format!("'{}' and '{}'", a.value, b.value);

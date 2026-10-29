@@ -22,6 +22,9 @@ pub(crate) struct PlacedUnit<'a> {
     pub unit_count: u32,
     pub uuid: Uuid,
     pub at: Point,
+    /// The symbol has instance entries (several placements): its findings
+    /// need the designator to stay apart.
+    pub placed_several_times: bool,
 }
 
 impl PlacedUnit<'_> {
@@ -95,13 +98,17 @@ pub(crate) fn finding(first: &PlacedUnit, gap: &UnitGap) -> Diagnostic {
              {MAX_UNITS_PER_PART}; the symbol is likely corrupt and its units were not checked"
         ),
     };
-    Diagnostic::new(RuleKind::UnitsNotPlaced, message, first.at)
-        .with_primary(sel(first.uuid, SelectedKind::Symbol))
-        .tagged(reference)
+    let d = Diagnostic::new(RuleKind::UnitsNotPlaced, message, first.at)
+        .with_primary(sel(first.uuid, SelectedKind::Symbol));
+    if first.placed_several_times {
+        d.tagged(reference)
+    } else {
+        d
+    }
 }
 
 pub(crate) fn units_not_placed(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let units: Vec<PlacedUnit> = ctx
+    let mut units: Vec<PlacedUnit> = ctx
         .symbols
         .iter()
         .flat_map(|s| s.placement_designators().into_iter().map(move |d| (s, d)))
@@ -113,8 +120,12 @@ pub(crate) fn units_not_placed(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             unit_count: s.unit_count,
             uuid: s.uuid,
             at: s.position,
+            placed_several_times: !s.instance_designators.is_empty(),
         })
         .collect();
+    // By uuid, so the unit a part is reported at does not depend on document
+    // order.
+    units.sort_by_key(|u| (u.uuid, u.reference));
     for (first, gap) in missing_units(&units) {
         out.push(finding(&units[first], &gap));
     }

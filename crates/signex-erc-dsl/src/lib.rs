@@ -79,6 +79,7 @@ mod tests {
                 is_power: false,
                 pins: vec![ErcPin {
                     world_pos: Point::new(10.0, 10.0),
+                    local_pos: Point::new(10.0, 10.0),
                     number: "1".into(),
                     electrical_type: PinDirection::Output,
                     required: true,
@@ -183,6 +184,7 @@ then warning \"hit\"
             reference: sym.reference.clone(),
             number: "1".into(),
             position: sym.pins[0].world_pos,
+            local_pos: sym.pins[0].local_pos,
             direction: PinDirection::Output,
             is_power_flag: false,
         }];
@@ -263,6 +265,7 @@ then warning \"hit\"
             .iter()
             .map(|&electrical_type| ErcPin {
                 world_pos: Point::new(10.0, 10.0),
+                local_pos: Point::new(10.0, 10.0),
                 number: "1".into(),
                 electrical_type,
                 required: true,

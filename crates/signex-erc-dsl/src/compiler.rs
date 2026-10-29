@@ -256,7 +256,7 @@ fn evaluate_rule(
                             primary: Some(SelectedItem::new(symbol.uuid, SelectedKind::Symbol)),
                             peer: None,
                             net: None,
-                            anchor_pin: Some(pin.number.clone()),
+                            anchor_pin: Some(pin.anchor()),
                             tag: None,
                         });
                     }

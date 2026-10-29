@@ -101,13 +101,14 @@ fn the_project_pass_uses_placement_designators_and_no_erc_directives() {
         })
         .collect();
     let found = project_units_not_placed(&[("s", &sheet)]);
-    let parts: Vec<&str> = found
+    let mut parts: Vec<&str> = found
         .iter()
         .map(|(_, v)| v.message.split(' ').nth(1).unwrap_or(""))
         .collect();
+    parts.sort_unstable();
     assert_eq!(
         parts,
-        ["U7", "U107"],
+        ["U107", "U7"],
         "one finding per placement, none for U?"
     );
 

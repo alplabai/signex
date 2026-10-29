@@ -80,6 +80,7 @@ mod tests {
             reference: reference.into(),
             number: number.into(),
             position: Point::new(x, 0.0),
+            local_pos: Point::new(x, 0.0),
             direction: PinDirection::Passive,
             is_power_flag: false,
         }

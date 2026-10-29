@@ -54,6 +54,7 @@ fn every_rule_fixture_gives_each_finding_its_own_identity() {
 fn pin(number: &str, at: Point, direction: PinDirection, connected: bool) -> ErcPin {
     ErcPin {
         world_pos: at,
+        local_pos: at,
         number: number.into(),
         electrical_type: direction,
         required: true,
@@ -68,6 +69,7 @@ fn net_pin(s: &ErcSymbol, p: &ErcPin) -> ErcNetPin {
         reference: s.reference.clone(),
         number: p.number.clone(),
         position: p.world_pos,
+        local_pos: p.local_pos,
         direction: p.electrical_type,
         is_power_flag: false,
     }
@@ -141,7 +143,14 @@ fn many_rules_at_once() -> ErcContext {
             .push(pin(n, p(152.4, y), PinDirection::PowerInput, true));
         c.wires.push(wire(p(127.0, y), p(152.4, y)));
     }
-    c.symbols.extend([u1, u2, u3, u4, r1, p33, p5]);
+    // U5: two unnumbered pins that share a name (the number falls back to
+    // it), both unconnected.
+    let mut u5 = symbol("U5", p(177.8, 0.0));
+    u5.pins = vec![
+        pin("NC", p(177.8, 0.0), PinDirection::Passive, false),
+        pin("NC", p(177.8, 2.54), PinDirection::Passive, false),
+    ];
+    c.symbols.extend([u1, u2, u3, u4, r1, p33, p5, u5]);
     // A sheet symbol with no pins whose file did not load.
     c.child_sheets.push(ErcChildSheet {
         uuid: Uuid::new_v4(),
@@ -170,6 +179,11 @@ fn a_sheet_tripping_many_rules_gives_each_finding_its_own_identity() {
     assert_eq!(r1, 2, "{found:?}");
     assert!(count(RuleKind::BadHierSheetPin) >= 2, "{found:?}");
     assert_eq!(count(RuleKind::PowerPortShort), 2, "{found:?}");
+    let u5_unused = engine::run_all(&c)
+        .iter()
+        .filter(|d| d.rule_kind == RuleKind::UnusedPin && d.message.contains("U5"))
+        .count();
+    assert_eq!(u5_unused, 2, "{found:?}");
     let shared = shared_identities(&c);
     assert!(shared.is_empty(), "{shared:?}");
 }
@@ -197,4 +211,74 @@ fn a_waived_conflict_between_two_parts_does_not_hide_a_later_one() {
     let waiver = super::new_waiver(&key, "D0", "bus by design", "me", "").expect("waiver");
     let later = super::split_waived(on("VCC"), &[waiver]);
     assert_eq!((later.kept.len(), later.waived.len()), (1, 0));
+}
+
+/// Every waivable `(rule id, identity)` of a run, sorted, duplicates kept.
+fn identities(ctx: &ErcContext) -> Vec<(String, Vec<String>)> {
+    let sheet = SchematicSheet::default();
+    let mut out: Vec<(String, Vec<String>)> = engine::run_all(ctx)
+        .into_iter()
+        .map(Violation::from)
+        .map(|v| (v.rule_id.to_string(), identity_objects(&v, &sheet)))
+        .filter(|(_, id)| !id.is_empty())
+        .collect();
+    out.sort();
+    out
+}
+
+/// The same sheet with its symbols (and each net's pins) in reverse order.
+fn reversed(ctx: &ErcContext) -> ErcContext {
+    let mut r = ctx.clone();
+    r.symbols.reverse();
+    for net in &mut r.nets {
+        net.pins.reverse();
+        net.pin_types.reverse();
+    }
+    r
+}
+
+#[test]
+fn identities_do_not_depend_on_symbol_order() {
+    let mut cases: Vec<(String, ErcContext)> = RuleKind::ALL
+        .into_iter()
+        .map(|k| (format!("{k:?}"), context_for(k)))
+        .collect();
+    cases.push(("many rules".into(), many_rules_at_once()));
+    for (name, ctx) in cases {
+        assert_eq!(identities(&ctx), identities(&reversed(&ctx)), "{name}");
+    }
+}
+
+#[test]
+fn re_annotating_a_single_placement_part_lapses_its_waiver() {
+    use signex_types::schematic::Symbol;
+    let id = Uuid::new_v4();
+    let run = |reference: &str| {
+        let mut c = empty();
+        let mut s = symbol(reference, Point::new(25.4, 25.4));
+        s.uuid = id;
+        c.symbols.push(s);
+        let sheet = SchematicSheet {
+            symbols: vec![Symbol {
+                uuid: id,
+                reference: reference.into(),
+                position: Point::new(25.4, 25.4),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut found: Vec<Violation> = engine::run_all(&c)
+            .into_iter()
+            .map(Violation::from)
+            .filter(|v| v.rule == RuleKind::PartWithoutFootprint)
+            .collect();
+        super::stamp_keys(&mut found, &sheet);
+        found
+    };
+    let before = run("R5");
+    let key = before[0].waiver_key.clone().expect("waivable");
+    let waiver = super::new_waiver(&key, "R5", "fitted later", "me", "").expect("waiver");
+    let after = super::split_waived(run("R7"), &[waiver]);
+    assert!(after.lapsed.contains(&0), "LAPSED, not unmatched");
+    assert_eq!(after.kept.len(), 1);
 }

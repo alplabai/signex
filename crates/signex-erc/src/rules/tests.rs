@@ -112,6 +112,7 @@ fn symbol_with_pin(reference: &str, world_pos: Point, connected: bool) -> ErcSym
         is_power: false,
         pins: vec![ErcPin {
             world_pos,
+            local_pos: world_pos,
             number: "1".into(),
             electrical_type: PinDirection::Passive,
             required: true,
@@ -181,6 +182,7 @@ fn missing_power_flag_reads_the_port_net_at_its_pin_tip() {
     let mut port = power_port("+3V3", pt(100.0, 100.0));
     port.pins.push(ErcPin {
         world_pos: pt(10.0, 0.0),
+        local_pos: pt(10.0, 0.0),
         number: "1".into(),
         electrical_type: PinDirection::PowerInput,
         required: true,
@@ -627,6 +629,7 @@ fn power_port_with_tip(value: &str, origin: Point, tip: Point) -> ErcSymbol {
     port.uuid = Uuid::new_v4();
     port.pins = vec![ErcPin {
         world_pos: tip,
+        local_pos: tip,
         number: "1".into(),
         electrical_type: PinDirection::PowerInput,
         required: true,
