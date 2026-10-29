@@ -126,12 +126,13 @@ impl Signex {
     /// is never displaced by the hover's own timer.
     pub(super) fn wait_for_net_index(
         &mut self,
+        project: ProjectId,
         action: PendingNetAction,
         build: Task<Message>,
     ) -> Task<Message> {
         let nav = &mut self.document_state.net_nav;
         if action != PendingNetAction::HoverDwell || nav.pending.is_none() {
-            nav.pending = Some(action);
+            nav.pending = Some((project, action));
         }
         build
     }
@@ -145,36 +146,59 @@ impl Signex {
                 IndexLookup::Ready(_) | IndexLookup::Unavailable => Task::none(),
             },
             Stored::Failed(reason) => {
-                self.document_state.net_nav.pending = None;
+                let nav = &mut self.document_state.net_nav;
+                if nav.pending.is_some_and(|(p, _)| p == outcome.project) {
+                    nav.pending = None;
+                }
                 crate::diagnostics::log_warning(messages::index_failed(&reason));
                 Task::none()
             }
             Stored::Fresh(data) => {
                 self.report_index_warnings(outcome);
                 self.refresh_highlight_from(outcome.project, &data);
-                match self.document_state.net_nav.pending.take() {
-                    Some(action) => self.run_pending_net_action(action),
-                    None => Task::none(),
-                }
+                self.run_pending_for(outcome.project)
             }
         }
     }
 
-    /// Say which sheets would not read and what the stitch found, once per
-    /// change. A project with net classes already hears the same lines from
-    /// the net-class style refresh, so it is left to that one.
-    fn report_index_warnings(&mut self, outcome: &IndexOutcome) {
-        let fresh = self
+    /// Run the parked command when its own project's index lands, and only
+    /// then, while that project is still open and in view. A command parked
+    /// for another project waits for that one's build, or is dropped when it
+    /// is gone; it never runs against a different project.
+    fn run_pending_for(&mut self, landed: ProjectId) -> Task<Message> {
+        let Some((project, action)) = self.document_state.net_nav.pending.take() else {
+            return Task::none();
+        };
+        if project != landed {
+            if self.document_state.project_by_id(project).is_some() {
+                self.document_state.net_nav.pending = Some((project, action));
+            }
+            return Task::none();
+        }
+        let in_view = self
             .document_state
-            .net_nav
-            .index
-            .new_warnings(outcome.project, &outcome.warnings);
-        if !outcome.key.classes.is_empty() {
-            return;
+            .active_path
+            .as_deref()
+            .and_then(|p| self.project_of_sheet(p))
+            == Some(project);
+        if in_view {
+            self.run_pending_net_action(action)
+        } else {
+            Task::none()
         }
-        for warning in fresh {
-            crate::diagnostics::log_warning(messages::index_warning(&warning));
+    }
+
+    /// Say which sheets would not read and what the stitch found. Each is said
+    /// once until it clears, whichever of this and the net-class style refresh
+    /// meets it first.
+    fn report_index_warnings(&mut self, outcome: &IndexOutcome) {
+        let reported = &mut self.document_state.net_nav.reported;
+        for warning in &outcome.warnings {
+            if reported.claim(outcome.project, warning) {
+                crate::diagnostics::log_warning(messages::index_warning(warning));
+            }
         }
+        reported.settle(outcome.project, &outcome.warnings);
     }
 
     /// Keep a highlighted net's index fresh through edits, so what stays
@@ -205,6 +229,7 @@ impl Signex {
             .map(|p| p.project)
             .collect();
         self.document_state.net_nav.index.retain_projects(&open);
+        self.document_state.net_nav.reported.retain_projects(&open);
         if self.document_state.project_by_id(project).is_none() {
             self.document_state.net_nav.highlight = None;
             crate::diagnostics::log_info(messages::project_closed());

@@ -84,7 +84,7 @@ impl Signex {
                 Task::none()
             }
             IndexLookup::Building(build) => {
-                self.wait_for_net_index(PendingNetAction::HoverDwell, build)
+                self.wait_for_net_index(project, PendingNetAction::HoverDwell, build)
             }
             IndexLookup::Unavailable => {
                 self.settle_hover(None);

@@ -346,3 +346,79 @@ fn an_auto_name_is_never_trusted_to_find_a_net_again() {
     let gone = (key("root.sch"), id(404));
     assert_eq!(idx.resolve("N$1", &gone), None);
 }
+
+/// Flat pages, none referencing another: each is its own root.
+fn indexed_flat(pages: &[(&str, SchematicSheet)]) -> NetIndex {
+    let sheets: HashMap<SheetKey, SchematicSheet> =
+        pages.iter().map(|(k, v)| (key(k), v.clone())).collect();
+    let resolved = HashMap::new();
+    let roots: Vec<ProjectRoot> = pages
+        .iter()
+        .map(|(k, _)| ProjectRoot { key: key(k) })
+        .collect();
+    let graph = ProjectGraph {
+        sheets: &sheets,
+        resolved: &resolved,
+        roots: &roots,
+    };
+    build_project_netlist_indexed(&graph).1
+}
+
+/// A resistor on a wire, with a local label `EN` when `labelled`.
+fn en_page(wire_uuid: u128, label_uuid: u128, labelled_net: bool) -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "R");
+    place(&mut s, "R1", "R", pt(0.0, 0.0));
+    s.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    s.wires[0].uuid = id(wire_uuid);
+    if labelled_net {
+        s.labels
+            .push(labelled("EN", pt(0.0, 0.0), LabelType::Net, label_uuid));
+    }
+    s
+}
+
+#[test]
+fn a_live_anchor_beats_an_unrelated_net_that_now_carries_the_name() {
+    let before = indexed_flat(&[
+        ("p1", en_page(100, 101, true)),
+        ("p2", en_page(200, 201, true)),
+    ]);
+    let net1 = before.nets_of(&key("p1"), id(100))[0];
+    assert_eq!(before.net(net1).map(|n| n.name.as_str()), Some("EN"));
+    let anchor = (key("p1"), id(100));
+
+    // Page 1 loses its label: its net is auto-named and page 2's net is `EN`.
+    let after = indexed_flat(&[
+        ("p1", en_page(100, 101, false)),
+        ("p2", en_page(200, 201, true)),
+    ]);
+    let own = after.nets_of(&key("p1"), id(100))[0];
+    assert_eq!(after.resolve("EN", &anchor), Some(own));
+}
+
+#[test]
+fn a_name_that_follows_position_is_not_trusted() {
+    assert!(is_positional_name("N$3") && is_positional_name("EN_2"));
+    assert!(!is_positional_name("EN") && !is_positional_name("EN_A") && !is_positional_name("VCC"));
+}
+
+#[test]
+fn power_ports_on_other_sheets_come_before_those_on_the_same_sheet() {
+    let mut root = root_with_child("a.sch", vec![]);
+    add_lib(&mut root, "P");
+    for (n, at) in [(70u128, 0.0), (72, 20.0)] {
+        place_power(&mut root, "#PWR", "P", "GND", pt(at, 0.0));
+        root.symbols.last_mut().unwrap().uuid = id(n);
+        root.wires.push(wire(pt(at, 0.0), pt(at + 5.0, 0.0)));
+    }
+    let mut a = empty_sheet();
+    add_lib(&mut a, "P");
+    place_power(&mut a, "#PWR", "P", "GND", pt(0.0, 0.0));
+    a.symbols[0].uuid = id(71);
+    a.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    let idx = indexed(&root, &[("a.sch", a)]);
+
+    let from_root = idx.partners(&key("root.sch"), id(70), None);
+    assert_eq!(ids(&from_root), [id(71), id(72)], "the other sheet first");
+}

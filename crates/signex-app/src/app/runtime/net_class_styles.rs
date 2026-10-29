@@ -264,8 +264,24 @@ impl Signex {
             }
         };
         let applied = self.ui_state.net_class_styles.apply(resolved);
+        // The net index stitches the same project: each warning is said once,
+        // whichever of the two meets it first.
         for warning in &applied.warnings {
-            crate::diagnostics::log_warning(warning);
+            let owner = resolved
+                .projects
+                .iter()
+                .find(|p| p.warnings.contains(warning))
+                .map(|p| p.project);
+            let reported = &mut self.document_state.net_nav.reported;
+            if owner.is_none_or(|project| reported.claim(project, warning)) {
+                crate::diagnostics::log_warning(warning);
+            }
+        }
+        for entry in &resolved.projects {
+            self.document_state
+                .net_nav
+                .reported
+                .settle(entry.project, &entry.warnings);
         }
         if applied.styles_changed {
             self.clear_schematic_content_caches();

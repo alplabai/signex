@@ -138,21 +138,21 @@ impl NetIndex {
     }
 
     /// The net an earlier highlight named, after the index was rebuilt: the
-    /// anchor's own net when it still exists, else the net of that name. An
-    /// auto-assigned name (`N$k`) is never trusted: it follows sort order, so
-    /// after an edit it can belong to an unrelated net.
+    /// anchor's own net while the anchor exists, however the net is named now.
+    /// Only when the anchor is gone is the name used, and never a positional
+    /// one ([`is_positional_name`]): it can belong to an unrelated net.
     pub fn resolve(&self, name: &str, anchor: &NetAnchor) -> Option<usize> {
         let own = self.nets_of(&anchor.0, anchor.1);
-        let named = |i: &usize| self.nets[*i].name == name;
-        if let Some(i) = own.iter().copied().find(named) {
+        if let Some(i) = own.iter().copied().find(|&i| self.nets[i].name == name) {
             return Some(i);
         }
-        if !is_auto_name(name)
-            && let Some(&i) = self.by_name.get(name)
-        {
+        if let Some(&i) = own.first() {
             return Some(i);
         }
-        own.first().copied()
+        if is_positional_name(name) {
+            return None;
+        }
+        self.by_name.get(name).copied()
     }
 
     /// The other ports on the nets `id` is on: Global and Hierarchical labels
@@ -177,11 +177,17 @@ impl NetIndex {
             .position(|m| m.id == id && &m.sheet == sheet)
             .map_or(0, |p| p + 1);
         let (head, tail) = ports.split_at(at.min(ports.len()));
-        tail.iter()
+        let mut ring: Vec<&NetMember> = tail
+            .iter()
             .chain(head)
             .filter(|m| !(m.id == id && &m.sheet == sheet))
             .copied()
-            .collect()
+            .collect();
+        // A jump goes somewhere else: other sheets and placements first.
+        if let Some(source) = ports.iter().find(|m| m.id == id && &m.sheet == sheet) {
+            ring.sort_by_key(|m| m.sheet == source.sheet && m.occurrence == source.occurrence);
+        }
+        ring
     }
 
     /// The members to step through on net `net`, one per element and pin, in
@@ -277,4 +283,14 @@ impl NetIndex {
 pub fn is_auto_name(name: &str) -> bool {
     name.strip_prefix("N$")
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// A name that follows position rather than identity: an auto name, or the
+/// `<name>_<n>` suffix a duplicate gets. After an edit it can belong to a
+/// different net, so it never finds a net again.
+pub fn is_positional_name(name: &str) -> bool {
+    is_auto_name(name)
+        || name.rsplit_once('_').is_some_and(|(base, n)| {
+            !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())
+        })
 }

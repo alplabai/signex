@@ -9,11 +9,13 @@ mod highlight;
 mod history;
 pub mod hover;
 mod index_cache;
+mod reported;
 
 pub use highlight::NetHighlight;
 pub use history::SheetHistory;
 pub use hover::{HoverCard, HoverState};
 pub use index_cache::{IndexOutcome, NetIndexCache, ProjectNetData, Stored};
+pub use reported::ReportedWarnings;
 
 /// What the user asked for while the index it needs was still being built:
 /// run again once the index arrives. The latest request wins.
@@ -33,7 +35,10 @@ pub struct NetNavState {
     pub highlight: Option<NetHighlight>,
     pub hover: HoverState,
     pub index: NetIndexCache,
-    pub pending: Option<PendingNetAction>,
+    /// The project it was asked in, and what to run when its index lands.
+    pub pending: Option<(crate::app::state::ProjectId, PendingNetAction)>,
+    /// Stitch warnings already shown, shared with the net-class refresh.
+    pub reported: ReportedWarnings,
     /// What the highlight's index refresh last saw, so an update that changed
     /// no connectivity, sheet list or class table does no planning.
     pub refresh_stamp: Option<u64>,

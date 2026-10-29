@@ -151,3 +151,116 @@ fn an_unreadable_page_is_reported_once_however_often_the_index_rebuilds() {
 
     assert_eq!(crate::diagnostics::logged_count(BROKEN), 1);
 }
+
+#[test]
+fn a_page_that_breaks_after_a_clean_class_run_is_reported_once() {
+    use signex_types::net_class::NetClass;
+    use signex_types::project::SheetEntry;
+    let mut p = project();
+    let dir = p.root.parent().expect("dir").to_path_buf();
+    // A valid listed page and a class table: the class job runs clean.
+    let page = dir.join(LATE_PAGE);
+    let valid = crate::app::handlers::menu::export::tests::sheet_with_net("R7", "X", &[]);
+    let text = signex_types::format::SnxSchematic::new(valid)
+        .write_string()
+        .expect("encode");
+    std::fs::write(&page, text).expect("write page");
+    let pid = p.app.document_state.projects[0].id;
+    let project = p
+        .app
+        .document_state
+        .project_by_id_mut(pid)
+        .expect("project");
+    project.data.net_classes = vec![NetClass {
+        nets: vec!["VCC".to_string()],
+        ..NetClass::named("Power")
+    }];
+    project.data.sheets.push(SheetEntry {
+        name: LATE_PAGE.to_string(),
+        filename: LATE_PAGE.to_string(),
+        symbols_count: 0,
+        wires_count: 0,
+        labels_count: 0,
+        unknown: Default::default(),
+    });
+    p.app.settle_net_class_styles_blocking();
+    assert_eq!(
+        crate::diagnostics::logged_count(LATE_PAGE),
+        0,
+        "clean so far"
+    );
+
+    // The page breaks on disk; only the index build sees it.
+    std::fs::write(&page, "not a schematic").expect("break page");
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
+    assert_eq!(crate::diagnostics::logged_count(LATE_PAGE), 1);
+
+    // The class job meeting the same page later adds nothing.
+    p.app.settle_net_class_styles_blocking();
+    assert_eq!(crate::diagnostics::logged_count(LATE_PAGE), 1);
+}
+
+#[test]
+fn a_command_parked_in_a_closed_project_never_runs_in_another() {
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+
+    // Project A closes while its index builds; project B opens and is focused.
+    let a = p.app.document_state.projects[0].id;
+    p.app.document_state.projects.retain(|x| x.id != a);
+    let (b_sheet, b_label) = p.add_second_project();
+    p.select_uuid(b_label, SelectedKind::Label);
+    p.send(NetNavMsg::HoverDwellTicked);
+    p.app.settle_net_index_blocking();
+
+    assert_eq!(p.active(), Some(b_sheet));
+    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(
+        !logged(&["has no partner", ONLY_B]),
+        "A's jump did not run against B's label"
+    );
+}
+
+#[test]
+fn a_stale_answer_starts_the_newest_build_and_the_parked_command_still_runs() {
+    use crate::app::runtime::net_class_styles::plan_projects;
+    use crate::app::state::net_nav::{IndexOutcome, ProjectNetData};
+    let mut p = project();
+    p.select(ROOT_VCC, SelectedKind::Label);
+    p.send(NetNavMsg::PartnerJumpRequested);
+    let planned = plan_projects(&p.app.document_state).remove(0);
+    let (project_id, old_key) = (planned.project, planned.key);
+
+    // An edit moves the key while that build runs.
+    p.focus(&p.mid.clone());
+    p.select(23, SelectedKind::Wire);
+    delete_selected(&mut p);
+    p.focus(&p.root.clone());
+    p.select(ROOT_VCC, SelectedKind::Label);
+    let _ = p.app.net_index_lookup(project_id);
+
+    let stale = IndexOutcome {
+        project: project_id,
+        key: old_key,
+        result: Ok(std::sync::Arc::new(ProjectNetData {
+            index: signex_net::NetIndex::default(),
+            paths: Default::default(),
+            base_dir: None,
+            fold: Default::default(),
+            classes: Vec::new(),
+        })),
+        warnings: Vec::new(),
+    };
+    let follow_up = p.app.apply_net_index(&stale);
+    assert!(follow_up.units() > 0, "the newest key's build starts now");
+    assert_eq!(
+        p.active(),
+        Some(p.root.clone()),
+        "not run on the stale answer"
+    );
+
+    p.app.settle_net_index_blocking();
+    assert_eq!(p.active(), Some(p.mid.clone()), "the parked jump ran");
+}

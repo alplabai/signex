@@ -52,7 +52,7 @@ impl Signex {
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.jump_with(&data, &target),
             IndexLookup::Building(build) => {
-                self.wait_for_net_index(PendingNetAction::JumpToPartner, build)
+                self.wait_for_net_index(project, PendingNetAction::JumpToPartner, build)
             }
             IndexLookup::Unavailable => {
                 crate::diagnostics::log_warning(messages::index_unavailable());

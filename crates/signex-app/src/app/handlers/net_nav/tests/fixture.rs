@@ -35,6 +35,8 @@ pub(super) const THIRD_R3: u128 = 32;
 pub(super) const R5_WIRE: u128 = 42;
 pub(super) const R4_WIRE: u128 = 41;
 pub(super) const BROKEN: &str = "broken_page_7291.snxsch";
+/// A page that breaks late; its own name keeps the shared log ring unambiguous.
+pub(super) const LATE_PAGE: &str = "late_page_5503.snxsch";
 
 pub(super) struct Project {
     pub app: Signex,
@@ -180,6 +182,11 @@ impl Project {
         assert!(self.app.open_or_focus_sheet_path(path.to_path_buf()));
     }
 
+    pub fn select_uuid(&mut self, uuid: Uuid, kind: SelectedKind) {
+        self.app.interaction_state.active_canvas_mut().selected =
+            vec![SelectedItem::new(uuid, kind)];
+    }
+
     pub fn select(&mut self, uuid: u128, kind: SelectedKind) {
         self.app.interaction_state.active_canvas_mut().selected =
             vec![SelectedItem::new(id(uuid), kind)];
@@ -266,4 +273,26 @@ pub(super) fn placed_twice() -> (Project, PathBuf) {
         _dir: dir,
     };
     (project, child_path)
+}
+
+pub(super) const ONLY_B: &str = "ONLYB";
+
+impl Project {
+    /// Add a second, unrelated project with one open sheet carrying the
+    /// global label `ONLYB`, and focus it. Returns that sheet's path and the
+    /// label's uuid.
+    pub fn add_second_project(&mut self) -> (PathBuf, Uuid) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let label_id = id(900);
+        let mut sheet = sheet_with_net("RB", ONLY_B, &[]);
+        sheet.labels[0].uuid = label_id;
+        let path = write(dir.path(), "b_only.snxsch", sheet);
+        let mut other = app_workspace(&dir.path().to_string_lossy(), &["b_only.snxsch"]);
+        let mut project = other.document_state.projects.remove(0);
+        project.id = self.app.document_state.mint_project_id();
+        self.app.document_state.projects.push(project);
+        assert!(self.app.open_or_focus_sheet_path(path.clone()));
+        std::mem::forget(dir);
+        (path, label_id)
+    }
 }

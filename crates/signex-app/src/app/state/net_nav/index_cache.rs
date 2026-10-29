@@ -88,9 +88,6 @@ pub struct NetIndexCache {
     /// The key a worker is building now: at most one per project.
     in_flight: HashMap<ProjectId, ProjectKey>,
     failed: HashMap<ProjectId, ProjectKey>,
-    /// The stitch warnings last reported per project, so a rebuild that
-    /// finds the same ones says nothing more.
-    reported: HashMap<ProjectId, Vec<String>>,
 }
 
 impl NetIndexCache {
@@ -163,20 +160,6 @@ impl NetIndexCache {
         self.wanted.retain(|id, _| keep.contains(id));
         self.in_flight.retain(|id, _| keep.contains(id));
         self.failed.retain(|id, _| keep.contains(id));
-        self.reported.retain(|id, _| keep.contains(id));
-    }
-
-    /// The warnings of `project`'s latest build that its previous one did not
-    /// already report.
-    pub fn new_warnings(&mut self, project: ProjectId, warnings: &[String]) -> Vec<String> {
-        let seen = self.reported.entry(project).or_default();
-        let fresh = warnings
-            .iter()
-            .filter(|w| !seen.contains(w))
-            .cloned()
-            .collect();
-        *seen = warnings.to_vec();
-        fresh
     }
 
     /// Forget requests in flight and failures, for a caller that lost its tasks.
@@ -274,31 +257,10 @@ mod tests {
         for p in [a, b] {
             cache.want(p, &key(1));
             cache.apply(&outcome(p, key(1)));
-            cache.new_warnings(p, &["w".to_string()]);
         }
         cache.retain_projects(&[a]);
         assert!(cache.latest(b).is_none());
-        assert_eq!(
-            cache.new_warnings(b, &["w".to_string()]),
-            ["w"],
-            "b forgotten"
-        );
         assert!(cache.latest(a).is_some());
-    }
-
-    #[test]
-    fn a_warning_is_reported_once_until_it_changes() {
-        let p = ProjectId::test_id(1);
-        let mut cache = NetIndexCache::default();
-        let w = vec!["page.snxsch unreadable".to_string()];
-        assert_eq!(cache.new_warnings(p, &w).len(), 1);
-        assert!(cache.new_warnings(p, &w).is_empty());
-        assert!(cache.new_warnings(p, &[]).is_empty());
-        assert_eq!(
-            cache.new_warnings(p, &w).len(),
-            1,
-            "back after it went away"
-        );
     }
 
     #[test]

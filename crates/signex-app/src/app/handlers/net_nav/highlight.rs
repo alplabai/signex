@@ -68,7 +68,7 @@ impl Signex {
                 self.highlight_with(project, &data, &target, select_here);
                 Task::none()
             }
-            IndexLookup::Building(build) => self.wait_for_net_index(action, build),
+            IndexLookup::Building(build) => self.wait_for_net_index(project, action, build),
             IndexLookup::Unavailable => {
                 crate::diagnostics::log_warning(messages::index_unavailable());
                 Task::none()
@@ -156,7 +156,7 @@ impl Signex {
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.step_with(&data, forward),
             IndexLookup::Building(build) => {
-                self.wait_for_net_index(PendingNetAction::StepHighlight { forward }, build)
+                self.wait_for_net_index(project, PendingNetAction::StepHighlight { forward }, build)
             }
             IndexLookup::Unavailable => {
                 crate::diagnostics::log_warning(messages::index_unavailable());

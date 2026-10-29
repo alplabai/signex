@@ -61,7 +61,7 @@ mod sheet_numbers;
 
 pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use names::{MultiNamedNet, NetNameSource};
-pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name};
+pub use net_index::{HoverPin, NetAnchor, NetHover, NetIndex, is_auto_name, is_positional_name};
 
 pub use designators::instance_entry_designators;
 pub use sheet_numbers::{NumberingIssue, SheetNumbering, SheetPage, sheet_numbering};
