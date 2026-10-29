@@ -253,3 +253,55 @@ fn commit_now_succeeds_when_every_pending_file_was_deleted() {
         .unwrap();
     assert!(tree.get_name("note.txt").is_none(), "the removal landed");
 }
+
+/// #1729: one unreadable pending file does not stall the library. The next
+/// save commits its own change, the file stays pending, and every commit it
+/// blocks names it in the Messages panel. Unix only: the unreadable file is
+/// made with `chmod 000`, which Windows has no equivalent of.
+#[cfg(unix)]
+#[test]
+fn an_unreadable_pending_file_is_named_in_messages_and_the_save_still_commits() {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = signex_app::diagnostics::init_logging();
+    let tmp = tempfile::Builder::new()
+        .prefix("signex-1729-")
+        .tempdir()
+        .expect("tempdir");
+    let snxlib = versioned_library(tmp.path());
+    let root = snxlib.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(root.join("symbols")).unwrap();
+    let name = format!("bad-{}.snxsym", Uuid::now_v7());
+    let bad = root.join("symbols").join(&name);
+    std::fs::write(&bad, "unreadable").unwrap();
+    std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&bad).is_ok() {
+        // Running as root: permissions are not enforced.
+        return;
+    }
+    let (mut app, _boot) = Signex::new();
+    app.library
+        .open_library(snxlib.clone())
+        .expect("mount library");
+    app.library
+        .library_browsers
+        .insert(snxlib.clone(), LibraryBrowserState::new(snxlib.clone()));
+    let named = || {
+        signex_app::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message.contains(&name))
+            .count()
+    };
+
+    add_table(&mut app, &snxlib, "caps");
+    assert_eq!(head_tables(&snxlib), vec!["caps".to_string()]);
+    assert_eq!(named(), 1, "the unreadable file is named");
+    add_table(&mut app, &snxlib, "res");
+    assert_eq!(
+        head_tables(&snxlib),
+        vec!["caps".to_string(), "res".to_string()]
+    );
+    assert_eq!(named(), 2, "and named again on every commit it blocks");
+    let pending = app.library.uncommitted_in(&snxlib).expect("still pending");
+    assert_eq!(pending.paths, vec![format!("symbols/{name}")]);
+    std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o644)).unwrap();
+}

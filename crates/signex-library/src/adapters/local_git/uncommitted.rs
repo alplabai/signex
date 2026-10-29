@@ -19,7 +19,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use super::helpers::*;
 use super::*;
-use crate::adapter::UncommittedChanges;
+use crate::adapter::{HeldBackFile, UncommittedChanges};
 
 /// Files saved but not committed, and what was already reported about them.
 #[derive(Debug, Default)]
@@ -32,6 +32,29 @@ pub(super) struct UncommittedLedger {
     /// Failure causes already warned about this session: one warning per
     /// cause, not one per save.
     reported: HashSet<String>,
+    /// Pending files commits left out since the app last asked (#1729).
+    held_back: Vec<HeldBackFile>,
+}
+
+/// One commit attempt that landed.
+struct Landed {
+    oid: Option<git2::Oid>,
+    /// Ledger files it could not read; they stay pending.
+    held: Vec<HeldBackFile>,
+}
+
+/// The ledger files a commit records besides the caller's own.
+#[derive(Default)]
+struct Sweep {
+    extras: Vec<String>,
+    removed: Vec<String>,
+    held: Vec<HeldBackFile>,
+}
+
+impl Sweep {
+    fn names(&self) -> Vec<String> {
+        self.extras.iter().chain(&self.removed).cloned().collect()
+    }
 }
 
 impl LocalGitAdapter {
@@ -108,17 +131,30 @@ impl LocalGitAdapter {
         } else {
             message
         };
-        match self.try_commit(&removed, rel_path, extra_rel_paths, message) {
-            Ok(Some(_)) => {
-                self.clear_ledger();
-                CommitOutcome::Committed
+        // The managed ignore block rides with this commit; on a failure it
+        // joins the ledger like the caller's files.
+        let mut extras: Vec<String> = extra_rel_paths.to_vec();
+        extras.extend(self.merge_ignore_rules_for_commit());
+        match self.try_commit(&removed, rel_path, &extras, message) {
+            Ok(landed) => {
+                self.settle_ledger(landed.held);
+                match landed.oid {
+                    Some(_) => CommitOutcome::Committed,
+                    None => CommitOutcome::NothingToCommit,
+                }
             }
-            Ok(None) => {
-                self.clear_ledger();
-                CommitOutcome::NothingToCommit
-            }
-            Err(reason) => self.note_not_committed(&removed, rel_path, extra_rel_paths, reason),
+            Err(reason) => self.note_not_committed(&removed, rel_path, &extras, reason),
         }
+    }
+
+    /// [`LibraryAdapter::take_held_back_files`].
+    pub(super) fn take_held_back(&self) -> Vec<HeldBackFile> {
+        std::mem::take(&mut self.ledger().held_back)
+    }
+
+    /// Record `reason` as reported; `true` the first time.
+    pub(super) fn note_reported(&self, reason: &str) -> bool {
+        self.ledger().reported.insert(reason.to_owned())
     }
 
     /// Seed the ledger from the working tree: library-owned files that
@@ -155,6 +191,7 @@ impl LocalGitAdapter {
     /// HEAD and the working tree, including untracked and deleted ones.
     fn working_tree_changes(&self) -> Result<BTreeSet<String>, git2::Error> {
         let repo = git2::Repository::open(&self.root_dir)?;
+        super::ignore_rules::apply_managed_rules(&repo)?;
         let head_tree = match repo.head() {
             Ok(head) => Some(head.peel_to_tree()?),
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
@@ -196,10 +233,15 @@ impl LocalGitAdapter {
         self.seed_uncommitted_from_working_tree();
     }
 
-    fn clear_ledger(&self) {
+    /// A commit landed: only the files it held back stay pending, and each
+    /// is queued for the app to report.
+    fn settle_ledger(&self, held: Vec<HeldBackFile>) {
         let mut ledger = self.ledger();
-        ledger.paths.clear();
-        ledger.reason = None;
+        ledger.paths = held.iter().map(|file| file.path.clone()).collect();
+        ledger.reason = held
+            .first()
+            .map(|file| format!("could not read {}: {}", file.path, file.reason));
+        ledger.held_back.extend(held);
     }
 
     /// One attempt, under the in-process git lock. `Err` is the reason.
@@ -209,53 +251,75 @@ impl LocalGitAdapter {
         rel_path: Option<&str>,
         extra_rel_paths: &[String],
         message: &str,
-    ) -> Result<Option<git2::Oid>, String> {
+    ) -> Result<Landed, String> {
         let repo = git2::Repository::open(&self.root_dir).map_err(|e| format!("git open: {e}"))?;
         let (sig_name, sig_email) = identity_for_repo(&repo).map_err(|e| e.to_string())?;
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| format!("git signature: {e}"))?;
         let _commit_lock = super::commit_lock::lock_repo_for_commit(repo.path())?;
+        super::ignore_rules::apply_managed_rules(&repo).map_err(|e| format!("git ignore: {e}"))?;
 
-        // Files an earlier failed commit left behind ride along. A file
-        // that is gone is committed as a removal, so a rename whose commit
-        // failed is recorded whole.
-        let mut removed: Vec<String> = removed.to_vec();
-        let mut extras: Vec<String> = extra_rel_paths.to_vec();
-        let mut swept: Vec<String> = Vec::new();
-        for pending in self.ledger().paths.iter() {
-            if Some(pending.as_str()) == rel_path
-                || extras.contains(pending)
-                || removed.contains(pending)
-            {
-                continue;
-            }
-            swept.push(pending.clone());
-            if self.root_dir.join(pending).symlink_metadata().is_ok() {
-                extras.push(pending.clone());
-            } else {
-                removed.push(pending.clone());
-            }
-        }
+        let own = Own {
+            removed,
+            rel_path,
+            extras: extra_rel_paths,
+        };
+        let sweep = self.plan_sweep(&repo, &own);
+        let swept = sweep.names();
         // History stays truthful: the commit says what else it holds.
-        let message = if swept.is_empty() {
+        let full_message = if swept.is_empty() {
             message.to_owned()
         } else {
             format!("{message}\n\nalso commits pending: {}", swept.join(", "))
         };
-        let removed: Vec<&Path> = removed.iter().map(Path::new).collect();
-        let extras: Vec<&Path> = extras.iter().map(Path::new).collect();
-        retry_on_git_lock(repo.path(), || {
-            stage_and_commit_with(
-                &repo,
-                &removed,
-                rel_path.map(Path::new),
-                None,
-                &extras,
-                &sig,
-                &message,
-            )
-        })
-        .map_err(|e| e.message().to_owned())
+        let with_sweep = own.commit(&repo, &sig, &full_message, &sweep);
+        match with_sweep {
+            Ok(oid) => Ok(Landed {
+                oid,
+                held: sweep.held,
+            }),
+            // A pending file failing must not take the caller's change down
+            // with it: commit that alone and keep the sweep pending.
+            Err(e) if !swept.is_empty() && own.has_changes() => {
+                let oid = own
+                    .commit(&repo, &sig, message, &Sweep::default())
+                    .map_err(|_| e.message().to_owned())?;
+                let mut held = sweep.held;
+                held.extend(swept.into_iter().map(|path| HeldBackFile {
+                    path,
+                    reason: e.message().to_owned(),
+                }));
+                Ok(Landed { oid, held })
+            }
+            Err(e) => Err(e.message().to_owned()),
+        }
+    }
+
+    /// The ledger files to record with this commit. Files an earlier failed
+    /// commit left behind ride along; a file that is gone is committed as a
+    /// removal, so a rename whose commit failed is recorded whole. An
+    /// ignored file is dropped from the ledger; one that cannot be read is
+    /// held back.
+    fn plan_sweep(&self, repo: &git2::Repository, own: &Own<'_>) -> Sweep {
+        let mut sweep = Sweep::default();
+        for pending in self.ledger().paths.iter() {
+            if own.holds(pending) || repo.is_path_ignored(Path::new(pending)).unwrap_or(false) {
+                continue;
+            }
+            let path = self.root_dir.join(pending);
+            if path.symlink_metadata().is_err() {
+                sweep.removed.push(pending.clone());
+                continue;
+            }
+            match fs::File::open(&path) {
+                Ok(_) => sweep.extras.push(pending.clone()),
+                Err(e) => sweep.held.push(HeldBackFile {
+                    path: pending.clone(),
+                    reason: e.to_string(),
+                }),
+            }
+        }
+        sweep
     }
 
     /// Remember the files of a failed commit and, once per cause, say so.
@@ -291,5 +355,58 @@ impl LocalGitAdapter {
             );
         }
         CommitOutcome::NotCommitted { reason }
+    }
+}
+
+/// The caller's own part of a commit.
+struct Own<'a> {
+    removed: &'a [String],
+    rel_path: Option<&'a str>,
+    extras: &'a [String],
+}
+
+impl Own<'_> {
+    /// Whether the caller asked to record anything of its own.
+    fn has_changes(&self) -> bool {
+        self.rel_path.is_some() || !self.extras.is_empty() || !self.removed.is_empty()
+    }
+
+    fn holds(&self, path: &str) -> bool {
+        Some(path) == self.rel_path
+            || self.extras.iter().any(|p| p == path)
+            || self.removed.iter().any(|p| p == path)
+    }
+
+    /// Commit the caller's paths plus `sweep`'s.
+    fn commit(
+        &self,
+        repo: &git2::Repository,
+        sig: &git2::Signature<'_>,
+        message: &str,
+        sweep: &Sweep,
+    ) -> Result<Option<git2::Oid>, git2::Error> {
+        let removed: Vec<&Path> = self
+            .removed
+            .iter()
+            .chain(&sweep.removed)
+            .map(Path::new)
+            .collect();
+        let extras: Vec<&Path> = self
+            .extras
+            .iter()
+            .chain(&sweep.extras)
+            .map(Path::new)
+            .collect();
+        retry_on_git_lock(repo.path(), || {
+            stage_and_commit_with(
+                repo,
+                &removed,
+                self.rel_path.map(Path::new),
+                None,
+                &extras,
+                sig,
+                message,
+            )
+        })
     }
 }

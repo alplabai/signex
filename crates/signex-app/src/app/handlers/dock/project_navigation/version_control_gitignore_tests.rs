@@ -108,8 +108,11 @@ fn unbalanced_markers_keep_the_file_and_the_failure_reaches_the_log() {
     );
 }
 
+/// #1729: a library repository gets the managed `.gitignore` block too,
+/// so OS and temp clutter never reaches its commits; no `.gitattributes`
+/// block without LFS.
 #[test]
-fn library_scope_writes_no_managed_block() {
+fn library_scope_writes_the_managed_ignore_block() {
     signex_library::git_identity::test_identity::install();
     let tmp = project_dir();
     let mut app = dialog_with_unticked_row(tmp.path());
@@ -120,10 +123,12 @@ fn library_scope_writes_no_managed_block() {
 
     confirm(&mut app);
 
+    let text = std::fs::read_to_string(tmp.path().join(".gitignore")).expect(".gitignore");
     assert!(
-        !tmp.path().join(".gitignore").exists(),
-        "a library repository gets no managed .gitignore"
+        text.contains(signex_types::project_vcs_files::GITIGNORE_BLOCK_BODY),
+        "{text}"
     );
+    assert!(!tmp.path().join(".gitattributes").exists());
 }
 
 #[cfg(unix)]

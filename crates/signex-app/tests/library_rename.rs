@@ -1165,7 +1165,12 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
         .library
         .uncommitted_in(&renamed)
         .expect("the rename is listed as uncommitted");
-    assert_eq!(pending.paths, vec!["alpha.snxlib", "alpha2.snxlib"]);
+    // The generated library predates the managed ignore block (#1729): the
+    // failed commit's merge of it is pending too.
+    assert_eq!(
+        pending.paths,
+        vec![".gitignore", "alpha.snxlib", "alpha2.snxlib"]
+    );
     // The failed commit touched neither HEAD nor the index.
     let idx = repo.index().unwrap();
     assert!(idx.get_path(Path::new("alpha2.snxlib"), 0).is_none());
@@ -1182,6 +1187,10 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
         "the old name is committed as removed"
     );
     assert!(tree.get_name("alpha2.snxlib").is_some());
+    assert!(
+        tree.get_name(".gitignore").is_some(),
+        "the block landed too"
+    );
     f.app.library.sync_uncommitted();
     assert!(f.app.library.uncommitted_in(&renamed).is_none());
 }

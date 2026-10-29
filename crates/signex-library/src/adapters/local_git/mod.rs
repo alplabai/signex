@@ -16,6 +16,7 @@
 //! ├── sims/<uuid>.snxsim
 //! ├── models/                      (3D models, optionally LFS-tracked)
 //! ├── .gitattributes               (written when [`LibraryInitOptions::use_lfs`])
+//! ├── .gitignore                   (the managed block, with version control)
 //! └── .git/
 //! ```
 //!
@@ -189,6 +190,7 @@ impl LocalGitAdapter {
             if opts.use_lfs {
                 write_lfs_attributes(&root_dir)?;
             }
+            ignore_rules::write_ignore_rules(&root_dir)?;
 
             let repo = git2::Repository::init(&root_dir)
                 .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
@@ -208,6 +210,9 @@ impl LocalGitAdapter {
                     .add_path(Path::new(GITATTRIBUTES_FILE))
                     .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
             }
+            index
+                .add_path(Path::new(ignore_rules::GITIGNORE_FILE))
+                .map_err(|e| LibraryError::Backend(format!("git add gitignore: {e}")))?;
             index
                 .write()
                 .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
@@ -455,7 +460,10 @@ pub use write_lock::{
     write_lock_path,
 };
 mod helpers;
+mod ignore_rules;
 pub use helpers::component_to_library_row;
+#[cfg(test)]
+mod ledger_hygiene_tests;
 pub(crate) mod lfs;
 mod pinned_assets;
 mod primitives;

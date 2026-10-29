@@ -47,16 +47,22 @@ impl LibraryState {
         self.uncommitted.committing.iter().map(PathBuf::as_path)
     }
 
-    /// Re-read every mounted library's uncommitted state from its adapter.
-    /// One short lock per library; no IO.
+    /// Re-read every mounted library's uncommitted state from its adapter,
+    /// and report in Messages each pending file a commit had to leave out
+    /// (#1729). One short lock per library; no IO.
     pub fn sync_uncommitted(&mut self) {
         let mut pending = HashMap::new();
         for lib in &self.open_libraries {
-            if let Some(changes) = self
-                .set
-                .get(lib.library_id)
-                .and_then(|adapter| adapter.uncommitted_changes())
-            {
+            let Some(adapter) = self.set.get(lib.library_id) else {
+                continue;
+            };
+            for held in adapter.take_held_back_files() {
+                crate::diagnostics::log_warning(format!(
+                    "Not committed, kept pending: could not read {} ({}) in library {}",
+                    held.path, held.reason, lib.display_name
+                ));
+            }
+            if let Some(changes) = adapter.uncommitted_changes() {
                 pending.insert(lib.root.clone(), changes);
             }
         }
