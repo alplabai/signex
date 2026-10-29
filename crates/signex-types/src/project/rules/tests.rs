@@ -176,3 +176,65 @@ fn net_waivers_round_trip_through_the_project_file() {
     );
     assert_eq!(parse_project(&path).unwrap().rules, data.rules);
 }
+
+const WITH_NET_WAIVERS_ONLY: &str = r#"{
+  "name": "p",
+  "dir": "",
+  "schematic_root": null,
+  "pcb_file": null,
+  "rules": {
+    "schema": 1,
+    "erc_net_waivers": {"user::single_driver": ["VBUS"]}
+  }
+}"#;
+
+#[test]
+fn a_file_without_violation_waivers_loads_and_resaves_without_the_key() {
+    let (data, saved) = open_and_resave(WITH_NET_WAIVERS_ONLY);
+    let rules = data.rules.as_ref().expect("rules");
+    assert!(rules.erc_waivers.is_empty());
+    assert!(rules.erc_net_waivers["user::single_driver"].contains("VBUS"));
+    assert_eq!(saved["rules"], rules_of(WITH_NET_WAIVERS_ONLY));
+}
+
+#[test]
+fn violation_waivers_round_trip_identically() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("p.snxprj");
+    let mut data: ProjectData = serde_json::from_str(WITH_NET_WAIVERS_ONLY).unwrap();
+    let waiver = crate::project::ErcWaiver {
+        rule_id: "builtin::unused_pin".into(),
+        objects: vec!["00000000-0000-4000-8000-000000000001".into()],
+        fingerprint: "ab".repeat(32),
+        reason: "Test point, left open on purpose".into(),
+        author: "A. Designer".into(),
+        date: "2026-10-29".into(),
+        message: "Pin on TP1 is not connected".into(),
+        unknown: Default::default(),
+    };
+    data.rules
+        .as_mut()
+        .unwrap()
+        .erc_waivers
+        .push(waiver.clone());
+    write_project(&path, &data).unwrap();
+    let back = parse_project(&path).unwrap();
+    assert_eq!(back.rules.as_ref().unwrap().erc_waivers, vec![waiver]);
+    assert_eq!(back.rules, data.rules);
+    // `dir` is re-derived on load, so compare two load -> save cycles.
+    write_project(&path, &back).unwrap();
+    let second = std::fs::read(&path).unwrap();
+    write_project(&path, &parse_project(&path).unwrap()).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), second, "save is byte-stable");
+}
+
+#[test]
+fn a_waiver_from_a_newer_build_keeps_its_unknown_keys() {
+    let text = project_with_rules(
+        r#"{"schema":1,"erc_waivers":[{"rule_id":"builtin::orphan_label","objects":["u"],"fingerprint":"f","reason":"r","author":"a","scope":"sheet"}]}"#,
+    );
+    let (data, saved) = open_and_resave(&text);
+    let w = &data.rules.as_ref().unwrap().erc_waivers[0];
+    assert!(w.is_complete());
+    assert_eq!(saved["rules"], rules_of(&text));
+}

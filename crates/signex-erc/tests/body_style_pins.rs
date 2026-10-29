@@ -40,13 +40,13 @@ fn two_body_sheet() -> SchematicSheet {
     };
     sheet.lib_symbols.insert("G".to_string(), lib);
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: Point::new(0.0, 0.0),
         end: Point::new(5.0, 0.0),
         ..Default::default()
     });
     sheet.symbols.push(Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: "G".to_string(),
         reference: "U1".to_string(),
         ..Default::default()

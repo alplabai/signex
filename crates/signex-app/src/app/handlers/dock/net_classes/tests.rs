@@ -268,7 +268,7 @@ fn a_loaded_class_named_none_is_still_a_class_when_picked() {
     use crate::panels::{NetClassChoice, net_class_choice, net_class_choices};
     // The engine refuses to Add or Rename a class to `(none)`, but a `.snxprj`
     // written by hand or by an older build can carry one.
-    let dir = std::env::temp_dir().join(format!("signex-none-class-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-none-class-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let path = dir.join("p.snxprj");
     std::fs::write(

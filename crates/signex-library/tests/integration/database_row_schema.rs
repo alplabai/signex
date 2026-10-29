@@ -101,7 +101,7 @@ fn respond(mut stream: TcpStream, reply: Reply) {
 }
 
 fn row() -> ComponentRow {
-    let lib = Uuid::new_v4();
+    let lib = Uuid::now_v7();
     ComponentRow {
         alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
@@ -112,7 +112,7 @@ fn row() -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
-        symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: None,
         alternate_footprints: Vec::new(),
         sim_ref: None,

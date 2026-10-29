@@ -113,7 +113,7 @@ fn error_kinds_are_distinct() {
 fn an_unknown_sheet_is_a_no_op() {
     let (mut engine, _) = engine_with_two_sheets();
     let result = engine
-        .execute(modify(uuid::Uuid::new_v4(), Some("x"), None))
+        .execute(modify(uuid::Uuid::now_v7(), Some("x"), None))
         .unwrap();
     assert!(!result.changed);
 }

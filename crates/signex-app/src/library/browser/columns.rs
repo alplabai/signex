@@ -8,7 +8,7 @@
 
 use super::sort::CellSortKey;
 use super::*;
-use crate::library::edit_row_modal::short_uuid;
+use signex_types::object_id::short_id;
 
 #[derive(Debug, Clone)]
 pub(super) struct GridColumn {
@@ -125,12 +125,12 @@ impl ColumnKind {
                     // Surface the short uuid prefix so the user has an
                     // at-a-glance signal without bloating the column
                     // width. Full path/name is in the Properties panel.
-                    format!("• {}", short_uuid(&r.symbol_ref.uuid))
+                    format!("• {}", short_id(&r.symbol_ref.uuid))
                 }
             }
             ColumnKind::Footprint => match &r.footprint_ref {
                 Some(fp) if !r.is_footprint_unbound() => {
-                    format!("• {}", short_uuid(&fp.uuid))
+                    format!("• {}", short_id(&fp.uuid))
                 }
                 _ => "—".to_string(),
             },
@@ -353,17 +353,6 @@ pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str) -> bool {
 }
 
 #[cfg(test)]
-mod short_uuid_tests {
-    use super::short_uuid;
-
-    #[test]
-    fn short_uuid_is_eight_chars() {
-        let id = uuid::Uuid::parse_str("12345678-9abc-def0-1234-56789abcdef0").unwrap();
-        assert_eq!(short_uuid(&id), "12345678");
-    }
-}
-
-#[cfg(test)]
 mod sort_tests {
     use super::*;
     use signex_library::{
@@ -383,7 +372,7 @@ mod sort_tests {
         );
         ComponentRow {
             alternate_symbols: Vec::new(),
-            row_id: uuid::Uuid::new_v4(),
+            row_id: uuid::Uuid::now_v7(),
             internal_pn: InternalPn::new("R1"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),

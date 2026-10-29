@@ -53,7 +53,7 @@ fn one_pin_part(pin_at: Point) -> LibSymbol {
 
 fn app_with_off_grid_pin_and_wire(hotspots: bool) -> (Signex, std::path::PathBuf) {
     let symbol = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "R".to_string(),
         position: Point::new(PIN_TIP.0, PIN_TIP.1),
         ..Default::default()
@@ -89,7 +89,6 @@ fn app_with_symbol_and_wire(
         title: "hotspot-snap".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -149,7 +148,7 @@ fn toggle_off_snaps_the_same_click_to_the_grid() {
 fn transformed_symbol() -> (Symbol, Point) {
     let local = Point::new(3.0, 1.0);
     let symbol = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "R".to_string(),
         position: Point::new(25.4, 12.7),
         rotation: 90.0,
@@ -204,7 +203,9 @@ fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
         .last()
         .expect("a wire was placed")
         .clone();
-    assert_eq!((wire.start.x, wire.end.x), (5.08, 6.35));
+    // The second leg runs straight on from the first, so it folds into it
+    // (#1254): one wire from the first click to the grid point.
+    assert_eq!((wire.start.x, wire.end.x), (0.0, 6.35));
     assert_eq!(wire.end.y, 25.4);
 }
 
@@ -213,7 +214,7 @@ fn click_on_the_grid_point_next_to_a_wire_end_stays_on_the_grid() {
 /// it off the tip lands on the grid.
 fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
     let symbol = Symbol {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         lib_id: "R".to_string(),
         position: Point::new(12.7, 6.35),
         ..Default::default()
@@ -221,10 +222,11 @@ fn move_pin_tip_near_wire_end(hotspots: bool) -> (f64, f64) {
     let id = symbol.uuid;
     let wire = Wire {
         unknown_columns: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         start: Point::new(50.0, 50.0),
         end: Point::new(25.4 + 0.3, 12.7 + 0.1),
         stroke_width: 0.0,
+        locked: false,
     };
     let (mut app, path) =
         app_with_symbol_and_wire(hotspots, Point::new(0.0, 0.0), symbol, Some(wire));

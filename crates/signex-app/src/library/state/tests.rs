@@ -83,7 +83,7 @@ pub(super) fn fixture_row(pn: &str) -> ComponentRow {
     let _ = (PinPadOverride::new("1", "1"),); // module touch
     ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -91,7 +91,7 @@ pub(super) fn fixture_row(pn: &str) -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
+        symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
         footprint_ref: None,
         alternate_footprints: Vec::new(),
         sim_ref: None,
@@ -190,7 +190,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
     );
     let row = ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new("R0805_10k"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -198,7 +198,7 @@ fn edit_row_modal_state_seeds_tags_buffer() {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
+        symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
         footprint_ref: None,
         alternate_footprints: Vec::new(),
         sim_ref: None,
@@ -255,7 +255,7 @@ fn library_with_cached_primitives(root: &Path, library_id: Uuid) -> OpenLibrary 
 /// symbols at all and the user re-created a primitive already on disk.
 #[test]
 fn a_failed_listing_keeps_the_primitive_caches_it_could_not_refresh() {
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let mut lib = library_with_cached_primitives(Path::new("/tmp/failing.snxlib"), library_id);
     let adapter = FailingListingAdapter::new(library_id);
 
@@ -277,7 +277,7 @@ fn a_failed_listing_keeps_the_primitive_caches_it_could_not_refresh() {
 #[test]
 fn refresh_components_keeps_the_caches_when_the_listings_fail() {
     let root = PathBuf::from("/tmp/failing-refresh.snxlib");
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let mut state = LibraryState::default();
     state
         .set
@@ -307,11 +307,11 @@ fn refresh_components_keeps_the_caches_when_the_listings_fail() {
 #[test]
 fn a_failed_listing_reaches_the_messages_panel() {
     let _ = crate::diagnostics::init_logging();
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let mut lib = library_with_cached_primitives(Path::new("/tmp/failing-log.snxlib"), library_id);
     // Unique display name — the diagnostics ring is global and every
     // other test in the binary writes to it.
-    let marker = format!("FailingLib-{}", Uuid::new_v4().simple());
+    let marker = format!("FailingLib-{}", Uuid::now_v7().simple());
     lib.display_name = marker.clone();
     let adapter = FailingListingAdapter::new(library_id);
 
@@ -339,7 +339,7 @@ fn a_failed_listing_reaches_the_messages_panel() {
 #[test]
 fn primitive_file_resolves_through_the_ref_library_id() {
     use signex_library::PrimitiveRef;
-    let (lib_a, lib_b) = (Uuid::new_v4(), Uuid::new_v4());
+    let (lib_a, lib_b) = (Uuid::now_v7(), Uuid::now_v7());
     let mut state = LibraryState::default();
     for (id, root) in [(lib_a, "/tmp/a/A.snxlib"), (lib_b, "/tmp/b/B.snxlib")] {
         state.open_libraries.push(OpenLibrary {
@@ -359,7 +359,7 @@ fn primitive_file_resolves_through_the_ref_library_id() {
             display: Default::default(),
         });
     }
-    let prim = Uuid::new_v4();
+    let prim = Uuid::now_v7();
     let path = state
         .primitive_file(&PrimitiveRef::new(lib_b, prim), "symbols", "snxsym")
         .unwrap();
@@ -370,7 +370,7 @@ fn primitive_file_resolves_through_the_ref_library_id() {
     assert!(
         state
             .primitive_file(
-                &PrimitiveRef::new(Uuid::new_v4(), prim),
+                &PrimitiveRef::new(Uuid::now_v7(), prim),
                 "symbols",
                 "snxsym"
             )
@@ -383,7 +383,7 @@ fn primitive_file_resolves_through_the_ref_library_id() {
 /// `refresh_components`.
 #[test]
 fn reload_tables_loads_cached_pricing() {
-    let library_id = Uuid::new_v4();
+    let library_id = Uuid::now_v7();
     let adapter = crate::library::test_adapters::PricedAdapter::new(library_id);
     let mut lib = library_with_cached_primitives(Path::new("/tmp/priced.snxlib"), library_id);
     assert!(lib.pricing.is_empty());
@@ -416,7 +416,7 @@ fn refresh_snapshot_carries_row_descriptions() {
     let mut row = fixture_row("C1");
     row.description = "100 nF 50 V X7R".into();
     let adapter =
-        crate::library::test_adapters::PricedAdapter::new(Uuid::new_v4()).with_rows(vec![row]);
+        crate::library::test_adapters::PricedAdapter::new(Uuid::now_v7()).with_rows(vec![row]);
     let snapshot = LibrarySnapshot::read(&adapter, Path::new("/tmp/desc.snxlib")).expect("read");
 
     assert_eq!(snapshot.summaries()[0].description, "100 nF 50 V X7R");

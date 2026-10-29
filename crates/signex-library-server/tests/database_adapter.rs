@@ -458,9 +458,10 @@ fn alternate_footprints_round_trip_through_the_real_server() {
     );
 }
 
-/// A client that knows documents (schema 3) or neither documents nor
-/// footprints (schema 2, no header) cannot carry the alternates: the server
-/// refuses the write, so the stored alternates and documents survive.
+/// A client below the alternate-footprint schema cannot carry the alternates:
+/// one that knows descriptions (schema 4), documents (schema 3) or neither
+/// (schema 2, no header). The server refuses the write, so the stored
+/// alternates and documents survive. Schema 4 is the clash #1319 moved off.
 #[test]
 fn a_write_below_the_row_schema_is_refused_and_keeps_alternates_and_documents() {
     let server = TestServer::start();
@@ -469,7 +470,7 @@ fn a_write_below_the_row_schema_is_refused_and_keeps_alternates_and_documents() 
     let (row, _) = row_with_alternates("U-OLD-FP");
     let id = RowId::from_uuid(row.row_id);
     adapter.insert_row("ics", row.clone(), "add").unwrap();
-    for schema in [None, Some(2), Some(3)] {
+    for schema in [None, Some(2), Some(3), Some(4)] {
         let mut body = serde_json::to_value(adapter.read_row("ics", id).unwrap()).unwrap();
         let object = body.as_object_mut().unwrap();
         object.remove("alternate_footprints");

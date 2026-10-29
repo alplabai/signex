@@ -97,7 +97,7 @@ pub fn on_disk(path: &Path) -> ProjectData {
 
 pub fn is_dirty(f: &Fixture) -> bool {
     let path = &f.app.document_state.projects[0].path;
-    f.app.document_state.dirty_paths.contains(path)
+    f.app.document_state.is_document_dirty(path)
 }
 
 /// Open the root sheet `Oscar.snxsch` as a dirty schematic tab of the
@@ -105,7 +105,7 @@ pub fn is_dirty(f: &Fixture) -> bool {
 pub fn open_dirty_root_sheet(f: &mut Fixture) -> PathBuf {
     let path = f.tmp.path().join("Oscar.snxsch");
     let mut engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     })
@@ -118,11 +118,10 @@ pub fn open_dirty_root_sheet(f: &mut Fixture) -> PathBuf {
         title: "Oscar".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: Some(project_id),
         kind: TabKind::Schematic,
     });
-    document.dirty_paths.insert(path.clone());
+    document.mark_document_dirty(&path);
     // What a tab switch to the sheet leaves behind.
     document.active_tab = document.tabs.len() - 1;
     document.active_path = Some(path.clone());

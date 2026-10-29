@@ -183,7 +183,6 @@ pub struct TabInfo {
     pub title: String,
     pub path: PathBuf,
     pub cached_document: Option<TabDocument>,
-    pub dirty: bool,
     /// Which loaded project this tab belongs to, if any. Resolved at
     /// open time via `DocumentState::project_for_path`; a tab opened
     /// without a matching project (lone file open, project closed
@@ -274,10 +273,16 @@ pub struct SymbolDocument {
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
     pub canvas_cache: iced::widget::canvas::Cache,
-    pub dirty: bool,
+    /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
+    /// the workspace reads and clears it through `DocumentState`.
+    dirty: bool,
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
+    /// Primitives of this container whose component rows a failed cascade
+    /// left behind and a retry can still move; the next Save cascades them
+    /// even with no new edit.
+    pub cascade_owed: Vec<uuid::Uuid>,
     /// Pan/zoom camera state — mirrors the schematic canvas so the
     /// user's viewport survives across tool / selection changes
     /// within the same `.snxsym` tab. New tabs and active-symbol
@@ -363,6 +368,22 @@ pub struct SymbolDocument {
 }
 
 impl SymbolDocument {
+    /// Does this draft hold edits that are not on disk?
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// An edit changed the draft.
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Set the flag outright: a save or discard clears it, a rejected edit
+    /// gives back the value it held before.
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.dirty = dirty;
+    }
+
     /// The unit and body the editor currently shows.
     pub fn view(&self) -> crate::library::editor::symbol::state::PartView {
         crate::library::editor::symbol::state::PartView::new(self.active_part, self.active_body)
@@ -388,6 +409,7 @@ impl SymbolDocument {
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
             save_generation: 0,
+            cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
             zoom_step: default_zoom_step(),
             cursor_mm: None,
@@ -483,14 +505,16 @@ pub struct FootprintDocument {
     /// Per-wheel-notch zoom factor (Preferences "Zoom speed"); see
     /// [`SymbolDocument::zoom_step`].
     pub zoom_step: f32,
-    pub dirty: bool,
+    /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
+    /// the workspace reads and clears it through `DocumentState`.
+    dirty: bool,
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
-    /// A rejected drag gave `dirty` back as clean; the workspace's dirty set
-    /// and the tab still say dirty until the next mirror sync (#1047). Lives
-    /// here, not in the canvas state, which a footprint switch rebuilds.
-    pub clean_mirror_owed: bool,
+    /// Primitives of this container whose component rows a failed cascade
+    /// left behind and a retry can still move; the next Save cascades them
+    /// even with no new edit.
+    pub cascade_owed: Vec<uuid::Uuid>,
     /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
     /// pushed by `push_history` ahead of each dispatcher mutation;
     /// `undo()` pops the most recent and swaps it in. Capped at
@@ -542,6 +566,22 @@ pub struct FootprintHistorySnapshot {
 }
 
 impl FootprintDocument {
+    /// Does this draft hold edits that are not on disk?
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// An edit changed the draft.
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Set the flag outright: a save or discard clears it, a rejected edit
+    /// gives back the value it held before.
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.dirty = dirty;
+    }
+
     /// Build a fresh standalone editor state from a `FootprintFile`
     /// container loaded off disk. `path` is the `.snxfpt` file the
     /// user opened. The editor opens on the first footprint in the
@@ -554,8 +594,8 @@ impl FootprintDocument {
     /// Rebuild the editor from a file re-read off disk (a History restore).
     /// Behaves like [`Self::new`] except the load repairs are not logged
     /// again: the user was already told when the file was opened.
-    /// `dirty` is still `true` when
-    /// something was repaired, so the caller must mirror it into the tab.
+    /// The editor is still dirty when
+    /// something was repaired.
     pub fn reloaded(path: PathBuf, file: signex_library::FootprintFile) -> Self {
         Self::build(path, file, false)
     }
@@ -586,7 +626,7 @@ impl FootprintDocument {
             // document opens dirty and a save persists the repair.
             dirty: repaired,
             save_generation: 0,
-            clean_mirror_owed: false,
+            cascade_owed: Vec::new(),
             history: Vec::new(),
             redo: Vec::new(),
             last_edit_key: None,
@@ -797,7 +837,7 @@ impl FootprintDocument {
         self.state.selected_sketch = snap.selected_sketch;
         self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
         self.canvas_cache.clear();
-        self.dirty = true;
+        self.mark_dirty();
         // The sketch was just replaced: a drag solve still in flight ran on
         // the one that is gone. History holds only solved states: a drag's
         // steps are collapsed to one solved step when its result lands.
@@ -903,6 +943,8 @@ pub enum Tool {
     SheetEntry,
     /// Two clicks measure the offset between two points (#1256). Read-only.
     Measure,
+    /// One click on a wire splits it in two at that point (#1254).
+    BreakWire,
 }
 
 impl std::fmt::Display for Tool {
@@ -926,6 +968,7 @@ impl std::fmt::Display for Tool {
             Tool::Sheet => write!(f, "Place Sheet"),
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
+            Tool::BreakWire => write!(f, "Break Wire"),
         }
     }
 }

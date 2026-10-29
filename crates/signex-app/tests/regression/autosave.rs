@@ -36,7 +36,7 @@ fn fixture(autosave_on: bool) -> Fixture {
     let recovery = tmp.path().join("recovery");
     std::fs::write(&doc, ORIGINAL).unwrap();
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -48,13 +48,12 @@ fn fixture(autosave_on: bool) -> Fixture {
         title: "autosave".to_string(),
         path: doc.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(doc.clone());
-    app.document_state.dirty_paths.insert(doc.clone());
+    app.document_state.mark_document_dirty(&doc);
     app.document_state.autosave.set_dir(Some(recovery.clone()));
     app.ui_state.autosave_enabled = autosave_on;
     Fixture {
@@ -133,7 +132,7 @@ fn autosave_on_writes_the_sidecar_and_never_the_real_file() {
     assert_eq!(std::fs::read_to_string(sidecar_of(&f)).unwrap(), expected);
     assert_eq!(std::fs::read_to_string(&f.doc).unwrap(), ORIGINAL);
     assert!(
-        f.app.document_state.dirty_paths.contains(&f.doc),
+        f.app.document_state.is_document_dirty(&f.doc),
         "a recovery copy is not a save"
     );
 }
@@ -141,7 +140,7 @@ fn autosave_on_writes_the_sidecar_and_never_the_real_file() {
 #[test]
 fn a_clean_document_gets_no_sidecar() {
     let mut f = fixture(true);
-    f.app.document_state.dirty_paths.clear();
+    f.app.document_state.mark_documents_clean_where(|_| true);
     let task = tick(&mut f);
     complete(&mut f.app, task);
     assert!(recovery_dir_is_empty(&f.recovery));
@@ -169,7 +168,7 @@ fn a_save_that_lands_while_the_sidecar_write_runs_leaves_no_sidecar() {
     complete(&mut f.app, save);
     // The document is edited again before the write finishes, so only the
     // superseded flag (not "no longer dirty") says the copy is stale.
-    f.app.document_state.dirty_paths.insert(f.doc.clone());
+    f.app.document_state.mark_document_dirty(&f.doc);
     // The autosave write finishes after the save.
     complete(&mut f.app, write);
     assert!(
@@ -270,7 +269,7 @@ fn turning_autosave_off_then_closing_the_document_removes_the_sidecar() {
 
     // Autosave goes off; the dirty edits are then discarded and the tab closed.
     f.app.ui_state.autosave_enabled = false;
-    f.app.document_state.dirty_paths.remove(&f.doc);
+    f.app.document_state.mark_document_clean(&f.doc);
     let close = f.app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::Close(0),
     )));
@@ -291,7 +290,7 @@ fn a_tick_with_autosave_off_sweeps_stale_sidecars_but_never_writes() {
 
     f.app.ui_state.autosave_enabled = false;
     f.app.document_state.engines.remove(&f.doc);
-    f.app.document_state.dirty_paths.remove(&f.doc);
+    f.app.document_state.mark_document_clean(&f.doc);
     let task = tick(&mut f);
     complete(&mut f.app, task);
     assert!(!sidecar_of(&f).exists());
@@ -444,7 +443,7 @@ fn age(path: &Path, secs_ago: u64) {
 
 fn open_from_disk(app: &mut Signex, doc: &Path) {
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -476,7 +475,7 @@ fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
 
     assert!(next.document_state.autosave.current_offer().is_none());
     assert!(
-        next.document_state.dirty_paths.contains(&f.doc),
+        next.document_state.is_document_dirty(&f.doc),
         "restored content is unsaved"
     );
     assert_eq!(
@@ -498,7 +497,7 @@ fn discard_deletes_the_copy_and_leaves_the_document_clean() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     answer(&mut next, signex_app::autosave::RecoveryChoice::Discard);
     assert!(!sidecar_of(&f).exists());
-    assert!(!next.document_state.dirty_paths.contains(&f.doc));
+    assert!(!next.document_state.is_document_dirty(&f.doc));
     assert_eq!(std::fs::read_to_string(&f.doc).unwrap(), ORIGINAL);
 }
 
@@ -508,7 +507,7 @@ fn decide_later_keeps_the_copy_for_the_next_open() {
     answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
     assert!(next.document_state.autosave.current_offer().is_none());
     assert!(sidecar_of(&f).exists());
-    assert!(!next.document_state.dirty_paths.contains(&f.doc));
+    assert!(!next.document_state.is_document_dirty(&f.doc));
 }
 
 #[test]
@@ -552,7 +551,7 @@ fn decide_later_then_an_edit_and_a_tick_never_overwrites_the_earlier_copy() {
     answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
 
     next.ui_state.autosave_enabled = true;
-    next.document_state.dirty_paths.insert(f.doc.clone());
+    next.document_state.mark_document_dirty(&f.doc);
     let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
     complete(&mut next, task);
     assert_eq!(
@@ -597,7 +596,7 @@ fn decide_later_then_a_save_keeps_the_copy_and_it_is_offered_at_the_next_open() 
 /// not answered: edit the document and let the autosave timer fire.
 fn edit_and_tick(app: &mut Signex, doc: &Path) {
     app.ui_state.autosave_enabled = true;
-    app.document_state.dirty_paths.insert(doc.to_path_buf());
+    app.document_state.mark_document_dirty(doc);
     let task = app.update(Message::Autosave(AutosaveMsg::Ticked));
     complete(app, task);
 }
@@ -629,7 +628,7 @@ fn a_tick_between_open_and_the_recovery_check_never_replaces_the_earlier_copy() 
         .autosave
         .set_dir(Some(f.recovery.clone()));
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -711,7 +710,7 @@ fn restoring_into_a_closed_tab_says_so_and_keeps_the_copy() {
 fn restore_over_edits_made_while_the_prompt_was_open_is_refused() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     let earlier = std::fs::read(sidecar_of(&f)).unwrap();
-    next.document_state.dirty_paths.insert(f.doc.clone());
+    next.document_state.mark_document_dirty(&f.doc);
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
     assert!(next.document_state.error_notice.is_some());
     assert!(sidecar_of(&f).exists(), "the copy is kept");
@@ -809,7 +808,7 @@ fn close_first_tab(app: &mut Signex) {
 fn closing_the_tab_of_an_unanswered_offer_keeps_the_copy_safe_from_autosave() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     let earlier = std::fs::read(sidecar_of(&f)).unwrap();
-    next.document_state.dirty_paths.insert(f.doc.clone());
+    next.document_state.mark_document_dirty(&f.doc);
     close_first_tab(&mut next);
     assert!(
         next.document_state.engines.contains_key(&f.doc),
@@ -828,7 +827,7 @@ fn closing_the_tab_after_decide_later_keeps_the_copy_safe_from_autosave() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     let earlier = std::fs::read(sidecar_of(&f)).unwrap();
     answer(&mut next, signex_app::autosave::RecoveryChoice::Later);
-    next.document_state.dirty_paths.insert(f.doc.clone());
+    next.document_state.mark_document_dirty(&f.doc);
     close_first_tab(&mut next);
 
     edit_and_tick(&mut next, &f.doc);
@@ -865,7 +864,7 @@ fn a_restore_that_cannot_open_the_copy_keeps_autosave_off_and_offers_it_again() 
 fn restoring_after_the_tab_was_closed_keeps_the_copy_safe_from_autosave() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     let earlier = std::fs::read(sidecar_of(&f)).unwrap();
-    next.document_state.dirty_paths.insert(f.doc.clone());
+    next.document_state.mark_document_dirty(&f.doc);
     close_first_tab(&mut next);
     assert!(next.document_state.engines.contains_key(&f.doc));
 

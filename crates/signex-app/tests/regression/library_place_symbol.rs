@@ -203,7 +203,7 @@ fn build_in_mode(
         // with the footprint text.
         footprint_ref: name
             .ends_with("-fp")
-            .then(|| PrimitiveRef::new(library_id, Uuid::new_v4())),
+            .then(|| PrimitiveRef::new(library_id, Uuid::now_v7())),
         alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
@@ -253,7 +253,7 @@ pub(crate) fn app_with_libraries(libs: &[&Fixture]) -> Signex {
 pub(crate) fn app_with_empty_sheet() -> Signex {
     let path = PathBuf::from("place-364.snxsch");
     let sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };
@@ -266,7 +266,6 @@ pub(crate) fn app_with_empty_sheet() -> Signex {
         title: "place-364".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -365,7 +364,7 @@ fn terminal_pins(app: &Signex, unit: u32) -> Vec<String> {
         .collect();
     for position in tips {
         sheet.no_connects.push(NoConnect {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position,
         });
     }
@@ -441,7 +440,8 @@ fn one_undo_removes_the_placement_and_its_new_lib_symbol() {
     assert!(doc(&app).symbols.is_empty());
     assert!(doc(&app).lib_symbols.is_empty());
     assert!(
-        app.document_state.tabs[0].dirty,
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
         "undo leaves the tab dirty"
     );
 }
@@ -693,7 +693,7 @@ fn a_library_power_port_places_as_a_power_port() {
     let lib = sheet.lib_symbols.get(&a.lib_id).expect("lib");
     let tip = SymbolTransform::from_symbol(a).apply(lib.pins[0].pin.position);
     sheet.wires.push(Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: tip,
         end: Point::new(tip.x + 10.16, tip.y),
         ..Default::default()
@@ -752,7 +752,7 @@ fn two_wired_copies(f: &Fixture) -> SchematicSheet {
         let lib = sheet.lib_symbols.get(&sym.lib_id).expect("lib");
         let tip = SymbolTransform::from_symbol(&sym).apply(lib.pins[0].pin.position);
         sheet.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: tip,
             end: Point::new(tip.x + 10.16, tip.y),
             ..Default::default()

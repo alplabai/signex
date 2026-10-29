@@ -10,16 +10,15 @@ use crate::persist::run_task::outputs;
 fn add_dirty_symbol(app: &mut Signex, path: &Path) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     let mut editor = SymbolDocument::new(path.to_path_buf(), file);
-    editor.dirty = true;
+    editor.mark_dirty();
     app.document_state
         .symbol_editors
         .insert(path.to_path_buf(), editor);
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    app.document_state.mark_document_dirty(path);
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::SymbolEditor(path.to_path_buf()),
     });
@@ -42,7 +41,8 @@ fn completion(task: iced::Task<Message>) -> crate::persist::PrimitiveSaveDone {
 }
 
 fn is_clean(app: &Signex, path: &Path) -> bool {
-    !app.document_state.symbol_editors[path].dirty && !app.document_state.dirty_paths.contains(path)
+    !app.document_state.symbol_editors[path].is_dirty()
+        && !app.document_state.is_document_dirty(path)
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn follow_ups_from_both_spellings_both_run() {
             .symbol_editors
             .get_mut(path)
             .expect("editor")
-            .dirty = true;
+            .set_dirty(true);
         let queued = app.save_primitive_tab_at(path).expect("queued");
         assert_eq!(queued.units(), 0);
     }

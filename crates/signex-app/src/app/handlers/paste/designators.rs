@@ -88,7 +88,7 @@ mod tests {
 
     fn part(reference: &str, lib: &str, unit: u32) -> Symbol {
         Symbol {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             lib_id: lib.to_owned(),
             reference: reference.to_owned(),
             unit,
@@ -98,7 +98,7 @@ mod tests {
 
     fn payload() -> PlacementPayload {
         PlacementPayload::new(SchematicSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".to_owned(),
             symbols: vec![
                 part("R1", "lib:r", 1),

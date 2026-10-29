@@ -36,7 +36,7 @@ fn item(n: u128) -> SelectedItem {
 
 fn locked_error(result: Result<CommandResult, EngineError>) -> String {
     match result {
-        Err(error @ EngineError::SymbolLocked { .. }) => error.to_string(),
+        Err(error @ EngineError::ItemLocked { .. }) => error.to_string(),
         other => panic!("expected a lock refusal, got {other:?}"),
     }
 }
@@ -261,7 +261,7 @@ fn a_batch_with_a_refused_command_rolls_back() {
         },
     ]);
 
-    assert!(matches!(result, Err(EngineError::SymbolLocked { .. })));
+    assert!(matches!(result, Err(EngineError::ItemLocked { .. })));
     assert_eq!(engine.document().symbols[1].position, free_before);
     assert_eq!(engine.document().symbols.len(), 2);
 }

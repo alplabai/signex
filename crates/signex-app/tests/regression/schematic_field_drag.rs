@@ -51,7 +51,7 @@ fn symbol(uuid: uuid::Uuid, ref_text: TextProp) -> Symbol {
 fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 0,
         generator: String::new(),
         generator_version: String::new(),
@@ -79,7 +79,7 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
 
 #[test]
 fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
-    let uuid = uuid::Uuid::new_v4();
+    let uuid = uuid::Uuid::now_v7();
     let prop = TextProp {
         position: Point::new(70.0, 30.0),
         rotation: 0.0,
@@ -97,7 +97,6 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
         title: "field-drag".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });
@@ -142,7 +141,7 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
 #[test]
 fn moved_tall_symbol_is_hit_on_its_library_body() {
     // A 10 x 40 mm IC body: the old fixed 8 x 5.6 mm box missed most of it.
-    let uuid = uuid::Uuid::new_v4();
+    let uuid = uuid::Uuid::now_v7();
     let prop = TextProp {
         position: Point::new(50.0, 20.0),
         rotation: 0.0,
@@ -175,7 +174,6 @@ fn moved_tall_symbol_is_hit_on_its_library_body() {
         title: "tall-symbol".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

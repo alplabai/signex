@@ -51,6 +51,17 @@ pub enum LibraryError {
     Unauthorized(String),
     #[error("backend: {0}")]
     Backend(String),
+    /// The stored data itself is invalid or unreadable (a malformed row, a
+    /// schema this build refuses, a file format it does not read): the same
+    /// operation cannot succeed until the data is fixed. Reads like
+    /// [`Self::Backend`].
+    #[error("backend: {0}")]
+    InvalidData(String),
+    /// A row of a batch that was not tried because an earlier row failed.
+    /// `permanent` says whether that earlier failure is one a retry cannot
+    /// fix, so these rows inherit its class.
+    #[error("backend: not attempted: an earlier row failed ({cause})")]
+    NotAttempted { cause: String, permanent: bool },
     /// A write reached a library that is mounted read-only. A property
     /// of the mount, not of filesystem permissions — it is raised
     /// before any byte is touched, so it reads the same whether or not
@@ -492,17 +503,18 @@ pub trait LibraryAdapter: Send + Sync {
         &self,
         targets: &[(String, RowId)],
         edit: &mut RowEdit<'_>,
-        message: &str,
+        message: &RowsMessage<'_>,
     ) -> Result<Vec<RowEditOutcome>, LibraryError> {
         let mut outcomes: Vec<RowEditOutcome> = Vec::with_capacity(targets.len());
-        let mut failed: Option<String> = None;
+        let mut failed: Option<(String, bool)> = None;
         for (table, row_id) in targets {
             if let Some(first) = &failed {
                 outcomes.push((
                     *row_id,
-                    Err(LibraryError::Backend(format!(
-                        "not attempted: an earlier row failed ({first})"
-                    ))),
+                    Err(LibraryError::NotAttempted {
+                        cause: first.0.clone(),
+                        permanent: first.1,
+                    }),
                 ));
                 continue;
             }
@@ -510,11 +522,11 @@ pub trait LibraryAdapter: Send + Sync {
                 if !edit(&mut row) {
                     return Ok(false);
                 }
-                self.update_row(table, row, message)?;
+                self.update_row(table, row, &message(&[*row_id]))?;
                 Ok(true)
             });
             if let Err(e) = &outcome {
-                failed = Some(e.to_string());
+                failed = Some((e.to_string(), crate::cascade::retry_cannot_fix(e)));
             }
             outcomes.push((*row_id, outcome));
         }
@@ -765,8 +777,8 @@ pub trait LibraryAdapter: Send + Sync {
     /// it is. Returns whether the file was written. A written file is
     /// committed with `commit_message` before the lock is released, so
     /// another process cannot replace it while git reads it. A failed
-    /// commit is logged, not returned: the file is already saved, and the
-    /// next commit picks it up.
+    /// commit is not returned: the file is already saved. It is listed by
+    /// [`Self::uncommitted_changes`] and the next commit picks it up (#858).
     ///
     /// The default has no lock to take and no version control, and only
     /// does the read and write; see [`rewrite_file`].
@@ -798,8 +810,25 @@ pub trait LibraryAdapter: Send + Sync {
         &self,
         _abs_path: &std::path::Path,
         _message: &str,
-    ) -> Result<(), LibraryError> {
-        Ok(())
+    ) -> Result<CommitOutcome, LibraryError> {
+        Ok(CommitOutcome::NothingToCommit)
+    }
+
+    /// Changes that are saved on disk but not in version control: a save
+    /// whose file write succeeded and whose git commit then failed (#858).
+    /// `None` when nothing is waiting, and always for a backend without
+    /// version control. The next successful commit of this library, or
+    /// [`Self::commit_pending`], records them.
+    fn uncommitted_changes(&self) -> Option<UncommittedChanges> {
+        None
+    }
+
+    /// Commit every change [`Self::uncommitted_changes`] lists, in one
+    /// commit with `message` (a default when empty). A failed commit is not
+    /// an error: it is [`CommitOutcome::NotCommitted`] and the changes stay
+    /// listed. The explicit retry behind the "Commit now" action.
+    fn commit_pending(&self, _message: &str) -> Result<CommitOutcome, LibraryError> {
+        Ok(CommitOutcome::NothingToCommit)
     }
 
     /// Per-primitive git history.
@@ -825,9 +854,51 @@ pub trait LibraryAdapter: Send + Sync {
     }
 }
 
+/// What the version-control step of a save did. A save whose file write
+/// succeeded is a successful save whatever this says (#858): a failed commit
+/// is [`Self::NotCommitted`], never an error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitOutcome {
+    /// A commit was made.
+    Committed,
+    /// Nothing needed committing: no version control, or the tree already
+    /// matched HEAD.
+    NothingToCommit,
+    /// The file is saved but the commit failed; the change stays listed in
+    /// [`LibraryAdapter::uncommitted_changes`] until a commit lands.
+    NotCommitted {
+        /// Why git refused, without the file name (the same cause reads the
+        /// same for every file).
+        reason: String,
+    },
+}
+
+impl CommitOutcome {
+    /// Whether the change is in version control (or needs no commit).
+    pub fn is_recorded(&self) -> bool {
+        !matches!(self, Self::NotCommitted { .. })
+    }
+}
+
+/// Saved changes of a library that no commit holds yet (#858).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UncommittedChanges {
+    /// Library-relative paths, forward slashes, sorted.
+    pub paths: Vec<String>,
+    /// Why the latest commit attempt failed.
+    pub reason: String,
+}
+
 /// The edit of [`LibraryAdapter::update_rows`]: changes the row it is given
 /// and returns whether it did.
 pub type RowEdit<'a> = dyn FnMut(&mut ComponentRow) -> bool + 'a;
+
+/// The commit message of [`LibraryAdapter::update_rows`], built once the
+/// batch knows which rows the edit actually changed: it is given exactly
+/// those rows, so the message never names a row that was gone or already
+/// moved. The adapter may call it while it holds its write lock, so it must
+/// not call back into the adapter.
+pub type RowsMessage<'a> = dyn Fn(&[RowId]) -> String + 'a;
 
 /// One target's outcome from [`LibraryAdapter::update_rows`].
 pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);

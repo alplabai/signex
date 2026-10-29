@@ -53,7 +53,7 @@ pub fn child_sheet_from_corners(a: Point, b: Point, stem: &str) -> Option<ChildS
         return None;
     }
     Some(ChildSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         name: stem.to_string(),
         filename: format!("{stem}.{SHEET_EXTENSION}"),
         position: Point::new(a.x.min(b.x), a.y.min(b.y)),

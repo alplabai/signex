@@ -81,7 +81,7 @@ mod tests {
 
     fn wire(a: Point, b: Point) -> ErcWire {
         ErcWire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: a,
             end: b,
         }

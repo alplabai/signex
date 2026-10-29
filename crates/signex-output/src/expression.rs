@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn pin_net_lookup_reads_names_from_the_netlist() {
-        let symbol_uuid = uuid::Uuid::new_v4();
+        let symbol_uuid = uuid::Uuid::now_v7();
         let netlist = Netlist {
             nets: vec![Net {
                 id: NetId(1),

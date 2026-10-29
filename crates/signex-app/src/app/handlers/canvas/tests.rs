@@ -63,7 +63,6 @@ fn app_focused_on(focused: &str) -> Signex {
         title: "sheet".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
@@ -135,7 +134,7 @@ fn child_sheet_double_click_keeps_the_dirty_engine_of_a_tab_less_sheet() {
     use crate::app::handlers::menu::export::tests::{open_with, sheet_with_net};
     use signex_types::format::SnxSchematic;
 
-    let dir = std::env::temp_dir().join(format!("signex-dbl-dirty-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-dbl-dirty-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let path = dir.join("child.snxsch");
     let text = SnxSchematic::new(sheet_with_net("R_DISK", "DISK_NET", &[]))
@@ -149,7 +148,7 @@ fn child_sheet_double_click_keeps_the_dirty_engine_of_a_tab_less_sheet() {
         &path,
         sheet_with_net("R_EDIT", "EDITED_NET", &[]),
     );
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
 
     app.open_or_focus_sheet_path(path.clone());
 
@@ -174,9 +173,9 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
     };
     let (mut app, _task) = Signex::new();
     let (bus_id, entry_id, wire_id) = (
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
+        uuid::Uuid::now_v7(),
     );
     let sheet = SchematicSheet {
         paper_size: "A4".to_string(),
@@ -196,6 +195,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
             end: Point::new(12.54, 12.54),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         }],
         ..Default::default()
     };
@@ -208,7 +208,6 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
         title: "bus-drag".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

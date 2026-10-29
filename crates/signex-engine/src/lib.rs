@@ -33,6 +33,10 @@ mod annotation_tests;
 
 #[cfg(test)]
 mod lock_tests;
+#[cfg(test)]
+mod object_lock_tests;
+#[cfg(test)]
+mod wire_merge_tests;
 
 #[cfg(test)]
 mod history_tests;
@@ -99,6 +103,7 @@ pub use sheet_placement::{
     unused_sheet_stem,
 };
 use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub(crate) use transform::TouchingPairs;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
@@ -150,6 +155,10 @@ pub struct Engine {
     unkept_pins: Vec<String>,
     /// Pre-move nets computed ahead of time (drag previews).
     preset_before: Option<BeforeNets>,
+    /// Net colour of each wire the app has painted, by wire uuid. The engine
+    /// never changes it; a merge reads it so two wires of different colours
+    /// are not folded into one (see `transform::merge`).
+    wire_colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
 }
 
 /// Process-wide revision source: values are never reused across engines.
@@ -225,6 +234,7 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            wire_colors: std::collections::HashMap::new(),
         })
     }
 
@@ -256,7 +266,17 @@ impl Engine {
             warnings: Vec::new(),
             unkept_pins: Vec::new(),
             preset_before: None,
+            wire_colors: std::collections::HashMap::new(),
         })
+    }
+
+    /// Tell the engine the wires' net colours before a command, so a merge
+    /// keeps wires of different colours apart.
+    pub fn set_wire_colors(
+        &mut self,
+        colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) {
+        self.wire_colors = colors;
     }
 
     /// The pins the last commands could not keep connected (drained).
@@ -410,7 +430,7 @@ impl Engine {
         };
         self.refuse_if_read_only(incoming)?;
         // A refusal touches nothing, so it moves no revision.
-        if let Some(refusal) = self.locked_symbol_refusal(&cmd) {
+        if let Some(refusal) = self.locked_item_refusal(&cmd) {
             return Err(refusal);
         }
         self.bump_revision();
@@ -422,6 +442,7 @@ impl Engine {
             | Command::UpdateLabelProps { .. }
             | Command::SetSymbolRotation { .. }
             | Command::SetSymbolLocked { .. }
+            | Command::SetItemLocked { .. }
             | Command::SetSymbolDnp { .. }
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
@@ -448,6 +469,8 @@ impl Engine {
             | Command::PlaceChildSheet { .. }
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
+            | Command::BreakWire { .. }
+            | Command::PlaceWireSegmentAsIs { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
             | Command::PlaceNoErcDirective { .. }
@@ -669,7 +692,7 @@ mod tests {
         let mut document = test_sheet();
         document.labels.push(Label {
             unknown_columns: Default::default(),
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: "ALERT".to_string(),
             position: Point::new(0.0, 0.0),
             rotation: 0.0,
@@ -679,10 +702,11 @@ mod tests {
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
         document.labels.push(Label {
             unknown_columns: Default::default(),
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             text: "ALERT".to_string(),
             position: Point::new(1.0, 1.0),
             rotation: 0.0,
@@ -692,6 +716,7 @@ mod tests {
             justify: signex_types::schematic::HAlign::Left,
             justify_v: signex_types::schematic::VAlign::Bottom,
             font_family: None,
+            locked: false,
         });
 
         let engine = Engine::new(document).unwrap();
@@ -706,7 +731,7 @@ mod tests {
     fn reconcile_child_sheet_pins_adds_new_and_removes_stale_auto_generated() {
         let mut document = test_sheet();
         document.child_sheets.push(ChildSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: "Child".to_string(),
             filename: "child.snxsch".to_string(),
             position: Point::new(10.0, 20.0),
@@ -718,7 +743,7 @@ mod tests {
             fields_autoplaced: false,
             pins: vec![
                 SheetPin {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     name: "OLD_AUTO".to_string(),
                     direction: "input".to_string(),
                     position: Point::new(10.0, 22.0),
@@ -727,7 +752,7 @@ mod tests {
                     user_moved: false,
                 },
                 SheetPin {
-                    uuid: uuid::Uuid::new_v4(),
+                    uuid: uuid::Uuid::now_v7(),
                     name: "MANUAL".to_string(),
                     direction: "input".to_string(),
                     position: Point::new(10.0, 24.0),
@@ -776,9 +801,9 @@ mod tests {
     #[test]
     fn reconcile_preserves_position_for_user_moved_pin() {
         let mut document = test_sheet();
-        let moved_uuid = uuid::Uuid::new_v4();
+        let moved_uuid = uuid::Uuid::now_v7();
         document.child_sheets.push(ChildSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: "Child".to_string(),
             filename: "child.snxsch".to_string(),
             position: Point::new(10.0, 20.0),
@@ -824,8 +849,8 @@ mod tests {
     #[test]
     fn moving_sheet_pin_locks_to_nearest_sheet_edge() {
         let mut document = test_sheet();
-        let pin_uuid = uuid::Uuid::new_v4();
-        let sheet_uuid = uuid::Uuid::new_v4();
+        let pin_uuid = uuid::Uuid::now_v7();
+        let sheet_uuid = uuid::Uuid::now_v7();
 
         document.child_sheets.push(ChildSheet {
             uuid: sheet_uuid,
@@ -875,7 +900,7 @@ mod tests {
 
     fn test_sheet_pin(name: &str) -> SheetPin {
         SheetPin {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: name.to_string(),
             direction: "input".to_string(),
             position: Point::new(10.0, 22.0),
@@ -887,7 +912,7 @@ mod tests {
 
     fn test_child_sheet(pins: Vec<SheetPin>) -> ChildSheet {
         ChildSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: "Child".to_string(),
             filename: "child.snxsch".to_string(),
             position: Point::new(10.0, 20.0),
@@ -1013,7 +1038,7 @@ mod tests {
         // bug #341 reports for sheets, just for a different kind.
         let mut document = test_sheet();
         let bus_entry = BusEntry {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             position: Point::new(5.0, 5.0),
             size: (2.54, 2.54),
         };
@@ -1041,9 +1066,9 @@ mod tests {
         // `collect_selection_clipboard` silently drops. `partition_cuttable`
         // is what `handle_selection_cut_requested` (signex-app) uses to
         // keep the two in sync.
-        let symbol_item = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Symbol);
-        let sheet_item = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::ChildSheet);
-        let pin_item = SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::SheetPin);
+        let symbol_item = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Symbol);
+        let sheet_item = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::ChildSheet);
+        let pin_item = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::SheetPin);
 
         let (cuttable, kept) =
             crate::selection::partition_cuttable(&[symbol_item, sheet_item, pin_item]);
@@ -1199,7 +1224,7 @@ mod tests {
 
     fn wire(a: Point, b: Point) -> signex_types::schematic::Wire {
         signex_types::schematic::Wire {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             start: a,
             end: b,
             ..Default::default()
@@ -1428,7 +1453,7 @@ mod tests {
             .push(wire(Point::new(0.0, 0.0), Point::new(10.0, 0.0)));
         let mut engine = Engine::new(document).expect("engine");
 
-        let user_junction_uuid = uuid::Uuid::new_v4();
+        let user_junction_uuid = uuid::Uuid::now_v7();
         engine
             .execute(Command::PlaceJunction {
                 junction: signex_types::schematic::Junction {
@@ -1525,7 +1550,7 @@ mod tests {
     #[test]
     fn delete_child_sheet_and_undo() {
         let mut document = test_sheet();
-        let child_sheet_uuid = uuid::Uuid::new_v4();
+        let child_sheet_uuid = uuid::Uuid::now_v7();
         document.child_sheets.push(ChildSheet {
             uuid: child_sheet_uuid,
             name: "ChildSheet".to_string(),
@@ -1567,8 +1592,8 @@ mod tests {
     #[test]
     fn delete_sheet_pin_and_undo() {
         let mut document = test_sheet();
-        let child_sheet_uuid = uuid::Uuid::new_v4();
-        let pin_uuid = uuid::Uuid::new_v4();
+        let child_sheet_uuid = uuid::Uuid::now_v7();
+        let pin_uuid = uuid::Uuid::now_v7();
         document.child_sheets.push(ChildSheet {
             uuid: child_sheet_uuid,
             name: "ChildSheet".to_string(),
@@ -1621,7 +1646,7 @@ mod tests {
 
     fn new_child_sheet(filename: &str, name: &str) -> ChildSheet {
         ChildSheet {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             name: name.to_string(),
             filename: filename.to_string(),
             position: Point::new(10.0, 20.0),
@@ -1632,7 +1657,7 @@ mod tests {
             fill_color: None,
             fields_autoplaced: false,
             pins: vec![SheetPin {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 name: "SDA".to_string(),
                 direction: "input".to_string(),
                 position: Point::new(10.0, 25.0),

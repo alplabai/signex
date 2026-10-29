@@ -37,7 +37,7 @@ fn one_bus_at_two_widths_on_separate_runs_is_a_mismatch() {
             at(
                 ErcLabel {
                     label_type: ty,
-                    uuid: Uuid::new_v4(),
+                    uuid: Uuid::now_v7(),
                     ..net_label(t, pt(0.0, 0.0))
                 },
                 y,

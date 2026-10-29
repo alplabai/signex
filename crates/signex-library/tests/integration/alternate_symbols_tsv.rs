@@ -47,7 +47,7 @@ fn stored_columns(file: &PathBuf) -> Vec<String> {
 }
 
 fn row(pn: &str) -> ComponentRow {
-    let lib = Uuid::new_v4();
+    let lib = Uuid::now_v7();
     ComponentRow {
         alternate_symbols: Vec::new(),
         row_id: Uuid::now_v7(),
@@ -58,7 +58,7 @@ fn row(pn: &str) -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Released,
-        symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
         footprint_ref: None,
         alternate_footprints: Vec::new(),
         sim_ref: None,
@@ -82,7 +82,7 @@ fn row(pn: &str) -> ComponentRow {
 
 fn with_alternate(mut r: ComponentRow) -> ComponentRow {
     r.alternate_symbols.push(AlternateSymbol::new(
-        PrimitiveRef::new(r.symbol_ref.library_id, Uuid::new_v4()),
+        PrimitiveRef::new(r.symbol_ref.library_id, Uuid::now_v7()),
         "0.0.2",
         "IEC",
     ));

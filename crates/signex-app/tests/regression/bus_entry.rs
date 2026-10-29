@@ -25,7 +25,7 @@ fn app_with_buses(buses: &[BusEnds]) -> (Signex, TempDir) {
     let mut sheet = super::place_sheet_tool::empty_sheet();
     for (start, end) in buses {
         sheet.buses.push(Bus {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(start.0, start.1),
             end: Point::new(end.0, end.1),
         });
@@ -38,7 +38,6 @@ fn app_with_buses(buses: &[BusEnds]) -> (Signex, TempDir) {
         title: "root".to_string(),
         path: path.clone(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::Schematic,
     });

@@ -18,7 +18,7 @@ fn head(line: &str) -> &str {
 }
 
 fn scratch(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("signex-stitched-{tag}-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-stitched-{tag}-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     dir
 }

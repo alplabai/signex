@@ -26,7 +26,7 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// The on-disk index entry is updated afterwards, best effort, so the
 /// working copy does not show the file as changed.
 ///
-/// `removed_rel_path` is dropped from the new tree (and the index) in the
+/// `removed_rel_paths` are dropped from the new tree (and the index) in the
 /// same commit, so a file moved to `rel_path` is recorded as a rename
 /// rather than left tracked at its old name.
 ///
@@ -34,7 +34,7 @@ const GIT_LOCK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 /// working-tree file as it is when this runs.
 pub(super) fn stage_and_commit(
     repo: &git2::Repository,
-    removed_rel_path: Option<&Path>,
+    removed_rel_paths: &[&Path],
     rel_path: &Path,
     content: Option<&[u8]>,
     signature: &git2::Signature<'_>,
@@ -42,8 +42,8 @@ pub(super) fn stage_and_commit(
 ) -> Result<Option<git2::Oid>, git2::Error> {
     stage_and_commit_with(
         repo,
-        removed_rel_path,
-        rel_path,
+        removed_rel_paths,
+        Some(rel_path),
         content,
         &[],
         signature,
@@ -53,10 +53,12 @@ pub(super) fn stage_and_commit(
 
 /// [`stage_and_commit`] that also puts `extra_rel_paths` (working-tree
 /// files, e.g. the pinned datasheet a row references) into the same commit.
+/// `rel_path` is `None` for a commit of only `extra_rel_paths` and removals
+/// (the retry of files whose earlier commit failed, #858).
 pub(super) fn stage_and_commit_with(
     repo: &git2::Repository,
-    removed_rel_path: Option<&Path>,
-    rel_path: &Path,
+    removed_rel_paths: &[&Path],
+    rel_path: Option<&Path>,
     content: Option<&[u8]>,
     extra_rel_paths: &[&Path],
     signature: &git2::Signature<'_>,
@@ -72,18 +74,23 @@ pub(super) fn stage_and_commit_with(
     // `text`/`eol` attributes), as before. Built in memory only; the tree
     // is still made from HEAD's, never the index. Supplied bytes are never
     // staged from the working file, which may have moved on since.
-    let main_entry = match content {
-        Some(_) => None,
-        None => staged_entry(repo, rel_path).ok(),
-    };
-    let staged_blob = match &main_entry {
-        Some(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+    let main_entry = match (content, rel_path) {
+        (None, Some(rel_path)) => staged_entry(repo, rel_path).ok(),
         _ => None,
     };
-    let blob = match (content, staged_blob) {
-        (Some(bytes), _) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
-        (None, Some(id)) => id,
-        (None, None) => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+    let blob = match rel_path {
+        None => None,
+        Some(rel_path) => {
+            let staged_blob = match &main_entry {
+                Some(entry) if !super::lfs::is_lfs_path(repo, rel_path)? => Some(entry.id),
+                _ => None,
+            };
+            Some(match (content, staged_blob) {
+                (Some(bytes), _) => super::lfs::blob_for_bytes(repo, rel_path, bytes)?,
+                (None, Some(id)) => id,
+                (None, None) => super::lfs::blob_for_path(repo, workdir, rel_path)?,
+            })
+        }
     };
     // An unborn HEAD (fresh repo) is the only legitimate "no parent" case.
     let parent = match repo.head() {
@@ -93,19 +100,29 @@ pub(super) fn stage_and_commit_with(
     };
     let base = parent.as_ref().map(|c| c.tree()).transpose()?;
     let head_tree = base.clone();
-    let base = match (removed_rel_path, base) {
-        (Some(removed), Some(tree)) => {
-            let components: Vec<&std::ffi::OsStr> = removed.iter().collect();
-            match tree_without_path(repo, &tree, &components)? {
-                Some(id) => Some(repo.find_tree(id)?),
-                None => None,
-            }
+    let mut base = base;
+    for removed in removed_rel_paths {
+        let Some(tree) = base.take() else { break };
+        let components: Vec<&std::ffi::OsStr> = removed.iter().collect();
+        base = match tree_without_path(repo, &tree, &components)? {
+            Some(id) => Some(repo.find_tree(id)?),
+            None => None,
+        };
+    }
+    let mut staged: Vec<(&Path, git2::Oid)> = Vec::new();
+    let mut tree_id = match (rel_path, blob) {
+        (Some(rel_path), Some(blob)) => {
+            let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
+            staged.push((rel_path, blob));
+            tree_with_blob(repo, base.as_ref(), &components, blob)?
         }
-        (_, base) => base,
+        _ => match &base {
+            Some(tree) => tree.id(),
+            // Nothing to record on a repository with no commit.
+            None if extra_rel_paths.is_empty() => return Ok(None),
+            None => repo.treebuilder(None)?.write()?,
+        },
     };
-    let components: Vec<&std::ffi::OsStr> = rel_path.iter().collect();
-    let mut tree_id = tree_with_blob(repo, base.as_ref(), &components, blob)?;
-    let mut staged: Vec<(&Path, git2::Oid)> = vec![(rel_path, blob)];
     for extra in extra_rel_paths {
         let extra_blob = super::lfs::blob_for_path(repo, workdir, extra)?;
         let extra_components: Vec<&std::ffi::OsStr> = extra.iter().collect();
@@ -118,26 +135,28 @@ pub(super) fn stage_and_commit_with(
     }
     let tree = repo.find_tree(tree_id)?;
     let parents: Vec<&git2::Commit> = parent.iter().collect();
+    #[cfg(test)]
+    run_before_commit_hook();
     let oid = repo.commit(Some("HEAD"), signature, signature, message, &tree, &parents)?;
     // Best effort: a failure here leaves the index stale for this one path
     // (shown as a change by `git status`), never a wrong commit.
     // The index is re-read on every attempt, so an entry another process
     // staged while we waited for its `index.lock` is kept (#900).
     let mut main_entry = main_entry;
-    if let Some(entry) = main_entry.as_mut() {
+    if let (Some(entry), Some(blob)) = (main_entry.as_mut(), blob) {
         // An LFS path's entry records the pointer that was committed.
         entry.id = blob;
     }
     let updated = retry_on_git_lock(repo.path(), || {
         let mut index = repo.index()?;
         index.read(true)?;
-        if let Some(removed) = removed_rel_path
-            && index.get_path(removed, 0).is_some()
-        {
-            index.remove_path(removed)?;
+        for removed in removed_rel_paths {
+            if index.get_path(removed, 0).is_some() {
+                index.remove_path(removed)?;
+            }
         }
         for (path, blob) in &staged {
-            if *path == rel_path
+            if Some(*path) == rel_path
                 && let Some(entry) = &main_entry
             {
                 index.add(entry)?;
@@ -154,7 +173,7 @@ pub(super) fn stage_and_commit_with(
             // re-hash the file and report it modified. The extra files are
             // always committed from the working tree, so they match.
             let working_differs = content.is_some()
-                && *path == rel_path
+                && Some(*path) == rel_path
                 && super::lfs::working_blob_id(repo, workdir, path).ok() != Some(*blob);
             if let Some(mut entry) = index.get_path(path, 0)
                 && (entry.id != *blob || working_differs)
@@ -174,12 +193,34 @@ pub(super) fn stage_and_commit_with(
     if let Err(e) = updated {
         tracing::warn!(
             target: "signex::library",
-            path = %rel_path.display(),
+            path = %rel_path.map(|p| p.display().to_string()).unwrap_or_default(),
             error = %e,
             "committed, but the git index could not be updated; `git status` may show the file as changed"
         );
     }
     Ok(Some(oid))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Runs once, on this thread, between resolving the parent commit and
+    /// making the commit: where a test moves HEAD under the commit.
+    static BEFORE_COMMIT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Arrange for `hook` to run once just before the next commit this thread
+/// makes (see [`BEFORE_COMMIT`]).
+#[cfg(test)]
+pub(super) fn set_before_commit_hook(hook: impl FnOnce() + 'static) {
+    BEFORE_COMMIT.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+}
+
+#[cfg(test)]
+fn run_before_commit_hook() {
+    if let Some(hook) = BEFORE_COMMIT.with(|slot| slot.borrow_mut().take()) {
+        hook();
+    }
 }
 
 /// The index entry `add_path` makes for `rel_path` from the working tree
@@ -393,7 +434,7 @@ pub(super) fn legacy_columns() -> Vec<String> {
 pub(super) fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
     let names: Vec<&str> = columns.iter().map(String::as_str).collect();
     crate::tables::check_columns(&names)
-        .map_err(|e| LibraryError::Backend(format!("table {table:?} schema mismatch: {e}")))?;
+        .map_err(|e| LibraryError::InvalidData(format!("table {table:?} schema mismatch: {e}")))?;
     Ok(())
 }
 
@@ -717,8 +758,8 @@ mod tests {
         use crate::primitive::PrimitiveRef;
         let mut row = crate::component::tests::fixture_row();
         row.alternate_footprints = vec![FootprintBinding::new(PrimitiveRef::new(
-            Uuid::new_v4(),
-            Uuid::new_v4(),
+            Uuid::now_v7(),
+            Uuid::now_v7(),
         ))];
         let lib_row = component_to_library_row(&row).unwrap();
         assert!(lib_row.cells["footprint_ref"].starts_with('['));

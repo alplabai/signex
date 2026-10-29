@@ -17,13 +17,14 @@ fn nm(mm: f64) -> i64 {
 
 /// Zero-length so the wire's anchor is its start point.
 fn wire_at(x: f64) -> (Wire, uuid::Uuid) {
-    let uuid = uuid::Uuid::new_v4();
+    let uuid = uuid::Uuid::now_v7();
     let wire = Wire {
         unknown_columns: Default::default(),
         uuid,
         start: Point::new(x, 0.0),
         end: Point::new(x, 0.0),
         stroke_width: 0.0,
+        locked: false,
     };
     (wire, uuid)
 }

@@ -138,6 +138,16 @@ pub enum LibraryMessage {
     BrowserDismissDeleteError {
         library_path: PathBuf,
     },
+    /// "Commit now" on the uncommitted-changes banner: retry the git commit
+    /// of everything the library saved without one (#858).
+    BrowserCommitPending {
+        library_path: PathBuf,
+    },
+    /// The off-thread "Commit now" finished.
+    BrowserCommitPendingDone {
+        library_path: PathBuf,
+        result: Result<signex_library::CommitOutcome, String>,
+    },
     /// Sidebar `✎` rename button — flip the matching row into edit
     /// mode (text input replaces label).
     BrowserBeginRenameTable {
@@ -516,6 +526,8 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         outcome: std::sync::Arc<Result<signex_library::PricingRefreshReport, String>>,
     },
+    /// The Copy to Library dialog, or the copy it started (#813).
+    StockCopy(crate::library::stock_copy::StockCopyMsg),
 }
 
 /// What the off-thread read of a library row hands back to `update`:

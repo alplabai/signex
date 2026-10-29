@@ -70,7 +70,7 @@ uuid                                  text  pos_x      pos_y      rotation  kind
 """
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000001]
-footprint = ""
+footprint = "PinHeader_1x02_P2.54mm"
 datasheet = ""
 mirror_x = false
 mirror_y = false
@@ -328,7 +328,7 @@ x = 124.46000000000001
 y = 115.57
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000007]
-footprint = ""
+footprint = "PinHeader_1x02_P2.54mm"
 datasheet = ""
 mirror_x = false
 mirror_y = true

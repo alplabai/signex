@@ -70,7 +70,11 @@ fn is_power_flag_pair(p: &PinPair<'_>) -> bool {
 
 fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mut Vec<Diagnostic>) {
     let mut pairs: Vec<PinPair<'_>> = Vec::new();
-    for (i, a) in net.pins.iter().enumerate() {
+    // Canonical pin order (symbol uuid, anchor): which pin of a pair is the
+    // primary, and which pair wins a tie, never depend on document order.
+    let mut pins: Vec<&ErcNetPin> = net.pins.iter().collect();
+    pins.sort_by_key(|p| (p.symbol, p.anchor()));
+    for (i, a) in pins.iter().copied().enumerate() {
         // A No-ERC directive on a pin tip silences that pin's pairs only. The
         // merged finding sits on one pin, so the engine's positional
         // suppression would otherwise drop (or keep) the whole net.
@@ -80,7 +84,7 @@ fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mu
         let Some(axis_a) = PinAxis::of(a.direction) else {
             continue;
         };
-        for b in &net.pins[i + 1..] {
+        for b in pins[i + 1..].iter().copied() {
             // Two pins of one part sharing a net (an LDO's paired VOUT pins,
             // a buck converter's several SW pins) are one driver, not two.
             // Keyed on (symbol, occurrence): two placements of one sheet file
@@ -142,6 +146,8 @@ fn conflict(net: &ErcNet, worst: &PinPair<'_>, all: &[PinPair<'_>]) -> Diagnosti
         .with_severity(worst.severity)
         .with_primary(sel(worst.a.symbol, SelectedKind::Symbol))
         .with_peer(sel(worst.b.symbol, SelectedKind::Symbol))
+        .at_pin_number(format!("{}/{}", worst.a.anchor(), worst.b.anchor()))
+        .about_net(crate::NetFinding::from_net(net))
 }
 
 fn other_pairs(worst: &PinPair<'_>, all: &[PinPair<'_>]) -> String {
@@ -182,6 +188,7 @@ mod tests {
             reference: "U1".into(),
             number: "1".into(),
             position: Point::new(0.0, 0.0),
+            local_pos: Point::new(0.0, 0.0),
             direction: PinDirection::Output,
             is_power_flag: false,
         }

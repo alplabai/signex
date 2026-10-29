@@ -35,7 +35,7 @@ impl DocumentSink for Recorder {
 
 fn engine_at(path: &Path, paper: &str) -> signex_engine::Engine {
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: paper.to_string(),
         ..Default::default()
     };
@@ -60,7 +60,7 @@ fn folding_app_with_two_spellings() -> (Signex, Arc<Recorder>, tempfile::TempDir
         app.document_state
             .engines
             .insert(path.clone(), engine_at(path, paper));
-        app.document_state.dirty_paths.insert(path.clone());
+        app.document_state.mark_document_dirty(path);
     }
     (app, recorder, tmp, upper, lower)
 }
@@ -110,9 +110,9 @@ fn an_older_write_under_one_spelling_never_lands_over_a_newer_one_under_another(
     for message in older_done.into_iter().chain(newer_done) {
         let _ = app.update(message);
     }
-    assert!(!app.document_state.dirty_paths.contains(&lower));
+    assert!(!app.document_state.is_document_dirty(&lower));
     assert!(
-        app.document_state.dirty_paths.contains(&upper),
+        app.document_state.is_document_dirty(&upper),
         "the spelling whose bytes never landed stays dirty"
     );
 }
@@ -139,9 +139,9 @@ fn a_sibling_that_wins_on_disk_is_cleaned_and_the_older_spelling_stays_dirty() {
     for message in save_all_done.into_iter().chain(sibling_done) {
         let _ = app.update(message);
     }
-    assert!(!app.document_state.dirty_paths.contains(&lower));
+    assert!(!app.document_state.is_document_dirty(&lower));
     assert!(
-        app.document_state.dirty_paths.contains(&upper),
+        app.document_state.is_document_dirty(&upper),
         "the older spelling's bytes never landed, so it stays dirty"
     );
     assert!(!app.document_state.document_saves.is_saving(&upper));

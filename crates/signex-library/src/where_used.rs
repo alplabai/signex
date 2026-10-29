@@ -189,10 +189,14 @@ impl WhereUsedIndex {
 
     fn add_primitive_links(&mut self, row: &ComponentRow) {
         let row_id = RowId::from_uuid(row.row_id);
-        // An alternate symbol is a use of that symbol too.
+        // An alternate symbol or footprint is a use of that primitive too.
         let symbols = std::iter::once(row.symbol_ref)
             .chain(row.alternate_symbols.iter().map(|a| a.symbol_ref));
-        let targets = symbols.chain(row.footprint_ref).chain(row.sim_ref);
+        let footprints = row
+            .footprint_ref
+            .into_iter()
+            .chain(row.alternate_footprints.iter().map(|a| a.footprint));
+        let targets = symbols.chain(footprints).chain(row.sim_ref);
         for target in targets {
             let rows = self.primitive_to_rows.entry(target).or_default();
             if !rows.contains(&row_id) {
@@ -314,9 +318,9 @@ mod tests {
 
     #[test]
     fn rows_for_primitive_returns_referencing_row() {
-        let lib = Uuid::new_v4();
-        let sym_ref = PrimitiveRef::new(lib, Uuid::new_v4());
-        let fpt_ref = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let sym_ref = PrimitiveRef::new(lib, Uuid::now_v7());
+        let fpt_ref = PrimitiveRef::new(lib, Uuid::now_v7());
         let row = fixture_row(sym_ref, Some(fpt_ref));
         let row_id = RowId::from_uuid(row.row_id);
 
@@ -324,15 +328,15 @@ mod tests {
         idx.ingest_row(&row);
         assert_eq!(idx.rows_for_primitive(&sym_ref), &[row_id]);
         assert_eq!(idx.rows_for_primitive(&fpt_ref), &[row_id]);
-        let unknown = PrimitiveRef::new(lib, Uuid::new_v4());
+        let unknown = PrimitiveRef::new(lib, Uuid::now_v7());
         assert!(idx.rows_for_primitive(&unknown).is_empty());
     }
 
     #[test]
     fn alternate_symbol_counts_as_a_use_of_that_symbol() {
-        let lib = Uuid::new_v4();
-        let default_sym = PrimitiveRef::new(lib, Uuid::new_v4());
-        let alt_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let default_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let alt_sym = PrimitiveRef::new(lib, Uuid::now_v7());
         let mut row = fixture_row(default_sym, None);
         row.alternate_symbols
             .push(AlternateSymbol::new(alt_sym, "0.0.1", "IEC"));
@@ -349,10 +353,31 @@ mod tests {
     }
 
     #[test]
+    fn alternate_footprint_counts_as_a_use_of_that_footprint() {
+        let lib = Uuid::now_v7();
+        let sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let default_fp = PrimitiveRef::new(lib, Uuid::now_v7());
+        let alt_fp = PrimitiveRef::new(lib, Uuid::now_v7());
+        let mut row = fixture_row(sym, Some(default_fp));
+        row.alternate_footprints
+            .push(crate::footprint_binding::FootprintBinding::new(alt_fp));
+        let row_id = RowId::from_uuid(row.row_id);
+
+        let mut idx = WhereUsedIndex::new();
+        idx.ingest_row(&row);
+        assert_eq!(idx.rows_for_primitive(&alt_fp), &[row_id]);
+        assert_eq!(idx.rows_for_primitive(&default_fp), &[row_id]);
+
+        row.alternate_footprints.clear();
+        idx.ingest_row(&row);
+        assert!(idx.rows_for_primitive(&alt_fp).is_empty());
+    }
+
+    #[test]
     fn rebuild_from_rows_replaces_state() {
-        let lib = Uuid::new_v4();
-        let old_sym = PrimitiveRef::new(lib, Uuid::new_v4());
-        let new_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let old_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let new_sym = PrimitiveRef::new(lib, Uuid::now_v7());
 
         let mut idx = WhereUsedIndex::new();
         let row_a = fixture_row(old_sym, None);
@@ -374,9 +399,9 @@ mod tests {
 
     #[test]
     fn ingest_row_replaces_prior_primitive_links() {
-        let lib = Uuid::new_v4();
-        let old_sym = PrimitiveRef::new(lib, Uuid::new_v4());
-        let new_sym = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let old_sym = PrimitiveRef::new(lib, Uuid::now_v7());
+        let new_sym = PrimitiveRef::new(lib, Uuid::now_v7());
 
         let mut row = fixture_row(old_sym, None);
         let mut idx = WhereUsedIndex::new();

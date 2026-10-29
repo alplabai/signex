@@ -74,7 +74,7 @@ fn stamped_parts_are_numbered_per_click_by_the_preference() {
     );
 }
 
-fn open_array(app: &mut Signex) {
+pub(crate) fn open_array(app: &mut Signex) {
     send_and_settle(app, EditMsg::PasteArrayRequested, PasteIntent::Array);
     answer(app, PasteIntent::Array, None);
 }

@@ -159,6 +159,24 @@ impl Signex {
         }
     }
 
+    /// Redraw a paste's ghost with the designators its next click gives, from
+    /// the same numbering the click uses. Not per update: the numbering walks
+    /// the sheet, so it runs when the ghost changes (armed, turned, placed).
+    pub(crate) fn refresh_paste_ghost(&mut self) {
+        let Some(session) = self.interaction_state.placement.as_ref() else {
+            return;
+        };
+        if !session.kind.is_paste() {
+            return;
+        }
+        let numbered = self
+            .paste_numbering(&session.target_sheet)
+            .apply(&session.payload);
+        if let Some(session) = self.interaction_state.placement.as_mut() {
+            session.ghost = PlacementGhost::new(&numbered);
+        }
+    }
+
     /// A click at `(x, y)` (already snapped): place the payload there as one
     /// undo step and stay armed for the next copy.
     pub(crate) fn handle_placement_click(&mut self, x: f64, y: f64) -> Task<Message> {
@@ -226,6 +244,7 @@ impl Signex {
             .and(used)
             .and_then(Self::increment_designator);
         self.refresh_placement_reference();
+        self.refresh_paste_ghost();
     }
 
     /// Space: turn the part on the cursor. `false` when none is armed, so
@@ -252,6 +271,7 @@ impl Signex {
                 "The part on the cursor could not be turned: {error}"
             )),
         }
+        self.refresh_paste_ghost();
         true
     }
 

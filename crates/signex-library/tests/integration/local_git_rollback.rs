@@ -22,7 +22,7 @@ use signex_library::param::ParamMap;
 use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 
-fn init(dir: &tempfile::TempDir) -> (PathBuf, Uuid, LocalGitAdapter) {
+pub(crate) fn init(dir: &tempfile::TempDir) -> (PathBuf, Uuid, LocalGitAdapter) {
     signex_library::git_identity::test_identity::install();
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -50,7 +50,7 @@ fn init(dir: &tempfile::TempDir) -> (PathBuf, Uuid, LocalGitAdapter) {
     (file, lib_id, adapter)
 }
 
-fn row(pn: &str, lib_id: Uuid) -> ComponentRow {
+pub(crate) fn row(pn: &str, lib_id: Uuid) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
         alternate_symbols: Vec::new(),
@@ -84,14 +84,14 @@ fn row(pn: &str, lib_id: Uuid) -> ComponentRow {
     }
 }
 
-fn class(key: &str) -> ClassEntry {
+pub(crate) fn class(key: &str) -> ClassEntry {
     ClassEntry {
         key: key.into(),
         label: key.into(),
     }
 }
 
-fn disk_classes(file: &Path) -> Vec<String> {
+pub(crate) fn disk_classes(file: &Path) -> Vec<String> {
     let lf = LibraryFile::parse(&std::fs::read_to_string(file).unwrap()).unwrap();
     lf.manifest.classes.into_iter().map(|c| c.key).collect()
 }
@@ -183,12 +183,12 @@ fn assert_index_is_head(root: &Path, file: &Path) {
     );
 }
 
-fn head_oid(root: &Path) -> git2::Oid {
+pub(crate) fn head_oid(root: &Path) -> git2::Oid {
     let repo = git2::Repository::open(root).unwrap();
     repo.head().unwrap().peel_to_commit().unwrap().id()
 }
 
-fn head_classes(root: &Path) -> Vec<String> {
+pub(crate) fn head_classes(root: &Path) -> Vec<String> {
     let repo = git2::Repository::open(root).unwrap();
     let tree = repo
         .head()
@@ -204,7 +204,7 @@ fn head_classes(root: &Path) -> Vec<String> {
     lf.manifest.classes.into_iter().map(|c| c.key).collect()
 }
 
-fn head_message(root: &Path) -> String {
+pub(crate) fn head_message(root: &Path) -> String {
     let repo = git2::Repository::open(root).unwrap();
     let commit = repo.head().unwrap().peel_to_commit().unwrap();
     commit.message().unwrap().to_string()
@@ -212,7 +212,7 @@ fn head_message(root: &Path) -> String {
 
 /// Make the next `repo.commit` fail AFTER the tree was built: a lock file
 /// on the branch ref. Returns the lock path; remove it to repair.
-fn lock_branch_ref(root: &Path) -> PathBuf {
+pub(crate) fn lock_branch_ref(root: &Path) -> PathBuf {
     let head = std::fs::read_to_string(root.join(".git").join("HEAD")).unwrap();
     let branch_ref = head.trim().strip_prefix("ref: ").unwrap().to_string();
     let lock = root.join(".git").join(format!("{branch_ref}.lock"));
@@ -221,14 +221,14 @@ fn lock_branch_ref(root: &Path) -> PathBuf {
 }
 
 /// Commit an unrelated file through the adapter's generic commit path.
-fn commit_other_file(adapter: &LocalGitAdapter, root: &Path, msg: &str) {
+pub(crate) fn commit_other_file(adapter: &LocalGitAdapter, root: &Path, msg: &str) {
     let other = root.join("notes.txt");
     std::fs::write(&other, msg).unwrap();
     adapter.commit_external_change(&other, msg).unwrap();
 }
 
 #[test]
-fn late_commit_failure_keeps_edit_unstaged_and_other_commits_exclude_it() {
+fn late_commit_failure_keeps_edit_unstaged_and_the_next_commit_of_any_path_takes_it() {
     let dir = tempfile::tempdir().unwrap();
     let (file, _, adapter) = init(&dir);
     let root = dir.path().join("Rb");
@@ -244,13 +244,15 @@ fn late_commit_failure_keeps_edit_unstaged_and_other_commits_exclude_it() {
     std::fs::remove_file(&lock).unwrap();
     assert_eq!(head_oid(&root), head_before, "HEAD must not move");
     assert_index_is_head(&root, &file);
+    assert!(adapter.uncommitted_changes().is_some());
 
-    // Another path's commit must not sweep the library edit in.
+    // The next successful commit, through whatever path, records the edit
+    // too (#858): it is not left waiting for another save of the `.snxlib`.
     commit_other_file(&adapter, &root, "unrelated");
-    assert_eq!(head_message(&root).trim(), "unrelated");
-    assert_eq!(head_classes(&root), vec!["res"]);
+    assert!(head_message(&root).starts_with("unrelated"));
+    assert_eq!(head_classes(&root), vec!["res", "cap"]);
+    assert_eq!(adapter.uncommitted_changes(), None);
 
-    // The next commit of the `.snxlib` stores the current disk content.
     adapter.add_library_class(class("ind"), "add ind").unwrap();
     assert_eq!(head_classes(&root), vec!["res", "cap", "ind"]);
 }
@@ -275,8 +277,9 @@ fn corrupt_head_keeps_edit_and_next_library_commit_includes_it() {
     std::fs::write(&head, good_head).unwrap();
     assert_eq!(head_oid(&root), head_before);
     assert_index_is_head(&root, &file);
+    // The next commit of any path takes the pending edit with it (#858).
     commit_other_file(&adapter, &root, "unrelated");
-    assert_eq!(head_classes(&root), vec!["res"]);
+    assert_eq!(head_classes(&root), vec!["res", "cap"]);
     adapter.add_library_class(class("ind"), "add ind").unwrap();
     assert_eq!(head_classes(&root), vec!["res", "cap", "ind"]);
 }
@@ -306,14 +309,14 @@ fn two_failures_in_a_row_never_store_a_stale_snxlib() {
     assert_eq!(memory_classes(&adapter), disk_classes(&file));
     assert_index_is_head(&root, &file);
 
-    // A commit through another path: HEAD's .snxlib is still the last
-    // committed one, never an intermediate.
+    // A commit through another path records the .snxlib as it is on disk,
+    // never an intermediate copy.
     commit_other_file(&adapter, &root, "unrelated");
-    assert_eq!(head_classes(&root), vec!["res"]);
+    assert_eq!(head_classes(&root), vec!["res", "cap", "ind"]);
 
     adapter.add_library_class(class("x"), "add x").unwrap();
     assert_eq!(head_classes(&root), vec!["res", "cap", "ind", "x"]);
-    assert_eq!(head_message(&root).trim(), "add x");
+    assert!(head_message(&root).starts_with("add x"));
 }
 
 #[test]

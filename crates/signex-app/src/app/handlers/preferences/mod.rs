@@ -316,6 +316,7 @@ impl Signex {
                     self.ui_state.preferences_draft_drag_direction_select;
                 self.ui_state.increment_step = self.ui_state.preferences_draft_increment_step;
                 self.ui_state.paste_designators = self.ui_state.preferences_draft_paste_designators;
+                self.refresh_paste_ghost();
                 self.ui_state.window_controls_placement =
                     self.ui_state.preferences_draft_window_controls_placement;
                 self.ui_state.autosave_enabled = self.ui_state.preferences_draft_autosave_enabled;

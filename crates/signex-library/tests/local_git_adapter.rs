@@ -594,6 +594,7 @@ fn list_primitives_rejects_zero_primitive_envelope() {
         format: "snxfpt/1".into(),
         file_uuid: Uuid::now_v7(),
         display_name: "empty".into(),
+        copied_from: None,
         footprints: Vec::new(),
         created: now,
         updated: now,

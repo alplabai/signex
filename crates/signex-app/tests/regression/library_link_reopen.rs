@@ -8,7 +8,7 @@ use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, place
 use crate::library_symbol_drift::{add_pin, edit_library_symbol};
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_types::schematic::SchematicSheet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const PLACED: usize = 3;
 const STALE: &str = "0.0.1";
@@ -105,12 +105,7 @@ fn a_mounted_drifted_library_updates_the_personal_sheet_once_and_marks_it_dirty(
         assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
         assert_eq!(symbol.row_id, Some(f.row_id), "link kept");
     }
-    assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && t.dirty)
-    );
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(app.library.library_updates.is_none());
     assert_eq!(not_mounted_warnings(&f), 0);
 }
@@ -139,12 +134,7 @@ fn a_mounted_library_that_has_not_drifted_changes_nothing() {
     for (a, b) in opened.symbols.iter().zip(&before.symbols) {
         assert_eq!(a.library_version, b.library_version);
     }
-    assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && !t.dirty)
-    );
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.library.library_updates.is_none());
 }
 
@@ -169,12 +159,7 @@ fn an_unmounted_library_warns_once_and_leaves_the_sheet_alone() {
         assert_eq!(symbol.library_version, STALE);
         assert_eq!(symbol.library_id, Some(f.library_id), "link kept");
     }
-    assert!(
-        app.document_state
-            .tabs
-            .iter()
-            .any(|t| t.path == path && !t.dirty)
-    );
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.library.library_updates.is_none());
 }
 
@@ -229,11 +214,8 @@ fn finish_mount(app: &mut Signex, f: &Fixture) {
     }));
 }
 
-fn is_dirty(app: &Signex, path: &PathBuf) -> bool {
-    app.document_state
-        .tabs
-        .iter()
-        .any(|t| &t.path == path && t.dirty)
+fn is_dirty(app: &Signex, path: &Path) -> bool {
+    app.document_state.is_document_dirty(path)
 }
 
 #[test]
@@ -460,13 +442,14 @@ fn a_late_mount_after_an_edit_lands_as_one_undo_step() {
     use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
     let f = fixture();
     let mut sheet = saved_linked_sheet(&f);
-    let wire = uuid::Uuid::new_v4();
+    let wire = uuid::Uuid::now_v7();
     sheet.wires.push(Wire {
         unknown_columns: Default::default(),
         uuid: wire,
         start: Point::new(10.0, 10.0),
         end: Point::new(30.0, 10.0),
         stroke_width: 0.0,
+        locked: false,
     });
     let pins_before = pins(&sheet);
     edit_library_symbol(&f, add_pin);

@@ -182,7 +182,7 @@ fn rename_repoints_the_entry_marks_it_unsaved_and_keeps_the_library_mounted() {
     // A never-saved project has no file to patch: none is created, and the
     // project is marked dirty so Save / Close / quit see it.
     assert!(!f.prj.exists(), "the rename must not save the project");
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
             .document_state
@@ -267,7 +267,7 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
     // Trunk's saves write nothing for an unchanged footprint (#902), so make
     // a real edit for the save to commit.
     editor.file.footprints[0].name.push_str(" edited");
-    editor.dirty = true;
+    editor.mark_dirty();
     f.app
         .document_state
         .footprint_editors
@@ -276,7 +276,6 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         title: "fp".into(),
         path: fpt.clone(),
         cached_document: None,
-        dirty: true,
         project_id: Some(f.project_id),
         kind: TabKind::FootprintEditor(fpt.clone()),
     });
@@ -301,7 +300,7 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
     );
 
     assert!(
-        !f.app.document_state.footprint_editors[&fpt].dirty,
+        !f.app.document_state.footprint_editors[&fpt].is_dirty(),
         "the save must succeed"
     );
     assert!(
@@ -320,6 +319,143 @@ fn an_open_footprint_editor_saves_and_commits_through_the_renamed_library() {
         "the save must commit through the relocated adapter, got {:?}",
         commit.message()
     );
+}
+
+/// A dirty symbol draft at `<library>/symbols/d.snxsym`, behind its tab.
+fn open_dirty_draft_in(f: &mut Fixture, library: &Path) -> PathBuf {
+    use signex_app::app::SymbolDocument;
+    use signex_library::{Symbol, SymbolFile};
+
+    let path = library.join("symbols").join("d.snxsym");
+    let mut editor = SymbolDocument::new(path.clone(), SymbolFile::from_symbol(Symbol::empty("D")));
+    editor.mark_dirty();
+    f.app
+        .document_state
+        .symbol_editors
+        .insert(path.clone(), editor);
+    f.app.document_state.tabs.push(TabInfo {
+        title: "d".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: Some(f.project_id),
+        kind: TabKind::SymbolEditor(path.clone()),
+    });
+    f.app.document_state.active_tab = f.app.document_state.tabs.len() - 1;
+    path
+}
+
+#[test]
+fn renaming_a_library_keeps_a_dirty_draft_inside_it_dirty_at_the_new_path() {
+    let mut f = fixture();
+    let renamed = f.alpha.with_file_name("alpha2.snxlib");
+    let alpha = f.alpha.clone();
+    let old = open_dirty_draft_in(&mut f, &alpha);
+    let new = renamed.join("symbols").join("d.snxsym");
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let d = &f.app.document_state;
+    assert!(d.symbol_editors.contains_key(&new), "the editor moved");
+    assert!(!d.symbol_editors.contains_key(&old));
+    assert!(d.is_document_dirty(&new), "the draft is still unsaved");
+    assert!(!d.is_document_dirty(&old));
+    assert_eq!(d.dirty_document_count(), 1);
+    let tab = d.tabs.iter().find(|t| t.path == new).expect("tab moved");
+    assert!(
+        matches!(&tab.kind, TabKind::SymbolEditor(p) if *p == new),
+        "the tab's kind follows the editor, or Save All writes the old folder"
+    );
+    assert!(d.is_document_dirty(&tab.path), "the tab dot stays on");
+}
+
+#[test]
+fn a_library_rename_waits_for_a_draft_inside_it_that_is_being_saved() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let alpha = f.alpha.clone();
+    let old = open_dirty_draft_in(&mut f, &alpha);
+    // A write of the draft is in flight; the guard keeps it so.
+    let _in_flight = f.app.document_state.document_saves.begin_work(old.clone());
+    assert!(f.app.document_state.document_saves.is_saving(&old));
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert!(f.alpha.exists(), "nothing moved");
+    assert!(
+        f.app.ui_state.rename_dialog.is_some(),
+        "the dialog stays open"
+    );
+    assert!(
+        f.app.document_state.symbol_editors.contains_key(&old),
+        "the draft stays where its write will land"
+    );
+    assert!(f.app.document_state.is_document_dirty(&old));
+}
+
+/// The project's volume folds case, so `ALPHA.snxlib` is the library.
+fn fold_case(f: &mut Fixture) {
+    f.app.document_state.projects[0].case_fold = signex_app::app::CaseFold {
+        fold_case: true,
+        backslash_is_separator: false,
+        normalize_unicode: false,
+    };
+}
+
+#[test]
+fn a_draft_under_a_case_variant_of_the_library_is_rekeyed_too() {
+    let mut f = fixture();
+    fold_case(&mut f);
+    let variant = f.alpha.with_file_name("ALPHA.snxlib");
+    let old = open_dirty_draft_in(&mut f, &variant);
+    let new = f
+        .alpha
+        .with_file_name("alpha2.snxlib")
+        .join("symbols")
+        .join("d.snxsym");
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    let d = &f.app.document_state;
+    assert!(d.symbol_editors.contains_key(&new), "the editor moved");
+    assert!(!d.symbol_editors.contains_key(&old));
+    assert!(d.is_document_dirty(&new));
+    assert_eq!(d.dirty_document_count(), 1);
+}
+
+#[test]
+fn a_library_rename_waits_for_a_draft_under_a_case_variant_being_saved() {
+    let mut f = fixture();
+    fold_case(&mut f);
+    let variant = f.alpha.with_file_name("ALPHA.snxlib");
+    let old = open_dirty_draft_in(&mut f, &variant);
+    let _in_flight = f.app.document_state.document_saves.begin_work(old.clone());
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert!(f.alpha.exists(), "nothing moved");
+    assert!(f.app.document_state.symbol_editors.contains_key(&old));
+}
+
+#[test]
+fn a_recorded_save_failure_follows_its_draft_through_a_library_rename() {
+    let mut f = fixture();
+    let alpha = f.alpha.clone();
+    let old = open_dirty_draft_in(&mut f, &alpha);
+    f.app
+        .document_state
+        .document_saves
+        .record_failure(old.clone(), "disk full".into());
+    let new = f
+        .alpha
+        .with_file_name("alpha2.snxlib")
+        .join("symbols")
+        .join("d.snxsym");
+
+    submit_rename(&mut f.app, &alpha, "alpha2.snxlib");
+
+    let saves = &f.app.document_state.document_saves;
+    assert_eq!(saves.failure(&new), Some("disk full"));
+    assert!(saves.failure(&old).is_none());
 }
 
 #[test]
@@ -348,7 +484,7 @@ fn a_failed_file_rename_changes_nothing_and_is_logged() {
             .set
             .contains_path(&f.alpha.with_file_name("alpha2.snxlib"))
     );
-    assert!(!f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(!f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
             .ui_state
@@ -391,7 +527,7 @@ fn a_destination_that_appeared_is_never_overwritten() {
 fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_moving() {
     use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
     let mut f = fixture();
-    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    f.app.document_state.mark_document_dirty(&f.prj);
     let root = vec![f.app.document_state.projects[0].id.to_string()];
     send(
         &mut f.app,
@@ -562,7 +698,6 @@ fn an_open_browser_tab_and_its_state_follow_the_rename() {
         title: "alpha".into(),
         path: f.alpha.clone(),
         cached_document: None,
-        dirty: false,
         project_id: Some(f.project_id),
         kind: TabKind::LibraryBrowser(f.alpha.clone()),
     });
@@ -675,10 +810,10 @@ fn the_library_updates_modal_follows_the_rename() {
     f.app.library.library_updates = Some(LibraryUpdatesState::new(
         f.prj.clone(),
         vec![LibraryUpdateEntry {
-            symbol_uuid: uuid::Uuid::new_v4(),
+            symbol_uuid: uuid::Uuid::now_v7(),
             ref_des: "R1".into(),
             lib_id: "L:S".into(),
-            library_id: uuid::Uuid::new_v4(),
+            library_id: uuid::Uuid::now_v7(),
             library_name: "alpha".into(),
             row_id: signex_library::RowId::new(),
             library_path: f.alpha.clone(),
@@ -702,7 +837,7 @@ fn rename_does_not_flush_unsaved_project_state() {
     let mut f = fixture();
     let pending = f._tmp.path().join("gamma").join("gamma.snxlib");
     f.app.document_state.projects[0].pending_libraries.insert(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         PendingLibrarySpec {
             lib_path: pending.clone(),
             enable_git: false,
@@ -710,7 +845,7 @@ fn rename_does_not_flush_unsaved_project_state() {
             display_name: "gamma".into(),
         },
     );
-    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    f.app.document_state.mark_document_dirty(&f.prj);
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
     assert!(
@@ -722,7 +857,7 @@ fn rename_does_not_flush_unsaved_project_state() {
         2,
         "the pending library must not reach the saved project"
     );
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert_eq!(f.app.document_state.projects[0].pending_libraries.len(), 1);
 }
 
@@ -758,7 +893,7 @@ fn a_saved_project_lists_the_renamed_library_so_reopening_mounts_it() {
         "reopen after Discard cannot mount the renamed library"
     );
     assert!(
-        !f.app.document_state.dirty_paths.contains(&f.prj),
+        !f.app.document_state.is_document_dirty(&f.prj),
         "memory and disk agree, so the project is not left dirty"
     );
 }
@@ -772,7 +907,7 @@ fn the_project_patch_does_not_flush_other_unsaved_edits() {
         .data
         .variant_definitions
         .push("Unsaved".into());
-    f.app.document_state.dirty_paths.insert(f.prj.clone());
+    f.app.document_state.mark_document_dirty(&f.prj);
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
     let on_disk = parse_project(&f.prj).unwrap();
@@ -784,7 +919,7 @@ fn the_project_patch_does_not_flush_other_unsaved_edits() {
         disk_library_paths(&f.prj)[0],
         PathBuf::from("alpha/alpha2.snxlib")
     );
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert_eq!(
         f.app.document_state.projects[0].data.variant_definitions,
         vec!["Unsaved".to_string()]
@@ -800,7 +935,7 @@ fn a_never_saved_project_is_not_created_by_the_rename() {
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
     assert!(!f.prj.exists(), "the rename created the project file");
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
             .document_state
@@ -891,7 +1026,7 @@ fn a_shared_disk_entry_gets_an_explicit_warning_and_a_dirty_project() {
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
     assert_eq!(disk_library_paths(&f.prj)[0], f.alpha);
-    assert!(f.app.document_state.dirty_paths.contains(&f.prj));
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
             .document_state
@@ -913,7 +1048,9 @@ fn lock_branch(dir: &Path) -> PathBuf {
 }
 
 /// A commit that fails (locked branch ref) leaves HEAD and the index exactly
-/// as before, so the next ordinary row write commits only the row.
+/// as before. The rename itself stands (#858: the file is already moved, and
+/// undoing it would be a second way to lose work): the library follows it, the
+/// rename is listed as uncommitted, and the next commit carries it.
 #[test]
 fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
     let _ = diagnostics::init_logging();
@@ -926,14 +1063,23 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
 
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
-    assert!(f.alpha.exists() && !renamed.exists());
-    assert!(f.app.library.library_at(&f.alpha).is_some());
+    assert!(renamed.exists() && !f.alpha.exists(), "the rename stands");
+    assert!(f.app.library.library_at(&renamed).is_some());
+    assert!(f.app.library.library_at(&f.alpha).is_none());
     assert_eq!(
         disk_library_paths(&f.prj)[0],
-        PathBuf::from("alpha/alpha.snxlib"),
-        "the project patch must be undone with the rename"
+        PathBuf::from("alpha/alpha2.snxlib"),
+        "the project follows the rename"
     );
     fs::remove_file(lock).unwrap();
+    f.app.library.sync_uncommitted();
+    let pending = f
+        .app
+        .library
+        .uncommitted_in(&renamed)
+        .expect("the rename is listed as uncommitted");
+    assert_eq!(pending.paths, vec!["alpha.snxlib", "alpha2.snxlib"]);
+    // The failed commit touched neither HEAD nor the index.
     let idx = repo.index().unwrap();
     assert!(idx.get_path(Path::new("alpha2.snxlib"), 0).is_none());
     assert!(idx.get_path(Path::new("alpha.snxlib"), 0).is_some());
@@ -942,13 +1088,15 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
         head_before
     );
 
-    adapter_write(&f.app, &f.alpha, "after_fail");
+    adapter_write(&f.app, &renamed, "after_fail");
     let tree = repo.head().unwrap().peel_to_tree().unwrap();
-    assert!(tree.get_name("alpha.snxlib").is_some());
     assert!(
-        tree.get_name("alpha2.snxlib").is_none(),
-        "phantom alpha2.snxlib committed from a stale index"
+        tree.get_name("alpha.snxlib").is_none(),
+        "the old name is committed as removed"
     );
+    assert!(tree.get_name("alpha2.snxlib").is_some());
+    f.app.library.sync_uncommitted();
+    assert!(f.app.library.uncommitted_in(&renamed).is_none());
 }
 
 /// A library without a repository renames cleanly.

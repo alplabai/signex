@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn an_alternate_symbol_pointing_nowhere_is_dangling() {
         let mut row = crate::component::tests::fixture_row();
-        let missing = PrimitiveRef::new(row.symbol_ref.library_id, Uuid::new_v4());
+        let missing = PrimitiveRef::new(row.symbol_ref.library_id, Uuid::now_v7());
         let default_ref = row.symbol_ref;
         row.alternate_symbols
             .push(AlternateSymbol::new(missing, "0.0.1", "IEC"));

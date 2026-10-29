@@ -53,7 +53,7 @@ pub struct HistoryPanelState {
     /// yet" (Ready with `entries.is_empty()`).
     pub mode: HistoryRenderMode,
     /// True when the active path has uncommitted edits in the
-    /// working tree (the engine reports it via `dirty_paths`).
+    /// working tree (`DocumentState::is_document_dirty`).
     /// Drives the "Working tree (uncommitted changes)" pseudo-card.
     pub dirty: bool,
     /// SHA of a Restore click waiting for confirmation. Set when the

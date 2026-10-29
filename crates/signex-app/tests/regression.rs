@@ -52,6 +52,8 @@ mod pdf_page_setup;
 
 #[path = "regression/paste_clipboard.rs"]
 mod paste_clipboard;
+#[path = "regression/paste_followups.rs"]
+mod paste_followups;
 #[path = "regression/paste_numbering_async.rs"]
 mod paste_numbering_async;
 #[path = "regression/paste_stamp_array.rs"]
@@ -121,9 +123,16 @@ mod primitive_dirty_quit;
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
+#[path = "regression/single_dirty_source.rs"]
+mod single_dirty_source;
+
 // #1250 — a locked symbol refuses delete and move, with a Messages note.
 #[path = "regression/symbol_locked_enforced.rs"]
 mod symbol_locked_enforced;
+
+// #1573 — locked wires, labels, notes and drawings refuse delete, with a note.
+#[path = "regression/object_locked_enforced.rs"]
+mod object_locked_enforced;
 
 // #768 — an over-cap foreign-column save names the objects to delete.
 #[path = "regression/foreign_column_save_blocked.rs"]
@@ -173,6 +182,9 @@ mod library_browser_cell_commit;
 mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
+
+#[path = "regression/library_uncommitted.rs"]
+mod library_uncommitted;
 
 #[path = "regression/library_read_only_mount.rs"]
 mod library_read_only_mount;
@@ -270,6 +282,8 @@ mod library_place_designator_standard;
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
 mod library_place_ui;
+#[path = "regression/library_stock_copy.rs"]
+mod library_stock_copy;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]

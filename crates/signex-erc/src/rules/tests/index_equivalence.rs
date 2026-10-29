@@ -22,7 +22,8 @@ fn dangling_wire_scan(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             })
     };
     for wire in &ctx.wires {
-        for endpoint in [wire.start, wire.end] {
+        // The end tag is part of the finding, not of the scan being checked.
+        for (end, endpoint) in [("start", wire.start), ("end", wire.end)] {
             let other = ctx
                 .wires
                 .iter()
@@ -38,7 +39,8 @@ fn dangling_wire_scan(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     "Wire endpoint is not connected",
                     endpoint,
                 )
-                .with_primary(sel(wire.uuid, SelectedKind::Wire)),
+                .with_primary(sel(wire.uuid, SelectedKind::Wire))
+                .tagged(end),
             );
         }
     }

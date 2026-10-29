@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn the_query_ranks_into_the_cache_the_view_reads() {
-        let dir = std::env::temp_dir().join(format!("signex-palette-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("signex-palette-{}", uuid::Uuid::now_v7()));
         let mut app = app_workspace(&dir.to_string_lossy(), &["a_root.snxsch"]);
 
         let _ =

@@ -598,7 +598,7 @@ mod tests {
         let now = chrono::Utc::now();
         signex_library::ComponentRow {
             alternate_symbols: Vec::new(),
-            row_id: uuid::Uuid::new_v4(),
+            row_id: uuid::Uuid::now_v7(),
             internal_pn: InternalPn::new("R1"),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),

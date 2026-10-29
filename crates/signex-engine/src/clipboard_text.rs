@@ -65,7 +65,7 @@ mod tests {
         let lib: LibSymbol = serde_json::from_str(r#"{"id":"lib:r"}"#).unwrap();
         sheet.lib_symbols.insert(lib.id.clone(), lib);
         let part = Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "lib:r".to_owned(),
             reference: "R7".to_owned(),
             position: Point::new(25.4, 25.4),
@@ -73,14 +73,15 @@ mod tests {
             ..Default::default()
         };
         let wire = Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(25.4, 25.4),
             end: Point::new(38.1, 25.4),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         };
         let label = Label {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             text: "D0".to_owned(),
             position: Point::new(38.1, 25.4),
             rotation: 0.0,
@@ -91,6 +92,7 @@ mod tests {
             justify: Default::default(),
             justify_v: Default::default(),
             unknown_columns: Default::default(),
+            locked: false,
         };
         let items = vec![
             SelectedItem::new(part.uuid, SelectedKind::Symbol),
@@ -158,5 +160,108 @@ mod tests {
         assert!(CopiedSelection::from_clipboard_text(&broken, 1.27).is_err());
         let marker_only = format!("{CLIPBOARD_MARKER}\n");
         assert!(CopiedSelection::from_clipboard_text(&marker_only, 1.27).is_err());
+    }
+    /// A fragment with every kind of item the writer and parser know, on an
+    /// exact binary grid so positions compare equal after the nm round trip.
+    fn rich_fragment() -> signex_types::schematic::SchematicSheet {
+        use signex_types::schematic::{Bus, NoConnect, SchDrawing, TextNote};
+        let at = |x: f64, y: f64| Point::new(x, y);
+        let foreign = r#"[["x_vendor","v1"]]"#;
+        let mut sheet = test_sheet();
+        sheet.wires.push(
+            serde_json::from_str(&format!(
+                r#"{{"uuid":"{}","start":{{"x":5.0,"y":5.0}},"end":{{"x":15.0,"y":5.0}},"stroke_width":0.25,"unknown_columns":{foreign}}}"#,
+                Uuid::now_v7()
+            ))
+            .unwrap(),
+        );
+        sheet.buses.push(Bus {
+            uuid: Uuid::now_v7(),
+            start: at(5.0, 10.0),
+            end: at(15.0, 10.0),
+        });
+        sheet.junctions.push(
+            serde_json::from_str(&format!(
+                r#"{{"uuid":"{}","position":{{"x":10.0,"y":5.0}},"diameter":0.5,"minted":true,"unknown_columns":{foreign}}}"#,
+                Uuid::now_v7()
+            ))
+            .unwrap(),
+        );
+        sheet.no_connects.push(NoConnect {
+            uuid: Uuid::now_v7(),
+            position: at(20.0, 5.0),
+        });
+        sheet.text_notes.push(TextNote {
+            uuid: Uuid::now_v7(),
+            text: "note\twith tab".to_owned(),
+            position: at(5.0, 15.0),
+            rotation: 90.0,
+            font_size: 2.5,
+            font_family: Some("Iosevka".to_owned()),
+            justify_h: Default::default(),
+            justify_v: Default::default(),
+            locked: true,
+        });
+        sheet.labels.push(
+            serde_json::from_str(&format!(
+                r#"{{"uuid":"{}","text":"D0","position":{{"x":15.0,"y":5.0}},"rotation":0.0,"label_type":"net","shape":"","font_size":1.27,"unknown_columns":{foreign}}}"#,
+                Uuid::now_v7()
+            ))
+            .unwrap(),
+        );
+        let line = SchDrawing::Line {
+            uuid: Uuid::now_v7(),
+            start: at(0.0, 0.0),
+            end: at(25.0, 0.0),
+            width: 0.5,
+            stroke_color: None,
+            locked: true,
+        };
+        let poly = SchDrawing::Polyline {
+            uuid: Uuid::now_v7(),
+            points: vec![at(0.0, 20.0), at(10.0, 25.0), at(20.0, 20.0)],
+            width: 0.25,
+            fill: Default::default(),
+            stroke_color: None,
+            locked: false,
+        };
+        sheet.drawing_placements.insert(
+            poly_uuid(&poly),
+            signex_types::schematic::DrawingPlacement::Above,
+        );
+        sheet.drawings.extend([line, poly]);
+        sheet
+    }
+
+    fn poly_uuid(drawing: &signex_types::schematic::SchDrawing) -> Uuid {
+        match drawing {
+            signex_types::schematic::SchDrawing::Polyline { uuid, .. } => *uuid,
+            _ => unreachable!("a polyline"),
+        }
+    }
+
+    #[test]
+    fn every_kind_of_item_survives_the_clipboard_text() {
+        let original = CopiedSelection::from_fragment(rich_fragment(), 2.5)
+            .unwrap()
+            .unwrap();
+        let text = original.to_clipboard_text().unwrap();
+        let back = CopiedSelection::from_clipboard_text(&text, 2.5)
+            .unwrap()
+            .unwrap();
+        let (a, b) = (original.payload.fragment(), back.payload.fragment());
+        assert_eq!(b.wires[0].unknown_columns.get("x_vendor"), Some("v1"));
+        assert_eq!(a.wires, b.wires, "wires with their foreign columns");
+        assert_eq!(a.buses, b.buses);
+        assert_eq!(
+            a.junctions, b.junctions,
+            "diameter, minted, foreign columns"
+        );
+        assert_eq!(a.no_connects, b.no_connects);
+        assert_eq!(a.text_notes, b.text_notes);
+        assert_eq!(a.labels, b.labels);
+        assert_eq!(a.drawings, b.drawings);
+        assert_eq!(a.drawing_placements, b.drawing_placements);
+        assert_eq!(original.origin, back.origin);
     }
 }

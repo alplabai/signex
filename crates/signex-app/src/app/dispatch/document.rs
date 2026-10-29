@@ -66,11 +66,7 @@ impl Signex {
             }
             EditMsg::Cut => self.handle_selection_cut_requested(),
             EditMsg::Copy => {
-                let write = if self.handle_selection_copy_requested() {
-                    self.clipboard_write_task()
-                } else {
-                    Task::none()
-                };
+                let write = self.copy_and_write_clipboard_task();
                 Task::batch([write, self.finish_update()])
             }
             EditMsg::Paste => self.request_paste(PasteIntent::Paste),

@@ -3,7 +3,7 @@ use signex_types::schematic::{Junction, Wire};
 
 fn label(text: &str, x: f64, y: f64) -> Label {
     serde_json::from_value(serde_json::json!({
-        "uuid": uuid::Uuid::new_v4(),
+        "uuid": uuid::Uuid::now_v7(),
         "text": text,
         "position": { "x": x, "y": y },
         "label_type": "net",
@@ -19,29 +19,30 @@ fn mixed_sheet() -> (SchematicSheet, Vec<SelectedItem>) {
     for n in 0..4 {
         let o = f64::from(n) * 10.0;
         let sym = Symbol {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             lib_id: "missing:lib".into(),
             position: Point::new(o, 5.0),
             ..Symbol::default()
         };
         let wire = Wire {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             start: Point::new(o, 0.0),
             end: Point::new(o + 4.0, 0.0),
             ..Wire::default()
         };
         let junction = Junction {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             position: Point::new(o + 2.0, 0.0),
             ..Junction::default()
         };
         let lbl = label("N", o, 2.0);
         let drawing = SchDrawing::Line {
-            uuid: uuid::Uuid::new_v4(),
+            uuid: uuid::Uuid::now_v7(),
             start: Point::new(o, 8.0),
             end: Point::new(o + 3.0, 9.0),
             width: 0.0,
             stroke_color: None,
+            locked: false,
         };
         if n % 2 == 0 {
             selected.extend([
@@ -101,10 +102,10 @@ fn batch_boxes_stay_aligned_when_an_item_is_gone() {
     let (sheet, mut selected) = mixed_sheet();
     selected.insert(
         1,
-        SelectedItem::new(uuid::Uuid::new_v4(), SelectedKind::Wire),
+        SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Wire),
     );
     selected.push(SelectedItem::new(
-        uuid::Uuid::new_v4(),
+        uuid::Uuid::now_v7(),
         SelectedKind::Symbol,
     ));
     let batch = selected_aabbs(&sheet, &selected, &Default::default());

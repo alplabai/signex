@@ -35,7 +35,6 @@ pub(crate) fn open_footprint_editor(app: &mut Signex, path: &Path) {
         title: "fp".into(),
         path: path.to_path_buf(),
         cached_document: None,
-        dirty: false,
         project_id: None,
         kind: TabKind::FootprintEditor(path.to_path_buf()),
     });
@@ -69,7 +68,11 @@ fn footprint_panel_edit_makes_quit_prompt_instead_of_closing() {
         .as_ref()
         .expect("an edited footprint must open the app-quit confirm modal");
     assert!(modal.dirty_paths.contains(&path));
-    assert!(app.document_state.tabs[0].dirty, "tab shows the dirty dot");
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path),
+        "tab shows the dirty dot"
+    );
 }
 
 #[test]
@@ -85,7 +88,7 @@ fn footprint_canvas_edit_marks_dirty_paths() {
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetName("renamed".into())),
     }));
 
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -104,8 +107,8 @@ fn quit_save_all_writes_the_edited_footprint() {
 
     let written = std::fs::read_to_string(&path).expect("Save All must write the .snxfpt");
     assert!(written.contains("edited"), "the edit must be on disk");
-    assert!(app.document_state.dirty_paths.is_empty());
-    assert!(!app.document_state.footprint_editors[&path].dirty);
+    assert!(!app.document_state.has_dirty_documents());
+    assert!(!app.document_state.footprint_editors[&path].is_dirty());
 }
 
 /// Load a project rooted at `dir` mounting the project-local `lib.snxlib`.
@@ -175,7 +178,7 @@ fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
         "nothing is provably the project's, so there is nothing to save or discard",
     );
     assert!(app.document_state.projects.is_empty(), "the project closes");
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(app.document_state.footprint_editors.contains_key(&path));
     assert!(app.document_state.tabs.iter().any(|t| t.path == path));
 }
@@ -183,7 +186,7 @@ fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
 fn preview_row() -> ComponentRow {
     ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: uuid::Uuid::new_v4(),
+        row_id: uuid::Uuid::now_v7(),
         internal_pn: InternalPn::new("TEST_PN"),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -191,7 +194,7 @@ fn preview_row() -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(uuid::Uuid::new_v4(), uuid::Uuid::new_v4()),
+        symbol_ref: PrimitiveRef::new(uuid::Uuid::now_v7(), uuid::Uuid::now_v7()),
         footprint_ref: None,
         alternate_footprints: Vec::new(),
         sim_ref: None,

@@ -519,9 +519,11 @@ fn normalize_degrees(angle_degrees: f64) -> f64 {
 mod about_centre;
 mod autoplace;
 mod bus_entry;
+mod merge;
 pub(crate) mod rubber_band;
 mod wire_index;
 use autoplace::autoplace_fields;
+pub(crate) use merge::TouchingPairs;
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------

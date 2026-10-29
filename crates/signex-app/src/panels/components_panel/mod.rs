@@ -435,7 +435,7 @@ mod tests {
         let _ = (PinPadOverride::new("1", "1"),);
         ComponentRow {
             alternate_symbols: Vec::new(),
-            row_id: Uuid::new_v4(),
+            row_id: Uuid::now_v7(),
             internal_pn: InternalPn::new(pn),
             class: ComponentClass::generic(),
             datasheet: DatasheetRef::default(),
@@ -443,7 +443,7 @@ mod tests {
             description: String::new(),
             more_datasheets: Vec::new(),
             state: LifecycleState::Draft,
-            symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
+            symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::now_v7()),
             footprint_ref: None,
             alternate_footprints: Vec::new(),
             sim_ref: None,
@@ -477,7 +477,7 @@ mod tests {
         state.open_libraries.push(OpenLibrary {
             root: PathBuf::from("/tmp/big.snxlib"),
             display_name: "big".into(),
-            library_id: uuid::Uuid::new_v4(),
+            library_id: uuid::Uuid::now_v7(),
             tables: std::collections::HashMap::from([("t".to_owned(), rows)]),
             cached_components: Vec::new(),
             cached_symbols: Vec::new(),

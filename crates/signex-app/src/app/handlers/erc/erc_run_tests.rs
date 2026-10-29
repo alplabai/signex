@@ -16,12 +16,12 @@ const CHILD_AT: (f64, f64) = (150.0, 120.0);
 /// (no pins); the on-disk child has a hierarchical label the parent does not
 /// expose, at `CHILD_AT`.
 fn parent_with_a_far_child_label() -> (Signex, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-erc-child-space-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-child-space-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let mut child = sheet_with_net("R_CHILD", "CHILD_NET", &[]);
     child.labels.push(Label {
         unknown_columns: Default::default(),
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         text: "ORPHAN".to_string(),
         position: Point::new(CHILD_AT.0, CHILD_AT.1),
         rotation: 0.0,
@@ -31,6 +31,7 @@ fn parent_with_a_far_child_label() -> (Signex, PathBuf) {
         justify: HAlign::default(),
         justify_v: VAlign::default(),
         font_family: None,
+        locked: false,
     });
     let text = SnxSchematic::new(child).write_string().expect("serialize");
     std::fs::write(dir.join("child.snxsch"), text).expect("write child");
@@ -133,7 +134,7 @@ fn a_child_finding_whose_sheet_was_not_checked_is_reported_but_not_panned_to() {
 /// `top -> (p, q)`, `p -> (a, b)`, `q -> (a, b)`; `a` and `b` each hold
 /// `R_DUP`. `top`, `p` and `q` all walk the `a`/`b` clash (#998).
 fn two_descendants_sharing_a_designator() -> (Signex, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("signex-erc-desc-clash-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-desc-clash-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let write = |name: &str, sheet| {
         let text = SnxSchematic::new(sheet).write_string().expect("serialize");
@@ -185,7 +186,7 @@ fn a_clash_between_two_descendant_sheets_is_reported_once_per_run() {
 /// diagnostics read identically (#998).
 #[test]
 fn identical_clashes_in_copied_channel_directories_are_each_reported() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-copied-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-copied-{}", Uuid::now_v7()));
     for ch in ["ch1", "ch2"] {
         std::fs::create_dir_all(dir.join(ch)).expect("tempdir");
     }
@@ -238,7 +239,7 @@ fn identical_clashes_in_copied_channel_directories_are_each_reported() {
 /// replace it with the on-disk copy (#1135).
 #[test]
 fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-nav-dirty-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-nav-dirty-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let path = dir.join("child.snxsch");
     let on_disk = sheet_with_net("R_DISK", "DISK_NET", &[]);
@@ -253,7 +254,7 @@ fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
         &path,
         sheet_with_net("R_EDIT", "EDITED_NET", &[]),
     );
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     assert!(app.document_state.tabs.is_empty());
 
     app.ensure_sheet_open_and_active(&path);
@@ -274,7 +275,7 @@ fn erc_navigation_keeps_the_dirty_engine_of_a_tab_less_sheet() {
 /// NoConnect on whichever sheet happens to be active (#1367).
 #[test]
 fn quick_fix_refuses_when_the_target_sheet_fails_to_open() {
-    let dir = std::env::temp_dir().join(format!("signex-erc-qf-missing-{}", Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("signex-erc-qf-missing-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
     let top = dir.join("top.snxsch");
@@ -329,6 +330,7 @@ mod net_level {
                 reference: "R1".to_string(),
                 number: "1".to_string(),
                 position: pin_at,
+                direction: signex_types::schematic::PinDirection::Passive,
             }],
         });
         v
@@ -357,7 +359,7 @@ mod net_level {
 
     #[test]
     fn clicking_a_net_finding_selects_the_whole_net_and_fits_its_box() {
-        let dir = std::env::temp_dir().join(format!("signex-erc-net-focus-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("signex-erc-net-focus-{}", Uuid::now_v7()));
         std::fs::create_dir_all(&dir).expect("tempdir");
         let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch"]);
         let top = dir.join("top.snxsch");

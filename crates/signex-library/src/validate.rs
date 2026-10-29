@@ -24,7 +24,7 @@ pub fn validate_row_for_write(row: &ComponentRow) -> Result<(), LibraryError> {
 /// back, so storing one would leave the table or library unloadable (#1056).
 fn check_parameters_finite(row: &ComponentRow) -> Result<(), LibraryError> {
     check_param_map_finite(&row.parameters).map_err(|e| match e {
-        LibraryError::Backend(msg) => LibraryError::Backend(format!(
+        LibraryError::InvalidData(msg) => LibraryError::InvalidData(format!(
             "row {} ({}): {msg}; nothing was written",
             row.internal_pn, row.row_id
         )),
@@ -36,7 +36,7 @@ fn check_parameters_finite(row: &ComponentRow) -> Result<(), LibraryError> {
 /// symbol (see [`alternate_symbol_issues`]).
 fn check_alternate_symbols(row: &ComponentRow) -> Result<(), LibraryError> {
     match alternate_symbol_issues(row).first() {
-        Some(issue) => Err(LibraryError::Backend(format!(
+        Some(issue) => Err(LibraryError::InvalidData(format!(
             "row {} ({}): {issue}; nothing was written",
             row.internal_pn, row.row_id
         ))),

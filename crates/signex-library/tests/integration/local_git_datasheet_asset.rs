@@ -222,8 +222,11 @@ fn a_pin_with_no_file_anywhere_does_not_block_the_save() {
     assert!(!datasheet_asset_path(&file, &hash).unwrap().exists());
 }
 
+/// #858 -- the row and its PDF are written, so a failed commit is a saved row
+/// that is not committed, the same as without an asset. The PDF stays pending
+/// and the next commit records it with the `.snxlib`.
 #[test]
-fn a_failed_commit_with_an_asset_is_an_error_and_leaves_the_row_unsaved() {
+fn a_failed_commit_with_an_asset_saves_the_row_and_the_next_commit_takes_the_pdf() {
     let tmp = tempfile::tempdir().unwrap();
     let (file, adapter, library_id) = mounted_library(tmp.path(), true);
     let seed = row(library_id);
@@ -232,34 +235,34 @@ fn a_failed_commit_with_an_asset_is_an_error_and_leaves_the_row_unsaved() {
     let hash = store_datasheet(&file, PDF).unwrap();
     edited.datasheet = DatasheetRef::hash_pinned(hash.clone(), "ds.pdf");
     let rel = datasheet_asset_rel_path(&hash).unwrap();
-    let before = std::fs::read(&file).unwrap();
 
     // A repository that cannot be opened makes the commit fail.
     let head = file.parent().unwrap().join(".git").join("HEAD");
     let good_head = std::fs::read(&head).unwrap();
     std::fs::write(&head, b"not a ref").unwrap();
-    let err = adapter
-        .update_row_with_assets(TABLE, edited.clone(), "pin", std::slice::from_ref(&rel))
-        .unwrap_err();
-    assert!(err.to_string().contains("not saved"), "{err}");
-    assert_eq!(std::fs::read(&file).unwrap(), before, "file restored");
-    let stored = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
-    assert!(stored.datasheet.is_empty(), "the row is not pinned");
-
-    // Once git works again the same save succeeds and commits the PDF.
-    std::fs::write(&head, good_head).unwrap();
     adapter
-        .update_row_with_assets(TABLE, edited, "pin", std::slice::from_ref(&rel))
-        .unwrap();
-    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
-    let tree = repo
-        .head()
-        .unwrap()
-        .peel_to_commit()
-        .unwrap()
-        .tree()
-        .unwrap();
-    assert!(tree.get_path(Path::new(&rel)).is_ok());
+        .update_row_with_assets(TABLE, edited.clone(), "pin", std::slice::from_ref(&rel))
+        .expect("a failed commit is not a failed save");
+    let stored = adapter.read_row(TABLE, seed.row_id.into()).unwrap();
+    assert_eq!(
+        stored.datasheet,
+        DatasheetRef::hash_pinned(hash.clone(), "ds.pdf"),
+        "the row is saved"
+    );
+    let pending = adapter.uncommitted_changes().expect("not committed");
+    assert!(pending.paths.contains(&rel), "{pending:?}");
+    assert!(
+        pending.paths.contains(&"Pin.snxlib".to_string()),
+        "{pending:?}"
+    );
+
+    // Once git works again the next save commits the row and the PDF.
+    std::fs::write(&head, good_head).unwrap();
+    let mut again = stored;
+    again.description = "later".into();
+    adapter.update_row(TABLE, again, "later").unwrap();
+    assert!(head_tree_has(&file, &rel));
+    assert_eq!(adapter.uncommitted_changes(), None);
 }
 
 fn head_tree_has(file: &Path, rel: &str) -> bool {

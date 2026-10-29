@@ -11,7 +11,7 @@ fn library(name: &str, tables: Vec<(&str, Vec<ComponentRow>)>) -> OpenLibrary {
     OpenLibrary {
         root: PathBuf::from(ROOT),
         display_name: name.into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: tables.into_iter().map(|(n, r)| (n.to_owned(), r)).collect(),
         cached_components: Vec::new(),
         cached_symbols: Vec::new(),

@@ -12,8 +12,7 @@ fn quit_app() -> (Signex, iced::window::Id) {
     app.ui_state.main_window_opened = true;
     app.ui_state.first_run_tour_open = false;
     app.document_state
-        .dirty_paths
-        .insert("/p/board.snxsch".into());
+        .mark_document_dirty(std::path::Path::new("/p/board.snxsch"));
     (app, main)
 }
 
@@ -48,8 +47,7 @@ fn every_quit_route_opens_the_confirm_and_never_exits_behind_it() {
         assert_eq!(task.units(), 0, "no close or exit behind the modal");
         assert!(
             app.document_state
-                .dirty_paths
-                .contains(std::path::Path::new("/p/board.snxsch"))
+                .is_document_dirty(std::path::Path::new("/p/board.snxsch"))
         );
     }
 }
@@ -62,8 +60,7 @@ fn closing_the_confirm_window_is_cancel_never_discard() {
     assert!(app.ui_state.app_quit_confirm.is_none());
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(std::path::Path::new("/p/board.snxsch")),
+            .is_document_dirty(std::path::Path::new("/p/board.snxsch")),
         "nothing was discarded"
     );
     assert!(
@@ -112,8 +109,7 @@ fn cancel_leaves_everything_open_and_discard_all_exits() {
     assert!(app.ui_state.app_quit_confirm.is_none());
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(std::path::Path::new("/p/board.snxsch"))
+            .is_document_dirty(std::path::Path::new("/p/board.snxsch"))
     );
     // The confirm window closes; nothing else runs.
     assert!(task.units() <= 1);
@@ -137,8 +133,7 @@ fn esc_in_the_locked_main_window_cancels_the_quit_confirm() {
     assert!(app.ui_state.app_quit_confirm.is_none());
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(std::path::Path::new("/p/board.snxsch"))
+            .is_document_dirty(std::path::Path::new("/p/board.snxsch"))
     );
 }
 
@@ -200,7 +195,7 @@ fn discard_all_discards_only_what_the_confirm_listed() {
     raise_quit_confirm(&mut app, main);
     // An edit lands after the confirm opened, through a route nobody locked.
     let late = std::path::PathBuf::from("/p/late.snxsch");
-    app.document_state.dirty_paths.insert(late.clone());
+    app.document_state.mark_document_dirty(&late);
     let task = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
         ProjectCloseChoice::DiscardAll,
     )));
@@ -225,11 +220,10 @@ fn discard_all_discards_only_what_the_confirm_listed() {
             .iter()
             .any(|t| t.text.contains("The unsaved list changed"))
     );
-    assert!(app.document_state.dirty_paths.contains(&late));
+    assert!(app.document_state.is_document_dirty(&late));
     assert!(
         app.document_state
-            .dirty_paths
-            .contains(std::path::Path::new("/p/board.snxsch")),
+            .is_document_dirty(std::path::Path::new("/p/board.snxsch")),
         "the first item is untouched"
     );
     // Only the window bookkeeping ran: no close, no exit, no recovery sweep.

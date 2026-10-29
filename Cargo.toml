@@ -73,7 +73,7 @@ toml = "0.8"
 toml_edit = "0.22"
 
 # Identity
-uuid = { version = "1.23.1", features = ["v4", "v7", "serde"] }
+uuid = { version = "1.23.1", features = ["v7", "serde"] }
 
 # Error handling
 thiserror = "2"

@@ -365,7 +365,7 @@ mod special_string_tests {
         schematic
             .text_notes
             .push(signex_types::schematic::TextNote {
-                uuid: uuid::Uuid::new_v4(),
+                uuid: uuid::Uuid::now_v7(),
                 text: NOTE.into(),
                 position: signex_types::schematic::Point::new(10.0, 10.0),
                 rotation: 0.0,
@@ -373,6 +373,7 @@ mod special_string_tests {
                 font_family: None,
                 justify_h: Default::default(),
                 justify_v: Default::default(),
+                locked: false,
             });
         let sheet = SheetSnapshot {
             path: std::path::PathBuf::from("/p/power.snxsch"),

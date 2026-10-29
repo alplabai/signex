@@ -27,7 +27,7 @@ fn row(pn: &str, value: Option<ParamValue>) -> ComponentRow {
     }
     ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -89,7 +89,7 @@ fn app_with_resistors() -> (Signex, PathBuf) {
     app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "Range".into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: HashMap::from([("Resistors".to_string(), rows)]),
         cached_components: summaries,
         cached_symbols: Vec::new(),

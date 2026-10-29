@@ -163,7 +163,7 @@ fn row(pn: &str) -> ComponentRow {
     let now = chrono::Utc::now();
     ComponentRow {
         alternate_symbols: Vec::new(),
-        row_id: Uuid::new_v4(),
+        row_id: Uuid::now_v7(),
         internal_pn: InternalPn::new(pn),
         class: ComponentClass::generic(),
         datasheet: DatasheetRef::default(),
@@ -205,7 +205,7 @@ fn library_at(n: usize, path: &str) -> (LibraryState, PathBuf, Vec<RowId>) {
     state.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "Window".into(),
-        library_id: Uuid::new_v4(),
+        library_id: Uuid::now_v7(),
         tables: HashMap::from([(TABLE.to_string(), rows)]),
         cached_components: Vec::new(),
         cached_symbols: Vec::new(),

@@ -443,9 +443,9 @@ mod tests {
     fn diff_detects_symbol_ref_change() {
         let mut a = row();
         let mut b = row();
-        let lib = Uuid::new_v4();
-        a.symbol_ref = PrimitiveRef::new(lib, Uuid::new_v4());
-        b.symbol_ref = PrimitiveRef::new(lib, Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        a.symbol_ref = PrimitiveRef::new(lib, Uuid::now_v7());
+        b.symbol_ref = PrimitiveRef::new(lib, Uuid::now_v7());
         let d = diff_rows(&a, &b);
         assert!(d.symbol_changed);
         assert!(!d.footprint_changed);
@@ -456,9 +456,9 @@ mod tests {
     fn diff_detects_footprint_ref_change() {
         let mut a = row();
         let mut b = row();
-        let lib = Uuid::new_v4();
-        a.footprint_ref = Some(PrimitiveRef::new(lib, Uuid::new_v4()));
-        b.footprint_ref = Some(PrimitiveRef::new(lib, Uuid::new_v4()));
+        let lib = Uuid::now_v7();
+        a.footprint_ref = Some(PrimitiveRef::new(lib, Uuid::now_v7()));
+        b.footprint_ref = Some(PrimitiveRef::new(lib, Uuid::now_v7()));
         let d = diff_rows(&a, &b);
         assert!(d.footprint_changed);
         assert_eq!(auto_bump_kind(&d), BumpKind::Major);
@@ -468,9 +468,9 @@ mod tests {
     fn diff_detects_sim_ref_change() {
         let mut a = row();
         let mut b = row();
-        let lib = Uuid::new_v4();
+        let lib = Uuid::now_v7();
         a.sim_ref = None;
-        b.sim_ref = Some(PrimitiveRef::new(lib, Uuid::new_v4()));
+        b.sim_ref = Some(PrimitiveRef::new(lib, Uuid::now_v7()));
         let d = diff_rows(&a, &b);
         assert!(d.sim_changed);
     }
@@ -659,8 +659,8 @@ mod tests {
 
     #[test]
     fn diff_reports_alternate_symbol_added_removed_and_changed() {
-        let lib = Uuid::new_v4();
-        let (iec, ansi) = (Uuid::new_v4(), Uuid::new_v4());
+        let lib = Uuid::now_v7();
+        let (iec, ansi) = (Uuid::now_v7(), Uuid::now_v7());
         let alt = |u, v: &str, l: &str| AlternateSymbol::new(PrimitiveRef::new(lib, u), v, l);
 
         let base = row();
@@ -705,9 +705,9 @@ mod tests {
 
     #[test]
     fn diff_reports_a_reordered_alternate_list() {
-        let lib = Uuid::new_v4();
+        let lib = Uuid::now_v7();
         let alt =
-            |l: &str| AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::new_v4()), "0.0.1", l);
+            |l: &str| AlternateSymbol::new(PrimitiveRef::new(lib, Uuid::now_v7()), "0.0.1", l);
         let (iec, ansi) = (alt("IEC"), alt("ANSI"));
         let mut a = row();
         a.alternate_symbols = vec![iec.clone(), ansi.clone()];

@@ -22,7 +22,7 @@ fn junction_with_columns(uuid: Uuid, range: std::ops::Range<usize>) -> Junction 
 fn over_cap_engine(first: Uuid, second: Uuid) -> Engine {
     let half = MAX_FOREIGN_COLUMNS * 3 / 4;
     let sheet = SchematicSheet {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
         junctions: vec![
             junction_with_columns(first, 0..half),
@@ -44,7 +44,7 @@ fn typed(error: &EngineError) -> &FormatError {
 
 #[test]
 fn serialize_over_cap_returns_the_typed_error_in_an_io_error() {
-    let (first, second) = (Uuid::new_v4(), Uuid::new_v4());
+    let (first, second) = (Uuid::now_v7(), Uuid::now_v7());
     let engine = over_cap_engine(first, second);
 
     let error = engine
@@ -74,7 +74,7 @@ fn serialize_over_cap_returns_the_typed_error_in_an_io_error() {
 
 #[test]
 fn save_as_over_cap_writes_nothing() {
-    let engine = over_cap_engine(Uuid::new_v4(), Uuid::new_v4());
+    let engine = over_cap_engine(Uuid::now_v7(), Uuid::now_v7());
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("Merged.snxsch");
     let mut engine = engine;

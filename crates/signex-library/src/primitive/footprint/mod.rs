@@ -521,6 +521,10 @@ pub struct FootprintFile {
     /// panel header. Defaults to the file stem when empty.
     #[serde(default)]
     pub display_name: String,
+    /// The `file_uuid` of the stock file this one was copied from (#813);
+    /// see `SymbolFile::copied_from`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copied_from: Option<Uuid>,
     /// All footprints in this file. Order is the Footprint Library
     /// panel order.
     pub footprints: Vec<Footprint>,
@@ -568,6 +572,8 @@ struct FootprintFileWire {
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    copied_from: Option<Uuid>,
     created: DateTime<Utc>,
     updated: DateTime<Utc>,
     #[serde(default)]
@@ -652,6 +658,7 @@ impl FootprintFile {
             format: default_footprint_format(),
             file_uuid,
             display_name: footprint.name.clone(),
+            copied_from: None,
             footprints: vec![footprint],
             created: timestamp,
             updated: timestamp,
@@ -717,6 +724,7 @@ impl FootprintFile {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
+            copied_from: wire.copied_from,
             created: wire.created,
             updated: wire.updated,
             footprints,
@@ -767,6 +775,7 @@ impl FootprintFile {
             format: self.format.clone(),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
+            copied_from: self.copied_from,
             created: self.created,
             updated: self.updated,
             footprints: wire_footprints,

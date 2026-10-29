@@ -7,7 +7,7 @@ pub struct SketchEntityId(pub Uuid);
 
 impl SketchEntityId {
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        Self(Uuid::now_v7())
     }
 }
 
@@ -29,7 +29,7 @@ pub struct ConstraintId(pub Uuid);
 
 impl ConstraintId {
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        Self(Uuid::now_v7())
     }
 }
 

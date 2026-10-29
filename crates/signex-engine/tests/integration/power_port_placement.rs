@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 fn port(lib_id: &str, value: &str, at: Point) -> Symbol {
     Symbol {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         lib_id: lib_id.to_string(),
         value: value.to_string(),
         is_power: true,
@@ -23,7 +23,7 @@ fn port(lib_id: &str, value: &str, at: Point) -> Symbol {
 
 fn wire(a: Point, b: Point) -> Wire {
     Wire {
-        uuid: Uuid::new_v4(),
+        uuid: Uuid::now_v7(),
         start: a,
         end: b,
         ..Default::default()

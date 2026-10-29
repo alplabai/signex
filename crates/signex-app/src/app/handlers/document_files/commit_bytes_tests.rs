@@ -51,7 +51,7 @@ fn sheet_fixture(stem: &str) -> (tempfile::TempDir, PathBuf, Signex) {
     let mut app = open_tab(dir.path(), &path, TabKind::Schematic);
     app.document_state.tabs.clear();
     let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     })
     .expect("engine");
@@ -60,13 +60,12 @@ fn sheet_fixture(stem: &str) -> (tempfile::TempDir, PathBuf, Signex) {
         title: file_name(&path),
         path: path.clone(),
         cached_document: None,
-        dirty: true,
         project_id: None,
         kind: TabKind::Schematic,
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path.clone());
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     (dir, path, app)
 }
 

@@ -33,4 +33,4 @@ The cascade (`cascade.rs`) finds a footprint bound only as an alternate and move
 
 ## Not yet
 
-`where_used.rs` and `diff.rs` still read only `footprint_ref`: a footprint used only as an alternate is not listed as used, and a change to alternates alone is not shown in a row diff. Neither has a production caller yet.
+`diff.rs` still reads only `footprint_ref`: a change to alternates alone is not shown in a row diff. It has no production caller yet. (`where_used.rs` lists alternate footprints as uses.)

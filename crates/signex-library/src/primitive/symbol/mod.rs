@@ -498,6 +498,12 @@ pub struct SymbolFile {
     /// Defaults to the file stem when empty.
     #[serde(default)]
     pub display_name: String,
+    /// The `file_uuid` of the stock file this one was copied from (#813).
+    /// Lets opening the same stock primitive again find the copy. Absent
+    /// from files that are not copies, so they stay byte-identical; older
+    /// builds ignore the key when loading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copied_from: Option<Uuid>,
     /// All symbols in this file. Order is the SCH-Library panel order.
     pub symbols: Vec<Symbol>,
     pub created: DateTime<Utc>,
@@ -599,6 +605,8 @@ struct SymbolFileWire {
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    copied_from: Option<Uuid>,
     created: DateTime<Utc>,
     updated: DateTime<Utc>,
     #[serde(default)]
@@ -721,6 +729,7 @@ impl SymbolFile {
             format: default_format(),
             file_uuid: Uuid::now_v7(),
             display_name: symbol.name.clone(),
+            copied_from: None,
             symbols: vec![symbol],
             created: now,
             updated: now,
@@ -838,6 +847,7 @@ impl SymbolFile {
             format: wire.format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
+            copied_from: wire.copied_from,
             created: wire.created,
             updated: wire.updated,
             symbols,
@@ -918,6 +928,7 @@ impl SymbolFile {
             format,
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
+            copied_from: self.copied_from,
             created: self.created,
             updated: self.updated,
             symbols: wire_symbols,

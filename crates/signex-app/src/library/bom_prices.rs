@@ -124,7 +124,7 @@ mod tests {
         rows: Vec<ComponentRow>,
         pricing: HashMap<Uuid, RowPricing>,
     ) -> (LibraryState, Uuid) {
-        let library_id = Uuid::new_v4();
+        let library_id = Uuid::now_v7();
         let mut state = LibraryState {
             clock: Utc::now(),
             ..Default::default()

@@ -527,7 +527,7 @@ fn a_reply_without_an_etag_drops_the_cached_primitive_check() {
 /// but with controllable PN + class so the assertions in each test don't
 /// fight over identity.
 pub(super) fn mk_row(pn: &str, class: &str) -> ComponentRow {
-    let lib = Uuid::new_v4();
+    let lib = Uuid::now_v7();
     let now = chrono::Utc::now();
     ComponentRow {
         alternate_symbols: Vec::new(),
@@ -539,8 +539,8 @@ pub(super) fn mk_row(pn: &str, class: &str) -> ComponentRow {
         description: String::new(),
         more_datasheets: Vec::new(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(lib, Uuid::new_v4()),
-        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::new_v4())),
+        symbol_ref: PrimitiveRef::new(lib, Uuid::now_v7()),
+        footprint_ref: Some(PrimitiveRef::new(lib, Uuid::now_v7())),
         alternate_footprints: Vec::new(),
         sim_ref: None,
         pin_map_overrides: Vec::new(),
@@ -1076,12 +1076,12 @@ fn row_writes_are_refused_against_an_old_server() {
                     .insert_row("resistors", row.clone(), "m")
                     .unwrap_err();
                 assert!(
-                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    matches!(&err, signex_library::LibraryError::InvalidData(m) if m.contains("too old")),
                     "{err:?}"
                 );
                 let err = adapter.update_row("resistors", row, "m").unwrap_err();
                 assert!(
-                    matches!(&err, signex_library::LibraryError::Backend(m) if m.contains("too old")),
+                    matches!(&err, signex_library::LibraryError::InvalidData(m) if m.contains("too old")),
                     "{err:?}"
                 );
             },

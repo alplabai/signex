@@ -2,6 +2,7 @@
 
 use super::helpers::*;
 use super::*;
+use crate::adapter::UncommittedChanges;
 
 impl LibraryAdapter for LocalGitAdapter {
     fn manifest(&self) -> &Manifest {
@@ -35,15 +36,22 @@ impl LibraryAdapter for LocalGitAdapter {
             // adapter moves, so a failed commit leaves it on the old path.
             let old_rel = self.snxlib_rel_path()?;
             let new_rel = file_name_str(new_file)?;
+            // The file is already renamed on disk, so a failed commit must
+            // not leave the adapter on the old path: the rename stays
+            // pending and the next commit records it (#858).
             self.commit_change(
                 Some(&old_rel),
                 &new_rel,
                 "",
                 &format!("rename {old_rel} to {new_rel}"),
-            )?;
+            );
         }
+        let moved_root = new_root != self.root_dir;
         self.root_dir = new_root;
         self.file_path = new_file.to_path_buf();
+        if moved_root {
+            self.reset_uncommitted_for_new_root();
+        }
         Ok(())
     }
 
@@ -263,11 +271,7 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
-        let target = row_id.as_uuid();
-        self.snapshot_table(table)?
-            .into_iter()
-            .find(|r| r.row_id == target)
-            .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
+        self.read_component_row(table, row_id)
     }
 
     /// Linear scan across every table — O(total rows). Acceptable at
@@ -596,32 +600,43 @@ impl LibraryAdapter for LocalGitAdapter {
 
     /// The whole batch in one `.snxlib` write and one commit. A target
     /// that is missing or unreadable is that target's `Err` and the rest
-    /// still land; a failed write or commit refuses the whole batch.
+    /// still land; a failed write or commit refuses the whole batch. The
+    /// commit message is built from the rows the edit changed.
     fn update_rows(
         &self,
         targets: &[(String, RowId)],
         edit: &mut crate::adapter::RowEdit<'_>,
-        message: &str,
+        message: &crate::adapter::RowsMessage<'_>,
     ) -> Result<Vec<crate::adapter::RowEditOutcome>, LibraryError> {
-        let mut outcomes: Vec<crate::adapter::RowEditOutcome> = Vec::with_capacity(targets.len());
+        let outcomes = std::cell::RefCell::new(Vec::with_capacity(targets.len()));
         let fallback = format!("update {} rows", targets.len());
-        self.mutate_library_file_if_changed(
+        self.mutate_library_file_deferred(
             |lf| {
                 // Rows are found and edited under the write lock, after the
                 // reload, so a field another writer changed since the
                 // caller's scan is kept.
                 let mut any = false;
+                let mut done = outcomes.borrow_mut();
                 for (table, row_id) in targets {
                     let outcome = edit_one_row(lf, table, *row_id, edit);
                     any |= matches!(outcome, Ok(true));
-                    outcomes.push((*row_id, outcome));
+                    done.push((*row_id, outcome));
                 }
                 Ok(any)
             },
-            message,
+            &[],
+            &|| {
+                let changed: Vec<RowId> = outcomes
+                    .borrow()
+                    .iter()
+                    .filter(|(_, o)| matches!(o, Ok(true)))
+                    .map(|(id, _)| *id)
+                    .collect();
+                message(&changed)
+            },
             &fallback,
         )?;
-        Ok(outcomes)
+        Ok(outcomes.into_inner())
     }
 
     fn root_path(&self) -> Option<PathBuf> {
@@ -643,18 +658,27 @@ impl LibraryAdapter for LocalGitAdapter {
         }
         let _write_lock = self.lock_for_write()?;
         let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
-        if written && let Err(e) = self.commit_external_change(abs_path, commit_message) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %abs_path.display(),
-                error = %e,
-                "save primitive: file written, not committed",
-            );
+        // The file is written: its commit, failed or not, is reported by
+        // the adapter (see `uncommitted`) and never undoes the write.
+        if written {
+            self.commit_external_change(abs_path, commit_message)?;
         }
         Ok(written)
     }
 
-    fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {
+    fn uncommitted_changes(&self) -> Option<UncommittedChanges> {
+        self.pending_changes()
+    }
+
+    fn commit_pending(&self, message: &str) -> Result<CommitOutcome, LibraryError> {
+        Ok(self.commit_pending_changes(message))
+    }
+
+    fn commit_external_change(
+        &self,
+        abs_path: &Path,
+        message: &str,
+    ) -> Result<CommitOutcome, LibraryError> {
         let rel_path = abs_path
             .strip_prefix(&self.root_dir)
             .map_err(|_| {
@@ -667,7 +691,7 @@ impl LibraryAdapter for LocalGitAdapter {
             .to_string_lossy()
             .replace('\\', "/");
         let fallback = format!("save {rel_path}");
-        self.commit_path(&rel_path, message, &fallback)
+        Ok(self.commit_path(&rel_path, message, &fallback))
     }
 
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {

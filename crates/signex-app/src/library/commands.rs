@@ -88,7 +88,7 @@ const RESERVED_STEMS: &[&str] = &[
 /// Shared pre-flight for a new `.snxlib` path: extension, portable
 /// non-empty stem, and the target must not already exist. Rejecting
 /// here beats a confusing adapter-init error later.
-fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
+pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
     let ext_ok = lib_path
         .extension()
         .and_then(|e| e.to_str())
@@ -233,11 +233,30 @@ pub fn materialize_pending_library(
     Ok(())
 }
 
+/// Create a library on its own at `lib_path`, not attached to any project:
+/// plain files, no version control. Used by the stock-copy flow, which
+/// writes straight to the library the user asked for (#813). Refuses a
+/// path that is not a new, portable `.snxlib`.
+pub(crate) fn create_library_file(
+    lib_path: &Path,
+    defaults: &super::state::NewLibraryDefaults,
+) -> Result<(), LibraryError> {
+    validate_new_library_path(lib_path)?;
+    let stem = lib_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let manifest = seed_manifest(Uuid::now_v7(), stem, defaults);
+    LocalGitAdapter::init(lib_path, manifest, LibraryInitOptions::default())?;
+    Ok(())
+}
+
 /// Manifest for a brand-new library. The class registry is seeded from
 /// the user's `prefs.json::component_classes` so a fresh library starts
 /// with their preferred taxonomy (editable per-library afterwards);
 /// mode/workflow/users stay at their defaults.
-fn seed_manifest(
+pub(crate) fn seed_manifest(
     library_id: Uuid,
     name: String,
     defaults: &super::state::NewLibraryDefaults,

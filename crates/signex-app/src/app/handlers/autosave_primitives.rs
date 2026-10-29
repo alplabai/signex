@@ -29,12 +29,12 @@ impl Signex {
         let open_dirty = document
             .symbol_editors
             .get(path)
-            .map(|editor| editor.dirty)
+            .map(|editor| editor.is_dirty())
             .or_else(|| {
                 document
                     .footprint_editors
                     .get(path)
-                    .map(|editor| editor.dirty)
+                    .map(|editor| editor.is_dirty())
             });
         open_dirty.is_some_and(|dirty| dirty || document.document_saves.is_saving(path))
     }
@@ -44,12 +44,12 @@ impl Signex {
         let symbols = document
             .symbol_editors
             .iter()
-            .filter(|(_, editor)| editor.dirty)
+            .filter(|(_, editor)| editor.is_dirty())
             .map(|(path, _)| path);
         let footprints = document
             .footprint_editors
             .iter()
-            .filter(|(_, editor)| editor.dirty)
+            .filter(|(_, editor)| editor.is_dirty())
             .map(|(path, _)| path);
         symbols.chain(footprints).cloned().collect()
     }
@@ -130,7 +130,7 @@ impl Signex {
         editor.baseline = baseline;
         editor.save_generation = generation;
         editor.zoom_step = zoom_step;
-        editor.dirty = true;
+        editor.mark_dirty();
         self.document_state
             .symbol_editors
             .insert(path.to_path_buf(), editor);
@@ -153,7 +153,7 @@ impl Signex {
         editor.baseline = baseline;
         editor.save_generation = generation;
         editor.zoom_step = zoom_step;
-        editor.dirty = true;
+        editor.mark_dirty();
         self.document_state
             .footprint_editors
             .insert(path.to_path_buf(), editor);

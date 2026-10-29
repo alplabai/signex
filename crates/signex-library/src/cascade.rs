@@ -29,11 +29,12 @@
 //! synchronous; making it async would force the whole trait surface
 //! to gain `async fn`. Async cascade is a v1.x concern.
 
-use crate::adapter::{LibraryAdapter, LibraryError, RowEdit, RowEditOutcome};
+use crate::adapter::{LibraryAdapter, LibraryError, RowEdit, RowEditOutcome, RowsMessage};
 use crate::component::ComponentRow;
 use crate::identity::RowId;
 use crate::manifest::WorkflowMode;
 use crate::primitive::PrimitiveRef;
+use signex_types::object_id::short_id;
 use uuid::Uuid;
 
 /// Outcome of one cascade pass: which rows were auto-bumped, which were
@@ -56,6 +57,13 @@ pub struct CascadeReport {
     /// failed row, so one bad row does not strand the rest; a later pass
     /// over the same save retries only these.
     pub failed: Vec<(RowId, String)>,
+    /// The rows of `failed` a retry cannot fix (row gone, row or schema
+    /// invalid, library not writable): the user has to act on them. The
+    /// rest of `failed` (IO, a lock held elsewhere) can succeed on a retry.
+    pub permanent: Vec<RowId>,
+    /// Part number (or short id) of each row in `failed`, in the same order,
+    /// for a message that names them.
+    pub failed_labels: Vec<String>,
 }
 
 impl CascadeReport {
@@ -188,6 +196,14 @@ fn single_save(
 /// cascade; an adapter without a batch write updates the rows in order and
 /// stops at the first failure. A row that fails to update is recorded in
 /// [`CascadeReport::failed`], never returned as an error.
+///
+/// Rows are independent: each re-pin is idempotent and a row already at the
+/// saved version is skipped, so one stale or vanished row never holds back
+/// the clean ones. The clean rows commit together; the others come back in
+/// `stale` or `failed` for the caller to report, and a later pass retries
+/// them. A write that fails as a whole moves no row, leaves the file and git
+/// as they were, and reports every row as failed. The commit message names
+/// the first rows and counts the rest.
 pub fn cascade_after_saves(
     adapter: &dyn LibraryAdapter,
     saves: &[PrimitiveSave],
@@ -200,7 +216,11 @@ pub fn cascade_after_saves(
 
 /// The batch write of a cascade: the rows to bump, the edit that bumps
 /// one, the commit message; one outcome per row.
-type WriteBatch<'a> = dyn FnMut(&[(String, RowId)], &mut RowEdit<'_>, &str) -> Result<Vec<RowEditOutcome>, LibraryError>
+type WriteBatch<'a> = dyn FnMut(
+        &[(String, RowId)],
+        &mut RowEdit<'_>,
+        &RowsMessage<'_>,
+    ) -> Result<Vec<RowEditOutcome>, LibraryError>
     + 'a;
 
 fn cascade_with(
@@ -214,6 +234,7 @@ fn cascade_with(
         return Ok(report);
     }
     let mut targets: Vec<(String, RowId)> = Vec::new();
+    let mut labels: std::collections::HashMap<RowId, String> = std::collections::HashMap::new();
     for (table, row) in adapter.iter_rows()? {
         let row_id = RowId::from_uuid(row.row_id);
         let mut bump = false;
@@ -228,6 +249,7 @@ fn cascade_with(
             bump = true;
         }
         if bump {
+            labels.insert(row_id, row_label(&row));
             targets.push((table, row_id));
         }
     }
@@ -246,25 +268,68 @@ fn cascade_with(
         }
         changed
     };
-    let msg = cascade_commit_message(saves, targets.len());
+    // Built after the write knows which rows it changed: a row that was
+    // gone, or already moved by another writer, is not named.
+    let msg = |changed: &[RowId]| {
+        let names: Vec<String> = changed
+            .iter()
+            .filter_map(|id| labels.get(id).cloned())
+            .collect();
+        cascade_commit_message(saves, &names)
+    };
     match write(&targets, &mut edit, &msg) {
         Ok(outcomes) => {
             for (row_id, outcome) in outcomes {
                 match outcome {
                     Ok(true) => report.auto_bumped.push(row_id),
                     Ok(false) => {}
-                    Err(e) => report.failed.push((row_id, e.to_string())),
+                    Err(e) => {
+                        if retry_cannot_fix(&e) {
+                            report.permanent.push(row_id);
+                        }
+                        report.failed.push((row_id, e.to_string()));
+                        report
+                            .failed_labels
+                            .push(labels.get(&row_id).cloned().unwrap_or_default());
+                    }
                 }
             }
         }
         Err(e) => {
             let reason = e.to_string();
+            if retry_cannot_fix(&e) {
+                report.permanent.extend(targets.iter().map(|(_, id)| *id));
+            }
             report
                 .failed
                 .extend(targets.iter().map(|(_, id)| (*id, reason.clone())));
+            report.failed_labels.extend(
+                targets
+                    .iter()
+                    .map(|(_, id)| labels.get(id).cloned().unwrap_or_default()),
+            );
         }
     }
     Ok(report)
+}
+
+/// True when running the same write again cannot succeed: the row is gone,
+/// the row or table is invalid, or the library refuses writes. IO errors,
+/// a row changed under the write and a lock held by another process can.
+pub fn retry_cannot_fix(error: &LibraryError) -> bool {
+    match error {
+        LibraryError::NotFound(_)
+        | LibraryError::Conflict(_)
+        | LibraryError::Unauthorized(_)
+        | LibraryError::VersionControlRefused(_)
+        | LibraryError::ReadOnly { .. }
+        | LibraryError::InvalidData(_) => true,
+        LibraryError::NotAttempted { permanent, .. } => *permanent,
+        LibraryError::Io(_)
+        | LibraryError::RowChanged { .. }
+        | LibraryError::PrimitiveChanged { .. }
+        | LibraryError::Backend(_) => false,
+    }
 }
 
 /// True when the row binds the saved primitive (as default or alternate
@@ -360,27 +425,46 @@ pub(crate) fn apply_cascade_bump(row: &mut ComponentRow, save: &PrimitiveSave) {
     row.updated = chrono::Utc::now();
 }
 
-/// Synthesise the one git commit message of a cascade: it names each saved
-/// primitive and how many rows the commit moved, so the audit trail
-/// groups under the primitive UUID.
-fn cascade_commit_message(saves: &[PrimitiveSave], rows: usize) -> String {
-    let what: Vec<String> = saves
-        .iter()
-        .map(|s| {
-            format!(
-                "{} {} to v{}",
-                s.kind.label(),
-                short_uuid(s.uuid),
-                s.version
-            )
-        })
-        .collect();
-    format!("cascade: bump {} on {rows} row(s)", what.join(", "))
+/// Rows named in a cascade commit message before "+N more".
+const MESSAGE_ROWS: usize = 5;
+/// Longest part number shown in a commit message, in characters.
+const MESSAGE_NAME_CHARS: usize = 32;
+
+/// What a commit message calls a row: its part number, or its short id when
+/// the part number is blank.
+fn row_label(row: &ComponentRow) -> String {
+    let pn = row.internal_pn.to_string();
+    let pn = pn.trim();
+    if pn.is_empty() {
+        return short_id(&row.row_id);
+    }
+    let mut label: String = pn.chars().take(MESSAGE_NAME_CHARS).collect();
+    if pn.chars().count() > MESSAGE_NAME_CHARS {
+        label.push('~');
+    }
+    label.replace(['\n', '\r'], " ")
 }
 
-fn short_uuid(uuid: Uuid) -> String {
-    let s = uuid.to_string();
-    s.split('-').next().unwrap_or(&s).to_string()
+/// Synthesise the one git commit message of a cascade: it names each saved
+/// primitive, how many rows the commit moves and the first few of them, so
+/// the audit trail groups under the primitive UUID. The list is cut with
+/// "+N more" so the subject stays one short line.
+fn cascade_commit_message(saves: &[PrimitiveSave], rows: &[String]) -> String {
+    let what: Vec<String> = saves
+        .iter()
+        .map(|s| format!("{} {} to v{}", s.kind.label(), short_id(&s.uuid), s.version))
+        .collect();
+    let mut message = format!("cascade: bump {} on {} row(s)", what.join(", "), rows.len());
+    if rows.is_empty() {
+        return message;
+    }
+    let shown = rows.len().min(MESSAGE_ROWS);
+    message.push_str(": ");
+    message.push_str(&rows[..shown].join(", "));
+    if rows.len() > shown {
+        message.push_str(&format!(", +{} more", rows.len() - shown));
+    }
+    message
 }
 
 #[cfg(test)]
@@ -405,6 +489,28 @@ mod tests {
         assert_eq!(patch_bump("1.2.3.4"), "1.2.3.4.1");
     }
 
+    fn save() -> PrimitiveSave {
+        PrimitiveSave {
+            kind: CascadeKind::Footprint,
+            library_id: Uuid::nil(),
+            uuid: Uuid::nil(),
+            version: "1.0.1".into(),
+        }
+    }
+
+    #[test]
+    fn the_commit_message_lists_few_rows_whole_and_cuts_many() {
+        let names: Vec<String> = (0..3).map(|i| format!("R-{i}")).collect();
+        assert_eq!(
+            cascade_commit_message(&[save()], &names),
+            "cascade: bump footprint 00000000 to v1.0.1 on 3 row(s): R-0, R-1, R-2"
+        );
+        let many: Vec<String> = (0..9).map(|i| format!("R-{i}")).collect();
+        let msg = cascade_commit_message(&[save()], &many);
+        assert!(msg.ends_with("R-0, R-1, R-2, R-3, R-4, +4 more"), "{msg}");
+        assert!(msg.contains("on 9 row(s)"));
+    }
+
     #[test]
     fn cascade_report_default_is_empty() {
         let r = CascadeReport::default();
@@ -427,6 +533,13 @@ mod tests {
         use crate::primitive::PrimitiveRef;
 
         fn library(dir: &std::path::Path) -> (std::path::PathBuf, LocalGitAdapter, Uuid) {
+            library_in(dir, false)
+        }
+
+        fn library_in(
+            dir: &std::path::Path,
+            enable_git: bool,
+        ) -> (std::path::PathBuf, LocalGitAdapter, Uuid) {
             crate::git_identity::test_identity::install();
             let file = dir.join("Lib").join("Lib.snxlib");
             let library_id = Uuid::now_v7();
@@ -442,8 +555,15 @@ mod tests {
                 users: UsersConfig::default(),
                 classes: Vec::new(),
             };
-            let adapter =
-                LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+            let adapter = LocalGitAdapter::init(
+                &file,
+                manifest,
+                LibraryInitOptions {
+                    enable_git,
+                    use_lfs: false,
+                },
+            )
+            .unwrap();
             (file, adapter, library_id)
         }
 
@@ -479,6 +599,14 @@ mod tests {
                 content_hash: [0u8; 32],
                 server_revision: None,
             }
+        }
+
+        #[test]
+        fn a_long_or_blank_part_number_stays_short_in_the_message() {
+            let mut row = row(&"X".repeat(100), Uuid::nil(), Uuid::nil());
+            assert_eq!(row_label(&row).chars().count(), MESSAGE_NAME_CHARS + 1);
+            row.internal_pn = crate::identity::InternalPn::new("  ");
+            assert_eq!(row_label(&row), short_id(&row.row_id));
         }
 
         fn save(lib: Uuid, symbol: Uuid) -> PrimitiveSave {
@@ -591,6 +719,74 @@ mod tests {
                 assert_eq!(on_disk.symbol_version, "0.0.2");
                 assert_eq!(on_disk.version, "0.0.2", "no row is bumped twice");
             }
+        }
+
+        #[test]
+        fn the_commit_message_leaves_out_a_row_gone_at_write_time() {
+            let dir = tempfile::tempdir().unwrap();
+            let (file, adapter, lib) = library_in(dir.path(), true);
+            let symbol = Uuid::now_v7();
+            let rows: Vec<ComponentRow> = (0..3)
+                .map(|i| row(&format!("KEEP-{i}"), lib, symbol))
+                .collect();
+            let mut gone_row = row("GONE-ROW", lib, symbol);
+            gone_row.internal_pn = crate::identity::InternalPn::new("GONE-ROW");
+            for r in rows.iter().chain([&gone_row]) {
+                adapter.insert_row("R", r.clone(), "seed").unwrap();
+            }
+            let gone = RowId::from_uuid(gone_row.row_id);
+            let other = LocalGitAdapter::open(&file).unwrap();
+
+            let report = cascade_with(
+                &adapter,
+                &[save(lib, symbol)],
+                WorkflowMode::Personal,
+                &mut |targets, edit, msg| {
+                    other
+                        .delete_row("R", gone, None, "removed meanwhile")
+                        .unwrap();
+                    adapter.update_rows(targets, edit, msg)
+                },
+            )
+            .unwrap();
+
+            assert_eq!(report.auto_bumped.len(), 3);
+            assert_eq!(report.failed.len(), 1);
+            assert_eq!(report.permanent, vec![gone], "a vanished row is permanent");
+            let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+            let msg = repo
+                .head()
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .message()
+                .unwrap()
+                .to_string();
+            assert!(msg.contains("on 3 row(s)"), "{msg}");
+            assert!(!msg.contains("GONE-ROW"), "{msg}");
+            assert!(msg.contains("KEEP-0"), "{msg}");
+        }
+
+        #[test]
+        fn io_and_lock_failures_can_be_retried_and_the_rest_cannot() {
+            use LibraryError as E;
+            let io = E::Io(std::io::Error::other("disk full"));
+            assert!(!retry_cannot_fix(&io));
+            assert!(!retry_cannot_fix(&E::RowChanged {
+                current_revision: 1
+            }));
+            assert!(!retry_cannot_fix(&E::Backend("lock held elsewhere".into())));
+            assert!(retry_cannot_fix(&E::NotFound("row".into())));
+            assert!(retry_cannot_fix(&E::InvalidData("row_id: bad".into())));
+            let cause = |permanent| E::NotAttempted {
+                cause: "x".into(),
+                permanent,
+            };
+            assert!(
+                !retry_cannot_fix(&cause(false)),
+                "inherits a retryable cause"
+            );
+            assert!(retry_cannot_fix(&cause(true)), "inherits a permanent cause");
         }
 
         #[test]

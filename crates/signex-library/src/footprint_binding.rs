@@ -148,7 +148,7 @@ mod tests {
     use uuid::Uuid;
 
     fn pr() -> PrimitiveRef {
-        PrimitiveRef::new(Uuid::new_v4(), Uuid::new_v4())
+        PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7())
     }
 
     #[test]
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn same_uuid_in_another_library_is_distinct() {
         let d = pr();
-        let other = FootprintBinding::new(PrimitiveRef::new(Uuid::new_v4(), d.uuid));
+        let other = FootprintBinding::new(PrimitiveRef::new(Uuid::now_v7(), d.uuid));
         let cell = encode_footprint_cell(Some(&d), std::slice::from_ref(&other)).unwrap();
         assert_eq!(
             decode_footprint_cell(&cell).unwrap(),

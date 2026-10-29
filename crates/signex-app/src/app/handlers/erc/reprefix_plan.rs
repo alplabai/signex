@@ -397,7 +397,7 @@ mod tests {
 
     fn linked(reference: &str, unit: u32) -> Symbol {
         Symbol {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             lib_id: "L:D".into(),
             reference: reference.into(),
             unit,

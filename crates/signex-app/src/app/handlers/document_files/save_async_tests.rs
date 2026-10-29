@@ -13,7 +13,7 @@ fn app_with_engine(dir: &Path) -> (Signex, PathBuf, u64) {
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.join("a.snxsch");
     let sheet = signex_types::schematic::SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         ..Default::default()
     };
     let engine = signex_engine::Engine::new(sheet).expect("engine");
@@ -111,8 +111,11 @@ fn a_write_from_a_closed_tab_does_not_clean_the_reopened_one() {
     for message in landed {
         let _ = app.update(message);
     }
-    assert!(app.document_state.tabs[0].dirty);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(no_commit_requested(&app));
 }
 
@@ -126,8 +129,11 @@ fn a_renamed_pcb_tab_still_saves_clean_and_commits() {
     assert!(app.document_state.pcb_revisions.contains_key(&renamed));
     mark_dirty(&mut app, &renamed);
     press_save(&mut app);
-    assert!(!app.document_state.tabs[0].dirty);
-    assert!(!app.document_state.dirty_paths.contains(&renamed));
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
+    assert!(!app.document_state.is_document_dirty(&renamed));
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
 }
 
@@ -139,7 +145,10 @@ fn a_pcb_tab_with_no_revision_entry_still_saves_clean() {
     app.document_state.pcb_revisions.remove(&path);
     mark_dirty(&mut app, &path);
     press_save(&mut app);
-    assert!(!app.document_state.tabs[0].dirty);
+    assert!(
+        !app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
 }
 
@@ -165,8 +174,11 @@ fn app_with_pcb(dir: &Path) -> (Signex, PathBuf) {
 }
 
 fn mark_dirty(app: &mut Signex, path: &Path) {
-    app.document_state.tabs[0].dirty = true;
-    app.document_state.dirty_paths.insert(path.to_path_buf());
+    {
+        let path = app.document_state.tabs[0].path.clone();
+        app.document_state.mark_document_dirty(&path);
+    }
+    app.document_state.mark_document_dirty(path);
 }
 
 /// Ctrl+S through `update`, then the write task as the iced runtime runs it.
@@ -212,7 +224,7 @@ fn ctrl_s_on_a_dirty_pcb_writes_the_board_and_queues_the_commit() {
         encoded(&empty_board_with(&app))
     );
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -228,11 +240,14 @@ fn an_edit_during_a_pcb_write_stays_dirty_and_queues_no_stale_commit() {
     for message in landed {
         let _ = app.update(message);
     }
-    assert!(app.document_state.tabs[0].dirty);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
+    assert!(app.document_state.is_document_dirty(&path));
     assert!(no_commit_requested(&app));
     press_save(&mut app);
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
 }
 
@@ -246,8 +261,11 @@ fn a_failed_pcb_write_stays_dirty_queues_no_commit_and_reports() {
     mark_dirty(&mut app, &path);
     press_save(&mut app);
     assert!(path.is_dir(), "nothing replaced the blocking directory");
-    assert!(app.document_state.dirty_paths.contains(&path));
-    assert!(app.document_state.tabs[0].dirty);
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(
+        app.document_state
+            .is_document_dirty(&app.document_state.tabs[0].path)
+    );
     assert!(no_commit_requested(&app));
     assert!(app.document_state.error_notice.is_some());
     let path_text = path.display().to_string();
@@ -280,7 +298,7 @@ fn ctrl_s_after_a_restore_that_cannot_be_re_read_refuses_to_undo_it() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());
     std::fs::write(&path, "restored but unparsable").expect("restore");
-    app.document_state.dirty_paths.insert(path.clone());
+    app.document_state.mark_document_dirty(&path);
     app.reload_active_tab_from_disk();
     assert!(app.document_state.error_notice.is_some(), "restore card");
     assert!(
@@ -358,7 +376,7 @@ fn a_restore_that_reads_as_non_utf8_refuses_to_undo_it() {
             .active_renderer_snapshot()
             .is_none()
     );
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert!(
         matches!(app.begin_pcb_save(path.clone()), Ok(None)),
         "clean tab: nothing to write"
@@ -375,9 +393,9 @@ fn closing_a_pcb_tab_drops_its_dirty_marker() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path) = app_with_pcb(dir.path());
     mark_dirty(&mut app, &path);
-    assert!(app.document_state.dirty_paths.contains(&path));
+    assert!(app.document_state.is_document_dirty(&path));
     let _ = app.close_tab_now(0);
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
 }
 
 #[test]
@@ -400,7 +418,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     commit_revision(dir.path(), &path, &encoded(&empty_board()));
     restore(&mut app, &old);
     assert!(app.document_state.error_notice.is_none());
-    assert!(!app.document_state.dirty_paths.contains(&path));
+    assert!(!app.document_state.is_document_dirty(&path));
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
     assert!(
         app.document_state.pending_git_commits[0]
@@ -425,7 +443,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
 pub(super) fn empty_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         unknown: Default::default(),
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         version: 1,
         generator: "signex-test".into(),
         thickness: 1.6,

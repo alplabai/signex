@@ -176,6 +176,7 @@ fn sheet() -> SchematicSheet {
         end: Point::new(115.0, 95.08),
         stroke_width: 0.0,
         unknown_columns: Default::default(),
+        locked: false,
     });
     sheet.labels.push(Label {
         uuid: uuid::Uuid::nil(),
@@ -189,6 +190,7 @@ fn sheet() -> SchematicSheet {
         justify: HAlign::Left,
         justify_v: VAlign::Bottom,
         unknown_columns: Default::default(),
+        locked: false,
     });
     sheet
 }

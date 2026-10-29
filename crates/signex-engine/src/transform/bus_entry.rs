@@ -141,7 +141,7 @@ mod tests {
     use crate::Command;
 
     fn engine_with_entry(size: (f64, f64)) -> (Engine, SelectedItem) {
-        let uuid = Uuid::new_v4();
+        let uuid = Uuid::now_v7();
         let mut sheet = SchematicSheet {
             paper_size: "A4".to_string(),
             ..Default::default()
@@ -199,7 +199,7 @@ mod tests {
         let (engine, item) = engine_with_entry((2.54, 2.54));
         assert!(engine.selection_is_single_bus_entry(&[item]));
         assert!(!engine.selection_is_single_bus_entry(&[]));
-        let ghost = SelectedItem::new(Uuid::new_v4(), SelectedKind::BusEntry);
+        let ghost = SelectedItem::new(Uuid::now_v7(), SelectedKind::BusEntry);
         assert!(!engine.selection_is_single_bus_entry(&[ghost]));
     }
 }
@@ -213,7 +213,7 @@ mod follow_tests {
     use crate::Command;
 
     fn sheet() -> (Engine, SelectedItem, SelectedItem) {
-        let (bus_id, entry_id) = (Uuid::new_v4(), Uuid::new_v4());
+        let (bus_id, entry_id) = (Uuid::now_v7(), Uuid::now_v7());
         let mut s = SchematicSheet {
             paper_size: "A4".to_string(),
             ..Default::default()
@@ -229,16 +229,17 @@ mod follow_tests {
             size: (2.54, 2.54),
         });
         s.bus_entries.push(BusEntry {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(50.0, 10.0),
             size: (2.54, 2.54),
         });
         s.wires.push(Wire {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             start: Point::new(2.54, 12.54),
             end: Point::new(12.54, 12.54),
             stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
         });
         (
             Engine::new(s).expect("engine"),
@@ -302,14 +303,14 @@ mod follow_tests {
             paper_size: "A4".to_string(),
             ..Default::default()
         };
-        let bus_id = Uuid::new_v4();
+        let bus_id = Uuid::now_v7();
         sheet.buses.push(Bus {
             uuid: bus_id,
             start: Point::new(30.0, 40.0),
             end: Point::new(30.0, 60.0),
         });
         sheet.bus_entries.push(BusEntry {
-            uuid: Uuid::new_v4(),
+            uuid: Uuid::now_v7(),
             position: Point::new(30.0, 47.46),
             size: (2.54, 2.54),
         });

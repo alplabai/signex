@@ -79,7 +79,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
     let thick = class_style(NetLineStyle::Solid, Some(1.0), None);
     let no_designators = HashMap::new();
     let mut renamed = HashMap::new();
-    renamed.insert(uuid::Uuid::new_v4(), "R7".to_string());
+    renamed.insert(uuid::Uuid::now_v7(), "R7".to_string());
 
     let mut cache = ContentSceneCache::default();
     let mut request =
@@ -308,4 +308,41 @@ fn a_junction_override_beats_the_class_colour_but_does_not_tint_alone() {
         theme,
         "with no classes a junction is drawn as it was before classes existed"
     );
+}
+
+/// Both segments of a bent wire emit the same colour and width (#1654): the
+/// difference seen on screen is pixel thickness, fixed in `scene_line_snap`.
+#[test]
+fn every_segment_of_a_bent_wire_gets_the_same_colour_and_width() {
+    let mut sheet = empty_snapshot();
+    let legs = [((10.0, 10.0), (60.0, 10.0)), ((60.0, 10.0), (60.0, 40.0))];
+    for (index, (a, b)) in legs.into_iter().enumerate() {
+        sheet.wires.push(Wire {
+            uuid: uuid::Uuid::from_u128(100 + index as u128),
+            start: Point::new(a.0, a.1),
+            end: Point::new(b.0, b.1),
+            ..Default::default()
+        });
+    }
+    let colors = canvas_colors(ThemeId::Signex);
+    let transform = ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
+
+    let scene = build_schematic_scene(
+        &sheet,
+        &transform,
+        &colors,
+        bounds,
+        None,
+        SceneOverrides::default(),
+    )
+    .expect("two wires draw something");
+
+    assert_eq!(scene.lines.len(), 2);
+    assert_eq!(scene.lines[0].color, scene.lines[1].color);
+    assert_eq!(scene.lines[0].width, scene.lines[1].width);
 }

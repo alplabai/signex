@@ -8,7 +8,7 @@ use signex_types::schematic::SchematicSheet;
 
 fn current_text() -> String {
     let sheet = SchematicSheet {
-        uuid: uuid::Uuid::new_v4(),
+        uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".to_string(),
         ..Default::default()
     };

@@ -69,7 +69,10 @@ pub(crate) fn bus_port_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic
                         ),
                         pin.position,
                     )
-                    .with_primary(sel(pin.uuid, SelectedKind::SheetPin)),
+                    .with_primary(sel(pin.uuid, SelectedKind::SheetPin))
+                    // One pin can disagree with several ports in the child;
+                    // the port lives on another sheet, so it tags the finding.
+                    .tagged(format!("port:{}", port.uuid)),
                 );
             }
         }

@@ -362,6 +362,10 @@ impl Signex {
                 crate::library::create_options::view(lib.create_options.as_ref()?, tokens, windowed)
                     .map(Message::Library)
             }
+            ModalId::LibraryStockCopy => {
+                crate::library::stock_copy::view(lib, lib.stock_copy.as_ref()?, tokens, windowed)
+                    .map(Message::Library)
+            }
             ModalId::LibraryCloseConfirm => crate::library::close_prompt::view(
                 lib,
                 lib.close_library_confirm.as_ref()?,
@@ -499,6 +503,10 @@ impl Signex {
 
     pub(in crate::app::view) fn create_options_overlay(&self) -> Option<Element<'_, Message>> {
         self.library_overlay(crate::app::state::ModalId::LibraryCreateOptions)
+    }
+
+    pub(in crate::app::view) fn stock_copy_overlay(&self) -> Option<Element<'_, Message>> {
+        self.library_overlay(crate::app::state::ModalId::LibraryStockCopy)
     }
 
     pub(in crate::app::view) fn close_library_confirm_overlay(
