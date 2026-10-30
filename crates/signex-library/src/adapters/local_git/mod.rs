@@ -188,7 +188,9 @@ impl LocalGitAdapter {
             // already has `.gitattributes` staged; otherwise libgit2's
             // index update sequence gets fiddly.
             if opts.use_lfs {
-                write_lfs_attributes(&root_dir)?;
+                // Keep a `.gitattributes` the folder already has: only the
+                // missing LFS rules are added (#1740).
+                ensure_lfs_attributes(&root_dir)?;
             }
 
             let repo = git2::Repository::init(&root_dir)
@@ -653,6 +655,37 @@ mod tests {
             assert!(
                 text.contains(&format!("*.{ext} filter=lfs")),
                 "missing LFS rule for *.{ext}"
+            );
+        }
+    }
+
+    /// #1740: a `.gitattributes` the folder already has keeps its rules; only
+    /// the missing LFS lines are added, each once.
+    #[test]
+    fn lfs_init_keeps_existing_gitattributes_rules() {
+        crate::git_identity::test_identity::install();
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "LfsKeep");
+        let custom = "*.sch text eol=lf\n*.glb filter=lfs diff=lfs merge=lfs -text\n";
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path.parent().unwrap().join(GITATTRIBUTES_FILE), custom).unwrap();
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("LfsKeep"),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: true,
+            },
+        )
+        .unwrap();
+        let text = fs::read_to_string(adapter.root().join(GITATTRIBUTES_FILE)).unwrap();
+        assert!(text.lines().any(|l| l == "*.sch text eol=lf"), "{text}");
+        for ext in LFS_EXTENSIONS {
+            let rule = format!("*.{ext} filter=lfs diff=lfs merge=lfs -text");
+            assert_eq!(
+                text.lines().filter(|l| l.trim() == rule).count(),
+                1,
+                "{rule}"
             );
         }
     }
