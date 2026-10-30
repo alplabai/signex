@@ -59,11 +59,12 @@ pub fn view_custom_selection_filters_section<'a>(
                     );
                     c = c.push(
                         container(
-                            iced::widget::button(
-                                text("+ Add Filter").size(TS.body).color(primary_c),
-                            )
-                            .padding([SP.s, 10.0])
-                            .on_press(PanelMsg::AddCustomFilterPreset),
+                            iced::widget::button(text("+ Add Filter").size(TS.body))
+                                .padding([SP.s, 10.0])
+                                .on_press(PanelMsg::AddCustomFilterPreset)
+                                .style(move |theme: &Theme, status| {
+                                    add_filter_button_style(theme, status, primary_c)
+                                }),
                         )
                         .padding([SP.s, SP.m]),
                     );
@@ -718,6 +719,37 @@ pub fn preset_chip(
     .into()
 }
 
+/// Primary-fill button whose label keeps `preferred` text where it is
+/// readable on the fill the theme paints behind it.
+pub(crate) fn add_filter_button_style(
+    theme: &Theme,
+    status: iced::widget::button::Status,
+    preferred: Color,
+) -> iced::widget::button::Style {
+    let mut style = iced::widget::button::primary(theme, status);
+    if let Some(Background::Color(fill)) = style.background {
+        style.text_color = crate::styles::tokens::keep_readable_on(preferred, fill);
+    } else {
+        style.text_color = preferred;
+    }
+    style
+}
+
+/// Label colour of a segmented-button cell: the active cell sits on
+/// `active_fill`, so its text must stay readable on that fill.
+pub(crate) fn seg_text(
+    active: bool,
+    text_active: Color,
+    text_inactive: Color,
+    active_fill: Color,
+) -> Color {
+    if active {
+        crate::styles::tokens::keep_readable_on(text_active, active_fill)
+    } else {
+        text_inactive
+    }
+}
+
 /// Segmented button (for units toggle etc).
 #[expect(
     clippy::too_many_arguments,
@@ -738,7 +770,7 @@ pub fn seg_btn<'a>(
     } else {
         Color::TRANSPARENT
     };
-    let text_c = if active { text_active } else { text_inactive };
+    let text_c = seg_text(active, text_active, text_inactive, active_bg);
     iced::widget::button(
         text(label.to_string())
             .size(TS.body)

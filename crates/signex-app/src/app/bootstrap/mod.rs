@@ -82,16 +82,14 @@ impl Signex {
     }
 
     fn resolve_theme(&self) -> Theme {
-        let id = if self.ui_state.preferences_open {
-            self.ui_state.preferences_draft_theme
-        } else {
-            self.ui_state.theme_id
-        };
-        Self::id_to_iced_theme(id, self.ui_state.custom_theme.as_ref())
+        Self::id_to_iced_theme(
+            self.ui_state.effective_theme_id(),
+            self.ui_state.custom_theme.as_ref(),
+        )
     }
 
     /// Map a ThemeId to an iced::Theme with a properly tuned palette.
-    fn id_to_iced_theme(
+    pub(crate) fn id_to_iced_theme(
         id: ThemeId,
         custom: Option<&signex_types::theme::CustomThemeFile>,
     ) -> Theme {

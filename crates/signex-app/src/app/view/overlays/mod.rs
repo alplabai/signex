@@ -346,7 +346,7 @@ impl Signex {
             &document.panel_ctx.tokens,
             &interaction.selection_filters,
             &interaction.custom_filter_presets,
-            self.ui_state.theme_id,
+            self.ui_state.effective_theme_id(),
             has_selection,
             has_net_colors,
         )

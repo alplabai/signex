@@ -189,6 +189,12 @@ where
     .into()
 }
 
+/// Colour of the "On" / "Off" word beside a checkbox, painted on `surface`.
+pub(crate) fn check_state_text(checked: bool, label_c: Color, surface: Color) -> Color {
+    let preferred = if checked { Color::WHITE } else { label_c };
+    crate::styles::tokens::keep_readable_on(preferred, surface)
+}
+
 /// Checkbox form row.
 pub fn form_check_row<'a>(
     label: &str,
@@ -206,7 +212,13 @@ pub fn form_check_row<'a>(
                     .spacing(SP.s),
                 text(if checked { "On" } else { "Off" })
                     .size(TS.body)
-                    .color(if checked { Color::WHITE } else { label_c }),
+                    .style(move |theme: &Theme| iced::widget::text::Style {
+                        color: Some(check_state_text(
+                            checked,
+                            label_c,
+                            theme.extended_palette().background.base.color,
+                        )),
+                    }),
             ]
             .spacing(SP.m)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),

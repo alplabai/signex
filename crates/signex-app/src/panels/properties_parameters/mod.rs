@@ -10,6 +10,8 @@
 //! - `net_params` — net-attribute rows, the Parameters (Net) section
 //!   chrome, and the justification-grid pickers.
 
+#[cfg(test)]
+mod contrast_tests;
 mod form_rows;
 mod general;
 mod net_params;

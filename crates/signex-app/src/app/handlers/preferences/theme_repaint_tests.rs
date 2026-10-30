@@ -45,3 +45,33 @@ fn saving_a_theme_drops_the_background_cache_of_every_schematic_canvas() {
         other + 1
     );
 }
+
+/// #1769 - while a theme is only drafted, every theme-derived input must
+/// follow the draft. A panel-context rebuild (any selection, tab or
+/// project event) used to reset the tokens to the saved theme while the
+/// iced palette stayed on the draft, giving dark surfaces under light text.
+#[test]
+fn a_panel_context_rebuild_keeps_the_drafted_palette() {
+    let (mut app, _boot) = Signex::new();
+    let saved = app.ui_state.theme_id;
+    let drafted = if saved == ThemeId::SolarizedLight {
+        ThemeId::Nord
+    } else {
+        ThemeId::SolarizedLight
+    };
+    app.ui_state.preferences_open = true;
+    send(&mut app, PrefMsg::DraftTheme(drafted));
+
+    app.refresh_panel_ctx();
+
+    let ctx = &app.document_state.panel_ctx;
+    assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(drafted));
+    assert_eq!(ctx.theme_id, drafted);
+    let window = iced::window::Id::unique();
+    assert_eq!(
+        app.theme(window).map(|t| t.palette()),
+        Some(Signex::id_to_iced_theme(drafted, None).palette()),
+        "the iced palette and the panel tokens must come from the same theme"
+    );
+    assert_eq!(app.ui_state.theme_id, saved, "a draft must not commit");
+}

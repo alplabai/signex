@@ -304,7 +304,7 @@ impl Signex {
             draggable_header, os_title_bar_slot,
         };
         use iced::widget::{Space, button, column, container, row, text};
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
 
         let preview = match &self.document_state.preview {
             Some(p) => p,

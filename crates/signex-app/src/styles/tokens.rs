@@ -71,6 +71,24 @@ pub fn on_accent(_tokens: &ThemeTokens) -> Color {
     Color::WHITE
 }
 
+/// Contrast below which a label counts as lost on its fill. The dark
+/// built-ins sit above it (the weakest, the orange primary button label,
+/// is about 1.7:1) and keep their colours; the light built-in sits far
+/// under it.
+pub const UNREADABLE_CONTRAST: f32 = 1.5;
+
+/// `preferred`, unless it is lost on `fill` ([`UNREADABLE_CONTRAST`]), in
+/// which case [`readable_on`] picks a label that reads. A label keeps its
+/// theme colour wherever it is at least visible and is replaced only where
+/// it vanishes.
+pub fn keep_readable_on(preferred: Color, fill: Color) -> Color {
+    if contrast_ratio(preferred, fill) >= UNREADABLE_CONTRAST {
+        preferred
+    } else {
+        readable_on(fill)
+    }
+}
+
 /// Fill for primary buttons and selected chips / segments: the theme
 /// accent, darkened (OKLab lightness lowered, hue and chroma kept) just
 /// enough that white text on it reaches [`MIN_TEXT_CONTRAST`]. An accent
