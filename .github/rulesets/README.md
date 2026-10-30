@@ -1,55 +1,54 @@
 # Branch-protection rulesets
 
-Importable GitHub **rulesets** encoding the protection policy for the two
-protected branches. Repo settings can't be committed to git, so these files are
-the version-controlled record of intent — a repo admin applies them. The full
+Importable GitHub **rulesets** for the protected branches. Repo settings can't
+be committed to git, so these files are the version-controlled copy of the
+live rulesets — a repo admin can import or re-apply them. The full
 policy (and the same settings in prose, for audit) lives in
 [`docs/branching-and-merge-policy.md`](../../docs/branching-and-merge-policy.md).
 
-| File | Branch | Ruleset name |
-|------|--------|--------------|
-| `trunk-protection.json` | default (`trunk`) | `Protect trunk` |
-| `main-protection.json` | `main` | `main-protection` |
+| File | Branch | Ruleset name | Live id |
+|------|--------|--------------|---------|
+| `trunk-protection.json` | default (`trunk`) | `Protect trunk` | `18991702` |
+| `main-protection.json` | `main` | `main-protection` | `14749484` |
+| `dev-protection.json` | legacy `dev` | `dev-protection` | `14749564` |
 
-> **These files are declarations, not the live state.** `trunk-protection.json`
-> described `trunk`'s protection for months while nothing enforced it: it had
-> never been applied, the only active rulesets targeted `main` and the legacy
-> `dev`, and `trunk` — the default, where every PR lands — was wide open.
-> `main-protection` *was* live but far weaker than the policy claimed: it
-> required a pull request and **zero approvals**, with no status checks and
-> rebase merges allowed, on the branch where release tags are cut.
->
-> Both were reconciled on 2026-07-15 and now match the policy. **If you edit
-> either file, re-apply it** (see below) and verify:
->
-> ```sh
-> gh api repos/alplabai/signex/rules/branches/trunk
-> gh api repos/alplabai/signex/rules/branches/main
-> ```
+> **The live rulesets are authoritative; these files are exports of them.**
+> Each file is the ruleset as `gh api repos/alplabai/signex/rulesets/<id>`
+> returns it, with only `name`, `target`, `enforcement`, `conditions`, `rules`
+> and `bypass_actors` kept. They were last re-exported on 2026-10-30 (#1723),
+> after drifting for months: they listed eleven per-job status checks, no merge
+> queue and no bypass actors. **When you change a ruleset in Settings,
+> re-export its file in the same PR** (see below), so the two never drift again.
 
 ## What they enforce
 
-Both branches carry the **same** set, per the policy's "`trunk` (and `main`,
-same set)". The one deliberate difference is the merge method: `trunk` takes
-squash or merge commits, while `main` accepts **merge commits only**, because
-`trunk` → `main` promotion is a `--no-ff` release gate.
+- **No direct pushes** — `trunk` and `main` change through a pull request.
+- **1 approving review from a Code Owner**, stale approvals dismissed on new
+  pushes, conversations resolved. `main` also requires approval of the most
+  recent push; `trunk` does not.
+- **Branch up to date** before merge (strict).
+- **Required status checks** on both: `ci · required` (the aggregate of the CI
+  jobs), `license guard · clean-room` and `PR-description self-declaration`.
+- **`trunk` merges through a merge queue** — method `SQUASH`, grouping
+  `ALLGREEN`, at most 5 entries per merge, 60-minute check timeout.
+- **Merge methods:** `merge` or `squash` on `trunk`; **merge commit only** on
+  `main`, because `trunk` → `main` promotion is a `--no-ff` release gate.
+- **No branch deletion** and **no force-push** on `trunk` and `main`; `dev`
+  only blocks force-push.
+- **Bypass:** the Organization admin role on `trunk` (always), and one named
+  maintainer account on `main` (always). Both are deliberate; nobody else can
+  bypass.
 
-- **No direct pushes** — changes land through a pull request.
-- **1 approving review** before merge (author can't approve their own PR),
-  **from a Code Owner**, with stale approvals dismissed on new pushes and the
-  most-recent push required to be approved.
-- **Conversations resolved** before merge.
-- **Branch up to date** with `trunk` before merge (strict).
-- **Required status checks** must pass:
-  - `check · ubuntu-latest` — `cargo check --workspace`
-  - `test · workspace` — `cargo test --workspace`
-  - `deny · licenses + deps` — license audit (sources/advisories are informational)
-  - `PR-description self-declaration` — the license-compliance block
-  - `No GPL-tool-shaped names anywhere in crates/` — the licence guard
-- **No branch deletion** and **no force-push** (non-fast-forward blocked).
-- **No bypass** (admins included) — this is the load-bearing setting.
-- Merge via **merge commit** or **squash** on `trunk`; **merge commit only** on
-  `main` (rebase disabled on both).
+## How to re-export
+
+```sh
+for p in "18991702 trunk-protection" "14749484 main-protection" "14749564 dev-protection"; do
+  set -- $p
+  gh api repos/alplabai/signex/rulesets/$1 \
+    | jq '{name, target, enforcement, conditions, rules, bypass_actors}' \
+    > .github/rulesets/$2.json
+done
+```
 
 ## How to apply
 
