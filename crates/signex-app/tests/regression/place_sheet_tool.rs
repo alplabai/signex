@@ -63,10 +63,13 @@ pub(crate) fn app_with_sheet_tool(path: PathBuf) -> Signex {
 }
 
 fn click(app: &mut Signex, x: f64, y: f64) {
-    let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
-        world_x: x,
-        world_y: y,
-    }));
+    crate::settle_support::settle(
+        app,
+        Message::CanvasEvent(CanvasEvent::Clicked {
+            world_x: x,
+            world_y: y,
+        }),
+    );
 }
 
 pub(crate) fn drag(app: &mut Signex, from: (f64, f64), to: (f64, f64)) {

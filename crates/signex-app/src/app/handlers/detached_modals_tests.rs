@@ -52,6 +52,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 intro_text: String::new(),
                 error: None,
                 working: false,
+                scanning: false,
             })
         }
         ModalId::GridProperties => {

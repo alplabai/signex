@@ -92,6 +92,8 @@ impl Default for LibraryState {
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
             preview_generations: HashMap::new(),
+            editor_reload_generations: HashMap::new(),
+            row_summary_job: Default::default(),
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
             data_version: 0,

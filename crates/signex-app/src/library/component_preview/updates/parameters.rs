@@ -18,13 +18,14 @@ pub(super) fn set_text(state: &mut ComponentPreviewState, name: String, value: S
             .row
             .parameters
             .insert(name, signex_library::ParamValue::Text(value));
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
 /// Live-update the edit buffer for a numeric parameter row.
 pub(super) fn set_number_buf(state: &mut ComponentPreviewState, name: String, buf: String) {
     state.params_edit_buf.insert(name, buf);
+    state.note_edit();
 }
 
 /// Commit a numeric parameter from its edit buffer, ignoring a buffer
@@ -37,7 +38,7 @@ pub(super) fn commit_number(state: &mut ComponentPreviewState, name: String) {
             .row
             .parameters
             .insert(name, signex_library::ParamValue::Number(value));
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -47,7 +48,7 @@ pub(super) fn set_bool(state: &mut ComponentPreviewState, name: String, value: b
         .row
         .parameters
         .insert(name, signex_library::ParamValue::Bool(value));
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Drop a parameter from the row.
@@ -58,7 +59,7 @@ pub(super) fn remove(state: &mut ComponentPreviewState, name: String) {
     state.params_slot.remove(&name);
     state.params_error.remove(&name);
     state.params_note.remove(&name);
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Commit every parseable numeric / measurement edit buffer into the row
@@ -135,7 +136,7 @@ pub(super) fn add_custom(state: &mut ComponentPreviewState, kind: ParamKindMsg) 
     };
     state.row.parameters.insert(trimmed.to_string(), value);
     state.new_param_name.clear();
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 #[cfg(test)]

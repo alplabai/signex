@@ -13,7 +13,7 @@ pub(super) fn clear_overrides(state: &mut ComponentPreviewState) {
     state.row.pin_map_overrides.clear();
     state.pin_map_state.expanded_row = None;
     state.pin_map_state.override_buf.clear();
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Auto-match by pin name. Stubbed until the name-based heuristic ships;
@@ -72,7 +72,7 @@ pub(super) fn add_override(state: &mut ComponentPreviewState, pin: String, pad: 
     }
     state.pin_map_state.expanded_row = None;
     state.pin_map_state.override_buf.clear();
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Discard the edit buffer and collapse the inline override editor
@@ -90,5 +90,5 @@ pub(super) fn remove_override(state: &mut ComponentPreviewState, pin: String) {
         .retain(|o| o.symbol_pin_number != pin);
     state.pin_map_state.expanded_row = None;
     state.pin_map_state.override_buf.clear();
-    state.dirty = true;
+    state.mark_dirty();
 }

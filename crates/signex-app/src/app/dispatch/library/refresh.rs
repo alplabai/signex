@@ -90,6 +90,55 @@ impl Signex {
         }
     }
 
+    /// Apply a row re-read by a worker, unless it went stale.
+    pub(super) fn handle_editor_reloaded(
+        &mut self,
+        readout: crate::library::shared_resolver::OneShotCell<
+            crate::library::preview_reads::EditorReloadOutcome,
+        >,
+    ) -> Task<Message> {
+        use crate::library::preview_reads::ReloadApplied;
+        let outcome = match readout.take() {
+            Some(Some(outcome)) => outcome,
+            Some(None) => {
+                crate::diagnostics::log_warning(
+                    "[library] re-reading a component row did not finish; \
+                     the open copy was left as it is",
+                );
+                return Task::none();
+            }
+            None => return Task::none(),
+        };
+        let address = outcome.address().clone();
+        match self.library.apply_editor_reload(outcome) {
+            ReloadApplied::Failed | ReloadApplied::Refused => {
+                self.sync_diagnostics_panel_ctx();
+                Task::none()
+            }
+            ReloadApplied::Replaced {
+                resolve_tab: Some(tab),
+            } => crate::library::preview_reads::tab_resolve_task(&mut self.library, &address, tab),
+            ReloadApplied::Replaced { resolve_tab: None } | ReloadApplied::Dropped => Task::none(),
+        }
+    }
+
+    /// Apply the primitives a worker looked up for a preview tab.
+    pub(super) fn handle_preview_tab_resolved(
+        &mut self,
+        readout: crate::library::shared_resolver::OneShotCell<
+            crate::library::preview_reads::TabResolveOutcome,
+        >,
+    ) {
+        match readout.take() {
+            Some(Some(outcome)) => self.library.apply_tab_resolve(outcome),
+            Some(None) => crate::diagnostics::log_warning(
+                "[library] looking up a component preview's primitives did not finish; \
+                 switch tabs to try again",
+            ),
+            None => {}
+        }
+    }
+
     fn after_refresh_applied(
         &mut self,
         path: &std::path::Path,
@@ -98,7 +147,7 @@ impl Signex {
         match follow_up {
             RefreshFollowUp::Nothing | RefreshFollowUp::PricingSaved => {}
             RefreshFollowUp::RevealSelected => return self.reveal_selected_browser_row(path),
-            RefreshFollowUp::CleanEditors(rows) => self.refresh_clean_editors(path, &rows),
+            RefreshFollowUp::CleanEditors(rows) => return self.refresh_clean_editors(path, &rows),
             RefreshFollowUp::HistoryRestored => {
                 crate::diagnostics::log_info(format!(
                     "[reload] LibraryBrowser tab {} refreshed",
@@ -139,10 +188,15 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             RefreshFollowUp::HistoryRestored => {
-                crate::diagnostics::log_warning(format!(
-                    "[reload] reload_tables({}) failed: {error}",
-                    path.display()
-                ));
+                let reason = error.to_string();
+                let line = match reason.split_once(crate::library::refresh::REOPEN_FAILED) {
+                    Some((_, open_error)) => format!(
+                        "[reload] LocalGitAdapter::open({}) failed: {open_error}",
+                        path.display()
+                    ),
+                    None => format!("[reload] reload_tables({}) failed: {error}", path.display()),
+                };
+                crate::diagnostics::log_warning(line);
             }
             RefreshFollowUp::PricingSaved => {
                 crate::diagnostics::log_warning(format!(

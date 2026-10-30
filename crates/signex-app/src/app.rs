@@ -117,6 +117,10 @@ impl Signex {
         if let Some(assembly) = self.start_navigator_assembly() {
             tasks.push(assembly);
         }
+        // And the symbol and footprint summaries of the selected library row.
+        if let Some(read) = self.start_row_summary_read() {
+            tasks.push(read);
+        }
         if tasks.len() == 1 {
             return tasks.pop().expect("one task");
         }

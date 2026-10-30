@@ -90,6 +90,8 @@ impl LibraryState {
             // later mount of the same library id.
             self.preview_generations.remove(&entry.library_id);
             self.editors.retain(|key, _| key.library_path != root);
+            self.editor_reload_generations
+                .retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;
         }

@@ -10,13 +10,13 @@ use signex_library::DistributorSource;
 /// Set the primary part's manufacturer name.
 pub(super) fn set_primary_manufacturer(state: &mut ComponentPreviewState, value: String) {
     state.row.primary_mpn.manufacturer = value;
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Set the primary part's manufacturer part number.
 pub(super) fn set_primary_mpn(state: &mut ComponentPreviewState, value: String) {
     state.row.primary_mpn.mpn = value;
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Set the primary part's lifecycle status.
@@ -25,7 +25,7 @@ pub(super) fn set_primary_status(
     value: signex_library::AlternateStatus,
 ) {
     state.row.primary_mpn.status = value;
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Set the primary part's free-text notes, storing `None` when blank.
@@ -35,7 +35,7 @@ pub(super) fn set_primary_notes(state: &mut ComponentPreviewState, value: String
     } else {
         Some(value)
     };
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 // ── Alternate parts ─────────────────────────────────────────────────
@@ -45,7 +45,7 @@ pub(super) fn add_alternate(state: &mut ComponentPreviewState) {
     let mut alt = signex_library::ManufacturerPart::draft("", "");
     alt.status = signex_library::AlternateStatus::Approved;
     state.row.alternates.push(alt);
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Set alternate `idx`'s manufacturer name.
@@ -56,7 +56,7 @@ pub(super) fn set_alternate_manufacturer(
 ) {
     if let Some(alt) = state.row.alternates.get_mut(idx) {
         alt.manufacturer = value;
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -64,7 +64,7 @@ pub(super) fn set_alternate_manufacturer(
 pub(super) fn set_alternate_mpn(state: &mut ComponentPreviewState, idx: usize, value: String) {
     if let Some(alt) = state.row.alternates.get_mut(idx) {
         alt.mpn = value;
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -76,7 +76,7 @@ pub(super) fn set_alternate_status(
 ) {
     if let Some(alt) = state.row.alternates.get_mut(idx) {
         alt.status = value;
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -88,7 +88,7 @@ pub(super) fn set_alternate_notes(state: &mut ComponentPreviewState, idx: usize,
         } else {
             Some(value)
         };
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -96,7 +96,7 @@ pub(super) fn set_alternate_notes(state: &mut ComponentPreviewState, idx: usize,
 pub(super) fn remove_alternate(state: &mut ComponentPreviewState, idx: usize) {
     if idx < state.row.alternates.len() {
         state.row.alternates.remove(idx);
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -110,7 +110,7 @@ pub(super) fn add_listing(state: &mut ComponentPreviewState) {
         url: None,
         moq: None,
     });
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Set listing `idx`'s distributor from a picked source.
@@ -121,7 +121,7 @@ pub(super) fn set_listing_distributor(
 ) {
     if let Some(listing) = state.row.supply.get_mut(idx) {
         listing.distributor = distributor_source_to_string(value);
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -129,7 +129,7 @@ pub(super) fn set_listing_distributor(
 pub(super) fn set_listing_sku(state: &mut ComponentPreviewState, idx: usize, value: String) {
     if let Some(listing) = state.row.supply.get_mut(idx) {
         listing.sku = value;
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -141,7 +141,7 @@ pub(super) fn set_listing_url(state: &mut ComponentPreviewState, idx: usize, val
         } else {
             Some(value)
         };
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -149,6 +149,6 @@ pub(super) fn set_listing_url(state: &mut ComponentPreviewState, idx: usize, val
 pub(super) fn remove_listing(state: &mut ComponentPreviewState, idx: usize) {
     if idx < state.row.supply.len() {
         state.row.supply.remove(idx);
-        state.dirty = true;
+        state.mark_dirty();
     }
 }

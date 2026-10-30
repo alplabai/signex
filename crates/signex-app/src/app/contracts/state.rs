@@ -557,6 +557,10 @@ pub struct EnableVersionControlState {
     /// A confirmed run is on the blocking pool: the dialog shows it as
     /// working and ignores edits and a second Confirm until it finishes.
     pub working: bool,
+    /// The row list is still being read on a worker (library scope, #859):
+    /// the dialog shows no rows yet and ignores edits and Confirm until
+    /// `EnableVersionControlMsg::ItemsScanned` fills them.
+    pub scanning: bool,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file
