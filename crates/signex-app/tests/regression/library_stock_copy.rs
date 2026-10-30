@@ -701,3 +701,54 @@ fn a_new_library_can_receive_the_copy() {
         Some(fresh.as_path())
     );
 }
+
+/// #1758: a library added from the Components panel after the worker
+/// registered its new library but before the copy finished must stay in the
+/// panel's list, alongside the worker's entry.
+#[test]
+fn a_global_add_while_a_copy_runs_survives_the_copy_finishing() {
+    use signex_app::library::state::ComponentsMountSource;
+
+    let mut w = world();
+    let stock_r = w.stock_r();
+    let fresh = w.tmp.path().join("fresh/Fresh.snxlib");
+    let other = w.tmp.path().join("other/Other.snxlib");
+    new_library(&other, "Other");
+    w.open(&stock_r);
+
+    // The worker runs (and registers `fresh` on disk); its result is held.
+    let task = w.app.update(Message::Library(LibraryMessage::StockCopy(
+        StockCopyMsg::NewLibraryPathChosen(Some(fresh.clone())),
+    )));
+    let held = run(task);
+    assert!(!held.is_empty(), "the worker reports back");
+
+    // Meanwhile the user adds `other` as a global library.
+    w.settle(Message::Library(
+        LibraryMessage::ComponentsPanelAddLibraryAt {
+            source: ComponentsMountSource::Global,
+            path: Some(other.clone()),
+        },
+    ));
+    for message in held {
+        w.settle(message);
+    }
+
+    let listed: Vec<&Path> = w
+        .app
+        .library
+        .global_libraries
+        .iter()
+        .map(|e| e.path.as_path())
+        .collect();
+    assert!(listed.contains(&other.as_path()), "the panel add survives");
+    assert!(
+        listed.contains(&fresh.as_path()),
+        "the new library is listed"
+    );
+    assert_eq!(
+        listed.iter().filter(|p| **p == fresh.as_path()).count(),
+        1,
+        "no duplicate"
+    );
+}
