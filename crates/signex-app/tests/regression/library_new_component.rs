@@ -27,7 +27,8 @@ use uuid::Uuid;
 
 /// The Messages-panel ring is process-wide and the unbound-row note names no
 /// library, so another test's New Component reads as a second report. Every
-/// test that creates a row through the app holds this while it runs.
+/// test that creates a row through the app (New Component, or the browser's
+/// Add Component) holds this while it runs.
 pub(crate) static NEW_ROW_NOTES: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub(crate) fn new_row_notes_lock() -> std::sync::MutexGuard<'static, ()> {

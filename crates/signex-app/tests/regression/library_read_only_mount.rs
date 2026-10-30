@@ -216,6 +216,7 @@ fn write_attempts_on_a_read_only_mount_explain_and_leave_disk_untouched() {
 /// writes and raises no card.
 #[test]
 fn the_same_attempts_on_an_ordinary_mount_write() {
+    let _notes = crate::library_new_component::new_row_notes_lock();
     let tmp = tempfile::Builder::new()
         .prefix("signex-329-rw-")
         .tempdir()
