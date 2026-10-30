@@ -16,8 +16,8 @@ fn owned_dirs() -> impl Iterator<Item = &'static str> {
 
 pub(super) struct Snapshot {
     pub(super) tree: git2::Oid,
-    /// Every library file in the tree, with the blob committed for it.
-    files: Vec<(String, git2::Oid)>,
+    /// Every library file in the tree, with the blob and mode committed for it.
+    files: Vec<(String, git2::Oid, u32)>,
     /// Tracked library paths that are gone from disk and left the tree.
     removed: Vec<String>,
 }
@@ -119,7 +119,7 @@ const LINK_MODE: u32 = 0o120000;
 const FILE_MODE: u32 = 0o100644;
 const EXEC_MODE: u32 = 0o100755;
 
-/// The local branch a Re-init without a HEAD continues, and its tip.
+/// The local branch a Re-init that made its HEAD anew continues, and its tip.
 /// Among the branches whose tip tracks this `.snxlib`: `main`, then
 /// `master`, then the branch the HEAD reflog last checked out, then the
 /// one with the newest tip commit (name order breaks a tie).
@@ -345,7 +345,7 @@ pub(super) fn library_tree(
         index
             .add(&entry(&name, id, mode))
             .map_err(backend("git tree insert"))?;
-        blobs.push((name, id));
+        blobs.push((name, id, mode));
     }
     let tree = index
         .write_tree_to(repo)
@@ -373,10 +373,20 @@ pub(super) fn record_in_index(
             .map_err(backend("git index remove"))?;
     }
     let mut lfs_paths = false;
-    for (name, id) in &snapshot.files {
+    for (name, id, mode) in &snapshot.files {
         index
             .add_path(Path::new(name))
             .map_err(backend("git add"))?;
+        // Where links are not real (`core.symlinks=false`), `add_path` reads a
+        // link as a plain file; the index takes the link the commit holds.
+        if *mode == LINK_MODE
+            && let Some(mut staged) = index.get_path(Path::new(name), 0)
+            && (staged.mode != LINK_MODE || staged.id != *id)
+        {
+            staged.mode = LINK_MODE;
+            staged.id = *id;
+            index.add(&staged).map_err(backend("git add"))?;
+        }
         // An LFS path is recorded as its pointer, as the commit holds it.
         if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false)
             && let Some(mut staged) = index.get_path(Path::new(name), 0)
