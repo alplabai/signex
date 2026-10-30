@@ -45,7 +45,7 @@ impl Signex {
             //
             // `None` means the modal has no Esc at all (the
             // `every_modal_claims_escape` gap — Move Selection, the
-            // net-colour palette, the parameter manager). Its in-window
+            // net-colour palette). Its in-window
             // card ignores Esc too, so swallowing the key keeps the two
             // spellings of one gesture agreeing.
             InputTarget::DetachedModal(modal) => {
@@ -324,13 +324,13 @@ mod tests {
 
     #[test]
     fn a_detached_modal_with_no_rung_still_swallows_its_own_esc() {
-        // The parameter manager is one of the three modals with no
-        // `OverlayId` and no `OpenOverlays` field — Esc over its in-window
-        // card does nothing. Its detached window must match that, NOT fall
-        // through to the main window's tool reset.
+        // Move Selection is one of the modals with no `OverlayId` and no
+        // `OpenOverlays` field — Esc over its in-window card does nothing.
+        // Its detached window must match that, NOT fall through to the main
+        // window's tool reset.
         let mut app = quiet_app();
-        app.ui_state.parameter_manager_open = true;
-        let window = detach(&mut app, ModalId::ParameterManager);
+        app.ui_state.move_selection.open = true;
+        let window = detach(&mut app, ModalId::MoveSelection);
         app.interaction_state.current_tool = Tool::Wire;
 
         let _task = app.update(Message::Input(InputMsg::EscapePressed {
@@ -342,6 +342,39 @@ mod tests {
             Tool::Wire,
             "an Esc with nothing to claim it in ITS OWN window is swallowed, \
              not redirected at the main window's canvas"
+        );
+    }
+
+    // ── #1783: the parameter manager's Esc ──────────────────────────
+
+    #[test]
+    fn esc_in_the_parameter_manager_closes_it_and_drops_the_draft() {
+        let mut app = quiet_app();
+        app.ui_state.parameter_manager_open = true;
+        app.ui_state.parameter_table.draft = Some(crate::app::state::CellDraft {
+            symbol_uuid: uuid::Uuid::now_v7(),
+            key: "Tolerance".to_string(),
+            text: "typed".to_string(),
+        });
+        let window = detach(&mut app, ModalId::ParameterManager);
+        app.interaction_state.current_tool = Tool::Wire;
+
+        let _task = app.update(Message::Input(InputMsg::EscapePressed {
+            window: Some(window),
+        }));
+
+        assert!(
+            !app.ui_state.parameter_manager_open,
+            "Esc must close the Parameter Manager"
+        );
+        assert!(
+            app.ui_state.parameter_table.draft.is_none(),
+            "Esc cancels, like every other modal: the uncommitted draft is dropped"
+        );
+        assert_eq!(
+            app.interaction_state.current_tool,
+            Tool::Wire,
+            "and the keypress stays in its own window, off the canvas tool"
         );
     }
 

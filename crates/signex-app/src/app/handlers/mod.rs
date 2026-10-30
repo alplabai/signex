@@ -26,6 +26,7 @@ pub mod missing_fonts;
 pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod net_nav;
+pub mod parameter_manager;
 pub mod paste;
 pub mod placed_part;
 pub mod placement_session;

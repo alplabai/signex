@@ -36,12 +36,32 @@ pub enum ParameterManagerMsg {
     Open,
     /// Close the dialog.
     Close,
-    /// Edit a single parameter on a single symbol via the manager.
+    /// Write one parameter value on one symbol: one undo step. An empty
+    /// value keeps the parameter and empties it.
     Edit {
         symbol_uuid: uuid::Uuid,
         key: String,
         value: String,
     },
+    /// The text of a cell changed. Held as a draft; nothing is written
+    /// until [`Self::CellSubmitted`], or until another cell takes over.
+    CellDrafted {
+        symbol_uuid: uuid::Uuid,
+        key: String,
+        text: String,
+    },
+    /// Enter in a cell: write the draft to the document.
+    CellSubmitted,
+    /// Delete the parameter `key` from every symbol, as one undo step.
+    ParameterRemoved { key: String },
+    /// The "new parameter" name box changed.
+    NewKeyChanged(String),
+    /// Add the typed parameter as a column on every symbol, empty.
+    ColumnAdded,
+    /// The row filter changed.
+    FilterChanged(String),
+    /// Esc: drop the draft and close.
+    Cancelled,
 }
 
 /// Annotate dialog message family (ADR-0001 D3). Namespaced under

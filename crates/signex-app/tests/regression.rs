@@ -90,6 +90,10 @@ mod palette_context_filter;
 #[path = "regression/parameter_manager_open.rs"]
 mod parameter_manager_open;
 
+// #1783 - the Parameter Manager table's cell drafts and deletes.
+#[path = "regression/parameter_manager_table.rs"]
+mod parameter_manager_table;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 

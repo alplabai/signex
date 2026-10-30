@@ -420,10 +420,12 @@ impl OpenOverlays {
 /// modal is a compile error here rather than a silent fall-through to
 /// the main window's tool reset.
 ///
-/// `None` is not an omission: `MoveSelection`, `NetColorPalette` and
-/// `ParameterManager` have no `OverlayId` and no `OpenOverlays` field —
-/// they are part of the `every_modal_claims_escape` gap, and Esc does
-/// nothing over their in-window cards either.
+/// `None` is not an omission: `MoveSelection` and `NetColorPalette` have no
+/// `OverlayId` and no `OpenOverlays` field — they are part of the
+/// `every_modal_claims_escape` gap, and Esc does nothing over their
+/// in-window cards either. `ParameterManager` has no `OverlayId` because it
+/// has no in-window card; its Esc is answered by
+/// `detached_modal_escape_message` directly.
 pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<OverlayId> {
     use crate::app::state::ModalId;
     match modal {
@@ -491,15 +493,27 @@ impl Signex {
     /// in-window card is not painted, which is the right answer for an
     /// Esc in the main window and the wrong one here.
     ///
+    /// The Parameter Manager has no `OverlayId`: it has no in-window card,
+    /// it only ever opens as a detached window, so there is no painted
+    /// stack for it to rank in. It answers here directly, with a cancel
+    /// that drops its uncommitted cell draft, the same way Esc discards a
+    /// Preferences draft.
+    ///
     /// `None` means that modal has no Esc at all — either no `OverlayId`
-    /// (Move Selection, the net-colour palette, the parameter manager)
-    /// or an `OverlayId` whose rung is `None` by design. Its in-window
-    /// card ignores Esc too, so this stays consistent with it rather than
-    /// inventing a dismissal only the detached form has.
+    /// (Move Selection, the net-colour palette) or an `OverlayId` whose
+    /// rung is `None` by design. Its in-window card ignores Esc too, so
+    /// this stays consistent with it rather than inventing a dismissal
+    /// only the detached form has.
     pub(crate) fn detached_modal_escape_message(
         &self,
         modal: crate::app::state::ModalId,
     ) -> Option<Message> {
+        if modal == crate::app::state::ModalId::ParameterManager {
+            return self
+                .ui_state
+                .parameter_manager_open
+                .then_some(Message::ParameterManager(ParameterManagerMsg::Cancelled));
+        }
         let id = modal_overlay_id(modal)?;
         self.open_overlays(Some(modal)).rung(id)
     }

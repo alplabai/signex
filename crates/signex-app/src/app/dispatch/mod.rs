@@ -606,17 +606,48 @@ impl Signex {
         match msg {
             ParameterManagerMsg::Open => {
                 self.ui_state.parameter_manager_open = true;
+                self.ui_state.parameter_table = Default::default();
                 self.handle_detach_modal(super::state::ModalId::ParameterManager)
             }
             ParameterManagerMsg::Close => {
-                self.ui_state.parameter_manager_open = false;
-                self.close_detached_modal(super::state::ModalId::ParameterManager)
+                // Closing keeps what was typed; only Esc discards it.
+                self.commit_parameter_draft();
+                self.close_parameter_manager()
+            }
+            ParameterManagerMsg::Cancelled => {
+                self.ui_state.parameter_table.draft = None;
+                self.close_parameter_manager()
             }
             ParameterManagerMsg::Edit {
                 symbol_uuid,
                 key,
                 value,
             } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
+            ParameterManagerMsg::CellDrafted {
+                symbol_uuid,
+                key,
+                text,
+            } => self.handle_parameter_cell_drafted(symbol_uuid, key, text),
+            ParameterManagerMsg::CellSubmitted => {
+                self.commit_parameter_draft();
+                Task::none()
+            }
+            ParameterManagerMsg::ParameterRemoved { key } => {
+                self.commit_parameter_draft();
+                self.handle_parameter_removed(&key)
+            }
+            ParameterManagerMsg::NewKeyChanged(key) => {
+                self.ui_state.parameter_table.new_key = key;
+                Task::none()
+            }
+            ParameterManagerMsg::ColumnAdded => {
+                self.commit_parameter_draft();
+                self.handle_parameter_column_added()
+            }
+            ParameterManagerMsg::FilterChanged(filter) => {
+                self.ui_state.parameter_table.filter = filter;
+                Task::none()
+            }
         }
     }
 }

@@ -477,6 +477,9 @@ pub struct UiState {
     pub net_color_palette_open: bool,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
+    /// Parameter Manager table: the cell being typed into, the new-column
+    /// name and the row filter.
+    pub parameter_table: crate::app::state::ParameterTableState,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.

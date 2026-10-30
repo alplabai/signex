@@ -451,6 +451,7 @@ impl Engine {
             | Command::UpdateSymbolLibId { .. }
             | Command::UpdateSymbolFootprint { .. }
             | Command::SetSymbolField { .. }
+            | Command::RemoveSymbolField { .. }
             | Command::UpdateSymbolFields { .. }
             | Command::SetTextFontFamily { .. }
             | Command::SetSymbolDesignatorIn { .. } => self.exec_edits(before, cmd),

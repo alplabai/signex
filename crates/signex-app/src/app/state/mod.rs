@@ -21,6 +21,7 @@ pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
+mod parameter_table;
 mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -44,6 +45,7 @@ pub use case_fold::CaseFold;
 pub use error_notice::ErrorNotice;
 pub use interaction::InteractionState;
 pub use keymap_recorder::KeymapRecorderState;
+pub use parameter_table::{CellDraft, ParameterTableState};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
