@@ -1,7 +1,7 @@
 //! #1765 — File ▸ Save All writes every dirty document through the shared
 //! Save All flow and then does nothing else: no close, no quit.
 
-use signex_app::app::{Message, Signex};
+use signex_app::app::{FileMsg, Message, Signex, TabInfo, TabKind};
 use signex_app::diagnostics;
 use signex_app::menu_bar::MenuMessage;
 use tempfile::TempDir;
@@ -52,4 +52,58 @@ fn save_all_with_nothing_dirty_writes_nothing() {
 
     assert!(!path.exists());
     assert_eq!(app.document_state.tabs.len(), 1);
+}
+
+#[test]
+fn a_failed_write_is_reported_and_leaves_the_document_dirty() {
+    let _ = diagnostics::init_logging();
+    let tmp = TempDir::new().unwrap();
+    let blocker = tmp.path().join("not-a-dir");
+    std::fs::write(&blocker, b"x").unwrap();
+    let path = blocker.join("unwritable.snxfpt");
+    let (mut app, _t) = Signex::new();
+    open_footprint_editor(&mut app, &path);
+    edit_description_via_panel(&mut app);
+
+    crate::settle_support::settle(&mut app, Message::Menu(MenuMessage::SaveAll));
+
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(logged("Save All: could not save"), "the failure is logged");
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the notice shows"
+    );
+}
+
+#[test]
+fn save_all_also_writes_a_dirty_schematic_and_project() {
+    let tmp = TempDir::new().unwrap();
+    let (mut app, _t) = Signex::new();
+    let prj = tmp.path().join("All.snxprj");
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj))));
+    let sch = tmp.path().join("one.snxsch");
+    let sheet = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    let mut engine = signex_engine::Engine::new(sheet).unwrap();
+    engine.set_path(Some(sch.clone()));
+    app.document_state.engines.insert(sch.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "one".into(),
+        path: sch.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    let prj = app.document_state.projects[0].path.clone();
+    app.document_state.mark_document_dirty(&sch);
+    app.document_state.mark_document_dirty(&prj);
+
+    crate::settle_support::settle(&mut app, Message::Menu(MenuMessage::SaveAll));
+
+    assert!(sch.exists(), "the schematic is written");
+    assert!(!app.document_state.is_document_dirty(&sch));
+    assert!(!app.document_state.is_document_dirty(&prj));
 }

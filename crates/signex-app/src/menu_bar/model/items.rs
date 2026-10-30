@@ -102,18 +102,6 @@ pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -
     )
 }
 
-/// Like [`cmd_item_gated`], but the row keeps `cmd.label` instead of the
-/// catalog's menu label, for a second row of a command (File ▸ Print next to
-/// Export ▸ PDF, which owns the catalog label).
-pub(super) fn cmd_item_gated_as(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
-    command_row(
-        ctx,
-        cmd,
-        cmd.label.to_owned(),
-        live(action, enabled(ctx, cmd.id)),
-    )
-}
-
 /// A keymap-backed row with its own enablement rule.
 pub(super) fn cmd_item_if(
     ctx: &MenuContext,

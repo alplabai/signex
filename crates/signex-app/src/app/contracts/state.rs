@@ -264,6 +264,9 @@ pub struct SaveAllPlan {
 #[derive(Debug, Clone)]
 pub struct SaveAllSettle {
     pub next: SaveAllNext,
+    /// Files and rows the Save All started, a file held under several
+    /// spellings counted once.
+    pub items: usize,
     /// The dirty files the Save All wrote; any still dirty did not save.
     pub paths: Vec<std::path::PathBuf>,
     /// `(label, reason)` of what already failed before a write started

@@ -16,10 +16,24 @@ Component Library, then Add New ▸ Component on the library node.
 ## File ▸ Export ▸ PDF {#file-export-pdf}
 
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
-shortcut. The two were consolidated under Export ▸ PDF so one surface opens
-the preview flow. Ctrl+P opens the preview through the keymap command bridge
-(`app/command/bridge.rs`). File ▸ Print... (#1765) is a second row for that
-same preview; Export ▸ PDF keeps the PDF export dialog.
+shortcut, so it was folded into Export ▸ PDF. They are different flows:
+Export ▸ PDF opens the PDF export dialog and has no shortcut, while Ctrl+P
+opens the print preview through the keymap command bridge
+(`app/command/bridge.rs`). File ▸ Print... (#1765) is the row for that
+preview and the only one that shows Ctrl+P.
+
+## File: close, save all {#file-close-save-all}
+
+Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
+profile, closes the active tab like the tab menu's Close and parks a dirty
+draft) is greyed when no tab is open. Close Project (the project tree's Close
+Project for the active project, behind its unsaved-changes gate) is greyed when
+no project is open. Save All writes every unsaved document and Component
+Preview row through the same Save All flow the close and quit prompts use
+(`SaveAllNext::Nothing`: no close, no quit afterwards). It is greyed when
+nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
+(the catalog has no `save_all` command), and reports "Save All: saved N
+item(s)" or the failures in the Messages panel.
 
 ## Save and Save As {#file-save}
 
@@ -76,16 +90,8 @@ key equivalent would disagree with the profile. Keys keep going through the
 keymap, so a key is never dispatched twice. The four app-menu key equivalents
 are the only registered ones, and none collides with editing.
 
-**File menu.** Close Document (the tab menu's Close for the active tab), Close
-Project (the project tree's Close Project for the active project, behind its
-unsaved-changes gate) and Print... (the Ctrl+P print preview) sit beside the
-rest. Exit is left out of the native File menu: Quit Signex in the app menu
-replaces it. Save All writes every unsaved document and Component Preview
-row through the same Save All flow the close and quit prompts use
-(`SaveAllNext::Nothing`: no close, no quit afterwards). It is greyed when
-nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
-(the catalog has no `save_all` command), and reports "Save All: saved N
-item(s)" or the failures in the Messages panel.
+**Exit.** The native File menu leaves out Exit and the separator above it:
+Quit Signex in the app menu replaces it. Windows and Linux keep Exit.
 
 **Ids.** `<title path>/<label>`, for example `File/Save` or
 `File/Export/PDF`. A recent project uses its full path instead of its file

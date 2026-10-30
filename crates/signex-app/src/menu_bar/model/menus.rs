@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_item_if, item, item_if, panel_item, stub,
-    submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, panel_item, stub, submenu,
+    unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::cycle_grid_menu_enabled;
@@ -26,9 +26,16 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
-        // Both act on what is open and do nothing when nothing is.
-        item("Close Document", MenuMessage::CloseDocument),
-        item("Close Project", MenuMessage::CloseProject),
+        cmd_item_gated(
+            ctx,
+            cmd("close_active_document", "Close Document", "Ctrl+F4"),
+            MenuMessage::CloseDocument,
+        ),
+        item_if(
+            "Close Project",
+            MenuMessage::CloseProject,
+            ctx.commands.has_open_project,
+        ),
         SEP,
         // Save gating: docs/MENU_BAR.md#file-save
         cmd_item_gated(
@@ -55,9 +62,9 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             "Import",
             vec![item("Altium Project...", MenuMessage::ImportAltium)],
         ),
-        // Print Preview lives under Export > PDF: docs/MENU_BAR.md#file-export-pdf
+        // Export > PDF and File > Print are different flows: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
-        cmd_item_gated_as(ctx, cmd("print", "Print...", "Ctrl+P"), MenuMessage::Print),
+        cmd_item_gated(ctx, cmd("print", "Print...", "Ctrl+P"), MenuMessage::Print),
         SEP,
         item("Exit", MenuMessage::Exit),
     ]
@@ -105,7 +112,9 @@ fn library(ctx: &MenuContext) -> Vec<MenuEntry> {
 fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
-        cmd_item_gated(ctx, cmd("print", "PDF…", "Ctrl+P"), MenuMessage::ExportPdf),
+        // No shortcut: Ctrl+P opens the print preview (File > Print), not
+        // this dialog. Gated like Print, which shares the PDF pipeline.
+        item_if("PDF…", MenuMessage::ExportPdf, enabled(ctx, "print")),
         item_if(
             "Netlist (Protel .NET)...",
             MenuMessage::ExportNetlist,

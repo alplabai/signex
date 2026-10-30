@@ -33,18 +33,23 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             can_redo: true,
             project_dirty: true,
             has_dirty_documents: true,
+            has_document: true,
+            has_open_project: true,
             ..base
         }),
         with(CommandContext {
             has_pcb: true,
+            has_document: true,
             ..base
         }),
         with(CommandContext {
             has_symbol_editor: true,
+            has_document: true,
             ..base
         }),
         with(CommandContext {
             has_sheets: true,
+            has_open_project: true,
             ..base
         }),
         with(CommandContext {
@@ -53,11 +58,13 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             has_footprint_editor: true,
+            has_document: true,
             ..base
         }),
         with(CommandContext {
             project_dirty: true,
             has_dirty_documents: true,
+            has_open_project: true,
             ..base
         }),
     ]
@@ -69,6 +76,7 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "never" => false,
         "sch" => ctx.commands.has_schematic,
         "dirty" => ctx.commands.has_dirty_documents,
+        "project" => ctx.commands.has_open_project,
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
@@ -109,11 +117,7 @@ fn golden_labels_and_shortcuts_match_helpers() {
         if id == "-" {
             continue;
         }
-        // File > Print... is the one row that names its command by its own
-        // label: the catalog's menu label for `print` belongs to Export > PDF.
-        if label != "Print..." {
-            assert_eq!(cmd_label(id, label), label, "label of {id}");
-        }
+        assert_eq!(cmd_label(id, label), label, "label of {id}");
         let expected = (shortcut != "-").then(|| shortcut.to_string());
         assert_eq!(
             shortcut_for(&ctx, id, shortcut),

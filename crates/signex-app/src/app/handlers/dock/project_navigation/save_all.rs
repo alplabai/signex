@@ -260,6 +260,7 @@ impl Signex {
         }
         let settled = Message::File(FileMsg::SaveAllSettled(Box::new(SaveAllSettle {
             next,
+            items: begun.len() + rows.len(),
             paths: paths.to_vec(),
             failed,
             rows: rows.to_vec(),
@@ -274,6 +275,7 @@ impl Signex {
     pub(crate) fn handle_save_all_settled(&mut self, settle: SaveAllSettle) -> Task<Message> {
         let SaveAllSettle {
             next,
+            items,
             paths,
             failed: rows_failed,
             rows,
@@ -324,10 +326,7 @@ impl Signex {
                 // meanwhile is dirty now; the quit gate prompts for it.
                 SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
                 SaveAllNext::Nothing => {
-                    crate::diagnostics::log_info(format!(
-                        "Save All: saved {} item(s)",
-                        paths.len() + rows.len()
-                    ));
+                    crate::diagnostics::log_info(format!("Save All: saved {} item(s)", items));
                     sweep
                 }
                 // A row edited while its PDFs were written is dirty again:
