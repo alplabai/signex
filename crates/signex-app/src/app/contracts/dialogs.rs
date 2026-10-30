@@ -217,6 +217,12 @@ pub enum EnableVersionControlMsg {
     Confirm,
     /// Dismiss the Enable Version Control modal without writing.
     Close,
+    /// The worker that lists a library's top-level entries finished (#859).
+    /// Applied only while the dialog still shows that directory.
+    ItemsScanned {
+        project_dir: std::path::PathBuf,
+        result: Result<Vec<crate::app::TrackItem>, String>,
+    },
     /// The off-thread run that `Confirm` started has finished (#1122).
     Finished {
         scope: crate::app::VersionControlScope,

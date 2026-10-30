@@ -316,7 +316,7 @@ impl Signex {
                 self.open_enable_version_control_dialog(tree_path);
             }
             ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
-                self.open_library_enable_version_control_dialog(row);
+                return self.open_library_enable_version_control_dialog(row);
             }
             ProjectTreeAction::RemoveLibrary(row) => {
                 self.open_library_remove_dialog(row);
