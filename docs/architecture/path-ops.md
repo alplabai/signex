@@ -124,3 +124,42 @@ write already running stays open and names it, as for a primitive. The quit
 barrier covers the job from `begin` until it is dropped. Saves are refused
 while a rename, delete or folder move touches the project or a pending
 library's path.
+
+## Annotate and Reset Duplicate Designators (`handlers/erc/annotate_job.rs`)
+
+Neither pass reads or writes a file in `update` (#859). A run has three steps:
+a worker reads the project's sheets (`plan_project_sheets_for(..).assemble()`,
+the same reader ERC uses); ONE `update` numbers them, open sheets in place
+through their engines and unopened sheets in memory, then encodes each
+unopened sheet; a second worker writes those through the document-save
+ledger (`document_saves.begin`), so quit waits for it and an open of the file
+is refused while it runs. `PassSheetsRead` and `PassSheetsWritten` (under
+`AnnotateMsg`) carry the results back. The shared counters, the part grouping
+and the sheet order are untouched, so the designators are the ones the
+synchronous pass produced (`annotate_golden_tests.rs` pins them).
+
+**Stale results are all or nothing.** A partly applied run could give two
+sheets the same designator, so when the read result arrives the run is dropped,
+with a Messages line and a notice and nothing changed, if `documents_epoch`
+moved (any open, save, close, rename, delete or folder move), if an open
+sheet's child-sheet placements changed, if the active project or its root
+changed, or if a rename, delete or folder move now holds one of the sheets.
+Open sheets are always numbered from their live engines, never from the
+snapshot the worker read, so a symbol typed meanwhile is counted and kept. A
+sheet whose file a History restore, a read or a save still owns is skipped, as
+before.
+
+**Guards.** The run is registered in `pending_path_ops` (`ProjectRewrite`) from
+`begin` until its last write completes: the declared pages and root while the
+sheets are read, the unopened sheets while they are written. A rename, delete,
+open or save of them is refused meanwhile. One run at a time: a second request
+is refused with a notice rather than queued, because a queued run would number
+the project as it was when the first started.
+
+**Failures.** A sheet that cannot be written keeps its old bytes (the write is
+atomic), is not marked clean, and is named in the Messages panel and a notice;
+the open sheets stay numbered and modified, and the other sheets still land.
+Run it again once the cause is fixed. A dead worker releases the guards and
+reports the same way. Reset marks an unopened sheet clean only after its bytes
+landed. Re-prefix still assembles and numbers inline; it is not part of this
+change.
