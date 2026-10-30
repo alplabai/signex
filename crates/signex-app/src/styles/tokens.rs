@@ -71,10 +71,11 @@ pub fn on_accent(_tokens: &ThemeTokens) -> Color {
     Color::WHITE
 }
 
-/// Contrast below which a label counts as lost on its fill. The dark
-/// built-ins sit above it (the weakest, the orange primary button label,
-/// is about 1.7:1) and keep their colours; the light built-in sits far
-/// under it.
+/// Contrast below which a label counts as lost on its fill. Every label
+/// the dark built-ins show sits above it except two that were already
+/// unreadable (Catppuccin Mocha "+ Add Filter", GitHub Dark focused ERC
+/// detail); those are corrected, the rest keep their colours. The light
+/// built-in's lost labels sit far under it.
 pub const UNREADABLE_CONTRAST: f32 = 1.5;
 
 /// `preferred`, unless it is lost on `fill` ([`UNREADABLE_CONTRAST`]), in

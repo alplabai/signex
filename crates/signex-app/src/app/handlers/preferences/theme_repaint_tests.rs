@@ -166,3 +166,44 @@ fn importing_a_theme_file_repaints_every_open_canvas() {
         assert_eq!(pcb.canvas_colors, canvas);
     }
 }
+
+fn drafted_other_than_saved(app: &Signex) -> ThemeId {
+    if app.ui_state.theme_id == ThemeId::SolarizedLight {
+        ThemeId::Nord
+    } else {
+        ThemeId::SolarizedLight
+    }
+}
+
+/// #1769 - the icon tint (`panel_ctx.theme_id`) moves with the tokens the
+/// moment a theme is drafted, not only after the next panel refresh.
+#[test]
+fn drafting_a_theme_moves_the_icon_theme_without_a_refresh() {
+    let (mut app, _boot) = Signex::new();
+    let drafted = drafted_other_than_saved(&app);
+    app.ui_state.preferences_open = true;
+
+    send(&mut app, PrefMsg::DraftTheme(drafted));
+
+    let ctx = &app.document_state.panel_ctx;
+    assert_eq!(ctx.theme_id, drafted);
+    assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(drafted));
+}
+
+/// #1769 - draft, refresh, discard: tokens and icon theme both return to
+/// the saved theme.
+#[test]
+fn discarding_after_a_refresh_restores_the_tokens_and_the_icon_theme() {
+    let (mut app, _boot) = Signex::new();
+    let saved = app.ui_state.theme_id;
+    let drafted = drafted_other_than_saved(&app);
+    app.ui_state.preferences_open = true;
+    send(&mut app, PrefMsg::DraftTheme(drafted));
+    app.refresh_panel_ctx();
+
+    send(&mut app, PrefMsg::DiscardAndClose);
+
+    let ctx = &app.document_state.panel_ctx;
+    assert_eq!(ctx.theme_id, saved);
+    assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(saved));
+}

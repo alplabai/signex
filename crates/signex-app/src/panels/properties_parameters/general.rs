@@ -726,12 +726,34 @@ pub(crate) fn add_filter_button_style(
     status: iced::widget::button::Status,
     preferred: Color,
 ) -> iced::widget::button::Style {
+    use crate::styles::tokens::{UNREADABLE_CONTRAST, contrast_ratio};
+    use iced::widget::button::Status;
     let mut style = iced::widget::button::primary(theme, status);
-    if let Some(Background::Color(fill)) = style.background {
-        style.text_color = crate::styles::tokens::keep_readable_on(preferred, fill);
+    // One label for every state, so it cannot flip on hover: `preferred`
+    // when it is visible on all three fills, else white or black, whichever
+    // reads better on the weakest fill.
+    let fills: Vec<Color> = [Status::Active, Status::Hovered, Status::Pressed]
+        .into_iter()
+        .filter_map(
+            |s| match iced::widget::button::primary(theme, s).background {
+                Some(Background::Color(fill)) => Some(fill),
+                _ => None,
+            },
+        )
+        .collect();
+    let worst = |label: Color| {
+        fills
+            .iter()
+            .map(|fill| contrast_ratio(label, *fill))
+            .fold(f32::INFINITY, f32::min)
+    };
+    style.text_color = if worst(preferred) >= UNREADABLE_CONTRAST {
+        preferred
+    } else if worst(Color::WHITE) >= worst(Color::BLACK) {
+        Color::WHITE
     } else {
-        style.text_color = preferred;
-    }
+        Color::BLACK
+    };
     style
 }
 

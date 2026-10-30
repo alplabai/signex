@@ -70,6 +70,16 @@ pub(crate) fn erc_row_text(tokens: &ThemeTokens, focused: bool) -> (Color, Color
     (readable(label), readable(detail))
 }
 
+/// Colour of a row's severity letter: on a focused row it is checked
+/// against the selection fill like the rest of the row's text.
+pub(crate) fn erc_severity_text(tokens: &ThemeTokens, focused: bool, severity: Color) -> Color {
+    if focused {
+        crate::styles::tokens::keep_readable_on(severity, theme_ext::selection_color(tokens))
+    } else {
+        severity
+    }
+}
+
 pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
@@ -191,6 +201,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         };
         let is_focused = ctx.erc_focus_index == Some(v.global_index);
         let (label_c, detail_c) = erc_row_text(&ctx.tokens, is_focused);
+        let sev_color = erc_severity_text(&ctx.tokens, is_focused, sev_color);
         let row_bg = if is_focused {
             Some(Background::Color(theme_ext::selection_color(&ctx.tokens)))
         } else {

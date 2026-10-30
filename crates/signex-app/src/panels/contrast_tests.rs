@@ -1,11 +1,10 @@
 //! #1769 - labels painted on an accent or selection fill must stay readable
 //! on the light built-in theme, and the dark themes must not change.
 
-use super::form_rows::check_state_text;
-use super::general::{add_filter_button_style, seg_text};
+use super::palette::PanelPalette;
+use super::properties_parameters::{add_filter_button_style, check_state_text, seg_text};
+use super::status::{erc_row_text, erc_severity_text};
 use crate::app::Signex;
-use crate::panels::palette::PanelPalette;
-use crate::panels::status::erc_row_text;
 use crate::styles::ti;
 use crate::styles::tokens::{MIN_TEXT_CONTRAST, UNREADABLE_CONTRAST, contrast_ratio};
 use iced::Color;
@@ -148,5 +147,59 @@ fn dark_themes_keep_every_label_that_was_visible() {
             detail,
             fill,
         );
+    }
+}
+
+#[test]
+fn focused_erc_severity_letter_is_readable_on_solarized_light() {
+    use signex_widgets::theme_ext;
+    let tokens = theme_tokens(LIGHT);
+    let fill = ti(tokens.selection);
+    for (name, colour) in [
+        ("E", theme_ext::error_color(&tokens)),
+        ("W", theme_ext::warning_color(&tokens)),
+        ("I", theme_ext::accent(&tokens)),
+    ] {
+        assert_readable(
+            &format!("ERC severity {name}"),
+            erc_severity_text(&tokens, true, colour),
+            fill,
+        );
+        assert_eq!(erc_severity_text(&tokens, false, colour), colour);
+    }
+}
+
+#[test]
+fn add_filter_label_never_flips_between_states_on_any_builtin() {
+    for &id in ThemeId::BUILTINS {
+        let p = PanelPalette::from_tokens(&theme_tokens(id));
+        let theme = Signex::id_to_iced_theme(id, None);
+        let resting = add_filter_button_style(&theme, button::Status::Active, p.primary);
+        for status in [button::Status::Hovered, button::Status::Pressed] {
+            let style = add_filter_button_style(&theme, status, p.primary);
+            assert_eq!(style.text_color, resting.text_color, "{id:?} {status:?}");
+        }
+    }
+}
+
+#[test]
+fn on_label_reads_on_the_panel_background_of_every_builtin() {
+    for &id in ThemeId::BUILTINS {
+        let tokens = theme_tokens(id);
+        let p = PanelPalette::from_tokens(&tokens);
+        let theme = Signex::id_to_iced_theme(id, None);
+        let on = check_state_text(
+            true,
+            p.muted,
+            theme.extended_palette().background.base.color,
+        );
+        let panel = ti(tokens.panel_bg);
+        assert!(
+            contrast_ratio(on, panel) >= UNREADABLE_CONTRAST,
+            "{id:?}: On is lost on the panel background"
+        );
+        if id == LIGHT {
+            assert_readable("On on panel_bg", on, panel);
+        }
     }
 }

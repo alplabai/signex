@@ -547,6 +547,7 @@ impl Signex {
 
         let net_classes = self.net_class_panel_state();
 
+        let (panel_tokens, panel_theme_id) = self.panel_theme();
         self.document_state.panel_ctx = crate::panels::PanelContext {
             projects: projects_panel,
             sym_count: active_schematic_snapshot
@@ -584,8 +585,8 @@ impl Signex {
             lib_symbol_names: Vec::new(),
             placed_symbols: Vec::new(),
             symbol_lists_key,
-            tokens: self.tokens_for(self.ui_state.effective_theme_id()),
-            theme_id: self.ui_state.effective_theme_id(),
+            tokens: panel_tokens,
+            theme_id: panel_theme_id,
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,
             snap_enabled: self.ui_state.snap_enabled,

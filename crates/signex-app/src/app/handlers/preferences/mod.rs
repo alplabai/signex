@@ -243,7 +243,7 @@ impl Signex {
         // takes no effect.
         self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
         // Revert the render inputs used for schematic live preview.
-        self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
+        self.sync_panel_theme();
         // #630 — the schematic grid style previewed live, so push the
         // committed value back to every window's canvas.
         // #629 — the symbol grid style is the only one of the three
@@ -339,7 +339,7 @@ impl Signex {
                 // re-assert it so the saved and effective flags can't diverge.
                 self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
                 self.update_canvas_theme();
-                self.document_state.panel_ctx.tokens = self.tokens_for(self.ui_state.theme_id);
+                self.sync_panel_theme();
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
                 // The live preview already pushed the draft onto the
                 // canvases; re-assert from the committed value so the
@@ -482,16 +482,7 @@ impl Signex {
             }
             PrefMsg::DraftTheme(id) => {
                 self.ui_state.preferences_draft_theme = id;
-                let tokens = if id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-                } else {
-                    signex_types::theme::theme_tokens(id)
-                };
-                self.document_state.panel_ctx.tokens = tokens;
+                self.sync_panel_theme();
                 // Schematic canvas colours are derived from
                 // `preferences_draft_theme` every frame (#631), but the PCB
                 // canvases hold pushed colours and every canvas caches its
