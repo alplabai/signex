@@ -137,6 +137,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
 
 #[test]
 fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
+    let _notes = crate::shared_locks::new_row_notes();
     let _ = diagnostics::init_logging();
     let tmp = tempfile::Builder::new()
         .prefix("signex-967-new-row-")
@@ -191,6 +192,7 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
 /// Component clicks in a row both create a row.
 #[test]
 fn two_blank_new_components_in_a_row_both_succeed() {
+    let _notes = crate::shared_locks::new_row_notes();
     let _ = diagnostics::init_logging();
     let tmp = tempfile::Builder::new()
         .prefix("signex-1363-two-blank-")

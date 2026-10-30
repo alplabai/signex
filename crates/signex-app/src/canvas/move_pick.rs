@@ -207,14 +207,14 @@ impl SchematicCanvas<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(in crate::canvas) mod tests {
     use super::super::tests::test_prefs;
     use super::*;
     use iced::event::Status;
     use iced::keyboard;
     use iced::widget::canvas::Program as _;
 
-    const BOUNDS: Rectangle = Rectangle {
+    pub(in crate::canvas) const BOUNDS: Rectangle = Rectangle {
         x: 0.0,
         y: 0.0,
         width: 800.0,
@@ -222,7 +222,7 @@ mod tests {
     };
 
     /// A slot whose snapshot holds one horizontal wire, (10,10)-(30,10) mm.
-    fn slot_with_wire() -> CanvasSlot {
+    pub(in crate::canvas) fn slot_with_wire() -> CanvasSlot {
         let sheet = signex_types::schematic::SchematicSheet {
             unknown: Default::default(),
             uuid: uuid::Uuid::now_v7(),
@@ -277,7 +277,7 @@ mod tests {
     }
 
     /// Screen point that the slot's camera maps to world `(wx, wy)`.
-    fn screen(slot: &CanvasSlot, wx: f32, wy: f32) -> iced::Point {
+    pub(in crate::canvas) fn screen(slot: &CanvasSlot, wx: f32, wy: f32) -> iced::Point {
         let (ox, oy, scale) = slot.live_camera();
         iced::Point::new(wx * scale + ox, wy * scale + oy)
     }
@@ -317,12 +317,20 @@ mod tests {
         }
     }
 
-    fn press(slot: &CanvasSlot, state: &mut CanvasState, at: iced::Point) -> Option<Message> {
+    pub(in crate::canvas) fn press(
+        slot: &CanvasSlot,
+        state: &mut CanvasState,
+        at: iced::Point,
+    ) -> Option<Message> {
         let event = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
         send(slot, state, event, at).0
     }
 
-    fn release(slot: &CanvasSlot, state: &mut CanvasState, at: iced::Point) -> Option<Message> {
+    pub(in crate::canvas) fn release(
+        slot: &CanvasSlot,
+        state: &mut CanvasState,
+        at: iced::Point,
+    ) -> Option<Message> {
         let event = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
         send(slot, state, event, at).0
     }
