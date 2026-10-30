@@ -151,6 +151,9 @@ impl Signex {
             ProjectMsg::ProjectFolderRenamed { job, result } => {
                 self.handle_project_folder_renamed(&job, result)
             }
+            ProjectMsg::SheetFilesListed { ticket, result } => {
+                self.handle_sheet_files_listed(ticket, result)
+            }
             ProjectMsg::ProjectFileRenamed { job, result } => {
                 self.handle_project_file_renamed(&job, result)
             }

@@ -667,6 +667,14 @@ pub enum ProjectMsg {
         job: ProjectFileRenameJob,
         result: Result<(), String>,
     },
+    /// The worker that lists the `.snxsch` files beside the active sheet
+    /// finished (#859): the Place Sheet tool's second click picks its default
+    /// name from them. `ticket` names the click; a result for any other
+    /// ticket is dropped.
+    SheetFilesListed {
+        ticket: u64,
+        result: Result<Vec<String>, String>,
+    },
 }
 
 /// One Rename Project that moves only the `.snxprj`: `from` becomes `to`.

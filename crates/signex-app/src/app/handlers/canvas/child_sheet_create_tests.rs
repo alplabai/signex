@@ -249,12 +249,13 @@ fn a_symbol_that_is_gone_is_logged_not_ignored() {
 fn committing_the_place_sheet_tool_opens_the_dialog_with_the_default_name() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, _id) = parent_with_symbol(dir.path());
-    app.place_sheet_click(10.0, 10.0);
+    let _ = app.place_sheet_click(10.0, 10.0);
     assert!(
         app.ui_state.create_child_sheet_confirm.is_none(),
         "first corner only"
     );
-    app.place_sheet_click(40.0, 40.0);
+    let task = app.place_sheet_click(40.0, 40.0);
+    crate::app::path_ops::settle_task(&mut app, task);
     let c = confirm(&app);
     assert_eq!(c.path_text, "sheet2.snxsch");
     assert_eq!(
@@ -468,8 +469,9 @@ fn the_place_tool_stays_armed_after_the_dialog_and_later() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, _id) = parent_with_symbol(dir.path());
     app.interaction_state.current_tool = crate::app::Tool::Sheet;
-    app.place_sheet_click(10.0, 10.0);
-    app.place_sheet_click(40.0, 40.0);
+    let _ = app.place_sheet_click(10.0, 10.0);
+    let task = app.place_sheet_click(40.0, 40.0);
+    crate::app::path_ops::settle_task(&mut app, task);
     assert!(app.ui_state.create_child_sheet_confirm.is_some());
     let _ = app.handle_create_child_sheet_answered(false);
     assert!(
@@ -497,8 +499,9 @@ fn the_main_window_is_locked_while_create_sheet_is_open_by_either_route() {
     app.ui_state.main_window_opened = true;
     app.ui_state.first_run_tour_open = false;
     assert!(!main_window_shows_the_lock(&app), "no dialog yet");
-    app.place_sheet_click(10.0, 10.0);
-    app.place_sheet_click(40.0, 40.0);
+    let _ = app.place_sheet_click(10.0, 10.0);
+    let task = app.place_sheet_click(40.0, 40.0);
+    crate::app::path_ops::settle_task(&mut app, task);
     let _ = app.sync_detached_modals();
     assert!(
         app.detached_window_of(crate::app::state::ModalId::CreateChildSheet)
@@ -522,4 +525,131 @@ fn the_main_window_is_locked_while_create_sheet_is_open_by_either_route() {
         main_window_shows_the_lock(&app),
         "descend route: the lock layer is drawn"
     );
+}
+
+// ---- #859: the place tool's folder listing runs on a worker.
+
+use crate::persist::run_task::outputs;
+
+/// The second corner of a Place Sheet drag: nothing placed yet, the worker's
+/// completion in hand.
+fn commit_second_corner(app: &mut Signex) -> crate::app::Message {
+    let _ = app.place_sheet_click(10.0, 10.0);
+    let task = app.place_sheet_click(40.0, 40.0);
+    let mut messages = outputs(task);
+    assert_eq!(messages.len(), 1, "one completion per worker");
+    messages.remove(0)
+}
+
+#[test]
+fn the_second_corner_lists_the_folder_on_a_worker_not_in_update() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, _id) = parent_with_symbol(dir.path());
+    let _ = app.place_sheet_click(10.0, 10.0);
+
+    let task = app.place_sheet_click(40.0, 40.0);
+
+    assert_eq!(
+        app.document_state.engines[&top]
+            .document()
+            .child_sheets
+            .len(),
+        1,
+        "nothing is placed before the listing arrives"
+    );
+    // A file that appears after `update` returned is still seen: the worker
+    // lists the folder when it runs.
+    std::fs::write(dir.path().join("sheet2.snxsch"), b"x").expect("file");
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(confirm(&app).path_text, "sheet3.snxsch");
+}
+
+#[test]
+fn a_sheet_is_not_placed_when_the_active_sheet_changed_meanwhile() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, _id) = parent_with_symbol(dir.path());
+    let message = commit_second_corner(&mut app);
+    // The engine the corners were drawn on is replaced (a restore, a reopen).
+    let sheet = app.document_state.engines[&top].document().clone();
+    let replacement = signex_engine::Engine::new(sheet).expect("engine");
+    app.document_state.engines.insert(top.clone(), replacement);
+    let since = crate::diagnostics::newest_entry_id();
+
+    let task = app.update(message);
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert_eq!(
+        app.document_state.engines[&top]
+            .document()
+            .child_sheets
+            .len(),
+        1
+    );
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert!(crate::diagnostics::recent_entries().iter().any(|e| {
+        Some(e.id) > since
+            && e.message
+                .contains("Sheet not placed: the sheet it was drawn on")
+    }));
+}
+
+#[test]
+fn a_second_commit_while_the_listing_runs_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, _id) = parent_with_symbol(dir.path());
+    let first = commit_second_corner(&mut app);
+    let since = crate::diagnostics::newest_entry_id();
+    let _ = app.place_sheet_click(60.0, 60.0);
+    let second = app.place_sheet_click(90.0, 90.0);
+    crate::app::path_ops::settle_task(&mut app, second);
+    assert!(crate::diagnostics::recent_entries().iter().any(|e| {
+        Some(e.id) > since
+            && e.message
+                .contains("the previous sheet is still being placed")
+    }));
+
+    let task = app.update(first);
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert_eq!(
+        app.document_state.engines[&top]
+            .document()
+            .child_sheets
+            .len(),
+        2,
+        "only the first sheet was placed"
+    );
+}
+
+#[test]
+fn a_dead_listing_worker_places_nothing_and_says_so() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, top, _id) = parent_with_symbol(dir.path());
+    let _unrun = commit_second_corner(&mut app);
+    let ticket = 1;
+    let since = crate::diagnostics::newest_entry_id();
+
+    let task = app.update(crate::app::Message::Project(
+        crate::app::ProjectMsg::SheetFilesListed {
+            ticket,
+            result: Err("the background task failed".to_string()),
+        },
+    ));
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert_eq!(
+        app.document_state.engines[&top]
+            .document()
+            .child_sheets
+            .len(),
+        1
+    );
+    assert!(crate::diagnostics::recent_entries().iter().any(|e| {
+        Some(e.id) > since
+            && e.message
+                .contains("Sheet not placed: the folder could not be listed")
+    }));
 }

@@ -499,6 +499,8 @@ pub struct UiState {
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
     /// The Annotate or Reset Duplicate Designators run in flight, if any (#859).
     pub annotate_runs: crate::app::handlers::erc::AnnotateRuns,
+    /// The Place Sheet commit waiting for the folder listing (#859).
+    pub sheet_place: crate::app::handlers::canvas::SheetPlaceJobs,
     /// Token of the newest Re-prefix to standard library lookup (#1315); a
     /// result carrying an older one is dropped.
     pub reprefix_generation: u64,

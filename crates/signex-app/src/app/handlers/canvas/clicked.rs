@@ -476,7 +476,7 @@ impl Signex {
                     }
                 }
             }
-            Tool::Sheet => self.place_sheet_click(wx, wy),
+            Tool::Sheet => return self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
             Tool::BreakWire => self.break_wire_click(wx, wy),

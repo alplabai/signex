@@ -19,6 +19,7 @@ mod layout_drag;
 mod measure_tool;
 mod move_pick;
 mod sheet_tool;
+pub use sheet_tool::SheetPlaceJobs;
 mod status_activity;
 mod sync_sheet_pins;
 #[cfg(test)]
