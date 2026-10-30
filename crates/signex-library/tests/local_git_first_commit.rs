@@ -308,6 +308,8 @@ fn recover_init_never_commits_what_a_symlink_points_at() {
     assert!(!head_tracks(tmp.path(), ".gitattributes"));
 }
 
+// Only the unix symlink tests read a blob back.
+#[cfg(unix)]
 fn blob_text(dir: &Path, name: &str) -> String {
     let repo = Repository::open(dir).unwrap();
     let tree = repo
