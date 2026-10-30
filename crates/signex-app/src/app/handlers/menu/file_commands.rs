@@ -240,11 +240,17 @@ impl Signex {
             Some(TabKind::Schematic) => {
                 let from_path = self.active_tab_path().unwrap_or_default();
                 let target = self.save_target(Some(&from_path));
+                let save_as_name = target.save_as_file_name();
                 Task::perform(
                     async move {
-                        target
-                            .dialog("Save Schematic As")
-                            .add_filter("Signex Schematic", &["snxsch"])
+                        let dialog = target
+                            .save_as_dialog("Save Schematic As")
+                            .add_filter("Signex Schematic", &["snxsch"]);
+                        let dialog = match save_as_name {
+                            Some(name) => dialog.set_file_name(name),
+                            None => dialog,
+                        };
+                        dialog
                             .save_file()
                             .await
                             .map(|file| file.path().to_path_buf())

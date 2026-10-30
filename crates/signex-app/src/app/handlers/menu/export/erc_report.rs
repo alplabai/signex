@@ -110,7 +110,7 @@ fn export_erc_report_task(opts: ErcReportOptions, path: PathBuf) -> Task<Message
                     success_log: String::new(),
                     advisory: None,
                     warnings: Vec::new(),
-                    report_in_preview: false,
+                    preview_source: None,
                 })
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -144,7 +144,7 @@ fn build_and_write_erc_report(
         success_log: format!("Wrote ERC report {}", path.display()),
         advisory: None,
         warnings: Vec::new(),
-        report_in_preview: false,
+        preview_source: None,
     }
 }
 
@@ -187,11 +187,11 @@ impl Signex {
     }
 
     fn refuse_erc_report_before_run(&mut self) {
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(format!(
+        self.report_export_failure(format!(
             "Cannot export the ERC report: ERC has not been run. \
                  Run ERC ({}) first, then export.",
             crate::menu_bar::run_erc_menu_path()
-        )));
+        ));
     }
 
     /// Menu entry: refuse if ERC never ran, otherwise ask where to save.

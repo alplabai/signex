@@ -524,6 +524,29 @@ pub enum PrintPreviewMsg {
     SetPcbColourMode(signex_output::ColourMode),
 }
 
+impl PrintPreviewMsg {
+    /// Whether the Export window's last export outcome stays on screen after
+    /// this message. Only viewing, rendering and the Export click itself
+    /// keep it; any change to the pages, files or options replaces it by the
+    /// page count again.
+    pub fn keeps_export_status(&self) -> bool {
+        matches!(
+            self,
+            Self::Requested
+                | Self::Rasterized { .. }
+                | Self::PagesRasterized { .. }
+                | Self::RasterFailed { .. }
+                | Self::SelectPage(_)
+                | Self::Zoom(_)
+                | Self::Export
+                | Self::Close
+                | Self::SetTab(_)
+                | Self::PanStart
+                | Self::PanFinished
+        )
+    }
+}
+
 /// Grid Properties dialog message family (ADR-0001 D3). Namespaced
 /// under `Message::GridProperties` and routed to
 /// `dispatch_grid_properties_message`.

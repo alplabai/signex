@@ -48,13 +48,10 @@ impl Signex {
             match super::build_page_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    let reason = format!(
+                    self.report_export_failure(format!(
                         "PDF export refused: the source document {} is no longer open.",
                         source.display()
-                    );
-                    crate::diagnostics::log_warning(reason.clone());
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(reason));
+                    ));
                     return Task::none();
                 }
             };
@@ -84,9 +81,7 @@ impl Signex {
                 .retain(|s| files.contains(&(s.path.clone(), s.placement.clone())));
         }
         if ctx.sheets.is_empty() {
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                "Cannot export PDF: no files selected in the Settings tab.".to_string(),
-            ));
+            self.report_export_failure("Cannot export PDF: no files selected in the Settings tab.");
             return Task::none();
         }
         // Apply the variant override the user picked in the modal.
@@ -105,7 +100,7 @@ impl Signex {
         }
 
         // Building the PDF and writing it both run off the UI thread.
-        self.export_pdf(ctx, options, save_path)
+        self.export_pdf(ctx, options, save_path, source)
     }
 
     pub(crate) fn handle_export_netlist_requested(&mut self) -> Option<Task<Message>> {
@@ -119,7 +114,7 @@ impl Signex {
         let source = self.document_state.active_path.clone()?;
         let format = NetlistOptions::default().format;
         let target = self.save_target(Some(&source));
-        let file_name = target.file_name("schematic", "", format.extension());
+        let file_name = format.file_name(target.stem().unwrap_or("schematic"));
         Some(Task::perform(
             async move {
                 target
@@ -171,8 +166,7 @@ impl Signex {
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::export(refusal));
+            self.report_export_failure(refusal);
             return Task::none();
         }
 
@@ -222,9 +216,7 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    format!("Netlist export failed: {e}"),
-                ));
+                self.report_export_failure(format!("Netlist export failed: {e}"));
             }
         }
 
@@ -279,9 +271,7 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    format!("Netlist export failed: {e}"),
-                ));
+                self.report_export_failure(format!("Netlist export failed: {e}"));
             }
         }
 

@@ -9,6 +9,7 @@ use crate::app::Signex;
 pub(crate) struct SaveTarget {
     dir: Option<PathBuf>,
     stem: Option<String>,
+    document: Option<PathBuf>,
 }
 
 impl SaveTarget {
@@ -18,13 +19,17 @@ impl SaveTarget {
     pub(crate) fn new(project_file: Option<&Path>, document: Option<&Path>) -> Self {
         let dir = project_file
             .and_then(Path::parent)
-            .filter(|dir| !dir.as_os_str().is_empty())
+            .and_then(user_folder)
             .map(Path::to_path_buf);
         let stem = project_file
             .or(document)
             .and_then(Path::file_stem)
             .map(|stem| stem.to_string_lossy().into_owned());
-        Self { dir, stem }
+        Self {
+            dir,
+            stem,
+            document: document.map(Path::to_path_buf),
+        }
     }
 
     /// The start folder, or `None` to leave it to the OS.
@@ -35,9 +40,26 @@ impl SaveTarget {
     /// Where New Project starts: the folder that holds the open project's
     /// folder, so the new project lands beside it, never inside it.
     pub(crate) fn new_project_dir(&self) -> Option<&Path> {
-        self.dir()
+        self.dir().and_then(Path::parent).and_then(user_folder)
+    }
+
+    /// The project or document name, when one is known.
+    pub(crate) fn stem(&self) -> Option<&str> {
+        self.stem.as_deref()
+    }
+
+    /// Where Save As starts: the document's own folder.
+    pub(crate) fn save_as_dir(&self) -> Option<&Path> {
+        self.document
+            .as_deref()
             .and_then(Path::parent)
-            .filter(|dir| !dir.as_os_str().is_empty())
+            .and_then(user_folder)
+    }
+
+    /// The document's current file name, offered by Save As.
+    pub(crate) fn save_as_file_name(&self) -> Option<String> {
+        let name = self.document.as_deref()?.file_name()?;
+        Some(name.to_string_lossy().into_owned())
     }
 
     /// `<name><suffix>.<ext>`, the name being the project or document name;
@@ -54,6 +76,11 @@ impl SaveTarget {
         Self::dialog_in(title, self.dir())
     }
 
+    /// A Save As panel, started in the document's own folder.
+    pub(crate) fn save_as_dialog(&self, title: &str) -> rfd::AsyncFileDialog {
+        Self::dialog_in(title, self.save_as_dir())
+    }
+
     /// A New Project panel, started beside the open project's folder.
     pub(crate) fn new_project_dialog(&self, title: &str) -> rfd::AsyncFileDialog {
         Self::dialog_in(title, self.new_project_dir())
@@ -66,6 +93,17 @@ impl SaveTarget {
             None => dialog,
         }
     }
+}
+
+/// `dir` as a start folder, unless it is empty or lies in the app's own
+/// config folder (the bundled Sample Project lives there): such a folder is
+/// not the user's, so the OS picks the start folder instead.
+fn user_folder(dir: &Path) -> Option<&Path> {
+    if dir.as_os_str().is_empty() {
+        return None;
+    }
+    let in_config = crate::config_root::config_root().is_some_and(|root| dir.starts_with(root));
+    (!in_config).then_some(dir)
 }
 
 impl Signex {
@@ -142,5 +180,38 @@ mod tests {
             SaveTarget::default().file_name("schematic", "", "pdf"),
             "schematic.pdf"
         );
+    }
+
+    fn config_project() -> PathBuf {
+        crate::config_root::config_root()
+            .expect("config root")
+            .join("samples/linear-regulator/linear-regulator.snxprj")
+    }
+
+    #[test]
+    fn a_project_under_the_config_folder_leaves_every_panel_to_the_os() {
+        let project = config_project();
+        let document = project.with_file_name("top.snxsch");
+        let target = SaveTarget::new(Some(&project), Some(&document));
+        assert_eq!(target.dir(), None);
+        assert_eq!(target.new_project_dir(), None);
+        assert_eq!(target.save_as_dir(), None);
+        assert_eq!(target.save_as_file_name().as_deref(), Some("top.snxsch"));
+    }
+
+    #[test]
+    fn save_as_starts_in_the_documents_own_folder_with_its_name() {
+        let target = SaveTarget::new(
+            Some(&p("/work/amp/amp.snxprj")),
+            Some(&p("/work/amp/sheets/psu.snxsch")),
+        );
+        assert_eq!(target.save_as_dir(), Some(Path::new("/work/amp/sheets")));
+        assert_eq!(target.save_as_file_name().as_deref(), Some("psu.snxsch"));
+    }
+
+    #[test]
+    fn save_as_of_a_loose_document_starts_in_its_folder_too() {
+        let target = SaveTarget::new(None, Some(&p("/tmp/loose.snxsch")));
+        assert_eq!(target.save_as_dir(), Some(Path::new("/tmp")));
     }
 }

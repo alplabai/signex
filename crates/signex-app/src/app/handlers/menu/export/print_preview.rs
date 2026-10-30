@@ -224,6 +224,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
+        // The last outcome is stale the moment Export is clicked again, also
+        // when validation refuses below.
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.export_status = None;
+        }
         // Pull the (possibly edited) options out of the live preview
         // and drive the OS save-file dialog directly. The intermediate
         // settings-only dialog was removed when PDF Export started
@@ -236,22 +241,18 @@ impl Signex {
                     let page = match parsed {
                         Some(p) if p > 0 => p,
                         _ => {
-                            self.document_state.error_notice =
-                                Some(crate::app::state::ErrorNotice::export(
-                                    "Specific page must be a positive page number (1, 2, 3, ...)."
-                                        .to_string(),
-                                ));
+                            self.report_export_failure(
+                                "Specific page must be a positive page number (1, 2, 3, ...).",
+                            );
                             return Some(Task::none());
                         }
                     };
                     options.page_range = PageRange::Specific(vec![page]);
                 }
                 if preview.selected_files.is_empty() {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(
-                            "Select at least one file in the Settings tab before exporting."
-                                .to_string(),
-                        ));
+                    self.report_export_failure(
+                        "Select at least one file in the Settings tab before exporting.",
+                    );
                     return Some(Task::none());
                 }
                 // Quality is the only Settings field not stored
@@ -274,9 +275,6 @@ impl Signex {
         // Print Preview. The options, sheet picks and source are captured
         // here and ride inside `PdfFinished`, so a second Export click while
         // this save dialog is open gets its own copy (#852).
-        if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.export_status = None;
-        }
         let descended_placement = self.document_state.tab_placements.get(&source).cloned();
         let request = Box::new(crate::app::state::PdfExportRequest {
             source,
