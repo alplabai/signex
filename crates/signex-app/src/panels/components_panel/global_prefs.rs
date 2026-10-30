@@ -171,6 +171,19 @@ pub fn add_path_at(prefs: &Path, path: PathBuf) -> Result<Vec<GlobalLibraryEntry
     Ok(current)
 }
 
+/// Add `path` to an in-memory list unless it is already there (same
+/// exact-path identity as [`add_path_at`]). For a handler whose list may
+/// have changed since a worker persisted the entry.
+pub fn merge_path(list: &mut Vec<GlobalLibraryEntry>, path: PathBuf) {
+    if !list.iter().any(|e| e.path == path) {
+        list.push(GlobalLibraryEntry {
+            path,
+            remote: None,
+            auto_pull: None,
+        });
+    }
+}
+
 /// Remove a path from the global list and persist.
 pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
     let prefs = prefs_path().ok_or_else(|| "no user config dir available".to_string())?;
@@ -208,6 +221,20 @@ mod tests {
         let err = remove_path_at(&prefs, Path::new("/a.snxlib")).unwrap_err();
         assert!(err.contains("left unchanged"), "{err}");
         assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
+    }
+
+    #[test]
+    fn merge_path_keeps_existing_entries_and_skips_duplicates() {
+        let mut list = vec![GlobalLibraryEntry {
+            path: PathBuf::from("/a.snxlib"),
+            remote: Some("r".into()),
+            auto_pull: None,
+        }];
+        merge_path(&mut list, PathBuf::from("/a.snxlib"));
+        merge_path(&mut list, PathBuf::from("/b.snxlib"));
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].remote.as_deref(), Some("r"));
+        assert_eq!(list[1].path, PathBuf::from("/b.snxlib"));
     }
 
     #[test]
