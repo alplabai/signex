@@ -768,6 +768,11 @@ pub struct LibraryCreateOptionsState {
     /// Only meaningful when `enable_git` is also true; the modal
     /// greys it out otherwise.
     pub use_lfs: bool,
+    /// Why the last Create press was refused (the library folder is the
+    /// root of a repository with history, so it cannot get its own). The
+    /// modal stays open and shows it; cleared when version control is
+    /// toggled.
+    pub refusal: Option<String>,
 }
 
 mod closing;
