@@ -315,6 +315,9 @@ impl LocalGitAdapter {
 
         // Built in memory from HEAD's tree (empty when unborn), so what the
         // user has staged in this repo is neither committed nor touched.
+        // The repo may only now be readable (a `.git/` that would not open
+        // before `git init` put it right): its history is checked here too.
+        reinit_tree::refuse_foreign_history(repo, file_path, root_dir)?;
         let parent = match repo.head() {
             Ok(h) => h
                 .peel_to_commit()
@@ -388,7 +391,9 @@ impl LocalGitAdapter {
         // working tree, so this also handles the "git was *not*
         // deleted" case as a no-op + re-commit-everything. The recovery
         // dialog is the gate; the adapter just does what it's asked.
-        let created_repo = git2::Repository::open(&root_dir).is_err();
+        // Only a `.git/` this call makes is ever removed again: one that is
+        // already there but will not open is the user's recoverable history.
+        let created_repo = fs::symlink_metadata(root_dir.join(".git")).is_err();
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git re-init: {e}")))?;
         // A fresh, unborn `.git/` left by a refused Re-init would hide the

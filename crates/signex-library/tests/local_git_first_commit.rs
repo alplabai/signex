@@ -398,3 +398,53 @@ mod links {
         assert_eq!(blob_text(tmp.path(), "symbols/x.snxsym"), "orig");
     }
 }
+
+/// #1741: a repo whose `.git/` will not open (its `HEAD` is gone) is the
+/// user's recoverable history. A Re-init that fails must leave it be.
+#[cfg(unix)]
+#[test]
+fn a_failed_recover_init_never_removes_a_git_dir_that_was_already_there() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/a.snxsym"), "a").unwrap();
+    LocalGitAdapter::recover_init(&lib).expect("first");
+    let before = head(tmp.path());
+
+    std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
+    let unreadable = tmp.path().join("symbols/b.snxsym");
+    std::fs::write(&unreadable, "b").unwrap();
+    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&unreadable).is_ok() {
+        return; // running as root: the file is readable, nothing fails
+    }
+
+    assert!(LocalGitAdapter::recover_init(&lib).is_err());
+
+    assert!(tmp.path().join(".git").is_dir(), "history was removed");
+    let repo = Repository::open(tmp.path()).unwrap();
+    assert!(repo.find_commit(before).is_ok(), "the commit is gone");
+}
+
+/// #1741: the same corrupt-repo route (no `HEAD`) is refused when the repo's
+/// history does not track the library; nothing is committed.
+#[test]
+fn recover_init_refuses_another_repo_whose_head_file_is_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let (_repo, before) = repo_with_staged_work(tmp.path());
+    std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
+
+    let Err(err) = LocalGitAdapter::recover_init(&lib) else {
+        panic!("re-init must refuse");
+    };
+
+    assert!(
+        err.to_string().contains("does not track this library"),
+        "{err}"
+    );
+    assert!(tmp.path().join(".git").is_dir());
+    assert_eq!(head(tmp.path()), before, "history untouched");
+    assert!(!head_tracks(tmp.path(), "lib.snxlib"));
+}

@@ -163,13 +163,13 @@ fn collect_files(
     Ok(())
 }
 
-fn entry(path: &str, id: git2::Oid) -> git2::IndexEntry {
+fn entry(path: &str, id: git2::Oid, mode: u32) -> git2::IndexEntry {
     git2::IndexEntry {
         ctime: git2::IndexTime::new(0, 0),
         mtime: git2::IndexTime::new(0, 0),
         dev: 0,
         ino: 0,
-        mode: 0o100644,
+        mode,
         uid: 0,
         gid: 0,
         file_size: 0,
@@ -218,8 +218,13 @@ pub(super) fn library_tree(
     for name in files {
         let id =
             lfs::blob_for_path(repo, root_dir, Path::new(&name)).map_err(backend("git blob"))?;
+        // A file HEAD has as executable stays executable; a link becomes a file.
+        let mode = match index.get_path(Path::new(&name), 0) {
+            Some(kept) if kept.mode == 0o100755 => 0o100755,
+            _ => 0o100644,
+        };
         index
-            .add(&entry(&name, id))
+            .add(&entry(&name, id, mode))
             .map_err(backend("git tree insert"))?;
         blobs.push((name, id));
     }
@@ -254,8 +259,8 @@ pub(super) fn record_in_index(
             .add_path(Path::new(name))
             .map_err(backend("git add"))?;
         // An LFS path is recorded as its pointer, as the commit holds it.
-        if let Some(mut staged) = index.get_path(Path::new(name), 0)
-            && staged.id != *id
+        if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false)
+            && let Some(mut staged) = index.get_path(Path::new(name), 0)
         {
             staged.id = *id;
             index.add(&staged).map_err(backend("git add"))?;
