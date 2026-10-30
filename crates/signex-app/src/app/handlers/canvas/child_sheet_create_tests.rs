@@ -871,3 +871,34 @@ fn closing_the_project_drops_its_pending_descents() {
 
     assert!(app.ui_state.pending_descents.is_empty());
 }
+
+#[test]
+fn a_missing_child_is_not_offered_against_another_sheet_after_a_tab_switch() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, parent, id) = parent_with_symbol(dir.path());
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    // The user switches to another sheet before the worker reports.
+    let other = dir.path().join("other.snxsch");
+    app.document_state.tabs.push(TabInfo {
+        title: "other".into(),
+        path: other.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(other);
+    let since = crate::diagnostics::newest_entry_id();
+
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| { Some(e.id) > since && e.message.contains("Create Sheet was not offered") })
+    );
+    assert!(app.ui_state.pending_descents.is_empty());
+    drop(parent);
+}

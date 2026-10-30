@@ -16,6 +16,9 @@ use super::super::super::*;
 pub struct PendingDescent {
     symbol: Uuid,
     placement: Option<InstancePath>,
+    /// The sheet the symbol is on: a missing child is offered for creation
+    /// only while that sheet is still the focused one.
+    parent: Option<PathBuf>,
     /// The read this descent waits for; any other completion for the path
     /// (a stale one) must leave it alone.
     generation: Option<u64>,
@@ -57,6 +60,7 @@ impl Signex {
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Schematic".to_string());
+        let parent = self.active_tab_path();
         let task = self.begin_document_read(
             path.clone(),
             crate::app::document_read::ReadJob::ChildSchematic { title },
@@ -69,6 +73,7 @@ impl Signex {
             PendingDescent {
                 symbol: sheet_symbol,
                 placement,
+                parent,
                 generation,
             },
         );
@@ -85,6 +90,14 @@ impl Signex {
         let Some(descent) = self.take_descent(path, generation) else {
             return;
         };
+        if descent.parent != self.active_tab_path() {
+            crate::diagnostics::log_warning(format!(
+                "Create Sheet was not offered for {}: the sheet it was entered from is no \
+                 longer the focused one",
+                path.display()
+            ));
+            return;
+        }
         self.open_create_child_sheet_dialog(descent.symbol, true);
     }
 
