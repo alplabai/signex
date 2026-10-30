@@ -125,10 +125,10 @@ impl Signex {
             .open_libraries
             .iter()
             .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
-            && self.library.writes.pending(&library.root) > 0
+            && self.library.writes.pending_writes(&library.root) > 0
         {
             anyhow::bail!(
-                "{}: a library read or write is still running; try again once it finishes",
+                "{}: a library write is still running; try again once it finishes",
                 path.display()
             );
         }

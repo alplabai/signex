@@ -390,7 +390,7 @@ pub fn reload_task(
     let Some(plan) = state.plan_editor_reload(address, require_clean) else {
         return iced::Task::none();
     };
-    let turn = state.writes.turn(&plan.root);
+    let turn = state.writes.read_turn(&plan.root);
     iced::Task::perform(
         async move {
             let outcome = tokio::task::spawn_blocking(move || {
@@ -414,7 +414,7 @@ pub fn tab_resolve_task(
     let Some(plan) = state.plan_tab_resolve(address, tab) else {
         return iced::Task::none();
     };
-    let turn = state.writes.turn(&plan.root);
+    let turn = state.writes.read_turn(&plan.root);
     iced::Task::perform(
         async move {
             let outcome = tokio::task::spawn_blocking(move || {

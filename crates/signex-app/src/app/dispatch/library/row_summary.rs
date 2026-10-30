@@ -13,7 +13,7 @@ impl Signex {
     pub(crate) fn start_row_summary_read(&mut self) -> Option<Task<Message>> {
         let (generation, request) = self.library.row_summary_job.begin()?;
         let resolver = self.library.shared_resolver();
-        let turn = self.library.writes.turn(request.root());
+        let turn = self.library.writes.read_turn(request.root());
         Some(Task::perform(
             async move {
                 let summaries = tokio::task::spawn_blocking(move || {

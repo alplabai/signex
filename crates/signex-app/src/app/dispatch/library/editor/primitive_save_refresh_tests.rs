@@ -193,3 +193,48 @@ fn a_library_closed_while_the_preview_read_runs_closes_when_it_lands() {
         "the close finished"
     );
 }
+
+/// A background read (the Properties panel's row summary, a preview
+/// re-read) must not make the blocking save, used by the Exclude prompt and
+/// by project close, fail: it only waits for the read, which cannot corrupt
+/// a synchronous write.
+#[test]
+fn the_blocking_save_is_not_refused_by_a_pending_read() {
+    let Fixture {
+        mut app,
+        file,
+        path,
+        ..
+    } = fixture();
+    let read = app.library.writes.read_turn(&file);
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(read);
+    });
+
+    let saved = app.save_primitive_tab_blocking(&path);
+    release.join().expect("the read ends");
+
+    assert!(saved.is_ok(), "{saved:?}");
+    assert!(path.exists(), "the bytes landed");
+}
+
+#[test]
+fn the_blocking_save_is_still_refused_while_a_write_is_pending() {
+    let Fixture {
+        mut app,
+        file,
+        path,
+        ..
+    } = fixture();
+    let _write = app.library.writes.turn(&file);
+
+    let refused = app.save_primitive_tab_blocking(&path).expect_err("refused");
+
+    assert!(
+        refused
+            .to_string()
+            .contains("a library write is still running"),
+        "{refused}"
+    );
+}

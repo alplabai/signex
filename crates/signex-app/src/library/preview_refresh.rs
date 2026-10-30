@@ -238,7 +238,7 @@ pub fn preview_refresh_task(
     };
     // Behind every write of this library started so far, so the read never
     // sees a file half-way through a rewrite (#893).
-    let turn = state.writes.turn(&plan.root);
+    let turn = state.writes.read_turn(&plan.root);
     iced::Task::perform(
         async move {
             let readout = tokio::task::spawn_blocking(move || {

@@ -117,7 +117,7 @@ pub fn refresh_task_from(
     let generation = start.generation;
     // Behind every write of this library started so far, so the read sees
     // them all and never a file half-way through a rewrite (#893).
-    let turn = state.writes.turn(root);
+    let turn = state.writes.read_turn(root);
     iced::Task::perform(
         async move {
             let result = tokio::task::spawn_blocking(move || {

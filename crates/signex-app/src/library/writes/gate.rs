@@ -58,6 +58,8 @@ struct GateState {
     serving: u64,
     /// Numbers released before their turn came.
     skipped: BTreeSet<u64>,
+    /// How many of the turns handed out and not yet released are reads.
+    reads: u64,
 }
 
 /// The write order of one library.
@@ -81,6 +83,12 @@ impl WriteGate {
     pub fn pending(&self) -> u64 {
         let state = self.lock();
         state.next - state.serving
+    }
+
+    /// Writes that have not finished; reads queued behind them do not count.
+    pub fn pending_writes(&self) -> u64 {
+        let state = self.lock();
+        state.next - state.serving - state.reads
     }
 
     /// Wait until every turn handed out so far is released, at most `limit`.
@@ -108,17 +116,20 @@ impl WriteGate {
 pub struct Turn {
     gate: Arc<WriteGate>,
     ticket: u64,
+    read: bool,
 }
 
 impl Turn {
-    fn take(gate: &Arc<WriteGate>) -> Self {
+    fn take(gate: &Arc<WriteGate>, read: bool) -> Self {
         let mut state = gate.lock();
         let ticket = state.next;
         state.next += 1;
+        state.reads += u64::from(read);
         drop(state);
         Self {
             gate: Arc::clone(gate),
             ticket,
+            read,
         }
     }
 
@@ -143,6 +154,7 @@ impl Turn {
 impl Drop for Turn {
     fn drop(&mut self) {
         let mut state = self.gate.lock();
+        state.reads -= u64::from(self.read);
         if state.serving == self.ticket {
             state.serving += 1;
             loop {
@@ -210,7 +222,16 @@ impl LibraryWrites {
     pub fn turn(&mut self, root: &Path) -> Turn {
         let mut gates = lock_gates(&self.gates);
         let gate = gates.entry(root.to_path_buf()).or_default();
-        Turn::take(gate)
+        Turn::take(gate, false)
+    }
+
+    /// The next place in the order of the library at `root` for a worker
+    /// that only reads: it still waits for the writes before it, but it is
+    /// not a write in [`Self::pending_writes`].
+    pub fn read_turn(&mut self, root: &Path) -> Turn {
+        let mut gates = lock_gates(&self.gates);
+        let gate = gates.entry(root.to_path_buf()).or_default();
+        Turn::take(gate, true)
     }
 
     fn gate(&self, root: &Path) -> Option<Arc<WriteGate>> {
@@ -229,6 +250,12 @@ impl LibraryWrites {
     /// Writes of the library at `root` that have not finished.
     pub fn pending(&self, root: &Path) -> u64 {
         self.gate(root).map_or(0, |gate| gate.pending())
+    }
+
+    /// Writes of the library at `root` that have not finished, not counting
+    /// reads queued behind them.
+    pub fn pending_writes(&self, root: &Path) -> u64 {
+        self.gate(root).map_or(0, |gate| gate.pending_writes())
     }
 
     /// `row` of the library at `root` was deleted.
