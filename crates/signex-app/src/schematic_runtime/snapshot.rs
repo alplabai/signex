@@ -470,6 +470,12 @@ pub(super) fn field_text_input(
             v_align,
         });
     }
+    // A power port is a net name, not a part: a placed one carries no
+    // reference prop, so its `#PWR?` designator must not fall back to a
+    // default position (#1771).
+    if symbol.is_power && matches!(slot, FieldSlot::Reference) {
+        return None;
+    }
     let (dy, v_align) = match slot {
         FieldSlot::Reference => (-3.5, VAlign::Bottom),
         FieldSlot::Value => (3.6, VAlign::Top),

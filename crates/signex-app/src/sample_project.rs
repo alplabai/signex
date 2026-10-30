@@ -13,7 +13,8 @@ const PROJECT_FILE: &str = "linear-regulator.snxprj";
 const SHEET_FILE: &str = "linear-regulator.snxsch";
 
 const PROJECT_SOURCE: &str = include_str!("../assets/sample-project/linear-regulator.snxprj");
-const SHEET_SOURCE: &str = include_str!("../assets/sample-project/linear-regulator.snxsch");
+pub(crate) const SHEET_SOURCE: &str =
+    include_str!("../assets/sample-project/linear-regulator.snxsch");
 
 /// `<config_dir>/signex/samples/linear-regulator/`, or `None` when the
 /// platform offers no config directory.

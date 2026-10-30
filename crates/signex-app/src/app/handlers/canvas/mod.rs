@@ -68,7 +68,6 @@ impl Signex {
                     self.ui_state.cursor_document =
                         self.cursor_document_now().map(std::path::Path::to_path_buf);
                 }
-                self.ui_state.zoom = zoom_pct;
                 // Hover detection: one hit test against the active sheet
                 // feeds both the symbol tooltip (a 700 ms dwell on a placed
                 // symbol) and the net-insight dwell (#1270), which reads the

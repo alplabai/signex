@@ -327,6 +327,11 @@ impl CanvasSlot {
         self.drag_layers.get_mut().clear();
     }
 
+    /// Zoom percentage the status bar shows, read from the live camera.
+    pub fn zoom_percent(&self) -> f64 {
+        self.camera.borrow().zoom_percent()
+    }
+
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
     /// read in `view()` from the single [`Self::camera`] home to place
     /// world-anchored overlays (the inline text editor, measurements).
@@ -983,6 +988,36 @@ mod tests {
             canvas.live_camera(),
             before,
             "the fit must land on the camera `view` and `draw` read"
+        );
+    }
+
+    /// #1771 — the status bar read a copy refreshed only by cursor events, so
+    /// it showed 100% after a fit until the first interaction. It now reads
+    /// the camera, which a fit has already moved.
+    #[test]
+    fn the_zoom_readout_follows_a_fit_without_any_cursor_event() {
+        // Arrange
+        let canvas = CanvasSlot::new();
+        canvas.pending_fit.set(Some(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(100.0, 50.0),
+        )));
+        let (overrides, filters) = Default::default();
+        let view = SchematicCanvas::new(&canvas, test_prefs(&overrides, &filters));
+
+        // Act
+        let _ = view.update_pending_fit(Rectangle::new(
+            iced::Point::new(0.0, 0.0),
+            iced::Size::new(800.0, 600.0),
+        ));
+
+        // Assert
+        let scale = f64::from(canvas.live_camera().2);
+        let expected = scale / f64::from(signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE) * 100.0;
+        assert!((canvas.zoom_percent() - expected).abs() < 1e-9);
+        assert!(
+            (canvas.zoom_percent() - 100.0).abs() > 1.0,
+            "a fit moves the zoom"
         );
     }
 

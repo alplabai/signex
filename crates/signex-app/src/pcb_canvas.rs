@@ -206,6 +206,11 @@ impl PcbCanvas {
         self.bg_cache.clear();
     }
 
+    /// Zoom percentage the status bar shows, read from the live camera.
+    pub fn zoom_percent(&self) -> f64 {
+        self.camera.borrow().zoom_percent()
+    }
+
     /// Current pan/zoom for the GPU path as
     /// `(offset_x_px, offset_y_px, scale_px_per_mm)`, read in `view()` from the
     /// single [`Self::camera`] home to build the shader program. Reads the same

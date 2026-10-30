@@ -1040,6 +1040,8 @@ mod drawings_tests;
 #[cfg(test)]
 mod font_geometry_tests;
 #[cfg(test)]
+mod sample_layout_tests;
+#[cfg(test)]
 mod scene_cache_tests;
 #[cfg(test)]
 mod selection_bounds_tests;
