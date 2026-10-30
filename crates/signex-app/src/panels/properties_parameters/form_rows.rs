@@ -268,7 +268,7 @@ pub fn form_grid_row(
         .size(TS.body)
         .color(label_c)
         .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-        .wrapping(iced::widget::text::Wrapping::None);
+        .wrapping(iced::widget::text::Wrapping::Word);
 
     let content: Element<PanelMsg> = if has_checkbox {
         // Snap Grid row: checkbox before pick_list
@@ -355,7 +355,7 @@ pub fn form_font_link_row<'a>(
                 .size(TS.body)
                 .color(label_c)
                 .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::Word),
             iced::widget::button(
                 text(summary)
                     .size(TS.body)

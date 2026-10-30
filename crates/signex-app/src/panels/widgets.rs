@@ -221,35 +221,29 @@ pub fn part_tree_row<'a>(
     .into()
 }
 
-/// Wrap a property-row label `text` in a clipped fill-portion container.
-/// Plain `text(...).width(FillPortion(...)).wrapping(None)` lays out at
-/// the text's intrinsic width and bleeds past the allotted column when
-/// the panel is narrow — covering the value column or the panel edge.
-/// This helper enforces the FillPortion bound and clips visual overflow
-/// inside it. Used by every `form_*_row` and inline property row.
+/// Property-row label: wraps by word inside its fill-portion column, so a
+/// narrow panel grows the row instead of cutting the label's last glyphs.
 pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    container(
-        text(label.into())
-            .size(TS.body)
-            .color(color)
-            .wrapping(iced::widget::text::Wrapping::None),
-    )
-    .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-    .clip(true)
-    .into()
+    property_label_sized(label, color, TS.body, PROPERTY_LABEL_PORTION)
 }
 
 /// Like `property_label`, but for size-10 labels (used by `form_edit_row_f64`).
 fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
-    container(
-        text(label.into())
-            .size(TS.caption)
-            .color(color)
-            .wrapping(iced::widget::text::Wrapping::None),
-    )
-    .width(Length::FillPortion(2))
-    .clip(true)
-    .into()
+    property_label_sized(label, color, TS.caption, 2)
+}
+
+fn property_label_sized<'a, M: 'a>(
+    label: impl Into<String>,
+    color: Color,
+    size: f32,
+    portion: u16,
+) -> Element<'a, M> {
+    text(label.into())
+        .size(size)
+        .color(color)
+        .width(Length::FillPortion(portion))
+        .wrapping(iced::widget::text::Wrapping::Word)
+        .into()
 }
 
 /// Numeric edit row used by the shape pre-placement form. The typed text

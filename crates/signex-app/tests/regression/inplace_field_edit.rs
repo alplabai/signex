@@ -279,3 +279,63 @@ fn a_commit_whose_object_is_gone_says_so_in_messages() {
     let _ = app.update(Message::TextEdit(TextEditMsg::Submit));
     assert!(logged(&["In-place edit discarded", "no longer exists"]));
 }
+
+/// The actions a task yields, as the iced runtime would receive them.
+fn actions(task: iced::Task<Message>) -> Vec<iced_runtime::Action<Message>> {
+    use futures::StreamExt as _;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    tokio::runtime::Runtime::new()
+        .expect("runtime")
+        .block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                out.push(action);
+            }
+            out
+        })
+}
+
+fn is_widget_op(action: &iced_runtime::Action<Message>) -> bool {
+    matches!(action, iced_runtime::Action::Widget(_))
+}
+
+/// #1770 — the editor widget only exists after the view is rebuilt, so the
+/// opening update must not focus it; it asks for the focus one turn later.
+#[test]
+fn opening_the_editor_defers_focus_until_the_widget_exists() {
+    let mut app = app();
+    let task = app.update(Message::CanvasEvent(CanvasEvent::DoubleClicked {
+        world_x: 20.0,
+        world_y: 100.0,
+        screen_x: 0.0,
+        screen_y: 0.0,
+    }));
+    assert!(editing(&app).is_some(), "the label editor should be open");
+    let acts = actions(task);
+    assert!(
+        !acts.iter().any(is_widget_op),
+        "focus must not be issued before the editor is in the view"
+    );
+}
+
+#[test]
+fn the_deferred_focus_message_focuses_the_open_editor() {
+    let mut app = app();
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::DoubleClicked {
+        world_x: 20.0,
+        world_y: 100.0,
+        screen_x: 0.0,
+        screen_y: 0.0,
+    }));
+    let acts = actions(app.update(Message::TextEdit(TextEditMsg::Opened)));
+    assert!(acts.iter().filter(|a| is_widget_op(a)).count() >= 1);
+}
+
+#[test]
+fn the_deferred_focus_message_does_nothing_once_the_editor_is_closed() {
+    let mut app = app();
+    let acts = actions(app.update(Message::TextEdit(TextEditMsg::Opened)));
+    assert!(!acts.iter().any(is_widget_op));
+}

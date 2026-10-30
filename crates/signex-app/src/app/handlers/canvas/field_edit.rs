@@ -54,8 +54,13 @@ fn nothing_to_edit(target: TextEditTarget) -> &'static str {
 }
 
 impl Signex {
-    /// Focus the editor that just opened and select its text.
-    fn focus_text_edit() -> Task<Message> {
+    /// Ask for the editor's focus one turn later, once the view holds it.
+    fn defer_text_edit_focus() -> Task<Message> {
+        Task::done(Message::TextEdit(TextEditMsg::Opened))
+    }
+
+    /// Focus the editor and select its text; it must be in the view already.
+    pub(in crate::app) fn focus_text_edit() -> Task<Message> {
         Task::batch([
             operation::focus(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
             operation::select_all(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
@@ -172,7 +177,7 @@ impl Signex {
             crate::diagnostics::log_warning(nothing_to_edit(target));
             return Task::none();
         }
-        Self::focus_text_edit()
+        Self::defer_text_edit_focus()
     }
 
     /// Double-click on a field: open its editor. `None` when `item` has no
@@ -188,7 +193,7 @@ impl Signex {
                 | SelectedKind::SymbolRefField
                 | SelectedKind::SymbolValField
         );
-        (editable && self.begin_text_edit(item)).then(Self::focus_text_edit)
+        (editable && self.begin_text_edit(item)).then(Self::defer_text_edit_focus)
     }
 
     /// Commit the editor's text through the engine edit Properties uses; one

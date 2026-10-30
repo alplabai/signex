@@ -10,6 +10,7 @@ pub(crate) mod dialogs;
 pub(crate) mod overlay_id;
 pub(crate) mod translate;
 
+mod canvas_region;
 mod chrome;
 mod context_menu;
 mod modals;
@@ -371,8 +372,11 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
-                    &dirty_paths,
-                    &read_only_paths,
+                    &tab_bar::TabMarks {
+                        dirty_paths: &dirty_paths,
+                        read_only_paths: &read_only_paths,
+                        tooltips_enabled: interaction.tab_context_menu.is_none(),
+                    },
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),

@@ -158,7 +158,7 @@ pub enum PrePlacementKind {
 
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
-pub const PROPERTY_LABEL_PORTION: u16 = 2;
+pub const PROPERTY_LABEL_PORTION: u16 = 3;
 pub const PROPERTY_CONTROL_PORTION: u16 = 5;
 pub const PROPERTY_ROW_PAD_X: u16 = 6;
 

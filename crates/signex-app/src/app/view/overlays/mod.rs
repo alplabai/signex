@@ -8,6 +8,7 @@
 //! entry point `collect_overlays` stays in `view/mod.rs` alongside the
 //! other composition-core methods.
 
+use super::canvas_region;
 use super::*;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -20,6 +21,24 @@ mod net_hover;
 pub(super) mod read_only_badge;
 
 impl Signex {
+    /// The canvas rectangle in window coordinates, from the live dock sizes.
+    pub(super) fn canvas_bounds(&self) -> iced::Rectangle {
+        use crate::dock::PanelPosition::{Bottom, Left, Right};
+        let dock = &self.document_state.dock;
+        let extent = |pos, size| canvas_region::DockExtent {
+            present: dock.has_panels(pos),
+            collapsed: dock.is_collapsed(pos),
+            size,
+        };
+        let ui = &self.ui_state;
+        canvas_region::canvas_bounds(
+            ui.window_size,
+            extent(Left, ui.left_width),
+            extent(Right, ui.right_width),
+            extent(Bottom, ui.bottom_height),
+        )
+    }
+
     /// Hover tooltip card showing the placed symbol's designator,
     /// value, footprint, and library id. Only paints after the cursor
     /// has dwelled on a Symbol hit for >= 250 ms — gates impulsive
@@ -130,26 +149,12 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        // Offset to bottom-right so the card never sits directly under
-        // the cursor — keeps the underlying symbol visible and avoids
-        // hover flicker when the tooltip itself enters the cursor's
-        // hover rectangle.
-        const OFFSET: f32 = 16.0;
-        let (ww, wh) = self.ui_state.window_size;
-        // Conservative card-size estimate for edge clamping. The
-        // actual size depends on font metrics so this is a guess
-        // intended to keep the card on-screen near the right/bottom
-        // edges; the iced layout will still render at its true size.
-        const ESTIMATED_W: f32 = CARD_W;
+        // Below-right of the cursor, flipped or clamped to stay on the
+        // canvas (not the Properties panel beside it). The height is an
+        // estimate; iced lays the card out at its true size.
         const ESTIMATED_H: f32 = 110.0;
-        let mut x = sx + OFFSET;
-        let mut y = sy + OFFSET;
-        if x + ESTIMATED_W > ww {
-            x = (sx - OFFSET - ESTIMATED_W).max(0.0);
-        }
-        if y + ESTIMATED_H > wh {
-            y = (sy - OFFSET - ESTIMATED_H).max(0.0);
-        }
+        let (x, y) =
+            canvas_region::place_card((sx, sy), (CARD_W, ESTIMATED_H), self.canvas_bounds());
         Some(super::view::translate::Translate::new(card, (x, y)).into())
     }
 
