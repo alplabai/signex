@@ -43,7 +43,7 @@ impl Signex {
                 Some(Task::perform(
                     async move {
                         target
-                            .dialog(
+                            .new_project_dialog(
                                 "New Signex Project (a folder named after the project is created)",
                             )
                             .set_file_name("Untitled.snxprj")

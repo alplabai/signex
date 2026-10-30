@@ -32,6 +32,14 @@ impl SaveTarget {
         self.dir.as_deref()
     }
 
+    /// Where New Project starts: the folder that holds the open project's
+    /// folder, so the new project lands beside it, never inside it.
+    pub(crate) fn new_project_dir(&self) -> Option<&Path> {
+        self.dir()
+            .and_then(Path::parent)
+            .filter(|dir| !dir.as_os_str().is_empty())
+    }
+
     /// `<name><suffix>.<ext>`, the name being the project or document name;
     /// with neither known, `<fallback>.<ext>` and no suffix.
     pub(crate) fn file_name(&self, fallback: &str, suffix: &str, ext: &str) -> String {
@@ -43,8 +51,17 @@ impl SaveTarget {
 
     /// A save panel titled `title`, started in the project folder when known.
     pub(crate) fn dialog(&self, title: &str) -> rfd::AsyncFileDialog {
+        Self::dialog_in(title, self.dir())
+    }
+
+    /// A New Project panel, started beside the open project's folder.
+    pub(crate) fn new_project_dialog(&self, title: &str) -> rfd::AsyncFileDialog {
+        Self::dialog_in(title, self.new_project_dir())
+    }
+
+    fn dialog_in(title: &str, dir: Option<&Path>) -> rfd::AsyncFileDialog {
         let dialog = rfd::AsyncFileDialog::new().set_title(title);
-        match self.dir() {
+        match dir {
             Some(dir) => dialog.set_directory(dir),
             None => dialog,
         }
@@ -79,6 +96,13 @@ mod tests {
             Some(&p("/work/amp/a.snxsch")),
         );
         assert_eq!(target.dir(), Some(Path::new("/work/amp")));
+    }
+
+    #[test]
+    fn new_project_starts_beside_the_open_project_not_inside_it() {
+        let target = SaveTarget::new(Some(&p("/work/amp/amp.snxprj")), None);
+        assert_eq!(target.new_project_dir(), Some(Path::new("/work")));
+        assert_eq!(SaveTarget::default().new_project_dir(), None);
     }
 
     #[test]
