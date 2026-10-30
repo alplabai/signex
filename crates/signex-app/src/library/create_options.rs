@@ -118,7 +118,18 @@ pub fn view<'a>(
     .padding([10, 14])
     .width(Length::Fill);
 
-    let body = column![git_row, lfs_row].spacing(SP.xs);
+    let mut body = column![git_row, lfs_row].spacing(SP.xs);
+    if let Some(reason) = &state.refusal {
+        body = body.push(
+            container(
+                text(reason.as_str())
+                    .size(TS.caption)
+                    .color(theme_ext::error_color(tokens)),
+            )
+            .padding([6, 14])
+            .width(Length::Fill),
+        );
+    }
 
     let cancel = button(text("Cancel").size(TS.body).color(text_c))
         .padding([SP.s, 14.0])

@@ -187,7 +187,7 @@ impl Signex {
             created_library: false,
             reused: false,
             result: Err("the copy worker stopped before it finished".to_string()),
-            global_libraries: None,
+            registered_global: None,
         };
         Task::perform(
             async move {
@@ -208,8 +208,13 @@ impl Signex {
         let mut tasks = Vec::new();
         // A library this copy created is recorded as global so it is
         // mounted again at the next start, whether or not the copy worked.
-        match outcome.global_libraries {
-            Some(Ok(list)) => self.library.global_libraries = list,
+        // Merge rather than replace: the user may have added a global
+        // library from the Components panel while the worker ran (#1758).
+        match outcome.registered_global {
+            Some(Ok(())) => crate::panels::components_panel::global_prefs::merge_path(
+                &mut self.library.global_libraries,
+                outcome.library.clone(),
+            ),
             Some(Err(reason)) => {
                 self.report_global_libraries_save_failure("register the new library", &reason)
             }

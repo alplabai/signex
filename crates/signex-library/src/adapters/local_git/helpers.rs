@@ -632,7 +632,7 @@ pub(super) fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> 
     for ext in LFS_EXTENSIONS {
         text.push_str(&format!("*.{ext} filter=lfs diff=lfs merge=lfs -text\n"));
     }
-    fs::write(&path, text)?;
+    signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
     Ok(())
 }
 
