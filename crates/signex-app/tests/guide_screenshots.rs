@@ -293,11 +293,7 @@ const PARTS: &[Part] = &[
 
 /// Where a symbol's designator and value sit, as `(dx, dy)` from its origin:
 /// beside the body for the two-pin parts, above and below it otherwise.
-fn field_offsets(
-    lib_id: &str,
-    sheet: &SchematicSheet,
-    reference: &str,
-) -> ((f64, f64), (f64, f64)) {
+fn field_offsets(reference: &str) -> ((f64, f64), (f64, f64)) {
     match reference.chars().next() {
         Some('R' | 'C') => ((2.8, -1.4), (2.8, 1.6)),
         Some('J') => ((-1.5, -6.5), (-1.5, 7.0)),
