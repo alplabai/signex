@@ -54,6 +54,11 @@ use crate::tables::{
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
 const SIMS_DIR: &str = "sims";
+
+/// The folders beside a `.snxlib` that belong to the library. The one list
+/// the Track picker and Re-init both read.
+pub const LIBRARY_SUBFOLDERS: [&str; 5] =
+    ["classes", SYMBOLS_DIR, FOOTPRINTS_DIR, SIMS_DIR, "3dmodels"];
 const SYMBOL_EXT: &str = "snxsym";
 const FOOTPRINT_EXT: &str = "snxfpt";
 const SIM_EXT: &str = "snxsim";
@@ -399,8 +404,12 @@ impl LocalGitAdapter {
         // A fresh, unborn `.git/` left by a refused Re-init would hide the
         // GitMissing recovery on the next open: take it away again.
         Self::reinit_commit(&repo, &file_path, &root_dir).inspect_err(|_| {
-            if created_repo {
-                let _ = fs::remove_dir_all(root_dir.join(".git"));
+            if created_repo && let Err(e) = fs::remove_dir_all(root_dir.join(".git")) {
+                tracing::warn!(
+                    target: "signex::library",
+                    "Re-init could not remove the unborn .git it made in {}: {e}",
+                    root_dir.display()
+                );
             }
         })?;
         // Stamp first: a write racing the read then costs one extra reload.

@@ -8,12 +8,11 @@ use super::*;
 
 /// Folders only the library writes into. Their content in a Re-init commit
 /// is exactly what is on disk, so a deleted primitive leaves the tree.
-const OWNED_DIRS: [&str; 4] = [
-    SYMBOLS_DIR,
-    FOOTPRINTS_DIR,
-    SIMS_DIR,
-    crate::datasheet_asset::DATASHEET_ASSET_DIR,
-];
+fn owned_dirs() -> impl Iterator<Item = &'static str> {
+    LIBRARY_SUBFOLDERS
+        .into_iter()
+        .chain([crate::datasheet_asset::DATASHEET_ASSET_DIR])
+}
 
 pub(super) struct Snapshot {
     pub(super) tree: git2::Oid,
@@ -32,15 +31,34 @@ pub(super) fn refuse_foreign_history<'r>(
     root_dir: &Path,
 ) -> Result<Option<git2::Commit<'r>>, LibraryError> {
     let head = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
-    if let Some(head) = &head {
-        let name = file_name_str(file_path)?;
-        let tracked = head.tree().is_ok_and(|tree| tree.get_name(&name).is_some());
-        if !tracked {
-            return Err(LibraryError::Conflict(format!(
-                "{} is a git repository that does not track this library",
-                root_dir.display()
-            )));
+    let name = file_name_str(file_path)?;
+    let tracks = |commit: &git2::Commit| {
+        commit
+            .tree()
+            .is_ok_and(|tree| tree.get_name(&name).is_some())
+    };
+    let foreign = match &head {
+        Some(head) => !tracks(head),
+        // An unborn HEAD (a deleted `HEAD` file is re-made at the default
+        // branch) can hide a repo whose real branch has history.
+        None => {
+            let tips: Vec<git2::Commit> = repo
+                .branches(Some(git2::BranchType::Local))
+                .map(|branches| {
+                    branches
+                        .flatten()
+                        .filter_map(|(branch, _)| branch.get().peel_to_commit().ok())
+                        .collect()
+                })
+                .unwrap_or_default();
+            !tips.is_empty() && !tips.iter().any(&tracks)
         }
+    };
+    if foreign {
+        return Err(LibraryError::Conflict(format!(
+            "{} is a git repository that does not track this library",
+            root_dir.display()
+        )));
     }
     Ok(head)
 }
@@ -105,7 +123,7 @@ fn library_files(
             out.push(name.to_string());
         }
     }
-    for dir in OWNED_DIRS {
+    for dir in owned_dirs() {
         collect_files(repo, root_dir, dir, &mut out)?;
     }
     Ok(out)
@@ -142,7 +160,15 @@ fn collect_files(
         };
         let child = format!("{rel}/{name}");
         let kind = entry.file_type()?;
-        if kind.is_dir() {
+        if kind.is_dir()
+            && (name == ".git" || fs::symlink_metadata(entry.path().join(".git")).is_ok())
+        {
+            tracing::warn!(
+                target: "signex::library",
+                "Re-init left out {}: it is or holds a git repository",
+                entry.path().display()
+            );
+        } else if kind.is_dir() {
             collect_files(repo, root_dir, &child, out)?;
         } else if kind.is_symlink() {
             tracing::warn!(
@@ -203,10 +229,12 @@ pub(super) fn library_tree(
         let tracked: Vec<String> = index
             .iter()
             .filter_map(|e| String::from_utf8(e.path).ok())
-            .filter(|p| OWNED_DIRS.iter().any(|d| p.starts_with(&format!("{d}/"))))
+            .filter(|p| owned_dirs().any(|d| p.starts_with(&format!("{d}/"))))
             .collect();
         for path in tracked {
-            if fs::symlink_metadata(root_dir.join(&path)).is_err() {
+            if fs::symlink_metadata(root_dir.join(&path))
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            {
                 index
                     .remove_path(Path::new(&path))
                     .map_err(backend("git tree remove"))?;

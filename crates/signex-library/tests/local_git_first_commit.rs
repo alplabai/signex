@@ -433,7 +433,11 @@ fn a_failed_recover_init_never_removes_a_git_dir_that_was_already_there() {
 fn recover_init_refuses_another_repo_whose_head_file_is_gone() {
     let tmp = tempfile::tempdir().unwrap();
     let lib = plain_library(tmp.path());
-    let (_repo, before) = repo_with_staged_work(tmp.path());
+    let (repo, before) = repo_with_staged_work(tmp.path());
+    // The real branch is not the one `git init` re-makes `HEAD` at.
+    git2::Branch::wrap(repo.head().unwrap())
+        .rename("main-x", true)
+        .unwrap();
     std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
 
     let Err(err) = LocalGitAdapter::recover_init(&lib) else {
@@ -445,6 +449,47 @@ fn recover_init_refuses_another_repo_whose_head_file_is_gone() {
         "{err}"
     );
     assert!(tmp.path().join(".git").is_dir());
-    assert_eq!(head(tmp.path()), before, "history untouched");
-    assert!(!head_tracks(tmp.path(), "lib.snxlib"));
+    let repo = Repository::open(tmp.path()).unwrap();
+    let tip = repo.find_branch("main-x", git2::BranchType::Local).unwrap();
+    assert_eq!(tip.get().target().unwrap(), before, "history untouched");
+    assert!(repo.head().is_err(), "nothing was committed");
+}
+
+/// #1741: every folder the Track picker names as a library folder is
+/// committed by Re-init.
+#[test]
+fn recover_init_commits_every_library_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    for dir in signex_library::adapters::local_git::LIBRARY_SUBFOLDERS {
+        std::fs::create_dir_all(tmp.path().join(dir)).unwrap();
+        std::fs::write(tmp.path().join(dir).join("f.bin"), dir).unwrap();
+    }
+    std::fs::create_dir_all(tmp.path().join("3dmodels")).unwrap();
+    std::fs::write(tmp.path().join("3dmodels/r.step"), "model").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    for dir in signex_library::adapters::local_git::LIBRARY_SUBFOLDERS {
+        assert!(head_tracks(tmp.path(), &format!("{dir}/f.bin")), "{dir}");
+    }
+    assert!(head_tracks(tmp.path(), "3dmodels/r.step"));
+}
+
+/// #1741: an embedded repository inside a library folder is left out, not a
+/// reason for Re-init to fail.
+#[test]
+fn recover_init_leaves_out_an_embedded_repository() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let vendor = tmp.path().join("symbols/vendor");
+    std::fs::create_dir_all(&vendor).unwrap();
+    Repository::init(&vendor).unwrap();
+    std::fs::write(vendor.join("a.snxsym"), "a").unwrap();
+    std::fs::write(tmp.path().join("symbols/ok.snxsym"), "ok").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "symbols/ok.snxsym"));
+    assert!(!head_tracks(tmp.path(), "symbols/vendor/a.snxsym"));
 }
