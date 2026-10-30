@@ -110,6 +110,28 @@ pub fn version_control_refusal(
     scan_for_other_projects(dir, &target, project_stem).err()
 }
 
+/// The refusal message when a new library at `lib_path` cannot get its own
+/// repository, or `None` when it can. A library folder that is the root of an
+/// existing repository with history would be reopened by `git init`, and the
+/// library's parentless first commit would then fail ("current tip is not the
+/// first parent"); a project's own repo is the usual case. A folder merely
+/// *inside* another repository is fine: `git init` makes a nested one.
+pub fn library_repo_refusal(lib_path: &Path) -> Option<String> {
+    let dir = lib_path.parent().filter(|d| !d.as_os_str().is_empty())?;
+    if !dir.join(".git").exists() {
+        return None;
+    }
+    let repo = git2::Repository::open(dir).ok()?;
+    // A repository with no commit yet takes the library's first commit.
+    repo.head().ok()?.peel_to_commit().ok()?;
+    Some(format!(
+        "{} is already a version-controlled folder with its own history, so the library \
+         cannot get its own repository there. Put the library in its own folder, for \
+         example a `<project>-lib` subfolder, or turn off version control for it.",
+        dir.display()
+    ))
+}
+
 fn canonical_or_given(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
@@ -423,5 +445,35 @@ mod tests {
             enclosing_project(&tmp.path().join("Work").join("X"), &none),
             None
         );
+    }
+
+    #[test]
+    fn library_repo_refusal_only_for_the_root_of_a_repo_with_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let lib = |d: &Path| d.join("p-lib.snxlib");
+        assert_eq!(library_repo_refusal(&lib(root)), None, "plain folder");
+        assert_eq!(
+            library_repo_refusal(Path::new("p-lib.snxlib")),
+            None,
+            "relative path is not probed against the CWD"
+        );
+
+        let repo = git2::Repository::init(root).unwrap();
+        assert_eq!(library_repo_refusal(&lib(root)), None, "repo, no commit");
+
+        let sig = git2::Signature::now("t", "t@example.com").unwrap();
+        let tree = repo
+            .find_tree(repo.index().unwrap().write_tree().unwrap())
+            .unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap();
+        let reason = library_repo_refusal(&lib(root)).expect("root of a repo with history");
+        assert!(reason.contains("own history"), "{reason}");
+
+        let sub = root.join("p-lib");
+        assert_eq!(library_repo_refusal(&lib(&sub)), None, "subfolder, missing");
+        std::fs::create_dir_all(&sub).unwrap();
+        assert_eq!(library_repo_refusal(&lib(&sub)), None, "subfolder, present");
     }
 }

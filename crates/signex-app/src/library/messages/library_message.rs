@@ -43,7 +43,7 @@ pub enum LibraryMessage {
     /// Library. Carries the active project's root directory; the
     /// dispatcher opens an `rfd::AsyncFileDialog::save_file()` with
     /// `.snxlib` filter so the user picks the library's name and
-    /// location (defaults to `<root>/<project>-lib.snxlib` for the
+    /// location (defaults to `<root>/<project>-lib/<project>-lib.snxlib` for the
     /// common project-local case, but the user can navigate anywhere
     /// for a shared library). On confirm, dispatches
     /// `CreateLibraryAtPath` with the chosen path.

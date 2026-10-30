@@ -96,6 +96,15 @@ in a hidden filter by file extension.
   block and records it in the library's first commit, beside
   `.gitattributes`; `init` and `complete_init` (a left-behind pending
   library) both go through it.
+  The New Library dialog suggests `<project>-lib/<project>-lib.snxlib`, a
+  folder of its own, so the library gets its own repository (`git init` in a
+  folder inside another repository makes a nested one). The library folder
+  must not be the root of a repository that already has commits: `git init`
+  would reopen that repo and the parentless first commit fails ("current tip
+  is not the first parent"). `vcs_target_guard::library_repo_refusal` checks
+  this when Create Library is pressed (the Library Options modal stays open
+  with the reason) and again before the pending library is written at
+  project save.
 - **Enable Version Control.** Library scope stages the block too; project
   scope also gets the managed `.gitattributes` block.
 - **Older library repositories.** Opening a library writes nothing: an
