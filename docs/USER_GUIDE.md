@@ -179,8 +179,9 @@ how many ("N excluded: not a measurement in Ω."). **✕** removes the filter.
 To place a part, open a schematic sheet, then either:
 
 - choose **Place ▸ Component…** (or **File ▸ Library ▸ Place Component…**,
-  the `P` shortcut, or the Active Bar's **Part** button, which all open the same
-  picker), select a part and press **Place**; or
+  `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
+  **Part** button, which all open the same picker), select a part and press
+  **Place**; or
 - press **Place** at the end of a part's row in the Components panel.
 
 The part attaches to the cursor and follows it on the grid. While it is
