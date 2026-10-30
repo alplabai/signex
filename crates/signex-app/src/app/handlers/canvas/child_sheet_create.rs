@@ -70,10 +70,10 @@ impl Signex {
     /// The context-menu route: open the child when its file exists, else the
     /// Create Sheet dialog.
     pub(crate) fn create_child_sheet_from_symbol(&mut self, symbol_id: Uuid) -> Task<Message> {
-        if let Some((_, filename)) = self.sheet_symbol_identity(symbol_id) {
-            self.descend_through_sheet_symbol(symbol_id, &filename);
+        match self.sheet_symbol_identity(symbol_id) {
+            Some((_, filename)) => self.descend_through_sheet_symbol(symbol_id, &filename),
+            None => Task::none(),
         }
-        Task::none()
     }
 
     fn sheet_symbol_identity(&self, symbol: Uuid) -> Option<(String, String)> {
@@ -213,10 +213,15 @@ impl Signex {
             .document_project(&confirm.parent)
             .map(|p| p.id);
         match self.link_and_open_child_sheet(project_id, &confirm.parent, confirm.symbol, path) {
-            Ok(()) => self.ui_state.create_child_sheet_confirm = None,
-            Err(why) => self.set_dialog_error(why, true),
+            Ok(task) => {
+                self.ui_state.create_child_sheet_confirm = None;
+                task
+            }
+            Err(why) => {
+                self.set_dialog_error(why, true);
+                Task::none()
+            }
         }
-        Task::none()
     }
 
     fn resolve_dialog_path(
@@ -343,10 +348,13 @@ impl Signex {
                 return Task::none();
             }
         }
-        if let Err(why) = self.link_and_open_child_sheet(project_id, parent, symbol, path) {
-            self.refuse_child_sheet(why);
+        match self.link_and_open_child_sheet(project_id, parent, symbol, path) {
+            Ok(task) => task,
+            Err(why) => {
+                self.refuse_child_sheet(why);
+                Task::none()
+            }
         }
-        Task::none()
     }
 
     /// Point the symbol at `path` FIRST (the engine may refuse), then list the
@@ -358,7 +366,7 @@ impl Signex {
         parent: &std::path::Path,
         symbol: Uuid,
         path: std::path::PathBuf,
-    ) -> Result<(), String> {
+    ) -> Result<Task<Message>, String> {
         self.point_symbol_at_file(parent, symbol, &path)?;
         if let Some(id) = project_id {
             self.register_child_sheet_in_project(id, &path);
@@ -369,11 +377,13 @@ impl Signex {
             .get(parent)
             .and_then(|e| e.document().child_sheets.iter().find(|c| c.uuid == symbol))
             .map(|c| c.filename.clone());
-        match filename {
+        Ok(match filename {
             Some(filename) => self.open_existing_child_sheet(parent, symbol, &filename, path),
-            None => self.open_sheet_with_placement(path, None),
-        }
-        Ok(())
+            None => {
+                self.open_sheet_with_placement(path, None);
+                Task::none()
+            }
+        })
     }
 
     /// Set the symbol's File field to `path`, relative to the parent sheet:
@@ -432,12 +442,12 @@ impl Signex {
         symbol: Uuid,
         filename: &str,
         path: std::path::PathBuf,
-    ) {
+    ) -> Task<Message> {
         if self.active_tab_path().as_deref() == Some(parent) {
-            self.descend_through_sheet_symbol(symbol, filename);
-        } else {
-            self.open_sheet_with_placement(path, None);
+            return self.descend_through_sheet_symbol(symbol, filename);
         }
+        self.open_sheet_with_placement(path, None);
+        Task::none()
     }
 
     /// List `path` among the project's sheets (relative to the project folder)

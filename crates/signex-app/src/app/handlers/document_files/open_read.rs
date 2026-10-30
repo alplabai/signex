@@ -39,9 +39,20 @@ impl Signex {
         result: Result<Box<LoadedDocument>, OpenFailure>,
     ) -> Task<Message> {
         let path = request.path.clone();
+        let generation = request.generation;
+        // A stale completion (closed meanwhile, asked again) is not the read a
+        // descent waits for and must not settle it.
+        let current = self
+            .document_state
+            .pending_opens
+            .is_current(&path, generation);
         let task = self.finish_document_read(request, result);
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
+        // So was a canvas descent, which records its placement now.
+        if current {
+            self.finish_descent(&path, generation);
+        }
         task
     }
 
@@ -77,6 +88,11 @@ impl Signex {
         match result {
             Ok(document) => self.install_loaded_document(request.path, *document),
             Err(failure) => {
+                // No silent no-op: a descent into a missing child offers to
+                // create the file (#1275).
+                if matches!(failure, OpenFailure::Missing(_)) {
+                    self.offer_to_create_missing_child(&request.path, request.generation);
+                }
                 self.report_read_failure(failure);
                 Task::none()
             }
@@ -101,6 +117,7 @@ impl Signex {
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
         self.ui_state.pending_create_sheet = None;
+        self.ui_state.pending_descents.clear();
         self.document_state.pending_restores.cancel_all_retaining();
     }
 
@@ -137,6 +154,9 @@ impl Signex {
                 "Failed to open project tree document",
                 &anyhow::anyhow!(message),
             ),
+            OpenFailure::Missing(message) => {
+                crate::diagnostics::log_info(message);
+            }
             OpenFailure::Card(message) => {
                 crate::diagnostics::log_error(
                     "Failed to open primitive",

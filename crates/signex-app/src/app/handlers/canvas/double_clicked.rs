@@ -32,8 +32,7 @@ impl Signex {
         };
 
         if let Some((sheet_symbol, child_filename)) = child_filename_to_open {
-            self.descend_through_sheet_symbol(sheet_symbol, child_filename.as_str());
-            return Task::none();
+            return self.descend_through_sheet_symbol(sheet_symbol, child_filename.as_str());
         }
 
         // Lasso already commits on the second single-click
@@ -77,8 +76,7 @@ impl Signex {
                 return Task::none();
             }
             Tool::Sheet => {
-                self.place_sheet_click(world_x, world_y);
-                return Task::none();
+                return self.place_sheet_click(world_x, world_y);
             }
             Tool::Rectangle => {
                 let (pp_w, pp_fill) = pre_placement_shape(&self.document_state);

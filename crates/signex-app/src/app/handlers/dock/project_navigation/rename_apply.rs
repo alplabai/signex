@@ -71,7 +71,7 @@ impl Signex {
 
     /// Does the open rename dialog still name `path`? It may have been closed
     /// or reopened for another file while the worker ran.
-    fn dialog_targets(&self, path: &std::path::Path) -> bool {
+    pub(super) fn dialog_targets(&self, path: &std::path::Path) -> bool {
         self.ui_state
             .rename_dialog
             .as_ref()
