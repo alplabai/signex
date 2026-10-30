@@ -185,7 +185,15 @@ impl Signex {
                 "[rename] Project file {} was not renamed: {reason}",
                 job.from.display()
             ));
-            self.set_rename_error(&format!("Rename failed: {reason}"));
+            // Only a dialog still open for this file shows it; another dialog
+            // (reopened for a sheet meanwhile) must not.
+            let shown = format!("Rename failed: {reason}");
+            if self.dialog_targets(&job.from) {
+                self.set_rename_error(&shown);
+            } else {
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::rename_failed(shown));
+            }
             return Task::none();
         }
         let recent_task = self.replace_recent_project(&job.recent_key, &job.to);
@@ -200,7 +208,9 @@ impl Signex {
                  updated; the file is now {}",
                 job.to.display()
             ));
-            self.ui_state.rename_dialog = None;
+            if self.dialog_targets(&job.from) {
+                self.ui_state.rename_dialog = None;
+            }
             return recent_task;
         };
         let old_stem = job
@@ -210,7 +220,9 @@ impl Signex {
             .unwrap_or_default();
         self.rekey_renamed_project_file(idx, &job.from, &job.to, &job.new_stem);
         self.queue_project_rename_commit(&job.from, &job.to, &old_stem, &job.new_stem);
-        self.ui_state.rename_dialog = None;
+        if self.dialog_targets(&job.from) {
+            self.ui_state.rename_dialog = None;
+        }
         self.refresh_panel_ctx();
         recent_task
     }

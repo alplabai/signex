@@ -122,3 +122,60 @@ fn a_project_closed_while_the_file_moves_is_reported_not_rekeyed() {
             .any(|e| { Some(e.id) > since && e.message.contains("closed or moved meanwhile") })
     );
 }
+
+/// Cancel the project rename, then open Rename on a sheet (another file).
+fn reopen_dialog_for_another_file(fx: &mut Fixture, other: &Path) {
+    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        project_id: None,
+        target_path: other.to_path_buf(),
+        tree_path: vec![0],
+        buffer: "half_typed".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+}
+
+#[test]
+fn a_failed_move_does_not_blame_a_dialog_reopened_for_another_file() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let (mut fx, old_file) = file_only(root.path());
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    let sheet = fx.sheet.clone();
+    reopen_dialog_for_another_file(&mut fx, &sheet);
+    std::fs::remove_file(&old_file).expect("remove");
+
+    run_task(&mut fx.app, task);
+
+    let dialog = fx
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("sheet dialog");
+    assert!(dialog.error.is_none(), "{:?}", dialog.error);
+    let notice = fx.app.document_state.error_notice.as_ref().expect("notice");
+    assert!(notice.detail.contains("Rename failed"), "{}", notice.detail);
+}
+
+#[test]
+fn a_finished_move_does_not_close_a_dialog_reopened_for_another_file() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let (mut fx, old_file) = file_only(root.path());
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+    let sheet = fx.sheet.clone();
+    reopen_dialog_for_another_file(&mut fx, &sheet);
+
+    run_task(&mut fx.app, task);
+
+    let dialog = fx
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .expect("sheet dialog kept");
+    assert_eq!(dialog.buffer, "half_typed");
+    assert_eq!(
+        fx.app.document_state.projects[0].path,
+        old_file.with_file_name("Bar.snxprj")
+    );
+}
