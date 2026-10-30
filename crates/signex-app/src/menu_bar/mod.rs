@@ -204,6 +204,8 @@ pub enum MenuMessage {
     AnnotateBack,
     AnnotateSheets,
     Erc,
+    /// Design ▸ Parameter Manager... - the active sheet's parameter table.
+    OpenParameterManager,
     ToggleAutoFocus,
     // Tools
     /// Open the Preferences dialog.
@@ -374,6 +376,9 @@ mod view;
 #[cfg(test)]
 pub(crate) mod panel_check_tests;
 #[cfg(test)]
+mod parameter_manager_tests;
+
+#[cfg(test)]
 mod planned_tests;
 
 pub use view::view;
@@ -410,7 +415,7 @@ fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
 /// bind (or the user unbound) shows no hint (#1378).
 fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
     let Some(keymap) = ctx.active_keymap.as_ref() else {
-        return Some(fallback.to_string());
+        return (!fallback.is_empty()).then(|| fallback.to_string());
     };
     let command = AppCommandId::new(command_id).ok()?;
     keymap.shortcut_label(&command)
