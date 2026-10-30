@@ -85,7 +85,7 @@ fn head_tracks(dir: &Path, name: &str) -> bool {
         .unwrap()
         .tree()
         .unwrap();
-    tree.get_name(name).is_some()
+    tree.get_path(Path::new(name)).is_ok()
 }
 
 #[test]
@@ -178,4 +178,320 @@ fn complete_init_without_version_control_does_nothing() {
 
     assert!(!tmp.path().join(".git").exists());
     assert!(!tmp.path().join(".gitattributes").exists());
+}
+
+/// #1741: Re-init in a project folder commits the library's own files, not
+/// the project's.
+#[test]
+fn recover_init_commits_only_the_librarys_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/r.snxsym"), "sym").unwrap();
+    std::fs::write(tmp.path().join("notes.txt"), "stray").unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "project").unwrap();
+    std::fs::write(tmp.path().join("main.snxsch"), "sheet").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "lib.snxlib"));
+    assert!(head_tracks(tmp.path(), "symbols/r.snxsym"));
+    for stray in ["notes.txt", "demo.snxprj", "main.snxsch"] {
+        assert!(!head_tracks(tmp.path(), stray), "{stray} must stay out");
+    }
+    assert!(head_tracks(tmp.path(), ".gitignore"));
+}
+
+/// #1741: a folder that is another repo with history, not tracking the
+/// library, is refused with a reason and nothing is committed.
+#[test]
+fn recover_init_refuses_a_repo_that_does_not_track_the_library() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let (_repo, before) = repo_with_staged_work(tmp.path());
+
+    let Err(err) = LocalGitAdapter::recover_init(&lib) else {
+        panic!("re-init must refuse");
+    };
+
+    assert!(
+        err.to_string().contains("does not track this library"),
+        "{err}"
+    );
+    assert_eq!(head(tmp.path()), before, "history untouched");
+    assert!(!head_tracks(tmp.path(), "staged.txt"));
+    assert!(!head_tracks(tmp.path(), "lib.snxlib"));
+}
+
+fn stage(dir: &Path, name: &str) {
+    std::fs::write(dir.join(name), "staged by the user").unwrap();
+    let repo = Repository::open(dir).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new(name)).unwrap();
+    index.write().unwrap();
+}
+
+fn index_has(dir: &Path, name: &str) -> bool {
+    let repo = Repository::open(dir).unwrap();
+    let index = repo.index().unwrap();
+    index.get_path(Path::new(name), 0).is_some()
+}
+
+/// #1741: a half-made repo (unborn HEAD) whose user staged a project file:
+/// Re-init commits the library, not what was staged, and leaves it staged.
+#[test]
+fn recover_init_on_an_unborn_repo_leaves_staged_work_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    Repository::init(tmp.path()).unwrap();
+    stage(tmp.path(), "demo.snxprj");
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "lib.snxlib"));
+    assert!(!head_tracks(tmp.path(), "demo.snxprj"));
+    assert!(index_has(tmp.path(), "demo.snxprj"), "still staged");
+}
+
+/// #1741: the library is tracked by a project repo (default layout), the user
+/// has staged a project file, a primitive was deleted and a project `models/`
+/// folder sits beside the library.
+#[test]
+fn recover_init_in_a_tracking_repo_commits_library_changes_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/keep.snxsym"), "k").unwrap();
+    std::fs::write(tmp.path().join("symbols/gone.snxsym"), "g").unwrap();
+    LocalGitAdapter::recover_init(&lib).expect("first re-init");
+    assert!(head_tracks(tmp.path(), "symbols/gone.snxsym"));
+
+    std::fs::remove_file(tmp.path().join("symbols/gone.snxsym")).unwrap();
+    std::fs::write(tmp.path().join("symbols/new.snxsym"), "n").unwrap();
+    std::fs::create_dir_all(tmp.path().join("models")).unwrap();
+    std::fs::write(tmp.path().join("models/part.step"), "project model").unwrap();
+    stage(tmp.path(), "demo.snxprj");
+    let before = head(tmp.path());
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert_ne!(head(tmp.path()), before, "a new commit");
+    assert!(!head_tracks(tmp.path(), "demo.snxprj"));
+    assert!(!head_tracks(tmp.path(), "models/part.step"));
+    assert!(!head_tracks(tmp.path(), "symbols/gone.snxsym"), "deleted");
+    assert!(head_tracks(tmp.path(), "symbols/keep.snxsym"));
+    assert!(head_tracks(tmp.path(), "symbols/new.snxsym"));
+    assert!(index_has(tmp.path(), "demo.snxprj"), "still staged");
+    assert!(!index_has(tmp.path(), "symbols/gone.snxsym"));
+}
+
+/// #1741: a link in a library folder is never read through: its target's
+/// contents (a private file outside the library) do not enter history.
+#[cfg(unix)]
+#[test]
+fn recover_init_never_commits_what_a_symlink_points_at() {
+    let outside = tempfile::tempdir().unwrap();
+    let secret = outside.path().join("id_rsa");
+    std::fs::write(&secret, "PRIVATE KEY").unwrap();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/ok.snxsym"), "ok").unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join("symbols/leak.snxsym")).unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join(".gitattributes")).unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "symbols/ok.snxsym"));
+    assert!(!head_tracks(tmp.path(), "symbols/leak.snxsym"));
+    assert!(!head_tracks(tmp.path(), ".gitattributes"));
+}
+
+// Only the unix symlink tests read a blob back.
+#[cfg(unix)]
+fn blob_text(dir: &Path, name: &str) -> String {
+    let repo = Repository::open(dir).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let blob = tree
+        .get_path(Path::new(name))
+        .unwrap()
+        .to_object(&repo)
+        .unwrap();
+    String::from_utf8_lossy(blob.as_blob().unwrap().content()).into_owned()
+}
+
+/// #1741: a file the user's own ignore rules name stays out of history.
+#[test]
+fn recover_init_respects_the_users_ignore_rules() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::write(tmp.path().join(".gitignore"), "*.bak\n").unwrap();
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/ok.snxsym"), "ok").unwrap();
+    std::fs::write(tmp.path().join("symbols/x.bak"), "scratch").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "symbols/ok.snxsym"));
+    assert!(!head_tracks(tmp.path(), "symbols/x.bak"));
+}
+
+#[cfg(unix)]
+mod links {
+    use super::*;
+
+    /// A `.gitignore` that cannot take the managed block does not fail
+    /// Re-init.
+    #[test]
+    fn recover_init_goes_on_with_an_unwritable_gitignore() {
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("ignore");
+        std::fs::write(&target, "*.bak\n").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = plain_library(tmp.path());
+        std::os::unix::fs::symlink(&target, tmp.path().join(".gitignore")).unwrap();
+
+        LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+        assert!(head_tracks(tmp.path(), "lib.snxlib"));
+        assert!(!head_tracks(tmp.path(), ".gitignore"));
+    }
+
+    /// A refused Re-init that created the repo takes its unborn `.git/` away.
+    #[test]
+    fn a_refused_recover_init_leaves_no_unborn_repo_behind() {
+        let outside = tempfile::tempdir().unwrap();
+        let real = outside.path().join("real.snxlib");
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = plain_library(tmp.path());
+        std::fs::rename(&lib, &real).unwrap();
+        std::os::unix::fs::symlink(&real, &lib).unwrap();
+
+        assert!(LocalGitAdapter::recover_init(&lib).is_err());
+
+        assert!(!tmp.path().join(".git").exists());
+    }
+
+    /// A tracked file that is now a link keeps what HEAD has; it is not a
+    /// silent deletion.
+    #[test]
+    fn recover_init_keeps_a_tracked_file_that_became_a_link() {
+        let outside = tempfile::tempdir().unwrap();
+        let secret = outside.path().join("secret");
+        std::fs::write(&secret, "PRIVATE").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = plain_library(tmp.path());
+        std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+        let sym = tmp.path().join("symbols/x.snxsym");
+        std::fs::write(&sym, "orig").unwrap();
+        LocalGitAdapter::recover_init(&lib).expect("first");
+
+        std::fs::remove_file(&sym).unwrap();
+        std::os::unix::fs::symlink(&secret, &sym).unwrap();
+        LocalGitAdapter::recover_init(&lib).expect("second");
+
+        assert_eq!(blob_text(tmp.path(), "symbols/x.snxsym"), "orig");
+    }
+}
+
+/// #1741: a repo whose `.git/` will not open (its `HEAD` is gone) is the
+/// user's recoverable history. A Re-init that fails must leave it be.
+#[cfg(unix)]
+#[test]
+fn a_failed_recover_init_never_removes_a_git_dir_that_was_already_there() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/a.snxsym"), "a").unwrap();
+    LocalGitAdapter::recover_init(&lib).expect("first");
+    let before = head(tmp.path());
+
+    std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
+    let unreadable = tmp.path().join("symbols/b.snxsym");
+    std::fs::write(&unreadable, "b").unwrap();
+    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&unreadable).is_ok() {
+        return; // running as root: the file is readable, nothing fails
+    }
+
+    assert!(LocalGitAdapter::recover_init(&lib).is_err());
+
+    assert!(tmp.path().join(".git").is_dir(), "history was removed");
+    let repo = Repository::open(tmp.path()).unwrap();
+    assert!(repo.find_commit(before).is_ok(), "the commit is gone");
+}
+
+/// #1741: the same corrupt-repo route (no `HEAD`) is refused when the repo's
+/// history does not track the library; nothing is committed.
+#[test]
+fn recover_init_refuses_another_repo_whose_head_file_is_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let (repo, before) = repo_with_staged_work(tmp.path());
+    // The real branch is not the one `git init` re-makes `HEAD` at.
+    git2::Branch::wrap(repo.head().unwrap())
+        .rename("main-x", true)
+        .unwrap();
+    std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
+
+    let Err(err) = LocalGitAdapter::recover_init(&lib) else {
+        panic!("re-init must refuse");
+    };
+
+    assert!(
+        err.to_string().contains("does not track this library"),
+        "{err}"
+    );
+    assert!(tmp.path().join(".git").is_dir());
+    let repo = Repository::open(tmp.path()).unwrap();
+    let tip = repo.find_branch("main-x", git2::BranchType::Local).unwrap();
+    assert_eq!(tip.get().target().unwrap(), before, "history untouched");
+    assert!(repo.head().is_err(), "nothing was committed");
+}
+
+/// #1741: every folder the Track picker names as a library folder is
+/// committed by Re-init.
+#[test]
+fn recover_init_commits_every_library_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    for dir in signex_library::adapters::local_git::LIBRARY_SUBFOLDERS {
+        std::fs::create_dir_all(tmp.path().join(dir)).unwrap();
+        std::fs::write(tmp.path().join(dir).join("f.bin"), dir).unwrap();
+    }
+    std::fs::create_dir_all(tmp.path().join("3dmodels")).unwrap();
+    std::fs::write(tmp.path().join("3dmodels/r.step"), "model").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    for dir in signex_library::adapters::local_git::LIBRARY_SUBFOLDERS {
+        assert!(head_tracks(tmp.path(), &format!("{dir}/f.bin")), "{dir}");
+    }
+    assert!(head_tracks(tmp.path(), "3dmodels/r.step"));
+}
+
+/// #1741: an embedded repository inside a library folder is left out, not a
+/// reason for Re-init to fail.
+#[test]
+fn recover_init_leaves_out_an_embedded_repository() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let vendor = tmp.path().join("symbols/vendor");
+    std::fs::create_dir_all(&vendor).unwrap();
+    Repository::init(&vendor).unwrap();
+    std::fs::write(vendor.join("a.snxsym"), "a").unwrap();
+    std::fs::write(tmp.path().join("symbols/ok.snxsym"), "ok").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "symbols/ok.snxsym"));
+    assert!(!head_tracks(tmp.path(), "symbols/vendor/a.snxsym"));
 }
