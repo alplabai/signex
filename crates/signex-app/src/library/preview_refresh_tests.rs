@@ -226,3 +226,34 @@ fn a_preview_that_never_resolved_stays_lazy() {
 
     assert!(fx.state.plan_preview_refresh(&saved).is_none());
 }
+
+#[test]
+fn a_readout_planned_under_a_closed_mount_does_not_land_on_the_next_mount() {
+    let mut fx = fixture();
+    let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
+    let plan = fx.state.plan_preview_refresh(&saved).expect("a plan");
+    fx.store("New");
+    let readout = plan.read();
+    let library_id = fx.state.open_libraries[0].library_id;
+    let row = fx.state.editors[&fx.address].row.clone();
+    fx.state.close_library(&fx.root.clone());
+    // The same library (same id, same path) is opened again, with a
+    // preview of its own that resolved "Old".
+    let manifest = manifest_of(ScriptedSymbolsAdapter::new(library_id).0);
+    fx.state
+        .set
+        .mount(Box::new(SymbolStoreAdapter {
+            manifest,
+            symbol: fx.stored.clone(),
+            reads: fx.reads.clone(),
+        }))
+        .expect("remount");
+    open(&mut fx.state, &fx.root, library_id);
+    let mut preview = ComponentPreviewState::from_row(fx.root.clone(), "R".into(), row);
+    preview.symbol = Some(Symbol::empty("Old"));
+    fx.state.editors.insert(fx.address.clone(), preview);
+
+    fx.state.apply_preview_readout(readout);
+
+    assert_eq!(fx.shown(), "Old");
+}

@@ -356,6 +356,9 @@ impl LibraryState {
             let entry = self.open_libraries.remove(idx);
             self.touch_data();
             self.set.unmount(entry.library_id);
+            // A preview readout planned under this mount must not apply to a
+            // later mount of the same library id.
+            self.preview_generations.remove(&entry.library_id);
             self.editors.retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;

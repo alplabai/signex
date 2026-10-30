@@ -18,6 +18,8 @@ mod primitive_save;
 #[cfg(test)]
 mod primitive_save_fold_tests;
 #[cfg(test)]
+mod primitive_save_refresh_tests;
+#[cfg(test)]
 mod primitive_save_tests;
 mod primitive_write;
 
@@ -465,12 +467,16 @@ impl Signex {
         let Some(root) = self.library_root_containing(path) else {
             return;
         };
-        if let Err(error) = self.library.refresh_components(&root) {
-            crate::diagnostics::log_warning(format!(
-                "[library] refresh of {} after a primitive save failed ({error}); \
-                 its cache may be stale",
-                root.display()
-            ));
+        // `set` and `open_libraries` are disjoint fields, so the adapter
+        // borrow and the entry's `&mut` coexist. Listings only, as before.
+        let library = &mut self.library;
+        if let Some(lib) = library
+            .open_libraries
+            .iter_mut()
+            .find(|lib| lib.root == root)
+            && let Some(adapter) = library.set.get(lib.library_id)
+        {
+            lib.reload_primitives(adapter);
         }
         self.library.refresh_loaded_previews(path);
         self.library.drift.check_pending = true;

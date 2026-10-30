@@ -70,6 +70,8 @@ impl LibraryState {
         if let Some(pending) = self.pending_follow_ups.remove(old) {
             self.pending_follow_ups.insert(new.to_path_buf(), pending);
         }
+        let library_id = self.open_libraries[idx].library_id;
+        self.preview_generations.remove(&library_id);
         self.touch_data();
 
         let editors = std::mem::take(&mut self.editors);

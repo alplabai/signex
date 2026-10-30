@@ -158,11 +158,37 @@ fn a_restored_library_tab_whose_library_was_closed_meanwhile_is_dropped() {
 
     let idx = tab_index(&app);
     let task = app.apply_reloaded(idx, Ok(RestoreJobDocument::Library), None);
-    app.library.open_libraries.clear();
+    // Closed and opened again (same id, same path) while the read ran.
+    // The running read holds a place in the library's write order, which
+    // makes `close_library` wait for it; forget that place so the close
+    // happens while the read is still running.
+    app.library.writes = Default::default();
+    app.library.close_library(&file);
+    app.library
+        .set
+        .mount(Box::new(LocalGitAdapter::open(&file).expect("open")))
+        .expect("remount");
+    app.library.open_libraries.push(OpenLibrary {
+        root: file.clone(),
+        display_name: "Lib".into(),
+        library_id,
+        tables: std::collections::HashMap::from([(TABLE.to_string(), vec![test_row()])]),
+        cached_components: Vec::new(),
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+    });
     crate::app::path_ops::settle_task(&mut app, task);
 
-    assert!(
-        app.library.library_at(&file).is_none(),
-        "nothing is re-opened"
+    assert_eq!(
+        cached_pns(&app, &file),
+        ["U1"],
+        "the old mount's read must not land"
     );
 }

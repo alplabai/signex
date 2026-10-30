@@ -185,17 +185,45 @@ fn a_post_save_refresh_superseded_before_it_lands_is_dropped() {
 #[test]
 fn a_post_save_refresh_for_a_library_closed_before_it_lands_is_dropped() {
     let library_id = Uuid::now_v7();
-    let (adapter, _symbols) = ScriptedSymbolsAdapter::new(library_id);
+    let (adapter, symbols) = ScriptedSymbolsAdapter::new(library_id);
     let (mut app, saved) = app_with_cached_library_over(Box::new(adapter), library_id);
+    *symbols.lock().expect("symbols lock") = vec![cached_summary("OldMount")];
     let task = app.refresh_primitive_cache_for(&saved);
-    app.library.open_libraries.clear();
+    let root = app.library.open_libraries[0].root.clone();
+    // Closed, then the same library (same id, same path) opened again with
+    // caches of its own, while the first read was still running.
+    // The running read holds a place in the library's write order, which
+    // makes `close_library` wait for it; forget that place so the close
+    // happens while the read is still running.
+    app.library.writes = Default::default();
+    app.library.close_library(&root);
+    let (adapter, _symbols) = ScriptedSymbolsAdapter::new(library_id);
+    app.library.set.mount(Box::new(adapter)).expect("remount");
+    app.library.open_libraries.push(OpenLibrary {
+        root,
+        display_name: "Remounted".into(),
+        library_id,
+        tables: std::collections::HashMap::new(),
+        cached_components: Vec::new(),
+        cached_symbols: vec![cached_summary("NewMount")],
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+    });
 
     crate::app::path_ops::settle_task(&mut app, task);
 
-    assert!(
-        app.library.open_libraries.is_empty(),
-        "nothing is re-opened"
-    );
+    let names: Vec<_> = app.library.open_libraries[0]
+        .cached_symbols
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+    assert_eq!(names, ["NewMount"], "the old mount's read must not land");
 }
 
 #[test]
