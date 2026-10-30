@@ -1,7 +1,7 @@
 //! #1767 — Place > Component… opens the component picker instead of
 //! only arming a tool with nothing on the cursor.
 
-use signex_app::app::{Message, Signex, TabInfo, TabKind};
+use signex_app::app::{Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::SchematicSheet;
 use std::path::PathBuf;
@@ -33,6 +33,7 @@ fn place_menu_component_opens_the_picker() {
     assert!(app.library.picker.is_none());
     let _ = app.update(Message::Menu(MenuMessage::PlaceComponent));
     assert!(app.library.picker.is_some());
+    assert_eq!(app.interaction_state.current_tool, Tool::Select);
 }
 
 #[test]
@@ -40,4 +41,5 @@ fn library_menu_place_component_opens_the_same_picker() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::Menu(MenuMessage::LibraryPlaceComponent));
     assert!(app.library.picker.is_some());
+    assert_eq!(app.interaction_state.current_tool, Tool::Select);
 }

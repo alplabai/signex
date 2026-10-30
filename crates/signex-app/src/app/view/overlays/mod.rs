@@ -110,14 +110,13 @@ impl Signex {
         if !symbol.lib_id.is_empty() {
             rows.push(field(
                 "Library",
-                crate::library::part_label::part_library_label(
-                    &symbol.lib_id,
-                    &self.library.drift.names,
-                    &self.library.open_libraries,
-                ),
+                self.library
+                    .drift
+                    .display_name(&symbol.lib_id, &self.library.open_libraries),
             ));
         }
 
+        let rows_len = rows.len();
         let card = container(column(rows).spacing(3))
             .padding(iced::Padding {
                 top: 8.0,
@@ -147,14 +146,16 @@ impl Signex {
         // intended to keep the card on-screen near the right/bottom
         // edges; the iced layout will still render at its true size.
         const ESTIMATED_W: f32 = CARD_W;
-        const ESTIMATED_H: f32 = 110.0;
+        // Rows wrap, so budget a few lines each plus the card padding.
+        const ESTIMATED_ROW_H: f32 = 28.0;
+        let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let mut x = sx + OFFSET;
         let mut y = sy + OFFSET;
         if x + ESTIMATED_W > ww {
             x = (sx - OFFSET - ESTIMATED_W).max(0.0);
         }
-        if y + ESTIMATED_H > wh {
-            y = (sy - OFFSET - ESTIMATED_H).max(0.0);
+        if y + estimated_h > wh {
+            y = (sy - OFFSET - estimated_h).max(0.0);
         }
         Some(super::view::translate::Translate::new(card, (x, y)).into())
     }

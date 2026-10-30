@@ -175,7 +175,9 @@ impl Signex {
         if !self.library.drift.is_drifted(&sheet, &lib_id) {
             crate::diagnostics::log_warning(format!(
                 "{} has no pending library update on this sheet.",
-                self.library.drift.display_name(&lib_id)
+                self.library
+                    .drift
+                    .display_name(&lib_id, &self.library.open_libraries)
             ));
             return Task::none();
         }

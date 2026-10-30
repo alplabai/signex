@@ -39,15 +39,26 @@ pub fn part_library_label(
     format!("{}:{}", short_id(library), short_id(symbol))
 }
 
+/// The random tail: a v7 uuid's head is a timestamp, shared by ids made
+/// close together (every stock id starts alike).
 fn short_id(id: &str) -> &str {
-    id.get(..SHORT_ID_LEN).unwrap_or(id)
+    id.len()
+        .checked_sub(SHORT_ID_LEN)
+        .and_then(|start| id.get(start..))
+        .unwrap_or(id)
+}
+
+/// Whether a comment or value is empty or the `*` "unset" placeholder.
+pub fn is_unset_value(value: &str) -> bool {
+    matches!(value.trim(), "" | "*")
 }
 
 /// The value the card shows: empty and the `*` "unset" placeholder read as a dash.
 pub fn card_value(value: &str) -> &str {
-    match value.trim() {
-        "" | "*" => NO_VALUE,
-        _ => value,
+    if is_unset_value(value) {
+        NO_VALUE
+    } else {
+        value
     }
 }
 
@@ -109,9 +120,10 @@ mod tests {
 
     #[test]
     fn an_unmounted_pair_of_uuids_gets_a_short_form() {
-        let id = "0190aaaa-1111-7000-8000-000000000001:0190bbbb-2222-7000-8000-000000000002";
+        // Same v7 timestamp prefix, different random tails.
+        let id = "019df45d-1111-7000-8000-0000000000a1:019df45d-1111-7000-8000-0000000000b2";
         let label = part_library_label(id, &HashMap::new(), &[]);
-        assert_eq!(label, "0190aaaa:0190bbbb");
+        assert_eq!(label, "000000a1:000000b2");
         assert!(label.len() < id.len());
     }
 

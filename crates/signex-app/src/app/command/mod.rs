@@ -100,6 +100,9 @@ impl Signex {
 mod arrange_tests;
 
 #[cfg(test)]
+mod place_part_tests;
+
+#[cfg(test)]
 mod shortcut_tests;
 
 #[cfg(test)]
