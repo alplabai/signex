@@ -14,6 +14,35 @@ fn is_double_click(dt_ms: u128, dist_px: f32) -> bool {
 }
 
 impl SchematicCanvas<'_> {
+    /// Whether the active tool turns a press into its own action (places,
+    /// starts a shape, measures, breaks a wire) rather than selecting. Only
+    /// Select, and Component with no part on the cursor, select instead.
+    fn tool_places_on_click(&self) -> bool {
+        use crate::app::Tool;
+        // Listed in full so a new tool has to pick a side here.
+        match self.prefs.current_tool {
+            Tool::Select => false,
+            Tool::Component => self.ghost_symbol.is_some(),
+            Tool::Wire
+            | Tool::Bus
+            | Tool::Label
+            | Tool::Text
+            | Tool::NoConnect
+            | Tool::Junction
+            | Tool::NoErcDirective
+            | Tool::BusEntry
+            | Tool::Line
+            | Tool::Rectangle
+            | Tool::Circle
+            | Tool::Arc
+            | Tool::Polyline
+            | Tool::Sheet
+            | Tool::SheetEntry
+            | Tool::Measure
+            | Tool::BreakWire => true,
+        }
+    }
+
     /// Left-press: select, tool action, start box-select, or start drag-move.
     pub(in crate::canvas) fn update_left_pressed(
         &self,
@@ -74,32 +103,35 @@ impl SchematicCanvas<'_> {
             state.last_click_time = Some(now);
             state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
+            // A click-to-place tool owns the press: it must not select or
+            // arm a drag, whose release would publish the click again (#1764).
             // Classify the click target:
             //   - hit an already-selected item  → defer click, prepare drag
             //   - hit an unselected item       → publish click (selects it), prepare drag
             //   - hit empty space              → publish click, start box-select
             // Altium-style: clicking and dragging on an unselected item
             // should immediately select-and-drag in one gesture.
-            let (on_selected, on_unselected_item) = if !self.drawing_mode {
-                if let Some(snapshot) = self.active_snapshot() {
-                    if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
-                        snapshot,
-                        &self.designators,
-                        wx,
-                        wy,
-                        self.prefs.wire_class_styles,
-                    ) {
-                        let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
-                        (sel, !sel)
+            let (on_selected, on_unselected_item) =
+                if !self.drawing_mode && !self.tool_places_on_click() {
+                    if let Some(snapshot) = self.active_snapshot() {
+                        if let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
+                            snapshot,
+                            &self.designators,
+                            wx,
+                            wy,
+                            self.prefs.wire_class_styles,
+                        ) {
+                            let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
+                            (sel, !sel)
+                        } else {
+                            (false, false)
+                        }
                     } else {
                         (false, false)
                     }
                 } else {
                     (false, false)
-                }
-            } else {
-                (false, false)
-            };
+                };
 
             if on_selected && !state.ctrl_held {
                 // Defer click — prepare for potential drag-to-move
