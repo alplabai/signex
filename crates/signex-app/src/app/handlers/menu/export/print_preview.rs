@@ -124,6 +124,7 @@ impl Signex {
             // Filed under this document on close, wherever the active tab
             // has moved to by then.
             source_path: self.document_state.active_path.clone(),
+            export_status: None,
         };
         // The first render runs in the background like every later one; the
         // modal opens at once with an empty page area.
@@ -273,6 +274,9 @@ impl Signex {
         // Print Preview. The options, sheet picks and source are captured
         // here and ride inside `PdfFinished`, so a second Export click while
         // this save dialog is open gets its own copy (#852).
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.export_status = None;
+        }
         let descended_placement = self.document_state.tab_placements.get(&source).cloned();
         let request = Box::new(crate::app::state::PdfExportRequest {
             source,
@@ -281,12 +285,14 @@ impl Signex {
             files,
         });
 
+        let target = self.save_target(Some(&request.source));
+        let file_name = target.file_name("schematic", "", "pdf");
         Some(Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export PDF")
+            async move {
+                target
+                    .dialog("Export PDF")
                     .add_filter("PDF", &["pdf"])
-                    .set_file_name("schematic.pdf")
+                    .set_file_name(file_name)
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())

@@ -118,12 +118,14 @@ impl Signex {
         // document it was started from (#852).
         let source = self.document_state.active_path.clone()?;
         let format = NetlistOptions::default().format;
+        let target = self.save_target(Some(&source));
+        let file_name = target.file_name("schematic", "", format.extension());
         Some(Task::perform(
             async move {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export Netlist")
+                target
+                    .dialog("Export Netlist")
                     .add_filter(format.label(), &[format.extension()])
-                    .set_file_name(format.default_file_name())
+                    .set_file_name(file_name)
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())

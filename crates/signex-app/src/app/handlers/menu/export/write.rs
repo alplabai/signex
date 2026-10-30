@@ -35,6 +35,7 @@ fn write_export_task(
                 success_log,
                 advisory,
                 warnings,
+                report_in_preview: false,
             }
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -61,6 +62,7 @@ fn export_pdf_task(
                     success_log: String::new(),
                     advisory: None,
                     warnings: Vec::new(),
+                    report_in_preview: true,
                 })
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -79,6 +81,7 @@ fn build_and_write_pdf(
         success_log: String::new(),
         advisory: None,
         warnings: Vec::new(),
+        report_in_preview: true,
     };
     let output = match signex_output::PdfExporter.export(ctx, options) {
         Ok(output) => output,
@@ -100,6 +103,7 @@ fn build_and_write_pdf(
         warnings: super::uncovered_chars_warning(&output.uncovered_chars)
             .into_iter()
             .collect(),
+        report_in_preview: true,
     }
 }
 
@@ -164,6 +168,14 @@ impl Signex {
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
         self.end_project_write(&outcome.path);
+        if outcome.report_in_preview
+            && let Some(preview) = self.document_state.preview.as_mut()
+        {
+            preview.export_status = Some(match &outcome.result {
+                Ok(()) => format!("Exported {}", outcome.path.display()),
+                Err(e) => format!("Export failed: {e}"),
+            });
+        }
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);

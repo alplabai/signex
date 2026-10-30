@@ -38,20 +38,23 @@ impl Signex {
             )),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
-            MenuMessage::NewProject => Some(Task::perform(
-                async {
-                    rfd::AsyncFileDialog::new()
-                        .set_title(
-                            "New Signex Project (a folder named after the project is created)",
-                        )
-                        .set_file_name("Untitled.snxprj")
-                        .add_filter("Signex Project", &["snxprj"])
-                        .save_file()
-                        .await
-                        .map(|file| file.path().to_path_buf())
-                },
-                |p| Message::File(FileMsg::NewProject(p)),
-            )),
+            MenuMessage::NewProject => {
+                let target = self.save_target(None);
+                Some(Task::perform(
+                    async move {
+                        target
+                            .dialog(
+                                "New Signex Project (a folder named after the project is created)",
+                            )
+                            .set_file_name("Untitled.snxprj")
+                            .add_filter("Signex Project", &["snxprj"])
+                            .save_file()
+                            .await
+                            .map(|file| file.path().to_path_buf())
+                    },
+                    |p| Message::File(FileMsg::NewProject(p)),
+                ))
+            }
             MenuMessage::OpenSampleProject => Some(self.handle_open_sample_project()),
             MenuMessage::ExportPdf => Some(self.update(Message::Export(ExportMsg::PdfOpenDialog))),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
@@ -236,10 +239,11 @@ impl Signex {
         match kind {
             Some(TabKind::Schematic) => {
                 let from_path = self.active_tab_path().unwrap_or_default();
+                let target = self.save_target(Some(&from_path));
                 Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .set_title("Save Schematic As")
+                    async move {
+                        target
+                            .dialog("Save Schematic As")
                             .add_filter("Signex Schematic", &["snxsch"])
                             .save_file()
                             .await

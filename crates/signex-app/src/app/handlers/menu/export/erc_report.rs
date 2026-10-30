@@ -110,6 +110,7 @@ fn export_erc_report_task(opts: ErcReportOptions, path: PathBuf) -> Task<Message
                     success_log: String::new(),
                     advisory: None,
                     warnings: Vec::new(),
+                    report_in_preview: false,
                 })
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -143,6 +144,7 @@ fn build_and_write_erc_report(
         success_log: format!("Wrote ERC report {}", path.display()),
         advisory: None,
         warnings: Vec::new(),
+        report_in_preview: false,
     }
 }
 
@@ -198,16 +200,18 @@ impl Signex {
             self.refuse_erc_report_before_run();
             return Task::none();
         }
+        let target = self.save_target(None);
+        let file_name = target.file_name("erc-report", "-erc-report", "html");
         Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export ERC Report")
+            async move {
+                target
+                    .dialog("Export ERC Report")
                     .add_filter("HTML (.html)", &["html", "htm"])
                     .add_filter("PDF (.pdf)", &["pdf"])
                     .add_filter("JSON (.json)", &["json"])
                     .add_filter("CSV (.csv)", &["csv"])
                     .add_filter("Text (.txt)", &["txt"])
-                    .set_file_name("erc-report.html")
+                    .set_file_name(file_name)
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())

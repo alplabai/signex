@@ -232,13 +232,14 @@ impl Signex {
         };
         let options = preview.options.clone();
         let source = preview.source.clone();
-        let (default_name, format_filter) = match options.format {
-            BomFormat::Csv => ("bom.csv", ("CSV (.csv)", &["csv"][..])),
-            BomFormat::Xlsx => ("bom.xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
-            BomFormat::Html => ("bom.html", ("HTML (.html)", &["html", "htm"][..])),
+        let (ext, format_filter) = match options.format {
+            BomFormat::Csv => ("csv", ("CSV (.csv)", &["csv"][..])),
+            BomFormat::Xlsx => ("xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
+            BomFormat::Html => ("html", ("HTML (.html)", &["html", "htm"][..])),
         };
         let (filter_label, filter_exts) = format_filter;
-        let default_name_owned = default_name.to_string();
+        let target = self.save_target(Some(&source));
+        let default_name_owned = target.file_name("bom", "-bom", ext);
         let filter_label_owned = filter_label.to_string();
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
@@ -252,8 +253,8 @@ impl Signex {
         let dialog = Task::perform(
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export Bill of Materials")
+                target
+                    .dialog("Export Bill of Materials")
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())
                     .save_file()
