@@ -298,6 +298,11 @@ impl Signex {
                 self.close_libraries_whose_writes_are_done();
                 task
             }
+            LibraryMessage::PreviewsReread { readout } => {
+                self.handle_previews_reread(readout);
+                self.close_libraries_whose_writes_are_done();
+                Task::none()
+            }
             LibraryMessage::WriteFinished(done) => self.handle_write_finished(*done),
             LibraryMessage::BrowserSelectTable {
                 library_path,
