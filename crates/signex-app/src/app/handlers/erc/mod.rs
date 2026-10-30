@@ -1,6 +1,11 @@
 //! ERC / annotate / modal handler impls for `Signex`, grouped by concern.
 
 mod annotate;
+#[cfg(test)]
+mod annotate_golden_tests;
+mod annotate_job;
+#[cfg(test)]
+mod annotate_job_tests;
 mod annotate_pass;
 mod annotate_preview;
 #[cfg(test)]
@@ -12,7 +17,9 @@ mod erc_run_tests;
 mod reprefix;
 mod reprefix_confirm;
 mod reprefix_plan;
+mod reset_duplicates;
 
+pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::{ErcRunOutcome, WaivedFinding};
 pub(crate) use reprefix_confirm::ReprefixConfirm;

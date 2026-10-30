@@ -98,7 +98,8 @@ fn the_preview_promises_what_the_action_assigns() {
     let promised_child = proposed_for(&app, "z_child");
     let promised_root = proposed_for(&app, "a_root");
 
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
 
     let written = std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child still on disk");
     let child_after: Vec<String> = SnxSchematic::parse(&written)
@@ -181,7 +182,8 @@ fn the_preview_promises_what_the_action_assigns_down_then_across() {
         .map(|e| (e.uuid, e.proposed))
         .collect();
 
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
 
     let assigned: Vec<(Uuid, String)> = app
         .document_state
@@ -222,7 +224,8 @@ fn the_preview_omits_tabs_the_action_refuses_to_touch() {
          so the preview must not offer to renumber it: {sheets:?}"
     );
 
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
     let loose_after = app
         .document_state
         .engines
@@ -440,7 +443,12 @@ fn resetting_duplicates_drops_the_cached_rows() {
     load_into_cache(&mut app);
     assert!(!app.ui_state.annotate_preview.entries.is_empty());
 
-    let _ = app.handle_reset_duplicate_designators();
+    // The sheets are read on a worker and the run ends in the completion. Its
+    // follow-up preview reload is not run, so the cache is as the run left it.
+    let task = app.handle_reset_duplicate_designators();
+    for message in crate::persist::run_task::outputs(task) {
+        let _ = app.update(message);
+    }
 
     assert!(
         app.ui_state.annotate_preview.entries.is_empty(),
