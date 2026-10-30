@@ -96,6 +96,7 @@ pub fn view<'a>(
     // Bucket every mounted library up-front so view_section
     // doesn't have to borrow back into the per-call Vec
     // `project_paths` (which can't live for the panel's `'a`).
+    let project_open = !ctx.projects.is_empty();
     let project_paths: Vec<PathBuf> = ctx
         .projects
         .iter()
@@ -115,7 +116,13 @@ pub fn view<'a>(
     drop(project_paths);
 
     for (i, src) in ComponentsMountSource::ORDER.iter().enumerate() {
-        col = col.push(view_section(*src, state, &bucketed[i], tokens));
+        col = col.push(view_section(
+            *src,
+            state,
+            &bucketed[i],
+            project_open,
+            tokens,
+        ));
         col = col.push(thin_sep(border_c));
     }
 
@@ -144,6 +151,7 @@ fn view_section<'a>(
     src: ComponentsMountSource,
     state: &'a LibraryState,
     libs_for_source: &[&'a OpenLibrary],
+    project_open: bool,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -209,20 +217,7 @@ fn view_section<'a>(
     // ── Section body (only when expanded) ────────────────────────
     if !collapsed {
         if libs_for_source.is_empty() {
-            let empty_msg = match src {
-                ComponentsMountSource::Project => {
-                    "No project libraries. Open a project to populate this section."
-                }
-                ComponentsMountSource::Installed => {
-                    "No session libraries. Click \"+ Add Library…\" to mount one."
-                }
-                ComponentsMountSource::Global => {
-                    "No global libraries. Click \"+ Add Library…\" or promote an installed library."
-                }
-                ComponentsMountSource::Stock => {
-                    "Stock library not found. Reinstall Signex to restore the bundled parts."
-                }
-            };
+            let empty_msg = empty_section_text(src, project_open);
             section_col = section_col.push(
                 container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6.0, SP.xl]),
             );
@@ -241,6 +236,36 @@ fn view_section<'a>(
     }
 
     section_col.into()
+}
+
+/// What an empty section says. The Project section tells an open project
+/// without libraries apart from no project at all.
+fn empty_section_text(src: ComponentsMountSource, project_open: bool) -> &'static str {
+    match src {
+        ComponentsMountSource::Project if project_open => {
+            "This project has no libraries yet. Add one from the project tree's Add New menu."
+        }
+        ComponentsMountSource::Project => {
+            "No project libraries. Open a project to populate this section."
+        }
+        ComponentsMountSource::Installed => {
+            "No session libraries. Click \"+ Add Library…\" to mount one."
+        }
+        ComponentsMountSource::Global => {
+            "No global libraries. Click \"+ Add Library…\" or promote an installed library."
+        }
+        ComponentsMountSource::Stock => {
+            "Stock library not found. Reinstall Signex to restore the bundled parts."
+        }
+    }
+}
+
+/// The left label of a component row: part number, then the MPN when set.
+fn component_row_label(internal_pn: &str, mpn: &str) -> String {
+    match mpn.trim() {
+        "" => internal_pn.to_owned(),
+        mpn => format!("{internal_pn} — {mpn}"),
+    }
 }
 
 /// Render one mounted library inside its source section: a small
@@ -338,11 +363,7 @@ fn view_row_button<'a>(
     hover_c: Color,
 ) -> Element<'a, LibraryMessage> {
     let row_id = signex_library::RowId::from_uuid(row_data.row_id);
-    let label_left = format!(
-        "{} — {}",
-        row_data.internal_pn.as_str(),
-        row_data.primary_mpn.mpn
-    );
+    let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
     let place = LibraryMessage::ComponentsPanelPlace {
         library_path: library_path.clone(),
@@ -599,5 +620,39 @@ mod tests {
             assert!(!src.key().is_empty());
             assert_ne!(src.label(), src.key());
         }
+    }
+
+    #[test]
+    fn an_open_project_without_libraries_says_so() {
+        let open = empty_section_text(ComponentsMountSource::Project, true);
+        assert!(open.contains("This project has no libraries yet"), "{open}");
+        assert!(!open.contains("Open a project"), "{open}");
+    }
+
+    #[test]
+    fn no_project_keeps_the_open_a_project_hint() {
+        let none = empty_section_text(ComponentsMountSource::Project, false);
+        assert!(none.contains("Open a project"), "{none}");
+    }
+
+    #[test]
+    fn other_sections_ignore_the_project_state() {
+        for src in [
+            ComponentsMountSource::Installed,
+            ComponentsMountSource::Global,
+            ComponentsMountSource::Stock,
+        ] {
+            assert_eq!(
+                empty_section_text(src, true),
+                empty_section_text(src, false)
+            );
+        }
+    }
+
+    #[test]
+    fn a_row_without_an_mpn_drops_the_trailing_dash() {
+        assert_eq!(component_row_label("STOCK-R", ""), "STOCK-R");
+        assert_eq!(component_row_label("STOCK-R", "  "), "STOCK-R");
+        assert_eq!(component_row_label("R0805", "RC0805"), "R0805 — RC0805");
     }
 }
