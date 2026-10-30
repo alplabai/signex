@@ -4,22 +4,37 @@
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["~DEFAULT_BRANCH"],
-      "exclude": []
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
     }
   },
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
     {
       "type": "pull_request",
       "parameters": {
         "required_approving_review_count": 1,
         "dismiss_stale_reviews_on_push": true,
+        "required_reviewers": [],
         "require_code_owner_review": true,
-        "require_last_push_approval": true,
+        "dismissal_restriction": {
+          "enabled": false,
+          "allowed_actors": []
+        },
+        "require_last_push_approval": false,
         "required_review_thread_resolution": true,
-        "allowed_merge_methods": ["merge", "squash"]
+        "require_extra_approval_for_unattributed_changes": true,
+        "allowed_merge_methods": [
+          "merge",
+          "squash"
+        ]
       }
     },
     {
@@ -28,19 +43,36 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "check · ubuntu-latest" },
-          { "context": "test · workspace" },
-          { "context": "deny · licenses + deps" },
-          { "context": "PR-description self-declaration" },
-          { "context": "No GPL-tool-shaped names anywhere in crates/" },
-          { "context": "fmt · rustfmt" },
-          { "context": "no god-files" },
-          { "context": "no discarded tasks" },
-          { "context": "check · macos-latest" },
-          { "context": "check · windows-latest" },
-          { "context": "lint lockstep" }
+          {
+            "context": "ci · required"
+          },
+          {
+            "context": "license guard · clean-room"
+          },
+          {
+            "context": "PR-description self-declaration"
+          }
         ]
       }
+    },
+    {
+      "type": "merge_queue",
+      "parameters": {
+        "merge_method": "SQUASH",
+        "max_entries_to_build": 2,
+        "min_entries_to_merge": 1,
+        "max_entries_to_merge": 5,
+        "min_entries_to_merge_wait_minutes": 0,
+        "grouping_strategy": "ALLGREEN",
+        "check_response_timeout_minutes": 60
+      }
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_id": null,
+      "actor_type": "OrganizationAdmin",
+      "bypass_mode": "always"
     }
   ]
 }

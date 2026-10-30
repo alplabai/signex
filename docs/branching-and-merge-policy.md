@@ -134,13 +134,10 @@ live settings under **Settings → Rules → Rulesets** are authoritative. Three
 rulesets exist: `Protect trunk` (the default branch), `main-protection`, and
 `dev-protection` (blocks force-push on the legacy `dev` branch only).
 
-[`.github/rulesets/trunk-protection.json`](../.github/rulesets/trunk-protection.json)
-and [`.github/rulesets/main-protection.json`](../.github/rulesets/main-protection.json)
-are the importable declarations, but they have **drifted from the live
-rulesets**: they still list the eleven per-job status checks, no merge queue and
-no bypass actors. Re-export the live rulesets before re-applying either file;
-the tables above describe the live state as read from the GitHub API on
-2026-10-29.
+[`.github/rulesets/`](../.github/rulesets/) holds the importable declarations
+of all three (`trunk-protection.json`, `main-protection.json`,
+`dev-protection.json`), exported from the live rulesets on 2026-10-30. The
+sections below describe the same state in prose.
 
 ### `Protect trunk`
 
