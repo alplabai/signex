@@ -114,9 +114,11 @@ impl Signex {
                     }
                     return Task::none();
                 }
-                return self.reload_editor_from_server(&address);
+                // Clean now, so a reload that lands after the user typed must
+                // not replace what was typed.
+                return self.reload_editor_from_server(&address, true);
             }
-            EditorMsg::ReloadConfirmed => return self.reload_editor_from_server(&address),
+            EditorMsg::ReloadConfirmed => return self.reload_editor_from_server(&address, false),
             EditorMsg::ReloadCancelled => {
                 if let Some(state) = self.library.editors.get_mut(&address) {
                     state.reload_confirming = false;
@@ -418,8 +420,17 @@ impl Signex {
     /// Replace the working copy of one Component Preview with the row the
     /// library stores now (content and base revision), dropping its unsaved
     /// edits. A row that cannot be read keeps the working copy.
-    pub(crate) fn reload_editor_from_server(&mut self, address: &EditorAddress) -> Task<Message> {
-        crate::library::preview_reads::reload_task(&mut self.library, address, false)
+    ///
+    /// `require_clean` is for a reload of a copy that was clean when asked:
+    /// it yields to edits typed before the read lands. Without it the edits
+    /// that existed when it was asked for are replaced, and newer ones are
+    /// kept.
+    pub(crate) fn reload_editor_from_server(
+        &mut self,
+        address: &EditorAddress,
+        require_clean: bool,
+    ) -> Task<Message> {
+        crate::library::preview_reads::reload_task(&mut self.library, address, require_clean)
     }
 
     /// After a write to `rows` that did not go through their Component

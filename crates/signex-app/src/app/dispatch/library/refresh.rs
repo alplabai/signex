@@ -111,7 +111,7 @@ impl Signex {
         };
         let address = outcome.address().clone();
         match self.library.apply_editor_reload(outcome) {
-            ReloadApplied::Failed => {
+            ReloadApplied::Failed | ReloadApplied::Refused => {
                 self.sync_diagnostics_panel_ctx();
                 Task::none()
             }

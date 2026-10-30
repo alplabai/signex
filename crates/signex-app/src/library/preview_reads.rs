@@ -8,7 +8,6 @@
 //! library's write order, and an apply that checks the answer against the
 //! state it finds when it lands.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use signex_library::{
@@ -151,6 +150,9 @@ pub struct EditorReloadPlan {
     resolver: SharedResolver,
     tab: PreviewTab,
     require_clean: bool,
+    /// The copy as it was when the reload was planned. A reload the user
+    /// asked for replaces the edits that existed then, not newer ones.
+    row_at_plan: ComponentRow,
 }
 
 impl EditorReloadPlan {
@@ -176,6 +178,7 @@ impl EditorReloadPlan {
             generation: self.generation,
             tab: self.tab,
             require_clean: self.require_clean,
+            row_at_plan: self.row_at_plan,
             row,
             needs,
             reads,
@@ -190,6 +193,7 @@ pub struct EditorReloadOutcome {
     generation: u64,
     tab: PreviewTab,
     require_clean: bool,
+    row_at_plan: ComponentRow,
     row: Result<ComponentRow, LibraryError>,
     needs: PreviewNeeds,
     reads: PreviewReads,
@@ -205,13 +209,27 @@ impl EditorReloadOutcome {
 /// What [`LibraryState::apply_editor_reload`] did.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReloadApplied {
-    /// The answer was stale, or the preview is gone or busy; nothing changed.
+    /// The answer was stale, or the preview is gone or a reload nobody asked
+    /// for found edits; nothing changed.
     Dropped,
+    /// A reload the user asked for was refused, and said so in the Messages
+    /// panel; nothing changed.
+    Refused,
     /// The row could not be read; it was reported and the copy stands.
     Failed,
     /// The copy was replaced. `resolve_tab` is set when the user moved to
     /// another tab meanwhile, whose primitives still have to be looked up.
     Replaced { resolve_tab: Option<PreviewTab> },
+}
+
+/// A reload that cannot apply: refused out loud when the user asked for it,
+/// dropped quietly when nobody did.
+fn refused(unrequested: bool, why: &str) -> ReloadApplied {
+    if unrequested {
+        return ReloadApplied::Dropped;
+    }
+    crate::diagnostics::log_info(why);
+    ReloadApplied::Refused
 }
 
 impl LibraryState {
@@ -254,7 +272,9 @@ impl LibraryState {
         let (library_id, root) = self
             .library_at(&address.library_path)
             .map(|lib| (lib.library_id, lib.root.clone()))?;
-        let tab = self.editors.get(address)?.active_tab;
+        let preview = self.editors.get(address)?;
+        let tab = preview.active_tab;
+        let row_at_plan = preview.row.clone();
         let Some(adapter) = self.set.get_shared(library_id) else {
             crate::diagnostics::log_warning(format!(
                 "Row {} could not be reloaded: {}",
@@ -276,6 +296,7 @@ impl LibraryState {
             resolver: self.shared_resolver(),
             tab,
             require_clean,
+            row_at_plan,
         })
     }
 
@@ -291,6 +312,7 @@ impl LibraryState {
             generation,
             tab,
             require_clean,
+            row_at_plan,
             row,
             needs,
             reads,
@@ -315,11 +337,21 @@ impl LibraryState {
         let Some(old) = self.editors.get(&address) else {
             return ReloadApplied::Dropped;
         };
-        if old.saving_row.is_some()
-            || old.binding_primitive
-            || (require_clean && old.has_unsaved_edits())
-        {
+        if require_clean && old.has_unsaved_edits() {
             return ReloadApplied::Dropped;
+        }
+        if old.saving_row.is_some() || old.binding_primitive {
+            return refused(
+                require_clean,
+                "Reload was ignored: this row is being saved. Reload again once the save has finished.",
+            );
+        }
+        if !require_clean && old.row != row_at_plan {
+            return refused(
+                false,
+                "Reload was ignored: this row was edited after the reload was confirmed. \
+                 Reload again to discard the new edits.",
+            );
         }
         let current_tab = old.active_tab;
         let mut fresh = ComponentPreviewState::from_row(
@@ -343,14 +375,8 @@ impl LibraryState {
     /// which has no task to return.
     pub fn reload_editor_blocking(&mut self, address: &EditorAddress, require_clean: bool) {
         if let Some(plan) = self.plan_editor_reload(address, require_clean) {
-            let outcome = plan.read();
-            if let ReloadApplied::Replaced {
-                resolve_tab: Some(_),
-            } = self.apply_editor_reload(outcome)
-            {
-                // Same thread, same tab: the tab cannot have moved.
-                tracing::debug!("blocking reload saw a tab change");
-            }
+            // Same thread, same tab: nothing is left to look up.
+            self.apply_editor_reload(plan.read());
         }
     }
 }
@@ -404,6 +430,3 @@ pub fn tab_resolve_task(
         },
     )
 }
-
-#[allow(dead_code)]
-fn _path_type_check(_: &Path) {}

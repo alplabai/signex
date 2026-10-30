@@ -142,6 +142,49 @@ fn reloading_a_row_reads_nothing_in_update() {
     assert_eq!(f.preview().row.description, "Stored");
 }
 
+#[test]
+fn a_reload_asked_of_a_clean_copy_keeps_what_is_typed_before_it_lands() {
+    let mut f = fixture();
+
+    let task = f.event(EditorMsg::ReloadRequested);
+    // The read is still queued; the user types.
+    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Typed".into();
+    preview.dirty = true;
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.preview().row.description, "Typed");
+    assert!(f.preview().dirty);
+}
+
+#[test]
+fn a_confirmed_reload_keeps_what_is_typed_after_the_confirm() {
+    let mut f = fixture();
+    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Confirmed over".into();
+    preview.dirty = true;
+
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Typed after".into();
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.preview().row.description, "Typed after");
+}
+
+#[test]
+fn a_confirmed_reload_replaces_the_edits_that_existed_at_the_confirm() {
+    let mut f = fixture();
+    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Confirmed over".into();
+    preview.dirty = true;
+
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.preview().row.description, "Stored");
+}
+
 /// A close asked while the read runs waits behind it; the message that
 /// lands the read must finish it.
 fn assert_close_finishes_when_the_read_lands(mut f: Fixture, task: iced::Task<Message>) {

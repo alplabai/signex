@@ -288,19 +288,37 @@ fn a_reload_nobody_asked_for_yields_to_edits_typed_since() {
 }
 
 #[test]
-fn a_reload_the_user_asked_for_replaces_even_a_dirty_copy() {
+fn a_reload_the_user_asked_for_replaces_the_edits_that_existed_when_asked() {
     let mut f = fixture();
+    let preview = f.state.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Typed".into();
+    preview.dirty = true;
+    let plan = f
+        .state
+        .plan_editor_reload(&f.address, false)
+        .expect("a plan");
+    let outcome = plan.read();
+
+    f.state.apply_editor_reload(outcome);
+    assert_eq!(f.description(), "Stored");
+}
+
+#[test]
+fn a_reload_the_user_asked_for_keeps_edits_typed_after_it_was_asked() {
+    let mut f = fixture();
+    let preview = f.state.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Confirmed over".into();
+    preview.dirty = true;
     let plan = f
         .state
         .plan_editor_reload(&f.address, false)
         .expect("a plan");
     let outcome = plan.read();
     let preview = f.state.editors.get_mut(&f.address).expect("preview");
-    preview.row.description = "Typed".into();
-    preview.dirty = true;
+    preview.row.description = "Typed after".into();
 
-    f.state.apply_editor_reload(outcome);
-    assert_eq!(f.description(), "Stored");
+    assert_eq!(f.state.apply_editor_reload(outcome), ReloadApplied::Refused);
+    assert_eq!(f.description(), "Typed after");
 }
 
 #[test]
@@ -314,7 +332,7 @@ fn no_reload_replaces_a_copy_that_is_being_saved() {
     let preview = f.state.editors.get_mut(&f.address).expect("preview");
     preview.saving_row = Some(preview.row.clone());
 
-    assert_eq!(f.state.apply_editor_reload(outcome), ReloadApplied::Dropped);
+    assert_eq!(f.state.apply_editor_reload(outcome), ReloadApplied::Refused);
     assert_eq!(f.description(), "Old");
 }
 
