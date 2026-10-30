@@ -284,3 +284,26 @@ fn recover_init_in_a_tracking_repo_commits_library_changes_only() {
     assert!(index_has(tmp.path(), "demo.snxprj"), "still staged");
     assert!(!index_has(tmp.path(), "symbols/gone.snxsym"));
 }
+
+/// #1741: a link in a library folder is never read through: its target's
+/// contents (a private file outside the library) do not enter history.
+#[cfg(unix)]
+#[test]
+fn recover_init_never_commits_what_a_symlink_points_at() {
+    let outside = tempfile::tempdir().unwrap();
+    let secret = outside.path().join("id_rsa");
+    std::fs::write(&secret, "PRIVATE KEY").unwrap();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/ok.snxsym"), "ok").unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join("symbols/leak.snxsym")).unwrap();
+    std::os::unix::fs::symlink(&secret, tmp.path().join(".gitattributes")).unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "symbols/ok.snxsym"));
+    assert!(!head_tracks(tmp.path(), "symbols/leak.snxsym"));
+    assert!(!head_tracks(tmp.path(), ".gitattributes"));
+}

@@ -43,18 +43,49 @@ pub(super) fn refuse_foreign_history<'r>(
     Ok(head)
 }
 
+/// Whether `rel` under `root_dir` exists with no symbolic link on the way.
+/// A link is never read through: it could point outside the library (at a
+/// private key, say) and the commit would carry that file's contents.
+fn is_plain_file(root_dir: &Path, rel: &str) -> bool {
+    let mut path = root_dir.to_path_buf();
+    let parts: Vec<&str> = rel.split('/').collect();
+    for (i, part) in parts.iter().enumerate() {
+        path.push(part);
+        match fs::symlink_metadata(&path) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "Re-init left out {}: it is a symbolic link",
+                    path.display()
+                );
+                return false;
+            }
+            Ok(meta) if i + 1 == parts.len() => return meta.is_file(),
+            Ok(_) => {}
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
 /// Library files under `root_dir`, as `/`-separated paths: the `.snxlib`,
 /// the managed `.gitignore` (written here, keeping user lines), a
 /// `.gitattributes` if there is one, and every regular file in the owned
 /// folders except write-lock sidecars and managed clutter.
 fn library_files(file_path: &Path, root_dir: &Path) -> Result<Vec<String>, LibraryError> {
     super::ignore_rules::write_ignore_rules(root_dir)?;
-    let mut out = vec![
-        file_name_str(file_path)?,
-        super::ignore_rules::GITIGNORE_FILE.to_string(),
-    ];
-    if root_dir.join(GITATTRIBUTES_FILE).is_file() {
-        out.push(GITATTRIBUTES_FILE.to_string());
+    let snxlib = file_name_str(file_path)?;
+    if !is_plain_file(root_dir, &snxlib) {
+        return Err(LibraryError::Backend(format!(
+            "{} is not a regular file; Re-init will not commit through a link",
+            file_path.display()
+        )));
+    }
+    let mut out = vec![snxlib];
+    for name in [super::ignore_rules::GITIGNORE_FILE, GITATTRIBUTES_FILE] {
+        if is_plain_file(root_dir, name) {
+            out.push(name.to_string());
+        }
     }
     for dir in OWNED_DIRS {
         collect_files(root_dir, dir, &mut out)?;
@@ -63,7 +94,17 @@ fn library_files(file_path: &Path, root_dir: &Path) -> Result<Vec<String>, Libra
 }
 
 fn collect_files(root_dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<(), LibraryError> {
-    let Ok(entries) = fs::read_dir(root_dir.join(rel)) else {
+    // The folder itself (and `assets/` above `assets/datasheets`) must not be
+    // a link either; `is_plain_file` is for files, so walk the parts here.
+    let mut dir = root_dir.to_path_buf();
+    for part in rel.split('/') {
+        dir.push(part);
+        match fs::symlink_metadata(&dir) {
+            Ok(meta) if meta.is_dir() => {}
+            _ => return Ok(()),
+        }
+    }
+    let Ok(entries) = fs::read_dir(&dir) else {
         return Ok(());
     };
     for entry in entries {
@@ -75,6 +116,12 @@ fn collect_files(root_dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<()
         let kind = entry.file_type()?;
         if kind.is_dir() {
             collect_files(root_dir, &child, out)?;
+        } else if kind.is_symlink() {
+            tracing::warn!(
+                target: "signex::library",
+                "Re-init left out {}: it is a symbolic link",
+                root_dir.join(&child).display()
+            );
         } else if kind.is_file()
             && !is_write_lock_file(Path::new(&child))
             && !super::ignore_rules::is_managed_clutter(&child)
@@ -170,12 +217,12 @@ pub(super) fn record_in_index(
             .add_path(Path::new(name))
             .map_err(backend("git add"))?;
         // An LFS path is recorded as its pointer, as the commit holds it.
-        if let Some(mut staged) = index.get_path(Path::new(name), 0) {
-            if staged.id != *id {
-                staged.id = *id;
-                index.add(&staged).map_err(backend("git add"))?;
-                lfs_paths = true;
-            }
+        if let Some(mut staged) = index.get_path(Path::new(name), 0)
+            && staged.id != *id
+        {
+            staged.id = *id;
+            index.add(&staged).map_err(backend("git add"))?;
+            lfs_paths = true;
         }
     }
     if lfs_paths {
