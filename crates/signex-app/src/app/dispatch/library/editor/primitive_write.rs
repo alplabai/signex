@@ -75,6 +75,7 @@ impl PrimitiveWrite {
                 owed,
             } => write_footprint(&context, file, &baseline, &name, &owed),
         };
+        library.report_held_back();
         // The reason leads: the Messages panel cuts long lines.
         written.map_err(|e| format!("{e} (writing {})", self.path.display()))
     }

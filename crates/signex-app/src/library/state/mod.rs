@@ -764,6 +764,7 @@ pub struct LibraryCreateOptionsState {
     pub use_lfs: bool,
 }
 
+mod closing;
 mod methods;
 mod new_library_defaults;
 mod panel_rows;

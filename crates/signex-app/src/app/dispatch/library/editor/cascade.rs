@@ -115,6 +115,15 @@ impl SaveLibrary {
         }
     }
 
+    /// Report what this save's commit left out (#1729): the adapter is
+    /// opened for the one save and dropped with it.
+    pub(super) fn report_held_back(&self) {
+        if let Some(adapter) = self.adapter() {
+            let name = adapter.manifest().library.name.clone();
+            crate::library::held_back::report_held_back(&name, adapter);
+        }
+    }
+
     fn adapter(&self) -> Option<&dyn LibraryAdapter> {
         match self {
             Self::Mounted(a) | Self::Opened(a) => Some(a.as_ref()),

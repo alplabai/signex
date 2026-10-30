@@ -322,8 +322,8 @@ fn enable_version_control_blocking(
         return Outcome::InitFailed(error.to_string());
     }
     // `enable_project_version_control` already merged the managed
-    // `.gitignore` / `.gitattributes` blocks (project scope) before the
-    // initial commit, so nothing is left to write or commit here.
+    // `.gitignore` block (both scopes) and `.gitattributes` block (project
+    // scope) before the initial commit, so nothing is left to write here.
     Outcome::Created {
         adapter_error: None,
         commit_warning: None,
@@ -333,21 +333,16 @@ fn enable_version_control_blocking(
 /// Thin wrapper around `signex_library::enable_project_version_control`
 /// — kept here so the dispatch handler can stay synchronous and
 /// surface the `LibraryError` as a user-facing string.
-/// `managed_gitignore` writes the managed `.gitignore` block (project
-/// scope only); `gitignore` is the picker's unticked rows, merged in
-/// outside the block, or `None` for none.
+/// `project_scope` adds the managed `.gitattributes` block; both scopes
+/// get the managed `.gitignore` block. `gitignore` is the picker's unticked
+/// rows, merged in outside the block, or `None` for none.
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
-    managed_gitignore: bool,
+    project_scope: bool,
     gitignore: Option<&str>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(
-        project_dir,
-        use_lfs,
-        managed_gitignore,
-        gitignore,
-    )
+    signex_library::enable_project_version_control(project_dir, use_lfs, project_scope, gitignore)
 }
 
 /// Build the per-row pick-list for the project-scope Enable Version

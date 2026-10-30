@@ -32,34 +32,27 @@ impl VcsFilePlan {
     /// pair, a link, a read-only or hard-linked file is a
     /// [`LibraryError::Conflict`].
     ///
-    /// `managed_gitignore` is the project-scope switch: it stages the managed
-    /// `.gitignore` block and the managed `.gitattributes` block (LFS rules
-    /// only when `use_lfs`). Hard-link refusal is Unix-only.
-    ///
-    /// With `managed_gitignore` off (library scope) there is no block; the
-    /// `rows` alone are merged into `.gitignore`, and only when there are any.
+    /// The managed `.gitignore` block is staged at both scopes, so OS and
+    /// temp clutter never reaches a commit (#1729). `project_scope` adds
+    /// the managed `.gitattributes` block (LFS rules only when `use_lfs`);
+    /// library scope touches `.gitattributes` only for LFS. Hard-link
+    /// refusal is Unix-only.
     pub(crate) fn new(
         project_dir: &Path,
         use_lfs: bool,
-        managed_gitignore: bool,
+        project_scope: bool,
         rows: Option<&str>,
     ) -> Result<Self, LibraryError> {
         let mut staged = Vec::new();
         // Project scope always carries a managed `.gitattributes` block, so a
         // bad file is refused here, before `git init`, whatever `use_lfs` is.
-        // Library scope only touches it for LFS.
-        if use_lfs || managed_gitignore {
+        if use_lfs || project_scope {
             let file = merge_gitattributes_file(project_dir, use_lfs).map_err(refuse)?;
             staged.push(stage(project_dir.join(".gitattributes"), file, None));
         }
         let path = project_dir.join(".gitignore");
-        if managed_gitignore {
-            let file = merge_file(&path, GITIGNORE_BLOCK_BODY).map_err(refuse)?;
-            staged.push(stage(path, file, rows));
-        } else if let Some(rows) = rows {
-            let file = merge_rows_only(&path).map_err(refuse)?;
-            staged.push(stage(path, file, Some(rows)));
-        }
+        let file = merge_file(&path, GITIGNORE_BLOCK_BODY).map_err(refuse)?;
+        staged.push(stage(path, file, rows));
         Ok(Self {
             staged,
             written: Vec::new(),
@@ -117,14 +110,6 @@ impl VcsFilePlan {
         }
         failures
     }
-}
-
-/// Existing `.gitignore` text as-is (no block); a missing file is empty.
-fn merge_rows_only(path: &Path) -> Result<MergedFile, ManagedFileError> {
-    signex_types::project_vcs_files::read_for_edit(path).map(|existing| MergedFile {
-        merged: existing.clone().unwrap_or_default(),
-        existing,
-    })
 }
 
 fn stage(path: PathBuf, file: MergedFile, rows: Option<&str>) -> Staged {

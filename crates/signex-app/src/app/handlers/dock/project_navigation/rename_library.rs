@@ -46,6 +46,7 @@ impl Signex {
         let old_path = state.target_path.clone();
         if let Some(reason) = self.library_rename_refusal(state, &old_path) {
             self.set_rename_error(&reason);
+            crate::diagnostics::log_warning(format!("[rename] refused: {reason}"));
             return iced::Task::none();
         }
         let Some((project, project_path)) = state

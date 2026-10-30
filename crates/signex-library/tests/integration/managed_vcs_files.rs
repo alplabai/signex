@@ -91,17 +91,36 @@ fn unbalanced_markers_refuse_enable_and_leave_the_file_untouched() {
     assert!(!dir.path().join(".git").exists(), "no repo left behind");
 }
 
+/// #1729: library scope gets the managed `.gitignore` block too (not the
+/// `.gitattributes` one), committed, and keeps the user's lines and rows.
 #[test]
-fn library_scope_gets_no_managed_block_but_keeps_the_unticked_rows() {
+fn library_scope_gets_the_managed_ignore_block_and_keeps_the_users_lines() {
     with_identity();
     let dir = project();
     enable_project_version_control(dir.path(), false, false, None).unwrap();
-    assert!(!dir.path().join(".gitignore").exists());
+    let text = read(&dir, ".gitignore");
+    assert!(
+        text.starts_with(BEGIN) && text.ends_with(&format!("{END}\n")),
+        "{text}"
+    );
+    assert!(
+        text.contains(".DS_Store\n") && text.contains("*.tmp\n"),
+        "{text}"
+    );
+    assert!(!dir.path().join(".gitattributes").exists());
+    let repo = git2::Repository::open(dir.path()).unwrap();
+    let tree = repo.head().unwrap().peel_to_tree().unwrap();
+    assert!(
+        tree.get_name(".gitignore").is_some(),
+        "committed with the rest"
+    );
 
     let dir = project();
     std::fs::write(dir.path().join(".gitignore"), "mine\n").unwrap();
     enable_project_version_control(dir.path(), false, false, Some("libs/\n")).unwrap();
-    assert_eq!(read(&dir, ".gitignore"), "mine\nlibs/\n");
+    let text = read(&dir, ".gitignore");
+    assert!(text.starts_with(BEGIN), "{text}");
+    assert!(text.contains(&format!("{END}\n\nmine\nlibs/\n")), "{text}");
 }
 
 #[test]

@@ -877,3 +877,11 @@ fn a_failed_new_component_insert_reaches_messages() {
         "the failed insert must be in Messages"
     );
 }
+
+#[path = "deferred_close_tests.rs"]
+mod deferred_close_tests;
+
+// Unix only: the test makes its unreadable file with `chmod 000`.
+#[cfg(unix)]
+#[path = "held_back_tests.rs"]
+mod held_back_tests;

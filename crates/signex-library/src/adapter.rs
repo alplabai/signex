@@ -831,6 +831,14 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(CommitOutcome::NothingToCommit)
     }
 
+    /// Pending files the commits since the last call had to leave out
+    /// because they could not be read (#1729), once per commit they held
+    /// back. They stay in [`Self::uncommitted_changes`]; the app reports
+    /// each one in the Messages panel.
+    fn take_held_back_files(&self) -> Vec<HeldBackFile> {
+        Vec::new()
+    }
+
     /// Per-primitive git history.
     ///
     /// Returns up to 50 entries from `git log --max-count 50
@@ -878,6 +886,15 @@ impl CommitOutcome {
     pub fn is_recorded(&self) -> bool {
         !matches!(self, Self::NotCommitted { .. })
     }
+}
+
+/// A pending file a commit left out because it could not be read (#1729).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeldBackFile {
+    /// Library-relative path, forward slashes.
+    pub path: String,
+    /// Why it could not be read.
+    pub reason: String,
 }
 
 /// Saved changes of a library that no commit holds yet (#858).

@@ -336,6 +336,8 @@ impl Signex {
         refresh: PostSaveRefresh<'_>,
     ) {
         self.document_state.document_saves.finish(&done.path);
+        // The write's turn is released: a close that waited for it is due.
+        self.close_libraries_whose_writes_are_done();
         let PrimitiveSaveDone {
             path,
             generation,

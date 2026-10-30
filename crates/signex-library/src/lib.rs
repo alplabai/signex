@@ -50,9 +50,9 @@ pub mod vcs_target_guard;
 pub mod where_used;
 
 pub use adapter::{
-    CommitOutcome, ComponentSummary, FileRewrite, HistoryEntry, LibraryAdapter, LibraryError,
-    LibraryQuery, PrimitiveSummary, RowEdit, RowEditOutcome, UncommittedChanges, Versioned,
-    rewrite_file,
+    CommitOutcome, ComponentSummary, FileRewrite, HeldBackFile, HistoryEntry, LibraryAdapter,
+    LibraryError, LibraryQuery, PrimitiveSummary, RowEdit, RowEditOutcome, UncommittedChanges,
+    Versioned, rewrite_file,
 };
 pub use adapters::library_set::{LibrarySet, UnresolvedRefs, absence_is_none};
 pub use adapters::read_only::ReadOnlyAdapter;
@@ -154,9 +154,9 @@ pub use adapters::local_git::{
 ///
 /// Existing `.gitignore` / `.gitattributes` files are merged, never
 /// replaced: only the block between the `# >>> signex (managed) >>>` /
-/// `# <<< signex (managed) <<<` markers is Signex's. `managed_gitignore`
-/// turns the `.gitignore` block on (project scope); library scope passes
-/// `false` and gets only the rows. Links and read-only files are refused,
+/// `# <<< signex (managed) <<<` markers is Signex's. Both scopes get the
+/// `.gitignore` block; `project_scope` adds the `.gitattributes` block,
+/// which library scope gets only for LFS. Links and read-only files are refused,
 /// and so are hard-linked files on Unix only (stable std has no link count
 /// on Windows). Any failure after the files are written restores them and
 /// removes the `.git` this call made. `gitignore` is the
@@ -173,7 +173,7 @@ pub use adapters::local_git::{
 pub fn enable_project_version_control(
     project_dir: &std::path::Path,
     use_lfs: bool,
-    managed_gitignore: bool,
+    project_scope: bool,
     gitignore: Option<&str>,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
@@ -202,7 +202,7 @@ pub fn enable_project_version_control(
     // Merge the managed blocks into the user's files in memory first, so a
     // malformed marker pair or a link refuses before anything touches disk.
     let mut files =
-        vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, managed_gitignore, gitignore)?;
+        vcs_init_files::VcsFilePlan::new(project_dir, use_lfs, project_scope, gitignore)?;
     if let Err(e) = files.write() {
         return Err(with_rollback_notes(e, files.roll_back()));
     }
