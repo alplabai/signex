@@ -8,20 +8,20 @@ use crate::library::ComponentPreviewState;
 pub(super) fn remove(state: &mut ComponentPreviewState, idx: usize) {
     if signex_library::remove_alternate_symbol(&mut state.row, idx) {
         state.alternate_error = None;
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
 /// Set the label of the alternate at `idx`.
 pub(super) fn relabel(state: &mut ComponentPreviewState, idx: usize, label: String) {
     if signex_library::relabel_alternate_symbol(&mut state.row, idx, label) {
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
 /// Move the alternate at `from` to position `to`.
 pub(super) fn move_to(state: &mut ComponentPreviewState, from: usize, to: usize) {
     if signex_library::move_alternate_symbol(&mut state.row, from, to) {
-        state.dirty = true;
+        state.mark_dirty();
     }
 }

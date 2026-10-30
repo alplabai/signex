@@ -81,9 +81,6 @@ impl Signex {
         if !navigates && self.refuse_read_only_write(&address.library_path) {
             return Task::none();
         }
-        if !navigates && let Some(state) = self.library.editors.get_mut(&address) {
-            state.edit_epoch += 1;
-        }
         match msg {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {

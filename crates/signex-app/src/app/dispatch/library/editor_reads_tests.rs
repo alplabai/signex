@@ -208,6 +208,74 @@ fn a_confirmed_reload_replaces_the_edits_that_existed_at_the_confirm() {
     assert_eq!(f.preview().row.state, LifecycleState::Draft);
 }
 
+/// A reload is requested of a clean copy, then something else changes the
+/// preview. `settle` runs the reload to the end; the preview must keep what
+/// the other change made.
+#[test]
+fn an_alternate_symbol_picked_after_a_confirmed_reload_is_kept() {
+    let mut f = fixture();
+    edit(&mut f, LifecycleState::Deprecated);
+    let library_id = f.preview().row.symbol_ref.library_id;
+
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    settle_task(&mut f.app, task);
+
+    assert_eq!(
+        f.preview().row.alternate_symbols.len(),
+        1,
+        "the alternate is kept"
+    );
+    assert!(f.preview().dirty);
+}
+
+#[test]
+fn a_bind_started_after_a_reload_was_asked_is_not_undone_by_it() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let picked = PrimitiveRef::new(library_id, Uuid::now_v7());
+
+    let reload = f.event(EditorMsg::ReloadRequested);
+    let bind = f.app.apply_primitive_pick_to_preview(
+        f.address.clone(),
+        signex_library::PrimitiveKind::Symbol,
+        picked,
+    );
+    settle_task(&mut f.app, reload);
+
+    assert_eq!(
+        f.preview().row.symbol_ref,
+        picked,
+        "the bound symbol stands"
+    );
+    assert_eq!(
+        f.preview().row.description,
+        "Old",
+        "the stale read was not applied"
+    );
+    settle_task(&mut f.app, bind);
+}
+
+#[test]
+fn a_footprint_canvas_event_after_a_requested_reload_does_not_stop_it() {
+    let mut f = fixture();
+
+    let task = f.event(EditorMsg::ReloadRequested);
+    let moved = f.event(EditorMsg::Footprint(
+        crate::library::messages::FootprintEditorMsg::CursorAt {
+            x_mm: 1.0,
+            y_mm: 2.0,
+        },
+    ));
+    settle_task(&mut f.app, moved);
+    settle_task(&mut f.app, task);
+
+    assert_eq!(f.preview().row.description, "Stored", "the reload applied");
+}
+
 /// A close asked while the read runs waits behind it; the message that
 /// lands the read must finish it.
 fn assert_close_finishes_when_the_read_lands(mut f: Fixture, task: iced::Task<Message>) {

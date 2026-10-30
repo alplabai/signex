@@ -310,6 +310,8 @@ impl Signex {
         // on is still refused as stale.
         let base_revision = state.row.server_revision;
         state.binding_primitive = true;
+        // The row changed under any reload still being read.
+        state.note_edit();
         let table = address.table.clone();
         let row_id = address.row_id;
         let msg = bind_message(kind);
