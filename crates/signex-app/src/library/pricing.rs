@@ -131,7 +131,15 @@ pub fn run_job_with(
     cancel: &AtomicBool,
 ) -> Result<PricingRefreshReport, String> {
     let adapter = LocalGitAdapter::open(library_path).map_err(|e| e.to_string())?;
-    refresh_library_pricing(&adapter, resolve, cancel).map_err(|e| e.to_string())
+    let report = refresh_library_pricing(&adapter, resolve, cancel).map_err(|e| e.to_string());
+    // The adapter is opened for this one walk: report what its commit left
+    // out before it goes (#1729).
+    let library = signex_library::LibraryAdapter::manifest(&adapter)
+        .library
+        .name
+        .clone();
+    crate::library::held_back::report_held_back(&library, &adapter);
+    report
 }
 
 /// How loud a Messages-panel line is.

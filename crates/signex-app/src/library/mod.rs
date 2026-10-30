@@ -34,6 +34,7 @@ pub mod edit_row_modal;
 mod edit_row_params;
 pub mod editor;
 pub mod external_poll;
+pub mod held_back;
 pub mod messages;
 pub(crate) mod modal_chrome;
 pub mod mount;

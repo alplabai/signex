@@ -113,17 +113,4 @@ impl Signex {
         )
         .chain(next)
     }
-
-    /// Unmount the libraries whose close was asked for while a write was
-    /// running, now that it has finished.
-    pub(super) fn close_libraries_whose_writes_are_done(&mut self) {
-        let done = self.library.closes_ready();
-        if done.is_empty() {
-            return;
-        }
-        for root in done {
-            self.library.close_library(&root);
-        }
-        self.refresh_panel_ctx();
-    }
 }

@@ -122,32 +122,14 @@ impl Signex {
     }
 
     /// Close an open library — diverts to the confirm modal when any
-    /// Component Preview editor against it is dirty.
+    /// Component Preview editor against it is dirty, so the user can Save
+    /// All / Discard All / Cancel rather than lose the edits silently.
     pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
-        // If any Component Preview editors against this library
-        // are dirty, divert to the confirm modal so the user
-        // can Save All / Discard All / Cancel rather than
-        // losing the edits silently. The modal handler
-        // (`CloseLibraryConfirm`) finishes the close once the
-        // user picks an option.
         let dirty = self.library.dirty_editors_for_library(&path);
         if dirty.is_empty() {
-            self.library.close_library(&path);
+            self.close_library_or_defer(&path);
         } else {
-            let library_name = self
-                .library
-                .library_at(&path)
-                .map(|lib| lib.display_name.clone())
-                .unwrap_or_else(|| {
-                    path.file_name()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| path.display().to_string())
-                });
-            self.library.close_library_confirm = Some(CloseLibraryConfirmState {
-                library_path: path,
-                library_name,
-                dirty_editors: dirty,
-            });
+            self.raise_close_library_prompt(path, dirty);
         }
         Task::none()
     }
@@ -159,27 +141,22 @@ impl Signex {
         library_path: std::path::PathBuf,
         dirty_editors: Vec<EditorAddress>,
     ) -> Task<Message> {
-        // Direct opener for the modal — used when callers
-        // already know the dirty list (e.g. a future
-        // workspace-close batch op). For the user-driven
-        // close path, `CloseLibrary` is the entry point and
-        // it diverts here automatically.
-        let library_name = self
-            .library
-            .library_at(&library_path)
-            .map(|lib| lib.display_name.clone())
-            .unwrap_or_else(|| {
-                library_path
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| library_path.display().to_string())
-            });
+        self.raise_close_library_prompt(library_path, dirty_editors);
+        Task::none()
+    }
+
+    /// Open the close-library confirm modal for `dirty_editors`.
+    pub(super) fn raise_close_library_prompt(
+        &mut self,
+        library_path: std::path::PathBuf,
+        dirty_editors: Vec<EditorAddress>,
+    ) {
+        let library_name = self.library.library_label(&library_path);
         self.library.close_library_confirm = Some(CloseLibraryConfirmState {
             library_path,
             library_name,
             dirty_editors,
         });
-        Task::none()
     }
 
     /// User picked Save All / Discard All / Cancel in the close prompt.
@@ -192,13 +169,20 @@ impl Signex {
         };
         match choice {
             CloseLibraryChoice::Cancel => {
-                // No state change — user kept the library open.
+                // The user kept the library open: a close still waiting for
+                // writes must not unmount it later.
+                self.library
+                    .cancel_pending_close(&confirm.library_path, "the close prompt was cancelled");
             }
             CloseLibraryChoice::DiscardAll => {
-                // Drop every dirty editor and proceed with the close.
-                // `close_library` retains-not by `library_path`, so
-                // this happens automatically as part of the close.
-                self.library.close_library(&confirm.library_path);
+                // Drop the library's editors now: a close that waits for
+                // writes must not find the discarded drafts dirty and ask
+                // again when it comes due.
+                let root = &confirm.library_path;
+                self.library
+                    .editors
+                    .retain(|key, _| key.library_path != *root);
+                self.close_library_or_defer(root);
             }
             CloseLibraryChoice::SaveAll => {
                 // Persist every dirty editor's row through the adapter

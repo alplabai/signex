@@ -674,6 +674,10 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(self.commit_pending_changes(message))
     }
 
+    fn take_held_back_files(&self) -> Vec<crate::adapter::HeldBackFile> {
+        self.take_held_back()
+    }
+
     fn commit_external_change(
         &self,
         abs_path: &Path,

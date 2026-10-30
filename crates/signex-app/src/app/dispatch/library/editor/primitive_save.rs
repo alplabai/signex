@@ -320,6 +320,8 @@ impl Signex {
     /// success or failure to the draft.
     fn settle_primitive_save_state(&mut self, done: PrimitiveSaveDone) {
         self.document_state.document_saves.finish(&done.path);
+        // The write's turn is released: a close that waited for it is due.
+        self.close_libraries_whose_writes_are_done();
         let PrimitiveSaveDone {
             path,
             generation,
