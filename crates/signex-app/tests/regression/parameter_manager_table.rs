@@ -15,14 +15,21 @@ fn fields(app: &Signex) -> std::collections::HashMap<String, String> {
         .clone()
 }
 
-fn drafted(app: &mut Signex, id: uuid::Uuid, key: &str, text: &str) {
-    let _ = app.update(Message::ParameterManager(
-        ParameterManagerMsg::CellDrafted {
-            symbol_uuid: id,
-            key: key.into(),
-            text: text.into(),
-        },
-    ));
+fn typed(app: &mut Signex, id: uuid::Uuid, key: &str, text: &str) {
+    let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        symbol_uuid: id,
+        key: key.into(),
+        value: text.into(),
+    }));
+}
+
+fn id_of(app: &Signex) -> uuid::Uuid {
+    app.document_state
+        .active_engine()
+        .unwrap()
+        .document()
+        .symbols[0]
+        .uuid
 }
 
 fn seeded() -> (Signex, uuid::Uuid) {
@@ -33,6 +40,10 @@ fn seeded() -> (Signex, uuid::Uuid) {
         key: "Tolerance".into(),
         value: "5%".into(),
     }));
+    // Enter ends the seeding edit's typing run.
+    let _ = app.update(Message::ParameterManager(
+        ParameterManagerMsg::CellSubmitted,
+    ));
     (app, id)
 }
 
@@ -54,24 +65,21 @@ fn clearing_a_cell_keeps_the_parameter_with_an_empty_value() {
 }
 
 #[test]
-fn typing_several_characters_then_enter_is_one_undo_step() {
-    let (mut app, id) = seeded();
+fn typing_several_characters_is_one_undo_step_and_is_in_the_document_at_once() {
+    let (mut app, _id) = seeded();
+    let path = std::path::PathBuf::from("dirty-gateway.snxsch");
 
     for text in ["1", "1%", "10", "10%"] {
-        drafted(&mut app, id, "Tolerance", text);
+        let id = id_of(&app);
+        typed(&mut app, id, "Tolerance", text);
     }
-    assert_eq!(
-        fields(&app).get("Tolerance").map(String::as_str),
-        Some("5%"),
-        "nothing is written while the cell is still being typed in"
-    );
-    let _ = app.update(Message::ParameterManager(
-        ParameterManagerMsg::CellSubmitted,
-    ));
+    // No Enter yet: the value is already in the document, so Save, Save All
+    // and quit see it and the sheet is dirty.
     assert_eq!(
         fields(&app).get("Tolerance").map(String::as_str),
         Some("10%")
     );
+    assert!(app.document_state.is_document_dirty(&path));
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(
@@ -82,20 +90,44 @@ fn typing_several_characters_then_enter_is_one_undo_step() {
 }
 
 #[test]
-fn moving_to_another_cell_commits_the_previous_draft() {
+fn enter_or_another_cell_starts_a_new_undo_step() {
     let (mut app, id) = seeded();
-    let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
-        symbol_uuid: id,
-        key: "Rating".into(),
-        value: "0.1W".into(),
-    }));
+    typed(&mut app, id, "Rating", "0.1W");
 
-    drafted(&mut app, id, "Tolerance", "2%");
-    drafted(&mut app, id, "Rating", "0.25W");
+    typed(&mut app, id, "Tolerance", "1%");
+    typed(&mut app, id, "Tolerance", "12%");
+    let _ = app.update(Message::ParameterManager(
+        ParameterManagerMsg::CellSubmitted,
+    ));
+    typed(&mut app, id, "Tolerance", "2%");
+    typed(&mut app, id, "Rating", "0.25W");
 
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(fields(&app).get("Rating").map(String::as_str), Some("0.1W"));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(
         fields(&app).get("Tolerance").map(String::as_str),
-        Some("2%")
+        Some("12%")
+    );
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(
+        fields(&app).get("Tolerance").map(String::as_str),
+        Some("5%")
+    );
+}
+
+#[test]
+fn an_edit_naming_a_symbol_the_sheet_lacks_changes_nothing() {
+    let (mut app, _id) = seeded();
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let before = fields(&app);
+
+    typed(&mut app, uuid::Uuid::now_v7(), "Tolerance", "99%");
+
+    assert_eq!(
+        fields(&app),
+        before,
+        "a foreign symbol must not land on this sheet"
     );
 }
 

@@ -45,7 +45,7 @@ pub use case_fold::CaseFold;
 pub use error_notice::ErrorNotice;
 pub use interaction::InteractionState;
 pub use keymap_recorder::KeymapRecorderState;
-pub use parameter_table::{CellDraft, ParameterTableState};
+pub use parameter_table::ParameterTableState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,

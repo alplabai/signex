@@ -109,6 +109,17 @@ pub use transform::rubber_band::{
     moved_pin_tips,
 };
 
+/// Whether `key` names one of the symbol's built-in fields (`reference`,
+/// `value`, `footprint`, any case). Those have their own commands, so
+/// [`Command::SetSymbolField`] and [`Command::RemoveSymbolField`] refuse
+/// them as custom parameters.
+pub fn is_reserved_symbol_key(key: &str) -> bool {
+    matches!(
+        key.to_lowercase().as_str(),
+        "reference" | "value" | "footprint"
+    )
+}
+
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
 
 #[derive(Debug)]
@@ -126,6 +137,9 @@ pub struct Engine {
     /// outside that loop, so every other path behaves exactly as before.
     /// See `exec/batch.rs`.
     history_suppressed: bool,
+    /// The parameter cell the last recorded edit wrote, while typing in it
+    /// goes on; see [`Engine::end_field_edit_run`].
+    field_edit_run: Option<history::FieldEditRun>,
     /// Full-sheet pre-image clones taken by `execute` (test hook for the
     /// one-snapshot-per-batch guarantee).
     #[cfg(test)]
@@ -225,6 +239,7 @@ impl Engine {
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
+            field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
             revision: crate::next_revision(),
@@ -257,6 +272,7 @@ impl Engine {
             redo_stack: Vec::new(),
             history_evicted: 0,
             history_suppressed: false,
+            field_edit_run: None,
             #[cfg(test)]
             pre_image_clones: 0,
             revision: crate::next_revision(),

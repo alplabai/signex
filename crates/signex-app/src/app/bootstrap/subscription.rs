@@ -495,9 +495,8 @@ impl Signex {
     ///
     /// The Parameter Manager has no `OverlayId`: it has no in-window card,
     /// it only ever opens as a detached window, so there is no painted
-    /// stack for it to rank in. It answers here directly, with a cancel
-    /// that drops its uncommitted cell draft, the same way Esc discards a
-    /// Preferences draft.
+    /// stack for it to rank in. It answers here directly, with its Close;
+    /// typed cells are already in the document, so nothing is lost.
     ///
     /// `None` means that modal has no Esc at all — either no `OverlayId`
     /// (Move Selection, the net-colour palette) or an `OverlayId` whose
@@ -512,7 +511,7 @@ impl Signex {
             return self
                 .ui_state
                 .parameter_manager_open
-                .then_some(Message::ParameterManager(ParameterManagerMsg::Cancelled));
+                .then_some(Message::ParameterManager(ParameterManagerMsg::Close));
         }
         let id = modal_overlay_id(modal)?;
         self.open_overlays(Some(modal)).rung(id)

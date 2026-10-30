@@ -66,6 +66,9 @@ fn the_command_opens_the_manager_and_a_cell_edit_is_undoable() {
         key: "Tolerance".into(),
         value: "5%".into(),
     }));
+    let _ = app.update(Message::ParameterManager(
+        ParameterManagerMsg::CellSubmitted,
+    ));
 
     // Typed into the palette and run with Enter.
     assert!(!app.ui_state.parameter_manager_open);

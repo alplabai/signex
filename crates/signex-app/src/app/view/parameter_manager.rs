@@ -1,6 +1,6 @@
 //! The Parameter Manager table: one row per placed symbol, one column per
-//! custom parameter in use. Cells are drafts, written on Enter; each
-//! parameter column carries a delete button.
+//! custom parameter in use. Cells write through as you type (one undo step
+//! per cell); each parameter column carries a delete button.
 //!
 //! Edits go through `ParameterManagerMsg`, so they are undoable and
 //! dirty-flagged like any other schematic edit.
@@ -136,19 +136,16 @@ impl Signex {
                     .width(iced::Length::Fixed(200.0)),
             ];
             for k in &keys {
-                let shown = match &table.draft {
-                    Some(draft) if draft.is_for(sym.uuid, k) => draft.text.clone(),
-                    _ => sym.fields.get(k).cloned().unwrap_or_default(),
-                };
+                let shown = sym.fields.get(k).cloned().unwrap_or_default();
                 let sym_uuid = sym.uuid;
                 let k_str = k.clone();
                 r = r.push(
                     text_input("", &shown)
                         .on_input(move |text| {
-                            Message::ParameterManager(ParameterManagerMsg::CellDrafted {
+                            Message::ParameterManager(ParameterManagerMsg::Edit {
                                 symbol_uuid: sym_uuid,
                                 key: k_str.clone(),
-                                text,
+                                value: text,
                             })
                         })
                         .on_submit(Message::ParameterManager(

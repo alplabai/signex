@@ -348,14 +348,9 @@ mod tests {
     // ── #1783: the parameter manager's Esc ──────────────────────────
 
     #[test]
-    fn esc_in_the_parameter_manager_closes_it_and_drops_the_draft() {
+    fn esc_in_the_parameter_manager_closes_it() {
         let mut app = quiet_app();
         app.ui_state.parameter_manager_open = true;
-        app.ui_state.parameter_table.draft = Some(crate::app::state::CellDraft {
-            symbol_uuid: uuid::Uuid::now_v7(),
-            key: "Tolerance".to_string(),
-            text: "typed".to_string(),
-        });
         let window = detach(&mut app, ModalId::ParameterManager);
         app.interaction_state.current_tool = Tool::Wire;
 
@@ -366,10 +361,6 @@ mod tests {
         assert!(
             !app.ui_state.parameter_manager_open,
             "Esc must close the Parameter Manager"
-        );
-        assert!(
-            app.ui_state.parameter_table.draft.is_none(),
-            "Esc cancels, like every other modal: the uncommitted draft is dropped"
         );
         assert_eq!(
             app.interaction_state.current_tool,

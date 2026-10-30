@@ -433,11 +433,8 @@ impl Engine {
             } => {
                 // Reject overwrites of reserved keys — those have their
                 // own commands so ref/value/footprint moves stay tracked.
-                match key.to_lowercase().as_str() {
-                    "reference" | "value" | "footprint" => {
-                        return Ok(CommandResult::unchanged());
-                    }
-                    _ => {}
+                if crate::is_reserved_symbol_key(&key) {
+                    return Ok(CommandResult::unchanged());
                 }
                 let changed = self
                     .document
@@ -448,7 +445,7 @@ impl Engine {
                         if symbol.fields.get(&key) == Some(&value) {
                             false
                         } else {
-                            symbol.fields.insert(key, value);
+                            symbol.fields.insert(key.clone(), value);
                             true
                         }
                     })
@@ -460,14 +457,11 @@ impl Engine {
                     semantic: SemanticPatch::SymbolFieldsUpdated,
                     document: DocumentPatch::SYMBOLS,
                 };
-                self.record_history(before, patch_pair);
+                self.record_field_edit(before, patch_pair, symbol_id, &key);
                 Ok(CommandResult::changed(patch_pair))
             }
             Command::RemoveSymbolField { symbol_id, key } => {
-                if matches!(
-                    key.to_lowercase().as_str(),
-                    "reference" | "value" | "footprint"
-                ) {
+                if crate::is_reserved_symbol_key(&key) {
                     return Ok(CommandResult::unchanged());
                 }
                 let removed = self

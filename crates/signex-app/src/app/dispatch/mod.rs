@@ -216,7 +216,9 @@ impl Signex {
                                 self.ui_state.net_color_palette_open = false
                             }
                             ModalId::ParameterManager => {
-                                self.ui_state.parameter_manager_open = false
+                                self.end_parameter_edit_run();
+                                self.ui_state.parameter_manager_open = false;
+                                self.ui_state.parameter_table = Default::default();
                             }
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
@@ -605,45 +607,29 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             ParameterManagerMsg::Open => {
+                // Already open: keep the filter and the half-typed column name.
+                if !self.ui_state.parameter_manager_open {
+                    self.ui_state.parameter_table = Default::default();
+                }
                 self.ui_state.parameter_manager_open = true;
-                self.ui_state.parameter_table = Default::default();
                 self.handle_detach_modal(super::state::ModalId::ParameterManager)
             }
-            ParameterManagerMsg::Close => {
-                // Closing keeps what was typed; only Esc discards it.
-                self.commit_parameter_draft();
-                self.close_parameter_manager()
-            }
-            ParameterManagerMsg::Cancelled => {
-                self.ui_state.parameter_table.draft = None;
-                self.close_parameter_manager()
-            }
+            ParameterManagerMsg::Close => self.close_parameter_manager(),
             ParameterManagerMsg::Edit {
                 symbol_uuid,
                 key,
                 value,
             } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
-            ParameterManagerMsg::CellDrafted {
-                symbol_uuid,
-                key,
-                text,
-            } => self.handle_parameter_cell_drafted(symbol_uuid, key, text),
             ParameterManagerMsg::CellSubmitted => {
-                self.commit_parameter_draft();
+                self.end_parameter_edit_run();
                 Task::none()
             }
-            ParameterManagerMsg::ParameterRemoved { key } => {
-                self.commit_parameter_draft();
-                self.handle_parameter_removed(&key)
-            }
+            ParameterManagerMsg::ParameterRemoved { key } => self.handle_parameter_removed(&key),
             ParameterManagerMsg::NewKeyChanged(key) => {
                 self.ui_state.parameter_table.new_key = key;
                 Task::none()
             }
-            ParameterManagerMsg::ColumnAdded => {
-                self.commit_parameter_draft();
-                self.handle_parameter_column_added()
-            }
+            ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
             ParameterManagerMsg::FilterChanged(filter) => {
                 self.ui_state.parameter_table.filter = filter;
                 Task::none()
