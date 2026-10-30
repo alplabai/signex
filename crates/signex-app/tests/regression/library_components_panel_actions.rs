@@ -139,14 +139,21 @@ fn mount_failure_is_surfaced_even_while_a_recovery_dialog_is_open() {
 /// the shared per-process config root poisoned for the other tests.
 struct UnwritableGlobalList {
     path: std::path::PathBuf,
+    // `Drop::drop` runs before the fields are dropped, so the file is
+    // restored before this lock is released.
+    _exclusive: std::sync::MutexGuard<'static, ()>,
 }
 
 impl UnwritableGlobalList {
     fn new() -> Self {
+        let exclusive = crate::shared_locks::global_list_file();
         let path = signex_app::panels::components_panel::global_prefs::prefs_path()
             .expect("the test redirect always resolves a config root");
         std::fs::create_dir_all(&path).expect("make global_libraries.toml a directory");
-        Self { path }
+        Self {
+            path,
+            _exclusive: exclusive,
+        }
     }
 }
 

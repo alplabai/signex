@@ -17,7 +17,8 @@
 //! 2. **Git missing** (`.snxlib` is fine but `.git/` was deleted) —
 //!    *Re-init* runs [`signex_library::LocalGitAdapter::recover_init`]
 //!    which `git init`s a fresh repo at the parent directory and
-//!    stages the current working tree as a single
+//!    commits only the library's own files (the `.snxlib`, its
+//!    folders and its ignore/attributes files) as a single
 //!    "snxlib re-init" commit. Past per-primitive history is lost
 //!    (the warning is bold-red on that button). *Skip (read-only)*
 //!    walks away — the dispatcher just logs and keeps going.
