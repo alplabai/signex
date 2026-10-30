@@ -119,6 +119,15 @@ pub enum MenuMessage {
     ImportAltium,
     Save,
     SaveAs,
+    /// File ▸ Close Document — closes the active tab like the tab menu's
+    /// Close; nothing when no tab is open.
+    CloseDocument,
+    /// File ▸ Close Project — closes the active project like the project
+    /// tree's Close Project, through its unsaved-changes gate; nothing when
+    /// no project is open.
+    CloseProject,
+    /// File ▸ Print... — the Ctrl+P print preview.
+    Print,
     ExportPdf,
     ExportNetlist,
     ExportBom,

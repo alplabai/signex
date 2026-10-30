@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, panel_item, stub, submenu,
-    unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_item_if, item, item_if, panel_item, stub,
+    submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::cycle_grid_menu_enabled;
@@ -26,6 +26,10 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
+        // Both act on what is open and do nothing when nothing is.
+        item("Close Document", MenuMessage::CloseDocument),
+        item("Close Project", MenuMessage::CloseProject),
+        SEP,
         // Save gating: docs/MENU_BAR.md#file-save
         cmd_item_gated(
             ctx,
@@ -47,6 +51,7 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         // Print Preview lives under Export > PDF: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
+        cmd_item_gated_as(ctx, cmd("print", "Print...", "Ctrl+P"), MenuMessage::Print),
         SEP,
         item("Exit", MenuMessage::Exit),
     ]

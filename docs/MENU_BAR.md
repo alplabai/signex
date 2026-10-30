@@ -17,8 +17,9 @@ Component Library, then Add New ▸ Component on the library node.
 
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
 shortcut. The two were consolidated under Export ▸ PDF so one surface opens
-the preview flow. Ctrl+P still opens the preview through the keymap command
-bridge (`app/command/bridge.rs`); only the menu row moved.
+the preview flow. Ctrl+P opens the preview through the keymap command bridge
+(`app/command/bridge.rs`). File ▸ Print... (#1765) is a second row for that
+same preview; Export ▸ PDF keeps the PDF export dialog.
 
 ## Save and Save As {#file-save}
 
@@ -64,15 +65,23 @@ itself on a click, so choosing one drops the applied spec and the next sync
 redraws every mark from the Model. A panel row opens or reveals its panel;
 the panel's shortcut toggles it.
 
-**No accelerators on model rows.** An AppKit key equivalent fires before iced
-sees the key, which bypasses the widget-capture rule in `app/dispatch/input.rs`
-(a focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap
-treats `Ctrl` as the physical Control key on every OS (#1441), so a native
-Command key equivalent would disagree with the profile. Native rows show no
-shortcut and
-register no key equivalent; keys keep going through the keymap.
-`Shortcut::command_id` stays in the model for a later change. The four
-app-menu key equivalents are the only ones, and none collides with editing.
+**Shortcuts on model rows are text, not key equivalents.** Each native row
+shows its keymap shortcut (`Shortcut::text`, from the active keymap, so a
+rebind shows up and the keymap change rebuilds the menu) as text after its
+label. It registers no AppKit key equivalent: one fires before iced sees the
+key, which bypasses the widget-capture rule in `app/dispatch/input.rs` (a
+focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap treats
+`Ctrl` as the physical Control key on every OS (#1441), so a native Command
+key equivalent would disagree with the profile. Keys keep going through the
+keymap, so a key is never dispatched twice. The four app-menu key equivalents
+are the only registered ones, and none collides with editing.
+
+**File menu.** Close Document (the tab menu's Close for the active tab), Close
+Project (the project tree's Close Project for the active project, behind its
+unsaved-changes gate) and Print... (the Ctrl+P print preview) sit beside the
+rest. Exit is left out of the native File menu: Quit Signex in the app menu
+replaces it. Save All has no standalone command (only the tail of the close
+flows), so it has no row.
 
 **Ids.** `<title path>/<label>`, for example `File/Save` or
 `File/Export/PDF`. A recent project uses its full path instead of its file

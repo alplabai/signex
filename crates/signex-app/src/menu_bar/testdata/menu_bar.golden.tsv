@@ -4,6 +4,9 @@ File/New Project	item	New Project	new_document	Ctrl+N	NewProject	11111111	always
 File/Open...	item	Open...	open_document	Ctrl+O	OpenProject	11111111	always
 File/Open Recent	submenu	Open Recent	-	-	-	-	-
 File/---	separator	-	-	-	-	-	-
+File/Close Document	item	Close Document	-	-	CloseDocument	11111111	always
+File/Close Project	item	Close Project	-	-	CloseProject	11111111	always
+File/---	separator	-	-	-	-	-	-
 File/Save	item	Save	save_document	Ctrl+S	Save	01010011	cmd:save_document
 File/Save As...	item	Save As...	save_document_as	Ctrl+Shift+S	SaveAs	01010010	cmd:save_document_as
 File/---	separator	-	-	-	-	-	-
@@ -19,6 +22,7 @@ File/Export/PDF…	item	PDF…	print	Ctrl+P	ExportPdf	01000000	cmd:print
 File/Export/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
 File/Export/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
 File/Export/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
+File/Print...	item	Print...	print	Ctrl+P	Print	01000000	cmd:print
 File/---	separator	-	-	-	-	-	-
 File/Exit	item	Exit	-	-	Exit	11111111	always
 Edit	menu	Edit	-	-	-	-	-

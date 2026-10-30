@@ -246,8 +246,11 @@ mod start_screen;
 
 #[path = "regression/command_enablement.rs"]
 mod command_enablement;
+
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/file_menu_close.rs"]
+mod file_menu_close;
 #[path = "regression/idle_cursor_move.rs"]
 mod idle_cursor_move;
 #[path = "regression/library_dangling_refs.rs"]

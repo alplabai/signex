@@ -38,6 +38,14 @@ impl Signex {
             )),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
+            MenuMessage::CloseDocument => {
+                let active = self.document_state.active_tab;
+                Some(self.handle_tab_context_action(crate::app::TabContextAction::Close(active)))
+            }
+            MenuMessage::CloseProject => Some(self.close_active_project()),
+            MenuMessage::Print => {
+                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
+            }
             MenuMessage::NewProject => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()

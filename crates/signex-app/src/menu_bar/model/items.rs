@@ -74,12 +74,12 @@ pub(super) fn stub(label: &str) -> MenuEntry {
     plain(label, ItemState::Placeholder)
 }
 
-fn command_row(ctx: &MenuContext, cmd: Cmd, state: ItemState) -> MenuEntry {
+fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> MenuEntry {
     let shortcut = AppCommandId::new(cmd.id).ok().and_then(|command_id| {
         shortcut_for(ctx, cmd.id, cmd.shortcut).map(|text| Shortcut { command_id, text })
     });
     MenuEntry::Item(MenuItem {
-        label: cmd_label(cmd.id, cmd.label),
+        label,
         shortcut,
         state,
         checked: None,
@@ -88,13 +88,30 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, state: ItemState) -> MenuEntry {
 
 /// A keymap-backed row that is always enabled.
 pub(super) fn cmd_item(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
-    command_row(ctx, cmd, live(action, true))
+    command_row(ctx, cmd, cmd_label(cmd.id, cmd.label), live(action, true))
 }
 
 /// A keymap-backed row enabled exactly when its command is
 /// ([`crate::app::command::is_enabled`]).
 pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
-    command_row(ctx, cmd, live(action, enabled(ctx, cmd.id)))
+    command_row(
+        ctx,
+        cmd,
+        cmd_label(cmd.id, cmd.label),
+        live(action, enabled(ctx, cmd.id)),
+    )
+}
+
+/// Like [`cmd_item_gated`], but the row keeps `cmd.label` instead of the
+/// catalog's menu label, for a second row of a command (File ▸ Print next to
+/// Export ▸ PDF, which owns the catalog label).
+pub(super) fn cmd_item_gated_as(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
+    command_row(
+        ctx,
+        cmd,
+        cmd.label.to_owned(),
+        live(action, enabled(ctx, cmd.id)),
+    )
 }
 
 /// A keymap-backed row with its own enablement rule.
@@ -104,7 +121,12 @@ pub(super) fn cmd_item_if(
     action: MenuMessage,
     is_enabled: bool,
 ) -> MenuEntry {
-    command_row(ctx, cmd, live(action, is_enabled))
+    command_row(
+        ctx,
+        cmd,
+        cmd_label(cmd.id, cmd.label),
+        live(action, is_enabled),
+    )
 }
 
 pub(super) fn submenu(title: &str, entries: Vec<MenuEntry>) -> MenuEntry {

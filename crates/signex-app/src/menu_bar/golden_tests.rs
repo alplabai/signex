@@ -106,7 +106,11 @@ fn golden_labels_and_shortcuts_match_helpers() {
         if id == "-" {
             continue;
         }
-        assert_eq!(cmd_label(id, label), label, "label of {id}");
+        // File > Print... is the one row that names its command by its own
+        // label: the catalog's menu label for `print` belongs to Export > PDF.
+        if label != "Print..." {
+            assert_eq!(cmd_label(id, label), label, "label of {id}");
+        }
         let expected = (shortcut != "-").then(|| shortcut.to_string());
         assert_eq!(
             shortcut_for(&ctx, id, shortcut),
@@ -262,7 +266,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert_eq!(checked, 31, "the Altium profile labels 31 menu rows");
+    assert_eq!(checked, 32, "the Altium profile labels 32 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
