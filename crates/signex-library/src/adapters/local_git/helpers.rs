@@ -663,6 +663,64 @@ pub(super) fn ensure_lfs_attributes(root_dir: &Path) -> Result<bool, LibraryErro
     Ok(changed)
 }
 
+/// The repo's HEAD commit, or `None` when it has no commit yet. A repo
+/// with history that does not track this `.snxlib` is refused: a library
+/// commit must never land in, or sweep up, another repo's work.
+pub(super) fn refuse_foreign_history<'r>(
+    repo: &'r git2::Repository,
+    file_path: &Path,
+    root_dir: &Path,
+) -> Result<Option<git2::Commit<'r>>, LibraryError> {
+    let head = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
+    if let Some(head) = &head {
+        let name = file_name_str(file_path)?;
+        let tracked = head.tree().is_ok_and(|tree| tree.get_name(&name).is_some());
+        if !tracked {
+            return Err(LibraryError::Conflict(format!(
+                "{} is a git repository that does not track this library",
+                root_dir.display()
+            )));
+        }
+    }
+    Ok(head)
+}
+
+/// Stage only what belongs to the library: the `.snxlib`, its own asset
+/// folders, the managed `.gitignore` block and a `.gitattributes` if there
+/// is one. Anything else in the folder (the project's `.snxprj` and sheets,
+/// unrelated files) is left unstaged.
+pub(super) fn stage_library_files(
+    index: &mut git2::Index,
+    file_path: &Path,
+    root_dir: &Path,
+) -> Result<(), LibraryError> {
+    let backend =
+        |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
+    super::ignore_rules::write_ignore_rules(root_dir)?;
+    let mut files = vec![
+        file_name_str(file_path)?,
+        super::ignore_rules::GITIGNORE_FILE.to_string(),
+    ];
+    if root_dir.join(GITATTRIBUTES_FILE).is_file() {
+        files.push(GITATTRIBUTES_FILE.to_string());
+    }
+    // Added by path, not pathspec: a name with glob characters stays literal.
+    for name in &files {
+        index
+            .add_path(Path::new(name))
+            .map_err(backend("git add"))?;
+    }
+    let dirs = [SYMBOLS_DIR, FOOTPRINTS_DIR, SIMS_DIR, MODELS_DIR];
+    index
+        .add_all(
+            dirs.iter().filter(|dir| root_dir.join(dir).is_dir()),
+            git2::IndexAddOption::DEFAULT,
+            Some(&mut skip_write_lock_files),
+        )
+        .map_err(backend("git add all"))?;
+    Ok(())
+}
+
 /// Record the library's own commit: `parent`'s tree (empty without one) plus
 /// the `.snxlib`, the managed `.gitignore` block (written here, keeping any
 /// user lines, #1729) and, for LFS, `.gitattributes`, built in memory so nothing

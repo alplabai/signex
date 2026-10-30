@@ -85,7 +85,7 @@ fn head_tracks(dir: &Path, name: &str) -> bool {
         .unwrap()
         .tree()
         .unwrap();
-    tree.get_name(name).is_some()
+    tree.get_path(Path::new(name)).is_ok()
 }
 
 #[test]
@@ -178,4 +178,47 @@ fn complete_init_without_version_control_does_nothing() {
 
     assert!(!tmp.path().join(".git").exists());
     assert!(!tmp.path().join(".gitattributes").exists());
+}
+
+/// #1741: Re-init in a project folder commits the library's own files, not
+/// the project's.
+#[test]
+fn recover_init_commits_only_the_librarys_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/r.snxsym"), "sym").unwrap();
+    std::fs::write(tmp.path().join("notes.txt"), "stray").unwrap();
+    std::fs::write(tmp.path().join("demo.snxprj"), "project").unwrap();
+    std::fs::write(tmp.path().join("main.snxsch"), "sheet").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "lib.snxlib"));
+    assert!(head_tracks(tmp.path(), "symbols/r.snxsym"));
+    for stray in ["notes.txt", "demo.snxprj", "main.snxsch"] {
+        assert!(!head_tracks(tmp.path(), stray), "{stray} must stay out");
+    }
+    assert!(head_tracks(tmp.path(), ".gitignore"));
+}
+
+/// #1741: a folder that is another repo with history, not tracking the
+/// library, is refused with a reason and nothing is committed.
+#[test]
+fn recover_init_refuses_a_repo_that_does_not_track_the_library() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let (_repo, before) = repo_with_staged_work(tmp.path());
+
+    let Err(err) = LocalGitAdapter::recover_init(&lib) else {
+        panic!("re-init must refuse");
+    };
+
+    assert!(
+        err.to_string().contains("does not track this library"),
+        "{err}"
+    );
+    assert_eq!(head(tmp.path()), before, "history untouched");
+    assert!(!head_tracks(tmp.path(), "staged.txt"));
+    assert!(!head_tracks(tmp.path(), "lib.snxlib"));
 }

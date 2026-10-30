@@ -54,6 +54,7 @@ use crate::tables::{
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
 const SIMS_DIR: &str = "sims";
+const MODELS_DIR: &str = "models";
 const SYMBOL_EXT: &str = "snxsym";
 const FOOTPRINT_EXT: &str = "snxfpt";
 const SIM_EXT: &str = "snxsim";
@@ -238,17 +239,7 @@ impl LocalGitAdapter {
         let root_dir = parent_dir(&file_path)?;
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-        let head = repo.head().ok().and_then(|head| head.peel_to_commit().ok());
-        if let Some(head) = &head {
-            let name = file_name_str(&file_path)?;
-            let tracked = head.tree().is_ok_and(|tree| tree.get_name(&name).is_some());
-            if !tracked {
-                return Err(LibraryError::Conflict(format!(
-                    "{} is a git repository that does not track this library",
-                    root_dir.display()
-                )));
-            }
-        }
+        let head = refuse_foreign_history(&repo, &file_path, &root_dir)?;
         let wrote_attributes = opts.use_lfs && ensure_lfs_attributes(&root_dir)?;
         match &head {
             None => commit_initial(&repo, &file_path, opts.use_lfs, None),
@@ -312,8 +303,10 @@ impl LocalGitAdapter {
 
     /// Recover a library whose `.git/` directory was deleted
     /// out-from-under-it. Re-runs `git init` at the parent directory
-    /// and stages the current working tree as a fresh
-    /// "snxlib re-init" commit. Past history is lost — the recovery
+    /// and commits the library's own files (see `stage_library_files`) as a
+    /// fresh "snxlib re-init" commit; other files in the folder stay
+    /// untouched. Refuses a folder that is another repo with history that
+    /// does not track this library. Past history is lost — the recovery
     /// dialog (Stage 10) is responsible for warning the user before
     /// landing here.
     pub fn recover_init(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
@@ -338,6 +331,12 @@ impl LocalGitAdapter {
         };
         preflight?;
 
+        // Another repo's history is never written into: refuse before
+        // `git init` or any staging touches the folder (#1741).
+        if let Ok(existing) = git2::Repository::open(&root_dir) {
+            refuse_foreign_history(&existing, &file_path, &root_dir)?;
+        }
+
         // `git2::Repository::init` is idempotent on an already-init'd
         // working tree, so this also handles the "git was *not*
         // deleted" case as a no-op + re-commit-everything. The recovery
@@ -351,13 +350,7 @@ impl LocalGitAdapter {
         let mut index = repo
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        index
-            .add_all(
-                ["."].iter(),
-                git2::IndexAddOption::DEFAULT,
-                Some(&mut skip_write_lock_files),
-            )
-            .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
+        stage_library_files(&mut index, &file_path, &root_dir)?;
         if lfs::convert_index(&repo, &mut index)
             .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?
             > 0
