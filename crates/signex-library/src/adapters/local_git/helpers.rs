@@ -664,7 +664,8 @@ pub(super) fn ensure_lfs_attributes(root_dir: &Path) -> Result<bool, LibraryErro
 }
 
 /// Record the library's own commit: `parent`'s tree (empty without one) plus
-/// the `.snxlib` and, for LFS, `.gitattributes`, built in memory so nothing
+/// the `.snxlib`, the managed `.gitignore` block (written here, keeping any
+/// user lines, #1729) and, for LFS, `.gitattributes`, built in memory so nothing
 /// else staged in the repo can be swept in. `init` passes no parent, as it
 /// always has; only the LFS top-up of a library's own first commit passes one.
 /// The repo's index gains just those entries, after the commit succeeded.
@@ -679,7 +680,11 @@ pub(super) fn commit_initial(
     let (sig_name, sig_email) = identity_for_repo(repo)?;
     let sig = git2::Signature::now(&sig_name, &sig_email).map_err(backend("git signature"))?;
     let root_dir = parent_dir(file_path)?;
-    let mut names = vec![file_name_str(file_path)?];
+    super::ignore_rules::write_ignore_rules(&root_dir)?;
+    let mut names = vec![
+        file_name_str(file_path)?,
+        super::ignore_rules::GITIGNORE_FILE.to_string(),
+    ];
     if use_lfs {
         names.push(GITATTRIBUTES_FILE.to_string());
     }

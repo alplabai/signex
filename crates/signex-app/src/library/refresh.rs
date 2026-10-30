@@ -39,6 +39,25 @@ pub enum RefreshFollowUp {
     /// Scroll the browser to its selected row, which the refresh just
     /// brought into the cache (a freshly added row).
     RevealSelected,
+    /// A History restore rewrote the library's files; the read went through
+    /// a freshly opened adapter, so the mounted one's git caches are not
+    /// consulted.
+    HistoryRestored,
+}
+
+/// Prefix of the error a [`RefreshSource::Reopened`] refresh reports when the
+/// library could not be reopened, as opposed to read; the completion handler
+/// words the two differently.
+pub(crate) const REOPEN_FAILED: &str = "could not reopen the library: ";
+
+/// Which adapter a refresh reads through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefreshSource {
+    /// The adapter mounted for the library: what a synchronous refresh sees.
+    Mounted,
+    /// A new `LocalGitAdapter` opened on the worker. After a History
+    /// restore the mounted adapter's git2 caches describe the old files.
+    Reopened,
 }
 
 /// One-shot carrier for a read snapshot across the `Task::perform`
@@ -73,6 +92,16 @@ pub fn refresh_task(
     root: &Path,
     follow_up: RefreshFollowUp,
 ) -> iced::Task<crate::app::Message> {
+    refresh_task_from(state, root, follow_up, RefreshSource::Mounted)
+}
+
+/// [`refresh_task`] reading through `source`.
+pub fn refresh_task_from(
+    state: &mut LibraryState,
+    root: &Path,
+    follow_up: RefreshFollowUp,
+    source: RefreshSource,
+) -> iced::Task<crate::app::Message> {
     let start = match state.begin_refresh(root, follow_up) {
         Ok(start) => start,
         Err(error) => {
@@ -88,12 +117,19 @@ pub fn refresh_task(
     let generation = start.generation;
     // Behind every write of this library started so far, so the read sees
     // them all and never a file half-way through a rewrite (#893).
-    let turn = state.writes.turn(root);
+    let turn = state.writes.read_turn(root);
     iced::Task::perform(
         async move {
             let result = tokio::task::spawn_blocking(move || {
                 turn.wait();
-                LibrarySnapshot::read(start.adapter.as_ref(), &read_path)
+                match source {
+                    RefreshSource::Mounted => {
+                        LibrarySnapshot::read(start.adapter.as_ref(), &read_path)
+                    }
+                    RefreshSource::Reopened => signex_library::LocalGitAdapter::open(&read_path)
+                        .map_err(|e| LibraryError::Backend(format!("{REOPEN_FAILED}{e}")))
+                        .and_then(|adapter| LibrarySnapshot::read(&adapter, &read_path)),
+                }
             })
             .await
             .unwrap_or_else(|e| Err(LibraryError::Backend(format!("spawn_blocking: {e}"))));

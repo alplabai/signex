@@ -91,6 +91,9 @@ impl Default for LibraryState {
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
+            preview_generations: HashMap::new(),
+            editor_reload_generations: HashMap::new(),
+            row_summary_job: Default::default(),
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
             data_version: 0,
@@ -233,6 +236,7 @@ impl LibraryState {
 
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
+            self.cancel_pending_close(&root, "it was opened again");
             return Ok(());
         }
         let adapter = LocalGitAdapter::open(&root)?;
@@ -312,52 +316,6 @@ impl LibraryState {
             && libraries.contains(&run.library_path)
         {
             run.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-    }
-
-    /// Libraries whose close was deferred and whose writes are all done.
-    pub fn closes_ready(&self) -> Vec<PathBuf> {
-        self.closing
-            .iter()
-            .filter(|root| self.writes.pending(root) == 0)
-            .cloned()
-            .collect()
-    }
-
-    /// Drop the library backing `root` — unmounts from `set` and drops
-    /// every editor pointing at it. (TODO(v0.9): unsaved-edits prompt
-    /// is wired from the dispatcher via `dirty_editors_for_library`.)
-    pub fn close_library(&mut self, root: &Path) {
-        // A pricing walk of this library must not write after it is closed.
-        self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
-        // Never unmount under a running write (ADR-0003 D2): the close
-        // waits, without blocking, and `closes_ready` finishes it once the
-        // library's writes are done.
-        if self.writes.pending(root) > 0 {
-            self.closing.insert(root.to_path_buf());
-            return;
-        }
-        self.closing.remove(root);
-        // Cancel any mount still being prepared off-thread for this path
-        // (#99 part 2c). `pending_mounts` doubles as the cancellation
-        // tombstone: `take_mount_intent` returns `None` for a path that
-        // is gone, so an in-flight preparation that lands after this
-        // point drops its payload instead of re-mounting a library the
-        // user just closed. Unconditional — the entry only exists while
-        // a preparation is in flight, and closing a library that was
-        // mounted synchronously simply has nothing to remove.
-        self.pending_mounts.remove(root);
-        self.refresh_generations.remove(root);
-        self.refresh_in_flight
-            .retain(|_, in_flight| in_flight.as_path() != root);
-        self.pending_follow_ups.remove(root);
-        if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
-            let entry = self.open_libraries.remove(idx);
-            self.touch_data();
-            self.set.unmount(entry.library_id);
-            self.editors.retain(|key, _| key.library_path != root);
-            // Names, drift rows and Update must not use an unmounted library.
-            self.drift.check_pending = true;
         }
     }
 

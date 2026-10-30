@@ -40,10 +40,13 @@ mod commit_pending;
 mod component_preview;
 mod components_panel;
 mod datasheet_save;
+mod deferred_close;
 mod document_options;
 #[cfg(test)]
 mod edit_modal_tests;
 mod editor;
+#[cfg(test)]
+mod editor_reads_tests;
 mod external_edits;
 #[cfg(test)]
 mod grid_window_tests;
@@ -61,6 +64,9 @@ mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod rename_guard;
+mod row_summary;
+#[cfg(test)]
+mod row_summary_tests;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 mod settings;
 #[cfg(test)]
@@ -297,6 +303,29 @@ impl Signex {
                 self.close_libraries_whose_writes_are_done();
                 task
             }
+            LibraryMessage::PreviewsReread { readout } => {
+                self.handle_previews_reread(readout);
+                self.close_libraries_whose_writes_are_done();
+                Task::none()
+            }
+            LibraryMessage::EditorReloaded { readout } => {
+                let task = self.handle_editor_reloaded(readout);
+                self.close_libraries_whose_writes_are_done();
+                task
+            }
+            LibraryMessage::PreviewTabResolved { readout } => {
+                self.handle_preview_tab_resolved(readout);
+                self.close_libraries_whose_writes_are_done();
+                Task::none()
+            }
+            LibraryMessage::RowSummariesRead {
+                generation,
+                readout,
+            } => {
+                self.handle_row_summaries_read(generation, readout);
+                self.close_libraries_whose_writes_are_done();
+                Task::none()
+            }
             LibraryMessage::WriteFinished(done) => self.handle_write_finished(*done),
             LibraryMessage::BrowserSelectTable {
                 library_path,
@@ -406,7 +435,9 @@ impl Signex {
             }
             LibraryMessage::RecoveryGitMissing(choice) => handle_recovery_git_missing(self, choice),
             LibraryMessage::GitReinitFinished { path, result } => {
-                recovery::handle_git_reinit_finished(self, path, result)
+                let task = recovery::handle_git_reinit_finished(self, path, result);
+                self.close_libraries_whose_writes_are_done();
+                task
             }
             LibraryMessage::RecoveryBrokenBinding(choice) => {
                 handle_recovery_broken_binding(self, choice)
@@ -446,7 +477,11 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_components_panel_place(library_path, table, row_id),
-            LibraryMessage::ExternalEditsPollTicked => self.handle_external_edits_poll_ticked(),
+            LibraryMessage::ExternalEditsPollTicked => {
+                // Also catches a write turn released by a dropped task.
+                self.close_libraries_whose_writes_are_done();
+                self.handle_external_edits_poll_ticked()
+            }
             LibraryMessage::ExternalEditsPolled(changed) => {
                 self.handle_external_edits_polled(changed)
             }

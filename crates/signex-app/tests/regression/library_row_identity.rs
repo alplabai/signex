@@ -312,3 +312,40 @@ fn mark_no_git(app: &mut Signex, dir: &Path) {
         .facts
         .set_exists(dir.join(".git"), false);
 }
+
+/// The library's top-level entries are listed on a worker (#859): the dialog
+/// opens with no rows and fills when the worker reports, so an entry that
+/// appeared after `update` returned is still seen.
+#[test]
+fn version_control_rows_are_read_by_the_worker_not_in_update() {
+    let mut f = two_libraries_one_name();
+    let dir = f.shared_lib.parent().expect("shared dir").to_path_buf();
+    mark_no_git(&mut f.app, &dir);
+    fs::write(dir.join("library.toml"), b"x").expect("library.toml");
+    let row = row_ref(&f, &f.shared_lib);
+
+    let task = f
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::OpenLibraryEnableVersionControl(row),
+        )));
+
+    let opened = f
+        .app
+        .ui_state
+        .enable_version_control
+        .as_ref()
+        .expect("open");
+    assert!(opened.scanning && opened.items.is_empty());
+    fs::write(dir.join("components.tsv"), b"x").expect("components.tsv");
+    crate::settle_support::settle_task(&mut f.app, task);
+    let vc = f
+        .app
+        .ui_state
+        .enable_version_control
+        .as_ref()
+        .expect("open");
+    let names: Vec<&str> = vc.items.iter().map(|i| i.relative.as_str()).collect();
+    assert!(!vc.scanning);
+    assert_eq!(names, ["library.toml", "components.tsv"]);
+}

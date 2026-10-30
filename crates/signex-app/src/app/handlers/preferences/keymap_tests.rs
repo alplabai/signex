@@ -101,23 +101,18 @@ fn a_stale_slot_is_refused_not_applied_to_another_binding() {
 // only copy of the file it overwrote.
 mod backup_row {
     use super::*;
+    use crate::config_root::isolated::IsolatedConfigRoot;
     use std::path::PathBuf;
-    use std::sync::Mutex;
 
-    // The keymap file lives under one per-process redirect root.
-    static LIVE_FILE: Mutex<()> = Mutex::new(());
-
-    fn clean_slate() -> (PathBuf, PathBuf) {
+    // Every other test that presses Save writes the keymap file under the
+    // shared per-process redirect root, so these take a private root for
+    // the length of the test (#1750) rather than clearing a shared one.
+    fn clean_slate() -> (IsolatedConfigRoot, PathBuf, PathBuf) {
+        let root = IsolatedConfigRoot::new();
         let live = crate::keymap::config_path().expect("test redirect root");
-        std::fs::create_dir_all(live.parent().unwrap()).unwrap();
-        for slot in ["", ".bak", ".bak.2", ".bak.3"] {
-            let mut name = live.file_name().unwrap().to_os_string();
-            name.push(slot);
-            let _ = std::fs::remove_file(live.with_file_name(name));
-        }
         let mut bak = live.file_name().unwrap().to_os_string();
         bak.push(".bak");
-        (live.clone(), live.with_file_name(bak))
+        (root, live.clone(), live.with_file_name(bak))
     }
 
     fn slot(live: &std::path::Path, suffix: &str) -> PathBuf {
@@ -129,8 +124,7 @@ mod backup_row {
     #[test]
     fn apply_after_a_failed_load_points_the_row_at_the_backup_it_wrote_and_discard_deletes_that_one()
      {
-        let _guard = LIVE_FILE.lock().unwrap_or_else(|e| e.into_inner());
-        let (live, bak) = clean_slate();
+        let (_root, live, bak) = clean_slate();
         std::fs::write(&bak, "older backup").unwrap();
         std::fs::write(&live, "this is [not a shortcuts file").unwrap();
         let (mut app, _boot) = Signex::new();
@@ -160,13 +154,11 @@ mod backup_row {
             Some(bak.display().to_string().as_str()),
             "the row falls back to the remaining backup"
         );
-        let _ = std::fs::remove_file(&bak);
     }
 
     #[test]
     fn discard_refuses_a_displayed_backup_that_is_gone_and_touches_nothing_else() {
-        let _guard = LIVE_FILE.lock().unwrap_or_else(|e| e.into_inner());
-        let (live, bak) = clean_slate();
+        let (_root, live, bak) = clean_slate();
         let other = slot(&live, ".bak.2");
         std::fs::write(&other, "someone else's backup").unwrap();
         let (mut app, _boot) = Signex::new();
@@ -181,6 +173,5 @@ mod backup_row {
             "the row is refreshed to what exists"
         );
         assert!(app.ui_state.preferences_keymap_status.contains("no longer"));
-        let _ = std::fs::remove_file(&other);
     }
 }

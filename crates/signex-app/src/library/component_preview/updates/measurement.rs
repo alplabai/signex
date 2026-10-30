@@ -55,6 +55,7 @@ pub(super) fn set_measurement_buf(
         }
     }
     state.params_edit_buf.insert(name, buf);
+    state.note_edit();
 }
 
 /// Store the outcome of a typed commit, or keep the reason it was refused.
@@ -65,7 +66,7 @@ fn apply(state: &mut ComponentPreviewState, name: String, result: Result<ParamVa
         Ok(value) => {
             if state.row.parameters.get(&name) != Some(&value) {
                 state.row.parameters.insert(name.clone(), value);
-                state.dirty = true;
+                state.mark_dirty();
             }
             // The field reads from the stored value again.
             state.params_edit_buf.remove(&name);
@@ -99,7 +100,7 @@ pub(super) fn commit_measurement(state: &mut ComponentPreviewState, name: String
                 .row
                 .parameters
                 .insert(name, ParamValue::Measurement { value, unit });
-            state.dirty = true;
+            state.mark_dirty();
         }
         return;
     };
@@ -143,6 +144,7 @@ pub(super) fn pick_prefix(
                 });
         if let Some(seed) = seed {
             state.params_edit_buf.insert(name.clone(), seed);
+            state.note_edit();
         }
     }
     state

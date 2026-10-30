@@ -215,11 +215,13 @@ impl LibraryState {
     /// in-flight preparation finishes and the completion handler reads
     /// the *upgraded* intent rather than one captured at spawn time.
     ///
-    /// Already-mounted paths record nothing — `library_at` is the same
+    /// Already-mounted paths record nothing but cancel a pending close
+    /// (#1728: any re-mount does) — `library_at` is the same
     /// idempotence guard `open_library` applies at
     /// `state/methods.rs:83-85`.
     pub fn request_mount(&mut self, path: &Path, intent: MountIntent) -> MountRequest {
         if self.library_at(path).is_some() {
+            self.cancel_pending_close(path, "it was opened again");
             return MountRequest::AlreadyMounted;
         }
         match self.pending_mounts.get_mut(path) {

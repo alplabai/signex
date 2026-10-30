@@ -7,6 +7,8 @@ mod keymap_tests;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;
+#[cfg(test)]
+mod theme_repaint_tests;
 
 use super::super::*;
 
@@ -251,9 +253,9 @@ impl Signex {
         // restoring their draft fields above is enough.
         self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `update_canvas_theme` re-derives the canvas colours from the saved
-        // theme and clears BOTH content caches (schematic + PCB) — don't
-        // clear them again here. `set_grid_style` already dropped every
-        // schematic bg cache, so only the PCB one is left to invalidate.
+        // theme, clears BOTH content caches (schematic + PCB) and every
+        // schematic bg cache — don't clear them again here. Only the PCB
+        // bg caches are left to invalidate.
         self.update_canvas_theme();
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.clear_bg_cache();
@@ -498,7 +500,9 @@ impl Signex {
                 // pushed onto the canvas for the live preview. `view` now
                 // derives them from `preferences_draft_theme` every frame,
                 // so setting the draft above IS the preview; only the
-                // content cache still has to be dropped to repaint.
+                // background (paper, grid) and content caches still have
+                // to be dropped to repaint.
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();

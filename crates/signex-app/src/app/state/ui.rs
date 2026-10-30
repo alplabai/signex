@@ -499,6 +499,11 @@ pub struct UiState {
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
     /// The Annotate or Reset Duplicate Designators run in flight, if any (#859).
     pub annotate_runs: crate::app::handlers::erc::AnnotateRuns,
+    /// The Place Sheet commit waiting for the folder listing (#859).
+    pub sheet_place: crate::app::handlers::canvas::SheetPlaceJobs,
+    /// Canvas descents whose child sheet is being read, by the path read (#859).
+    pub pending_descents:
+        std::collections::HashMap<std::path::PathBuf, crate::app::handlers::canvas::PendingDescent>,
     /// Token of the newest Re-prefix to standard library lookup (#1315); a
     /// result carrying an older one is dropped.
     pub reprefix_generation: u64,

@@ -702,13 +702,14 @@ fn a_history_restore_over_an_editor_that_owes_rows_says_so() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _path) = owing(dir.path(), "OwedRestore");
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Back"));
-    app.apply_reloaded(
+    let task = app.apply_reloaded(
         0,
         Ok(crate::app::restore_job::RestoreJobDocument::Symbol(
             Box::new(file),
         )),
         None,
     );
+    crate::app::path_ops::settle_task(&mut app, task);
     assert!(warned("OwedRestore").is_some());
 }
 
@@ -716,7 +717,7 @@ fn a_history_restore_over_an_editor_that_owes_rows_says_so() {
 fn a_failed_reload_after_a_restore_says_so_too() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _path) = owing(dir.path(), "OwedReloadFail");
-    app.apply_reloaded(
+    let task = app.apply_reloaded(
         0,
         Err(crate::app::restore_job::RestoreFailure::NotReloaded {
             why: "unreadable".into(),
@@ -724,6 +725,7 @@ fn a_failed_reload_after_a_restore_says_so_too() {
         }),
         None,
     );
+    crate::app::path_ops::settle_task(&mut app, task);
     assert!(warned("OwedReloadFail").is_some());
 }
 

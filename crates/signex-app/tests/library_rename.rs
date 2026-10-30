@@ -763,6 +763,26 @@ fn a_library_still_mounting_is_refused() {
     assert_refused(&f, "still mounting");
 }
 
+/// #1728 E: the refusal while a library edit is still being written reaches
+/// the Messages panel, not only the dialog's error line.
+#[test]
+fn a_library_rename_while_its_writes_are_pending_is_refused_in_messages_too() {
+    let _ = diagnostics::init_logging();
+    let mut f = fixture();
+    let in_flight = f.app.library.writes.turn(&f.alpha);
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "a library edit is being written");
+    assert!(
+        diagnostics::recent_entries().iter().any(|e| e
+            .message
+            .contains("refused: A library edit is still being written")),
+        "the refusal reaches the Messages panel"
+    );
+    drop(in_flight);
+}
+
 #[test]
 fn an_open_browser_tab_and_its_state_follow_the_rename() {
     use signex_app::library::LibraryBrowserState;
@@ -1164,7 +1184,12 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
         .library
         .uncommitted_in(&renamed)
         .expect("the rename is listed as uncommitted");
-    assert_eq!(pending.paths, vec!["alpha.snxlib", "alpha2.snxlib"]);
+    // The generated library predates the managed ignore block (#1729): the
+    // failed commit's merge of it is pending too.
+    assert_eq!(
+        pending.paths,
+        vec![".gitignore", "alpha.snxlib", "alpha2.snxlib"]
+    );
     // The failed commit touched neither HEAD nor the index.
     let idx = repo.index().unwrap();
     assert!(idx.get_path(Path::new("alpha2.snxlib"), 0).is_none());
@@ -1181,6 +1206,10 @@ fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
         "the old name is committed as removed"
     );
     assert!(tree.get_name("alpha2.snxlib").is_some());
+    assert!(
+        tree.get_name(".gitignore").is_some(),
+        "the block landed too"
+    );
     f.app.library.sync_uncommitted();
     assert!(f.app.library.uncommitted_in(&renamed).is_none());
 }

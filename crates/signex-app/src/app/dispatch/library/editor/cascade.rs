@@ -115,6 +115,15 @@ impl SaveLibrary {
         }
     }
 
+    /// Report what this save's commit left out (#1729): the adapter is
+    /// opened for the one save and dropped with it.
+    pub(super) fn report_held_back(&self) {
+        if let Some(adapter) = self.adapter() {
+            let name = adapter.manifest().library.name.clone();
+            crate::library::held_back::report_held_back(&name, adapter);
+        }
+    }
+
     fn adapter(&self) -> Option<&dyn LibraryAdapter> {
         match self {
             Self::Mounted(a) | Self::Opened(a) => Some(a.as_ref()),
@@ -140,19 +149,34 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
         rows: &[RowId],
-    ) {
-        if rows.is_empty() {
-            return;
+    ) -> iced::Task<crate::app::Message> {
+        match self.cascade_root(path, rows) {
+            Some(root) => self.refresh_clean_editors(&root, rows),
+            None => iced::Task::none(),
         }
-        let root = self
-            .library
+    }
+
+    /// [`Self::refresh_editors_after_cascade`] on this thread, for the save
+    /// that is blocking by design.
+    pub(in crate::app::dispatch::library) fn refresh_editors_after_cascade_blocking(
+        &mut self,
+        path: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        if let Some(root) = self.cascade_root(path, rows) {
+            self.refresh_clean_editors_blocking(&root, rows);
+        }
+    }
+
+    fn cascade_root(&self, path: &std::path::Path, rows: &[RowId]) -> Option<std::path::PathBuf> {
+        if rows.is_empty() {
+            return None;
+        }
+        self.library
             .open_libraries
             .iter()
             .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
-            .map(|lib| lib.root.clone());
-        if let Some(root) = root {
-            self.refresh_clean_editors(&root, rows);
-        }
+            .map(|lib| lib.root.clone())
     }
 }
 

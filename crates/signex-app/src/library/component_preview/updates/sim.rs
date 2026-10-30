@@ -40,7 +40,7 @@ pub(super) fn set_enabled(state: &mut ComponentPreviewState, enabled: bool) {
         state.sim = None;
         state.sim_body = None;
     }
-    state.dirty = true;
+    state.mark_dirty();
 }
 
 /// Set the simulation model's kind, touching its `updated` timestamp.
@@ -48,7 +48,7 @@ pub(super) fn set_kind(state: &mut ComponentPreviewState, kind: signex_library::
     if let Some(sim) = state.sim.as_mut() {
         sim.kind = kind;
         sim.updated = chrono::Utc::now();
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -57,7 +57,7 @@ pub(super) fn set_name(state: &mut ComponentPreviewState, name: String) {
     if let Some(sim) = state.sim.as_mut() {
         sim.name = name;
         sim.updated = chrono::Utc::now();
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -79,7 +79,7 @@ pub(super) fn apply_body_action(
             sim.body = content.text();
             sim.updated = chrono::Utc::now();
         }
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 
@@ -93,6 +93,6 @@ pub(super) fn set_pin_node(state: &mut ComponentPreviewState, pin_number: String
             sim.default_node_map.insert(pin_number, trimmed.to_string());
         }
         sim.updated = chrono::Utc::now();
-        state.dirty = true;
+        state.mark_dirty();
     }
 }

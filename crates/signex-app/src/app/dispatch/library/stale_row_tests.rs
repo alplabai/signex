@@ -207,7 +207,8 @@ fn a_clean_preview_follows_a_browser_cell_commit_in_content_and_revision() {
     app.library.editors.get_mut(&address).unwrap().dirty = false;
 
     commit_cell(&mut app, &address, "R-115b");
-    drop(app.land_pending_refresh(&address.library_path));
+    let task = app.land_pending_refresh(&address.library_path);
+    crate::app::path_ops::settle_task(&mut app, task);
 
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
@@ -258,7 +259,7 @@ fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
     run_write(&mut app, task);
     let (a, m) = msg(EditorMsg::ReloadConfirmed);
     let task = app.handle_editor_event(a, m);
-    run_write(&mut app, task);
+    crate::app::path_ops::settle_task(&mut app, task);
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");
     assert_eq!(preview.row.server_revision, Some(2));
@@ -294,7 +295,8 @@ fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
     let inside = address.library_path.parent().unwrap().join("x.snxsym");
 
     // Dirty: untouched, and its own save is refused as stale.
-    app.refresh_editors_after_cascade(&inside, &[address.row_id]);
+    let task = app.refresh_editors_after_cascade(&inside, &[address.row_id]);
+    crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
@@ -302,7 +304,8 @@ fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
 
     // Clean: follows the cascade.
     app.library.editors.get_mut(&address).unwrap().dirty = false;
-    app.refresh_editors_after_cascade(&inside, &[address.row_id]);
+    let task = app.refresh_editors_after_cascade(&inside, &[address.row_id]);
+    crate::app::path_ops::settle_task(&mut app, task);
     let preview = editor(&app, &address);
     assert_eq!(preview.row.symbol_version, "9.9.9");
     assert_eq!(preview.row.server_revision, Some(2));
@@ -432,10 +435,11 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
 
     // A dirty preview keeps its draft, and its own save is refused as
     // stale: the refusal reaches the user.
-    let _ = app.handle_primitive_saved(primitive_saved_with_cascade(
+    let task = app.handle_primitive_saved(primitive_saved_with_cascade(
         inside.clone(),
         vec![address.row_id],
     ));
+    crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
@@ -443,7 +447,9 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
 
     // A clean one follows the cascade the worker ran.
     app.library.editors.get_mut(&address).unwrap().dirty = false;
-    let _ = app.handle_primitive_saved(primitive_saved_with_cascade(inside, vec![address.row_id]));
+    let task =
+        app.handle_primitive_saved(primitive_saved_with_cascade(inside, vec![address.row_id]));
+    crate::app::path_ops::settle_task(&mut app, task);
     let preview = editor(&app, &address);
     assert_eq!(preview.row.symbol_version, "9.9.9");
     assert_eq!(preview.row.server_revision, Some(2));
@@ -469,7 +475,8 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
 
     run_write(&mut app, task);
 
-    drop(app.land_pending_refresh(&address.library_path));
+    let task = app.land_pending_refresh(&address.library_path);
+    crate::app::path_ops::settle_task(&mut app, task);
 
     assert_eq!(cached_base(&app), Some(2), "the refusal re-reads the rows");
 }
@@ -511,7 +518,8 @@ fn a_superseded_refreshs_follow_up_runs_when_the_latest_lands() {
     drop(app.land_refresh_with_generation(&path, superseded));
     assert_eq!(editor(&app, &address).row.server_revision, Some(1));
 
-    drop(app.land_pending_refresh(&path));
+    let task = app.land_pending_refresh(&path);
+    crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(
         editor(&app, &address).row.server_revision,
         Some(2),
@@ -534,7 +542,8 @@ fn two_quick_commits_still_refresh_the_first_rows_clean_preview() {
         RefreshFollowUp::CleanEditors(vec![other_row]),
     );
 
-    drop(app.land_pending_refresh(&address.library_path));
+    let task = app.land_pending_refresh(&address.library_path);
+    crate::app::path_ops::settle_task(&mut app, task);
 
     let preview = editor(&app, &address);
     assert_eq!(preview.row.internal_pn.as_str(), "R-115b");

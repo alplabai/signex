@@ -36,6 +36,7 @@ impl Signex {
             intro_text,
             error: None,
             working: false,
+            scanning: false,
         });
     }
 
@@ -46,15 +47,15 @@ impl Signex {
     pub(crate) fn open_library_enable_version_control_dialog(
         &mut self,
         row: crate::app::LibraryRowRef,
-    ) {
+    ) -> Task<Message> {
         // Resolved by identity, not row position (#742): a stale row
         // is refused with a Messages-panel warning.
         let Some(project_idx) = self.resolve_library_row(&row, "Enable Version Control") else {
-            return;
+            return Task::none();
         };
         let library_file_path = row.root;
         let Some(root_dir) = library_file_path.parent().map(|p| p.to_path_buf()) else {
-            return;
+            return Task::none();
         };
         // A pending library is not on disk yet, so there is nothing to
         // put under version control. Read from the Model, no stat call.
@@ -67,18 +68,17 @@ impl Signex {
                 "Enable Version Control cancelled: library {} is not on disk yet.",
                 library_file_path.display()
             ));
-            return;
+            return Task::none();
         }
         if !self.document_state.project_fs.facts.lacks_git(&root_dir) {
             // Already version-controlled (or not probed yet) — nothing to enable.
-            return;
+            return Task::none();
         }
         let library_name = library_file_path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("library")
             .to_string();
-        let items = collect_track_items_for_library(&root_dir);
         let intro_text = format!(
             "Initialise a Git repository at {} and stage the \
              ticked entries as the first commit. The library \
@@ -86,6 +86,7 @@ impl Signex {
              route subsequent edits through libgit2.",
             root_dir.display()
         );
+        let (scan_dir, project_dir) = (root_dir.clone(), root_dir.clone());
         // `project_path` is purely informational; point it at a
         // `library.toml` (whether it exists yet or not) inside the
         // library so the modal can mirror the project-scope pattern.
@@ -94,12 +95,55 @@ impl Signex {
             project_path: root_dir.join("library.toml"),
             project_dir: root_dir,
             project_name: library_name,
-            items,
+            // Which entries exist is read on a worker; see `ItemsScanned`.
+            items: Vec::new(),
             use_lfs: false,
             intro_text,
             error: None,
             working: false,
+            scanning: true,
         });
+        Task::perform(
+            crate::app::path_op_jobs::run_blocking(move || {
+                collect_track_items_for_library(&scan_dir)
+            }),
+            move |joined| {
+                Message::EnableVersionControl(crate::app::EnableVersionControlMsg::ItemsScanned {
+                    project_dir: project_dir.clone(),
+                    result: joined,
+                })
+            },
+        )
+    }
+
+    /// The row list of a library-scope dialog arrived. Dropped when the dialog
+    /// was closed or reopened for another directory meanwhile.
+    pub(crate) fn handle_enable_version_control_items_scanned(
+        &mut self,
+        project_dir: &std::path::Path,
+        result: Result<Vec<crate::app::TrackItem>, String>,
+    ) {
+        let Some(state) = self
+            .ui_state
+            .enable_version_control
+            .as_mut()
+            .filter(|s| s.scanning && s.project_dir == project_dir)
+        else {
+            return;
+        };
+        state.scanning = false;
+        match result {
+            Ok(items) => state.items = items,
+            Err(why) => {
+                // The dialog stays usable with no rows (everything tracked).
+                let detail = format!(
+                    "Could not read the library folder {}: {why}",
+                    project_dir.display()
+                );
+                crate::diagnostics::log_warning(detail.clone());
+                state.error = Some(detail);
+            }
+        }
     }
 
     /// Start the confirmed run on the blocking pool (#1122): `git init`,
@@ -111,7 +155,7 @@ impl Signex {
         let Some(state) = self.ui_state.enable_version_control.as_mut() else {
             return Task::none();
         };
-        if state.working {
+        if state.working || state.scanning {
             return Task::none();
         }
         state.working = true;
@@ -322,8 +366,8 @@ fn enable_version_control_blocking(
         return Outcome::InitFailed(error.to_string());
     }
     // `enable_project_version_control` already merged the managed
-    // `.gitignore` / `.gitattributes` blocks (project scope) before the
-    // initial commit, so nothing is left to write or commit here.
+    // `.gitignore` block (both scopes) and `.gitattributes` block (project
+    // scope) before the initial commit, so nothing is left to write here.
     Outcome::Created {
         adapter_error: None,
         commit_warning: None,
@@ -333,21 +377,16 @@ fn enable_version_control_blocking(
 /// Thin wrapper around `signex_library::enable_project_version_control`
 /// — kept here so the dispatch handler can stay synchronous and
 /// surface the `LibraryError` as a user-facing string.
-/// `managed_gitignore` writes the managed `.gitignore` block (project
-/// scope only); `gitignore` is the picker's unticked rows, merged in
-/// outside the block, or `None` for none.
+/// `project_scope` adds the managed `.gitattributes` block; both scopes
+/// get the managed `.gitignore` block. `gitignore` is the picker's unticked
+/// rows, merged in outside the block, or `None` for none.
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
-    managed_gitignore: bool,
+    project_scope: bool,
     gitignore: Option<&str>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(
-        project_dir,
-        use_lfs,
-        managed_gitignore,
-        gitignore,
-    )
+    signex_library::enable_project_version_control(project_dir, use_lfs, project_scope, gitignore)
 }
 
 /// Build the per-row pick-list for the project-scope Enable Version
@@ -514,3 +553,7 @@ mod version_control_tests;
 #[cfg(test)]
 #[path = "version_control_gitignore_tests.rs"]
 mod version_control_gitignore_tests;
+
+#[cfg(test)]
+#[path = "version_control_scan_tests.rs"]
+mod version_control_scan_tests;

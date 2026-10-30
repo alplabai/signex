@@ -620,6 +620,15 @@ pub struct LibraryState {
     /// Source of refresh generations — never reused, so a result from a
     /// closed library cannot match a later mount of the same path.
     pub refresh_generation_counter: u64,
+    /// Latest preview re-resolution plan per library (`library_id`). A
+    /// readout applies only while its generation is still the one here.
+    pub preview_generations: HashMap<Uuid, u64>,
+    /// Latest row reload planned per Component Preview. A reload applies
+    /// only while its generation is still the one here.
+    pub editor_reload_generations: HashMap<EditorAddress, u64>,
+    /// The Properties panel's summaries of the selected row's bindings,
+    /// read off the UI thread.
+    pub row_summary_job: super::row_summaries::RowSummaryJob,
     /// Off-thread reads started and not yet reported: generation -> the
     /// library root it reads. Keyed by generation (unique, never reused) so
     /// a late report removes only its own read, whatever happened to the
@@ -761,6 +770,7 @@ pub struct LibraryCreateOptionsState {
     pub use_lfs: bool,
 }
 
+mod closing;
 mod methods;
 mod new_library_defaults;
 mod panel_rows;

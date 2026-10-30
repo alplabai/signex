@@ -36,7 +36,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::SelectTab(tab) => state.active_tab = tab,
         EditorMsg::SetLifecycle(lifecycle) => {
             state.row.state = lifecycle;
-            state.dirty = true;
+            state.mark_dirty();
         }
 
         // ── Datasheet ────────────────────────────────────────────────

@@ -436,7 +436,8 @@ fn a_save_after_a_double_failure_commits_the_untracked_pinned_pdf() {
     assert!(!head_has(&file, &hash));
 
     // Reload builds a fresh editor with nothing staged; then an edit.
-    app.reload_editor_from_server(&address);
+    let task = app.reload_editor_from_server(&address, false);
+    crate::app::path_ops::settle_task(&mut app, task);
     assert!(editor(&app, &address).staged_datasheets.is_empty());
     let state = app.library.editors.get_mut(&address).unwrap();
     state.row.datasheet_label = "edited after reload".into();
