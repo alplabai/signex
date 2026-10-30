@@ -145,8 +145,16 @@ fn collect_files(
             _ => return Ok(()),
         }
     }
-    let Ok(entries) = fs::read_dir(&dir) else {
-        return Ok(());
+    let entries = match fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            tracing::warn!(
+                target: "signex::library",
+                "Re-init could not read {}, so it is left out of the commit: {e}",
+                dir.display()
+            );
+            return Ok(());
+        }
     };
     for entry in entries {
         let entry = entry?;
