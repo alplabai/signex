@@ -323,7 +323,7 @@ impl LocalGitAdapter {
         // The repo may only now be readable (a `.git/` that would not open
         // before `git init` put it right): its history is checked here too.
         reinit_tree::refuse_foreign_history(repo, file_path, root_dir)?;
-        let parent = match repo.head() {
+        let mut parent = match repo.head() {
             Ok(h) => h
                 .peel_to_commit()
                 .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
@@ -331,7 +331,20 @@ impl LocalGitAdapter {
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
             Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
         };
+        // A deleted `.git/HEAD` is re-made at the default branch, unborn. If
+        // a branch of the repo tracks this library, continue that one.
+        let mut branch_ref = None;
+        if parent.is_none()
+            && let Some((refname, tip)) = reinit_tree::tracking_branch(repo, file_path)?
+        {
+            branch_ref = Some(refname);
+            parent = Some(tip);
+        }
         let snapshot = reinit_tree::library_tree(repo, file_path, root_dir, parent.as_ref())?;
+        if let Some(refname) = &branch_ref {
+            repo.set_head(refname)
+                .map_err(|e| LibraryError::Backend(format!("git set head: {e}")))?;
+        }
         let tree = repo
             .find_tree(snapshot.tree)
             .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
