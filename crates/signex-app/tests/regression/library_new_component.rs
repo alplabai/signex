@@ -25,6 +25,17 @@ use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::{ComponentRow, PrimitiveKind, PrimitiveRef, RowId};
 use uuid::Uuid;
 
+/// The Messages-panel ring is process-wide and the unbound-row note names no
+/// library, so another test's New Component reads as a second report. Every
+/// test that creates a row through the app holds this while it runs.
+pub(crate) static NEW_ROW_NOTES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub(crate) fn new_row_notes_lock() -> std::sync::MutexGuard<'static, ()> {
+    NEW_ROW_NOTES
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Messages-panel records written after `after_id` that contain `needle`.
 fn records_since(after_id: Option<u64>, needle: &str) -> Vec<DiagnosticEntry> {
     diagnostics::recent_entries()
@@ -137,6 +148,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
 
 #[test]
 fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
+    let _notes = new_row_notes_lock();
     let _ = diagnostics::init_logging();
     let tmp = tempfile::Builder::new()
         .prefix("signex-967-new-row-")
@@ -191,6 +203,7 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
 /// Component clicks in a row both create a row.
 #[test]
 fn two_blank_new_components_in_a_row_both_succeed() {
+    let _notes = new_row_notes_lock();
     let _ = diagnostics::init_logging();
     let tmp = tempfile::Builder::new()
         .prefix("signex-1363-two-blank-")

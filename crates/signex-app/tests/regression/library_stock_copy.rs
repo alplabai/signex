@@ -21,9 +21,11 @@ use uuid::Uuid;
 
 use crate::library_place_symbol::run;
 
-/// The remembered target lives in the process-wide `prefs.json`, so the
-/// tests of this file run one at a time.
-static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// The remembered target lives in the process-wide `prefs.json`, and the
+/// restart test reads the global library list back, so the tests of this file
+/// run one at a time and never while another test has made that list
+/// unwritable.
+use crate::library_components_panel_actions::GLOBAL_LIST_FILE as SERIAL;
 
 struct World {
     _serial: std::sync::MutexGuard<'static, ()>,

@@ -535,6 +535,7 @@ fn a_refused_write_is_logged_to_the_diagnostics_ring() {
 
 #[test]
 fn new_component_skips_a_read_only_library_and_uses_the_writable_one() {
+    let _notes = crate::library_new_component::new_row_notes_lock();
     let tmp = tempfile::Builder::new()
         .prefix("signex-329-newc-")
         .tempdir()

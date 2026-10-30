@@ -150,6 +150,18 @@ pub fn load_for_update_at(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String
         })
 }
 
+/// Serialises the read-modify-write of the list within this process: two
+/// concurrent `add_path`/`remove_path` calls (two background tasks, or two
+/// windows' worth of work) would otherwise each load the same list and the
+/// later write would drop the earlier one's change.
+static UPDATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn update_lock() -> std::sync::MutexGuard<'static, ()> {
+    UPDATE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Append a path to the global list and persist. Idempotent — already-
 /// present paths are skipped. Returns the resulting full list.
 pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
@@ -159,6 +171,7 @@ pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`add_path`] against an explicit prefs file.
 pub fn add_path_at(prefs: &Path, path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let _update = update_lock();
     let mut current = load_for_update_at(prefs)?;
     if !current.iter().any(|e| e.path == path) {
         current.push(GlobalLibraryEntry {
@@ -179,6 +192,7 @@ pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`remove_path`] against an explicit prefs file.
 pub fn remove_path_at(prefs: &Path, path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let _update = update_lock();
     let mut current = load_for_update_at(prefs)?;
     let before = current.len();
     current.retain(|e| e.path != path);
@@ -208,6 +222,23 @@ mod tests {
         let err = remove_path_at(&prefs, Path::new("/a.snxlib")).unwrap_err();
         assert!(err.contains("left unchanged"), "{err}");
         assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
+    }
+
+    /// Concurrent adds must all land: each used to load the same list and the
+    /// last writer dropped the others' entries.
+    #[test]
+    fn concurrent_adds_all_land() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        std::thread::scope(|scope| {
+            for n in 0..16 {
+                let prefs = &prefs;
+                scope.spawn(move || {
+                    add_path_at(prefs, PathBuf::from(format!("/lib{n}.snxlib"))).unwrap();
+                });
+            }
+        });
+        assert_eq!(load_at(&prefs).len(), 16);
     }
 
     #[test]
