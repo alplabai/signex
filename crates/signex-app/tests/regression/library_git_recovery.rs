@@ -79,3 +79,46 @@ fn a_refused_reinit_keeps_the_dialog_open_and_a_successful_one_closes_it() {
         app.library.recovery
     );
 }
+
+/// #1741: Re-init in a folder that is another repo with history, not tracking
+/// the library, is refused in the dialog and commits nothing.
+#[test]
+fn reinit_in_another_repo_is_refused_in_the_dialog_and_commits_nothing() {
+    let scratch = tempfile::tempdir().unwrap();
+    let good = valid_snxlib_bytes(scratch.path());
+
+    let dir = tempfile::tempdir().unwrap();
+    let lib_file = dir.path().join("lib.snxlib");
+    std::fs::write(&lib_file, &good).unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    let mut cfg = repo.config().unwrap();
+    cfg.set_str("user.name", "Test User").unwrap();
+    cfg.set_str("user.email", "test@example.org").unwrap();
+    std::fs::write(dir.path().join("project.snxprj"), "project").unwrap();
+    let mut index = repo.index().unwrap();
+    index
+        .add_path(std::path::Path::new("project.snxprj"))
+        .unwrap();
+    index.write().unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let sig = git2::Signature::now("Test User", "test@example.org").unwrap();
+    let before = repo
+        .commit(Some("HEAD"), &sig, &sig, "project", &tree, &[])
+        .unwrap();
+
+    let (mut app, _boot) = Signex::new();
+    app.library.recovery = Some(RecoveryDialog::GitMissing {
+        path: lib_file,
+        remote: None,
+        error: None,
+    });
+    re_init(&mut app);
+
+    match &app.library.recovery {
+        Some(RecoveryDialog::GitMissing { error: Some(e), .. }) => {
+            assert!(e.contains("does not track this library"), "{e}");
+        }
+        other => panic!("dialog must stay open with the reason, got {other:?}"),
+    }
+    assert_eq!(repo.head().unwrap().target().unwrap(), before);
+}

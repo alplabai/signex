@@ -766,7 +766,12 @@ mod tests {
             .expect("a nested library repo is created");
 
         let lib_repo = git2::Repository::open(lib.parent().unwrap()).unwrap();
-        assert_eq!(lib_repo.workdir().unwrap(), lib.parent().unwrap().join(""));
+        // Compare canonical paths: macOS reports the temp dir under
+        // `/private`, and Windows can hand back an 8.3 short name.
+        assert_eq!(
+            std::fs::canonicalize(lib_repo.workdir().unwrap()).unwrap(),
+            std::fs::canonicalize(lib.parent().unwrap()).unwrap()
+        );
         let first = lib_repo.head().unwrap().peel_to_commit().unwrap();
         assert_eq!(first.parent_count(), 0, "the library's own first commit");
         let project = git2::Repository::open(dir).unwrap();
