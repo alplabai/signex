@@ -59,6 +59,9 @@ pub(crate) struct CommandContext {
     /// The active project's `.snxprj` has unsaved changes, which Save
     /// writes from any tab.
     pub project_dirty: bool,
+    /// Some document or Component Preview row has unsaved edits, which
+    /// File ▸ Save All writes.
+    pub has_dirty_documents: bool,
 }
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
@@ -195,6 +198,8 @@ impl Signex {
             can_undo,
             can_redo,
             project_dirty: self.active_project_is_dirty(),
+            has_dirty_documents: document.has_dirty_documents()
+                || !self.library.dirty_editors().is_empty(),
         }
     }
 

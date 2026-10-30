@@ -323,6 +323,13 @@ impl Signex {
                 // The UI stayed live during the writes, so anything edited
                 // meanwhile is dirty now; the quit gate prompts for it.
                 SaveAllNext::Quit => Task::batch([sweep, self.handle_app_quit_requested()]),
+                SaveAllNext::Nothing => {
+                    crate::diagnostics::log_info(format!(
+                        "Save All: saved {} item(s)",
+                        paths.len() + rows.len()
+                    ));
+                    sweep
+                }
                 // A row edited while its PDFs were written is dirty again:
                 // the close gate prompts for it instead of dropping it.
                 // Only the library this Save All started on: Discard All and
@@ -348,12 +355,17 @@ impl Signex {
                 "Could not save {} item(s) — library not closed:\n  {listing}",
                 failed.len()
             ),
+            SaveAllNext::Nothing => format!(
+                "Save All: could not save {} item(s):\n  {listing}",
+                failed.len()
+            ),
             SaveAllNext::Quit => format!(
                 "Could not save {} item(s) — Signex stayed open so nothing is lost. \
                  Save them manually, or choose Discard All to exit anyway:\n  {listing}",
                 failed.len()
             ),
         };
+        crate::diagnostics::log_warning(&message);
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
         Task::none()
     }

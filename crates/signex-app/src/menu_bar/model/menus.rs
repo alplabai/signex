@@ -41,6 +41,12 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("save_document_as", "Save As...", "Ctrl+Shift+S"),
             MenuMessage::SaveAs,
         ),
+        // Greyed when nothing is unsaved; runs the shared Save All flow.
+        item_if(
+            "Save All",
+            MenuMessage::SaveAll,
+            ctx.commands.has_dirty_documents,
+        ),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
         submenu("Library", library(ctx)),

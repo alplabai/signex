@@ -237,6 +237,8 @@ pub enum SaveAllNext {
     Quit,
     /// Close a library; the tail of the close-library Save All.
     CloseLibrary { library_path: std::path::PathBuf },
+    /// File ▸ Save All: report the outcome and do nothing else.
+    Nothing,
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;

@@ -80,8 +80,12 @@ are the only registered ones, and none collides with editing.
 Project (the project tree's Close Project for the active project, behind its
 unsaved-changes gate) and Print... (the Ctrl+P print preview) sit beside the
 rest. Exit is left out of the native File menu: Quit Signex in the app menu
-replaces it. Save All has no standalone command (only the tail of the close
-flows), so it has no row.
+replaces it. Save All writes every unsaved document and Component Preview
+row through the same Save All flow the close and quit prompts use
+(`SaveAllNext::Nothing`: no close, no quit afterwards). It is greyed when
+nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
+(the catalog has no `save_all` command), and reports "Save All: saved N
+item(s)" or the failures in the Messages panel.
 
 **Ids.** `<title path>/<label>`, for example `File/Save` or
 `File/Export/PDF`. A recent project uses its full path instead of its file

@@ -9,6 +9,7 @@ File/Close Project	item	Close Project	-	-	CloseProject	11111111	always
 File/---	separator	-	-	-	-	-	-
 File/Save	item	Save	save_document	Ctrl+S	Save	01010011	cmd:save_document
 File/Save As...	item	Save As...	save_document_as	Ctrl+Shift+S	SaveAs	01010010	cmd:save_document_as
+File/Save All	item	Save All	-	-	SaveAll	01000001	dirty
 File/---	separator	-	-	-	-	-	-
 File/Library	submenu	Library	-	-	-	-	-
 File/Library/Open Library...	item	Open Library...	-	-	LibraryOpenLibrary	11111111	always

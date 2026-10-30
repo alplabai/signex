@@ -119,6 +119,9 @@ pub enum MenuMessage {
     ImportAltium,
     Save,
     SaveAs,
+    /// File ▸ Save All — saves every unsaved document and Component Preview
+    /// row, then does nothing else (no close, no quit).
+    SaveAll,
     /// File ▸ Close Document — closes the active tab like the tab menu's
     /// Close; nothing when no tab is open.
     CloseDocument,

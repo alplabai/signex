@@ -32,6 +32,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             can_undo: true,
             can_redo: true,
             project_dirty: true,
+            has_dirty_documents: true,
             ..base
         }),
         with(CommandContext {
@@ -56,6 +57,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             project_dirty: true,
+            has_dirty_documents: true,
             ..base
         }),
     ]
@@ -66,6 +68,7 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "always" => true,
         "never" => false,
         "sch" => ctx.commands.has_schematic,
+        "dirty" => ctx.commands.has_dirty_documents,
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
