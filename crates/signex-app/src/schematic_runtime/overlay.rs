@@ -17,6 +17,13 @@ pub struct ErcMarker {
     pub net_level: bool,
 }
 
+/// How much of the part under a point marker still shows through its disc and
+/// its halo. The outline carries the severity; the fills stay faint so the
+/// symbol the finding points at is never hidden (#1768).
+const MARKER_DISC_ALPHA: f32 = 0.22;
+const MARKER_HALO_ALPHA: f32 = 0.08;
+const _: () = assert!(MARKER_DISC_ALPHA <= 0.3 && MARKER_HALO_ALPHA <= MARKER_DISC_ALPHA);
+
 pub fn draw_erc_markers(
     frame: &mut canvas::Frame,
     markers: &[ErcMarker],
@@ -35,15 +42,15 @@ pub fn draw_erc_markers(
         }
         let (fill, stroke) = match marker.severity {
             ErcSeverity::Error => (
-                Color::from_rgba(0.95, 0.25, 0.25, 0.6),
+                Color::from_rgba(0.95, 0.25, 0.25, MARKER_DISC_ALPHA),
                 Color::from_rgb(0.95, 0.25, 0.25),
             ),
             ErcSeverity::Warning => (
-                Color::from_rgba(0.98, 0.72, 0.20, 0.6),
+                Color::from_rgba(0.98, 0.72, 0.20, MARKER_DISC_ALPHA),
                 Color::from_rgb(0.98, 0.72, 0.20),
             ),
             ErcSeverity::Info => (
-                Color::from_rgba(0.30, 0.55, 0.85, 0.55),
+                Color::from_rgba(0.30, 0.55, 0.85, MARKER_DISC_ALPHA),
                 Color::from_rgb(0.30, 0.55, 0.85),
             ),
         };
@@ -53,7 +60,7 @@ pub fn draw_erc_markers(
             center,
             radius_mm: screen_px_to_world_mm(16.0, transform.scale) as f32,
             stroke_width_mm: 0.0,
-            color: [fill.r, fill.g, fill.b, 0.18],
+            color: [fill.r, fill.g, fill.b, MARKER_HALO_ALPHA],
         });
         overlays.snap_circles.push(OverlayCircleInput {
             center,

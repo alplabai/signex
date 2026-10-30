@@ -52,7 +52,7 @@ pub use pdf_preview_raster::{
 pub use placement::{LastPlacement, PasteCounters, PlacementKind, PlacementSession};
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
-pub use ui::{NetColorStep, UiState};
+pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, NetColorStep, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,

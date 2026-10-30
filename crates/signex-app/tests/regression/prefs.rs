@@ -516,7 +516,7 @@ fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
             signex_app::fonts::read_paste_designators_pref_from(json.as_ref()),
         )
     };
-    assert_eq!(read(&path), (1, PasteDesignators::Keep), "defaults");
+    assert_eq!(read(&path), (1, PasteDesignators::KeepIfFree), "defaults");
 
     signex_app::fonts::write_increment_step_pref_at(&path, -7);
     signex_app::fonts::write_paste_designators_pref_at(&path, PasteDesignators::NextFree);

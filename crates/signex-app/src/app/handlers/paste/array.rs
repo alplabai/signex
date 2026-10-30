@@ -6,7 +6,6 @@ use signex_types::schematic::Point;
 
 use crate::app::{Message, PasteIntent, PasteRequest, Signex};
 use crate::paste_array::{PasteArrayInput, PasteArrayMsg, PasteArrayState};
-use crate::paste_prefs::PasteDesignators;
 
 /// Width of the copy in the default X spacing is padded by this many grid
 /// pitches so neighbouring copies do not touch.
@@ -59,7 +58,7 @@ impl Signex {
                 PasteArrayMsg::StepChanged(text) => state.step = text,
                 PasteArrayMsg::DesignatorsChosen(mode) => {
                     state.designators = mode;
-                    if mode == PasteDesignators::NextFree {
+                    if mode.reads_project() {
                         seeding = self.seed_paste_array();
                     }
                 }
@@ -119,7 +118,7 @@ impl Signex {
         let Some(state) = self.ui_state.paste_array.as_ref() else {
             return;
         };
-        if state.seed_pending && state.designators == PasteDesignators::NextFree {
+        if state.seed_pending && state.designators.reads_project() {
             crate::diagnostics::log_warning(
                 "Paste Array: the project's designators are still being read; press OK again in a moment.",
             );

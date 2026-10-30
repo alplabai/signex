@@ -10,6 +10,10 @@ use super::{
     ReorderPicker, WindowKind,
 };
 
+/// Height of the bottom dock at first run: the tab strip, the ERC header and
+/// several finding rows (#1768).
+pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
+
 pub struct UiState {
     pub theme_id: ThemeId,
     pub unit: Unit,

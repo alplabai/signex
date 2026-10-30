@@ -5,8 +5,11 @@
 /// `paste_designators`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PasteDesignators {
-    /// The copy keeps the designators it had.
+    /// The copy keeps its designators unless the project already uses one,
+    /// and then takes the next free number of its prefix; `R?` stays `R?`.
     #[default]
+    KeepIfFree,
+    /// The copy keeps the designators it had, taken or not.
     Keep,
     /// Every pasted part becomes `R?`, `U?`, ... for Annotate to number.
     Reset,
@@ -17,14 +20,24 @@ pub enum PasteDesignators {
 
 impl PasteDesignators {
     pub const ALL: &'static [PasteDesignators] = &[
+        PasteDesignators::KeepIfFree,
         PasteDesignators::Keep,
         PasteDesignators::Reset,
         PasteDesignators::NextFree,
     ];
 
+    /// Whether numbering a paste needs the numbers the project already uses.
+    pub fn reads_project(self) -> bool {
+        matches!(
+            self,
+            PasteDesignators::KeepIfFree | PasteDesignators::NextFree
+        )
+    }
+
     /// The `prefs.json` token.
     pub fn token(self) -> &'static str {
         match self {
+            PasteDesignators::KeepIfFree => "keep_if_free",
             PasteDesignators::Keep => "keep",
             PasteDesignators::Reset => "reset",
             PasteDesignators::NextFree => "next_free",
@@ -44,6 +57,7 @@ impl PasteDesignators {
 impl std::fmt::Display for PasteDesignators {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PasteDesignators::KeepIfFree => write!(f, "Keep unless taken"),
             PasteDesignators::Keep => write!(f, "Keep"),
             PasteDesignators::Reset => write!(f, "Reset (R?, U?, ...)"),
             PasteDesignators::NextFree => write!(f, "Next free number"),
@@ -62,7 +76,7 @@ mod tests {
         }
         assert_eq!(
             PasteDesignators::from_token("bogus"),
-            PasteDesignators::Keep
+            PasteDesignators::KeepIfFree
         );
     }
 }

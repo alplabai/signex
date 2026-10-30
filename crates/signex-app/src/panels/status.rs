@@ -207,15 +207,15 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .size(9)
                             .color(theme_ext::text_secondary(&ctx.tokens)),
                         Space::new().width(6).height(Length::Shrink),
-                        text(format!(
-                            "{}  ({:.2}, {:.2})  {}",
-                            v.sheet_name,
-                            v.world_x,
-                            v.world_y,
-                            v.sheet_path.display()
-                        ))
-                        .size(9)
-                        .color(theme_ext::text_secondary(&ctx.tokens)),
+                        iced::widget::tooltip(
+                            text(location_label(&v.sheet_name, v.world_x, v.world_y))
+                                .size(9)
+                                .wrapping(iced::widget::text::Wrapping::None)
+                                .color(theme_ext::text_secondary(&ctx.tokens)),
+                            text(v.sheet_path.display().to_string()).size(9),
+                            iced::widget::tooltip::Position::Top,
+                        )
+                        .gap(4),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fill),
@@ -255,6 +255,12 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col.push(waived_section(ctx))
         .push(super::erc_waivers::violation_waivers_section(ctx))
         .into()
+}
+
+/// Where a finding is, on one line: the sheet's file name and the point. The
+/// full path is the row's tooltip, so a long path never wraps the row.
+fn location_label(sheet_name: &str, x: f64, y: f64) -> String {
+    format!("{sheet_name}  ({x:.2}, {y:.2})")
 }
 
 /// "Waive net" chip for a net-level finding on a named net; nothing for any
@@ -456,4 +462,16 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     container(col).width(Length::Fill).into()
+}
+
+#[cfg(test)]
+mod location_tests {
+    use super::location_label;
+
+    #[test]
+    fn a_finding_location_is_the_file_name_and_the_point_on_one_line() {
+        let label = location_label("top.snxsch", 12.345, -6.0);
+        assert_eq!(label, "top.snxsch  (12.35, -6.00)");
+        assert!(!label.contains('/') && !label.contains('\\') && !label.contains('\n'));
+    }
 }

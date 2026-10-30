@@ -18,6 +18,9 @@ mod reprefix;
 mod reprefix_confirm;
 mod reprefix_plan;
 mod reset_duplicates;
+mod stale_findings;
+#[cfg(test)]
+mod stale_findings_tests;
 
 pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};

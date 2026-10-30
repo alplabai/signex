@@ -1,10 +1,12 @@
 //! What a pasted part is called, per the "Designators on paste" preference.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use signex_engine::PlacementPayload;
-use signex_types::designator::{alphabetic_prefix, merge_counters, seed_counters, take_next};
+use signex_types::designator::{
+    alphabetic_prefix, merge_counters, seed_counters, split_reference, take_next,
+};
 
 use crate::app::Signex;
 use crate::paste_prefs::PasteDesignators;
@@ -14,11 +16,39 @@ use crate::paste_prefs::PasteDesignators;
 pub(crate) struct PasteNumbering {
     mode: PasteDesignators,
     counters: HashMap<String, u32>,
+    /// Designators already in use, for Keep unless taken.
+    used: HashSet<String>,
 }
 
 impl PasteNumbering {
     pub(crate) fn new(mode: PasteDesignators, counters: HashMap<String, u32>) -> Self {
-        Self { mode, counters }
+        Self {
+            mode,
+            counters,
+            used: HashSet::new(),
+        }
+    }
+
+    /// The same numbering that also knows which designators are in use.
+    pub(crate) fn with_used(mut self, used: HashSet<String>) -> Self {
+        self.used = used;
+        self
+    }
+
+    /// The designator a part called `old` gets under Keep unless taken: `None`
+    /// keeps it (unnumbered, or free), otherwise the next number above every
+    /// one in use. Either way the result counts as used for the next part.
+    fn keep_if_free(&mut self, old: &str) -> Option<String> {
+        let (prefix, number) = split_reference(old);
+        let number = number.filter(|_| !prefix.is_empty())?;
+        if self.used.insert(old.to_owned()) {
+            let highest = self.counters.entry(prefix.to_owned()).or_insert(0);
+            *highest = (*highest).max(number);
+            return None;
+        }
+        let new = take_next(prefix, &mut self.counters)?;
+        self.used.insert(new.clone());
+        Some(new)
     }
 
     /// `payload` with the designators the preference gives its parts. The
@@ -26,6 +56,7 @@ impl PasteNumbering {
     pub(crate) fn apply(&mut self, payload: &PlacementPayload) -> PlacementPayload {
         match self.mode {
             PasteDesignators::Keep => payload.clone(),
+            PasteDesignators::KeepIfFree => payload.redesignate_parts(|old| self.keep_if_free(old)),
             PasteDesignators::Reset => payload.redesignate_parts(|old| {
                 let prefix = alphabetic_prefix(old);
                 (!prefix.is_empty()).then(|| format!("{prefix}?"))
@@ -57,27 +88,28 @@ impl Signex {
         target: &Path,
         mode: PasteDesignators,
     ) -> PasteNumbering {
-        if mode != PasteDesignators::NextFree {
+        if !mode.reads_project() {
             return PasteNumbering::new(mode, HashMap::new());
         }
-        let mut counters = self
+        let read = self
             .interaction_state
             .paste_counters
             .as_ref()
-            .filter(|c| c.target == target)
-            .map(|c| c.counters.clone())
-            .unwrap_or_default();
+            .filter(|c| c.target == target);
+        let mut counters = read.map(|c| c.counters.clone()).unwrap_or_default();
+        let mut used = read.map(|c| c.used.clone()).unwrap_or_default();
         if let Some(live) = self.document_state.engines.get(target) {
-            let live = seed_counters(
+            let references = || {
                 live.document()
                     .symbols
                     .iter()
                     .filter(|s| !s.is_power && !s.reference.starts_with('#'))
-                    .map(|s| s.reference.as_str()),
-            );
-            merge_counters(&mut counters, &live);
+                    .map(|s| s.reference.as_str())
+            };
+            merge_counters(&mut counters, &seed_counters(references()));
+            used.extend(references().map(str::to_owned));
         }
-        PasteNumbering::new(mode, counters)
+        PasteNumbering::new(mode, counters).with_used(used)
     }
 }
 
@@ -134,6 +166,38 @@ mod tests {
             references(&numbering.apply(&payload())),
             ["R?", "U?", "R?", "U?"]
         );
+    }
+
+    #[test]
+    fn keep_if_free_renumbers_only_the_parts_whose_designator_is_taken() {
+        let counters = seed_counters(["R2", "U1"]);
+        let used = HashSet::from(["R2".to_owned(), "U1".to_owned()]);
+        let mut numbering =
+            PasteNumbering::new(PasteDesignators::KeepIfFree, counters).with_used(used);
+        // R1 and U4 (both units) are free and kept; R2 is taken.
+        assert_eq!(
+            references(&numbering.apply(&payload())),
+            ["R1", "U4", "R3", "U4"]
+        );
+    }
+
+    #[test]
+    fn keep_if_free_moves_units_of_a_taken_part_together() {
+        let counters = seed_counters(["U4"]);
+        let used = HashSet::from(["U4".to_owned()]);
+        let mut numbering =
+            PasteNumbering::new(PasteDesignators::KeepIfFree, counters).with_used(used);
+        assert_eq!(
+            references(&numbering.apply(&payload())),
+            ["R1", "U5", "R2", "U5"]
+        );
+    }
+
+    #[test]
+    fn keep_if_free_leaves_unannotated_parts_alone() {
+        let mut numbering = PasteNumbering::new(PasteDesignators::KeepIfFree, HashMap::new());
+        let rq = payload().redesignate_parts(|_| Some("R?".to_owned()));
+        assert_eq!(references(&numbering.apply(&rq)), ["R?", "R?", "R?", "R?"]);
     }
 
     #[test]

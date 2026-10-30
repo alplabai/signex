@@ -51,6 +51,8 @@ fn cut_writes_the_fragment_too_and_removes_the_selection() {
 #[test]
 fn a_paste_request_asks_the_system_clipboard() {
     let (mut app, _text) = app_with_copied_parts();
+    // Keep reads no project numbers first, so the clipboard read comes first.
+    app.ui_state.paste_designators = PasteDesignators::Keep;
     for message in [EditMsg::Paste, EditMsg::SmartPaste] {
         let task = app.update(Message::Edit(message));
         assert!(reads_clipboard(task));
@@ -119,6 +121,8 @@ fn text_that_is_not_a_fragment_falls_back_to_the_in_app_copy() {
 #[test]
 fn the_system_clipboard_wins_over_an_older_in_app_copy() {
     let (mut app, _text) = app_with_copied_parts();
+    // Keep shows which copy was pasted: Keep unless taken would renumber both.
+    app.ui_state.paste_designators = PasteDesignators::Keep;
     select(&mut app, &[("R1", 1)], false);
     let newer = written_text(app.update(Message::Edit(EditMsg::Copy))).unwrap();
     // The window's own copy is then replaced by what the clipboard now holds.

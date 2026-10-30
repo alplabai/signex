@@ -255,7 +255,7 @@ impl Signex {
                 canvas_font_italic: false,
                 left_width: 240.0,
                 right_width: 220.0,
-                bottom_height: 120.0,
+                bottom_height: crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT,
                 window_size: (1400.0, 900.0),
                 main_window_scale: 1.0,
                 panel_list_open: false,
