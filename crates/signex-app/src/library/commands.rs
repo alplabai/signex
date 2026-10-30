@@ -798,6 +798,7 @@ mod tests {
 
     #[test]
     fn a_non_git_project_takes_the_new_default() {
+        signex_library::git_identity::test_identity::install();
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         std::fs::write(dir.join("p.snxprj"), "{}").unwrap();
