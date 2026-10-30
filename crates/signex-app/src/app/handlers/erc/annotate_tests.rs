@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::app::Signex;
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
 
-fn unit(reference: &str, unit: u32, y: f64) -> Symbol {
+pub(super) fn unit(reference: &str, unit: u32, y: f64) -> Symbol {
     Symbol {
         uuid: Uuid::now_v7(),
         lib_id: "Amplifier:LM358".to_string(),
@@ -21,7 +21,7 @@ fn unit(reference: &str, unit: u32, y: f64) -> Symbol {
     }
 }
 
-fn sheet_of(children: &[&str], symbols: Vec<Symbol>) -> SchematicSheet {
+pub(super) fn sheet_of(children: &[&str], symbols: Vec<Symbol>) -> SchematicSheet {
     let mut sheet = sheet_with_net("R?", "NET", children);
     sheet.symbols = symbols;
     sheet
@@ -29,7 +29,7 @@ fn sheet_of(children: &[&str], symbols: Vec<Symbol>) -> SchematicSheet {
 
 /// `a_root.snxsch` is open and active; `z_child.snxsch` is an unopened
 /// hierarchical child on disk. Returns the app and the project directory.
-fn project(root: Vec<Symbol>, child: Vec<Symbol>) -> (Signex, PathBuf) {
+pub(super) fn project(root: Vec<Symbol>, child: Vec<Symbol>) -> (Signex, PathBuf) {
     let dir = std::env::temp_dir().join(format!("signex-annotate-units-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
     let child_text = SnxSchematic::new(sheet_of(&[], child))
@@ -48,7 +48,7 @@ fn project(root: Vec<Symbol>, child: Vec<Symbol>) -> (Signex, PathBuf) {
     (app, dir)
 }
 
-fn root_refs(app: &Signex, dir: &std::path::Path) -> Vec<String> {
+pub(super) fn root_refs(app: &Signex, dir: &std::path::Path) -> Vec<String> {
     app.document_state
         .engines
         .get(&dir.join("a_root.snxsch"))
@@ -60,7 +60,7 @@ fn root_refs(app: &Signex, dir: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
-fn child_refs(dir: &std::path::Path) -> Vec<String> {
+pub(super) fn child_refs(dir: &std::path::Path) -> Vec<String> {
     let text = std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child on disk");
     SnxSchematic::parse(&text)
         .expect("child parses")
@@ -74,7 +74,8 @@ fn child_refs(dir: &std::path::Path) -> Vec<String> {
 #[test]
 fn reset_duplicates_leaves_units_of_one_part_alone() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0), unit("U1", 2, 10.0)], vec![]);
-    let _ = app.handle_reset_duplicate_designators();
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(&mut app, task);
     let refs = root_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, ["U1", "U1"]);
@@ -83,7 +84,8 @@ fn reset_duplicates_leaves_units_of_one_part_alone() {
 #[test]
 fn reset_duplicates_still_resets_a_real_duplicate() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)], vec![]);
-    let _ = app.handle_reset_duplicate_designators();
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(&mut app, task);
     let refs = root_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, ["U?", "U?"]);
@@ -92,7 +94,8 @@ fn reset_duplicates_still_resets_a_real_duplicate() {
 #[test]
 fn reset_duplicates_leaves_units_split_across_sheets_alone() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit("U1", 2, 0.0)]);
-    let _ = app.handle_reset_duplicate_designators();
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(&mut app, task);
     let (root, child) = (root_refs(&app, &dir), child_refs(&dir));
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(
@@ -104,7 +107,8 @@ fn reset_duplicates_leaves_units_split_across_sheets_alone() {
 #[test]
 fn reset_and_renumber_keeps_a_part_split_across_sheets_together() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit("U1", 2, 0.0)]);
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    crate::app::path_ops::settle_task(&mut app, task);
     let (root, child) = (root_refs(&app, &dir), child_refs(&dir));
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(root, child, "one part, one designator across sheets");
@@ -117,7 +121,8 @@ fn a_locked_unannotated_unit_keeps_its_siblings_unannotated() {
     let locked_uuid = locked.uuid;
     let (mut app, dir) = project(vec![locked, unit("U?", 2, 10.0)], vec![]);
     app.ui_state.annotate_locked.insert(locked_uuid);
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
     let refs = root_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, ["U?", "U?"]);
@@ -134,7 +139,7 @@ fn make_child_newer_minor(dir: &std::path::Path) -> String {
     newer
 }
 
-fn notice_detail(app: &Signex) -> String {
+pub(super) fn notice_detail(app: &Signex) -> String {
     app.document_state
         .error_notice
         .as_ref()
@@ -146,7 +151,8 @@ fn notice_detail(app: &Signex) -> String {
 fn annotate_leaves_an_unopened_newer_minor_child_alone_and_names_it() {
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
     let newer = make_child_newer_minor(&dir);
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
     let (root, on_disk) = (
         root_refs(&app, &dir),
         std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child"),
@@ -162,7 +168,8 @@ fn annotate_leaves_an_unopened_newer_minor_child_alone_and_names_it() {
 fn reset_duplicates_leaves_an_unopened_newer_minor_child_alone_and_names_it() {
     let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
     let newer = make_child_newer_minor(&dir);
-    let _ = app.handle_reset_duplicate_designators();
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(&mut app, task);
     let (root, on_disk) = (
         root_refs(&app, &dir),
         std::fs::read_to_string(dir.join("z_child.snxsch")).expect("child"),
@@ -185,9 +192,11 @@ fn bulk_passes_do_not_dirty_an_open_newer_minor_sheet() {
             .engines
             .insert(child_path.clone(), engine);
         if reset {
-            let _ = app.handle_reset_duplicate_designators();
+            let task = app.handle_reset_duplicate_designators();
+            crate::app::path_ops::settle_task(&mut app, task);
         } else {
-            let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+            let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+            crate::app::path_ops::settle_task(&mut app, task);
         }
         let child_refs: Vec<String> = app.document_state.engines[&child_path]
             .document()
@@ -237,7 +246,8 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
     app.interaction_state.canvases.insert(window, slot);
 
     // Annotate runs from the root; the child's engine changes, its slot does not.
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    crate::app::path_ops::settle_task(&mut app, task);
     let annotated = app.document_state.engines[&child_path].document().symbols[0]
         .reference
         .clone();
@@ -345,9 +355,7 @@ fn reset_duplicates_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
         vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)],
     );
     let task = app.handle_reset_duplicate_designators();
-    for message in crate::persist::run_task::outputs(task) {
-        let _ = app.update(message);
-    }
+    crate::app::path_ops::settle_task(&mut app, task);
     assert_earlier_copy_survives_and_is_offered(app, dir, recovery, child_path);
 }
 
@@ -356,9 +364,7 @@ fn annotate_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
     let (mut app, dir, recovery, child_path) =
         child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
-    for message in crate::persist::run_task::outputs(task) {
-        let _ = app.update(message);
-    }
+    crate::app::path_ops::settle_task(&mut app, task);
     assert_earlier_copy_survives_and_is_offered(app, dir, recovery, child_path);
 }
 
@@ -374,9 +380,7 @@ fn annotate_drops_a_recovery_copy_this_run_wrote() {
     app.document_state.autosave.begin(&child_path);
     app.document_state.autosave.finish(&child_path, stamp, true);
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
-    for message in crate::persist::run_task::outputs(task) {
-        let _ = app.update(message);
-    }
+    crate::app::path_ops::settle_task(&mut app, task);
     let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
     std::fs::remove_dir_all(&dir).ok();
     assert!(
@@ -387,12 +391,12 @@ fn annotate_drops_a_recovery_copy_this_run_wrote() {
 
 // ---- #859: an in-flight read or restore owns the sheet's file.
 
-fn child_path(dir: &std::path::Path) -> PathBuf {
+pub(super) fn child_path(dir: &std::path::Path) -> PathBuf {
     dir.join("z_child.snxsch")
 }
 
 /// Whether a Messages line containing `needle` was logged after `since`.
-fn logged_since(since: Option<u64>, needle: &str) -> bool {
+pub(super) fn logged_since(since: Option<u64>, needle: &str) -> bool {
     crate::diagnostics::recent_entries()
         .iter()
         .any(|e| Some(e.id) > since && e.message.contains(needle))
@@ -482,11 +486,13 @@ const RESTORE: &str = "a History restore of it is still running";
 const READ: &str = "a read of it is still in flight";
 
 fn annotate(app: &mut Signex) {
-    let _ = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    crate::app::path_ops::settle_task(app, task);
 }
 
 fn reset(app: &mut Signex) {
-    let _ = app.handle_reset_duplicate_designators();
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(app, task);
 }
 
 #[test]

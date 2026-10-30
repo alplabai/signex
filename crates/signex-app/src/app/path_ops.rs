@@ -21,6 +21,9 @@ pub enum PathOpKind {
     Rename,
     RenameLibrary,
     Delete,
+    /// Annotate or Reset Duplicate Designators reading or rewriting the
+    /// project's sheets.
+    ProjectRewrite,
 }
 
 impl PathOpKind {
@@ -28,6 +31,7 @@ impl PathOpKind {
         match self {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
+            Self::ProjectRewrite => "project-wide rewrite",
         }
     }
 }
@@ -130,6 +134,13 @@ impl PendingPathOps {
     /// Is anything running?
     pub fn is_empty(&self) -> bool {
         self.ops.is_empty()
+    }
+
+    /// Is an Annotate or Reset Duplicate Designators run holding sheets?
+    pub fn rewrite_running(&self) -> bool {
+        self.ops
+            .iter()
+            .any(|op| op.kind == PathOpKind::ProjectRewrite)
     }
 
     /// Is a library rename or delete running? Library edits write through
@@ -435,9 +446,16 @@ pub struct DeleteDone {
 /// runtime, for unit tests of flows whose result lands on a worker (#859).
 #[cfg(test)]
 pub(crate) fn settle(app: &mut crate::app::Signex, message: crate::app::Message) {
+    let task = app.update(message);
+    settle_task(app, task);
+}
+
+/// [`settle`] for a task a handler returned directly.
+#[cfg(test)]
+pub(crate) fn settle_task(app: &mut crate::app::Signex, task: iced::Task<crate::app::Message>) {
     use futures::StreamExt as _;
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    let mut pending = vec![app.update(message)];
+    let mut pending = vec![task];
     while let Some(task) = pending.pop() {
         let Some(mut stream) = iced_runtime::task::into_stream(task) else {
             continue;

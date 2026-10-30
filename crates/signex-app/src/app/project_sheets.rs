@@ -301,6 +301,20 @@ pub(crate) struct ProjectSheetPlan {
 }
 
 impl ProjectSheetPlan {
+    /// The declared pages the assembly starts from.
+    pub(crate) fn pages(&self) -> &[PathBuf] {
+        &self.pages
+    }
+
+    /// The root sheet the assembly walks first.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(crate) fn fold(&self) -> CaseFold {
+        self.fold
+    }
+
     pub(crate) fn assemble(&self) -> ProjectSheetSet {
         assemble_project_sheets_from(&self.open, &self.pages, &self.root, self.fold)
     }

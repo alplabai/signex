@@ -392,6 +392,7 @@ impl Signex {
                 pin_matrix_overrides: std::collections::HashMap::new(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
+                annotate_runs: Default::default(),
                 reprefix_generation: 0,
                 reprefix_confirm: None,
                 reprefix_window_close_pending: false,

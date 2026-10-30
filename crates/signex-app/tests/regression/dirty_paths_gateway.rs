@@ -166,9 +166,12 @@ fn annotate_marks_the_active_sheet_dirty() {
         symbol(uuid::Uuid::now_v7(), "R?", 10.0),
     ]);
 
-    let _ = app.update(Message::Annotate(AnnotateMsg::Run(
-        signex_engine::AnnotateMode::ResetAndRenumber,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Annotate(AnnotateMsg::Run(
+            signex_engine::AnnotateMode::ResetAndRenumber,
+        )),
+    );
 
     let references: Vec<String> = app
         .document_state
@@ -194,7 +197,10 @@ fn reset_duplicate_designators_marks_the_active_sheet_dirty() {
         symbol(uuid::Uuid::now_v7(), "R1", 10.0),
     ]);
 
-    let _ = app.update(Message::Menu(MenuMessage::AnnotateResetDuplicates));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Menu(MenuMessage::AnnotateResetDuplicates),
+    );
 
     let references: Vec<String> = app
         .document_state
@@ -287,9 +293,12 @@ fn annotate_numbers_a_parked_sheet_in_memory_and_never_writes_it() {
         symbol(uuid::Uuid::now_v7(), "R?", 10.0),
     ]);
 
-    let _ = app.update(Message::Annotate(AnnotateMsg::Run(
-        signex_engine::AnnotateMode::ResetAndRenumber,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Annotate(AnnotateMsg::Run(
+            signex_engine::AnnotateMode::ResetAndRenumber,
+        )),
+    );
 
     let parked_refs = parked_references(&app, &parked_path);
     assert!(
@@ -309,7 +318,10 @@ fn reset_duplicates_resets_a_parked_sheet_in_memory_and_never_writes_it() {
         symbol(uuid::Uuid::now_v7(), "R1", 10.0),
     ]);
 
-    let _ = app.update(Message::Menu(MenuMessage::AnnotateResetDuplicates));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Menu(MenuMessage::AnnotateResetDuplicates),
+    );
 
     let parked_refs = parked_references(&app, &parked_path);
     assert!(
