@@ -152,7 +152,7 @@ pub fn load_preferred_order_at(path: &std::path::Path) -> Vec<DistributorSource>
 /// Persist the preferred-order list. Errors warn through `tracing` and
 /// surface to the caller via the `Result` so the dispatcher can show a
 /// brief inline error in the Distributor APIs settings panel — mirrors
-/// `components_panel::global_prefs::save`. Swallowing this made a failed
+/// `components_panel::global_prefs::add_path`. Swallowing this made a failed
 /// save invisible until the user found the setting reverted next launch.
 pub fn save_preferred_order(order: &[DistributorSource]) -> Result<(), String> {
     let Some(path) = config_path() else {
