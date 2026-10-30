@@ -189,6 +189,9 @@ mod library_range_filter;
 #[path = "regression/library_row_base_local.rs"]
 mod library_row_base_local;
 
+#[path = "regression/library_create_refusal.rs"]
+mod library_create_refusal;
+
 #[path = "regression/library_uncommitted.rs"]
 mod library_uncommitted;
 

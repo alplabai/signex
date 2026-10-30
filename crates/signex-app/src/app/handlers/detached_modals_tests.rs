@@ -120,6 +120,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 lib_path: "l.snxlib".into(),
                 enable_git: false,
                 use_lfs: false,
+                refusal: None,
             })
         }
         ModalId::LibraryCloseConfirm => {

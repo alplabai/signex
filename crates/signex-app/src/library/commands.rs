@@ -128,6 +128,24 @@ pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryEr
     Ok(())
 }
 
+/// The suggested `.snxlib` for a new library of the project `stem` in
+/// `project_dir`: `<project_dir>/<stem>-lib/<stem>-lib.snxlib`. The library
+/// lives in a subfolder of its own so a version-controlled project and its
+/// library each get their own repository (a library at the project folder
+/// would reopen the project's repo). A taken name gets a `-2`, `-3`, … suffix.
+pub fn default_new_library_path(project_dir: &Path, stem: &str) -> PathBuf {
+    let candidate = |name: &str| project_dir.join(name).join(format!("{name}.snxlib"));
+    let taken = |name: &str| project_dir.join(name).exists();
+    let base = format!("{stem}-lib");
+    if !taken(&base) {
+        return candidate(&base);
+    }
+    (2..=99)
+        .map(|n| format!("{stem}-lib-{n}"))
+        .find(|name| !taken(name))
+        .map_or_else(|| candidate(&base), |name| candidate(&name))
+}
+
 /// Register a library creation request without touching disk.
 ///
 /// Validates via `validate_new_library_path` (extension must be
@@ -199,6 +217,11 @@ pub(crate) fn create_pending_library(
             "{} already exists (pending materialise)",
             spec.lib_path.display()
         )));
+    }
+    if spec.enable_git
+        && let Some(reason) = signex_library::vcs_target_guard::library_repo_refusal(&spec.lib_path)
+    {
+        return Err(LibraryError::VersionControlRefused(reason));
     }
     let manifest = seed_manifest(library_id, spec.display_name.clone(), defaults);
     LocalGitAdapter::init(
@@ -656,5 +679,95 @@ mod tests {
             assert!(validate_new_library_path(Path::new(bad)).is_err(), "{bad}");
         }
         assert!(validate_new_library_path(Path::new("ok-lib.snxlib")).is_ok());
+    }
+
+    /// A repo at `dir` with one commit, standing in for a version-controlled
+    /// project. Returns the head commit id.
+    fn project_repo(dir: &Path) -> git2::Oid {
+        signex_library::git_identity::test_identity::install();
+        std::fs::write(dir.join("p.snxprj"), "{}").unwrap();
+        let repo = git2::Repository::init(dir).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("p.snxprj")).unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let sig = git2::Signature::now("t", "t@example.org").unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "project", &tree, &[])
+            .unwrap()
+    }
+
+    fn git_spec(lib_path: PathBuf) -> PendingLibrarySpec {
+        register_pending_library(lib_path, true, false).unwrap().1
+    }
+
+    #[test]
+    fn default_new_library_path_is_a_subfolder_and_skips_taken_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        assert_eq!(
+            default_new_library_path(dir, "p"),
+            dir.join("p-lib").join("p-lib.snxlib")
+        );
+        std::fs::create_dir(dir.join("p-lib")).unwrap();
+        assert_eq!(
+            default_new_library_path(dir, "p"),
+            dir.join("p-lib-2").join("p-lib-2.snxlib")
+        );
+    }
+
+    #[test]
+    fn a_git_library_at_the_new_default_gets_its_own_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let project_head = project_repo(dir);
+        let project_index = std::fs::read(dir.join(".git").join("index")).unwrap();
+        let lib = default_new_library_path(dir, "p");
+
+        create_pending_library(Uuid::now_v7(), &git_spec(lib.clone()), &Default::default())
+            .expect("a nested library repo is created");
+
+        let lib_repo = git2::Repository::open(lib.parent().unwrap()).unwrap();
+        assert_eq!(lib_repo.workdir().unwrap(), lib.parent().unwrap().join(""));
+        let first = lib_repo.head().unwrap().peel_to_commit().unwrap();
+        assert_eq!(first.parent_count(), 0, "the library's own first commit");
+        let project = git2::Repository::open(dir).unwrap();
+        assert_eq!(project.head().unwrap().target(), Some(project_head));
+        assert_eq!(
+            std::fs::read(dir.join(".git").join("index")).unwrap(),
+            project_index,
+            "the project's index is untouched"
+        );
+    }
+
+    #[test]
+    fn a_git_library_at_the_project_folder_is_refused_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        project_repo(dir);
+        let lib = dir.join("p-lib.snxlib");
+
+        let err =
+            create_pending_library(Uuid::now_v7(), &git_spec(lib.clone()), &Default::default())
+                .expect_err("the project's repo cannot host the library");
+
+        assert!(
+            matches!(err, LibraryError::VersionControlRefused(_)),
+            "{err}"
+        );
+        assert!(!lib.exists(), "nothing written");
+    }
+
+    #[test]
+    fn a_non_git_project_takes_the_new_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        std::fs::write(dir.join("p.snxprj"), "{}").unwrap();
+        let lib = default_new_library_path(dir, "p");
+        create_pending_library(Uuid::now_v7(), &git_spec(lib.clone()), &Default::default())
+            .expect("created");
+        assert!(lib.exists());
+        let repo = git2::Repository::open(lib.parent().unwrap()).unwrap();
+        assert!(repo.head().unwrap().peel_to_commit().is_ok());
+        assert!(!dir.join(".git").exists(), "the project stays unversioned");
     }
 }

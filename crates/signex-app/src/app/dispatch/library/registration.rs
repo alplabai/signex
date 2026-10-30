@@ -29,6 +29,7 @@ impl Signex {
             lib_path,
             enable_git: false,
             use_lfs: false,
+            refusal: None,
         });
         Task::none()
     }
@@ -46,6 +47,7 @@ impl Signex {
     pub(super) fn handle_library_create_options_toggle_git(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.enable_git = !state.enable_git;
+            state.refusal = None;
             // LFS is meaningless without git — keep the two
             // toggles consistent so the user doesn't end up
             // with LFS-on-no-git which the adapter would
@@ -59,6 +61,16 @@ impl Signex {
 
     /// "Library Options" modal — Create Library button.
     pub(super) fn handle_library_create_options_confirm(&mut self) -> Task<Message> {
+        // Refuse before anything is registered or written, and keep the modal
+        // open with the reason so the user can pick another place.
+        if let Some(state) = self.library.create_options.as_mut()
+            && state.enable_git
+            && let Some(reason) =
+                signex_library::vcs_target_guard::library_repo_refusal(&state.lib_path)
+        {
+            state.refusal = Some(reason);
+            return Task::none();
+        }
         if let Some(state) = self.library.create_options.take() {
             self.handle_create_library_at_path(
                 state.project_path,
@@ -73,8 +85,9 @@ impl Signex {
 
     /// Spawn the "New Component Library" Save-As dialog for the
     /// project rooted at `project_root`. The dialog defaults to
-    /// `<project_dir>/<project>-lib.snxlib` so the common
-    /// project-local case is one Enter key, but the user can navigate
+    /// `<project_dir>/<project>-lib/<project>-lib.snxlib` (a subfolder of
+    /// its own, so a version-controlled library gets its own repository
+    /// rather than reopening the project's), but the user can navigate
     /// to a global directory to create a shared library. On confirm,
     /// the dialog dispatches `CreateLibraryAtPath` which calls
     /// `commands::create_library_at` to do the actual disk + manifest
@@ -110,23 +123,20 @@ impl Signex {
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("project");
-        let mut name = format!("{stem}-lib");
-
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
-        // Pre-disambiguate the default name so the user doesn't get a
-        // misleading "<project>-lib" suggestion when that path already
-        // exists. Conflicts get a `-2`, `-3`, … suffix matching the
-        // pattern `commands::create_library` previously used.
-        if project_dir.join(format!("{name}.snxlib")).exists() {
-            for n in 2..=99 {
-                let candidate = format!("{stem}-lib-{n}");
-                if !project_dir.join(format!("{candidate}.snxlib")).exists() {
-                    name = candidate;
-                    break;
-                }
-            }
-        }
-        let suggested_filename = format!("{name}.snxlib");
+        let suggested = crate::library::commands::default_new_library_path(&project_dir, stem);
+        let suggested_filename = suggested
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        // The subfolder does not exist yet (it is made when the library is
+        // created), so the dialog opens at its nearest existing ancestor.
+        let dialog_dir = suggested
+            .ancestors()
+            .skip(1)
+            .find(|p| p.is_dir())
+            .unwrap_or(&project_dir)
+            .to_path_buf();
         let project_path = loaded.path.clone();
 
         Task::perform(
@@ -134,7 +144,7 @@ impl Signex {
                 rfd::AsyncFileDialog::new()
                     .set_title("New Component Library")
                     .add_filter("Signex Component Library", &["snxlib"])
-                    .set_directory(&project_dir)
+                    .set_directory(&dialog_dir)
                     .set_file_name(&suggested_filename)
                     .save_file()
                     .await
