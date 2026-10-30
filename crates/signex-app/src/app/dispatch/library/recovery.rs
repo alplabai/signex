@@ -190,6 +190,12 @@ pub(super) fn handle_git_reinit_finished(
                 error = %reason,
                 "git recover-init failed"
             );
+            // Messages as well as the dialog: every recover-init failure is
+            // logged here, a refusal (another repo's history, #1741) too.
+            crate::diagnostics::log_warning(format!(
+                "Re-init of {} failed: {reason}",
+                path.display()
+            ));
             // Keep the dialog open and show the reason so the click is
             // never a silent no-op (#141).
             if let Some(RecoveryDialog::GitMissing { error, .. }) = app.library.recovery.as_mut() {
