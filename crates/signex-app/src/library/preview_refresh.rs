@@ -40,8 +40,8 @@ pub struct PreviewRefreshPlan {
 }
 
 enum Resolved {
-    Symbol(Result<Option<Symbol>, LibraryError>),
-    Footprint(Result<Option<Footprint>, LibraryError>),
+    Symbol(Box<Result<Option<Symbol>, LibraryError>>),
+    Footprint(Box<Result<Option<Footprint>, LibraryError>>),
 }
 
 /// The answers of one [`PreviewRefreshPlan::read`], not yet applied.
@@ -94,14 +94,14 @@ impl PreviewRefreshPlan {
                 let adapter = adapters.get(&item.reference.library_id);
                 let uuid = item.reference.uuid;
                 let answer = match item.kind {
-                    ResolvedKind::Footprint => Resolved::Footprint(match adapter {
+                    ResolvedKind::Footprint => Resolved::Footprint(Box::new(match adapter {
                         Some(a) => absence_is_none(a.get_footprint(uuid)),
                         None => Ok(None),
-                    }),
-                    _ => Resolved::Symbol(match adapter {
+                    })),
+                    _ => Resolved::Symbol(Box::new(match adapter {
                         Some(a) => absence_is_none(a.get_symbol(uuid)),
                         None => Ok(None),
-                    }),
+                    })),
                 };
                 (item, answer)
             })
@@ -200,7 +200,7 @@ impl LibraryState {
                 Resolved::Symbol(result)
                     if state.symbol.is_some() && state.row.symbol_ref == item.reference =>
                 {
-                    if let Some(fresh) = reresolve(result, item.kind, &item.reference) {
+                    if let Some(fresh) = reresolve(*result, item.kind, &item.reference) {
                         state.symbol = fresh;
                     }
                 }
@@ -208,7 +208,7 @@ impl LibraryState {
                     if state.footprint.is_some()
                         && state.row.footprint_ref == Some(item.reference) =>
                 {
-                    if let Some(fresh) = reresolve(result, item.kind, &item.reference) {
+                    if let Some(fresh) = reresolve(*result, item.kind, &item.reference) {
                         state.footprint = fresh;
                     }
                 }
