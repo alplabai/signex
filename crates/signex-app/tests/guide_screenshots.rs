@@ -210,11 +210,6 @@ fn stock_file() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library/Stock.snxlib")
 }
 
-/// Run a task and every task its messages spawn to completion.
-fn run_to_completion(app: &mut Signex, message: Message) {
-    settle_support::settle(app, message);
-}
-
 /// Place Stock part `internal_pn` at `at` through the Components panel's own
 /// message and a canvas click, so the symbol, library id, footprint and field
 /// placement are what a user gets.
@@ -229,7 +224,7 @@ fn place_stock(app: &mut Signex, internal_pn: &str, at: (f64, f64)) {
         .library
         .table_of_row(&stock_file(), row.row_id)
         .expect("row table");
-    run_to_completion(
+    settle_support::settle(
         app,
         Message::Library(LibraryMessage::ComponentsPanelPlace {
             library_path: stock_file(),
@@ -279,8 +274,7 @@ fn placed_parts() -> SchematicSheet {
         .clone()
 }
 
-/// (Stock part, position, value, footprint, offset of the designator field,
-/// offset of the value field), positions in mm.
+/// (Stock part, position in mm, value, footprint).
 type Part = (&'static str, (f64, f64), &'static str, &'static str);
 
 const PARTS: &[Part] = &[
@@ -304,7 +298,6 @@ fn field_offsets(
     sheet: &SchematicSheet,
     reference: &str,
 ) -> ((f64, f64), (f64, f64)) {
-    let _ = (lib_id, sheet);
     match reference.chars().next() {
         Some('R' | 'C') => ((2.8, -1.4), (2.8, 1.6)),
         Some('J') => ((-1.5, -6.5), (-1.5, 7.0)),
@@ -350,7 +343,7 @@ fn readme_sheet() -> SchematicSheet {
         sym.value = (*value).into();
         sym.footprint = (*footprint).into();
         sym.fields_user_placed = true;
-        let (r, v) = field_offsets(&sym.lib_id, &SchematicSheet::default(), &sym.reference);
+        let (r, v) = field_offsets(&sym.reference);
         let at = sym.position;
         sym.ref_text = Some(field_text(Point::new(at.x + r.0, at.y + r.1)));
         sym.val_text = Some(field_text(Point::new(at.x + v.0, at.y + v.1)));
