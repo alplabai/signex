@@ -254,12 +254,8 @@ impl Signex {
         self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `update_canvas_theme` re-derives the canvas colours from the saved
         // theme, clears BOTH content caches (schematic + PCB) and every
-        // schematic bg cache — don't clear them again here. Only the PCB
-        // bg caches are left to invalidate.
+        // schematic and PCB bg cache — don't clear them again here.
         self.update_canvas_theme();
-        for canvas in self.interaction_state.all_pcb_canvases_mut() {
-            canvas.clear_bg_cache();
-        }
     }
 
     /// Set the effective PCB GPU-render flag on every PCB canvas (#494).
@@ -502,10 +498,8 @@ impl Signex {
                 // so setting the draft above IS the preview; only the
                 // background (paper, grid) and content caches still have
                 // to be dropped to repaint.
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                // Every open canvas previews it, docked or undocked (#1749).
+                self.apply_canvas_theme(id);
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftFont(name) => {

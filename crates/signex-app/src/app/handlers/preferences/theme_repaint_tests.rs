@@ -45,3 +45,62 @@ fn saving_a_theme_drops_the_background_cache_of_every_schematic_canvas() {
         other + 1
     );
 }
+
+#[test]
+fn drafting_a_theme_repaints_an_undocked_schematic_canvas() {
+    let (mut app, _boot) = Signex::new();
+    let undocked = iced::window::Id::unique();
+    app.interaction_state
+        .canvases
+        .insert(undocked, CanvasSlot::new());
+    let bg = app.interaction_state.canvases[&undocked].bg_cache_clears;
+    let content = app.interaction_state.canvases[&undocked].content_cache_clears;
+
+    send(&mut app, PrefMsg::DraftTheme(ThemeId::SolarizedLight));
+
+    let slot = &app.interaction_state.canvases[&undocked];
+    assert_eq!(slot.bg_cache_clears, bg + 1);
+    assert_eq!(slot.content_cache_clears, content + 1);
+}
+
+#[test]
+fn drafting_a_theme_recolours_every_pcb_canvas() {
+    let (mut app, _boot) = Signex::new();
+    let undocked = iced::window::Id::unique();
+    app.interaction_state
+        .pcb_canvases
+        .insert(undocked, crate::pcb_canvas::PcbCanvas::default());
+
+    send(&mut app, PrefMsg::DraftTheme(ThemeId::SolarizedLight));
+
+    let wanted = signex_types::theme::canvas_colors(ThemeId::SolarizedLight);
+    for canvas in app.interaction_state.all_pcb_canvases_mut() {
+        assert_eq!(canvas.canvas_colors, wanted);
+    }
+}
+
+#[test]
+fn reverting_drafts_repaints_the_undocked_canvases_with_the_saved_theme() {
+    let (mut app, _boot) = Signex::new();
+    let undocked = iced::window::Id::unique();
+    app.interaction_state
+        .canvases
+        .insert(undocked, CanvasSlot::new());
+    app.interaction_state
+        .pcb_canvases
+        .insert(undocked, crate::pcb_canvas::PcbCanvas::default());
+    send(&mut app, PrefMsg::DraftTheme(ThemeId::SolarizedLight));
+    let bg = app.interaction_state.canvases[&undocked].bg_cache_clears;
+
+    app.revert_preferences_drafts();
+
+    assert_eq!(
+        app.interaction_state.canvases[&undocked].bg_cache_clears,
+        bg + 1
+    );
+    let saved = signex_types::theme::canvas_colors(app.ui_state.theme_id);
+    assert_eq!(app.ui_state.preferences_draft_theme, app.ui_state.theme_id);
+    for canvas in app.interaction_state.all_pcb_canvases_mut() {
+        assert_eq!(canvas.canvas_colors, saved);
+    }
+}
