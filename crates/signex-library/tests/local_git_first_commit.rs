@@ -412,9 +412,11 @@ fn recover_init_prefers_main_among_tracking_branches() {
         .commit(Some("HEAD"), &sig, &sig, "lib", &tree, &[&parent])
         .unwrap();
     let commit = repo.find_commit(tip).unwrap();
-    // No branch is left at the name `git init` makes HEAD point at.
+    // No branch is left at the name `git init` makes HEAD point at. `aaa`
+    // sorts before `main` and ties on the tip, so only the `main` rank picks
+    // `main` here.
     git2::Branch::wrap(repo.head().unwrap())
-        .rename("zeta", true)
+        .rename("aaa", true)
         .unwrap();
     repo.branch("main", &commit, true).unwrap();
     drop((tree, parent, commit));
@@ -424,8 +426,8 @@ fn recover_init_prefers_main_among_tracking_branches() {
 
     let repo = Repository::open(tmp.path()).unwrap();
     assert_eq!(repo.head().unwrap().name().unwrap(), "refs/heads/main");
-    let zeta = repo.find_branch("zeta", git2::BranchType::Local).unwrap();
-    assert_eq!(zeta.get().target().unwrap(), tip, "other branch untouched");
+    let other = repo.find_branch("aaa", git2::BranchType::Local).unwrap();
+    assert_eq!(other.get().target().unwrap(), tip, "other branch untouched");
 }
 
 // Only the unix tests read a tree entry back.
