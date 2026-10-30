@@ -447,6 +447,9 @@ impl Signex {
             canvas.clear_content_cache();
         }
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
+            // The paper and grid live in the background layer, so a new
+            // theme repaints them only if that cache is dropped too.
+            canvas.clear_bg_cache();
             canvas.clear_content_cache();
         }
     }
@@ -467,11 +470,13 @@ mod tests {
             .insert(win, crate::canvas::CanvasSlot::new());
 
         app.update_canvas_theme();
-        let _ = app.update(Message::Ui(UiMsg::GridToggle));
-
+        // A theme change repaints the paper and grid too, not just the content.
         let slot = &app.interaction_state.canvases[&win];
         assert_eq!(slot.content_cache_clears, 1);
         assert_eq!(slot.bg_cache_clears, 1);
+
+        let _ = app.update(Message::Ui(UiMsg::GridToggle));
+        assert_eq!(app.interaction_state.canvases[&win].bg_cache_clears, 2);
 
         let _ = app.update(Message::NetColor(NetColorMsg::Set {
             net: "N1".into(),
