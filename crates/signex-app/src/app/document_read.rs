@@ -87,6 +87,22 @@ impl InFlightReads {
         Some(generation)
     }
 
+    /// The generation of the tracked claim on `path`, if any.
+    pub fn generation_of(&self, path: &Path) -> Option<u64> {
+        self.claims
+            .get(path)
+            .filter(|c| c.tracked)
+            .map(|c| c.generation)
+    }
+
+    /// Would a completion presenting `generation` still be applied? True only
+    /// for the live, not cancelled, tracked claim.
+    pub fn is_current(&self, path: &Path, generation: u64) -> bool {
+        self.claims
+            .get(path)
+            .is_some_and(|c| c.tracked && !c.cancelled && c.generation == generation)
+    }
+
     /// Start a tracked claim on `path`. `None` when a read for it is already
     /// in flight, so the caller must not spawn a second one.
     pub fn begin(&mut self, path: PathBuf) -> Option<u64> {

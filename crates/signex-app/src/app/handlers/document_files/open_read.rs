@@ -39,11 +39,20 @@ impl Signex {
         result: Result<Box<LoadedDocument>, OpenFailure>,
     ) -> Task<Message> {
         let path = request.path.clone();
+        let generation = request.generation;
+        // A stale completion (closed meanwhile, asked again) is not the read a
+        // descent waits for and must not settle it.
+        let current = self
+            .document_state
+            .pending_opens
+            .is_current(&path, generation);
         let task = self.finish_document_read(request, result);
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
         // So was a canvas descent, which records its placement now.
-        self.finish_descent(&path);
+        if current {
+            self.finish_descent(&path, generation);
+        }
         task
     }
 
@@ -82,7 +91,7 @@ impl Signex {
                 // No silent no-op: a descent into a missing child offers to
                 // create the file (#1275).
                 if matches!(failure, OpenFailure::Missing(_)) {
-                    self.offer_to_create_missing_child(&request.path);
+                    self.offer_to_create_missing_child(&request.path, request.generation);
                 }
                 self.report_read_failure(failure);
                 Task::none()

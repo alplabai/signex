@@ -16,6 +16,9 @@ use super::super::super::*;
 pub struct PendingDescent {
     symbol: Uuid,
     placement: Option<InstancePath>,
+    /// The read this descent waits for; any other completion for the path
+    /// (a stale one) must leave it alone.
+    generation: Option<u64>,
 }
 
 impl Signex {
@@ -54,32 +57,56 @@ impl Signex {
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Schematic".to_string());
-        self.ui_state.pending_descents.insert(
+        let task = self.begin_document_read(
             path.clone(),
+            crate::app::document_read::ReadJob::ChildSchematic { title },
+        );
+        // The read this descent rides on: the one just started, or the one
+        // already in flight for the file.
+        let generation = self.document_state.pending_opens.generation_of(&path);
+        self.ui_state.pending_descents.insert(
+            path,
             PendingDescent {
                 symbol: sheet_symbol,
                 placement,
+                generation,
             },
         );
-        self.begin_document_read(
-            path,
-            crate::app::document_read::ReadJob::ChildSchematic { title },
-        )
+        task
     }
 
     /// The read of `path` ended with the file missing: offer to create the
     /// sheet the descent came through.
-    pub(crate) fn offer_to_create_missing_child(&mut self, path: &std::path::Path) {
-        if let Some(descent) = self.ui_state.pending_descents.remove(path) {
-            self.open_create_child_sheet_dialog(descent.symbol, true);
+    pub(crate) fn offer_to_create_missing_child(
+        &mut self,
+        path: &std::path::Path,
+        generation: u64,
+    ) {
+        let Some(descent) = self.take_descent(path, generation) else {
+            return;
+        };
+        self.open_create_child_sheet_dialog(descent.symbol, true);
+    }
+
+    /// The pending descent for `path`, only when it waits for read `generation`.
+    fn take_descent(&mut self, path: &std::path::Path, generation: u64) -> Option<PendingDescent> {
+        let waits = self
+            .ui_state
+            .pending_descents
+            .get(path)
+            .is_some_and(|d| d.generation == Some(generation));
+        if waits {
+            self.ui_state.pending_descents.remove(path)
+        } else {
+            None
         }
     }
 
     /// The read of `path` ended: when its tab is up, record the placement the
     /// descent came through. Anything else (a failed or stale read) leaves
     /// nothing to record.
-    pub(crate) fn finish_descent(&mut self, path: &std::path::Path) {
-        let Some(descent) = self.ui_state.pending_descents.remove(path) else {
+    pub(crate) fn finish_descent(&mut self, path: &std::path::Path, generation: u64) {
+        let Some(descent) = self.take_descent(path, generation) else {
             return;
         };
         if self.has_tab_for(path) {

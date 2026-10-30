@@ -819,3 +819,55 @@ fn an_unreadable_child_is_reported_and_opens_nothing() {
         Some(e.id) > since && e.message.contains("Failed to open project tree document")
     }));
 }
+
+#[test]
+fn a_stale_read_of_the_same_file_does_not_settle_the_new_descent() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let child = dir.path().join("sheet1.snxsch");
+    let from = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
+    app.document_state
+        .tab_placements
+        .record(&parent, Some(from.clone()));
+    // A first descent whose read is cancelled (Close All), then a second one.
+    let old_read = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    app.cancel_in_flight_reads();
+    let new_read = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+
+    // The old completion arrives first and must leave the new descent alone.
+    crate::app::path_ops::settle_task(&mut app, old_read);
+    assert!(
+        app.ui_state.pending_descents.contains_key(&child),
+        "the old completion settled the new descent"
+    );
+    crate::app::path_ops::settle_task(&mut app, new_read);
+
+    assert!(app.has_tab_for(&child));
+    assert_eq!(
+        app.document_state.tab_placements.get(&child),
+        Some(&from.child(id)),
+        "the new descent's placement is recorded"
+    );
+}
+
+#[test]
+fn closing_the_project_drops_its_pending_descents() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let _read = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    assert!(!app.ui_state.pending_descents.is_empty());
+
+    let project_id = app.document_state.projects[0].id;
+    let refs = app.resolve_sheet_refs_blocking().expect("sheet refs");
+    let _ = app.update(crate::app::Message::Project(
+        crate::app::ProjectMsg::CloseRefsResolved {
+            project_id,
+            result: Ok(refs),
+        },
+    ));
+    assert!(app.document_state.projects.is_empty(), "the project closed");
+
+    assert!(app.ui_state.pending_descents.is_empty());
+}
