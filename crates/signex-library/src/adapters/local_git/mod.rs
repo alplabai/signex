@@ -309,10 +309,15 @@ impl LocalGitAdapter {
 
     /// The commit of [`Self::recover_init`]: HEAD's tree plus the library's
     /// own files, on top of HEAD when there is one.
+    ///
+    /// `head_recreated` is true when this Re-init made `.git/HEAD` anew (it
+    /// was gone before `git init`): only then is the branch chosen for the
+    /// user. A HEAD that was there, even on an unborn orphan branch, stays.
     fn reinit_commit(
         repo: &git2::Repository,
         file_path: &Path,
         root_dir: &Path,
+        head_recreated: bool,
     ) -> Result<(), LibraryError> {
         let (sig_name, sig_email) = identity_for_repo(repo)?;
         let sig = git2::Signature::now(&sig_name, &sig_email)
@@ -320,26 +325,31 @@ impl LocalGitAdapter {
 
         // Built in memory from HEAD's tree (empty when unborn), so what the
         // user has staged in this repo is neither committed nor touched.
-        // The repo may only now be readable (a `.git/` that would not open
-        // before `git init` put it right): its history is checked here too.
-        reinit_tree::refuse_foreign_history(repo, file_path, root_dir)?;
-        let mut parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+        // A re-made HEAD points at `init.defaultBranch`, which may or may not
+        // exist. Whatever it resolves to, the documented priority picks the
+        // branch that tracks the library. The foreign-history check is skipped
+        // for it, as a tracking tip cannot be foreign; when none tracks, the
+        // check runs (the repo may only now be readable, after `git init`
+        // put a `.git/` right that would not open before).
+        let tracking = if head_recreated {
+            reinit_tree::tracking_branch(repo, file_path)?
+        } else {
+            None
         };
-        // A deleted `.git/HEAD` is re-made at the default branch, unborn. If
-        // a branch of the repo tracks this library, continue that one.
-        let mut branch_ref = None;
-        if parent.is_none()
-            && let Some((refname, tip)) = reinit_tree::tracking_branch(repo, file_path)?
-        {
-            branch_ref = Some(refname);
-            parent = Some(tip);
-        }
+        let (branch_ref, parent) = if let Some((refname, tip)) = tracking {
+            (Some(refname), Some(tip))
+        } else {
+            reinit_tree::refuse_foreign_history(repo, file_path, root_dir)?;
+            let parent = match repo.head() {
+                Ok(h) => h
+                    .peel_to_commit()
+                    .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
+                    .map(Some)?,
+                Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+                Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+            };
+            (None, parent)
+        };
         let snapshot = reinit_tree::library_tree(repo, file_path, root_dir, parent.as_ref())?;
         if let Some(refname) = &branch_ref {
             repo.set_head(refname)
@@ -411,12 +421,19 @@ impl LocalGitAdapter {
         // dialog is the gate; the adapter just does what it's asked.
         // Only a `.git/` this call makes is ever removed again: one that is
         // already there but will not open is the user's recoverable history.
-        let created_repo = fs::symlink_metadata(root_dir.join(".git")).is_err();
+        let git_meta = fs::symlink_metadata(root_dir.join(".git"));
+        let created_repo = git_meta.is_err();
+        // `git init` makes a missing `HEAD` anew; a present one is left alone.
+        let head_recreated = match &git_meta {
+            Ok(meta) if meta.is_dir() => fs::symlink_metadata(root_dir.join(".git/HEAD")).is_err(),
+            Ok(_) => false,
+            Err(_) => true,
+        };
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git re-init: {e}")))?;
         // A fresh, unborn `.git/` left by a refused Re-init would hide the
         // GitMissing recovery on the next open: take it away again.
-        Self::reinit_commit(&repo, &file_path, &root_dir).inspect_err(|_| {
+        Self::reinit_commit(&repo, &file_path, &root_dir, head_recreated).inspect_err(|_| {
             if created_repo && let Err(e) = fs::remove_dir_all(root_dir.join(".git")) {
                 tracing::warn!(
                     target: "signex::library",
