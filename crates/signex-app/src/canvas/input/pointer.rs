@@ -19,10 +19,27 @@ impl SchematicCanvas<'_> {
     /// Select, and Component with no part on the cursor, select instead.
     fn tool_places_on_click(&self) -> bool {
         use crate::app::Tool;
+        // Listed in full so a new tool has to pick a side here.
         match self.prefs.current_tool {
             Tool::Select => false,
             Tool::Component => self.ghost_symbol.is_some(),
-            _ => true,
+            Tool::Wire
+            | Tool::Bus
+            | Tool::Label
+            | Tool::Text
+            | Tool::NoConnect
+            | Tool::Junction
+            | Tool::NoErcDirective
+            | Tool::BusEntry
+            | Tool::Line
+            | Tool::Rectangle
+            | Tool::Circle
+            | Tool::Arc
+            | Tool::Polyline
+            | Tool::Sheet
+            | Tool::SheetEntry
+            | Tool::Measure
+            | Tool::BreakWire => true,
         }
     }
 

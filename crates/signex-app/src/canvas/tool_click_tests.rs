@@ -80,6 +80,12 @@ fn a_power_port_on_the_cursor_over_an_item_publishes_one_click() {
 }
 
 #[test]
+fn the_component_tool_without_a_part_still_selects_like_select() {
+    let messages = gesture_messages(Tool::Component, false);
+    assert_eq!(clicks(&messages), 2, "{messages:?}");
+}
+
+#[test]
 fn the_select_tool_still_defers_its_click_on_an_item_to_the_release() {
     let messages = gesture_messages(Tool::Select, false);
     assert_eq!(clicks(&messages), 2, "{messages:?}");
