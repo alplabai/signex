@@ -150,6 +150,19 @@ pub fn load_for_update_at(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String
         })
 }
 
+/// Serialises the read-modify-write of `global_libraries.toml` within this
+/// process: two concurrent `add_path`/`remove_path` calls would otherwise each
+/// load the same list and the later write would drop the earlier one's
+/// change. Guards file IO only and holds no app state, so a poisoned lock is
+/// recovered rather than propagated.
+static GLOBAL_LIST_IO: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn global_list_io() -> std::sync::MutexGuard<'static, ()> {
+    GLOBAL_LIST_IO
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Append a path to the global list and persist. Idempotent — already-
 /// present paths are skipped. Returns the resulting full list.
 pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
@@ -159,6 +172,7 @@ pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`add_path`] against an explicit prefs file.
 pub fn add_path_at(prefs: &Path, path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let _io = global_list_io();
     let mut current = load_for_update_at(prefs)?;
     if !current.iter().any(|e| e.path == path) {
         current.push(GlobalLibraryEntry {
@@ -192,6 +206,7 @@ pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`remove_path`] against an explicit prefs file.
 pub fn remove_path_at(prefs: &Path, path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let _io = global_list_io();
     let mut current = load_for_update_at(prefs)?;
     let before = current.len();
     current.retain(|e| e.path != path);
@@ -221,6 +236,23 @@ mod tests {
         let err = remove_path_at(&prefs, Path::new("/a.snxlib")).unwrap_err();
         assert!(err.contains("left unchanged"), "{err}");
         assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
+    }
+
+    /// Concurrent adds must all land: each used to load the same list and the
+    /// last writer dropped the others' entries.
+    #[test]
+    fn concurrent_adds_all_land() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        std::thread::scope(|scope| {
+            for n in 0..16 {
+                let prefs = &prefs;
+                scope.spawn(move || {
+                    add_path_at(prefs, PathBuf::from(format!("/lib{n}.snxlib"))).unwrap();
+                });
+            }
+        });
+        assert_eq!(load_at(&prefs).len(), 16);
     }
 
     #[test]
