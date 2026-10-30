@@ -73,9 +73,9 @@ pub enum PrefNav {
 impl PrefNav {
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Keyboard,
         PrefNav::Annotation,
         PrefNav::Editing,
-        PrefNav::Keyboard,
         PrefNav::RuleProfiles,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
@@ -914,3 +914,6 @@ fn discard_btn<'a>() -> Element<'a, PrefMsg> {
         .style(danger_button_style)
         .into()
 }
+
+#[cfg(test)]
+mod nav_tests;
