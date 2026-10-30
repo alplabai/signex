@@ -216,7 +216,7 @@ fn write_attempts_on_a_read_only_mount_explain_and_leave_disk_untouched() {
 /// writes and raises no card.
 #[test]
 fn the_same_attempts_on_an_ordinary_mount_write() {
-    let _notes = crate::library_new_component::new_row_notes_lock();
+    let _notes = crate::shared_locks::new_row_notes();
     let tmp = tempfile::Builder::new()
         .prefix("signex-329-rw-")
         .tempdir()
@@ -536,7 +536,7 @@ fn a_refused_write_is_logged_to_the_diagnostics_ring() {
 
 #[test]
 fn new_component_skips_a_read_only_library_and_uses_the_writable_one() {
-    let _notes = crate::library_new_component::new_row_notes_lock();
+    let _notes = crate::shared_locks::new_row_notes();
     let tmp = tempfile::Builder::new()
         .prefix("signex-329-newc-")
         .tempdir()

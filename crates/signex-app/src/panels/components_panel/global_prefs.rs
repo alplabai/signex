@@ -150,14 +150,15 @@ pub fn load_for_update_at(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String
         })
 }
 
-/// Serialises the read-modify-write of the list within this process: two
-/// concurrent `add_path`/`remove_path` calls (two background tasks, or two
-/// windows' worth of work) would otherwise each load the same list and the
-/// later write would drop the earlier one's change.
-static UPDATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Serialises the read-modify-write of `global_libraries.toml` within this
+/// process: two concurrent `add_path`/`remove_path` calls would otherwise each
+/// load the same list and the later write would drop the earlier one's
+/// change. Guards file IO only and holds no app state, so a poisoned lock is
+/// recovered rather than propagated.
+static GLOBAL_LIST_IO: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-fn update_lock() -> std::sync::MutexGuard<'static, ()> {
-    UPDATE_LOCK
+fn global_list_io() -> std::sync::MutexGuard<'static, ()> {
+    GLOBAL_LIST_IO
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -171,7 +172,7 @@ pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`add_path`] against an explicit prefs file.
 pub fn add_path_at(prefs: &Path, path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
-    let _update = update_lock();
+    let _io = global_list_io();
     let mut current = load_for_update_at(prefs)?;
     if !current.iter().any(|e| e.path == path) {
         current.push(GlobalLibraryEntry {
@@ -192,7 +193,7 @@ pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`remove_path`] against an explicit prefs file.
 pub fn remove_path_at(prefs: &Path, path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
-    let _update = update_lock();
+    let _io = global_list_io();
     let mut current = load_for_update_at(prefs)?;
     let before = current.len();
     current.retain(|e| e.path != path);

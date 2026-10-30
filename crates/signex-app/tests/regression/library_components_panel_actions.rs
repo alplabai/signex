@@ -134,25 +134,19 @@ fn mount_failure_is_surfaced_even_while_a_recovery_dialog_is_open() {
     );
 }
 
-/// Who may rely on the shared `global_libraries.toml` being a readable file:
-/// this file's test turns it into a directory, and the stock-copy tests
-/// restart an app that must read it back. Held by both for their whole body.
-pub(crate) static GLOBAL_LIST_FILE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 /// Makes `global_libraries.toml` unwritable by putting a directory where
 /// the file belongs; removed on drop so a failing assertion cannot leave
 /// the shared per-process config root poisoned for the other tests.
 struct UnwritableGlobalList {
     path: std::path::PathBuf,
-    // Declared last so it is released after `drop` has restored the file.
+    // `Drop::drop` runs before the fields are dropped, so the file is
+    // restored before this lock is released.
     _exclusive: std::sync::MutexGuard<'static, ()>,
 }
 
 impl UnwritableGlobalList {
     fn new() -> Self {
-        let exclusive = GLOBAL_LIST_FILE
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let exclusive = crate::shared_locks::global_list_file();
         let path = signex_app::panels::components_panel::global_prefs::prefs_path()
             .expect("the test redirect always resolves a config root");
         std::fs::create_dir_all(&path).expect("make global_libraries.toml a directory");

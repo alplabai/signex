@@ -21,12 +21,6 @@ use uuid::Uuid;
 
 use crate::library_place_symbol::run;
 
-/// The remembered target lives in the process-wide `prefs.json`, and the
-/// restart test reads the global library list back, so the tests of this file
-/// run one at a time and never while another test has made that list
-/// unwritable.
-use crate::library_components_panel_actions::GLOBAL_LIST_FILE as SERIAL;
-
 struct World {
     _serial: std::sync::MutexGuard<'static, ()>,
     tmp: TempDir,
@@ -73,7 +67,7 @@ fn new_library(path: &Path, name: &str) {
 }
 
 fn world() -> World {
-    let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let serial = crate::shared_locks::global_list_file();
     let tmp = TempDir::new().expect("tempdir");
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library");
     copy_dir(&source, &tmp.path().join("stock"));
