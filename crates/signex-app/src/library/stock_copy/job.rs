@@ -10,7 +10,7 @@ use signex_library::{
 };
 use uuid::Uuid;
 
-use crate::panels::components_panel::global_prefs::{self, GlobalLibraryEntry};
+use crate::panels::components_panel::global_prefs;
 
 use super::{CopyTarget, StockPrimitiveKind};
 use crate::library::state::NewLibraryDefaults;
@@ -55,9 +55,11 @@ pub struct StockCopyOutcome {
     pub reused: bool,
     /// The copy's file, or why there is none.
     pub result: Result<PathBuf, String>,
-    /// The global library list after registering a created library, so it
-    /// survives a restart; `None` when no library was created.
-    pub global_libraries: Option<Result<Vec<GlobalLibraryEntry>, String>>,
+    /// Whether registering a created library in `global_libraries.toml`
+    /// worked, so it survives a restart; `None` when no library was
+    /// created. Carries no list: the handler merges `library` into the
+    /// live list, which may have changed while the copy ran (#1758).
+    pub registered_global: Option<Result<(), String>>,
 }
 
 impl StockCopyJob {
@@ -71,7 +73,7 @@ impl StockCopyJob {
             created_library: false,
             reused: false,
             result: Err(String::new()),
-            global_libraries: None,
+            registered_global: None,
         };
         if matches!(self.target, CopyTarget::New(_)) {
             if let Err(e) =
@@ -81,7 +83,7 @@ impl StockCopyJob {
                 return outcome;
             }
             outcome.created_library = true;
-            outcome.global_libraries = Some(global_prefs::add_path(library.clone()));
+            outcome.registered_global = Some(global_prefs::add_path(library.clone()).map(|_| ()));
         }
         outcome.result = match self.copy() {
             Ok((path, reused)) => {
