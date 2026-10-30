@@ -316,6 +316,45 @@ mod tests {
         );
     }
 
+    /// #1757: the guarantee is an OS lock on the sidecar, not an in-process
+    /// mutex. A separate handle holding the sidecar (as another process
+    /// would) must block `add_path_at` until it is released.
+    #[test]
+    fn add_waits_for_a_foreign_holder_of_the_sidecar_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        let foreign = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(tmp.path().join("global_libraries.toml.lock"))
+            .unwrap();
+        foreign.lock().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let worker = {
+            let prefs = prefs.clone();
+            std::thread::spawn(move || {
+                let result = add_path_at(&prefs, PathBuf::from("/b.snxlib"));
+                done_tx.send(()).unwrap();
+                result
+            })
+        };
+        assert!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_millis(200))
+                .is_err(),
+            "add_path_at finished while another handle held the list lock"
+        );
+
+        foreign.unlock().unwrap();
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("add_path_at did not resume after the lock was released");
+        worker.join().unwrap().unwrap();
+        assert_eq!(load_at(&prefs).len(), 1);
+    }
+
     #[test]
     fn add_to_a_missing_file_creates_it() {
         let tmp = tempfile::tempdir().unwrap();
