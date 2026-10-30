@@ -29,12 +29,16 @@ use iced::{Color, Font, Pixels, Size};
 use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use iced_wgpu::wgpu;
-use signex_app::app::{ErcMsg, FileMsg, LoadedProject, Message, Signex, UiMsg};
-use signex_app::canvas::CanvasEvent;
+use signex_app::app::{
+    ErcMsg, FileMsg, LoadedProject, Message, PreferencesMsg, Signex, TabInfo, TabKind,
+};
+use signex_app::library::LibraryMessage;
+use signex_app::preferences::PrefMsg;
+use signex_app::canvas::{BoxDirection, CanvasEvent};
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
-    Graphic, HAlign, Junction, Label, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection,
-    PinShapeStyle, Point, SchematicSheet, Symbol, VAlign, Wire,
+    Graphic, HAlign, Label, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection,
+    PinShapeStyle, Point, SchematicSheet, Symbol, SymbolTransform, VAlign, Wire,
 };
 use signex_types::theme::ThemeId;
 use std::path::PathBuf;
@@ -201,118 +205,218 @@ fn sheet() -> SchematicSheet {
     sheet
 }
 
-/// A two-pin box symbol (`Device:<name>`), the stand-in for R and C.
-fn box_symbol(name: &str, reference: &str) -> LibSymbol {
-    let pin = |y: f64, rotation: f64, number: &str| LibPin {
-        unit: 0,
-        body_style: 1,
-        pin: Pin {
-            direction: PinDirection::Passive,
-            shape_style: PinShapeStyle::Plain,
-            position: Point::new(0.0, y),
-            rotation,
-            length: 2.54,
-            name: number.to_string(),
-            number: number.to_string(),
-            visible: true,
-            name_visible: false,
-            number_visible: false,
-        },
-    };
-    let mut lib: LibSymbol = serde_json::from_value(
-        serde_json::json!({ "id": format!("Device:{name}"), "reference": reference }),
-    )
-    .expect("lib symbol");
-    lib.graphics.push(LibGraphic {
-        unit: 0,
-        body_style: 1,
-        graphic: Graphic::Rectangle {
-            start: Point::new(-1.016, -2.54),
-            end: Point::new(1.016, 2.54),
-            width: 0.254,
-            fill: signex_types::schematic::FillType::None,
-        },
-    });
-    lib.pins.push(pin(5.08, 270.0, "1"));
-    lib.pins.push(pin(-5.08, 90.0, "2"));
-    lib
+/// The Stock library that ships with the app, mounted the way first run does.
+fn stock_file() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library/Stock.snxlib")
 }
 
-/// An RC divider: VIN -> R1 -> VOUT -> R2 -> GND, with C1 from VOUT to GND.
-fn readme_sheet() -> SchematicSheet {
-    let mut sheet = SchematicSheet {
-        paper_size: "A4".into(),
+/// Run a task and every task its messages spawn to completion.
+fn run_to_completion(app: &mut Signex, message: Message) {
+    settle_support::settle(app, message);
+}
+
+/// Place Stock part `internal_pn` at `at` through the Components panel's own
+/// message and a canvas click, so the symbol, library id, footprint and field
+/// placement are what a user gets.
+fn place_stock(app: &mut Signex, internal_pn: &str, at: (f64, f64)) {
+    let (_, row) = app
+        .library
+        .all_components()
+        .into_iter()
+        .find(|(_, c)| c.internal_pn.as_str() == internal_pn)
+        .unwrap_or_else(|| panic!("Stock lists {internal_pn}"));
+    let table = app
+        .library
+        .table_of_row(&stock_file(), row.row_id)
+        .expect("row table");
+    run_to_completion(
+        app,
+        Message::Library(LibraryMessage::ComponentsPanelPlace {
+            library_path: stock_file(),
+            table,
+            row_id: signex_library::RowId(row.row_id),
+        }),
+    );
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+        world_x: at.0,
+        world_y: at.1,
+    }));
+}
+
+/// Place the sensor-node parts from Stock on a scratch sheet and return it.
+fn placed_parts() -> SchematicSheet {
+    let path = PathBuf::from("scratch.snxsch");
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        paper_size: "A4".to_string(),
         ..Default::default()
     };
-    for (name, reference) in [("R", "R"), ("C", "C")] {
-        let lib = box_symbol(name, reference);
-        sheet.lib_symbols.insert(lib.id.clone(), lib);
+    let (mut app, _task) = Signex::new();
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new(sheet).expect("engine"),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "scratch".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path);
+    app.library.stock_library_root = Some(stock_file());
+    app.library
+        .open_library_read_only(stock_file())
+        .expect("mount stock");
+    for (pn, at, _, _) in PARTS {
+        place_stock(&mut app, pn, *at);
     }
-    let part = |lib_id: &str, reference: &str, value: &str, x: f64, y: f64| Symbol {
-        uuid: uuid::Uuid::nil(),
-        lib_id: lib_id.into(),
-        reference: reference.into(),
-        value: value.into(),
-        position: Point::new(x, y),
-        ..Symbol::default()
-    };
-    sheet
-        .symbols
-        .push(part("Device:R", "R1", "10k", 100.0, 80.0));
-    sheet
-        .symbols
-        .push(part("Device:R", "R2", "4.7k", 100.0, 110.0));
-    sheet
-        .symbols
-        .push(part("Device:C", "C1", "100n", 130.0, 110.0));
-    let wire = |x1: f64, y1: f64, x2: f64, y2: f64| Wire {
-        uuid: uuid::Uuid::nil(),
-        start: Point::new(x1, y1),
-        end: Point::new(x2, y2),
-        stroke_width: 0.0,
-        unknown_columns: Default::default(),
-        locked: false,
-    };
-    // R1 spans y 74.92..85.08, R2 and C1 span y 104.92..115.08.
-    for (x1, y1, x2, y2) in [
-        (80.0, 74.92, 100.0, 74.92),
-        (100.0, 85.08, 100.0, 104.92),
-        (100.0, 95.0, 130.0, 95.0),
-        (130.0, 95.0, 130.0, 104.92),
-        (150.0, 95.0, 130.0, 95.0),
-        (100.0, 115.08, 100.0, 130.0),
-        (130.0, 115.08, 130.0, 130.0),
-        (100.0, 130.0, 130.0, 130.0),
-        (100.0, 130.0, 80.0, 130.0),
-    ] {
-        sheet.wires.push(wire(x1, y1, x2, y2));
+    app.document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .clone()
+}
+
+/// (Stock part, position, value, footprint, offset of the designator field,
+/// offset of the value field), positions in mm.
+type Part = (&'static str, (f64, f64), &'static str, &'static str);
+
+const PARTS: &[Part] = &[
+    ("STOCK-Conn_1x04", (60.96, 101.6), "I2C", "Header-1x04-2.54mm"),
+    ("STOCK-R", (88.9, 71.12), "10k", "Chip-0805"),
+    ("STOCK-R", (104.14, 71.12), "10k", "Chip-0805"),
+    ("STOCK-IC_Generic", (127.0, 101.6), "MCU", "SOIC-8"),
+    ("STOCK-C", (88.9, 134.62), "100n", "Chip-0805"),
+    ("STOCK-C", (104.14, 134.62), "10u", "Chip-0805"),
+];
+
+/// Where a symbol's designator and value sit, as `(dx, dy)` from its origin:
+/// beside the body for the two-pin parts, above and below it otherwise.
+fn field_offsets(lib_id: &str, sheet: &SchematicSheet, reference: &str) -> ((f64, f64), (f64, f64)) {
+    let _ = (lib_id, sheet);
+    match reference.chars().next() {
+        Some('R' | 'C') => ((2.8, -1.4), (2.8, 1.6)),
+        Some('J') => ((-1.5, -6.5), (-1.5, 7.0)),
+        _ => ((-7.6, -8.5), (-7.6, 9.0)),
     }
-    for (x, y) in [(100.0, 95.0), (130.0, 95.0), (100.0, 130.0)] {
-        sheet.junctions.push(Junction {
-            uuid: uuid::Uuid::nil(),
-            position: Point::new(x, y),
-            diameter: 0.0,
-            minted: false,
+}
+
+fn field_text(position: Point) -> signex_types::schematic::TextProp {
+    signex_types::schematic::TextProp {
+        position,
+        rotation: 0.0,
+        font_size: 1.7,
+        font_family: None,
+        justify_h: HAlign::Left,
+        justify_v: VAlign::Center,
+        hidden: false,
+    }
+}
+
+/// The Stock part name behind a designator.
+fn part_name(reference: &str) -> &'static str {
+    match reference.chars().next() {
+        Some('R') => "R",
+        Some('C') => "C",
+        Some('J') => "Conn_1x04",
+        _ => "IC_Generic",
+    }
+}
+
+/// The sensor node: an I2C header, two pull-ups, a small MCU and decoupling,
+/// placed from Stock and wired with net labels.
+fn readme_sheet() -> SchematicSheet {
+    let mut sheet = placed_parts();
+    let mut tips = std::collections::HashMap::new();
+    for (sym, (_, _, value, footprint)) in sheet.symbols.iter_mut().zip(PARTS) {
+        // Stock lists parts by library uuid; show the readable `Stock:<part>` id.
+        let readable = format!("Stock:{}", part_name(&sym.reference));
+        if let Some(mut lib) = sheet.lib_symbols.remove(&sym.lib_id) {
+            lib.id = readable.clone();
+            sheet.lib_symbols.insert(readable.clone(), lib);
+        }
+        sym.lib_id = readable;
+        sym.value = (*value).into();
+        sym.footprint = (*footprint).into();
+        sym.fields_user_placed = true;
+        let (r, v) = field_offsets(&sym.lib_id, &SchematicSheet::default(), &sym.reference);
+        let at = sym.position;
+        sym.ref_text = Some(field_text(Point::new(at.x + r.0, at.y + r.1)));
+        sym.val_text = Some(field_text(Point::new(at.x + v.0, at.y + v.1)));
+    }
+    for sym in &sheet.symbols {
+        let xform = SymbolTransform::from_symbol(sym);
+        let lib = sheet.lib_symbols.get(&sym.lib_id).expect("lib");
+        for p in &lib.pins {
+            let tip = xform.apply(p.pin.position);
+            tips.insert((sym.reference.clone(), p.pin.number.clone()), (tip.x, tip.y));
+        }
+    }
+    let tip = |reference: &str, pin: &str| tips[&(reference.to_string(), pin.to_string())];
+    let mut wire = |a: (f64, f64), b: (f64, f64)| {
+        sheet.wires.push(Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(a.0, a.1),
+            end: Point::new(b.0, b.1),
+            stroke_width: 0.0,
             unknown_columns: Default::default(),
+            locked: false,
+        });
+    };
+    // Header and MCU left pins run out to a net label.
+    let mut labels: Vec<(&str, (f64, f64), HAlign)> = Vec::new();
+    for (pin, net) in [("1", "3V3"), ("2", "SDA"), ("3", "SCL"), ("4", "GND")] {
+        let t = tip("J1", pin);
+        wire(t, (t.0 - 10.16, t.1));
+        labels.push((net, (t.0 - 10.16, t.1), HAlign::Right));
+    }
+    for (pin, net) in [("1", "3V3"), ("2", "SDA"), ("3", "SCL"), ("4", "GND")] {
+        let t = tip("U1", pin);
+        wire(t, (t.0 - 10.16, t.1));
+        labels.push((net, (t.0 - 10.16, t.1), HAlign::Right));
+    }
+    for (pin, net) in [("8", "GPIO0"), ("7", "GPIO1"), ("6", "GPIO2"), ("5", "GPIO3")] {
+        let t = tip("U1", pin);
+        wire(t, (t.0 + 10.16, t.1));
+        labels.push((net, (t.0 + 10.16, t.1), HAlign::Left));
+    }
+    // 3V3 rail over the pull-ups, SDA / SCL out of their lower pins.
+    let (r1_top, r2_top) = (tip("R1", "1"), tip("R2", "1"));
+    wire(r1_top, (r1_top.0, 58.42));
+    wire((r1_top.0, 58.42), (r2_top.0, 58.42));
+    wire(r2_top, (r2_top.0, 58.42));
+    labels.push(("3V3", (96.52, 58.42), HAlign::Center));
+    for (r, net) in [("R1", "SDA"), ("R2", "SCL")] {
+        let t = tip(r, "2");
+        wire(t, (t.0, t.1 + 7.62));
+        labels.push((net, (t.0, t.1 + 7.62), HAlign::Left));
+    }
+    // Decoupling between 3V3 and GND.
+    for c in ["C1", "C2"] {
+        let (top, bottom) = (tip(c, "1"), tip(c, "2"));
+        wire(top, (top.0, top.1 - 7.62));
+        labels.push(("3V3", (top.0, top.1 - 7.62), HAlign::Left));
+        wire(bottom, (bottom.0, bottom.1 + 7.62));
+        labels.push(("GND", (bottom.0, bottom.1 + 7.62), HAlign::Left));
+    }
+    for (text, at, justify) in labels {
+        sheet.labels.push(Label {
+            uuid: uuid::Uuid::now_v7(),
+            text: text.into(),
+            position: Point::new(at.0, at.1),
+            rotation: 0.0,
+            label_type: LabelType::Net,
+            shape: String::new(),
+            font_size: 1.7,
+            font_family: None,
+            justify,
+            justify_v: VAlign::Bottom,
+            unknown_columns: Default::default(),
+            locked: false,
         });
     }
-    let label = |text: &str, x: f64, y: f64, justify: HAlign| Label {
-        uuid: uuid::Uuid::nil(),
-        text: text.into(),
-        position: Point::new(x, y),
-        rotation: 0.0,
-        label_type: LabelType::Net,
-        shape: String::new(),
-        font_size: 1.27,
-        font_family: None,
-        justify,
-        justify_v: VAlign::Bottom,
-        unknown_columns: Default::default(),
-        locked: false,
-    };
-    sheet.labels.push(label("VIN", 80.0, 74.92, HAlign::Right));
-    sheet.labels.push(label("VOUT", 150.0, 95.0, HAlign::Left));
-    sheet.labels.push(label("GND", 80.0, 130.0, HAlign::Right));
     sheet
 }
 
@@ -390,13 +494,27 @@ fn render_readme_screenshots() {
         result: Ok(Box::new(readme_sheet())),
     }));
     let _ = draw(&mut renderer, &app);
-    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
+    // Frame the circuit rather than the whole A4 page: select it, fit the
+    // selection, then click empty sheet to deselect.
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::BoxSelect {
+        x1: 30.0,
+        y1: 45.0,
+        x2: 165.0,
+        y2: 155.0,
+        direction: BoxDirection::LeftToRight,
+    }));
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitSelection));
+    let _ = draw(&mut renderer, &app);
+    let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
+        world_x: 20.0,
+        world_y: 20.0,
+    }));
 
     shoot(&mut renderer, &app, "hero.png");
     // Select R1 so the Properties panel shows a component, as `editor.png` does.
     let _ = app.update(Message::CanvasEvent(CanvasEvent::Clicked {
-        world_x: 100.0,
-        world_y: 80.0,
+        world_x: 88.9,
+        world_y: 71.12,
     }));
     for (theme, name) in [
         (ThemeId::Signex, "editor.png"),
@@ -404,16 +522,11 @@ fn render_readme_screenshots() {
         (ThemeId::GitHubDark, "github-dark-theme.png"),
         (ThemeId::SolarizedLight, "solarized-theme.png"),
     ] {
-        let _ = app.update(Message::Ui(UiMsg::ThemeChanged(theme)));
-        // The chrome reads its tokens from the panel context and the canvas
-        // its colours from the draft theme; the Preferences dialog moves both
-        // on a theme pick, so mirror that here.
-        app.ui_state.preferences_draft_theme = theme;
-        // Toggling the grid twice drops the cached background layer (paper
-        // and grid), which a theme pick through Preferences also repaints.
-        let _ = app.update(Message::Ui(UiMsg::GridToggle));
-        let _ = app.update(Message::Ui(UiMsg::GridToggle));
-        app.document_state.panel_ctx.tokens = signex_types::theme::theme_tokens(theme);
+        // Pick the theme the way Preferences does: draft it, then save.
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+            PrefMsg::DraftTheme(theme),
+        )));
+        let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
         let _ = draw(&mut renderer, &app);
         shoot(&mut renderer, &app, name);
     }
