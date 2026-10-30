@@ -14,7 +14,7 @@ fn rename_from_tab(app: &mut signex_app::app::Signex, stem: &str) {
         ProjectTabMsg::RenameRequested { project_id },
     )));
     let _ = app.update(Message::Rename(RenameMsg::BufferChanged(stem.to_string())));
-    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    crate::settle_support::settle(app, Message::Rename(RenameMsg::Submit));
 }
 
 /// File names in the project folder, as the volume spells them.

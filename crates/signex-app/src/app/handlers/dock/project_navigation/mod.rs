@@ -35,6 +35,8 @@ mod open_document;
 #[cfg(test)]
 mod path_op_guard_tests;
 mod project_actions;
+#[cfg(test)]
+mod project_file_rename_tests;
 mod project_rename;
 #[cfg(test)]
 mod project_rename_failing_move_tests;
