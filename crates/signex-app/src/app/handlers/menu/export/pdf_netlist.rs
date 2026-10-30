@@ -48,7 +48,7 @@ impl Signex {
             match super::build_page_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.report_export_failure(format!(
+                    self.refuse_export(format!(
                         "PDF export refused: the source document {} is no longer open.",
                         source.display()
                     ));
@@ -81,7 +81,7 @@ impl Signex {
                 .retain(|s| files.contains(&(s.path.clone(), s.placement.clone())));
         }
         if ctx.sheets.is_empty() {
-            self.report_export_failure("Cannot export PDF: no files selected in the Settings tab.");
+            self.refuse_export("Cannot export PDF: no files selected in the Settings tab.");
             return Task::none();
         }
         // Apply the variant override the user picked in the modal.
@@ -166,7 +166,7 @@ impl Signex {
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {
-            self.report_export_failure(refusal);
+            self.refuse_export(refusal);
             return Task::none();
         }
 

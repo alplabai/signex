@@ -530,20 +530,58 @@ impl PrintPreviewMsg {
     /// keep it; any change to the pages, files or options replaces it by the
     /// page count again.
     pub fn keeps_export_status(&self) -> bool {
-        matches!(
-            self,
+        match self {
             Self::Requested
-                | Self::Rasterized { .. }
-                | Self::PagesRasterized { .. }
-                | Self::RasterFailed { .. }
-                | Self::SelectPage(_)
-                | Self::Zoom(_)
-                | Self::Export
-                | Self::Close
-                | Self::SetTab(_)
-                | Self::PanStart
-                | Self::PanFinished
-        )
+            | Self::Rasterized { .. }
+            | Self::PagesRasterized { .. }
+            | Self::RasterFailed { .. }
+            | Self::SelectPage(..)
+            | Self::Zoom(..)
+            | Self::Export
+            | Self::Close
+            | Self::SetTab(..)
+            | Self::PanStart
+            | Self::PanFinished => true,
+            Self::SetColourMode(..)
+            | Self::SetPageRangeAll
+            | Self::SetPageRangeCurrent
+            | Self::SetPageRangeSpecific
+            | Self::SetSpecificPageInput(..)
+            | Self::SetPageSize(..)
+            | Self::SetOrientation(..)
+            | Self::SetCustomWidth(..)
+            | Self::SetCustomHeight(..)
+            | Self::SetMargin(..)
+            | Self::SetScaleMode(..)
+            | Self::SetScalePercent(..)
+            | Self::SetIncludeTitleBlock(..)
+            | Self::ToggleFile(..)
+            | Self::SelectAllFiles
+            | Self::ClearAllFiles
+            | Self::SetVariant(..)
+            | Self::SetUsePhysicalStructure(..)
+            | Self::SetPhysicalDesignators(..)
+            | Self::SetPhysicalNetLabels(..)
+            | Self::SetPhysicalPorts(..)
+            | Self::SetPhysicalSheetNumber(..)
+            | Self::SetPhysicalDocumentNumber(..)
+            | Self::SetIncludeNoErcMarkers(..)
+            | Self::SetIncludeNoConnectMarkers(..)
+            | Self::SetIncludeParameterSets(..)
+            | Self::SetIncludeProbes(..)
+            | Self::SetIncludeBlankets(..)
+            | Self::SetIncludeNotes(..)
+            | Self::SetIncludeCollapsedNotes(..)
+            | Self::SetQuality(..)
+            | Self::SetBookmarkZoom(..)
+            | Self::SetGenerateNetsInfo(..)
+            | Self::SetBookmarkPins(..)
+            | Self::SetBookmarkNetLabels(..)
+            | Self::SetBookmarkPorts(..)
+            | Self::SetIncludeComponentParameters(..)
+            | Self::SetGlobalBookmarks(..)
+            | Self::SetPcbColourMode(..) => false,
+        }
     }
 }
 

@@ -43,7 +43,7 @@ impl Signex {
             ..BomOptions::default()
         };
         let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
-            self.report_export_failure("Cannot build BOM: no active schematic.");
+            self.refuse_export("Cannot build BOM: no active schematic.");
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -330,7 +330,7 @@ impl Signex {
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    self.report_export_failure(format!(
+                    self.refuse_export(format!(
                         "Cannot export BOM: the source document {} is no longer open.",
                         source.display()
                     ));

@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::app::Signex;
+use crate::app::state::scope::{CaseFold, path_is_under};
 
 /// Folder and file stem a save panel for a project output opens with.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -99,10 +100,40 @@ impl SaveTarget {
 /// config folder (the bundled Sample Project lives there): such a folder is
 /// not the user's, so the OS picks the start folder instead.
 fn user_folder(dir: &Path) -> Option<&Path> {
+    let root = crate::config_root::config_root().map(resolved);
+    user_folder_under(dir, root.as_deref())
+}
+
+/// `path` with symlinks resolved: its deepest existing ancestor is
+/// canonicalised and the part that does not exist (yet) is kept as given.
+fn resolved(path: PathBuf) -> PathBuf {
+    let mut missing = Vec::new();
+    let mut existing = path.as_path();
+    loop {
+        if let Ok(real) = existing.canonicalize() {
+            return missing.iter().rev().fold(real, |acc, part| acc.join(part));
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name.to_os_string());
+                existing = parent;
+            }
+            _ => return path,
+        }
+    }
+}
+
+/// [`user_folder`] against an already resolved `config_root`. Both sides are
+/// compared resolved: a recent-projects entry or an Open panel hands back the
+/// resolved spelling (`/private/var/…` for `/var/…`), not the one the config
+/// root was built from.
+fn user_folder_under<'a>(dir: &'a Path, config_root: Option<&Path>) -> Option<&'a Path> {
     if dir.as_os_str().is_empty() {
         return None;
     }
-    let in_config = crate::config_root::config_root().is_some_and(|root| dir.starts_with(root));
+    let in_config = config_root.is_some_and(|root| {
+        path_is_under(&resolved(dir.to_path_buf()), root, CaseFold::host_default())
+    });
     (!in_config).then_some(dir)
 }
 
@@ -213,5 +244,41 @@ mod tests {
     fn save_as_of_a_loose_document_starts_in_its_folder_too() {
         let target = SaveTarget::new(None, Some(&p("/tmp/loose.snxsch")));
         assert_eq!(target.save_as_dir(), Some(Path::new("/tmp")));
+    }
+
+    #[test]
+    fn the_canonical_spelling_of_the_config_folder_is_still_the_config_folder() {
+        let root = crate::config_root::config_root().expect("config root");
+        std::fs::create_dir_all(&root).unwrap();
+        let canonical = root.canonicalize().unwrap();
+        let project = canonical.join("samples/linear-regulator/linear-regulator.snxprj");
+        let target = SaveTarget::new(Some(&project), None);
+        assert_eq!(target.dir(), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_config_folder_is_still_the_config_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("real");
+        std::fs::create_dir_all(real.join("samples/s")).unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let via_real = real.join("samples/s");
+        let via_link = link.join("samples/s");
+        assert_eq!(
+            user_folder_under(&via_real, Some(&link.canonicalize().unwrap())),
+            None
+        );
+        assert_eq!(
+            user_folder_under(&via_link, Some(&real.canonicalize().unwrap())),
+            None
+        );
+        let elsewhere = tmp.path().join("projects");
+        assert_eq!(
+            user_folder_under(&elsewhere, Some(&link.canonicalize().unwrap())),
+            Some(elsewhere.as_path())
+        );
     }
 }

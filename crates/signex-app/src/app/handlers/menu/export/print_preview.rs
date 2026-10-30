@@ -241,7 +241,7 @@ impl Signex {
                     let page = match parsed {
                         Some(p) if p > 0 => p,
                         _ => {
-                            self.report_export_failure(
+                            self.refuse_export(
                                 "Specific page must be a positive page number (1, 2, 3, ...).",
                             );
                             return Some(Task::none());
@@ -250,7 +250,7 @@ impl Signex {
                     options.page_range = PageRange::Specific(vec![page]);
                 }
                 if preview.selected_files.is_empty() {
-                    self.report_export_failure(
+                    self.refuse_export(
                         "Select at least one file in the Settings tab before exporting.",
                     );
                     return Some(Task::none());

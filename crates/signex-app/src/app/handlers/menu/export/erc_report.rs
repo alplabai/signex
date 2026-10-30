@@ -136,7 +136,7 @@ fn build_and_write_erc_report(
         .map_err(|e| format!("ERC report export failed: {e}"))
         .and_then(|output| {
             signex_types::atomic_io::atomic_write(path, &output.bytes)
-                .map_err(|e| format!("Could not write ERC report to {}:\n{e}", path.display()))
+                .map_err(|e| format!("{e}: could not write ERC report to {}", path.display()))
         });
     ExportWriteOutcome {
         path: path.to_path_buf(),
@@ -187,7 +187,7 @@ impl Signex {
     }
 
     fn refuse_erc_report_before_run(&mut self) {
-        self.report_export_failure(format!(
+        self.refuse_export(format!(
             "Cannot export the ERC report: ERC has not been run. \
                  Run ERC ({}) first, then export.",
             crate::menu_bar::run_erc_menu_path()

@@ -57,14 +57,18 @@ fn logged(needle: &str) -> bool {
 
 #[test]
 fn a_written_pdf_is_confirmed_with_its_full_path_and_logged() {
-    let _ = crate::diagnostics::init_logging();
+    let needle = "Wrote /work/amp/logged-once-1766.pdf";
+    let before = crate::diagnostics::logged_count(needle);
     let mut app = open_preview(DIR);
     let src = source(&app);
-    let _ = app.handle_export_written(outcome("/work/amp/amp.pdf", Some(src), Ok(())));
+    let _ = app.handle_export_written(outcome("/work/amp/logged-once-1766.pdf", Some(src), Ok(())));
 
     let line = status(&app).expect("the Export window shows a status line");
-    assert!(line.contains("/work/amp/amp.pdf"), "got {line:?}");
-    assert!(logged("Wrote /work/amp/amp.pdf"));
+    assert!(
+        line.contains("/work/amp/logged-once-1766.pdf"),
+        "got {line:?}"
+    );
+    assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
 }
 
 #[test]
@@ -220,4 +224,25 @@ fn the_save_target_follows_the_source_documents_project_among_several() {
     assert_eq!(target.file_name("schematic", "", "pdf"), "ProjectB.pdf");
     let active = app.save_target(Some(Path::new("/w/proj_a/top.snxsch")));
     assert_eq!(active.dir(), Some(Path::new("/w/proj_a")));
+}
+
+fn level_of(needle: &str) -> Option<crate::diagnostics::DiagnosticLevel> {
+    crate::diagnostics::recent_entries()
+        .into_iter()
+        .rev()
+        .find(|e| e.message.contains(needle))
+        .map(|e| e.level)
+}
+
+#[test]
+fn a_refusal_logs_a_warning_and_a_real_failure_logs_an_error_without_a_prefix() {
+    use crate::diagnostics::DiagnosticLevel;
+    let _ = crate::diagnostics::init_logging();
+    let mut app = open_preview(DIR);
+    app.refuse_export("Select something 1766-refusal");
+    app.report_export_failure("BOM export failed: 1766-failure");
+
+    assert_eq!(level_of("1766-refusal"), Some(DiagnosticLevel::Warning));
+    assert_eq!(level_of("1766-failure"), Some(DiagnosticLevel::Error));
+    assert!(!logged("Export failed: BOM export failed"));
 }

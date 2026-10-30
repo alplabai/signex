@@ -25,7 +25,7 @@ fn write_export_task(
             let target = path.clone();
             let result = tokio::task::spawn_blocking(move || {
                 signex_types::atomic_io::atomic_write(&path, &bytes)
-                    .map_err(|e| format!("Could not write {what} to {}:\n{e}", path.display()))
+                    .map_err(|e| format!("{e}: could not write {what} to {}", path.display()))
             })
             .await
             .unwrap_or_else(|e| Err(format!("Could not write {what}: {e}")));
@@ -97,7 +97,7 @@ fn build_and_write_pdf(
         output.bytes.len(),
     );
     let result = signex_types::atomic_io::atomic_write(path, &output.bytes)
-        .map_err(|e| format!("Could not write PDF to {}:\n{e}", path.display()));
+        .map_err(|e| format!("{e}: could not write PDF to {}", path.display()));
     ExportWriteOutcome {
         path: path.to_path_buf(),
         result,
@@ -198,12 +198,21 @@ impl Signex {
         export_pdf_task(ctx, options, path, source)
     }
 
-    /// An export could not be produced: the notice card plus a Messages-panel
-    /// line, so the failure outlives the card.
+    /// An export failed for real (building or writing the file): the notice
+    /// card plus an error line in the Messages panel, so the failure outlives
+    /// the card.
     pub(crate) fn report_export_failure(&mut self, detail: impl Into<String>) {
         let detail = detail.into();
-        crate::diagnostics::log_error("Export failed", &anyhow::anyhow!(detail.clone()));
+        log::error!("{detail}");
         self.document_state.error_notice = Some(ErrorNotice::export(detail));
+    }
+
+    /// An export was refused up front (a precondition or an input of the
+    /// user's): the notice card plus a warning line in the Messages panel.
+    pub(crate) fn refuse_export(&mut self, reason: impl Into<String>) {
+        let reason = reason.into();
+        crate::diagnostics::log_warning(&reason);
+        self.document_state.error_notice = Some(ErrorNotice::export(reason));
     }
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
