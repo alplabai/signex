@@ -204,7 +204,7 @@ pub enum MenuMessage {
     AnnotateBack,
     AnnotateSheets,
     Erc,
-    /// Design ▸ Parameter Manager... - the project parameter table.
+    /// Design ▸ Parameter Manager... - the active sheet's parameter table.
     OpenParameterManager,
     ToggleAutoFocus,
     // Tools
