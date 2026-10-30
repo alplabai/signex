@@ -222,3 +222,65 @@ fn recover_init_refuses_a_repo_that_does_not_track_the_library() {
     assert!(!head_tracks(tmp.path(), "staged.txt"));
     assert!(!head_tracks(tmp.path(), "lib.snxlib"));
 }
+
+fn stage(dir: &Path, name: &str) {
+    std::fs::write(dir.join(name), "staged by the user").unwrap();
+    let repo = Repository::open(dir).unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new(name)).unwrap();
+    index.write().unwrap();
+}
+
+fn index_has(dir: &Path, name: &str) -> bool {
+    let repo = Repository::open(dir).unwrap();
+    let index = repo.index().unwrap();
+    index.get_path(Path::new(name), 0).is_some()
+}
+
+/// #1741: a half-made repo (unborn HEAD) whose user staged a project file:
+/// Re-init commits the library, not what was staged, and leaves it staged.
+#[test]
+fn recover_init_on_an_unborn_repo_leaves_staged_work_out() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    Repository::init(tmp.path()).unwrap();
+    stage(tmp.path(), "demo.snxprj");
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "lib.snxlib"));
+    assert!(!head_tracks(tmp.path(), "demo.snxprj"));
+    assert!(index_has(tmp.path(), "demo.snxprj"), "still staged");
+}
+
+/// #1741: the library is tracked by a project repo (default layout), the user
+/// has staged a project file, a primitive was deleted and a project `models/`
+/// folder sits beside the library.
+#[test]
+fn recover_init_in_a_tracking_repo_commits_library_changes_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/keep.snxsym"), "k").unwrap();
+    std::fs::write(tmp.path().join("symbols/gone.snxsym"), "g").unwrap();
+    LocalGitAdapter::recover_init(&lib).expect("first re-init");
+    assert!(head_tracks(tmp.path(), "symbols/gone.snxsym"));
+
+    std::fs::remove_file(tmp.path().join("symbols/gone.snxsym")).unwrap();
+    std::fs::write(tmp.path().join("symbols/new.snxsym"), "n").unwrap();
+    std::fs::create_dir_all(tmp.path().join("models")).unwrap();
+    std::fs::write(tmp.path().join("models/part.step"), "project model").unwrap();
+    stage(tmp.path(), "demo.snxprj");
+    let before = head(tmp.path());
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert_ne!(head(tmp.path()), before, "a new commit");
+    assert!(!head_tracks(tmp.path(), "demo.snxprj"));
+    assert!(!head_tracks(tmp.path(), "models/part.step"));
+    assert!(!head_tracks(tmp.path(), "symbols/gone.snxsym"), "deleted");
+    assert!(head_tracks(tmp.path(), "symbols/keep.snxsym"));
+    assert!(head_tracks(tmp.path(), "symbols/new.snxsym"));
+    assert!(index_has(tmp.path(), "demo.snxprj"), "still staged");
+    assert!(!index_has(tmp.path(), "symbols/gone.snxsym"));
+}

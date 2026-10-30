@@ -190,8 +190,8 @@ pub(super) fn handle_git_reinit_finished(
                 error = %reason,
                 "git recover-init failed"
             );
-            // Say it in Messages too, so a refusal (another repo's history,
-            // #1741) is not only in the dialog.
+            // Messages as well as the dialog: every recover-init failure is
+            // logged here, a refusal (another repo's history, #1741) too.
             crate::diagnostics::log_warning(format!(
                 "Re-init of {} failed: {reason}",
                 path.display()

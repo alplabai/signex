@@ -54,7 +54,6 @@ use crate::tables::{
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
 const SIMS_DIR: &str = "sims";
-const MODELS_DIR: &str = "models";
 const SYMBOL_EXT: &str = "snxsym";
 const FOOTPRINT_EXT: &str = "snxfpt";
 const SIM_EXT: &str = "snxsim";
@@ -239,7 +238,7 @@ impl LocalGitAdapter {
         let root_dir = parent_dir(&file_path)?;
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
-        let head = refuse_foreign_history(&repo, &file_path, &root_dir)?;
+        let head = reinit_tree::refuse_foreign_history(&repo, &file_path, &root_dir)?;
         let wrote_attributes = opts.use_lfs && ensure_lfs_attributes(&root_dir)?;
         match &head {
             None => commit_initial(&repo, &file_path, opts.use_lfs, None),
@@ -334,7 +333,7 @@ impl LocalGitAdapter {
         // Another repo's history is never written into: refuse before
         // `git init` or any staging touches the folder (#1741).
         if let Ok(existing) = git2::Repository::open(&root_dir) {
-            refuse_foreign_history(&existing, &file_path, &root_dir)?;
+            reinit_tree::refuse_foreign_history(&existing, &file_path, &root_dir)?;
         }
 
         // `git2::Repository::init` is idempotent on an already-init'd
@@ -347,28 +346,8 @@ impl LocalGitAdapter {
         let sig = git2::Signature::now(&sig_name, &sig_email)
             .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
 
-        let mut index = repo
-            .index()
-            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
-        stage_library_files(&mut index, &file_path, &root_dir)?;
-        if lfs::convert_index(&repo, &mut index)
-            .map_err(|e| LibraryError::Backend(format!("git lfs: {e}")))?
-            > 0
-        {
-            lfs::install_pre_push_hook(&repo)
-                .map_err(|e| LibraryError::Backend(format!("git lfs hook: {e}")))?;
-        }
-        index
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
-        let tree_oid = index
-            .write_tree()
-            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
-        let tree = repo
-            .find_tree(tree_oid)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-        // Use the existing HEAD commit as parent if any — a re-init
-        // case keeps prior history intact under the rewritten ref.
+        // Built in memory from HEAD's tree (empty when unborn), so what the
+        // user has staged in this repo is neither committed nor touched.
         let parent = match repo.head() {
             Ok(h) => h
                 .peel_to_commit()
@@ -377,6 +356,10 @@ impl LocalGitAdapter {
             Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
             Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
         };
+        let snapshot = reinit_tree::library_tree(&repo, &file_path, &root_dir, parent.as_ref())?;
+        let tree = repo
+            .find_tree(snapshot.tree)
+            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
         let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
         repo.commit(
             Some("HEAD"),
@@ -387,6 +370,7 @@ impl LocalGitAdapter {
             &parents,
         )
         .map_err(|e| LibraryError::Backend(format!("git recover commit: {e}")))?;
+        reinit_tree::record_in_index(&repo, &snapshot)?;
 
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
@@ -460,6 +444,7 @@ pub use write_lock::{
 };
 mod helpers;
 mod ignore_rules;
+mod reinit_tree;
 pub use helpers::component_to_library_row;
 #[cfg(test)]
 mod ledger_hygiene_tests;
