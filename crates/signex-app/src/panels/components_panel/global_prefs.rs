@@ -151,6 +151,11 @@ pub fn load_for_update_at(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String
 /// The sidecar is never replaced or deleted. `File::lock` is advisory
 /// `flock` on Unix and `LockFileEx` on Windows; it is released when the
 /// handle drops, including if the process crashes.
+///
+/// One lock for both cases, so there is no separate in-process mutex: every
+/// call opens its own `File`, and `flock` (per open file description) and
+/// `LockFileEx` (per handle) both make separate handles in the same process
+/// exclude each other, exactly as they do across processes.
 fn with_list_lock<T>(
     prefs: &Path,
     update: impl FnOnce() -> Result<T, String>,
@@ -247,6 +252,23 @@ mod tests {
         let err = remove_path_at(&prefs, Path::new("/a.snxlib")).unwrap_err();
         assert!(err.contains("left unchanged"), "{err}");
         assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
+    }
+
+    /// Concurrent adds must all land: each used to load the same list and the
+    /// last writer dropped the others' entries.
+    #[test]
+    fn concurrent_adds_all_land() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        std::thread::scope(|scope| {
+            for n in 0..16 {
+                let prefs = &prefs;
+                scope.spawn(move || {
+                    add_path_at(prefs, PathBuf::from(format!("/lib{n}.snxlib"))).unwrap();
+                });
+            }
+        });
+        assert_eq!(load_at(&prefs).len(), 16);
     }
 
     #[test]
