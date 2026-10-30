@@ -214,6 +214,7 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
         "placement_accept" => Message::Selection(selection_request::SelectionRequest::LassoCommit),
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
+        "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
@@ -823,6 +824,18 @@ mod tests {
 
         assert!(!is_dispatchable(&update_pcb));
         assert!(matches!(resolve(&run_erc), Some(Message::Erc(ErcMsg::Run))));
+    }
+
+    /// #1245 - the catalog command that opens the Parameter Manager resolves
+    /// to its `Open` message, so the palette and a keymap binding reach it.
+    #[test]
+    fn open_parameter_manager_resolves_to_the_open_message() {
+        let id = AppCommandId::new("open_parameter_manager").unwrap();
+        assert!(is_dispatchable(&id));
+        assert!(matches!(
+            resolve(&id),
+            Some(Message::ParameterManager(ParameterManagerMsg::Open))
+        ));
     }
 
     /// #103 - ids that gained an existing handler resolve; the rest of the

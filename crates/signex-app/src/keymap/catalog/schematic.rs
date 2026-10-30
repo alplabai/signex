@@ -355,6 +355,16 @@ pub(super) const SCHEMATIC: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
+        id: "open_parameter_manager",
+        category: "design",
+        label: "Open Parameter Manager",
+        menu_label: Some("Parameter Manager..."),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
         id: "reset_schematic_designators",
         category: "design",
         label: "Reset schematic designators",
