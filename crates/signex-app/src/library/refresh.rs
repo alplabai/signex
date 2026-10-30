@@ -45,6 +45,11 @@ pub enum RefreshFollowUp {
     HistoryRestored,
 }
 
+/// Prefix of the error a [`RefreshSource::Reopened`] refresh reports when the
+/// library could not be reopened, as opposed to read; the completion handler
+/// words the two differently.
+pub(crate) const REOPEN_FAILED: &str = "could not reopen the library: ";
+
 /// Which adapter a refresh reads through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefreshSource {
@@ -122,6 +127,7 @@ pub fn refresh_task_from(
                         LibrarySnapshot::read(start.adapter.as_ref(), &read_path)
                     }
                     RefreshSource::Reopened => signex_library::LocalGitAdapter::open(&read_path)
+                        .map_err(|e| LibraryError::Backend(format!("{REOPEN_FAILED}{e}")))
                         .and_then(|adapter| LibrarySnapshot::read(&adapter, &read_path)),
                 }
             })

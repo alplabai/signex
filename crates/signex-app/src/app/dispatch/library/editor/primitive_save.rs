@@ -128,7 +128,7 @@ impl Signex {
             && self.library.writes.pending(&library.root) > 0
         {
             anyhow::bail!(
-                "{}: a library write is still running; try again once it finishes",
+                "{}: a library read or write is still running; try again once it finishes",
                 path.display()
             );
         }
@@ -389,17 +389,20 @@ impl Signex {
         refresh: PostSaveRefresh<'_>,
     ) {
         let label = if was_save_as { "save-as" } else { "save" };
-        // The picker and open Component Previews read the new bytes.
+        // The picker and open Component Previews read the new bytes. Rows
+        // the cascade moved changed under their open previews: clean ones
+        // reload, dirty ones keep their draft and are refused as stale on
+        // save (#1072).
         match refresh {
             PostSaveRefresh::Background(tasks) => {
-                tasks.push(self.refresh_primitive_cache_for(path))
+                tasks.push(self.refresh_primitive_cache_for(path));
+                tasks.push(self.refresh_editors_after_cascade(path, &written.cascaded_rows));
             }
-            PostSaveRefresh::Inline => self.refresh_primitive_cache_blocking(path),
+            PostSaveRefresh::Inline => {
+                self.refresh_primitive_cache_blocking(path);
+                self.refresh_editors_after_cascade_blocking(path, &written.cascaded_rows);
+            }
         }
-        // Rows the cascade moved changed under their open previews: clean
-        // ones reload, dirty ones keep their draft and are refused as
-        // stale on save (#1072).
-        self.refresh_editors_after_cascade(path, &written.cascaded_rows);
         // The editor the snapshot came from is gone: closed, discarded and
         // reopened, or History-restored while the write ran. The bytes
         // landed, but its baseline, versions and dirty state are not this

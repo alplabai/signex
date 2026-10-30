@@ -1,17 +1,17 @@
 use super::super::*;
+use std::path::PathBuf;
+
 use super::footprint_ctx::build_footprint_editor_panel_ctx;
 use super::symbol_ctx::build_symbol_editor_panel_ctx;
+use crate::library::row_summaries::{FootprintOutcome, RowSummaryRequest, SymbolOutcome};
 
 /// `(lib_symbol_names, placed_symbols)` as held by the panel context.
 type SymbolLists = (Vec<String>, Vec<(String, String, String, String)>);
 
 impl Signex {
-    /// F15 — When the active tab is a Library Browser AND a row is
-    /// selected in that tab's browser state, build the
-    /// [`crate::panels::LibraryRowDetail`] the Properties panel
-    /// renders. Returns `None` for any other active tab kind, or
-    /// when the browser tab has no row selected.
-    fn compute_library_row_detail(&self) -> Option<crate::panels::LibraryRowDetail> {
+    /// The library row selected in the active Library Browser tab:
+    /// `(library path, table, row)`.
+    fn selected_library_row(&self) -> Option<(PathBuf, String, &signex_library::ComponentRow)> {
         let active_tab = self
             .document_state
             .tabs
@@ -29,38 +29,46 @@ impl Signex {
             .get(&table)?
             .iter()
             .find(|r| signex_library::RowId::from_uuid(r.row_id) == row_id)?;
+        Some((library_path, table, row))
+    }
 
+    /// Record which row's bindings the Properties panel needs summarised;
+    /// `start_row_summary_read` fetches them. Never reads the disk.
+    pub(super) fn want_row_summaries(&mut self) {
+        let request = self
+            .selected_library_row()
+            .map(|(path, _, row)| RowSummaryRequest::for_row(row, path, self.library.data_version));
+        self.library.row_summary_job.want(request);
+    }
+
+    /// F15 — When the active tab is a Library Browser AND a row is
+    /// selected in that tab's browser state, build the
+    /// [`crate::panels::LibraryRowDetail`] the Properties panel
+    /// renders. Returns `None` for any other active tab kind, or
+    /// when the browser tab has no row selected.
+    fn compute_library_row_detail(&self) -> Option<crate::panels::LibraryRowDetail> {
+        let (library_path, table, row) = self.selected_library_row()?;
+        let summaries = self.library.row_summary_job.summaries_for(row);
         // A read failure and an absent UUID are different diagnoses.
         // Reporting "UUID not in mounted libraries" for a corrupt
         // `.snxsym` or a library server returning 500 sends the user
         // off to re-bind a perfectly good UUID, so the error arm gets
-        // its own wording and a Messages-panel record.
-        let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
-            Ok(Some(s)) => {
-                // The alternate (De Morgan) body redraws the same pins, so
-                // counting it too would double them.
-                let pins = s
-                    .pins
-                    .iter()
-                    .filter(|p| p.body_style != signex_library::BODY_ALTERNATE)
-                    .count();
-                format!(
+        // its own wording (and a Messages-panel record, once per read).
+        let symbol_summary = if row.is_symbol_unbound() {
+            "No symbol bound".to_string()
+        } else {
+            match summaries.and_then(|s| s.symbol.as_ref()) {
+                Some(SymbolOutcome::Pins(pins)) => format!(
                     "Symbol bound — {pins} pin{}",
-                    if pins == 1 { "" } else { "s" }
-                )
-            }
-            Ok(None) if row.is_symbol_unbound() => "No symbol bound".to_string(),
-            Ok(None) => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
-            Err(e) => {
-                tracing::error!(
-                    target: "signex::library",
-                    error = %e,
-                    library_id = %row.symbol_ref.library_id,
-                    symbol_uuid = %row.symbol_ref.uuid,
-                    internal_pn = %row.internal_pn,
-                    "symbol could not be read from its library — the binding is not known to be wrong"
-                );
-                format!("Symbol could not be read from its library — {e}")
+                    if *pins == 1 { "" } else { "s" }
+                ),
+                Some(SymbolOutcome::Absent) => {
+                    "Symbol unresolved (UUID not in mounted libraries)".to_string()
+                }
+                Some(SymbolOutcome::Failed(e)) => {
+                    format!("Symbol could not be read from its library — {e}")
+                }
+                None => "Reading symbol…".to_string(),
             }
         };
         let symbol_summary = match row.alternate_symbols.len() {
@@ -70,20 +78,15 @@ impl Signex {
         };
         let footprint_summary = match &row.footprint_ref {
             Some(_) if row.is_footprint_unbound() => "No footprint bound".to_string(),
-            Some(fp) => match self.library.set.resolve_footprint(fp) {
-                Ok(Some(_)) => "Footprint bound".to_string(),
-                Ok(None) => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
-                Err(e) => {
-                    tracing::error!(
-                        target: "signex::library",
-                        error = %e,
-                        library_id = %fp.library_id,
-                        footprint_uuid = %fp.uuid,
-                        internal_pn = %row.internal_pn,
-                        "footprint could not be read from its library — the binding is not known to be wrong"
-                    );
+            Some(_) => match summaries.and_then(|s| s.footprint.as_ref()) {
+                Some(FootprintOutcome::Found) => "Footprint bound".to_string(),
+                Some(FootprintOutcome::Absent) => {
+                    "Footprint unresolved (UUID not in mounted libraries)".to_string()
+                }
+                Some(FootprintOutcome::Failed(e)) => {
                     format!("Footprint could not be read from its library — {e}")
                 }
+                None => "Reading footprint…".to_string(),
             },
             None => "No footprint bound".to_string(),
         };
@@ -251,6 +254,7 @@ impl Signex {
         let fs_request = self.project_fs_request();
         self.document_state.project_fs.want(fs_request);
         let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
+        self.want_row_summaries();
         let navigator = self.next_navigator_model(previous_navigator);
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /

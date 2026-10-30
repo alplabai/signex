@@ -145,6 +145,7 @@ fn a_restored_library_tab_that_cannot_be_reopened_keeps_its_caches() {
         .into_iter()
         .any(|entry| {
             entry.message.contains(&marker)
+                && entry.message.contains("LocalGitAdapter::open")
                 && entry.level == crate::diagnostics::DiagnosticLevel::Warning
         });
     assert!(reported, "the failed reload reaches the Messages panel");

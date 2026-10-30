@@ -8,7 +8,6 @@
 use super::*;
 use crate::library::messages::DatasheetMsg;
 use crate::library::refresh::RefreshFollowUp;
-use crate::library::resolve::{ResolvedKind, report_read_failure};
 use crate::library::writes::{
     PreviewRowSave, RowEdit, RowStart, WriteFailure, WriteKind, row_edit_task,
 };
@@ -113,25 +112,18 @@ impl Signex {
                     if let Some(state) = self.library.editors.get_mut(&address) {
                         state.reload_confirming = true;
                     }
-                } else {
-                    self.reload_editor_from_server(&address);
+                    return Task::none();
                 }
-                return Task::none();
+                return self.reload_editor_from_server(&address);
             }
-            EditorMsg::ReloadConfirmed => {
-                self.reload_editor_from_server(&address);
-                return Task::none();
-            }
+            EditorMsg::ReloadConfirmed => return self.reload_editor_from_server(&address),
             EditorMsg::ReloadCancelled => {
                 if let Some(state) = self.library.editors.get_mut(&address) {
                     state.reload_confirming = false;
                 }
                 return Task::none();
             }
-            EditorMsg::SelectTab(tab) => {
-                self.handle_select_preview_tab(&address, tab);
-                return Task::none();
-            }
+            EditorMsg::SelectTab(tab) => return self.handle_select_preview_tab(&address, tab),
             EditorMsg::OpenWhereUsedTab => {
                 if let Some(state) = self.library.editors.get_mut(&address) {
                     state.active_tab = PreviewTab::Preview;
@@ -171,65 +163,18 @@ impl Signex {
         Task::none()
     }
 
-    fn handle_select_preview_tab(&mut self, address: &EditorAddress, tab: PreviewTab) {
+    /// Show `tab`, and look up off the UI thread whatever primitives it
+    /// shows that the preview has not resolved yet (#859).
+    fn handle_select_preview_tab(
+        &mut self,
+        address: &EditorAddress,
+        tab: PreviewTab,
+    ) -> Task<Message> {
         let Some(state) = self.library.editors.get_mut(address) else {
-            return;
+            return Task::none();
         };
         state.active_tab = tab;
-
-        match tab {
-            PreviewTab::Preview => {
-                if state.symbol.is_none() {
-                    let symbol_ref = state.row.symbol_ref;
-                    let resolved = report_read_failure(
-                        self.library.set.resolve_symbol(&symbol_ref),
-                        ResolvedKind::Symbol,
-                        &symbol_ref,
-                        "component preview tab",
-                    );
-                    if let Some(state) = self.library.editors.get_mut(address) {
-                        state.symbol = resolved;
-                    }
-                }
-                if let Some(state) = self.library.editors.get_mut(address)
-                    && state.footprint.is_none()
-                {
-                    let resolved = state.row.footprint_ref.as_ref().and_then(|r| {
-                        report_read_failure(
-                            self.library.set.resolve_footprint(r),
-                            ResolvedKind::Footprint,
-                            r,
-                            "component preview tab",
-                        )
-                    });
-                    if let Some(state) = self.library.editors.get_mut(address) {
-                        state.footprint = resolved;
-                    }
-                }
-            }
-            PreviewTab::Simulation => {
-                if state.sim.is_none()
-                    && let Some(sim_ref) = state.row.sim_ref.as_ref()
-                {
-                    let sim_ref = *sim_ref;
-                    let resolved = report_read_failure(
-                        self.library.set.resolve_sim(&sim_ref),
-                        ResolvedKind::Sim,
-                        &sim_ref,
-                        "component preview simulation tab",
-                    );
-                    if let Some(state) = self.library.editors.get_mut(address) {
-                        if let Some(sim) = resolved.as_ref() {
-                            state.sim_body = Some(iced::widget::text_editor::Content::with_text(
-                                sim.body.as_str(),
-                            ));
-                        }
-                        state.sim = resolved;
-                    }
-                }
-            }
-            _ => {}
-        }
+        crate::library::preview_reads::tab_resolve_task(&mut self.library, address, tab)
     }
 
     /// The Save button. A row that pins PDFs picked this session first has
@@ -473,65 +418,53 @@ impl Signex {
     /// Replace the working copy of one Component Preview with the row the
     /// library stores now (content and base revision), dropping its unsaved
     /// edits. A row that cannot be read keeps the working copy.
-    pub(crate) fn reload_editor_from_server(&mut self, address: &EditorAddress) {
-        let Some(library_id) = self
-            .library
-            .library_at(&address.library_path)
-            .map(|lib| lib.library_id)
-        else {
-            return;
-        };
-        let read = self
-            .library
-            .set
-            .get(library_id)
-            .ok_or_else(|| {
-                signex_library::LibraryError::NotFound(address.library_path.display().to_string())
-            })
-            .and_then(|adapter| adapter.read_row(&address.table, address.row_id));
-        let row = match read {
-            Ok(row) => row,
-            Err(e) => {
-                crate::diagnostics::log_warning(format!(
-                    "Row {} could not be reloaded: {e}",
-                    address.row_id
-                ));
-                self.sync_diagnostics_panel_ctx();
-                return;
-            }
-        };
-        let Some(old) = self.library.editors.get(address) else {
-            return;
-        };
-        let tab = old.active_tab;
-        let mut fresh = crate::library::state::ComponentPreviewState::from_row(
-            address.library_path.clone(),
-            address.table.clone(),
-            row,
-        );
-        fresh.active_tab = tab;
-        self.library.editors.insert(address.clone(), fresh);
-        self.handle_select_preview_tab(address, tab);
+    pub(crate) fn reload_editor_from_server(&mut self, address: &EditorAddress) -> Task<Message> {
+        crate::library::preview_reads::reload_task(&mut self.library, address, false)
     }
 
     /// After a write to `rows` that did not go through their Component
     /// Previews (browser cell or modal edit, primitive bind, cascade), bring
     /// every CLEAN preview of those rows to the stored content and revision.
     /// A DIRTY preview keeps its base revision so its own save is refused as
-    /// stale (#115) instead of silently overwriting the write.
-    pub(crate) fn refresh_clean_editors(&mut self, library_path: &std::path::Path, rows: &[RowId]) {
-        let clean: Vec<EditorAddress> = self
-            .library
+    /// stale (#115) instead of silently overwriting the write. The rows are
+    /// read off the UI thread; a preview edited before its read lands keeps
+    /// the edits.
+    pub(crate) fn refresh_clean_editors(
+        &mut self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Task<Message> {
+        let clean = self.clean_editors_of(library_path, rows);
+        Task::batch(clean.iter().map(|address| {
+            crate::library::preview_reads::reload_task(&mut self.library, address, true)
+        }))
+    }
+
+    /// [`Self::refresh_clean_editors`] on this thread, for the save that is
+    /// blocking by design (`save_primitive_tab_blocking`).
+    pub(crate) fn refresh_clean_editors_blocking(
+        &mut self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        for address in self.clean_editors_of(library_path, rows) {
+            self.library.reload_editor_blocking(&address, true);
+        }
+    }
+
+    fn clean_editors_of(
+        &self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Vec<EditorAddress> {
+        self.library
             .editors
             .iter()
             .filter(|(a, s)| {
                 a.library_path == library_path && rows.contains(&a.row_id) && !s.has_unsaved_edits()
             })
             .map(|(a, _)| a.clone())
-            .collect();
-        for address in clean {
-            self.reload_editor_from_server(&address);
-        }
+            .collect()
     }
 
     /// Close one Component Preview editor, discarding its draft: closes
