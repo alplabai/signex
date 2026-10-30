@@ -38,6 +38,18 @@ use tempfile::TempDir;
 
 use support::{Scale, generate_library};
 
+/// The diagnostics ring is process-wide and every fixture's library is called
+/// `alpha.snxlib`, so a rollback record from one test is indistinguishable
+/// from one in another. Tests that cause or assert on a "renamed back" record
+/// hold this for their whole body.
+static ROLLBACK_RECORDS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn rollback_records_lock() -> std::sync::MutexGuard<'static, ()> {
+    ROLLBACK_RECORDS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// Send `msg` and run every task it produces to completion: the file move
 /// runs on a worker and its completion message does the re-point (#859).
 fn send(app: &mut Signex, msg: Message) {
@@ -588,6 +600,8 @@ fn a_destination_that_appeared_is_never_overwritten() {
 #[test]
 fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_moving() {
     use signex_app::app::{ContextMenuMsg, ProjectTreeAction};
+    let _ = diagnostics::init_logging();
+    let _records = rollback_records_lock();
     let mut f = fixture();
     f.app.document_state.mark_document_dirty(&f.prj);
     let root = vec![f.app.document_state.projects[0].id.to_string()];
@@ -598,6 +612,8 @@ fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_mo
         )),
     );
     let _write_in_flight = f.app.update(Message::File(FileMsg::Save));
+    // Records older than this belong to earlier tests.
+    let before = diagnostics::newest_entry_id();
 
     submit_rename(&mut f.app, &f.alpha.clone(), "gamma.snxlib");
 
@@ -623,6 +639,7 @@ fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_mo
             .panel_ctx
             .diagnostics
             .iter()
+            .filter(|d| before.is_none_or(|id| d.id > id))
             .any(|d| d.message.contains("renamed back")),
         "nothing was moved, so nothing was moved back"
     );
@@ -1035,6 +1052,7 @@ fn a_never_saved_project_is_not_created_by_the_rename() {
 fn a_failed_project_patch_rolls_the_rename_back() {
     use std::os::unix::fs::PermissionsExt;
     let _ = diagnostics::init_logging();
+    let _records = rollback_records_lock();
     let mut f = fixture();
     let dir = f.prj.parent().unwrap().to_path_buf();
     let renamed = f.alpha.with_file_name("alpha2.snxlib");
@@ -1141,6 +1159,7 @@ fn lock_branch(dir: &Path) -> PathBuf {
 #[test]
 fn a_failed_rename_commit_leaves_the_index_and_head_untouched() {
     let _ = diagnostics::init_logging();
+    let _records = rollback_records_lock();
     let mut f = fixture();
     let dir = f.alpha.parent().unwrap().to_path_buf();
     let renamed = f.alpha.with_file_name("alpha2.snxlib");
@@ -1233,6 +1252,7 @@ fn assert_rolled_back(f: &Fixture, renamed: &Path) {
 #[test]
 fn a_mount_that_cannot_follow_rolls_the_file_and_project_back() {
     let _ = diagnostics::init_logging();
+    let _records = rollback_records_lock();
     let mut f = fixture();
     let renamed = f.alpha.with_file_name("alpha2.snxlib");
     let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
@@ -1256,6 +1276,7 @@ fn a_mount_that_cannot_follow_rolls_the_file_and_project_back() {
 #[test]
 fn a_project_closed_during_the_rename_moves_the_library_back() {
     let _ = diagnostics::init_logging();
+    let _records = rollback_records_lock();
     let mut f = fixture();
     let renamed = f.alpha.with_file_name("alpha2.snxlib");
     let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
