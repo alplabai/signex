@@ -124,7 +124,13 @@ impl Signex {
             .and_then(|s| s.to_str())
             .unwrap_or("project");
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
-        let suggested = crate::library::commands::default_new_library_path(&project_dir, stem);
+        let pending: Vec<std::path::PathBuf> = loaded
+            .pending_libraries
+            .values()
+            .map(|spec| spec.lib_path.clone())
+            .collect();
+        let suggested =
+            crate::library::commands::default_new_library_path(&project_dir, stem, &pending);
         let suggested_filename = suggested
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())

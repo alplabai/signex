@@ -132,10 +132,20 @@ pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryEr
 /// `project_dir`: `<project_dir>/<stem>-lib/<stem>-lib.snxlib`. The library
 /// lives in a subfolder of its own so a version-controlled project and its
 /// library each get their own repository (a library at the project folder
-/// would reopen the project's repo). A taken name gets a `-2`, `-3`, … suffix.
-pub fn default_new_library_path(project_dir: &Path, stem: &str) -> PathBuf {
+/// would reopen the project's repo). A name is taken when its folder exists,
+/// when the old-style `<project_dir>/<name>.snxlib` exists, or when a library
+/// in `pending` (registered, not yet written) sits at either path; a taken
+/// name gets a `-2`, `-3`, … suffix.
+pub fn default_new_library_path(project_dir: &Path, stem: &str, pending: &[PathBuf]) -> PathBuf {
     let candidate = |name: &str| project_dir.join(name).join(format!("{name}.snxlib"));
-    let taken = |name: &str| project_dir.join(name).exists();
+    let flat = |name: &str| project_dir.join(format!("{name}.snxlib"));
+    let taken = |name: &str| {
+        project_dir.join(name).exists()
+            || flat(name).exists()
+            || pending
+                .iter()
+                .any(|p| *p == candidate(name) || *p == flat(name))
+    };
     let base = format!("{stem}-lib");
     if !taken(&base) {
         return candidate(&base);
@@ -701,16 +711,45 @@ mod tests {
     }
 
     #[test]
+    fn default_new_library_path_skips_an_old_style_library_and_a_pending_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        std::fs::write(dir.join("p-lib.snxlib"), "x").unwrap();
+        assert_eq!(
+            default_new_library_path(dir, "p", &[]),
+            dir.join("p-lib-2").join("p-lib-2.snxlib"),
+            "old default library"
+        );
+        let pending = [dir.join("p-lib-2").join("p-lib-2.snxlib")];
+        assert_eq!(
+            default_new_library_path(dir, "p", &pending),
+            dir.join("p-lib-3").join("p-lib-3.snxlib"),
+            "pending library"
+        );
+    }
+
+    #[test]
+    fn default_new_library_path_skips_a_pending_old_style_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let pending = [dir.join("p-lib.snxlib")];
+        assert_eq!(
+            default_new_library_path(dir, "p", &pending),
+            dir.join("p-lib-2").join("p-lib-2.snxlib")
+        );
+    }
+
+    #[test]
     fn default_new_library_path_is_a_subfolder_and_skips_taken_names() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         assert_eq!(
-            default_new_library_path(dir, "p"),
+            default_new_library_path(dir, "p", &[]),
             dir.join("p-lib").join("p-lib.snxlib")
         );
         std::fs::create_dir(dir.join("p-lib")).unwrap();
         assert_eq!(
-            default_new_library_path(dir, "p"),
+            default_new_library_path(dir, "p", &[]),
             dir.join("p-lib-2").join("p-lib-2.snxlib")
         );
     }
@@ -721,7 +760,7 @@ mod tests {
         let dir = tmp.path();
         let project_head = project_repo(dir);
         let project_index = std::fs::read(dir.join(".git").join("index")).unwrap();
-        let lib = default_new_library_path(dir, "p");
+        let lib = default_new_library_path(dir, "p", &[]);
 
         create_pending_library(Uuid::now_v7(), &git_spec(lib.clone()), &Default::default())
             .expect("a nested library repo is created");
@@ -762,7 +801,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         std::fs::write(dir.join("p.snxprj"), "{}").unwrap();
-        let lib = default_new_library_path(dir, "p");
+        let lib = default_new_library_path(dir, "p", &[]);
         create_pending_library(Uuid::now_v7(), &git_spec(lib.clone()), &Default::default())
             .expect("created");
         assert!(lib.exists());

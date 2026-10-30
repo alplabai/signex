@@ -117,7 +117,7 @@ pub fn version_control_refusal(
 /// first parent"); a project's own repo is the usual case. A folder merely
 /// *inside* another repository is fine: `git init` makes a nested one.
 pub fn library_repo_refusal(lib_path: &Path) -> Option<String> {
-    let dir = lib_path.parent()?;
+    let dir = lib_path.parent().filter(|d| !d.as_os_str().is_empty())?;
     if !dir.join(".git").exists() {
         return None;
     }
@@ -453,6 +453,11 @@ mod tests {
         let root = tmp.path();
         let lib = |d: &Path| d.join("p-lib.snxlib");
         assert_eq!(library_repo_refusal(&lib(root)), None, "plain folder");
+        assert_eq!(
+            library_repo_refusal(Path::new("p-lib.snxlib")),
+            None,
+            "relative path is not probed against the CWD"
+        );
 
         let repo = git2::Repository::init(root).unwrap();
         assert_eq!(library_repo_refusal(&lib(root)), None, "repo, no commit");

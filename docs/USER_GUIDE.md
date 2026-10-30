@@ -570,7 +570,9 @@ repository and never touches the project's. If you tick **Enable version
 control (Git)** and pick the project folder itself while the project is already
 under version control, **Create Library** is refused with the reason, the
 dialog stays open, and nothing is written. Choose a folder of its own, or turn
-version control off for the library.
+version control off for the library. A library with version control off at the
+new subfolder default is not committed by the project's own repository: its
+edits stay untracked by Signex in the project repo.
 
 A sheet written by a newer Signex opens read-only. Its tab shows a muted
 "read-only" label (the tooltip gives the reason) and a badge sits in the corner

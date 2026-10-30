@@ -95,7 +95,7 @@ fn the_project_folder_is_refused_with_a_reason_and_nothing_is_written() {
 #[test]
 fn the_new_default_subfolder_is_accepted() {
     let (mut app, tmp, prj) = git_project();
-    let lib = signex_app::library::commands::default_new_library_path(tmp.path(), "p");
+    let lib = signex_app::library::commands::default_new_library_path(tmp.path(), "p", &[]);
 
     create(&mut app, &prj, &lib, true);
 
