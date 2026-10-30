@@ -403,6 +403,10 @@ pub struct BindingConflict {
 }
 
 pub fn config_path() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(root) = crate::config_root::isolated::current() {
+        return Some(root.join(USER_SHORTCUTS_FILE_NAME));
+    }
     crate::config_root::config_root().map(|root| root.join(USER_SHORTCUTS_FILE_NAME))
 }
 
