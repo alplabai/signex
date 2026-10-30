@@ -24,6 +24,8 @@ pub mod placement_ghost;
 mod shape_preview;
 mod shift_selection;
 mod special_strings;
+#[cfg(test)]
+mod tool_click_tests;
 
 use gpu_mount::ContentMode;
 use shift_selection::shift_snapshot_for_selection;

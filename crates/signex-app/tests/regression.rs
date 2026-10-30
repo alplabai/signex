@@ -35,6 +35,9 @@
 #[path = "support/drive.rs"]
 mod drive;
 
+#[path = "regression/shared_locks.rs"]
+mod shared_locks;
+
 #[path = "regression/close_support.rs"]
 mod close_support;
 

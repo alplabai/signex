@@ -254,12 +254,8 @@ impl Signex {
         self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `update_canvas_theme` re-derives the canvas colours from the saved
         // theme, clears BOTH content caches (schematic + PCB) and every
-        // schematic bg cache — don't clear them again here. Only the PCB
-        // bg caches are left to invalidate.
+        // schematic and PCB bg cache — don't clear them again here.
         self.update_canvas_theme();
-        for canvas in self.interaction_state.all_pcb_canvases_mut() {
-            canvas.clear_bg_cache();
-        }
     }
 
     /// Set the effective PCB GPU-render flag on every PCB canvas (#494).
@@ -496,16 +492,13 @@ impl Signex {
                     signex_types::theme::theme_tokens(id)
                 };
                 self.document_state.panel_ctx.tokens = tokens;
-                // #631 — the canvas colours used to be computed here and
-                // pushed onto the canvas for the live preview. `view` now
-                // derives them from `preferences_draft_theme` every frame,
-                // so setting the draft above IS the preview; only the
-                // background (paper, grid) and content caches still have
-                // to be dropped to repaint.
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
+                // Schematic canvas colours are derived from
+                // `preferences_draft_theme` every frame (#631), but the PCB
+                // canvases hold pushed colours and every canvas caches its
+                // paper, grid and content. `apply_canvas_theme` recolours
+                // the PCB canvases and drops the caches on every open
+                // canvas, docked or undocked (#1749).
+                self.apply_canvas_theme(id);
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftFont(name) => {
@@ -697,6 +690,8 @@ impl Signex {
                     Ok(custom) => {
                         self.ui_state.custom_theme = Some(custom);
                         self.ui_state.preferences_draft_theme = ThemeId::Custom;
+                        // Preview the imported colours on every open canvas.
+                        self.apply_canvas_theme(ThemeId::Custom);
                         // Import swaps the live `custom_theme` in place — the
                         // draft comparator can't see it, so pin the dirty flag
                         // sticky until Save or a draft reseed clears it. Sticky

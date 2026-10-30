@@ -495,15 +495,14 @@ pub(crate) fn collect_track_items_for_library(
     }
     // Canonical subdirectories — surfaced as `Folder` rows. Skip the
     // ones that aren't on disk yet so the picker stays accurate.
-    let dirs: &[&str] = &["classes", "symbols", "footprints", "sims", "3dmodels"];
-    for name in dirs {
+    for name in signex_library::adapters::local_git::LIBRARY_SUBFOLDERS {
         let abs = root_dir.join(name);
         if !abs.is_dir() {
             continue;
         }
         items.push(crate::app::TrackItem {
             absolute: abs,
-            relative: (*name).to_string(),
+            relative: name.to_string(),
             label: "Folder".to_string(),
             is_directory: true,
             tracked: true,
