@@ -11,6 +11,7 @@ pub(crate) use child_sheet_path::relative_within;
 mod break_wire_tool;
 mod clicked;
 mod descend;
+pub use descend::PendingDescent;
 mod double_clicked;
 mod field_edit;
 pub(crate) use field_edit::editor_placeholder;
@@ -337,28 +338,7 @@ impl Signex {
             return false;
         }
 
-        if let Some(index) = self
-            .document_state
-            .tabs
-            .iter()
-            .position(|tab| tab.path == path)
-        {
-            if index != self.document_state.active_tab {
-                self.park_active_schematic_session();
-                self.document_state.active_tab = index;
-                self.sync_active_tab();
-            }
-            return true;
-        }
-
-        // A dirty engine parked without a tab holds unsaved edits: reattach
-        // it rather than replace it with the on-disk sheet (#1135).
-        if self.path_is_owned_by_open_document(&path) {
-            let title = path
-                .file_stem()
-                .map(|stem| stem.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Schematic".to_string());
-            self.attach_parked_schematic_tab(path, title);
+        if self.focus_open_sheet(&path) {
             return true;
         }
 
@@ -386,6 +366,36 @@ impl Signex {
                 false
             }
         }
+    }
+
+    /// Focus the tab already showing `path`, or reattach the dirty engine
+    /// parked without a tab (#1135). `false` when no document holds the file.
+    /// Touches no file.
+    pub(crate) fn focus_open_sheet(&mut self, path: &std::path::Path) -> bool {
+        if let Some(index) = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == path)
+        {
+            if index != self.document_state.active_tab {
+                self.park_active_schematic_session();
+                self.document_state.active_tab = index;
+                self.sync_active_tab();
+            }
+            return true;
+        }
+        // A dirty engine parked without a tab holds unsaved edits: reattach
+        // it rather than replace it with the on-disk sheet (#1135).
+        if self.path_is_owned_by_open_document(path) {
+            let title = path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Schematic".to_string());
+            self.attach_parked_schematic_tab(path.to_path_buf(), title);
+            return true;
+        }
+        false
     }
 
     /// The first selected sheet symbol on the active sheet: its uuid and the
@@ -430,13 +440,10 @@ impl Signex {
         filenames
     }
 
-    pub(crate) fn open_selected_child_sheet(&mut self) -> bool {
-        if let Some((sheet_symbol, filename)) = self.selected_child_sheet() {
-            self.descend_through_sheet_symbol(sheet_symbol, filename.as_str());
-            true
-        } else {
-            false
-        }
+    /// Descend through the selected sheet symbol; `None` when none is selected.
+    pub(crate) fn open_selected_child_sheet(&mut self) -> Option<Task<Message>> {
+        let (sheet_symbol, filename) = self.selected_child_sheet()?;
+        Some(self.descend_through_sheet_symbol(sheet_symbol, filename.as_str()))
     }
 
     /// The document a reported cursor point belongs to: the active schematic,

@@ -272,7 +272,8 @@ fn descending_through_a_symbol_without_a_file_opens_the_dialog() {
     let _ = crate::diagnostics::init_logging();
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _top, id) = parent_with_symbol(dir.path());
-    app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(confirm(&app).symbol, id);
     assert!(
         app.has_locking_confirm_modal(),
@@ -291,7 +292,8 @@ fn an_unsaved_parent_says_so_and_offers_nothing() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, top, id) = parent_with_symbol(dir.path());
     std::fs::remove_file(&top).expect("parent not on disk");
-    app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    crate::app::path_ops::settle_task(&mut app, task);
     assert!(app.ui_state.create_child_sheet_confirm.is_none());
     let card = app.document_state.error_notice.as_ref().expect("a notice");
     assert!(
@@ -519,7 +521,8 @@ fn the_main_window_is_locked_while_create_sheet_is_open_by_either_route() {
     let (mut app, _top, id) = parent_with_symbol(dir.path());
     app.ui_state.main_window_opened = true;
     app.ui_state.first_run_tour_open = false;
-    app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    crate::app::path_ops::settle_task(&mut app, task);
     let _ = app.sync_detached_modals();
     assert!(
         main_window_shows_the_lock(&app),
@@ -651,5 +654,168 @@ fn a_dead_listing_worker_places_nothing_and_says_so() {
         Some(e.id) > since
             && e.message
                 .contains("Sheet not placed: the folder could not be listed")
+    }));
+}
+
+// ---- #859: a canvas descent reads the child sheet on a worker.
+
+fn write_child_file(dir: &Path, symbols: usize) {
+    let mut sheet = SchematicSheet::default();
+    for i in 0..symbols {
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: Uuid::now_v7(),
+            reference: format!("R{}", i + 1),
+            ..Default::default()
+        });
+    }
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("encode");
+    std::fs::write(dir.join("sheet1.snxsch"), text).expect("write child");
+}
+
+#[test]
+fn descending_into_an_unopened_child_opens_it_when_the_worker_has_read_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let child = dir.path().join("sheet1.snxsch");
+    let root = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
+    app.document_state
+        .tab_placements
+        .record(&parent, Some(root.clone()));
+
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+
+    assert!(!app.has_tab_for(&child), "update opened a tab");
+    assert!(app.document_state.pending_opens.contains(&child));
+    // The worker reads when it runs, so this later content is what opens.
+    write_child_file(dir.path(), 2);
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(app.active_tab_path().as_deref(), Some(child.as_path()));
+    assert_eq!(
+        app.document_state.engines[&child].document().symbols.len(),
+        2
+    );
+    assert!(!app.document_state.pending_opens.contains(&child));
+    assert!(app.ui_state.pending_descents.is_empty());
+    assert_eq!(
+        app.document_state.tab_placements.get(&child),
+        Some(&root.child(id)),
+        "the placement it came through"
+    );
+}
+
+#[test]
+fn a_child_that_goes_missing_meanwhile_still_offers_to_create_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+
+    assert!(
+        app.ui_state.create_child_sheet_confirm.is_none(),
+        "the dialog waits for the worker"
+    );
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(confirm(&app).symbol, id);
+    assert!(app.ui_state.pending_descents.is_empty());
+}
+
+#[test]
+fn a_file_created_after_the_click_is_opened_not_offered_for_creation() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    // `update` did not stat the path: a file that appears now is the one read.
+    write_child_file(dir.path(), 1);
+
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+    assert!(app.has_tab_for(&dir.path().join("sheet1.snxsch")));
+}
+
+#[test]
+fn a_sheet_that_is_already_open_is_focused_without_a_read() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let child = dir.path().join("sheet1.snxsch");
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    crate::app::path_ops::settle_task(&mut app, task);
+    app.open_or_focus_sheet_path(parent);
+
+    let again = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+
+    assert!(
+        !app.document_state.pending_opens.contains(&child),
+        "no read"
+    );
+    assert_eq!(app.active_tab_path().as_deref(), Some(child.as_path()));
+    drop(again);
+}
+
+#[test]
+fn closing_the_documents_while_the_child_is_read_opens_nothing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let child = dir.path().join("sheet1.snxsch");
+    let from = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
+    app.document_state
+        .tab_placements
+        .record(&parent, Some(from));
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+
+    app.cancel_in_flight_reads();
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(!app.has_tab_for(&child));
+    assert!(
+        app.document_state.tab_placements.get(&child).is_none(),
+        "no placement for a tab that never opened"
+    );
+    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.create_child_sheet_confirm.is_none());
+}
+
+#[test]
+fn a_rename_holding_the_child_refuses_the_descent_with_a_notice() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let child = dir.path().join("sheet1.snxsch");
+    app.document_state.pending_path_ops.begin(
+        crate::app::path_ops::PathOpKind::Rename,
+        vec![child.clone(), dir.path().join("moved.snxsch")],
+        crate::app::state::scope::CaseFold::PRESERVE,
+    );
+
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(!app.has_tab_for(&child));
+    assert!(!app.document_state.pending_opens.contains(&child));
+    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    assert!(notice.detail.contains("still running"), "{}", notice.detail);
+}
+
+#[test]
+fn an_unreadable_child_is_reported_and_opens_nothing() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    std::fs::write(dir.path().join("sheet1.snxsch"), b"not a schematic").expect("garbage");
+    let child = dir.path().join("sheet1.snxsch");
+    let since = crate::diagnostics::newest_entry_id();
+
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(!app.has_tab_for(&child));
+    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(crate::diagnostics::recent_entries().iter().any(|e| {
+        Some(e.id) > since && e.message.contains("Failed to open project tree document")
     }));
 }

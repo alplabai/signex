@@ -42,6 +42,8 @@ impl Signex {
         let task = self.finish_document_read(request, result);
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
+        // So was a canvas descent, which records its placement now.
+        self.finish_descent(&path);
         task
     }
 
@@ -77,6 +79,11 @@ impl Signex {
         match result {
             Ok(document) => self.install_loaded_document(request.path, *document),
             Err(failure) => {
+                // No silent no-op: a descent into a missing child offers to
+                // create the file (#1275).
+                if matches!(failure, OpenFailure::Missing(_)) {
+                    self.offer_to_create_missing_child(&request.path);
+                }
                 self.report_read_failure(failure);
                 Task::none()
             }
@@ -101,6 +108,7 @@ impl Signex {
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
         self.ui_state.pending_create_sheet = None;
+        self.ui_state.pending_descents.clear();
         self.document_state.pending_restores.cancel_all_retaining();
     }
 
@@ -137,6 +145,9 @@ impl Signex {
                 "Failed to open project tree document",
                 &anyhow::anyhow!(message),
             ),
+            OpenFailure::Missing(message) => {
+                crate::diagnostics::log_info(message);
+            }
             OpenFailure::Card(message) => {
                 crate::diagnostics::log_error(
                     "Failed to open primitive",

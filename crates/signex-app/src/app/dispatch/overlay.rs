@@ -367,8 +367,7 @@ impl Signex {
                     ContextAction::Paste => self.dispatch_edit_message(EditMsg::Paste),
                     ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
                     ContextAction::OpenChildSheet => {
-                        self.open_selected_child_sheet();
-                        Task::none()
+                        self.open_selected_child_sheet().unwrap_or_else(Task::none)
                     }
                     ContextAction::CreateChildSheet => match self.selected_child_sheet() {
                         Some((symbol, _)) => self.create_child_sheet_from_symbol(symbol),

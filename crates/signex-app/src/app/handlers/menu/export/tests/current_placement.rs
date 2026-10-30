@@ -75,7 +75,10 @@ pub(crate) fn descend_by_canvas(app: &mut Signex, placement: u128) {
         Uuid::from_u128(placement),
         SelectedKind::ChildSheet,
     )];
-    assert!(app.open_selected_child_sheet());
+    let task = app
+        .open_selected_child_sheet()
+        .expect("a sheet symbol is selected");
+    crate::app::path_ops::settle_task(app, task);
     app.refresh_panel_ctx();
     app.settle_navigator();
 }
@@ -252,14 +255,15 @@ fn double_clicking_a_sheet_symbol_records_that_placement() {
     app.settle_navigator();
 
     // Sheet symbol B sits at x = 50..60.
-    let _ = app.update(crate::app::Message::CanvasEvent(
-        CanvasEvent::DoubleClicked {
+    crate::app::path_ops::settle(
+        &mut app,
+        crate::app::Message::CanvasEvent(CanvasEvent::DoubleClicked {
             world_x: 55.0,
             world_y: 5.0,
             screen_x: 0.0,
             screen_y: 0.0,
-        },
-    ));
+        }),
+    );
 
     assert_eq!(app.active_tab_path().as_deref(), Some(child.as_path()));
     assert_eq!(

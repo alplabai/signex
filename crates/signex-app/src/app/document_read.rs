@@ -207,6 +207,9 @@ pub enum OpenFailure {
     LogOnly(String),
     /// Logged and raised as the error card: what opening a primitive did.
     Card(String),
+    /// The file is not there: a canvas descent offers to create the sheet
+    /// instead of reporting a failure (#1275).
+    Missing(String),
 }
 
 /// The blocking part of an open.
@@ -216,6 +219,11 @@ pub enum ReadJob {
         title: String,
     },
     TreePcb {
+        title: String,
+    },
+    /// A child sheet opened by descending through its sheet symbol on the
+    /// canvas: like `TreeSchematic`, but a missing file is its own answer.
+    ChildSchematic {
         title: String,
     },
     /// `from_tree` also checks the file exists first, with the project
@@ -236,6 +244,9 @@ impl ReadJob {
                 tree_checked(path).and_then(|()| read_schematic(path, title))
             }
             Self::TreePcb { title } => tree_checked(path).and_then(|()| read_pcb(path, title)),
+            Self::ChildSchematic { title } => {
+                child_checked(path).and_then(|()| read_schematic(path, title))
+            }
             Self::Symbol { from_tree } => {
                 if from_tree {
                     tree_checked(path)?;
@@ -259,6 +270,16 @@ fn tree_checked(path: &Path) -> Result<(), OpenFailure> {
     }
     Err(OpenFailure::LogOnly(format!(
         "project tree file does not exist: {}",
+        path.display()
+    )))
+}
+
+fn child_checked(path: &Path) -> Result<(), OpenFailure> {
+    if path.exists() {
+        return Ok(());
+    }
+    Err(OpenFailure::Missing(format!(
+        "Child-sheet file not found: {}",
         path.display()
     )))
 }
