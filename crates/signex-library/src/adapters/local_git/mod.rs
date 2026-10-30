@@ -325,12 +325,12 @@ impl LocalGitAdapter {
 
         // Built in memory from HEAD's tree (empty when unborn), so what the
         // user has staged in this repo is neither committed nor touched.
-        // The repo may only now be readable (a `.git/` that would not open
-        // before `git init` put it right): its history is checked here too.
         // A re-made HEAD points at `init.defaultBranch`, which may or may not
         // exist. Whatever it resolves to, the documented priority picks the
-        // branch that tracks the library; only when none does, the usual
-        // check refuses a repo with foreign history.
+        // branch that tracks the library. The foreign-history check is skipped
+        // for it, as a tracking tip cannot be foreign; when none tracks, the
+        // check runs (the repo may only now be readable, after `git init`
+        // put a `.git/` right that would not open before).
         let tracking = if head_recreated {
             reinit_tree::tracking_branch(repo, file_path)?
         } else {
@@ -421,10 +421,11 @@ impl LocalGitAdapter {
         // dialog is the gate; the adapter just does what it's asked.
         // Only a `.git/` this call makes is ever removed again: one that is
         // already there but will not open is the user's recoverable history.
-        let created_repo = fs::symlink_metadata(root_dir.join(".git")).is_err();
+        let git_meta = fs::symlink_metadata(root_dir.join(".git"));
+        let created_repo = git_meta.is_err();
         // `git init` makes a missing `HEAD` anew; a present one is left alone.
-        let head_recreated = match fs::symlink_metadata(root_dir.join(".git")) {
-            Ok(meta) if meta.is_dir() => fs::read(root_dir.join(".git/HEAD")).is_err(),
+        let head_recreated = match &git_meta {
+            Ok(meta) if meta.is_dir() => fs::symlink_metadata(root_dir.join(".git/HEAD")).is_err(),
             Ok(_) => false,
             Err(_) => true,
         };

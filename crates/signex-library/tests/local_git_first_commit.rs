@@ -531,9 +531,10 @@ fn recover_init_keeps_a_user_on_an_orphan_branch() {
 
 /// #1780: where links are not real (`core.symlinks=false`), the index holds
 /// the link the commit holds, so nothing is left staged against HEAD.
-#[cfg(unix)]
-#[test]
-fn recover_init_indexes_a_link_as_a_link_without_symlink_support() {
+/// `make_link` creates the link; an error means the platform refused (no
+/// privilege), and the check is skipped.
+#[cfg(any(unix, windows))]
+fn assert_link_indexed_as_link(make_link: impl Fn(&Path, &Path) -> std::io::Result<()>) {
     let tmp = tempfile::tempdir().unwrap();
     let lib = plain_library(tmp.path());
     let repo = Repository::init(tmp.path()).unwrap();
@@ -542,7 +543,15 @@ fn recover_init_indexes_a_link_as_a_link_without_symlink_support() {
         .set_bool("core.symlinks", false)
         .unwrap();
     std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
-    std::os::unix::fs::symlink("elsewhere.snxsym", tmp.path().join("symbols/x.snxsym")).unwrap();
+    std::fs::write(tmp.path().join("symbols/elsewhere.snxsym"), "t").unwrap();
+    if make_link(
+        Path::new("elsewhere.snxsym"),
+        &tmp.path().join("symbols/x.snxsym"),
+    )
+    .is_err()
+    {
+        return;
+    }
     drop(repo);
 
     LocalGitAdapter::recover_init(&lib).expect("re-init");
@@ -565,6 +574,20 @@ fn recover_init_indexes_a_link_as_a_link_without_symlink_support() {
         .diff_tree_to_index(Some(&head_tree), Some(&index), None)
         .unwrap();
     assert_eq!(diff.deltas().count(), 0, "nothing staged against HEAD");
+}
+
+#[cfg(unix)]
+#[test]
+fn recover_init_indexes_a_link_as_a_link_without_symlink_support() {
+    assert_link_indexed_as_link(|target, link| std::os::unix::fs::symlink(target, link));
+}
+
+/// The Windows runners can create links; without the privilege the test
+/// returns early.
+#[cfg(windows)]
+#[test]
+fn recover_init_indexes_a_link_as_a_link_without_symlink_support_windows() {
+    assert_link_indexed_as_link(|target, link| std::os::windows::fs::symlink_file(target, link));
 }
 
 // Only the unix tests read a tree entry back.
