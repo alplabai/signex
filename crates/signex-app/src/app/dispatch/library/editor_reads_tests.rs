@@ -244,6 +244,9 @@ fn a_bind_started_after_a_reload_was_asked_is_not_undone_by_it() {
         signex_library::PrimitiveKind::Symbol,
         picked,
     );
+    // The bind finishes before the read lands.
+    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
+    preview.binding_primitive = false;
     settle_task(&mut f.app, reload);
 
     assert_eq!(
