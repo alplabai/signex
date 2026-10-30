@@ -9,14 +9,24 @@ use signex_library::{PrimitiveRef, RowId, Symbol};
 use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{SymbolDocument, TabInfo, TabKind};
+use crate::app::{Message, SymbolDocument, TabInfo, TabKind};
 use crate::library::component_preview::test_row;
+use crate::library::messages::LibraryMessage;
 use crate::library::state::{
     ComponentPreviewState, EditorAddress, LibraryDisplaySettings, OpenLibrary,
 };
 
-#[test]
-fn saving_a_primitive_refreshes_the_picker_cache_and_the_open_preview() {
+/// A mounted library, a dirty symbol editor in it, and an open Component
+/// Preview that already drew that symbol.
+struct Fixture {
+    app: crate::app::Signex,
+    file: std::path::PathBuf,
+    path: std::path::PathBuf,
+    address: EditorAddress,
+    _dir: tempfile::TempDir,
+}
+
+fn fixture() -> Fixture {
     signex_library::git_identity::test_identity::install();
     let dir = tempfile::tempdir().expect("tempdir");
     let file = dir.path().join("Lib").join("Lib.snxlib");
@@ -96,6 +106,23 @@ fn saving_a_primitive_refreshes_the_picker_cache_and_the_open_preview() {
     preview.symbol = Some(Symbol::empty("Before"));
     app.library.editors.insert(address.clone(), preview);
 
+    Fixture {
+        app,
+        file,
+        path,
+        address,
+        _dir: dir,
+    }
+}
+
+#[test]
+fn saving_a_primitive_refreshes_the_picker_cache_and_the_open_preview() {
+    let Fixture {
+        mut app,
+        path,
+        address,
+        ..
+    } = fixture();
     let task = app.save_primitive_tab_at(&path).expect("save starts");
     crate::app::path_ops::settle_task(&mut app, task);
 
@@ -113,5 +140,56 @@ fn saving_a_primitive_refreshes_the_picker_cache_and_the_open_preview() {
         shown.as_deref(),
         Some("After"),
         "the preview draws the saved bytes"
+    );
+}
+
+/// The preview read holds a place in the library's write order, so a close
+/// asked meanwhile waits; whichever read lands last must finish it.
+#[test]
+fn a_library_closed_while_the_preview_read_runs_closes_when_it_lands() {
+    let Fixture {
+        mut app,
+        file,
+        path,
+        ..
+    } = fixture();
+    let save = app.save_primitive_tab_at(&path).expect("save starts");
+    let reads: Vec<_> = crate::persist::run_task::outputs(save)
+        .into_iter()
+        .map(|message| app.update(message))
+        .flat_map(crate::persist::run_task::outputs)
+        .collect();
+    // Another write is queued behind the reads, so the refresh completion
+    // finds the library busy; it is gone again when the preview read lands.
+    let busy = app.library.writes.turn(&file);
+    app.library.close_library(&file);
+    assert!(
+        app.library.library_at(&file).is_some(),
+        "the close waits for the reads"
+    );
+    let (previews, others): (Vec<_>, Vec<_>) = reads.into_iter().partition(|message| {
+        matches!(
+            message,
+            Message::Library(LibraryMessage::PreviewsReread { .. })
+        )
+    });
+    assert_eq!(previews.len(), 1, "the preview read was started");
+    for message in others {
+        let task = app.update(message);
+        crate::app::path_ops::settle_task(&mut app, task);
+    }
+    assert!(
+        app.library.library_at(&file).is_some(),
+        "still busy while the other write is queued"
+    );
+    drop(busy);
+    for message in previews {
+        let task = app.update(message);
+        crate::app::path_ops::settle_task(&mut app, task);
+    }
+
+    assert!(
+        app.library.library_at(&file).is_none(),
+        "the close finished"
     );
 }
