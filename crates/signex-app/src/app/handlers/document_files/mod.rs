@@ -31,6 +31,8 @@ mod restore_cancel_tests;
 pub(crate) mod restore_commit_tests;
 mod restore_fingerprint;
 #[cfg(test)]
+mod restore_library_tests;
+#[cfg(test)]
 mod restore_pending_commit_tests;
 mod save;
 pub(crate) use save::log_foreign_column_offenders;

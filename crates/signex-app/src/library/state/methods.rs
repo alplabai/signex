@@ -91,6 +91,7 @@ impl Default for LibraryState {
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
+            preview_generations: HashMap::new(),
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
             data_version: 0,

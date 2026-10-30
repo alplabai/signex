@@ -18,6 +18,16 @@ use super::primitive_write::{PrimitiveWrite, Snapshot};
 use super::*;
 use crate::persist::{PrimitiveSaveDone, PrimitiveWritten, SaveAsOrigin, WrittenContainer};
 
+/// How a finished primitive write brings the library caches and open
+/// previews up to date.
+enum PostSaveRefresh<'a> {
+    /// Off the UI thread; the tasks are collected for the caller to run.
+    Background(&'a mut Vec<Task<Message>>),
+    /// On this thread, for the save that is blocking by design and has no
+    /// task to return.
+    Inline,
+}
+
 impl Signex {
     /// Write the primitive at `path` back to disk as JSON: snapshot the
     /// editor now, return the task that does the blocking write. The
@@ -298,27 +308,33 @@ impl Signex {
     pub(crate) fn handle_primitive_saved(&mut self, done: PrimitiveSaveDone) -> Task<Message> {
         let path = done.path.clone();
         let written = done.result.is_ok();
-        self.settle_primitive_save_state(done);
-        let follow_up = self.start_follow_up_save(&path);
+        let mut tasks = Vec::new();
+        self.settle_primitive_save_state(done, PostSaveRefresh::Background(&mut tasks));
+        tasks.push(self.start_follow_up_save(&path));
         self.refresh_panel_ctx();
-        if !written {
-            return follow_up;
+        if written {
+            // The container is on disk: its recovery copy is stale (#1185).
+            // An edit made while the write ran is copied again by the next
+            // tick.
+            tasks.push(self.autosave_after_save(&path));
         }
-        // The container is on disk: its recovery copy is stale (#1185). An
-        // edit made while the write ran is copied again by the next tick.
-        Task::batch([follow_up, self.autosave_after_save(&path)])
+        Task::batch(tasks)
     }
 
     /// Settle a finished write that has no follow-up to start: the
     /// synchronous save paths use this, so no `Task` is produced to drop.
     fn settle_primitive_save(&mut self, done: PrimitiveSaveDone) {
-        self.settle_primitive_save_state(done);
+        self.settle_primitive_save_state(done, PostSaveRefresh::Inline);
         self.refresh_panel_ctx();
     }
 
     /// The state half of a completion: release the path, then apply the
     /// success or failure to the draft.
-    fn settle_primitive_save_state(&mut self, done: PrimitiveSaveDone) {
+    fn settle_primitive_save_state(
+        &mut self,
+        done: PrimitiveSaveDone,
+        refresh: PostSaveRefresh<'_>,
+    ) {
         self.document_state.document_saves.finish(&done.path);
         let PrimitiveSaveDone {
             path,
@@ -329,7 +345,7 @@ impl Signex {
         match result {
             Ok(written) => {
                 self.document_state.document_saves.clear_failure(&path);
-                self.finish_primitive_save(&path, generation, written, save_as.is_some());
+                self.finish_primitive_save(&path, generation, written, save_as.is_some(), refresh);
             }
             Err(reason) => self.fail_primitive_save(&path, generation, save_as, reason),
         }
@@ -368,11 +384,16 @@ impl Signex {
         generation: u64,
         written: PrimitiveWritten,
         was_save_as: bool,
+        refresh: PostSaveRefresh<'_>,
     ) {
         let label = if was_save_as { "save-as" } else { "save" };
         // The picker and open Component Previews read the new bytes.
-        self.refresh_primitive_cache_for(path);
-        self.reload_primitive_in_library_set(path);
+        match refresh {
+            PostSaveRefresh::Background(tasks) => {
+                tasks.push(self.refresh_primitive_cache_for(path))
+            }
+            PostSaveRefresh::Inline => self.refresh_primitive_cache_blocking(path),
+        }
         // Rows the cascade moved changed under their open previews: clean
         // ones reload, dirty ones keep their draft and are refused as
         // stale on save (#1072).

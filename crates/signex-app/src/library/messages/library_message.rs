@@ -295,6 +295,12 @@ pub enum LibraryMessage {
         generation: u64,
         snapshot: crate::library::refresh::RefreshSnapshotCell,
     },
+    /// The worker that re-resolves open Component Previews after a
+    /// primitive save has read (#859). Applied only while it is the newest
+    /// plan for its library; a stale one is dropped.
+    PreviewsReread {
+        readout: crate::library::preview_refresh::PreviewReadoutCell,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {

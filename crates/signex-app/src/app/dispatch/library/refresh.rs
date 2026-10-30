@@ -52,7 +52,9 @@ impl Signex {
             let has_own_wording = finish.follow_ups.iter().any(|f| {
                 matches!(
                     f,
-                    RefreshFollowUp::ExternalEdit { .. } | RefreshFollowUp::PricingSaved
+                    RefreshFollowUp::ExternalEdit { .. }
+                        | RefreshFollowUp::PricingSaved
+                        | RefreshFollowUp::HistoryRestored
                 )
             });
             if !has_own_wording {
@@ -72,6 +74,22 @@ impl Signex {
         Task::batch(tasks)
     }
 
+    /// Apply the previews a worker re-resolved after a primitive save,
+    /// unless a newer plan or a closed library made them stale.
+    pub(super) fn handle_previews_reread(
+        &mut self,
+        readout: crate::library::preview_refresh::PreviewReadoutCell,
+    ) {
+        match readout.take() {
+            Some(Some(readout)) => self.library.apply_preview_readout(readout),
+            Some(None) => crate::diagnostics::log_warning(
+                "[library] re-reading previews after a primitive save did not finish; \
+                 open previews may show the earlier copy",
+            ),
+            None => {}
+        }
+    }
+
     fn after_refresh_applied(
         &mut self,
         path: &std::path::Path,
@@ -81,6 +99,13 @@ impl Signex {
             RefreshFollowUp::Nothing | RefreshFollowUp::PricingSaved => {}
             RefreshFollowUp::RevealSelected => return self.reveal_selected_browser_row(path),
             RefreshFollowUp::CleanEditors(rows) => self.refresh_clean_editors(path, &rows),
+            RefreshFollowUp::HistoryRestored => {
+                crate::diagnostics::log_info(format!(
+                    "[reload] LibraryBrowser tab {} refreshed",
+                    path.display()
+                ));
+                self.refresh_panel_ctx();
+            }
             RefreshFollowUp::ExternalEdit { own_edit, .. } => {
                 if !own_edit {
                     let name = self.library_display_name(path);
@@ -112,6 +137,12 @@ impl Signex {
                     lib.observed_stamp = Some(stamp);
                 }
                 self.refresh_panel_ctx();
+            }
+            RefreshFollowUp::HistoryRestored => {
+                crate::diagnostics::log_warning(format!(
+                    "[reload] reload_tables({}) failed: {error}",
+                    path.display()
+                ));
             }
             RefreshFollowUp::PricingSaved => {
                 crate::diagnostics::log_warning(format!(

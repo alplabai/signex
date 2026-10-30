@@ -43,6 +43,8 @@ pub mod place;
 pub mod placed_part;
 pub(crate) mod prefix_picker;
 pub mod preview_refresh;
+#[cfg(test)]
+mod preview_refresh_tests;
 pub mod pricing;
 pub mod primitive_picker;
 pub mod range_filter;

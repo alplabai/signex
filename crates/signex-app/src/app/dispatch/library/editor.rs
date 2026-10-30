@@ -6,6 +6,7 @@
 //! pure code motion, zero behaviour change.
 
 use super::*;
+use crate::library::refresh::RefreshFollowUp;
 
 #[cfg(test)]
 mod cache_refresh_tests;
@@ -422,52 +423,56 @@ impl Signex {
         }
     }
 
-    /// Refresh the matching library's per-kind primitive cache so the
-    /// picker modal sees the just-saved primitive without waiting
-    /// for the next full `refresh_components` round-trip. No-op when
-    /// `path` lives outside any mounted library.
-    ///
-    /// A failing listing must not blank the caches. This runs right
-    /// after a primitive save, so the three caches it touches are
-    /// known-good; overwriting them with empty vecs made every symbol,
-    /// footprint and sim vanish from the library's picker and read as
-    /// "my save didn't work" while the file was fine on disk.
-    /// [`OpenLibrary::reload_primitives`] keeps each previous cache on
-    /// error and reports the failure to the Messages panel at `warn`.
-    fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) {
-        // Same `root_dir()` ancestor walk as `library_adapter_for` —
-        // `lib.root` is the `.snxlib` file, the on-disk children sit
-        // under its parent dir.
-        let library_id = match self
-            .library
+    /// The library whose directory contains `path`: its `.snxlib` file
+    /// path, same `root_dir()` ancestor walk as `library_adapter_for`.
+    /// `None` when `path` lives outside any mounted library.
+    fn library_root_containing(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
+        self.library
             .open_libraries
             .iter()
             .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false))
-        {
-            Some(lib) => lib.library_id,
-            None => return,
-        };
-        // `set` and `open_libraries` are disjoint fields, so the
-        // adapter borrow and the entry's `&mut` coexist.
-        let Some(adapter) = self.library.set.get(library_id) else {
-            return;
-        };
-        if let Some(lib) = self
-            .library
-            .open_libraries
-            .iter_mut()
-            .find(|lib| lib.library_id == library_id)
-        {
-            lib.reload_primitives(adapter);
-        }
-        // A saved primitive may be the symbol an open sheet embeds (#912).
-        self.library.drift.check_pending = true;
+            .map(|lib| lib.root.clone())
     }
 
-    /// Refresh the previews that already resolved a primitive from the
-    /// library `path` lives in, so a Component Preview tab draws the
-    /// bytes just saved instead of the copy it resolved earlier.
-    fn reload_primitive_in_library_set(&mut self, path: &std::path::Path) {
+    /// Refresh the matching library's caches so the picker modal sees the
+    /// just-saved primitive without waiting for the next full
+    /// `refresh_components` round-trip, and re-resolve the open Component
+    /// Previews that show it. The listings and file reads run on the
+    /// blocking pool (#859); `update` only plans them. No-op when `path`
+    /// lives outside any mounted library.
+    ///
+    /// A failing listing must not blank the caches (#599): the refresh
+    /// keeps each previous cache on error and reports the failure to the
+    /// Messages panel at `warn` (`LibraryState::apply_snapshot`).
+    fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) -> Task<Message> {
+        let Some(root) = self.library_root_containing(path) else {
+            return Task::none();
+        };
+        // A saved primitive may be the symbol an open sheet embeds (#912).
+        // Set now, not only when the read lands: a failed read must still
+        // trigger the check.
+        self.library.drift.check_pending = true;
+        Task::batch([
+            self.refresh_library_task(&root, RefreshFollowUp::Nothing),
+            crate::library::preview_refresh::preview_refresh_task(&mut self.library, path),
+        ])
+    }
+
+    /// [`Self::refresh_primitive_cache_for`] on this thread, for the save
+    /// that is blocking by design (`save_primitive_tab_blocking`), which
+    /// has no task to return.
+    fn refresh_primitive_cache_blocking(&mut self, path: &std::path::Path) {
+        let Some(root) = self.library_root_containing(path) else {
+            return;
+        };
+        if let Err(error) = self.library.refresh_components(&root) {
+            crate::diagnostics::log_warning(format!(
+                "[library] refresh of {} after a primitive save failed ({error}); \
+                 its cache may be stale",
+                root.display()
+            ));
+        }
         self.library.refresh_loaded_previews(path);
+        self.library.drift.check_pending = true;
     }
 }

@@ -205,7 +205,8 @@ impl Signex {
             return;
         };
         let outcome = crate::app::restore_job::read_back(kind, &tab.path);
-        self.apply_reloaded(idx, outcome, None);
+        let task = self.apply_reloaded(idx, outcome, None);
+        crate::app::path_ops::settle_task(self, task);
     }
 
     /// The root directory of the open project that contains `path`.
@@ -263,17 +264,18 @@ impl Signex {
         }
         // `apply_reloaded` installs by tab index and path, so the user's
         // active tab, tool and half-finished input stay as they are.
+        let mut tasks = Vec::new();
         match result {
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Err(failure) => {
                 self.note_restored(&path, sha);
-                self.apply_reloaded(idx, Err(failure), None);
+                tasks.push(self.apply_reloaded(idx, Err(failure), None));
                 self.refresh_panel_ctx();
             }
             Ok(restored) => {
                 let RestoredFile { document, bytes } = *restored;
                 self.note_restored(&path, sha);
-                self.apply_reloaded(idx, Ok(document), Some(bytes));
+                tasks.push(self.apply_reloaded(idx, Ok(document), Some(bytes)));
                 self.refresh_panel_ctx();
             }
         }
@@ -285,9 +287,9 @@ impl Signex {
         // engine has its own revision, so the next tick writes the restored
         // document without waiting on the old stamp.
         if wrote {
-            return self.autosave_after_disk_write(&path);
+            tasks.push(self.autosave_after_disk_write(&path));
         }
-        Task::none()
+        Task::batch(tasks)
     }
 
     /// Whether the tab at `idx` has nothing unsaved.
@@ -373,9 +375,9 @@ impl Signex {
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
-    ) {
+    ) -> Task<Message> {
         let Some(tab) = self.document_state.tabs.get(idx) else {
-            return;
+            return Task::none();
         };
         let path = tab.path.clone();
         let kind = tab.kind.clone();
@@ -461,55 +463,39 @@ impl Signex {
                 self.set_reloaded_dirty(&path, false);
                 self.commit_restore(&path, restored_bytes);
             }
-            Ok(RestoreJobDocument::Library) => self.reload_library_tab(&kind),
+            Ok(RestoreJobDocument::Library) => return self.reload_library_tab(&kind),
         }
+        Task::none()
     }
 
-    /// v0.23 — reload-after-restore for `.snxlib` tabs. Re-opens a fresh
-    /// `LocalGitAdapter` against the on-disk root (the mounted adapter's git2
-    /// caches are stale after the restore) and re-runs `reload_tables` so the
-    /// table view picks up the restored TSVs. Bails early if no library is
-    /// open at this path; failures log and leave the cache as it was.
-    fn reload_library_tab(&mut self, kind: &crate::app::TabKind) {
+    /// Reload-after-restore for `.snxlib` tabs. The restore rewrote the
+    /// library's files, so the tables are re-read on the blocking pool
+    /// through a freshly opened `LocalGitAdapter` (the mounted adapter's
+    /// git2 caches are stale); the caches update when the read lands
+    /// (`handle_refresh_finished`, `RefreshFollowUp::HistoryRestored`).
+    /// Bails early if no library is open at this path; failures log and
+    /// leave the cache as it was.
+    fn reload_library_tab(&mut self, kind: &crate::app::TabKind) -> Task<Message> {
         let lib_path = match kind {
             crate::app::TabKind::LibraryBrowser(p) => p.clone(),
             crate::app::TabKind::ComponentEditor(c) => c.library_path.clone(),
-            _ => return,
+            _ => return Task::none(),
         };
         if self.library.library_at(&lib_path).is_none() {
             crate::diagnostics::log_warning(format!(
                 "[reload] LibraryBrowser tab {} has no open library to refresh",
                 lib_path.display()
             ));
-            return;
+            return Task::none();
         }
-        if let Some(open_lib) = self.library.library_at_mut(&lib_path) {
-            match signex_library::LocalGitAdapter::open(&lib_path) {
-                Ok(fresh_adapter) => {
-                    if let Err(e) = open_lib.reload_tables(&fresh_adapter) {
-                        crate::diagnostics::log_warning(format!(
-                            "[reload] reload_tables({}) failed: {e}",
-                            lib_path.display()
-                        ));
-                    } else {
-                        self.library.touch_data();
-                        self.library.supersede_refreshes(&lib_path);
-                        self.library.sweep_dangling_refs();
-                        crate::diagnostics::log_info(format!(
-                            "[reload] LibraryBrowser tab {} refreshed",
-                            lib_path.display()
-                        ));
-                    }
-                }
-                Err(e) => {
-                    crate::diagnostics::log_warning(format!(
-                        "[reload] LocalGitAdapter::open({}) failed: {e}",
-                        lib_path.display()
-                    ));
-                }
-            }
-        }
+        let refresh = crate::library::refresh::refresh_task_from(
+            &mut self.library,
+            &lib_path,
+            crate::library::refresh::RefreshFollowUp::HistoryRestored,
+            crate::library::refresh::RefreshSource::Reopened,
+        );
         self.refresh_panel_ctx();
+        refresh
     }
 
     /// Queue the project git commit for the restore, so a clean tab does not
