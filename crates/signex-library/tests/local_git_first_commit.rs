@@ -307,3 +307,94 @@ fn recover_init_never_commits_what_a_symlink_points_at() {
     assert!(!head_tracks(tmp.path(), "symbols/leak.snxsym"));
     assert!(!head_tracks(tmp.path(), ".gitattributes"));
 }
+
+fn blob_text(dir: &Path, name: &str) -> String {
+    let repo = Repository::open(dir).unwrap();
+    let tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let blob = tree
+        .get_path(Path::new(name))
+        .unwrap()
+        .to_object(&repo)
+        .unwrap();
+    String::from_utf8_lossy(blob.as_blob().unwrap().content()).into_owned()
+}
+
+/// #1741: a file the user's own ignore rules name stays out of history.
+#[test]
+fn recover_init_respects_the_users_ignore_rules() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    std::fs::write(tmp.path().join(".gitignore"), "*.bak\n").unwrap();
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::fs::write(tmp.path().join("symbols/ok.snxsym"), "ok").unwrap();
+    std::fs::write(tmp.path().join("symbols/x.bak"), "scratch").unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    assert!(head_tracks(tmp.path(), "symbols/ok.snxsym"));
+    assert!(!head_tracks(tmp.path(), "symbols/x.bak"));
+}
+
+#[cfg(unix)]
+mod links {
+    use super::*;
+
+    /// A `.gitignore` that cannot take the managed block does not fail
+    /// Re-init.
+    #[test]
+    fn recover_init_goes_on_with_an_unwritable_gitignore() {
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("ignore");
+        std::fs::write(&target, "*.bak\n").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = plain_library(tmp.path());
+        std::os::unix::fs::symlink(&target, tmp.path().join(".gitignore")).unwrap();
+
+        LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+        assert!(head_tracks(tmp.path(), "lib.snxlib"));
+        assert!(!head_tracks(tmp.path(), ".gitignore"));
+    }
+
+    /// A refused Re-init that created the repo takes its unborn `.git/` away.
+    #[test]
+    fn a_refused_recover_init_leaves_no_unborn_repo_behind() {
+        let outside = tempfile::tempdir().unwrap();
+        let real = outside.path().join("real.snxlib");
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = plain_library(tmp.path());
+        std::fs::rename(&lib, &real).unwrap();
+        std::os::unix::fs::symlink(&real, &lib).unwrap();
+
+        assert!(LocalGitAdapter::recover_init(&lib).is_err());
+
+        assert!(!tmp.path().join(".git").exists());
+    }
+
+    /// A tracked file that is now a link keeps what HEAD has; it is not a
+    /// silent deletion.
+    #[test]
+    fn recover_init_keeps_a_tracked_file_that_became_a_link() {
+        let outside = tempfile::tempdir().unwrap();
+        let secret = outside.path().join("secret");
+        std::fs::write(&secret, "PRIVATE").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let lib = plain_library(tmp.path());
+        std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+        let sym = tmp.path().join("symbols/x.snxsym");
+        std::fs::write(&sym, "orig").unwrap();
+        LocalGitAdapter::recover_init(&lib).expect("first");
+
+        std::fs::remove_file(&sym).unwrap();
+        std::os::unix::fs::symlink(&secret, &sym).unwrap();
+        LocalGitAdapter::recover_init(&lib).expect("second");
+
+        assert_eq!(blob_text(tmp.path(), "symbols/x.snxsym"), "orig");
+    }
+}

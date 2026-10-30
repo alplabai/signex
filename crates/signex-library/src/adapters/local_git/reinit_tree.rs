@@ -19,6 +19,8 @@ pub(super) struct Snapshot {
     pub(super) tree: git2::Oid,
     /// Every library file in the tree, with the blob committed for it.
     files: Vec<(String, git2::Oid)>,
+    /// Tracked library paths that are gone from disk and left the tree.
+    removed: Vec<String>,
 }
 
 /// The repo's HEAD commit, or `None` when it has no commit yet. A repo
@@ -71,9 +73,25 @@ fn is_plain_file(root_dir: &Path, rel: &str) -> bool {
 /// Library files under `root_dir`, as `/`-separated paths: the `.snxlib`,
 /// the managed `.gitignore` (written here, keeping user lines), a
 /// `.gitattributes` if there is one, and every regular file in the owned
-/// folders except write-lock sidecars and managed clutter.
-fn library_files(file_path: &Path, root_dir: &Path) -> Result<Vec<String>, LibraryError> {
-    super::ignore_rules::write_ignore_rules(root_dir)?;
+/// folders except write-lock sidecars and what the repo's ignore rules name.
+/// The managed `.gitignore` block is written best-effort: a file that cannot
+/// take it (read-only, a link, broken markers) is warned about and left as
+/// it is, as a normal commit does, and Re-init goes on.
+fn library_files(
+    repo: &git2::Repository,
+    file_path: &Path,
+    root_dir: &Path,
+) -> Result<Vec<String>, LibraryError> {
+    if let Err(e) = super::ignore_rules::write_ignore_rules(root_dir) {
+        tracing::warn!(
+            target: "signex::library",
+            "Re-init could not add Signex's ignore rules to {}: {e}",
+            root_dir.join(super::ignore_rules::GITIGNORE_FILE).display()
+        );
+    }
+    if let Err(e) = super::ignore_rules::apply_managed_rules(repo) {
+        return Err(LibraryError::Backend(format!("git ignore rules: {e}")));
+    }
     let snxlib = file_name_str(file_path)?;
     if !is_plain_file(root_dir, &snxlib) {
         return Err(LibraryError::Backend(format!(
@@ -88,12 +106,17 @@ fn library_files(file_path: &Path, root_dir: &Path) -> Result<Vec<String>, Libra
         }
     }
     for dir in OWNED_DIRS {
-        collect_files(root_dir, dir, &mut out)?;
+        collect_files(repo, root_dir, dir, &mut out)?;
     }
     Ok(out)
 }
 
-fn collect_files(root_dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<(), LibraryError> {
+fn collect_files(
+    repo: &git2::Repository,
+    root_dir: &Path,
+    rel: &str,
+    out: &mut Vec<String>,
+) -> Result<(), LibraryError> {
     // The folder itself (and `assets/` above `assets/datasheets`) must not be
     // a link either; `is_plain_file` is for files, so walk the parts here.
     let mut dir = root_dir.to_path_buf();
@@ -110,12 +133,17 @@ fn collect_files(root_dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<()
     for entry in entries {
         let entry = entry?;
         let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            tracing::warn!(
+                target: "signex::library",
+                "Re-init left out {}: its name is not UTF-8",
+                entry.path().display()
+            );
             continue;
         };
         let child = format!("{rel}/{name}");
         let kind = entry.file_type()?;
         if kind.is_dir() {
-            collect_files(root_dir, &child, out)?;
+            collect_files(repo, root_dir, &child, out)?;
         } else if kind.is_symlink() {
             tracing::warn!(
                 target: "signex::library",
@@ -125,6 +153,9 @@ fn collect_files(root_dir: &Path, rel: &str, out: &mut Vec<String>) -> Result<()
         } else if kind.is_file()
             && !is_write_lock_file(Path::new(&child))
             && !super::ignore_rules::is_managed_clutter(&child)
+            && !repo
+                .status_should_ignore(Path::new(&child))
+                .unwrap_or(false)
         {
             out.push(child);
         }
@@ -159,16 +190,29 @@ pub(super) fn library_tree(
 ) -> Result<Snapshot, LibraryError> {
     let backend =
         |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
-    let files = library_files(file_path, root_dir)?;
+    let files = library_files(repo, file_path, root_dir)?;
     // In memory only: not the repo's index, so nothing staged there is seen.
     let mut index = git2::Index::new().map_err(backend("git index"))?;
+    let mut removed = Vec::new();
     if let Some(parent) = parent {
         let base = parent.tree().map_err(backend("git parent tree"))?;
         index.read_tree(&base).map_err(backend("git read tree"))?;
-    }
-    for dir in OWNED_DIRS {
-        // Fails when the folder holds nothing in the tree: nothing to drop.
-        let _ = index.remove_dir(Path::new(dir), 0);
+        // A tracked file leaves the tree only when it is gone from disk. One
+        // that is still there but left out (a link, an ignored file, a name
+        // that is not UTF-8) keeps what HEAD has.
+        let tracked: Vec<String> = index
+            .iter()
+            .filter_map(|e| String::from_utf8(e.path).ok())
+            .filter(|p| OWNED_DIRS.iter().any(|d| p.starts_with(&format!("{d}/"))))
+            .collect();
+        for path in tracked {
+            if fs::symlink_metadata(root_dir.join(&path)).is_err() {
+                index
+                    .remove_path(Path::new(&path))
+                    .map_err(backend("git tree remove"))?;
+                removed.push(path);
+            }
+        }
     }
     let mut blobs = Vec::with_capacity(files.len());
     for name in files {
@@ -182,7 +226,11 @@ pub(super) fn library_tree(
     let tree = index
         .write_tree_to(repo)
         .map_err(backend("git write tree"))?;
-    Ok(Snapshot { tree, files: blobs })
+    Ok(Snapshot {
+        tree,
+        files: blobs,
+        removed,
+    })
 }
 
 /// After the commit, make the repo's own index agree with it for the
@@ -195,20 +243,9 @@ pub(super) fn record_in_index(
     let backend =
         |what: &'static str| move |e: git2::Error| LibraryError::Backend(format!("{what}: {e}"));
     let mut index = repo.index().map_err(backend("git index"))?;
-    let kept: std::collections::HashSet<&str> = snapshot
-        .files
-        .iter()
-        .map(|(name, _)| name.as_str())
-        .collect();
-    let stale: Vec<String> = index
-        .iter()
-        .filter_map(|e| String::from_utf8(e.path).ok())
-        .filter(|p| OWNED_DIRS.iter().any(|d| p.starts_with(&format!("{d}/"))))
-        .filter(|p| !kept.contains(p.as_str()))
-        .collect();
-    for path in stale {
+    for path in &snapshot.removed {
         index
-            .remove_path(Path::new(&path))
+            .remove_path(Path::new(path))
             .map_err(backend("git index remove"))?;
     }
     let mut lfs_paths = false;

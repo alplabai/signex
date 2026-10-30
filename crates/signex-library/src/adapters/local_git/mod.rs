@@ -3,7 +3,7 @@
 //! Per `v0.9-snxlib-as-file-plan.md`, a Signex library on disk is a
 //! *directory* containing a `.snxlib` file (the user-facing entry
 //! point) and sibling `symbols/` / `footprints/` / `sims/` /
-//! `models/` directories. The `.git/` repo lives at the parent
+//! `assets/datasheets/` directories. The `.git/` repo lives at the parent
 //! directory so per-primitive `git log -- symbols/<name>.snxsym`
 //! works line-by-line — that's the load-bearing reason the layout
 //! is multi-file.
@@ -14,7 +14,7 @@
 //! ├── symbols/<slug>.snxsym
 //! ├── footprints/<uuid>.snxfpt
 //! ├── sims/<uuid>.snxsim
-//! ├── models/                      (3D models, optionally LFS-tracked)
+//! ├── assets/datasheets/<hash>.pdf (pinned datasheets)
 //! ├── .gitattributes               (written when [`LibraryInitOptions::use_lfs`])
 //! ├── .gitignore                   (the managed block, with version control)
 //! └── .git/
@@ -300,9 +300,55 @@ impl LocalGitAdapter {
         Ok(adapter)
     }
 
+    /// The commit of [`Self::recover_init`]: HEAD's tree plus the library's
+    /// own files, on top of HEAD when there is one.
+    fn reinit_commit(
+        repo: &git2::Repository,
+        file_path: &Path,
+        root_dir: &Path,
+    ) -> Result<(), LibraryError> {
+        let (sig_name, sig_email) = identity_for_repo(repo)?;
+        let sig = git2::Signature::now(&sig_name, &sig_email)
+            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+
+        // Built in memory from HEAD's tree (empty when unborn), so what the
+        // user has staged in this repo is neither committed nor touched.
+        let parent = match repo.head() {
+            Ok(h) => h
+                .peel_to_commit()
+                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
+                .map(Some)?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+        };
+        let snapshot = reinit_tree::library_tree(repo, file_path, root_dir, parent.as_ref())?;
+        let tree = repo
+            .find_tree(snapshot.tree)
+            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "chore: snxlib re-init",
+            &tree,
+            &parents,
+        )
+        .map_err(|e| LibraryError::Backend(format!("git recover commit: {e}")))?;
+        // The commit has landed: a failure here must not read as a failed
+        // Re-init (a retry would stack a second commit).
+        if let Err(e) = reinit_tree::record_in_index(repo, &snapshot) {
+            tracing::warn!(
+                target: "signex::library",
+                "Re-init committed, but the git index could not be updated: {e}"
+            );
+        }
+        Ok(())
+    }
+
     /// Recover a library whose `.git/` directory was deleted
     /// out-from-under-it. Re-runs `git init` at the parent directory
-    /// and commits the library's own files (see `stage_library_files`) as a
+    /// and commits the library's own files (see `reinit_tree`) as a
     /// fresh "snxlib re-init" commit; other files in the folder stay
     /// untouched. Refuses a folder that is another repo with history that
     /// does not track this library. Past history is lost — the recovery
@@ -340,38 +386,16 @@ impl LocalGitAdapter {
         // working tree, so this also handles the "git was *not*
         // deleted" case as a no-op + re-commit-everything. The recovery
         // dialog is the gate; the adapter just does what it's asked.
+        let created_repo = git2::Repository::open(&root_dir).is_err();
         let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git re-init: {e}")))?;
-        let (sig_name, sig_email) = identity_for_repo(&repo)?;
-        let sig = git2::Signature::now(&sig_name, &sig_email)
-            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
-
-        // Built in memory from HEAD's tree (empty when unborn), so what the
-        // user has staged in this repo is neither committed nor touched.
-        let parent = match repo.head() {
-            Ok(h) => h
-                .peel_to_commit()
-                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
-                .map(Some)?,
-            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
-            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
-        };
-        let snapshot = reinit_tree::library_tree(&repo, &file_path, &root_dir, parent.as_ref())?;
-        let tree = repo
-            .find_tree(snapshot.tree)
-            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            "chore: snxlib re-init",
-            &tree,
-            &parents,
-        )
-        .map_err(|e| LibraryError::Backend(format!("git recover commit: {e}")))?;
-        reinit_tree::record_in_index(&repo, &snapshot)?;
-
+        // A fresh, unborn `.git/` left by a refused Re-init would hide the
+        // GitMissing recovery on the next open: take it away again.
+        Self::reinit_commit(&repo, &file_path, &root_dir).inspect_err(|_| {
+            if created_repo {
+                let _ = fs::remove_dir_all(root_dir.join(".git"));
+            }
+        })?;
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
