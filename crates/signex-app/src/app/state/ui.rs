@@ -497,6 +497,8 @@ pub struct UiState {
     /// Cached Annotate-dialog preview; loaded off-thread and re-derived in
     /// `update`, never in `view` (#111).
     pub annotate_preview: crate::app::handlers::erc::AnnotatePreviewCache,
+    /// The Annotate or Reset Duplicate Designators run in flight, if any (#859).
+    pub annotate_runs: crate::app::handlers::erc::AnnotateRuns,
     /// Token of the newest Re-prefix to standard library lookup (#1315); a
     /// result carrying an older one is dropped.
     pub reprefix_generation: u64,

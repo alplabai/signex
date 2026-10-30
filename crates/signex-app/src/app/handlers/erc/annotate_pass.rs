@@ -4,8 +4,10 @@ use iced::Task;
 
 use super::super::super::*;
 use super::annotate::{
-    PassFailed, annotate_and_save_unopened, annotate_unopened_in_memory, read_only_sheets,
+    PassFailed, annotate_unopened_for_write, annotate_unopened_in_memory, read_only_sheets,
 };
+use super::annotate_job::{PassApplied, PendingWrite, RunUndo};
+use crate::app::project_sheets::ProjectSheetSet;
 
 /// What one project-wide pass does: the engine mode, and (#1315) an optional
 /// re-prefix map that makes the pass one Re-prefix to standard run.
@@ -21,31 +23,70 @@ pub(super) struct AnnotatePass<'a> {
 }
 
 impl Signex {
-    /// The project-wide annotate walk: one shared counter across every sheet,
-    /// in the order `ordered_project_sheet_paths` defines.
+    /// Re-prefix's entry (#1315): assemble the project here and number it in
+    /// this one `update`. Re-prefix writes nothing (it parks the unopened sheets
+    /// dirty), but its sheet read is still inline; Annotate itself runs through
+    /// `annotate_job` and reaches [`Self::number_project`] with sheets a worker
+    /// read.
     pub(super) fn annotate_project(&mut self, pass: AnnotatePass<'_>) -> Task<Message> {
+        let label = pass.label;
+        if self.ui_state.annotate_runs.is_running() {
+            let detail = format!(
+                "{label} was not run: an Annotate or Reset Duplicate Designators run is still going. \
+                 Try again once it has finished."
+            );
+            crate::diagnostics::log_warning(detail.clone());
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::annotate(detail));
+            return Task::none();
+        }
+        // The project, from the one assembler: the declared pages plus
+        // everything reachable down the child-sheet graph (#406).
+        let (_pages, project_set) =
+            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
+        // Refused up front, before any sheet is touched, so a re-prefix stays
+        // all or nothing and an annotate never half-runs.
+        let sheets = || project_set.sheets.keys().map(std::path::PathBuf::as_path);
+        if self.refuse_annotate_while_project_moves(sheets(), label)
+            || self.refuse_annotate_while_path_op(sheets(), label)
+        {
+            return Task::none();
+        }
+        let applied = self.number_project(pass, project_set);
+        debug_assert!(applied.writes.is_empty(), "a re-prefix writes nothing");
+        applied.task
+    }
+
+    /// Annotate the project `project_set` (read by a worker): one shared
+    /// counter across every sheet, in the order `ordered_project_sheet_paths`
+    /// defines. Open sheets are annotated in place; each unopened sheet comes
+    /// back as bytes for the write worker.
+    pub(super) fn apply_annotate(
+        &mut self,
+        mode: signex_engine::AnnotateMode,
+        project_set: ProjectSheetSet,
+    ) -> PassApplied {
+        self.number_project(
+            AnnotatePass {
+                mode,
+                reprefix: None,
+                label: "Annotate",
+            },
+            project_set,
+        )
+    }
+
+    fn number_project(
+        &mut self,
+        pass: AnnotatePass<'_>,
+        project_set: ProjectSheetSet,
+    ) -> PassApplied {
         let AnnotatePass {
             mode,
             reprefix,
             label,
         } = pass;
-        // The project, from the one assembler: the declared pages plus
-        // everything reachable down the child-sheet graph. Seeding off
-        // `engines.values()` instead both over-reached (a loose tab from
-        // another project claimed numbers here) and under-reached (a
-        // hierarchical child never added to `data.sheets` was invisible, so
-        // this "project-wide" annotate handed out designators it already
-        // used) — #406.
-        let (_pages, project_set) =
-            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-        // Refused up front, before any sheet is touched, so a re-prefix stays
-        // all or nothing and an annotate never half-runs.
-        if self.refuse_annotate_while_project_moves(&project_set, label)
-            || self.refuse_annotate_while_path_op(&project_set, label)
-        {
-            return Task::none();
-        }
-
+        let mut writes: Vec<PendingWrite> = Vec::new();
         // Pass A: seed the shared counter from every sheet's already-
         // annotated symbols. This happens inside annotate_with_seed's
         // phase 2, but running a separate seed pass first ensures
@@ -107,7 +148,6 @@ impl Signex {
         let read_only = read_only_sheets(&self.document_state, &project_set);
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
-        let mut disk_touched = 0usize;
         // One project-wide undo step per run, unless the preference asks for
         // one per sheet. Which sheets it touched is filled in below.
         let undo_group = (reprefix.is_some()
@@ -245,7 +285,7 @@ impl Signex {
                 }
                 continue;
             }
-            if annotate_and_save_unopened(
+            if let Some(bytes) = annotate_unopened_for_write(
                 document,
                 path,
                 mode,
@@ -253,37 +293,28 @@ impl Signex {
                 scope,
                 &mut assigned,
             ) {
-                disk_touched += 1;
-                touched_sheets.disk_only.push(path.clone());
+                writes.push(PendingWrite {
+                    path: path.clone(),
+                    bytes,
+                });
             }
         }
         if failed {
-            return self.roll_back_reprefix(
+            let task = self.roll_back_reprefix(
                 undo_group,
                 &touched_sheets.live,
                 &parked_here,
                 &newly_dirty,
                 label,
             );
+            return PassApplied::without_writes(task);
         }
-        let changed_sheets = touched_sheets.live.len() + touched_sheets.disk_only.len();
-        // The files written above bypassed the document save path, so the
-        // autosave hook is called for them here (#1164).
-        let recovery_cleanup: Vec<Task<Message>> = touched_sheets
-            .disk_only
-            .clone()
-            .iter()
-            .map(|path| self.autosave_after_disk_write(path))
-            .collect();
+        let changed_sheets = touched_sheets.live.len();
         touched_sheets.parked = parked_here.iter().cloned().collect();
+        // Owed to disk already, so an undo before the write lands still names them.
+        touched_sheets.disk_only = writes.iter().map(|w| w.path.clone()).collect();
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
-        }
-        if disk_touched > 0 {
-            crate::diagnostics::log_info(format!(
-                "Annotate: wrote {} unopened sheet file(s) to disk",
-                disk_touched,
-            ));
         }
         // The active engine was annotated through a non-`Command` method, so
         // nothing has marked it dirty. Without this the quit guard sees a
@@ -311,11 +342,17 @@ impl Signex {
             ));
         } else {
             crate::diagnostics::log_info(format!(
-                "Annotated symbols on {changed_sheets} sheet(s) ({mode:?})",
+                "Annotated symbols on {changed_sheets} open sheet(s) ({mode:?}), {} unopened \
+                 sheet(s) to write",
+                writes.len(),
             ));
         }
         self.report_read_only_skipped(label, &read_only);
-        Task::batch(recovery_cleanup)
+        PassApplied {
+            writes,
+            task: Task::none(),
+            undo: undo_group.map(|group| RunUndo { group }),
+        }
     }
 }
 

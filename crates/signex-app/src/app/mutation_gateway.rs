@@ -796,7 +796,8 @@ mod tests {
         );
         app.document_state.active_path = Some(top);
 
-        let _ = app.handle_reset_duplicate_designators();
+        let task = app.handle_reset_duplicate_designators();
+        crate::app::path_ops::settle_task(&mut app, task);
 
         let written = std::fs::read_to_string(&child_path).expect("read child back");
         std::fs::remove_dir_all(&dir).ok();

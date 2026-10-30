@@ -46,12 +46,11 @@ impl Signex {
             MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
                 AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber),
             ))),
-            // Reset Duplicate Designators — scan every sheet (active,
-            // cached, and on-disk project sheets), find references
-            // that appear on more than one symbol across the project,
-            // reset just those to `{prefix}?`. Other designators keep
-            // their current value. Saves unopened sheets through the
-            // engine's native `.snxsch` writer so the fix is project-wide.
+            // Reset Duplicate Designators — find references that appear on
+            // more than one part across the project, reset just those to
+            // `{prefix}?`. Other designators keep their current value. The
+            // sheets are read and the unopened ones written on background
+            // jobs (`handlers/erc/annotate_job.rs`), so the fix is project-wide.
             MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
             MenuMessage::AnnotateBack => {
                 crate::diagnostics::log_info(

@@ -46,9 +46,12 @@ fn annotate_grid_with(order: AnnotateOrder) -> Vec<String> {
     app.document_state.active_path = Some(path);
 
     let _ = app.update(Message::Annotate(AnnotateMsg::OrderChanged(order)));
-    let _ = app.update(Message::Annotate(AnnotateMsg::Run(
-        signex_engine::AnnotateMode::ResetAndRenumber,
-    )));
+    crate::settle_support::settle(
+        &mut app,
+        Message::Annotate(AnnotateMsg::Run(
+            signex_engine::AnnotateMode::ResetAndRenumber,
+        )),
+    );
 
     app.document_state
         .active_engine()

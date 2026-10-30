@@ -66,7 +66,7 @@ impl Signex {
     }
 
     /// The open sheets' child-sheet placements, read live (memory only).
-    fn child_sheet_signature(&self) -> ChildSheetSignature {
+    pub(crate) fn child_sheet_signature(&self) -> ChildSheetSignature {
         self.document_state
             .engines
             .iter()
@@ -205,7 +205,7 @@ impl Signex {
             crate::diagnostics::log_info("Replace cancelled: the search changed.");
             return Task::none();
         }
-        if job.epoch != self.document_state.documents_epoch {
+        if job.epoch != self.document_state.documents_epoch || self.replace_sheets_held(&job) {
             crate::diagnostics::log_warning(
                 "Replace cancelled: a document changed while the sheets were being read. \
                  Nothing was changed; run Replace All again.",
@@ -227,6 +227,18 @@ impl Signex {
         };
         self.replace_across_sheets(&job, prep);
         self.refresh_find_matches()
+    }
+
+    /// A sheet with no engine that the replace would install one for is being
+    /// written or moved by a job that is already running (Annotate's write):
+    /// the bytes the replace read are no longer what the file holds.
+    fn replace_sheets_held(&self, job: &ReplaceJob) -> bool {
+        sheets_of(&job.matches).iter().any(|listed| {
+            let path = self.resolve_held_spelling(listed.clone());
+            !self.document_state.engines.contains_key(&path)
+                && (self.document_state.document_saves.is_saving(&path)
+                    || self.refuse_while_path_op(&path, "replaced").is_err())
+        })
     }
 
     /// Apply `job` to every sheet it names, all or nothing: one `update`, one
