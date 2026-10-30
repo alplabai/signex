@@ -81,6 +81,9 @@ impl Signex {
         if !navigates && self.refuse_read_only_write(&address.library_path) {
             return Task::none();
         }
+        if !navigates && let Some(state) = self.library.editors.get_mut(&address) {
+            state.edit_epoch += 1;
+        }
         match msg {
             EditorMsg::CloseEditor => return self.close_component_preview(&address),
             EditorMsg::SaveDraft | EditorMsg::Commit => {
@@ -430,7 +433,7 @@ impl Signex {
         address: &EditorAddress,
         require_clean: bool,
     ) -> Task<Message> {
-        crate::library::preview_reads::reload_task(&mut self.library, address, require_clean)
+        crate::library::preview_reads::reload_task(&mut self.library, address, require_clean, true)
     }
 
     /// After a write to `rows` that did not go through their Component
@@ -447,7 +450,7 @@ impl Signex {
     ) -> Task<Message> {
         let clean = self.clean_editors_of(library_path, rows);
         Task::batch(clean.iter().map(|address| {
-            crate::library::preview_reads::reload_task(&mut self.library, address, true)
+            crate::library::preview_reads::reload_task(&mut self.library, address, true, false)
         }))
     }
 

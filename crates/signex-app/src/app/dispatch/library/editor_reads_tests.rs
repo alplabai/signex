@@ -7,7 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use signex_library::{
-    ComponentRow, LibraryAdapter, LibraryError, Manifest, PrimitiveRef, RowId, Symbol,
+    ComponentRow, LibraryAdapter, LibraryError, LifecycleState, Manifest, PrimitiveRef, RowId,
+    Symbol,
 };
 use uuid::Uuid;
 
@@ -142,47 +143,69 @@ fn reloading_a_row_reads_nothing_in_update() {
     assert_eq!(f.preview().row.description, "Stored");
 }
 
+/// A real edit of the row, as the Lifecycle pills send it.
+fn edit(f: &mut Fixture, state: LifecycleState) {
+    let task = f.event(EditorMsg::SetLifecycle(state));
+    settle_task(&mut f.app, task);
+}
+
 #[test]
 fn a_reload_asked_of_a_clean_copy_keeps_what_is_typed_before_it_lands() {
     let mut f = fixture();
 
     let task = f.event(EditorMsg::ReloadRequested);
     // The read is still queued; the user types.
-    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
-    preview.row.description = "Typed".into();
-    preview.dirty = true;
+    edit(&mut f, LifecycleState::Obsolete);
     settle_task(&mut f.app, task);
 
-    assert_eq!(f.preview().row.description, "Typed");
+    assert_eq!(f.preview().row.state, LifecycleState::Obsolete);
     assert!(f.preview().dirty);
 }
 
 #[test]
 fn a_confirmed_reload_keeps_what_is_typed_after_the_confirm() {
     let mut f = fixture();
-    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
-    preview.row.description = "Confirmed over".into();
-    preview.dirty = true;
+    edit(&mut f, LifecycleState::Deprecated);
 
     let task = f.event(EditorMsg::ReloadConfirmed);
-    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
-    preview.row.description = "Typed after".into();
+    edit(&mut f, LifecycleState::Obsolete);
     settle_task(&mut f.app, task);
 
-    assert_eq!(f.preview().row.description, "Typed after");
+    assert_eq!(f.preview().row.state, LifecycleState::Obsolete);
+}
+
+#[test]
+fn a_confirmed_reload_keeps_a_simulation_edit_typed_after_the_confirm() {
+    let mut f = fixture();
+    edit(&mut f, LifecycleState::Deprecated);
+    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
+    preview.sim = Some(signex_library::SimModel::empty(
+        "Deck",
+        signex_library::SimKind::Spice3,
+    ));
+    preview.sim_body = Some(iced::widget::text_editor::Content::with_text("*"));
+
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    let typed =
+        iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Insert('x'));
+    let task_edit = f.event(EditorMsg::SimBodyAction(typed));
+    settle_task(&mut f.app, task_edit);
+    settle_task(&mut f.app, task);
+
+    let sim = f.preview().sim.as_ref().expect("the edited model is kept");
+    assert!(sim.body.contains('x'), "{:?}", sim.body);
+    assert_eq!(f.preview().row.state, LifecycleState::Deprecated);
 }
 
 #[test]
 fn a_confirmed_reload_replaces_the_edits_that_existed_at_the_confirm() {
     let mut f = fixture();
-    let preview = f.app.library.editors.get_mut(&f.address).expect("preview");
-    preview.row.description = "Confirmed over".into();
-    preview.dirty = true;
+    edit(&mut f, LifecycleState::Deprecated);
 
     let task = f.event(EditorMsg::ReloadConfirmed);
     settle_task(&mut f.app, task);
 
-    assert_eq!(f.preview().row.description, "Stored");
+    assert_eq!(f.preview().row.state, LifecycleState::Draft);
 }
 
 /// A close asked while the read runs waits behind it; the message that

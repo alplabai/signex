@@ -197,6 +197,10 @@ pub struct ComponentPreviewState {
     /// row's revision, so a Save or a reload started meanwhile is refused
     /// until the result is in.
     pub binding_primitive: bool,
+    /// Bumped by every event that edits or saves the preview (all of them
+    /// except navigation), so a read that was planned before an edit can
+    /// tell the edit happened, whichever field it touched.
+    pub edit_epoch: u64,
 }
 
 impl ComponentPreviewState {
@@ -228,6 +232,7 @@ impl ComponentPreviewState {
             saving_generation: 0,
             saving_batch: None,
             binding_primitive: false,
+            edit_epoch: 0,
         }
     }
 

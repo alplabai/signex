@@ -150,9 +150,12 @@ pub struct EditorReloadPlan {
     resolver: SharedResolver,
     tab: PreviewTab,
     require_clean: bool,
-    /// The copy as it was when the reload was planned. A reload the user
-    /// asked for replaces the edits that existed then, not newer ones.
-    row_at_plan: ComponentRow,
+    /// The Reload button or Confirm was pressed for this, as opposed to a
+    /// refresh after a write: a reload that cannot apply says so.
+    requested: bool,
+    /// The preview's `edit_epoch` when planned. A reload replaces the edits
+    /// that existed then, not newer ones.
+    epoch_at_plan: u64,
 }
 
 impl EditorReloadPlan {
@@ -178,7 +181,8 @@ impl EditorReloadPlan {
             generation: self.generation,
             tab: self.tab,
             require_clean: self.require_clean,
-            row_at_plan: self.row_at_plan,
+            requested: self.requested,
+            epoch_at_plan: self.epoch_at_plan,
             row,
             needs,
             reads,
@@ -193,7 +197,8 @@ pub struct EditorReloadOutcome {
     generation: u64,
     tab: PreviewTab,
     require_clean: bool,
-    row_at_plan: ComponentRow,
+    requested: bool,
+    epoch_at_plan: u64,
     row: Result<ComponentRow, LibraryError>,
     needs: PreviewNeeds,
     reads: PreviewReads,
@@ -223,9 +228,9 @@ pub enum ReloadApplied {
 }
 
 /// A reload that cannot apply: refused out loud when the user asked for it,
-/// dropped quietly when nobody did.
-fn refused(unrequested: bool, why: &str) -> ReloadApplied {
-    if unrequested {
+/// dropped quietly when it was a refresh nobody asked for.
+fn refused(requested: bool, why: &str) -> ReloadApplied {
+    if !requested {
         return ReloadApplied::Dropped;
     }
     crate::diagnostics::log_info(why);
@@ -261,20 +266,23 @@ impl LibraryState {
         }
     }
 
-    /// Plan re-reading the row of `address`. `require_clean` is for
-    /// reloads nobody asked for: the copy is then replaced only if the user
-    /// has not edited it by the time the read lands.
+    /// Plan re-reading the row of `address`. `require_clean` is for a copy
+    /// that was clean when planned: it is replaced only if it is still clean
+    /// when the read lands. `requested` is for a Reload the user pressed: if
+    /// it cannot apply, it says so. In every case edits made after the plan
+    /// (`edit_epoch`) are kept.
     pub fn plan_editor_reload(
         &mut self,
         address: &EditorAddress,
         require_clean: bool,
+        requested: bool,
     ) -> Option<EditorReloadPlan> {
         let (library_id, root) = self
             .library_at(&address.library_path)
             .map(|lib| (lib.library_id, lib.root.clone()))?;
         let preview = self.editors.get(address)?;
         let tab = preview.active_tab;
-        let row_at_plan = preview.row.clone();
+        let epoch_at_plan = preview.edit_epoch;
         let Some(adapter) = self.set.get_shared(library_id) else {
             crate::diagnostics::log_warning(format!(
                 "Row {} could not be reloaded: {}",
@@ -296,7 +304,8 @@ impl LibraryState {
             resolver: self.shared_resolver(),
             tab,
             require_clean,
-            row_at_plan,
+            requested,
+            epoch_at_plan,
         })
     }
 
@@ -312,7 +321,8 @@ impl LibraryState {
             generation,
             tab,
             require_clean,
-            row_at_plan,
+            requested,
+            epoch_at_plan,
             row,
             needs,
             reads,
@@ -337,20 +347,19 @@ impl LibraryState {
         let Some(old) = self.editors.get(&address) else {
             return ReloadApplied::Dropped;
         };
-        if require_clean && old.has_unsaved_edits() {
-            return ReloadApplied::Dropped;
+        let edited_since =
+            old.edit_epoch != epoch_at_plan || (require_clean && old.has_unsaved_edits());
+        if edited_since {
+            return refused(
+                requested,
+                "Reload was ignored: this row was edited after the reload was asked for. \
+                 Reload again to discard the new edits.",
+            );
         }
         if old.saving_row.is_some() || old.binding_primitive {
             return refused(
-                require_clean,
+                requested,
                 "Reload was ignored: this row is being saved. Reload again once the save has finished.",
-            );
-        }
-        if !require_clean && old.row != row_at_plan {
-            return refused(
-                false,
-                "Reload was ignored: this row was edited after the reload was confirmed. \
-                 Reload again to discard the new edits.",
             );
         }
         let current_tab = old.active_tab;
@@ -374,7 +383,7 @@ impl LibraryState {
     /// save path that is blocking by design (`save_primitive_tab_blocking`),
     /// which has no task to return.
     pub fn reload_editor_blocking(&mut self, address: &EditorAddress, require_clean: bool) {
-        if let Some(plan) = self.plan_editor_reload(address, require_clean) {
+        if let Some(plan) = self.plan_editor_reload(address, require_clean, false) {
             // Same thread, same tab: nothing is left to look up.
             self.apply_editor_reload(plan.read());
         }
@@ -386,8 +395,9 @@ pub fn reload_task(
     state: &mut LibraryState,
     address: &EditorAddress,
     require_clean: bool,
+    requested: bool,
 ) -> iced::Task<crate::app::Message> {
-    let Some(plan) = state.plan_editor_reload(address, require_clean) else {
+    let Some(plan) = state.plan_editor_reload(address, require_clean, requested) else {
         return iced::Task::none();
     };
     let turn = state.writes.read_turn(&plan.root);

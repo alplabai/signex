@@ -205,7 +205,7 @@ fn planning_a_reload_reads_nothing_and_the_worker_does() {
     let mut f = fixture();
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     assert_eq!(f.reads.load(Ordering::SeqCst), 0);
     let _outcome = plan.read();
@@ -217,7 +217,7 @@ fn a_reload_replaces_the_copy_and_what_its_tab_shows() {
     let mut f = fixture();
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     let applied = f.state.apply_editor_reload(plan.read());
     assert_eq!(applied, ReloadApplied::Replaced { resolve_tab: None });
@@ -230,11 +230,11 @@ fn a_reload_superseded_by_a_newer_one_is_dropped() {
     let mut f = fixture();
     let first = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("first");
     let second = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("second");
     let early = first.read();
     f.row.lock().expect("row").description = "Newest".into();
@@ -253,7 +253,7 @@ fn a_reload_of_a_library_closed_and_opened_again_meanwhile_is_dropped() {
     let mut f = fixture();
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     let outcome = plan.read();
     f.state.close_library(&f.root.clone());
@@ -276,7 +276,7 @@ fn a_reload_nobody_asked_for_yields_to_edits_typed_since() {
     let mut f = fixture();
     let plan = f
         .state
-        .plan_editor_reload(&f.address, true)
+        .plan_editor_reload(&f.address, true, false)
         .expect("a plan");
     let outcome = plan.read();
     let preview = f.state.editors.get_mut(&f.address).expect("preview");
@@ -295,7 +295,7 @@ fn a_reload_the_user_asked_for_replaces_the_edits_that_existed_when_asked() {
     preview.dirty = true;
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     let outcome = plan.read();
 
@@ -311,11 +311,12 @@ fn a_reload_the_user_asked_for_keeps_edits_typed_after_it_was_asked() {
     preview.dirty = true;
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     let outcome = plan.read();
     let preview = f.state.editors.get_mut(&f.address).expect("preview");
     preview.row.description = "Typed after".into();
+    preview.edit_epoch += 1;
 
     assert_eq!(f.state.apply_editor_reload(outcome), ReloadApplied::Refused);
     assert_eq!(f.description(), "Typed after");
@@ -326,7 +327,7 @@ fn no_reload_replaces_a_copy_that_is_being_saved() {
     let mut f = fixture();
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     let outcome = plan.read();
     let preview = f.state.editors.get_mut(&f.address).expect("preview");
@@ -341,7 +342,7 @@ fn a_reload_after_a_tab_change_asks_for_the_new_tab_to_be_looked_up() {
     let mut f = fixture();
     let plan = f
         .state
-        .plan_editor_reload(&f.address, false)
+        .plan_editor_reload(&f.address, false, true)
         .expect("a plan");
     let outcome = plan.read();
     f.state
@@ -356,4 +357,45 @@ fn a_reload_after_a_tab_change_asks_for_the_new_tab_to_be_looked_up() {
             resolve_tab: Some(PreviewTab::Simulation)
         }
     );
+}
+
+#[test]
+fn a_requested_reload_that_meets_a_save_says_so_and_an_unrequested_one_does_not() {
+    for (requested, expected) in [
+        (true, ReloadApplied::Refused),
+        (false, ReloadApplied::Dropped),
+    ] {
+        let mut f = fixture();
+        let plan = f
+            .state
+            .plan_editor_reload(&f.address, true, requested)
+            .expect("a plan");
+        let outcome = plan.read();
+        let preview = f.state.editors.get_mut(&f.address).expect("preview");
+        preview.saving_row = Some(preview.row.clone());
+
+        assert_eq!(
+            f.state.apply_editor_reload(outcome),
+            expected,
+            "{requested}"
+        );
+        assert_eq!(f.description(), "Old");
+    }
+}
+
+#[test]
+fn a_requested_reload_of_a_clean_copy_edited_meanwhile_says_so() {
+    let mut f = fixture();
+    let plan = f
+        .state
+        .plan_editor_reload(&f.address, true, true)
+        .expect("a plan");
+    let outcome = plan.read();
+    let preview = f.state.editors.get_mut(&f.address).expect("preview");
+    preview.row.description = "Typed".into();
+    preview.edit_epoch += 1;
+    preview.dirty = true;
+
+    assert_eq!(f.state.apply_editor_reload(outcome), ReloadApplied::Refused);
+    assert_eq!(f.description(), "Typed");
 }
