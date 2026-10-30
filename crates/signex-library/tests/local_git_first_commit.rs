@@ -430,6 +430,143 @@ fn recover_init_prefers_main_among_tracking_branches() {
     assert_eq!(other.get().target().unwrap(), tip, "other branch untouched");
 }
 
+/// The branch `git init` points a re-made HEAD at on this machine.
+fn default_branch() -> String {
+    let scratch = tempfile::tempdir().unwrap();
+    let repo = Repository::init(scratch.path()).unwrap();
+    let head = repo.find_reference("HEAD").unwrap();
+    let target = head.symbolic_target().unwrap().unwrap();
+    target.strip_prefix("refs/heads/").unwrap().to_owned()
+}
+
+/// A repo at `dir` holding a base commit (no library) on `default` and a
+/// commit with the library on top, tipped by each of `tracking`. Returns the
+/// library commit.
+fn repo_with_branches(dir: &Path, default: &str, tracking: &[&str]) -> git2::Oid {
+    let (repo, _) = repo_with_staged_work(dir);
+    git2::Branch::wrap(repo.head().unwrap())
+        .rename(default, true)
+        .unwrap();
+    let sig = git2::Signature::now("t", "t@example.org").unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("lib.snxlib")).unwrap();
+    let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+    let base = repo.head().unwrap().peel_to_commit().unwrap();
+    let tip = repo
+        .commit(None, &sig, &sig, "lib", &tree, &[&base])
+        .unwrap();
+    for name in tracking {
+        repo.reference(&format!("refs/heads/{name}"), tip, true, "test")
+            .unwrap();
+    }
+    tip
+}
+
+/// #1780: the re-made HEAD resolves to a branch that does not track the
+/// library, while `main` does: Re-init continues `main`, not refuses.
+#[test]
+fn recover_init_leaves_a_resolving_remade_head_for_the_tracking_branch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let dflt = default_branch();
+    let tip = repo_with_branches(tmp.path(), &dflt, &["main"]);
+    std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    let repo = Repository::open(tmp.path()).unwrap();
+    assert_eq!(repo.head().unwrap().name().unwrap(), "refs/heads/main");
+    let new = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(new.parent_id(0).unwrap(), tip);
+    let dflt = repo.find_branch(&dflt, git2::BranchType::Local).unwrap();
+    assert_ne!(dflt.get().target().unwrap(), new.id(), "dflt untouched");
+}
+
+/// #1780: the re-made HEAD resolves to a tracking branch, but `main` has
+/// priority over it.
+#[test]
+fn recover_init_prefers_main_over_a_resolving_remade_head() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let dflt = default_branch();
+    let tip = repo_with_branches(tmp.path(), &dflt, &[&dflt, "main"]);
+    std::fs::remove_file(tmp.path().join(".git/HEAD")).unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    let repo = Repository::open(tmp.path()).unwrap();
+    assert_eq!(repo.head().unwrap().name().unwrap(), "refs/heads/main");
+    let dflt = repo.find_branch(&dflt, git2::BranchType::Local).unwrap();
+    assert_eq!(dflt.get().target().unwrap(), tip, "dflt untouched");
+}
+
+/// #1780: a HEAD that is there, on a deliberate orphan branch, is never moved
+/// onto `main`.
+#[test]
+fn recover_init_keeps_a_user_on_an_orphan_branch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let dflt = default_branch();
+    let tip = repo_with_branches(tmp.path(), &dflt, &["main"]);
+    Repository::open(tmp.path())
+        .unwrap()
+        .set_head("refs/heads/orphan")
+        .unwrap();
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    let repo = Repository::open(tmp.path()).unwrap();
+    assert_eq!(repo.head().unwrap().name().unwrap(), "refs/heads/orphan");
+    assert_eq!(
+        repo.head()
+            .unwrap()
+            .peel_to_commit()
+            .unwrap()
+            .parent_count(),
+        0
+    );
+    let main = repo.find_branch("main", git2::BranchType::Local).unwrap();
+    assert_eq!(main.get().target().unwrap(), tip, "main untouched");
+}
+
+/// #1780: where links are not real (`core.symlinks=false`), the index holds
+/// the link the commit holds, so nothing is left staged against HEAD.
+#[cfg(unix)]
+#[test]
+fn recover_init_indexes_a_link_as_a_link_without_symlink_support() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = plain_library(tmp.path());
+    let repo = Repository::init(tmp.path()).unwrap();
+    repo.config()
+        .unwrap()
+        .set_bool("core.symlinks", false)
+        .unwrap();
+    std::fs::create_dir_all(tmp.path().join("symbols")).unwrap();
+    std::os::unix::fs::symlink("elsewhere.snxsym", tmp.path().join("symbols/x.snxsym")).unwrap();
+    drop(repo);
+
+    LocalGitAdapter::recover_init(&lib).expect("re-init");
+
+    let repo = Repository::open(tmp.path()).unwrap();
+    let head_tree = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .tree()
+        .unwrap();
+    let committed = head_tree.get_path(Path::new("symbols/x.snxsym")).unwrap();
+    assert_eq!(committed.filemode(), 0o120000);
+    let index = repo.index().unwrap();
+    let staged = index.get_path(Path::new("symbols/x.snxsym"), 0).unwrap();
+    assert_eq!(staged.mode, 0o120000);
+    assert_eq!(staged.id, committed.id());
+    let diff = repo
+        .diff_tree_to_index(Some(&head_tree), Some(&index), None)
+        .unwrap();
+    assert_eq!(diff.deltas().count(), 0, "nothing staged against HEAD");
+}
+
 // Only the unix tests read a tree entry back.
 #[cfg(unix)]
 fn entry_mode(dir: &Path, name: &str) -> i32 {
