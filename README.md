@@ -160,17 +160,17 @@ board.
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshots/editor.png" alt="Active Bar with power port dropdown and Properties panel" width="800">
+  <img src="assets/screenshots/editor.png" alt="Signex schematic editor with a selected symbol and its Properties panel" width="800">
   <br>
-  <em>Active Bar with dropdown menus, Selection Filter tags, Properties panel with document options</em>
+  <em>Active Bar, project tree with native <code>.snxsch</code> / <code>.snxprj</code> files, and the Properties panel for the selected symbol</em>
 </p>
 
 <details>
 <summary><strong>More themes</strong></summary>
 
 <p align="center">
-  <img src="assets/screenshots/cappuchine-theme.png" alt="Catppuccin Mocha theme" width="400">
-  <img src="assets/screenshots/gtihubdark-theme.png" alt="GitHub Dark theme" width="400">
+  <img src="assets/screenshots/catppuccin-theme.png" alt="Catppuccin Mocha theme" width="400">
+  <img src="assets/screenshots/github-dark-theme.png" alt="GitHub Dark theme" width="400">
   <br>
   <img src="assets/screenshots/solarized-theme.png" alt="Solarized Light theme" width="400">
   <br>
