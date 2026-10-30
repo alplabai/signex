@@ -217,6 +217,12 @@ pub enum EnableVersionControlMsg {
     Confirm,
     /// Dismiss the Enable Version Control modal without writing.
     Close,
+    /// The worker that lists a library's top-level entries finished (#859).
+    /// Applied only while the dialog still shows that directory.
+    ItemsScanned {
+        project_dir: std::path::PathBuf,
+        result: Result<Vec<crate::app::TrackItem>, String>,
+    },
     /// The off-thread run that `Confirm` started has finished (#1122).
     Finished {
         scope: crate::app::VersionControlScope,
@@ -654,6 +660,35 @@ pub enum ProjectMsg {
         job: ProjectRenameJob,
         result: Result<(), String>,
     },
+    /// The off-thread move of the `.snxprj` alone (the folder keeps its name)
+    /// finished (#859). The in-memory project follows only when `result` is
+    /// `Ok`; on `Err` the file was not moved and the dialog says why.
+    ProjectFileRenamed {
+        job: ProjectFileRenameJob,
+        result: Result<(), String>,
+    },
+    /// The worker that lists the `.snxsch` files beside the active sheet
+    /// finished (#859): the Place Sheet tool's second click picks its default
+    /// name from them. `ticket` names the click; a result for any other
+    /// ticket is dropped.
+    SheetFilesListed {
+        ticket: u64,
+        result: Result<Vec<String>, String>,
+    },
+}
+
+/// One Rename Project that moves only the `.snxprj`: `from` becomes `to`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectFileRenameJob {
+    /// The registration in `pending_path_ops` that refuses saves, opens and
+    /// other moves of the two paths until the move is reported.
+    pub guard: crate::app::path_ops::PathOpId,
+    pub project_id: crate::app::state::ProjectId,
+    pub from: std::path::PathBuf,
+    pub to: std::path::PathBuf,
+    pub new_stem: String,
+    /// The recent-projects spelling of `from`, read before the move.
+    pub recent_key: std::path::PathBuf,
 }
 
 /// One Rename Project that moves the `.snxprj` and its folder together

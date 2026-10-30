@@ -197,6 +197,11 @@ pub struct ComponentPreviewState {
     /// row's revision, so a Save or a reload started meanwhile is refused
     /// until the result is in.
     pub binding_primitive: bool,
+    /// Bumped by [`Self::mark_dirty`] and [`Self::note_edit`], so a read that
+    /// was planned before an edit can tell the edit happened, whichever
+    /// field it touched, and from wherever it came. View-only events never
+    /// bump it.
+    pub edit_epoch: u64,
 }
 
 impl ComponentPreviewState {
@@ -228,6 +233,7 @@ impl ComponentPreviewState {
             saving_generation: 0,
             saving_batch: None,
             binding_primitive: false,
+            edit_epoch: 0,
         }
     }
 
@@ -288,8 +294,17 @@ impl ComponentPreviewState {
             .retain(|hash, _| keep.iter().any(|a| &a.hash == hash));
     }
 
+    /// The preview's content was edited: it has unsaved work, and a read
+    /// planned before this (a reload) no longer describes it.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.note_edit();
+    }
+
+    /// Record an edit that is not (yet) unsaved work, such as a bind that is
+    /// already being written, or half-typed text.
+    pub fn note_edit(&mut self) {
+        self.edit_epoch += 1;
     }
 
     pub fn clear_dirty(&mut self) {

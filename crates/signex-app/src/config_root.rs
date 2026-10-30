@@ -69,6 +69,61 @@ pub fn config_root_for_dir(base: &std::path::Path) -> PathBuf {
     base.join("signex")
 }
 
+/// Per-test config roots (#1750). The per-process redirect above is one
+/// directory shared by every test thread, so two tests that write the same
+/// config file race on it. A test that needs a file of its own takes an
+/// [`isolated::IsolatedConfigRoot`]: while it lives, the resolvers that
+/// consult it (today only `crate::keymap::config_path`) answer with a
+/// private directory on that thread. [`config_root`] itself is deliberately
+/// not redirected: `fonts::prefs_path` caches its answer for the whole
+/// process, and a per-thread root must never leak into that cache. Only the
+/// calling thread is redirected, so this covers synchronous `update` paths,
+/// not work a spawned `Task` does on another thread.
+#[cfg(test)]
+pub(crate) mod isolated {
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    thread_local! {
+        static ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    }
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    pub(crate) fn current() -> Option<PathBuf> {
+        ROOT.with(|root| root.borrow().clone())
+    }
+
+    pub(crate) struct IsolatedConfigRoot {
+        root: PathBuf,
+    }
+
+    impl IsolatedConfigRoot {
+        pub(crate) fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "signex-test-prefs-{}-isolated-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir_all(&root).expect("create isolated config root");
+            ROOT.with(|slot| {
+                let mut slot = slot.borrow_mut();
+                assert!(slot.is_none(), "isolated config roots do not nest");
+                *slot = Some(root.clone());
+            });
+            Self { root }
+        }
+    }
+
+    impl Drop for IsolatedConfigRoot {
+        fn drop(&mut self) {
+            ROOT.with(|slot| *slot.borrow_mut() = None);
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,5 +142,22 @@ mod tests {
                 .and_then(|n| n.to_str())
                 .is_some_and(|n| n.starts_with("signex-test-prefs-"))
         );
+    }
+
+    #[test]
+    fn an_isolated_root_is_private_to_its_thread_and_gone_after_drop() {
+        let shared = crate::keymap::config_path().unwrap();
+        let isolated = isolated::IsolatedConfigRoot::new();
+        let mine = crate::keymap::config_path().unwrap();
+        assert_ne!(mine, shared);
+        assert!(mine.parent().unwrap().exists());
+        let seen_elsewhere = std::thread::spawn(|| crate::keymap::config_path().unwrap())
+            .join()
+            .unwrap();
+        assert_eq!(seen_elsewhere, shared);
+        assert_eq!(config_root().unwrap(), shared.parent().unwrap());
+        drop(isolated);
+        assert_eq!(crate::keymap::config_path().unwrap(), shared);
+        assert!(!mine.parent().unwrap().exists());
     }
 }

@@ -151,6 +151,12 @@ impl Signex {
             ProjectMsg::ProjectFolderRenamed { job, result } => {
                 self.handle_project_folder_renamed(&job, result)
             }
+            ProjectMsg::SheetFilesListed { ticket, result } => {
+                self.handle_sheet_files_listed(ticket, result)
+            }
+            ProjectMsg::ProjectFileRenamed { job, result } => {
+                self.handle_project_file_renamed(&job, result)
+            }
         }
     }
 
@@ -361,8 +367,7 @@ impl Signex {
                     ContextAction::Paste => self.dispatch_edit_message(EditMsg::Paste),
                     ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
                     ContextAction::OpenChildSheet => {
-                        self.open_selected_child_sheet();
-                        Task::none()
+                        self.open_selected_child_sheet().unwrap_or_else(Task::none)
                     }
                     ContextAction::CreateChildSheet => match self.selected_child_sheet() {
                         Some((symbol, _)) => self.create_child_sheet_from_symbol(symbol),
@@ -592,6 +597,7 @@ impl Signex {
             EnableVersionControlMsg::ToggleLfs => {
                 if let Some(s) = self.ui_state.enable_version_control.as_mut()
                     && !s.working
+                    && !s.scanning
                 {
                     s.use_lfs = !s.use_lfs;
                 }
@@ -600,6 +606,7 @@ impl Signex {
             EnableVersionControlMsg::ToggleItem(idx) => {
                 if let Some(s) = self.ui_state.enable_version_control.as_mut()
                     && !s.working
+                    && !s.scanning
                     && let Some(item) = s.items.get_mut(idx)
                 {
                     item.tracked = !item.tracked;
@@ -607,6 +614,13 @@ impl Signex {
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
+            EnableVersionControlMsg::ItemsScanned {
+                project_dir,
+                result,
+            } => {
+                self.handle_enable_version_control_items_scanned(&project_dir, result);
+                Task::none()
+            }
             EnableVersionControlMsg::Finished {
                 scope,
                 project_dir,

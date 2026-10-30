@@ -295,6 +295,35 @@ pub enum LibraryMessage {
         generation: u64,
         snapshot: crate::library::refresh::RefreshSnapshotCell,
     },
+    /// The worker that re-resolves open Component Previews after a
+    /// primitive save has read (#859). Applied only while it is the newest
+    /// plan for its library; a stale one is dropped.
+    PreviewsReread {
+        readout: crate::library::preview_refresh::PreviewReadoutCell,
+    },
+    /// A Component Preview's row was re-read off the UI thread (#859).
+    /// Applied only if it is still the newest reload of that preview.
+    EditorReloaded {
+        readout: crate::library::shared_resolver::OneShotCell<
+            crate::library::preview_reads::EditorReloadOutcome,
+        >,
+    },
+    /// The primitives a Component Preview tab shows were looked up off the
+    /// UI thread the first time it was visited (#859).
+    PreviewTabResolved {
+        readout: crate::library::shared_resolver::OneShotCell<
+            crate::library::preview_reads::TabResolveOutcome,
+        >,
+    },
+    /// The bindings of the selected library row were looked up off the UI
+    /// thread for the Properties panel (#859). Kept only while it is the
+    /// read that was asked for.
+    RowSummariesRead {
+        generation: u64,
+        readout: crate::library::shared_resolver::OneShotCell<
+            crate::library::row_summaries::RowSummaries,
+        >,
+    },
     /// Active table change inside a Library Browser tab — clicked one
     /// of the category tabs in the strip.
     BrowserSelectTable {

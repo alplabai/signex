@@ -13,6 +13,7 @@ use super::project_rename_fs::{
     rename_project_on_disk, same_path_on_disk, unjournal_closed_copies,
 };
 use super::*;
+use crate::app::contracts::ProjectFileRenameJob;
 
 impl Signex {
     /// Project-root rename — `state.target_path` is the project's
@@ -115,16 +116,113 @@ impl Signex {
             return Task::none();
         }
 
-        // Only the file moves. Nothing else is written; the project's
-        // in-memory record follows.
-        if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
-            self.set_rename_error(&format!("Rename failed: {e}"));
+        // Only the file moves, on a worker; nothing else is written. The
+        // project's in-memory record follows in the completion.
+        self.begin_project_file_rename(
+            project_id,
+            &state.target_path,
+            new_prj,
+            new_stem,
+            recent_key,
+        )
+    }
+
+    /// Register the move and return the task that runs it. Nothing on disk or
+    /// in memory has changed yet: the dialog stays open and
+    /// [`Self::handle_project_file_renamed`] finishes the job.
+    fn begin_project_file_rename(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        from: &Path,
+        to: PathBuf,
+        new_stem: &str,
+        recent_key: PathBuf,
+    ) -> Task<Message> {
+        let fold = self.fold_for_path(from);
+        let guard = self.document_state.pending_path_ops.begin(
+            crate::app::path_ops::PathOpKind::Rename,
+            vec![from.to_path_buf(), to.clone()],
+            fold,
+        );
+        // A read of the old file already in flight is out of date.
+        self.document_state.note_documents_changed();
+        let job = ProjectFileRenameJob {
+            guard,
+            project_id,
+            from: from.to_path_buf(),
+            to,
+            new_stem: new_stem.to_string(),
+            recent_key,
+        };
+        let (source, target) = (job.from.clone(), job.to.clone());
+        Task::perform(
+            crate::app::path_op_jobs::run_blocking(move || {
+                std::fs::rename(&source, &target).map_err(|e| e.to_string())
+            }),
+            move |joined| {
+                Message::Project(ProjectMsg::ProjectFileRenamed {
+                    job: job.clone(),
+                    result: joined.and_then(|moved| moved),
+                })
+            },
+        )
+    }
+
+    /// The file move finished. On success the project, its tabs and the
+    /// recent-projects list follow; on failure the disk is as it was and the
+    /// dialog says why. A project closed meanwhile still gets its recent
+    /// entry re-pointed, since the file did move.
+    pub(crate) fn handle_project_file_renamed(
+        &mut self,
+        job: &ProjectFileRenameJob,
+        result: Result<(), String>,
+    ) -> Task<Message> {
+        self.document_state.pending_path_ops.finish(job.guard);
+        // The file moved or not, anything that read it before is out of date.
+        self.document_state.note_documents_changed();
+        if let Err(reason) = result {
+            crate::diagnostics::log_warning(format!(
+                "[rename] Project file {} was not renamed: {reason}",
+                job.from.display()
+            ));
+            // Only a dialog still open for this file shows it; another dialog
+            // (reopened for a sheet meanwhile) must not.
+            let shown = format!("Rename failed: {reason}");
+            if self.dialog_targets(&job.from) {
+                self.set_rename_error(&shown);
+            } else {
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::rename_failed(shown));
+            }
             return Task::none();
         }
-        self.rekey_renamed_project_file(idx, &state.target_path, &new_prj, new_stem);
-        let recent_task = self.replace_recent_project(&recent_key, &new_prj);
-        self.queue_project_rename_commit(&state.target_path, &new_prj, &old_stem, new_stem);
-        self.ui_state.rename_dialog = None;
+        let recent_task = self.replace_recent_project(&job.recent_key, &job.to);
+        let Some(idx) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| p.id == job.project_id && p.path == job.from)
+        else {
+            crate::diagnostics::log_warning(format!(
+                "[rename] The project was closed or moved meanwhile, so nothing open was \
+                 updated; the file is now {}",
+                job.to.display()
+            ));
+            if self.dialog_targets(&job.from) {
+                self.ui_state.rename_dialog = None;
+            }
+            return recent_task;
+        };
+        let old_stem = job
+            .from
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.rekey_renamed_project_file(idx, &job.from, &job.to, &job.new_stem);
+        self.queue_project_rename_commit(&job.from, &job.to, &old_stem, &job.new_stem);
+        if self.dialog_targets(&job.from) {
+            self.ui_state.rename_dialog = None;
+        }
         self.refresh_panel_ctx();
         recent_task
     }

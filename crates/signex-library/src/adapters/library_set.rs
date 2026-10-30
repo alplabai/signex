@@ -386,7 +386,11 @@ fn probe_every_kind(lib: &dyn LibraryAdapter, r: &PrimitiveRef) -> Probe {
 
 /// Fold an adapter lookup into the resolver's `Ok(None)` = "not there"
 /// / `Err` = "could not tell" split.
-fn absence_is_none<T>(got: Result<T, LibraryError>) -> Result<Option<T>, LibraryError> {
+/// Flatten an adapter lookup into the resolver contract: `NotFound` is
+/// `Ok(None)` (the primitive is not there), any other error stays an `Err`
+/// (the lookup itself failed). For callers that read through a shared
+/// adapter handle instead of the set, e.g. on a worker thread.
+pub fn absence_is_none<T>(got: Result<T, LibraryError>) -> Result<Option<T>, LibraryError> {
     match got {
         Ok(v) => Ok(Some(v)),
         Err(LibraryError::NotFound(_)) => Ok(None),

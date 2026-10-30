@@ -54,7 +54,7 @@ fn edit_documents(state: &mut ComponentPreviewState, edit: impl FnOnce(&mut Vec<
     edit(&mut docs);
     if docs != before {
         state.row.set_documents(docs);
-        state.dirty = true;
+        state.mark_dirty();
     }
 }
 

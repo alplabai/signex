@@ -23,6 +23,7 @@ fn dialog_with_unticked_row(project_dir: &std::path::Path) -> Signex {
         intro_text: String::new(),
         error: None,
         working: false,
+        scanning: false,
     });
     app
 }

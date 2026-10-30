@@ -35,6 +35,8 @@ mod open_document;
 #[cfg(test)]
 mod path_op_guard_tests;
 mod project_actions;
+#[cfg(test)]
+mod project_file_rename_tests;
 mod project_rename;
 #[cfg(test)]
 mod project_rename_failing_move_tests;
@@ -314,7 +316,7 @@ impl Signex {
                 self.open_enable_version_control_dialog(tree_path);
             }
             ProjectTreeAction::OpenLibraryEnableVersionControl(row) => {
-                self.open_library_enable_version_control_dialog(row);
+                return self.open_library_enable_version_control_dialog(row);
             }
             ProjectTreeAction::RemoveLibrary(row) => {
                 self.open_library_remove_dialog(row);

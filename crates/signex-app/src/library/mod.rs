@@ -43,7 +43,12 @@ pub mod picker;
 pub mod place;
 pub mod placed_part;
 pub(crate) mod prefix_picker;
+pub mod preview_reads;
+#[cfg(test)]
+mod preview_reads_tests;
 pub mod preview_refresh;
+#[cfg(test)]
+mod preview_refresh_tests;
 pub mod pricing;
 pub mod primitive_picker;
 pub mod range_filter;
@@ -52,7 +57,9 @@ pub mod refresh;
 pub mod reprefix_lookup;
 pub mod resolve;
 pub mod row_documents;
+pub mod row_summaries;
 pub mod settings;
+pub mod shared_resolver;
 pub mod state;
 pub mod stock_copy;
 #[cfg(test)]

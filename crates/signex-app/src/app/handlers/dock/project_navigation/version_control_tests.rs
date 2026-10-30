@@ -15,6 +15,7 @@ fn open_dialog_on(project_dir: &std::path::Path) -> Signex {
         intro_text: String::new(),
         error: None,
         working: false,
+        scanning: false,
     });
     app
 }
