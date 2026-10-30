@@ -499,6 +499,7 @@ impl Signex {
                 // derives them from `preferences_draft_theme` every frame,
                 // so setting the draft above IS the preview; only the
                 // content cache still has to be dropped to repaint.
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();

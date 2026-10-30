@@ -447,6 +447,9 @@ impl Signex {
             canvas.clear_content_cache();
         }
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
+            // The paper and grid live in the background layer, so a new
+            // theme repaints them only if that cache is dropped too.
+            canvas.clear_bg_cache();
             canvas.clear_content_cache();
         }
     }

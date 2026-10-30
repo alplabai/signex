@@ -32,9 +32,9 @@ use iced_wgpu::wgpu;
 use signex_app::app::{
     ErcMsg, FileMsg, LoadedProject, Message, PreferencesMsg, Signex, TabInfo, TabKind,
 };
+use signex_app::canvas::{BoxDirection, CanvasEvent};
 use signex_app::library::LibraryMessage;
 use signex_app::preferences::PrefMsg;
-use signex_app::canvas::{BoxDirection, CanvasEvent};
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
     Graphic, HAlign, Label, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection,
@@ -284,7 +284,12 @@ fn placed_parts() -> SchematicSheet {
 type Part = (&'static str, (f64, f64), &'static str, &'static str);
 
 const PARTS: &[Part] = &[
-    ("STOCK-Conn_1x04", (60.96, 101.6), "I2C", "Header-1x04-2.54mm"),
+    (
+        "STOCK-Conn_1x04",
+        (60.96, 101.6),
+        "I2C",
+        "Header-1x04-2.54mm",
+    ),
     ("STOCK-R", (88.9, 71.12), "10k", "Chip-0805"),
     ("STOCK-R", (104.14, 71.12), "10k", "Chip-0805"),
     ("STOCK-IC_Generic", (127.0, 101.6), "MCU", "SOIC-8"),
@@ -294,7 +299,11 @@ const PARTS: &[Part] = &[
 
 /// Where a symbol's designator and value sit, as `(dx, dy)` from its origin:
 /// beside the body for the two-pin parts, above and below it otherwise.
-fn field_offsets(lib_id: &str, sheet: &SchematicSheet, reference: &str) -> ((f64, f64), (f64, f64)) {
+fn field_offsets(
+    lib_id: &str,
+    sheet: &SchematicSheet,
+    reference: &str,
+) -> ((f64, f64), (f64, f64)) {
     let _ = (lib_id, sheet);
     match reference.chars().next() {
         Some('R' | 'C') => ((2.8, -1.4), (2.8, 1.6)),
@@ -351,7 +360,10 @@ fn readme_sheet() -> SchematicSheet {
         let lib = sheet.lib_symbols.get(&sym.lib_id).expect("lib");
         for p in &lib.pins {
             let tip = xform.apply(p.pin.position);
-            tips.insert((sym.reference.clone(), p.pin.number.clone()), (tip.x, tip.y));
+            tips.insert(
+                (sym.reference.clone(), p.pin.number.clone()),
+                (tip.x, tip.y),
+            );
         }
     }
     let tip = |reference: &str, pin: &str| tips[&(reference.to_string(), pin.to_string())];
@@ -377,7 +389,12 @@ fn readme_sheet() -> SchematicSheet {
         wire(t, (t.0 - 10.16, t.1));
         labels.push((net, (t.0 - 10.16, t.1), HAlign::Right));
     }
-    for (pin, net) in [("8", "GPIO0"), ("7", "GPIO1"), ("6", "GPIO2"), ("5", "GPIO3")] {
+    for (pin, net) in [
+        ("8", "GPIO0"),
+        ("7", "GPIO1"),
+        ("6", "GPIO2"),
+        ("5", "GPIO3"),
+    ] {
         let t = tip("U1", pin);
         wire(t, (t.0 + 10.16, t.1));
         labels.push((net, (t.0 + 10.16, t.1), HAlign::Left));
