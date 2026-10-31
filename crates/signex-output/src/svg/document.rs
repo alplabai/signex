@@ -367,7 +367,7 @@ impl SvgRenderContext {
             // - power-symbol references (#PWR...) are always hidden
             // - reference/value field visibility follows TextProp.hidden
             if !sym.reference.is_empty()
-                && !sym.is_power
+                && sym.draws_reference()
                 && let Some(ref_text) = &sym.ref_text
                 && !ref_text.hidden
             {

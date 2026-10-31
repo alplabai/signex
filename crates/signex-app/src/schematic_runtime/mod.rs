@@ -601,7 +601,7 @@ fn collect_item_bounds_with(
         if let Some(ref_text) = symbol
             .ref_text
             .as_ref()
-            .filter(|p| !p.hidden && !symbol.is_power)
+            .filter(|p| !p.hidden && symbol.draws_reference())
         {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
