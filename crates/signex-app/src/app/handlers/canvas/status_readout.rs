@@ -8,18 +8,34 @@ use super::super::super::*;
 enum Surface<'a> {
     SymbolEditor(&'a SymbolDocument),
     FootprintEditor(&'a FootprintDocument),
+    /// A Component Preview: it draws auto-fitted previews with no camera of
+    /// its own, so it has no zoom or cursor to report.
+    ComponentPreview,
     Pcb,
     Schematic,
 }
 
+/// What the zoom readout shows over a surface without a camera.
+const NO_CAMERA_ZOOM_PERCENT: f64 = 100.0;
+
 impl Signex {
     /// What `window_id` shows. Standalone symbol and footprint editors are
-    /// main-window tabs; an undocked window holds one schematic or PCB.
+    /// main-window tabs; an undocked window holds one schematic or PCB, or
+    /// is a Component Preview of its own.
     fn status_surface(&self, window_id: iced::window::Id) -> Surface<'_> {
         let docs = &self.document_state;
+        if matches!(
+            self.ui_state.windows.get(&window_id),
+            Some(crate::app::state::WindowKind::ComponentEditor { .. })
+        ) {
+            return Surface::ComponentPreview;
+        }
         if self.ui_state.main_window_id == Some(window_id)
             && let Some(tab) = docs.tabs.get(docs.active_tab)
         {
+            if tab.kind.as_component_editor().is_some() {
+                return Surface::ComponentPreview;
+            }
             if let Some(editor) = tab
                 .kind
                 .as_symbol_editor()
@@ -47,6 +63,7 @@ impl Signex {
         match self.status_surface(window_id) {
             Surface::SymbolEditor(editor) => editor.camera.zoom_percent(),
             Surface::FootprintEditor(editor) => editor.state.zoom_percent(),
+            Surface::ComponentPreview => NO_CAMERA_ZOOM_PERCENT,
             Surface::Pcb => self
                 .interaction_state
                 .pcb_canvas_for_window(window_id)
@@ -65,6 +82,7 @@ impl Signex {
         let own = match self.status_surface(window_id) {
             Surface::SymbolEditor(editor) => Some(editor.cursor_mm.unwrap_or_default()),
             Surface::FootprintEditor(editor) => Some(editor.state.cursor_mm.unwrap_or_default()),
+            Surface::ComponentPreview => Some((0.0, 0.0)),
             Surface::Pcb | Surface::Schematic => None,
         };
         own.unwrap_or((self.ui_state.cursor_x, self.ui_state.cursor_y))
@@ -149,6 +167,54 @@ mod tests {
         ));
 
         assert_eq!(app.status_zoom(window), 200.0);
+    }
+
+    /// A main window showing a Component Preview tab while the schematic
+    /// camera sits zoomed and the schematic cursor at (7, 8).
+    fn app_showing_a_component_preview() -> (Signex, iced::window::Id) {
+        let (mut app, window, _path) = app_showing(|_| TabKind::Schematic);
+        app.interaction_state.canvas.set_viewport(viewport());
+        assert!(app.interaction_state.canvas.zoom_about_centre(true, 1.5));
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "R1".into(),
+            path: PathBuf::from("parts.snxlib/Resistors.tsv#1"),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::ComponentEditor(crate::app::ComponentEditorTab {
+                library_path: PathBuf::from("parts.snxlib"),
+                table: "Resistors".to_string(),
+                row_id: signex_library::RowId::new(),
+            }),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        (app, window)
+    }
+
+    /// #1808: a Component Preview has no camera, so the readout must not
+    /// show the schematic's zoom or cursor behind it.
+    #[test]
+    fn a_component_preview_tab_does_not_read_the_schematic_camera() {
+        let (app, window) = app_showing_a_component_preview();
+        assert_ne!(app.interaction_state.canvas.zoom_percent(), 100.0);
+        assert_eq!(app.status_zoom(window), 100.0);
+        assert_eq!(app.status_cursor(window), (0.0, 0.0));
+    }
+
+    /// The same Component Preview undocked into its own window.
+    #[test]
+    fn an_undocked_component_preview_window_does_not_read_the_schematic_camera() {
+        let (mut app, _main) = app_showing_a_component_preview();
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::ComponentEditor {
+                library_path: PathBuf::from("parts.snxlib"),
+                table: "Resistors".to_string(),
+                row_id: signex_library::RowId::new(),
+            },
+        );
+        assert_eq!(app.status_zoom(window), 100.0);
+        assert_eq!(app.status_cursor(window), (0.0, 0.0));
     }
 
     #[test]

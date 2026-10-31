@@ -111,6 +111,13 @@ pub enum FootprintEditorMsg {
         px_per_mm: f32,
     },
 
+    /// The canvas fitted its camera on the first draw, so the scale changed
+    /// with no cursor event to carry it; the status bar's zoom reads it
+    /// from the model (#1808).
+    ViewScaleChanged {
+        px_per_mm: f32,
+    },
+
     /// Select / deselect a pad. `None` deselects everything.
     SelectPad(Option<usize>),
 

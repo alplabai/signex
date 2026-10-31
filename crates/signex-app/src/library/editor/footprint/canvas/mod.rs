@@ -232,10 +232,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
         // First-draw camera placement + one-shot Fit-to-Window (see
-        // `input::camera`). `apply_initial_fit` only mutates the
-        // camera; `apply_pending_fit` consumes the event tick when a
-        // Fit-to-Window is queued.
-        self.apply_initial_fit(cstate, bounds);
+        // `input::camera`). Both mutate the camera and publish the scale
+        // they settled on, consuming the event tick.
+        if let Some(action) = self.apply_initial_fit(cstate, bounds) {
+            return Some(action);
+        }
         if let Some(action) = self.apply_pending_fit(cstate, bounds) {
             return Some(action);
         }

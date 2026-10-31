@@ -380,6 +380,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::DeleteSilkF
         | FootprintEditorMsg::MovePad { .. }
         | FootprintEditorMsg::CursorAt { .. }
+        | FootprintEditorMsg::ViewScaleChanged { .. }
         | FootprintEditorMsg::SelectPad(..)
         | FootprintEditorMsg::SelectPads(..)
         | FootprintEditorMsg::DeleteSelected
@@ -539,6 +540,7 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // These don't change persisted geometry and shouldn't enter
         // the history.
         CursorAt { .. }
+        | ViewScaleChanged { .. }
         | SelectPad(_)
         | SelectSilkF(_)
         | ToggleLayer(_)
