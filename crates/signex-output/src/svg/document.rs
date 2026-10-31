@@ -17,6 +17,7 @@ use super::labels::{
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
 use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
+use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
 use crate::SheetSnapshot;
@@ -202,23 +203,24 @@ impl SvgRenderContext {
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
-            let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale);
+            let font_alias = alias_for_family(label.font_family.as_deref(), document_family, "F3");
+            let size_pt = label_size_pt(label.font_size, xform.mm_to_unit, &opts.scale, font_alias);
             let spin = label_spin_style(label.justify, label.rotation);
             let (off_x, off_y) = match label.label_type {
                 LabelType::Net => schematic_text_offset_net(spin),
-                LabelType::Global => schematic_text_offset_global(&label.shape, spin),
-                LabelType::Hierarchical => schematic_text_offset_hier(
-                    &label.text,
-                    signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    spin,
-                ),
+                LabelType::Global => {
+                    schematic_text_offset_global(&label.shape, spin, label.font_size)
+                }
+                LabelType::Hierarchical => {
+                    schematic_text_offset_hier(&label.text, label.font_size, spin)
+                }
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
             elements.push(SvgElement::Text {
                 x: xform.x(label.position.x + off_x),
                 y: xform.px_y(label.position.y + off_y),
-                font_alias: alias_for_family(label.font_family.as_deref(), document_family, "F3"),
+                font_alias,
                 size_pt,
                 align,
                 v_align,
@@ -232,15 +234,14 @@ impl SvgRenderContext {
         // from the export when the user unchecks the Notes toggle.
         if opts.include_notes {
             for note in &sheet.schematic.text_notes {
-                let size_pt = label_size_pt(note.font_size, xform.mm_to_unit, &opts.scale);
+                let font_alias =
+                    alias_for_family(note.font_family.as_deref(), document_family, "F1");
+                let size_pt =
+                    label_size_pt(note.font_size, xform.mm_to_unit, &opts.scale, font_alias);
                 elements.push(SvgElement::Text {
                     x: xform.x(note.position.x),
                     y: xform.px_y(note.position.y),
-                    font_alias: alias_for_family(
-                        note.font_family.as_deref(),
-                        document_family,
-                        "F1",
-                    ),
+                    font_alias,
                     size_pt,
                     align: halign_to_svg(note.justify_h),
                     v_align: valign_to_svg(note.justify_v),
@@ -380,7 +381,11 @@ impl SvgRenderContext {
                         document_family,
                         "F3",
                     ),
-                    size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                    size_pt: glyph_em_pt(
+                        alias_for_family(ref_text.font_family.as_deref(), document_family, "F3"),
+                        signex_types::schematic::SCHEMATIC_TEXT_MM,
+                        xform.mm_to_unit,
+                    ),
                     align: halign_to_svg(ref_style.1),
                     v_align: valign_to_svg(ref_style.2),
                     rotation_deg: ref_style.0 as f32,
@@ -402,7 +407,11 @@ impl SvgRenderContext {
                         document_family,
                         "F1",
                     ),
-                    size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                    size_pt: glyph_em_pt(
+                        alias_for_family(val_text.font_family.as_deref(), document_family, "F1"),
+                        signex_types::schematic::SCHEMATIC_TEXT_MM,
+                        xform.mm_to_unit,
+                    ),
                     align: halign_to_svg(val_style.1),
                     v_align: valign_to_svg(val_style.2),
                     rotation_deg: val_style.0 as f32,

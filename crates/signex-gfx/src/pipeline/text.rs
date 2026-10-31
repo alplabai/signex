@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::text_cache::{ShapedBufferCache, ShapedKey, quantise_px};
 use crate::primitive::text::{
-    LINE_HEIGHT_EM, TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px,
+    LINE_HEIGHT_EM, TextHAlign, TextItem, TextSizePolicy, TextVAlign, text_px_in,
 };
 
 /// Rendered em size in logical pixels, from the one shared sizing rule.
@@ -19,7 +19,12 @@ use crate::primitive::text::{
 /// short of the CPU replay and broke the millimetre contract the model
 /// guarantees (a 10 pt import stopped measuring 50 mils).
 fn text_size_px(item: &TextItem, scale_px_per_mm: f32, policy: TextSizePolicy) -> f32 {
-    text_px(item.size_mm, scale_px_per_mm, policy)
+    text_px_in(
+        item.size_mm,
+        scale_px_per_mm,
+        policy,
+        item.family.as_deref(),
+    )
 }
 
 fn text_position_px(item: &TextItem, scale_px_per_mm: f32, offset_px: [f32; 2]) -> [f32; 2] {
@@ -603,12 +608,12 @@ mod tests {
         let panned_px = text_position_px(&item, 32.0, [15.0, -7.0]);
         let bounds = viewport_bounds([128, 96]);
 
-        // 1.0 mm of glyph height is 1.0 / MM_PER_EM em, then scaled. This
+        // 1.0 mm of glyph height is 1.0 / 0.735 em (Iosevka's cap height), then scaled. This
         // used to assert 32.0 — `size_mm` taken as the em size directly,
         // which rendered every label short of the CPU replay.
         assert!(
-            (size_px - 44.444_443).abs() < 1e-3,
-            "expected ~44.444 px, got {size_px}"
+            (size_px - 43.537_41).abs() < 1e-3,
+            "expected ~43.537 px, got {size_px}"
         );
         assert_eq!(position_px, [80.0, 128.0]);
         // Pan translates the anchor by the screen-space offset.

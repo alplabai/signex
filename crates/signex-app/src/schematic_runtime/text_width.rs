@@ -7,7 +7,6 @@
 //! shaper (`fonts::measure`); until that measurer exists (the startup scan
 //! has not finished) the monospace estimate stands in.
 
-use signex_gfx::primitive::text::MM_PER_EM;
 use signex_types::font::BUNDLED_DEFAULT_FAMILY;
 
 /// Width in mm of `text` drawn at glyph height `size_mm` in `family`
@@ -23,7 +22,9 @@ pub(super) fn text_width_mm(
         return monospace_estimate_mm;
     };
     match crate::fonts::measure::shaped_advance_em(text, family) {
-        Some(em) => f64::from(em) * size_mm / f64::from(MM_PER_EM),
+        Some(em) => {
+            f64::from(em) * size_mm / f64::from(signex_types::font::mm_per_em(Some(family)))
+        }
         None => monospace_estimate_mm,
     }
 }

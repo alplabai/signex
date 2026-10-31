@@ -260,7 +260,12 @@ fn unmounting_the_library_drops_names_and_drift() {
     assert!(info(&app, "Library").is_none());
     assert!(info(&app, "Library Drift").is_none());
     let lib_id = doc(&app).symbols[0].lib_id.clone();
-    assert_eq!(app.library.drift.display_name(&lib_id), lib_id);
+    assert_eq!(
+        app.library
+            .drift
+            .display_name(&lib_id, &app.library.open_libraries),
+        short_form(&lib_id)
+    );
 }
 
 #[test]
@@ -334,7 +339,12 @@ fn an_unreadable_library_symbol_keeps_the_previous_drift_row() {
         "an unreadable symbol must not clear drift"
     );
     let lib_id = doc(&app).symbols[0].lib_id.clone();
-    assert_eq!(app.library.drift.display_name(&lib_id), "lib/TWO-UNIT");
+    assert_eq!(
+        app.library
+            .drift
+            .display_name(&lib_id, &app.library.open_libraries),
+        "lib/TWO-UNIT"
+    );
 }
 
 #[test]
@@ -360,5 +370,17 @@ fn a_symbol_deleted_from_the_library_clears_its_row_and_name() {
         "a deleted symbol must not stay updatable"
     );
     let lib_id = doc(&app).symbols[0].lib_id.clone();
-    assert_eq!(app.library.drift.display_name(&lib_id), lib_id);
+    // The drift scan's name is gone; the mounted library's own cache is
+    // not what this test deletes from.
+    assert!(!app.library.drift.names.contains_key(&lib_id));
+}
+
+/// The unmounted fallback: the last 8 hex digits of each uuid.
+fn short_form(lib_id: &str) -> String {
+    let (library, symbol) = lib_id.split_once(':').expect("library:symbol id");
+    format!(
+        "{}:{}",
+        &library[library.len() - 8..],
+        &symbol[symbol.len() - 8..]
+    )
 }

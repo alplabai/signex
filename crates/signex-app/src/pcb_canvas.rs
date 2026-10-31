@@ -206,7 +206,7 @@ impl PcbCanvas {
         self.bg_cache.clear();
     }
 
-    /// Zoom percentage the status bar shows, read from the live camera.
+    /// The camera's zoom as a percentage, `100.0` at the default scale.
     pub fn zoom_percent(&self) -> f64 {
         self.camera.borrow().zoom_percent()
     }

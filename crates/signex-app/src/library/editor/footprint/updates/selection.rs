@@ -15,7 +15,11 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
         FootprintEditorMsg::SelectSilkF(sel) => select_silk_f(editor, sel),
         FootprintEditorMsg::DeleteSilkF => delete_silk_f(editor),
         FootprintEditorMsg::MovePad { idx, x_mm, y_mm } => move_pad(editor, idx, x_mm, y_mm),
-        FootprintEditorMsg::CursorAt { x_mm, y_mm } => cursor_at(editor, x_mm, y_mm),
+        FootprintEditorMsg::CursorAt {
+            x_mm,
+            y_mm,
+            px_per_mm,
+        } => cursor_at(editor, x_mm, y_mm, px_per_mm),
         FootprintEditorMsg::SelectPad(sel) => select_pad(editor, sel),
         FootprintEditorMsg::SelectPads(pads) => select_pads(editor, pads),
         FootprintEditorMsg::DeleteSelected => delete_selected(editor),
@@ -125,8 +129,9 @@ fn move_pad(editor: &mut crate::app::FootprintDocument, idx: usize, x_mm: f64, y
     editor.mark_dirty();
 }
 
-fn cursor_at(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
+fn cursor_at(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64, px_per_mm: f32) {
     editor.state.cursor_mm = Some((x_mm, y_mm));
+    editor.state.view_px_per_mm = px_per_mm;
 }
 
 fn select_pad(editor: &mut crate::app::FootprintDocument, sel: Option<usize>) {

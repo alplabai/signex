@@ -102,9 +102,13 @@ pub enum FootprintEditorMsg {
     },
 
     /// Cursor moved over the canvas — drives the footer X/Y readout.
+    /// `px_per_mm` is the canvas camera's scale at that moment: the camera
+    /// lives in the widget, so this is how the model (and the status bar's
+    /// zoom readout) learns it (#1789).
     CursorAt {
         x_mm: f64,
         y_mm: f64,
+        px_per_mm: f32,
     },
 
     /// Select / deselect a pad. `None` deselects everything.

@@ -17,6 +17,8 @@ mod document;
 mod drawings;
 mod family;
 mod geometry;
+#[cfg(test)]
+mod glyph_height_tests;
 mod labels;
 mod markers;
 mod symbols;

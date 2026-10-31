@@ -60,7 +60,7 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
 
         let header_content: Element<'_, Message> = container(
             row![

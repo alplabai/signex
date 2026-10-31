@@ -424,6 +424,8 @@ impl Exporter for PdfExporter {
 }
 
 mod content;
+#[cfg(test)]
+mod glyph_height_tests;
 pub(crate) mod page_range;
 #[cfg(test)]
 mod page_range_tests;

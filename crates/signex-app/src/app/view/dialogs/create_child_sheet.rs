@@ -42,7 +42,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(later.clone(), self.ui_state.theme_id, text_muted),
+                close_x_button(
+                    later.clone(),
+                    self.ui_state.effective_theme_id(),
+                    text_muted
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )

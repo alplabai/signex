@@ -5700,6 +5700,8 @@ dependencies = [
  "serde_json",
  "signex-gfx",
  "signex-sketch",
+ "signex-types",
+ "ttf-parser",
  "wgpu",
 ]
 

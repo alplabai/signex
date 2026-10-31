@@ -280,7 +280,7 @@ pub fn draw_power_port_preview(
                 cx + screen_px_to_world_mm(9.0, transform.scale) as f32,
                 cy - screen_px_to_world_mm(4.0, transform.scale) as f32,
             ],
-            size_mm: (11.0 * signex_gfx::primitive::text::MM_PER_EM / transform.scale.max(0.001))
+            size_mm: (11.0 * signex_types::font::mm_per_em(None) / transform.scale.max(0.001))
                 .max(0.1),
             color: to_rgba(color),
             bold: false,
