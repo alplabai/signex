@@ -660,7 +660,7 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
         project_id,
         path: new_sheet.clone(),
-        result: Ok(()),
+        result: Ok(signex_app::app::project_entry_disk::EntryPatch::NoProjectFile),
     }));
 
     assert!(new_sheet.exists(), "new .snxsch must land on disk");

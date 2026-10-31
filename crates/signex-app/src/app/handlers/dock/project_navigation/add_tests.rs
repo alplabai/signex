@@ -151,7 +151,7 @@ fn a_project_reordered_before_add_new_completes_still_gets_its_own_sheet() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
         project_id: target,
         path: new_sheet.clone(),
-        result: Ok(()),
+        result: Ok(crate::app::project_entry_disk::EntryPatch::NoProjectFile),
     }));
     drop(d2);
 
@@ -180,7 +180,8 @@ fn a_failed_blank_schematic_write_reaches_the_messages_panel() {
     let existing = d1.path().join("Here.snxsch");
     std::fs::write(&existing, b"keep").expect("existing file");
 
-    let result = add_io::write_blank_schematic(&existing);
+    let result = add_io::write_blank_schematic(&existing)
+        .map(|()| crate::app::project_entry_disk::EntryPatch::NoProjectFile);
     assert_eq!(std::fs::read(&existing).expect("read"), b"keep");
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
         project_id: target,

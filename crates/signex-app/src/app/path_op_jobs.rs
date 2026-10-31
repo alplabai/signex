@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use signex_types::project::{LibraryRetarget, retarget_library_entry};
 
 use crate::app::path_ops::{DeleteIo, LibraryRenameIo, ParentSheets, RenameIoError};
+use crate::app::project_entry_disk::{EntryPatch, retarget_sheet_entry};
 use crate::persist::SaveBarrier;
 
 /// Runs a blocking job on tokio's blocking pool. A worker that panicked or was
@@ -28,16 +29,47 @@ pub struct RenameJob {
     pub to: PathBuf,
     pub saves: SaveBarrier,
     pub parents_to_read: Vec<PathBuf>,
+    /// The owning project's saved `.snxprj` and case rules, with the new file
+    /// name: its entry for `from` is re-pointed in the same job, so the saved
+    /// project never names a file that is gone (#1821).
+    pub project: Option<ProjectEntryPatch>,
+}
+
+/// The saved project a rename commits its entry change to.
+pub struct ProjectEntryPatch {
+    pub project_file: PathBuf,
+    pub new_name: String,
+    pub fold: crate::app::state::scope::CaseFold,
 }
 
 impl RenameJob {
-    pub fn run(self) -> (Result<(), RenameIoError>, ParentSheets) {
+    pub fn run(self) -> (Result<EntryPatch, RenameIoError>, ParentSheets) {
         // A write still running for this file would recreate the old name or
         // land after the move; let it finish first. New writes are refused
         // while the operation is registered, so nothing can start after this.
         self.saves.wait();
         let parents = read_parent_sheets(&self.parents_to_read);
-        (move_file(&self.from, &self.to), parents)
+        (self.move_and_patch(), parents)
+    }
+
+    /// Move the file, then re-point the saved project's entry. When the
+    /// project cannot follow the move is undone, so disk never holds a
+    /// renamed file under an unrenamed project (#1821).
+    fn move_and_patch(&self) -> Result<EntryPatch, RenameIoError> {
+        move_file(&self.from, &self.to)?;
+        let Some(project) = &self.project else {
+            return Ok(EntryPatch::NotListed);
+        };
+        retarget_sheet_entry(
+            &project.project_file,
+            &self.from,
+            &project.new_name,
+            project.fold,
+        )
+        .map_err(|e| RenameIoError::ProjectNotPatched {
+            reason: format!("the project file could not be updated ({e}); nothing was changed"),
+            moved_back: std::fs::rename(&self.to, &self.from).map_err(|e| e.to_string()),
+        })
     }
 }
 
@@ -79,6 +111,9 @@ impl LibraryRenameJob {
         match move_file(&self.old, &self.new) {
             Err(RenameIoError::TargetExists) => return LibraryRenameIo::TargetExists,
             Err(RenameIoError::Os(e)) => return LibraryRenameIo::NotRenamed(e),
+            Err(RenameIoError::ProjectNotPatched { reason, .. }) => {
+                return LibraryRenameIo::NotRenamed(reason);
+            }
             Ok(()) => {}
         }
         let new_name = self.new.file_name().unwrap_or_default();

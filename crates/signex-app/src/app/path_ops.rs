@@ -350,6 +350,13 @@ pub enum RenameIoError {
     TargetExists,
     /// The OS error text of `fs::rename`, or of the worker that ran it.
     Os(String),
+    /// The file moved but the saved `.snxprj` could not be updated to follow,
+    /// so the worker moved the file back (#1821). `moved_back` is that
+    /// attempt's result: when it failed the file is still at the new name.
+    ProjectNotPatched {
+        reason: String,
+        moved_back: Result<(), String>,
+    },
 }
 
 /// Parent sheets read for the reference rewrite, keyed by their path.
@@ -358,7 +365,8 @@ pub type ParentSheets = HashMap<PathBuf, Result<Box<SchematicSheet>, String>>;
 #[derive(Debug, Clone)]
 pub struct FileRenameDone {
     pub request: FileRenameRequest,
-    pub result: Result<(), RenameIoError>,
+    /// What the move did to the saved `.snxprj` entry (#1821).
+    pub result: Result<crate::app::project_entry_disk::EntryPatch, RenameIoError>,
     pub parents: ParentSheets,
 }
 

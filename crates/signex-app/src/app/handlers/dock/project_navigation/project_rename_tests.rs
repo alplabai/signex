@@ -66,7 +66,11 @@ pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
     std::fs::create_dir(&folder).expect("project folder");
     let project_file = folder.join(format!("{stem}.snxprj"));
     let sheet = folder.join("main.snxsch");
-    std::fs::write(&project_file, b"{}").expect("project file");
+    let mut app = app_workspace(&folder.to_string_lossy(), &["main.snxsch"]);
+    app.document_state.projects[0].data.name = stem.to_string();
+    // A readable project: a sheet rename re-points its entry on disk (#1821).
+    signex_types::project::write_project(&project_file, &app.document_state.projects[0].data)
+        .expect("project file");
     std::fs::write(&sheet, b"sheet").expect("sheet");
     if git {
         let adapter = LocalGitProjectAdapter::open_or_init(folder.clone()).expect("repo");
@@ -76,7 +80,6 @@ pub(super) fn fixture(root: &Path, stem: &str, git: bool) -> Fixture {
                 .expect("commit");
         }
     }
-    let mut app = app_workspace(&folder.to_string_lossy(), &["main.snxsch"]);
     let project = &mut app.document_state.projects[0];
     project.path = project_file.clone();
     project.data.name = stem.to_string();
@@ -371,13 +374,14 @@ fn the_project_file_and_editor_saves_are_refused_while_the_folder_moves() {
     fx.app.document_state.mark_document_dirty(&symbol);
     fx.app.document_state.mark_document_dirty(&old_file);
     let project_id = fx.app.document_state.projects[0].id;
+    let before = std::fs::read(&old_file).expect("project file");
 
     let task = submit_rename(&mut fx.app, &old_file, "Bar");
     assert!(!fx.app.document_state.project_folder_renames.is_empty());
 
     // The `.snxprj` writer (Ctrl+S, Save All, Close Project).
     assert!(fx.app.begin_project_save(project_id).is_err());
-    assert_eq!(std::fs::read(&old_file).expect("project file"), b"{}");
+    assert_eq!(std::fs::read(&old_file).expect("project file"), before);
     assert!(fx.app.document_state.is_document_dirty(&old_file));
 
     // The symbol / footprint editor writers.

@@ -11,39 +11,7 @@ use super::*;
 use crate::app::path_ops::{
     FileRenameDone, FileRenameKind, FileRenameRequest, ParentSheets, ReferencePlan, RenameIoError,
 };
-use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
-
-/// Point the project's page list, PCB and schematic root at `new_name`.
-/// Entries match by resolved path and keep their directory prefix
-/// (`sub/Power.snxsch` becomes `sub/Power2.snxsch`, #1367). Returns whether
-/// anything changed.
-fn repoint_project_entries(
-    loaded: &mut crate::app::state::LoadedProject,
-    from: &std::path::Path,
-    new_name: &str,
-) -> bool {
-    let fold = loaded.case_fold;
-    let dir = loaded.dir().to_path_buf();
-    let renamed_from = |entry: &str| {
-        entry_resolves_to(&dir, entry, from, fold).then(|| with_new_leaf(entry, new_name))
-    };
-    let mut changed = false;
-    for entry in loaded.data.sheets.iter_mut() {
-        if let Some(new_entry) = renamed_from(&entry.filename) {
-            entry.filename = new_entry;
-            changed = true;
-        }
-    }
-    if let Some(new_entry) = loaded.data.pcb_file.as_deref().and_then(renamed_from) {
-        loaded.data.pcb_file = Some(new_entry);
-        changed = true;
-    }
-    if let Some(new_entry) = loaded.data.schematic_root.as_deref().and_then(renamed_from) {
-        loaded.data.schematic_root = Some(new_entry);
-        changed = true;
-    }
-    changed
-}
+use crate::app::project_entry_disk::{EntryPatch, repoint_entries};
 
 impl Signex {
     pub(crate) fn handle_file_renamed(&mut self, done: FileRenameDone) -> iced::Task<Message> {
@@ -53,14 +21,19 @@ impl Signex {
             parents,
         } = done;
         self.document_state.pending_path_ops.finish(request.id);
-        if let Err(error) = result {
-            self.report_file_rename_failure(&request, &error);
-            return iced::Task::none();
-        }
+        let patch = match result {
+            Ok(patch) => patch,
+            Err(error) => {
+                self.report_file_rename_failure(&request, &error);
+                return iced::Task::none();
+            }
+        };
         // The file moved on disk: a background read of it is out of date.
         self.document_state.note_document_written_behind_engines();
         match &request.kind {
-            FileRenameKind::Document(plan) => self.apply_document_rename(&request, plan, parents),
+            FileRenameKind::Document(plan) => {
+                self.apply_document_rename(&request, plan, parents, patch)
+            }
         }
         if self.dialog_targets(&request.from) {
             self.ui_state.rename_dialog = None;
@@ -89,6 +62,18 @@ impl Signex {
             ),
             (RenameIoError::Os(e), _) => {
                 (format!("Rename failed: {e}"), format!("Rename failed: {e}"))
+            }
+            (RenameIoError::ProjectNotPatched { reason, moved_back }, _) => {
+                let shown = match moved_back {
+                    Ok(()) => format!("Rename cancelled: {reason}. The file was renamed back."),
+                    Err(back) => format!(
+                        "{reason}. The file could not be moved back ({back}): it is now at {} \
+                         while the project still lists {}. Move it back by hand.",
+                        request.to.display(),
+                        request.from.display()
+                    ),
+                };
+                (shown.clone(), shown)
             }
         };
         let name = request
@@ -129,6 +114,7 @@ impl Signex {
         request: &FileRenameRequest,
         plan: &ReferencePlan,
         parents: ParentSheets,
+        patch: EntryPatch,
     ) {
         let new_name = request.new_name.as_str();
         let owner_idx = self.owner_index(request);
@@ -137,22 +123,20 @@ impl Signex {
         }
         // Update in-memory project data (page list + schematic root);
         // parent-sheet references are re-pointed through the engine
-        // below. Nothing besides the rename itself is written to disk:
-        // the touched documents are marked dirty for the user to save.
+        // below. The worker already re-pointed the saved `.snxprj` entry
+        // (#1821), so the move and the project commit together; only when
+        // the saved project had nothing to patch is the in-memory change
+        // left dirty for the user to save.
         // Mutate the *owning* project's data, not the active project:
         // renaming a sheet of project B while project A is active should
         // still touch B. (#54)
         if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
-            && repoint_project_entries(loaded, &request.from, new_name)
         {
-            // The sheet list changed in memory; without the dirty bit
-            // `save_active_project_if_dirty` never writes the .snxprj and
-            // a reopened project points at a file that no longer exists.
-            // A rename that touched neither (a footprint, say) leaves the
-            // project file as it was and must not dirty it.
+            let (dir, fold) = (loaded.dir().to_path_buf(), loaded.case_fold);
+            let repointed = repoint_entries(&mut loaded.data, &dir, &request.from, new_name, fold);
             let project_file = loaded.path.clone();
-            self.document_state.mark_document_dirty(&project_file);
+            self.report_entry_patch(request, &project_file, repointed, patch);
         }
 
         // Update any open tabs + engine-map keys that pointed at the
@@ -170,6 +154,42 @@ impl Signex {
                     &outcome.failed,
                     &outcome.unchecked,
                 ),
+            ));
+        }
+    }
+
+    /// Tell the user what the rename wrote. A change the saved project did
+    /// not take (a project never saved, or one that does not list the file)
+    /// dirties the project so a save keeps it; a rename that touched no entry
+    /// (a footprint, say) leaves the project file as it was.
+    fn report_entry_patch(
+        &mut self,
+        request: &FileRenameRequest,
+        project_file: &std::path::Path,
+        repointed: bool,
+        patch: EntryPatch,
+    ) {
+        let leaf = |p: &std::path::Path| {
+            p.file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        };
+        let (old, new) = (leaf(&request.from), leaf(&request.to));
+        if patch == EntryPatch::Patched {
+            let other_edits = self.document_state.is_document_dirty(project_file);
+            crate::diagnostics::log_info(format!(
+                "Renamed {old} to {new}; the saved project file now lists the new name{}.",
+                if other_edits {
+                    " (its other unsaved changes were not written)"
+                } else {
+                    ""
+                }
+            ));
+            self.commit_save_to_project_git(project_file, &format!("Rename sheet {old} to {new}"));
+        } else if repointed {
+            self.document_state.mark_document_dirty(project_file);
+            crate::diagnostics::log_warning(format!(
+                "Save the project to keep the new name of {old} (renamed to {new}); \
+                 the saved project file does not list it."
             ));
         }
     }
