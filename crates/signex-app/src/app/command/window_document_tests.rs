@@ -614,22 +614,78 @@ fn close_document_in_a_window_with_no_tab_is_logged() {
         .document_state
         .tabs
         .retain(|t| t.path != f.undocked_path);
+    let needle = DOCUMENT_GONE_MESSAGE;
     {
         use crate::ignore::IgnoreResult;
         crate::diagnostics::init_logging()
             .ignore("another test in this binary already installed the same logger");
     }
-    let reported = || {
-        crate::diagnostics::recent_entries()
-            .iter()
-            .filter(|entry| entry.message.contains("no longer open"))
-            .count()
-    };
-    let before = reported();
+    // Only entries newer than this one count, so older lines cannot satisfy it.
+    let newest = crate::diagnostics::newest_entry_id();
     let _ = f.app.dispatch_command(
         &command("close_active_document"),
         CommandArgs::none(),
         Some(window),
     );
-    assert_eq!(reported(), before + 1, "nothing reached the Messages panel");
+    let reported = crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.id > newest.unwrap_or(0) && e.message.contains(needle))
+        .count();
+    // `>=`: other tests log the same text when threads share the ring.
+    assert!(reported >= 1, "nothing reached the Messages panel");
+}
+
+/// A workspace whose project has unsaved changes and whose main window
+/// shows no document, so only the project can enable Save.
+fn dirty_project_app(dir: &Path) -> Signex {
+    let mut app =
+        crate::app::handlers::menu::export::tests::app_workspace(dir.to_str().expect("utf8"), &[]);
+    let prj = app.document_state.projects[0].path.clone();
+    app.document_state.mark_document_dirty(&prj);
+    app
+}
+
+fn save_enabled(app: &Signex, window: Option<iced::window::Id>) -> bool {
+    crate::app::command::is_enabled(&command("save_document"), &app.command_context(window))
+}
+
+/// #1815: a dirty project writes from the main window, but a window that
+/// has no document of its own refuses Save, so its row stays greyed.
+#[test]
+fn a_dirty_project_enables_save_in_the_main_window_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = dirty_project_app(dir.path());
+    assert!(save_enabled(&app, None), "the main window keeps it");
+    let preview = component_preview(&mut app);
+    assert!(!save_enabled(&app, Some(preview)), "Component Preview");
+    let gone = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        gone,
+        WindowKind::UndockedTab {
+            path: dir.path().join("closed.snxsch"),
+            title: "closed".to_string(),
+        },
+    );
+    assert!(!save_enabled(&app, Some(gone)), "tab gone");
+}
+
+/// An undocked tab that does hold a document runs Save against it, where a
+/// dirty project still writes, so the row stays enabled.
+#[test]
+fn a_dirty_project_enables_save_in_an_undocked_pcb_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = dirty_project_app(dir.path());
+    let path = dir.path().join("board.snxpcb");
+    let mut pcb_tab = tab(&path);
+    pcb_tab.kind = TabKind::Pcb;
+    app.document_state.tabs.push(pcb_tab);
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path,
+            title: "board".to_string(),
+        },
+    );
+    assert!(save_enabled(&app, Some(window)));
 }

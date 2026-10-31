@@ -35,11 +35,12 @@ pub(super) fn is_window_document_command(command: &AppCommandId) -> bool {
     )
 }
 
+pub(super) const DOCUMENT_GONE_MESSAGE: &str =
+    "This window's document is no longer open, so the command did nothing.";
+
 /// Say why a command typed in a window whose tab is gone did nothing.
 fn explain_document_gone() {
-    crate::diagnostics::log_info(
-        "This window's document is no longer open, so the command did nothing.",
-    );
+    crate::diagnostics::log_info(DOCUMENT_GONE_MESSAGE);
 }
 
 fn is_tab_stepper(command: &AppCommandId) -> bool {
