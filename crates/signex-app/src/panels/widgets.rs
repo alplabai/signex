@@ -221,8 +221,9 @@ pub fn part_tree_row<'a>(
     .into()
 }
 
-/// Property-row label: wraps by word inside its fill-portion column, so a
-/// narrow panel grows the row instead of cutting the label's last glyphs.
+/// Property-row label: wraps inside its fill-portion column (by word, and by
+/// glyph for a word wider than the column), so a narrow panel grows the row
+/// instead of cutting the label; the clip keeps it off the value column.
 pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     property_label_sized(label, color, TS.body, PROPERTY_LABEL_PORTION)
 }
@@ -238,12 +239,15 @@ fn property_label_sized<'a, M: 'a>(
     size: f32,
     portion: u16,
 ) -> Element<'a, M> {
-    text(label.into())
-        .size(size)
-        .color(color)
-        .width(Length::FillPortion(portion))
-        .wrapping(iced::widget::text::Wrapping::Word)
-        .into()
+    container(
+        text(label.into())
+            .size(size)
+            .color(color)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+    )
+    .width(Length::FillPortion(portion))
+    .clip(true)
+    .into()
 }
 
 /// Numeric edit row used by the shape pre-placement form. The typed text

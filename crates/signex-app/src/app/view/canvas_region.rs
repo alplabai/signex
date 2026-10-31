@@ -6,15 +6,18 @@ use iced::Rectangle;
 
 /// Menu row, 1 px separator and tab strip above the canvas. The tab strip is
 /// reserved even with no tab open (`view` pushes a placeholder).
-pub(in crate::app) const CHROME_TOP: f32 =
+pub(super) const CHROME_TOP: f32 =
     crate::menu_bar::MENU_BAR_HEIGHT + CHROME_SEPARATOR + crate::tab_bar::TAB_STRIP_HEIGHT;
 const CHROME_SEPARATOR: f32 = 1.0;
+/// Room taken by the status bar under the docks; its height follows its
+/// content, so this is the measured default.
+const STATUS_BAR: f32 = 24.0;
 /// Resize handle drawn beside an open dock.
 const HANDLE: f32 = 5.0;
 /// A collapsed dock keeps this strip.
 const COLLAPSED: f32 = 28.0;
 /// Gap between the pointer and a card, so the card never sits under it.
-pub(in crate::app) const POINTER_GAP: f32 = 16.0;
+const POINTER_GAP: f32 = 16.0;
 
 /// One dock's footprint beside the canvas.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,7 +47,7 @@ pub(in crate::app) fn canvas_bounds(
 ) -> Rectangle {
     let x = left.footprint();
     let width = (window.0 - x - right.footprint()).max(0.0);
-    let height = (window.1 - CHROME_TOP - bottom.footprint()).max(0.0);
+    let height = (window.1 - CHROME_TOP - STATUS_BAR - bottom.footprint()).max(0.0);
     Rectangle {
         x,
         y: CHROME_TOP,
@@ -115,6 +118,7 @@ mod tests {
         assert_eq!(b.x, 245.0);
         assert_eq!(b.width, 1400.0 - 245.0 - 225.0);
         assert_eq!(b.y, 63.0);
+        assert_eq!(b.height, 900.0 - 63.0 - STATUS_BAR);
     }
 
     #[test]
@@ -149,19 +153,10 @@ mod tests {
     }
 
     #[test]
-    fn the_inline_editor_anchors_at_the_labels_window_position() {
-        let b = bounds();
-        let at = world_to_window((10.0, 20.0), (5.0, 7.0, 3.0), b);
-        assert_eq!(at, (b.x + 35.0, b.y + 67.0));
-    }
-
-    #[test]
-    fn a_collapsed_dock_leaves_its_strip() {
-        let collapsed = DockExtent {
-            present: true,
-            collapsed: true,
-            size: 240.0,
-        };
-        assert_eq!(collapsed.footprint(), 28.0);
+    fn a_label_maps_to_its_window_point_under_the_default_dock_layout() {
+        // Default docks: 240 px left + 5 px handle, so the canvas starts at
+        // x = 245; menu 36 + separator 1 + tab strip 26 put it at y = 63.
+        let at = world_to_window((10.0, 20.0), (5.0, 7.0, 3.0), bounds());
+        assert_eq!(at, (245.0 + 35.0, 63.0 + 67.0));
     }
 }

@@ -139,3 +139,23 @@ fn a_second_dwell_reads_the_cached_index_without_a_rebuild() {
     p.send(NetNavMsg::HoverDwellTicked);
     assert_eq!(card(&p).name, "VCC");
 }
+
+#[test]
+fn opening_the_inline_editor_clears_the_card_and_blocks_a_new_one() {
+    let mut p = project();
+    p.focus(&p.mid.clone());
+    dwell_on(&mut p, MID_VCC, SelectedKind::Label, (0.0, 0.0));
+    assert!(p.app.document_state.net_nav.hover.card.is_some());
+
+    assert!(
+        p.app
+            .begin_text_edit(SelectedItem::new(id(MID_VCC), SelectedKind::Label))
+    );
+    assert!(p.app.document_state.net_nav.hover.card.is_none());
+
+    dwell_on(&mut p, MID_VCC, SelectedKind::Label, (0.0, 0.0));
+    assert!(
+        p.app.document_state.net_nav.hover.card.is_none(),
+        "a card must not appear over the open editor"
+    );
+}

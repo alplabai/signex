@@ -54,13 +54,8 @@ fn nothing_to_edit(target: TextEditTarget) -> &'static str {
 }
 
 impl Signex {
-    /// Ask for the editor's focus one turn later, once the view holds it.
-    fn defer_text_edit_focus() -> Task<Message> {
-        Task::done(Message::TextEdit(TextEditMsg::Opened))
-    }
-
-    /// Focus the editor and select its text; it must be in the view already.
-    pub(in crate::app) fn focus_text_edit() -> Task<Message> {
+    /// Focus the editor that just opened and select its text.
+    fn focus_text_edit() -> Task<Message> {
         Task::batch([
             operation::focus(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
             operation::select_all(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
@@ -120,6 +115,10 @@ impl Signex {
             return false;
         };
         self.interaction_state.editing_text = Some(opened);
+        // A hover card left on screen would cover the editor (#1770).
+        self.document_state.net_nav.hover.card = None;
+        self.interaction_state.hover_symbol_uuid = None;
+        self.interaction_state.hover_screen_pos = None;
         true
     }
 
@@ -177,7 +176,7 @@ impl Signex {
             crate::diagnostics::log_warning(nothing_to_edit(target));
             return Task::none();
         }
-        Self::defer_text_edit_focus()
+        Self::focus_text_edit()
     }
 
     /// Double-click on a field: open its editor. `None` when `item` has no
@@ -193,7 +192,7 @@ impl Signex {
                 | SelectedKind::SymbolRefField
                 | SelectedKind::SymbolValField
         );
-        (editable && self.begin_text_edit(item)).then(Self::defer_text_edit_focus)
+        (editable && self.begin_text_edit(item)).then(Self::focus_text_edit)
     }
 
     /// Commit the editor's text through the engine edit Properties uses; one

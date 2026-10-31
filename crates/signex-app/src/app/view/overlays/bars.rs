@@ -213,8 +213,7 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let y_offset: f32 =
-            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 = canvas_region::CHROME_TOP;
         let bar_has_selection = !interaction.canvas.selected.is_empty();
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
@@ -255,8 +254,7 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 =
-            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 = canvas_region::CHROME_TOP;
         let theme_id = self.ui_state.theme_id;
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -452,8 +450,7 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 =
-            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 = canvas_region::CHROME_TOP;
         let theme_id = self.ui_state.theme_id;
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);

@@ -17,13 +17,6 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            TextEditMsg::Opened => {
-                if self.interaction_state.editing_text.is_some() {
-                    Self::focus_text_edit()
-                } else {
-                    Task::none()
-                }
-            }
             TextEditMsg::Requested(target) => {
                 let focus = self.request_text_edit(target);
                 Task::batch([focus, self.finish_update()])

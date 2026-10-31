@@ -50,6 +50,9 @@ impl Signex {
         use iced::widget::{column, container, text};
         use iced::{Background, Border};
 
+        if self.interaction_state.editing_text.is_some() {
+            return None;
+        }
         // A net card (a wire, pin or label, #1270) takes the place of the
         // symbol card while the pointer rests on a pin.
         if let Some(card) = &self.document_state.net_nav.hover.card {
@@ -359,8 +362,7 @@ impl Signex {
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
-        let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 }
+        let ab_y: f32 = canvas_region::CHROME_TOP
             + crate::active_bar::BAR_TOP_MARGIN_PX
             + crate::active_bar::BAR_HEIGHT_PX
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;

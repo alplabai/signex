@@ -150,10 +150,6 @@ pub enum TextEditMsg {
     /// A command (F2, V, U, F) asked to edit a field in place; the target
     /// is the object under the cursor, else the single selection.
     Requested(TextEditTarget),
-    /// The editor is in the view now: focus it and select its text. Sent one
-    /// turn after the editor opens, because a widget cannot be focused in
-    /// the update that creates it (#1770).
-    Opened,
 }
 
 /// Which text a field-edit command asks for (#1670).
