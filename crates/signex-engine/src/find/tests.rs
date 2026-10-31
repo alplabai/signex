@@ -142,3 +142,16 @@ fn non_ascii_case_folds_the_same_way_in_scan_and_replace() {
     assert_eq!(out.labels[0].text, "X_X", "and the replace rewrites both");
     assert_eq!(replace_all_ci("STRASSE", "\u{DF}", "x"), "STRASSE");
 }
+
+#[test]
+fn a_power_ports_hidden_designator_is_not_found_but_its_net_name_is() {
+    let mut sheet = sheet();
+    sheet.symbols[0].reference = "#PWR01".into();
+    sheet.symbols[0].value = "+5V".into();
+    sheet.symbols[0].is_power = true;
+    let scope = DesignatorScope::default();
+    assert!(scan_sheet(&sheet, "PWR", &scope).is_empty());
+    let hits = scan_sheet(&sheet, "+5V", &scope);
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].kind, FindKind::Value);
+}
