@@ -6,6 +6,8 @@
 //! the font must not destroy the author's choice. This module owns the part
 //! that is pure data: the bundled fallback and the order a name is picked in.
 
+use std::sync::OnceLock;
+
 /// Family every renderer falls back to. It ships inside the app, so it
 /// always exists, on every machine, which is what makes the fallback
 /// deterministic.
@@ -25,15 +27,36 @@ pub const FALLBACK_MM_PER_EM: f32 = 0.72;
 const BUNDLED_CAP_HEIGHT_PER_EM: [(&str, f32); 2] =
     [("Iosevka", 735.0 / 1000.0), ("Roboto", 1456.0 / 2048.0)];
 
+/// Reads the cap height over em of an installed family, `None` when the
+/// family is unknown or the reader is not ready yet.
+pub type CapHeightResolver = fn(&str) -> Option<f32>;
+
+static CAP_HEIGHT_RESOLVER: OnceLock<CapHeightResolver> = OnceLock::new();
+
+/// Register the reader of system families' cap height (#1797). This crate
+/// does no font-file IO: the app, which holds the font database, supplies
+/// the reader once and owns its per-family cache. First registration wins.
+pub fn set_cap_height_resolver(resolver: CapHeightResolver) {
+    let _ = CAP_HEIGHT_RESOLVER.set(resolver);
+}
+
 /// Millimetres of cap height per em for `family` (`None` is the bundled
-/// default). Bundled faces use their measured ratio; any other family keeps
+/// default). Bundled faces use their measured ratio; a system family uses
+/// the registered resolver's reading; anything else keeps
 /// [`FALLBACK_MM_PER_EM`].
 pub fn mm_per_em(family: Option<&str>) -> f32 {
     let name = family.map_or(BUNDLED_DEFAULT_FAMILY, str::trim);
-    BUNDLED_CAP_HEIGHT_PER_EM
+    if let Some(&(_, ratio)) = BUNDLED_CAP_HEIGHT_PER_EM
         .iter()
         .find(|(bundled, _)| bundled.eq_ignore_ascii_case(name))
-        .map_or(FALLBACK_MM_PER_EM, |&(_, ratio)| ratio)
+    {
+        return ratio;
+    }
+    CAP_HEIGHT_RESOLVER
+        .get()
+        .and_then(|resolve| resolve(name))
+        .filter(|ratio| ratio.is_finite() && *ratio > 0.0)
+        .unwrap_or(FALLBACK_MM_PER_EM)
 }
 
 /// Cap-height ratio of the bundled `family`, for tests that pin the table.
