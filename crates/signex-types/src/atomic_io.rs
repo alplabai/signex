@@ -25,11 +25,15 @@
 //! FUSE, vfat) refuse `chmod`, and a save that worked before must not start
 //! failing, so a refusal is logged with `tracing::warn!` and the write goes on.
 //!
-//! A read-only existing target (no write bit on Unix, the read-only attribute on
-//! Windows) is refused with [`ReadOnlyTarget`] before anything is written: the
-//! temp-then-rename dance only needs the folder to be writable, so without this
-//! check it would silently replace a file the user locked on purpose (#1825).
-//! Callers recognise the refusal with [`is_read_only_target`].
+//! An existing read-only target is refused with [`ReadOnlyTarget`] before
+//! anything is written: the temp-then-rename dance only needs the folder to be
+//! writable, so without this check it would silently replace a file the user
+//! locked on purpose (#1825). The contract is exactly [`std::fs::Permissions::readonly`]
+//! on the file at `path`: on Unix no write bit set for anyone (`chmod 444`),
+//! on Windows the read-only attribute. A file that merely is not writable by
+//! the current user (owned by someone else, ACLs), or a symlink whose target
+//! is read-only, is NOT covered. Callers recognise the refusal with
+//! [`is_read_only_file_refusal`].
 //!
 //! The two `fsync`s are what make the power-loss guarantee real:
 //! without fsyncing the temp file before the rename, many filesystems
@@ -83,7 +87,7 @@ fn copy_existing_permissions(path: &Path, tmp: &Path) -> io::Result<()> {
 
 /// The write was refused because the file already at the destination is
 /// read-only. Carried as the inner error of an [`io::Error`] of kind
-/// [`io::ErrorKind::PermissionDenied`]; detect it with [`is_read_only_target`].
+/// [`io::ErrorKind::PermissionDenied`]; detect it with [`is_read_only_file_refusal`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReadOnlyTarget {
     /// The file name (no directory) that was left untouched.
@@ -103,7 +107,7 @@ impl std::fmt::Display for ReadOnlyTarget {
 impl std::error::Error for ReadOnlyTarget {}
 
 /// Whether `error` is the [`ReadOnlyTarget`] refusal of [`atomic_write`].
-pub fn is_read_only_target(error: &io::Error) -> bool {
+pub fn is_read_only_file_refusal(error: &io::Error) -> bool {
     error
         .get_ref()
         .is_some_and(|inner| inner.is::<ReadOnlyTarget>())
@@ -253,7 +257,7 @@ mod tests {
 
         let error = atomic_write(&path, b"new").unwrap_err();
 
-        assert!(is_read_only_target(&error), "got {error}");
+        assert!(is_read_only_file_refusal(&error), "got {error}");
         assert!(error.to_string().contains("locked.txt"));
         assert_eq!(std::fs::read(&path).unwrap(), b"old");
         assert!(!has_stray_tmp(dir.path()));
