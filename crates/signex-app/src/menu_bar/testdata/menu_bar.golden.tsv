@@ -82,6 +82,7 @@ Design/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-
 Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
 Design/---	separator	-	-	-	-	-	-
 Design/Electrical Rules Check	item	Electrical Rules Check	run_erc	F8	Erc	01001000	cmd:run_erc
+Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/---	separator	-	-	-	-	-	-
 Design/Generate BOM	item	Generate BOM	-	-	ExportBom	01000000	sch
 Tools	menu	Tools	-	-	-	-	-
