@@ -47,6 +47,14 @@ impl super::LibSymbol {
 }
 
 impl Symbol {
+    /// Whether the reference designator is drawn at all. A power port is a
+    /// net name, not a part, so it never draws one; canvas, hit boxes and
+    /// SVG/PDF export all read this one answer (#1771).
+    #[must_use]
+    pub fn draws_reference(&self) -> bool {
+        !self.is_power
+    }
+
     /// The fields [`group_into_parts`] groups by.
     pub fn part_key(&self) -> PartKey<'_> {
         PartKey {
@@ -249,6 +257,16 @@ pub fn duplicate_designators<'a>(symbols: impl IntoIterator<Item = &'a Symbol>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_power_port_draws_no_reference_and_a_part_does() {
+        let port = Symbol {
+            is_power: true,
+            ..Symbol::default()
+        };
+        assert!(!port.draws_reference());
+        assert!(Symbol::default().draws_reference());
+    }
 
     fn key<'a>(reference: &'a str, lib_id: &'a str, unit: u32) -> PartKey<'a> {
         PartKey {
