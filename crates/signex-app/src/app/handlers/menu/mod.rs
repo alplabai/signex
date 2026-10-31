@@ -7,6 +7,7 @@ pub(crate) mod export;
 mod file_commands;
 mod panel_commands;
 mod placement;
+pub(crate) mod save_target;
 mod view_commands;
 
 impl Signex {

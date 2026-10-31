@@ -248,6 +248,6 @@ fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
         .error_notice
         .as_ref()
         .expect("a failed write must be reported");
-    assert!(notice.detail.contains("Could not write BOM"), "{notice:?}");
+    assert!(notice.detail.contains("could not write BOM"), "{notice:?}");
     assert!(!out.exists());
 }

@@ -21,6 +21,7 @@ pub(crate) mod net_class_picks;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
 pub(crate) mod ownership_index;
+mod parameter_table;
 mod path_key;
 mod pcb_revision;
 mod pdf_page_setup;
@@ -44,6 +45,7 @@ pub use case_fold::CaseFold;
 pub use error_notice::ErrorNotice;
 pub use interaction::InteractionState;
 pub use keymap_recorder::KeymapRecorderState;
+pub use parameter_table::ParameterTableState;
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -842,6 +844,9 @@ pub struct PreviewState {
     /// remembered page setup is filed under this, not whichever tab is
     /// active when the preview closes.
     pub source_path: Option<PathBuf>,
+    /// Outcome of the last PDF export started from this window, shown in its
+    /// footer: where the file went, or why it was not written (#1766).
+    pub export_status: Option<String>,
 }
 
 impl PreviewState {

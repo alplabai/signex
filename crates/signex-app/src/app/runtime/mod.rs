@@ -436,8 +436,16 @@ impl Signex {
         }
     }
 
+    /// Repaint every canvas with the committed theme.
     pub(crate) fn update_canvas_theme(&mut self) {
-        let colors = self.canvas_colors_for(self.ui_state.theme_id);
+        self.apply_canvas_theme(self.ui_state.theme_id);
+    }
+
+    /// Push `id`'s canvas colours onto every PCB canvas and drop the caches
+    /// of every PCB and schematic canvas, docked or undocked. Serves both
+    /// the committed theme and the Preferences draft preview (#1749).
+    pub(crate) fn apply_canvas_theme(&mut self, id: ThemeId) {
+        let colors = self.canvas_colors_for(id);
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.set_theme_colors(
                 crate::render_config::to_iced(&colors.background),

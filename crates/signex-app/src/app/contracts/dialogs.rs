@@ -36,12 +36,24 @@ pub enum ParameterManagerMsg {
     Open,
     /// Close the dialog.
     Close,
-    /// Edit a single parameter on a single symbol via the manager.
+    /// A cell's text changed: write it to the document now. Keystrokes in
+    /// one cell share one undo step; an empty value keeps the parameter and
+    /// empties it.
     Edit {
         symbol_uuid: uuid::Uuid,
         key: String,
         value: String,
     },
+    /// Enter in a cell: the next edit of that cell is a new undo step.
+    CellSubmitted,
+    /// Delete the parameter `key` from every symbol, as one undo step.
+    ParameterRemoved { key: String },
+    /// The "new parameter" name box changed.
+    NewKeyChanged(String),
+    /// Add the typed parameter as a column on every symbol, empty.
+    ColumnAdded,
+    /// The row filter changed.
+    FilterChanged(String),
 }
 
 /// Annotate dialog message family (ADR-0001 D3). Namespaced under
@@ -398,6 +410,9 @@ pub struct ExportWriteOutcome {
     pub advisory: Option<crate::app::state::ErrorNotice>,
     /// Reported to the Messages panel after a successful write.
     pub warnings: Vec<String>,
+    /// The document a PDF export was made from. Set, the outcome is also
+    /// shown in the status line of the Export PDF window open for it.
+    pub preview_source: Option<std::path::PathBuf>,
 }
 
 /// Custom Selection Filter modal message family (ADR-0001 D3).
