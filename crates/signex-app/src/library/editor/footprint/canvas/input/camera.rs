@@ -75,7 +75,9 @@ impl FootprintCanvas<'_> {
                 library_path: self.address.library_path.clone(),
                 table: self.address.table.clone(),
                 row_id: self.address.row_id,
-                msg: EditorMsg::Footprint(FootprintEditorMsg::FitConsumed),
+                msg: EditorMsg::Footprint(FootprintEditorMsg::FitConsumed {
+                    px_per_mm: cstate.scale,
+                }),
             }));
         }
         None

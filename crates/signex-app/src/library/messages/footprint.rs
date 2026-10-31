@@ -198,7 +198,10 @@ pub enum FootprintEditorMsg {
 
     /// v0.26-C — canvas signals that the pending Fit-to-Window
     /// request has been honoured. See EditorMsg::Footprint(FootprintEditorMsg::FitConsumed).
-    FitConsumed,
+    /// `px_per_mm` is the scale the fit settled on (the status bar reads it).
+    FitConsumed {
+        px_per_mm: f32,
+    },
 
     /// v0.26-E — clipboard ops on the selected pad.
     CopyPad,

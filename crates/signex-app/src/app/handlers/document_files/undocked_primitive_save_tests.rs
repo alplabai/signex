@@ -110,6 +110,37 @@ fn save_as_in_an_undocked_footprint_window_re_keys_the_window() {
     save_as_enables_the_window(Primitive::Footprint);
 }
 
+/// Save in the window writes the re-keyed document: after the Save As write
+/// lands, the file is overwritten and a Save typed in the window restores it.
+fn save_acts_after_save_as(kind: Primitive) {
+    let mut f = fixture(kind);
+    let (from, to) = (f.from.clone(), f.to.clone());
+    let write = f.app.handle_save_primitive_as(&from, &to).expect("starts");
+    crate::app::path_ops::settle_task(&mut f.app, write);
+    assert!(to.exists(), "{kind:?}: the Save As write landed");
+    std::fs::write(&to, b"stale").unwrap();
+    f.app.document_state.mark_document_dirty(&to);
+    let window = f.window;
+    let task = f
+        .app
+        .dispatch_command(&command("save_document"), CommandArgs::none(), Some(window));
+    crate::app::path_ops::settle_task(&mut f.app, task);
+    assert!(
+        to.exists(),
+        "{kind:?}: Save in the window wrote its document"
+    );
+}
+
+#[test]
+fn save_in_an_undocked_symbol_window_acts_after_save_as() {
+    save_acts_after_save_as(Primitive::Symbol);
+}
+
+#[test]
+fn save_in_an_undocked_footprint_window_acts_after_save_as() {
+    save_acts_after_save_as(Primitive::Footprint);
+}
+
 /// Close Document in the window closes its own re-keyed tab; with the old
 /// path the window found no tab and the keystroke did nothing.
 fn close_document_acts_after_save_as(kind: Primitive) {

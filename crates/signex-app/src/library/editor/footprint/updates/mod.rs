@@ -444,7 +444,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ToggleAutoFit
         | FootprintEditorMsg::SetMode(..)
         | FootprintEditorMsg::TogglePlacementPause
-        | FootprintEditorMsg::FitConsumed
+        | FootprintEditorMsg::FitConsumed { .. }
         | FootprintEditorMsg::CopyPad
         | FootprintEditorMsg::CutPad
         | FootprintEditorMsg::PastePad
@@ -588,7 +588,7 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | CloseContextMenu
         | ContextMenuOpenSubmenu(_)
         | ContextMenuAction(_)
-        | FitConsumed
+        | FitConsumed { .. }
         // v0.26-E — clipboard ops handle their own push_history at
         // call site, so the snapshot-classifier here returns false
         // (Copy mutates nothing; Cut + Paste already snapshotted).

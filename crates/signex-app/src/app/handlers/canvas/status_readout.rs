@@ -19,17 +19,12 @@ enum Surface<'a> {
 const NO_CAMERA_ZOOM_PERCENT: f64 = 100.0;
 
 impl Signex {
-    /// What `window_id` shows. Standalone symbol and footprint editors are
-    /// main-window tabs; an undocked window holds one schematic or PCB, or
-    /// is a Component Preview of its own.
+    /// What `window_id` shows. The main window shows its active tab: a
+    /// symbol or footprint editor, or a Component Preview. Any other window
+    /// reads its own schematic or PCB canvas (a Component Preview window has
+    /// no status bar).
     fn status_surface(&self, window_id: iced::window::Id) -> Surface<'_> {
         let docs = &self.document_state;
-        if matches!(
-            self.ui_state.windows.get(&window_id),
-            Some(crate::app::state::WindowKind::ComponentEditor { .. })
-        ) {
-            return Surface::ComponentPreview;
-        }
         if self.ui_state.main_window_id == Some(window_id)
             && let Some(tab) = docs.tabs.get(docs.active_tab)
         {
@@ -196,23 +191,6 @@ mod tests {
     fn a_component_preview_tab_does_not_read_the_schematic_camera() {
         let (app, window) = app_showing_a_component_preview();
         assert_ne!(app.interaction_state.canvas.zoom_percent(), 100.0);
-        assert_eq!(app.status_zoom(window), 100.0);
-        assert_eq!(app.status_cursor(window), (0.0, 0.0));
-    }
-
-    /// The same Component Preview undocked into its own window.
-    #[test]
-    fn an_undocked_component_preview_window_does_not_read_the_schematic_camera() {
-        let (mut app, _main) = app_showing_a_component_preview();
-        let window = iced::window::Id::unique();
-        app.ui_state.windows.insert(
-            window,
-            crate::app::state::WindowKind::ComponentEditor {
-                library_path: PathBuf::from("parts.snxlib"),
-                table: "Resistors".to_string(),
-                row_id: signex_library::RowId::new(),
-            },
-        );
         assert_eq!(app.status_zoom(window), 100.0);
         assert_eq!(app.status_cursor(window), (0.0, 0.0));
     }

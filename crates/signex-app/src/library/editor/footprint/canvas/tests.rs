@@ -629,6 +629,45 @@ mod initial_fit {
         state
     }
 
+    /// #1808: a right-click Fit to Window publishes the scale it settled on.
+    #[test]
+    fn a_pending_fit_publishes_the_fitted_scale() {
+        let mut state = state_with_content();
+        state.fit_pending = true;
+        let cache = canvas::Cache::new();
+        let fpc = FootprintCanvas {
+            state: &state,
+            address: EditorAddress::new(
+                std::path::PathBuf::from("/tmp/lib.snxlib"),
+                "footprints".to_string(),
+                signex_library::RowId::new(),
+            ),
+            bg_color: Color::WHITE,
+            grid_color: Color::BLACK,
+            cache: &cache,
+            sketch: None,
+            silk_f: &[],
+            silk_b: &[],
+            zoom_step: 1.1,
+        };
+        let mut cstate = FootprintCanvasState::default();
+        let message = fpc
+            .apply_pending_fit(&mut cstate, BOUNDS)
+            .and_then(|action| action.into_inner().0);
+        let Some(LibraryMessage::EditorEvent {
+            msg:
+                EditorMsg::Footprint(crate::library::messages::FootprintEditorMsg::FitConsumed {
+                    px_per_mm,
+                }),
+            ..
+        }) = message
+        else {
+            panic!("the pending fit published no FitConsumed: {message:?}");
+        };
+        assert_eq!(px_per_mm, cstate.scale);
+        assert_ne!(px_per_mm, super::super::DEFAULT_PX_PER_MM, "it did fit");
+    }
+
     #[test]
     fn the_first_fit_publishes_the_fitted_scale() {
         let (message, cstate) = first_event(&state_with_content());
