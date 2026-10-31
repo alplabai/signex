@@ -107,4 +107,74 @@ mod tests {
         ensure_extracted(&root).expect("second extract");
         assert_eq!(std::fs::read_to_string(&sheet).expect("read"), "edited");
     }
+
+    /// #1798 — no field or net label of the sample touches a part. Text drawn
+    /// at its true size crowded the +5V label into its power bar, U1's
+    /// reference against pin 3, and J2's value into its body.
+    #[test]
+    fn sample_text_clears_every_part() {
+        use signex_types::schematic::{
+            Aabb, field_effective_style, lower_placed_symbol, primitives_bounds, text_aabb,
+        };
+        let sheet = SnxSchematic::parse(SHEET_SOURCE)
+            .expect("sample parses")
+            .sheet;
+        let bodies: Vec<(String, Aabb)> = sheet
+            .symbols
+            .iter()
+            .filter_map(|sym| {
+                let parts = lower_placed_symbol(sheet.lib_symbols.get(&sym.lib_id), sym);
+                primitives_bounds(&parts).map(|b| (sym.reference.clone(), b))
+            })
+            .collect();
+        let touches = |text: &Aabb| {
+            bodies.iter().find(|(_, b)| {
+                text.min_x < b.max_x
+                    && text.max_x > b.min_x
+                    && text.min_y < b.max_y
+                    && text.max_y > b.min_y
+            })
+        };
+        for sym in sheet.symbols.iter().filter(|s| !s.is_power) {
+            for (what, content, prop) in [
+                ("reference", &sym.reference, &sym.ref_text),
+                ("value", &sym.value, &sym.val_text),
+            ] {
+                let Some(prop) = prop.as_ref().filter(|p| !p.hidden) else {
+                    continue;
+                };
+                let (rotation, h, v) = field_effective_style(prop, sym);
+                let text = text_aabb(
+                    content,
+                    prop.font_size,
+                    (prop.position.x, prop.position.y),
+                    rotation,
+                    h,
+                    v,
+                );
+                assert!(
+                    touches(&text).is_none(),
+                    "{} {what} {text:?} touches {:?}",
+                    sym.reference,
+                    touches(&text)
+                );
+            }
+        }
+        for label in &sheet.labels {
+            let text = text_aabb(
+                &label.text,
+                label.font_size,
+                (label.position.x, label.position.y),
+                label.rotation,
+                label.justify,
+                label.justify_v,
+            );
+            assert!(
+                touches(&text).is_none(),
+                "label {} {text:?} touches {:?}",
+                label.text,
+                touches(&text)
+            );
+        }
+    }
 }

@@ -158,7 +158,7 @@ impl Signex {
         }
         let prefix = self.placement_prefix_for(target_sheet, &resolved);
         let reference = self.next_designator_in_sheet(target_sheet, &prefix);
-        let placed = placed_symbol(
+        let mut placed = placed_symbol(
             &resolved,
             reference,
             signex_types::schematic::Point::new(0.0, 0.0),
@@ -174,6 +174,7 @@ impl Signex {
             .and_then(|e| e.document().lib_symbols.get(&resolved.lib_symbol.id))
             .cloned()
             .unwrap_or(resolved.lib_symbol);
+        signex_engine::place_fields_for_new_symbol(&mut placed, &body);
         let mut fragment = signex_types::schematic::SchematicSheet::default();
         fragment.lib_symbols.insert(body.id.clone(), body);
         fragment.symbols.push(placed);
