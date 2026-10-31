@@ -218,6 +218,8 @@ mod library_pricing_refresh;
 #[path = "regression/render_config_grid_style.rs"]
 mod render_config_grid_style;
 
+#[path = "regression/status_zoom_readout.rs"]
+mod status_zoom_readout;
 #[path = "regression/zoom_speed_pref.rs"]
 mod zoom_speed_pref;
 

@@ -28,6 +28,13 @@ impl Signex {
         self.active_schematic().is_some()
     }
 
+    /// The zoom the status bar shows for `window_id`, read from that window's
+    /// own camera (the one `view_center` and the canvas read).
+    pub fn status_zoom_percent(&self, window_id: iced::window::Id) -> f64 {
+        self.interaction_state
+            .zoom_percent_for_window(window_id, self.pcb_for_window(window_id).is_some())
+    }
+
     pub(crate) fn has_active_pcb(&self) -> bool {
         self.active_pcb().is_some()
     }

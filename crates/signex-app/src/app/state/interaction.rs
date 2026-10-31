@@ -181,6 +181,17 @@ impl InteractionState {
             .unwrap_or(&self.pcb_canvas)
     }
 
+    /// Zoom percentage of the canvas `window_id` shows, read from its live
+    /// camera: the PCB canvas when that window shows a board, else the
+    /// schematic one (an undocked window has its own of each, #494).
+    pub fn zoom_percent_for_window(&self, window_id: iced::window::Id, shows_pcb: bool) -> f64 {
+        if shows_pcb {
+            self.pcb_canvas_for_window(window_id).zoom_percent()
+        } else {
+            self.canvas_for_window(window_id).zoom_percent()
+        }
+    }
+
     /// The main schematic canvas plus every undocked window's own slot, so
     /// an app-wide appearance change cannot leave a detached window stale.
     pub fn all_schematic_canvases_mut(&mut self) -> impl Iterator<Item = &mut CanvasSlot> {

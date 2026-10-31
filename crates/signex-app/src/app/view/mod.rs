@@ -274,11 +274,7 @@ impl Signex {
         });
         // Read the camera itself, not a copy refreshed on cursor events: a
         // zoom-to-fit lands on the first frame, before any cursor event.
-        let status_zoom = if self.has_active_pcb() {
-            interaction.pcb_canvas.zoom_percent()
-        } else {
-            interaction.canvas_for_window(window_id).zoom_percent()
-        };
+        let status_zoom = self.status_zoom_percent(window_id);
         let status = status_bar::view(
             ui.cursor_x,
             ui.cursor_y,

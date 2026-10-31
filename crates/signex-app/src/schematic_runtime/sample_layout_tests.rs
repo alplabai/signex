@@ -71,16 +71,18 @@ fn no_sample_net_label_sits_on_a_power_port_glyph() {
     for port in sheet.symbols.iter().filter(|s| s.is_power) {
         let glyph = symbol::symbol_bounds(&sheet, port);
         for label in &sheet.labels {
-            let width = label.text.chars().count() as f64 * 1.27 * 0.6;
-            let text = Aabb::new(
-                label.position.x,
-                label.position.y - 1.27,
-                label.position.x + width,
-                label.position.y,
+            let text = drawn_text_aabb(
+                &label.text,
+                None,
+                label.font_size,
+                (label.position.x, label.position.y),
+                0.0,
+                label.justify,
+                label.justify_v,
             );
             assert!(
                 !overlaps(text, glyph),
-                "label {:?} overlaps the {} port glyph",
+                "label {:?} {text:?} overlaps the {} port glyph {glyph:?}",
                 label.text,
                 port.value
             );
@@ -88,25 +90,60 @@ fn no_sample_net_label_sits_on_a_power_port_glyph() {
     }
 }
 
-#[test]
-fn a_placed_power_port_without_a_ref_prop_draws_no_designator() {
-    let port = Symbol {
+fn power_port(ref_text: Option<TextProp>) -> Symbol {
+    Symbol {
         uuid: uuid::Uuid::now_v7(),
         reference: "#PWR?".into(),
         value: "+3V3".into(),
         is_power: true,
-        ref_text: None,
+        ref_text,
         ..Symbol::default()
-    };
-    let drawn = snapshot::field_text_input(
-        &port,
+    }
+}
+
+fn reference_drawn(port: &Symbol) -> bool {
+    snapshot::field_text_input(
+        port,
         &port.reference,
         port.ref_text.as_ref(),
         snapshot::FieldSlot::Reference,
         [1.0; 4],
         None,
-    );
-    assert!(drawn.is_none(), "#PWR? must not be drawn: {drawn:?}");
+    )
+    .is_some()
+}
+
+/// Place > Power Port builds the symbol with no reference prop.
+#[test]
+fn a_menu_placed_power_port_draws_no_designator() {
+    assert!(!reference_drawn(&power_port(None)));
+}
+
+/// A port placed from a library row carries a visible reference prop; the
+/// SVG/PDF export hides every power-port designator, so the canvas does too.
+#[test]
+fn a_library_placed_power_port_draws_no_designator() {
+    let visible = TextProp {
+        position: Point::new(0.0, -2.54),
+        rotation: 0.0,
+        font_size: 1.27,
+        justify_h: HAlign::Center,
+        justify_v: signex_types::schematic::VAlign::default(),
+        hidden: false,
+        font_family: None,
+    };
+    let port = power_port(Some(visible));
+    assert!(!reference_drawn(&port));
+    let bounds = collect_item_bounds(&SchematicSheet::default(), &Default::default());
+    assert!(bounds.is_empty());
+    let sheet = SchematicSheet {
+        symbols: vec![port],
+        ..SchematicSheet::default()
+    };
+    let has_ref_box = collect_item_bounds(&sheet, &Default::default())
+        .iter()
+        .any(|b| b.item.kind == signex_types::schematic::SelectedKind::SymbolRefField);
+    assert!(!has_ref_box, "an undrawn designator must not be selectable");
 }
 
 #[test]

@@ -116,7 +116,9 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 > **Sample project.** **Help ▸ Open Sample Project** (or the button on the
 > start screen) opens a small bundled design, a linear regulator. Signex copies
 > it into your per-user configuration folder the first time, so your edits to it
-> are kept.
+> are kept. A copy that is already there is never overwritten, so one opened
+> before an update keeps its old layout until you delete its folder under the
+> app configuration directory.
 
 ## 4. Canvas basics
 

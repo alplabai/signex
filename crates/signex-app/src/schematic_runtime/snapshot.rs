@@ -450,6 +450,11 @@ pub(super) fn field_text_input(
     color: [f32; 4],
     document_family: Option<&str>,
 ) -> Option<TextInput> {
+    // A power port is a net name, not a part: its designator is never drawn,
+    // as in the SVG/PDF export (#1771).
+    if symbol.is_power && matches!(slot, FieldSlot::Reference) {
+        return None;
+    }
     if let Some(prop) = prop {
         if prop.hidden {
             return None;
@@ -469,12 +474,6 @@ pub(super) fn field_text_input(
             h_align,
             v_align,
         });
-    }
-    // A power port is a net name, not a part: a placed one carries no
-    // reference prop, so its `#PWR?` designator must not fall back to a
-    // default position (#1771).
-    if symbol.is_power && matches!(slot, FieldSlot::Reference) {
-        return None;
     }
     let (dy, v_align) = match slot {
         FieldSlot::Reference => (-3.5, VAlign::Bottom),

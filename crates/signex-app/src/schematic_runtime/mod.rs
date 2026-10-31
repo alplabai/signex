@@ -598,7 +598,11 @@ fn collect_item_bounds_with(
             });
         }
 
-        if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
+        if let Some(ref_text) = symbol
+            .ref_text
+            .as_ref()
+            .filter(|p| !p.hidden && !symbol.is_power)
+        {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
                 bbox: text_prop_aabb(
