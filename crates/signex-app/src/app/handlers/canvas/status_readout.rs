@@ -176,10 +176,11 @@ mod tests {
         assert!(after > before + 1.0, "{before} -> {after}");
     }
 
-    /// #1771 — an undocked window reads its own schematic and PCB cameras,
-    /// and the main window's readout is not disturbed by them.
+    /// #1771 — an undocked schematic window's readout follows its own
+    /// camera, not the main window's, and each window keeps its own PCB
+    /// camera to read.
     #[test]
-    fn each_window_reads_its_own_camera() {
+    fn an_undocked_window_reads_its_own_camera() {
         let (mut app, main, _path) = app_showing(|_| TabKind::Schematic);
         let sch_window = iced::window::Id::unique();
         let pcb_window = iced::window::Id::unique();
