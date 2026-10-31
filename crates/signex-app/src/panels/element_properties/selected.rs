@@ -23,6 +23,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     let PanelPalette {
         input_bg,
         input_bdr,
+        panel_bg,
         ..
     } = palette;
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
@@ -421,24 +422,28 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             has_mirror_x,
                             PanelMsg::ToggleSymbolMirrorX(id),
                             muted,
+                            panel_bg,
                         ));
                         c = c.push(form_check_row(
                             "Mirror Y",
                             has_mirror_y,
                             PanelMsg::ToggleSymbolMirrorY(id),
                             muted,
+                            panel_bg,
                         ));
                         c = c.push(form_check_row(
                             "Locked",
                             locked,
                             PanelMsg::ToggleSymbolLocked(id),
                             muted,
+                            panel_bg,
                         ));
                         c = c.push(form_check_row(
                             "DNP",
                             dnp,
                             PanelMsg::ToggleSymbolDnp(id),
                             muted,
+                            panel_bg,
                         ));
                         c
                     },
@@ -859,6 +864,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         locked,
                         PanelMsg::ToggleItemLocked(item),
                         muted,
+                        panel_bg,
                     ))
             },
         ));
