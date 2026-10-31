@@ -65,7 +65,8 @@ pub(crate) struct CommandContext {
     /// (net-colour changes have no redo).
     pub can_redo: bool,
     /// The active project's `.snxprj` has unsaved changes, which Save
-    /// writes from any tab.
+    /// writes from any tab, in a window that has a document to run Save
+    /// against (false in a Component Preview or a window with no tab).
     pub project_dirty: bool,
     /// Some document or Component Preview row has unsaved edits, which
     /// File ▸ Save All writes.
@@ -193,6 +194,17 @@ pub(crate) fn is_planned_command(command: &AppCommandId) -> bool {
         .is_some_and(|action| crate::active_bar::is_planned(&action))
 }
 
+/// The document the per-window commands (Save, Save As, Print) act on.
+#[derive(Debug, Clone, Copy, Default)]
+struct WindowDocumentKind {
+    is_schematic: bool,
+    is_editor: bool,
+    /// The window holds a document with a file of its own, so Save has
+    /// something to run against: false in a Component Preview and in a
+    /// window whose tab is gone, which refuse Save whatever the project holds.
+    has_file: bool,
+}
+
 impl Signex {
     /// The [`CommandContext`] for a command invoked from `window` (`None`:
     /// the main window).
@@ -226,16 +238,20 @@ impl Signex {
         let has_schematic = document.active_engine().is_some();
         let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
         let has_footprint_editor = matches!(active_kind, Some(TabKind::FootprintEditor(_)));
-        let (document_is_schematic, document_is_editor) = self.window_document_kind(
+        let own = self.window_document_kind(
             window,
-            (has_schematic, has_symbol_editor || has_footprint_editor),
+            WindowDocumentKind {
+                is_schematic: has_schematic,
+                is_editor: has_symbol_editor || has_footprint_editor,
+                has_file: true,
+            },
         );
         CommandContext {
             has_schematic,
             has_pcb: self.has_active_pcb(),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
-            document_is_schematic,
-            document_is_editor,
+            document_is_schematic: own.is_schematic,
+            document_is_editor: own.is_editor,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
             has_symbol_editor,
             has_footprint_editor,
@@ -245,7 +261,7 @@ impl Signex {
                 || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
             can_redo,
-            project_dirty: self.active_project_is_dirty(),
+            project_dirty: own.has_file && self.active_project_is_dirty(),
             has_dirty_documents: document.has_dirty_documents()
                 || self.library.editors.values().any(|editor| editor.dirty),
             has_document: !document.tabs.is_empty(),
@@ -255,32 +271,35 @@ impl Signex {
         }
     }
 
-    /// `(is a schematic sheet, is an editor tab)` for the document the
-    /// per-window commands act on in `window`: the window's own tab in an
-    /// undocked or Component Preview window (a preview is neither), else
-    /// `main`, the main window's active-tab facts.
+    /// What the per-window commands act on in `window`: the window's own tab
+    /// in an undocked or Component Preview window, else `main`, the main
+    /// window's active-tab facts.
     fn window_document_kind(
         &self,
         window: Option<iced::window::Id>,
-        main: (bool, bool),
-    ) -> (bool, bool) {
+        main: WindowDocumentKind,
+    ) -> WindowDocumentKind {
+        use super::window_document::WindowDocument;
+        let none = WindowDocumentKind::default();
         let document = &self.document_state;
-        match self.document_of_window(window) {
-            None => main,
-            Some(super::window_document::WindowDocument::Tab(index)) => {
-                match document.tabs.get(index) {
-                    Some(tab) => (
-                        matches!(tab.kind, TabKind::Schematic)
-                            && document.engines.contains_key(&tab.path),
-                        matches!(
-                            tab.kind,
-                            TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_)
-                        ),
-                    ),
-                    None => (false, false),
-                }
-            }
-            Some(super::window_document::WindowDocument::NoTab) => (false, false),
+        // The main window, or a detached panel or modal, keeps `main`; a
+        // window whose tab is gone has nothing.
+        let index = match self.document_of_window(window) {
+            None => return main,
+            Some(WindowDocument::Tab(index)) => index,
+            Some(WindowDocument::NoTab) => return none,
+        };
+        let Some(tab) = document.tabs.get(index) else {
+            return none;
+        };
+        WindowDocumentKind {
+            is_schematic: matches!(tab.kind, TabKind::Schematic)
+                && document.engines.contains_key(&tab.path),
+            is_editor: matches!(
+                tab.kind,
+                TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_)
+            ),
+            has_file: !tab.kind.is_component_editor(),
         }
     }
 
