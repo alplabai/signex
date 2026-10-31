@@ -546,7 +546,13 @@ impl Engine {
                 ));
                 info.push((
                     "Visible".into(),
-                    if ref_text.hidden { "No" } else { "Yes" }.into(),
+                    // A power port's designator is never drawn (#1799).
+                    if ref_text.hidden || symbol.is_power {
+                        "No"
+                    } else {
+                        "Yes"
+                    }
+                    .into(),
                 ));
                 info.push((
                     "Fields Autoplaced".into(),
