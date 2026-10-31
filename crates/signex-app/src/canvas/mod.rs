@@ -343,6 +343,11 @@ impl CanvasSlot {
         self.camera.borrow()
     }
 
+    /// The camera's zoom as a percentage, `100.0` at the default scale.
+    pub fn zoom_percent(&self) -> f64 {
+        self.camera.borrow().zoom_percent()
+    }
+
     /// Mutable borrow for the `update` path — pan, zoom and fit write here.
     pub(in crate::canvas) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
         self.camera.borrow_mut()

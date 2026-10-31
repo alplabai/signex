@@ -367,7 +367,7 @@ impl FootprintCanvas<'_> {
         if let Some(a) = self.on_pointer_drag_tick(cstate, cursor_pos, world) {
             return Some(a);
         }
-        self.cursor_move_cache_and_hover(world)
+        self.cursor_move_cache_and_hover(world, cstate.scale)
     }
 
     /// v0.18.8 / v0.27 — resolve the move-tick world position. Select
@@ -613,6 +613,7 @@ impl FootprintCanvas<'_> {
     fn cursor_move_cache_and_hover(
         &self,
         world: (f64, f64),
+        px_per_mm: f32,
     ) -> Option<canvas::Action<LibraryMessage>> {
         use crate::library::editor::footprint::state::{EditorMode, PadsTool, ToolPending};
         let in_sketch_with_anchor = matches!(self.state.mode, EditorMode::Sketch)
@@ -652,6 +653,7 @@ impl FootprintCanvas<'_> {
             msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
                 x_mm: world.0,
                 y_mm: world.1,
+                px_per_mm,
             }),
         }))
     }
