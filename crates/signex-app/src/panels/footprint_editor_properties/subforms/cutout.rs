@@ -19,6 +19,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    panel_bg: Color,
 ) -> Column<'a, PanelMsg> {
     let Some(c) = fp.selected_cutout.as_ref() else {
         return col;
@@ -71,6 +72,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
             value: !c.through,
         },
         muted,
+        panel_bg,
     ));
 
     col
