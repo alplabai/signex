@@ -54,7 +54,7 @@ pub use pdf_preview_raster::{
 pub use placement::{LastPlacement, PasteCounters, PlacementKind, PlacementSession};
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
-pub use ui::{NetColorStep, UiState};
+pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, NetColorStep, UiState};
 
 pub struct Signex {
     pub ui_state: UiState,
@@ -332,6 +332,12 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Counts the changes that can alter an ERC finding: an edit to a sheet
+    /// (through the engine, or Annotate, Replace, library update and the like),
+    /// a project-file change, and a sheet written behind the engines. Each calls
+    /// [`DocumentState::note_sheet_edit`], mostly via `mark_document_dirty`.
+    /// ERC compares it with the count its results were read at (#1768).
+    pub sheet_edit_epoch: u64,
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
     /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
@@ -978,6 +984,7 @@ impl DocumentState {
     /// of that file can tell it is out of date.
     pub fn note_document_written_behind_engines(&mut self) {
         self.note_documents_changed();
+        self.note_sheet_edit();
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {

@@ -245,7 +245,7 @@ impl super::super::super::Signex {
         document.panel_ctx.net_classes = panel;
         if changed {
             let project_file = project.path.clone();
-            document.mark_document_dirty(&project_file);
+            document.mark_document_dirty_display_only(&project_file);
         }
         if let Some(step) = pick_step {
             self.record_net_class_pick(id, step);

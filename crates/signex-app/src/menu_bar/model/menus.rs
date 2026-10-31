@@ -6,7 +6,9 @@ use super::items::{
     unavailable,
 };
 use super::{MenuEntry, MenuMessage};
-use crate::app::command::enablement::cycle_grid_menu_enabled;
+use crate::app::command::enablement::{
+    cycle_grid_menu_enabled, new_part_menu_enabled, remove_part_menu_enabled,
+};
 use crate::menu_bar::{MenuContext, enabled};
 use crate::panels::PanelKind;
 
@@ -391,13 +393,21 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         item_if(
             "Up Hierarchy",
             MenuMessage::AscendToParentSheet,
-            ctx.commands.has_schematic,
+            enabled(ctx, "navigate_up_hierarchy"),
         ),
         SEP,
-        // Multi-part flow: only acts on a `.snxsym` editor tab; the
-        // dispatcher no-ops elsewhere.
-        item("New Part", MenuMessage::ToolsNewPart),
-        item("Remove Part", MenuMessage::ToolsRemovePart),
+        // Multi-part flow: acts only on a `.snxsym` editor tab, and Remove
+        // Part only on a part after the first.
+        item_if(
+            "New Part",
+            MenuMessage::ToolsNewPart,
+            new_part_menu_enabled(&ctx.commands),
+        ),
+        item_if(
+            "Remove Part",
+            MenuMessage::ToolsRemovePart,
+            remove_part_menu_enabled(&ctx.commands),
+        ),
         SEP,
         item("Document Options...", MenuMessage::ToolsDocumentOptions),
         SEP,

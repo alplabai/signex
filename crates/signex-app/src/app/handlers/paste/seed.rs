@@ -1,6 +1,6 @@
 //! Reading the project's designator numbers for Next free, off the UI thread.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -9,13 +9,14 @@ use signex_types::designator::seed_counters;
 
 use crate::app::state::PasteCounters;
 use crate::app::{EditMsg, Message, PasteIntent, PasteRequest, Signex};
-use crate::paste_prefs::PasteDesignators;
 
 /// What the numbering read found.
 #[derive(Debug, Default)]
 pub struct PasteSeed {
     /// The highest number in use per prefix, across every project sheet.
     pub counters: HashMap<String, u32>,
+    /// Every numbered designator in use across the project sheets.
+    pub used: HashSet<String>,
     /// Sheets that exist but could not be read, with why.
     pub unreadable: Vec<(PathBuf, String)>,
     /// The read itself did not finish; `counters` says nothing.
@@ -29,7 +30,7 @@ impl Signex {
     /// a later choice of Next free asks for them with `ArraySeed`.
     pub(crate) fn paste_seed_task(&self, request: &PasteRequest) -> Option<Task<Message>> {
         let needs = request.intent == PasteIntent::ArraySeed
-            || self.ui_state.paste_designators == PasteDesignators::NextFree;
+            || self.ui_state.paste_designators.reads_project();
         if !needs {
             return None;
         }
@@ -41,22 +42,25 @@ impl Signex {
             async move {
                 tokio::task::spawn_blocking(move || {
                     let set = plan.assemble();
+                    let references = || {
+                        set.sheets
+                            .values()
+                            .flat_map(|sheet| sheet.symbols.iter())
+                            .filter(|s| !s.is_power && !s.reference.starts_with('#'))
+                            .map(|s| s.reference.as_str())
+                    };
                     PasteSeed {
                         failed: false,
-                        counters: seed_counters(
-                            set.sheets
-                                .values()
-                                .flat_map(|sheet| sheet.symbols.iter())
-                                .filter(|s| !s.is_power && !s.reference.starts_with('#'))
-                                .map(|s| s.reference.as_str()),
-                        ),
-                        unreadable: set.unreadable,
+                        counters: seed_counters(references()),
+                        used: references().map(|r| r.trim().to_owned()).collect(),
+                        unreadable: set.unreadable.clone(),
                     }
                 })
                 .await
                 .unwrap_or_else(|error| PasteSeed {
                     failed: true,
                     counters: HashMap::new(),
+                    used: HashSet::new(),
                     unreadable: vec![(target, format!("the numbering task failed: {error}"))],
                 })
             },
@@ -87,6 +91,7 @@ impl Signex {
             self.interaction_state.paste_counters = Some(PasteCounters {
                 target,
                 counters: seed.counters.clone(),
+                used: seed.used.clone(),
             });
         }
     }

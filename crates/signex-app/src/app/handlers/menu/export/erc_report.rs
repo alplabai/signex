@@ -176,6 +176,7 @@ impl Signex {
             format,
             violations: self.erc_report_rows(),
             rule_set: self.ui_state.erc_run_rule_set.clone(),
+            results_stale: self.erc_results_stale(),
             waivers: self
                 .erc_violation_waiver_entries()
                 .iter()
@@ -252,6 +253,11 @@ impl Signex {
             return Task::none();
         }
         let opts = self.erc_report_options(ErcReportFormat::from_output_path(&path));
+        if opts.results_stale {
+            crate::diagnostics::log_warning(
+                "The ERC report is written from results that may be out of date: the sheet changed after the last run. Run ERC again for a current report.",
+            );
+        }
         // Held like any export write, so a folder rename waits for it.
         self.begin_project_write(&path);
         export_erc_report_task(opts, path)

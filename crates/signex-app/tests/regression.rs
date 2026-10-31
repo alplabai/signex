@@ -63,6 +63,8 @@ mod pdf_page_setup;
 mod paste_clipboard;
 #[path = "regression/paste_followups.rs"]
 mod paste_followups;
+#[path = "regression/paste_keep_if_free.rs"]
+mod paste_keep_if_free;
 #[path = "regression/paste_numbering_async.rs"]
 mod paste_numbering_async;
 #[path = "regression/paste_stamp_array.rs"]

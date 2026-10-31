@@ -516,7 +516,7 @@ fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
             signex_app::fonts::read_paste_designators_pref_from(json.as_ref()),
         )
     };
-    assert_eq!(read(&path), (1, PasteDesignators::Keep), "defaults");
+    assert_eq!(read(&path), (1, PasteDesignators::KeepIfFree), "defaults");
 
     signex_app::fonts::write_increment_step_pref_at(&path, -7);
     signex_app::fonts::write_paste_designators_pref_at(&path, PasteDesignators::NextFree);
@@ -526,4 +526,54 @@ fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
         signex_app::fonts::write_increment_step_pref_at(&path, stored);
         assert_eq!(read(&path).0, expected, "stored {stored}");
     }
+}
+
+#[test]
+fn a_legacy_keep_is_migrated_once_and_an_explicit_keep_afterwards_stays() {
+    use signex_app::fonts::{
+        PasteDesignatorsMigration::{Migrated, NotNeeded},
+        migrate_paste_designators_pref_at, read_paste_designators_pref_from,
+        write_paste_designators_pref_at,
+    };
+    use signex_app::paste_prefs::PasteDesignators;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("prefs.json");
+    let read = || {
+        let json = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        read_paste_designators_pref_from(json.as_ref())
+    };
+
+    // An rc.1 file: every saved Preferences wrote the old default.
+    std::fs::write(&path, r#"{"paste_designators":"keep","theme":"Signex"}"#).unwrap();
+    assert_eq!(
+        read(),
+        PasteDesignators::KeepIfFree,
+        "legacy keep reads as the new default"
+    );
+    assert_eq!(
+        migrate_paste_designators_pref_at(&path),
+        Migrated,
+        "and is rewritten once"
+    );
+    assert_eq!(read(), PasteDesignators::KeepIfFree);
+    assert_eq!(
+        migrate_paste_designators_pref_at(&path),
+        NotNeeded,
+        "not again"
+    );
+
+    // A Keep the user then chooses is theirs.
+    write_paste_designators_pref_at(&path, PasteDesignators::Keep);
+    assert_eq!(read(), PasteDesignators::Keep);
+    assert_eq!(migrate_paste_designators_pref_at(&path), NotNeeded);
+    assert_eq!(read(), PasteDesignators::Keep);
+
+    // Other legacy tokens are untouched; an unknown one falls back as before.
+    std::fs::write(&path, r#"{"paste_designators":"next_free"}"#).unwrap();
+    assert_eq!(read(), PasteDesignators::NextFree);
+    std::fs::write(&path, r#"{"paste_designators":"bogus"}"#).unwrap();
+    assert_eq!(read(), PasteDesignators::KeepIfFree);
 }

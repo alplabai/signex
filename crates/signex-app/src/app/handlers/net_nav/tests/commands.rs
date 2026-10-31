@@ -79,6 +79,18 @@ fn the_up_commands_go_to_the_parent_sheet() {
     }
 }
 
+/// #1772: the menu row greys on a top-level sheet, but the shortcut still
+/// reaches the handler, which says why in the Messages panel.
+#[test]
+fn the_up_commands_on_a_top_level_sheet_say_there_is_no_parent() {
+    for id in ["leave_sheet", "navigate_up_hierarchy"] {
+        let mut p = project();
+        run(&mut p, id);
+        assert_eq!(p.active(), Some(p.root.clone()), "{id}");
+        assert!(logged(&["no parent sheet"]), "{id}");
+    }
+}
+
 #[test]
 fn the_partner_command_jumps_from_the_selected_port() {
     let mut p = project();

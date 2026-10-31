@@ -5,8 +5,8 @@
 
 use std::path::PathBuf;
 
-use crate::paste_support::{paste, smart_paste};
-use signex_app::app::{EditMsg, Message, Signex};
+use crate::paste_support::{paste, send_and_settle, smart_paste};
+use signex_app::app::{EditMsg, Message, PasteIntent, Signex};
 use signex_app::canvas::CanvasEvent;
 use signex_app::canvas::placement_ghost::ghost_anchor;
 use signex_engine::Command;
@@ -424,7 +424,7 @@ fn duplicate_registers_the_body_offsets_by_5_08_and_is_one_undo_step() {
     let (mut app, _other) = app_with_copied_part();
     let original = doc(&app).symbols[0].clone();
 
-    let _ = app.update(Message::Edit(EditMsg::Duplicate));
+    send_and_settle(&mut app, EditMsg::Duplicate, PasteIntent::Duplicate);
 
     assert!(
         app.interaction_state.placement.is_none(),

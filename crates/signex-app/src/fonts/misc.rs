@@ -305,13 +305,64 @@ pub fn write_increment_step_pref_at(path: &Path, step: i32) {
     })
 }
 
-/// Read "Designators on paste" (#1263). A missing or unknown value is Keep.
+/// Marker stored beside `paste_designators` once the value is one the user
+/// chose under the "Keep unless taken" default (#1768). A stored `keep`
+/// without it was written by an older build, when Keep was the default.
+const PASTE_DESIGNATORS_SCHEMA: u64 = 2;
+const PASTE_DESIGNATORS_SCHEMA_KEY: &str = "paste_designators_schema";
+
+/// Whether the file holds a legacy `keep` that has not been migrated yet.
+pub fn paste_designators_needs_migration(json: Option<&serde_json::Value>) -> bool {
+    let Some(json) = json else { return false };
+    let keep = json["paste_designators"].as_str().is_some_and(|t| {
+        t.eq_ignore_ascii_case(crate::paste_prefs::PasteDesignators::Keep.token())
+    });
+    let current = json[PASTE_DESIGNATORS_SCHEMA_KEY]
+        .as_u64()
+        .is_some_and(|v| v >= PASTE_DESIGNATORS_SCHEMA);
+    keep && !current
+}
+
+/// Read "Designators on paste" (#1263). A missing or unknown value is Keep
+/// unless taken, and so is a legacy `keep` (see [`PASTE_DESIGNATORS_SCHEMA`]).
 pub fn read_paste_designators_pref_from(
     json: Option<&serde_json::Value>,
 ) -> crate::paste_prefs::PasteDesignators {
+    if paste_designators_needs_migration(json) {
+        return crate::paste_prefs::PasteDesignators::KeepIfFree;
+    }
     json.and_then(|json| json["paste_designators"].as_str())
         .map(crate::paste_prefs::PasteDesignators::from_token)
         .unwrap_or_default()
+}
+
+/// How a migration of the legacy `keep` went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteDesignatorsMigration {
+    /// Nothing to migrate.
+    NotNeeded,
+    /// The file now holds `keep_if_free` and the schema marker.
+    Migrated,
+    /// The file could not be written; the next launch tries again.
+    WriteFailed,
+}
+
+/// Rewrite a legacy `keep` as `keep_if_free` with the schema marker, once.
+pub fn migrate_paste_designators_pref_at(path: &Path) -> PasteDesignatorsMigration {
+    if !paste_designators_needs_migration(read_prefs_json(path).as_ref()) {
+        return PasteDesignatorsMigration::NotNeeded;
+    }
+    if write_paste_designators_pref_checked(path, crate::paste_prefs::PasteDesignators::KeepIfFree)
+    {
+        PasteDesignatorsMigration::Migrated
+    } else {
+        PasteDesignatorsMigration::WriteFailed
+    }
+}
+
+/// [`migrate_paste_designators_pref_at`] on the user's prefs file.
+pub fn migrate_paste_designators_pref() -> PasteDesignatorsMigration {
+    migrate_paste_designators_pref_at(&prefs_path())
 }
 
 pub fn write_paste_designators_pref(mode: crate::paste_prefs::PasteDesignators) {
@@ -319,10 +370,22 @@ pub fn write_paste_designators_pref(mode: crate::paste_prefs::PasteDesignators) 
 }
 
 pub fn write_paste_designators_pref_at(path: &Path, mode: crate::paste_prefs::PasteDesignators) {
-    update_prefs_json(path, "paste_designators", |prefs| {
+    write_paste_designators_pref_checked(path, mode);
+}
+
+/// [`write_paste_designators_pref_at`] that says whether the file was written.
+fn write_paste_designators_pref_checked(
+    path: &Path,
+    mode: crate::paste_prefs::PasteDesignators,
+) -> bool {
+    update_prefs_json_checked(path, "paste_designators", |prefs| {
         prefs.insert(
             "paste_designators".to_string(),
             serde_json::Value::String(mode.token().to_string()),
+        );
+        prefs.insert(
+            PASTE_DESIGNATORS_SCHEMA_KEY.to_string(),
+            serde_json::json!(PASTE_DESIGNATORS_SCHEMA),
         );
     })
 }

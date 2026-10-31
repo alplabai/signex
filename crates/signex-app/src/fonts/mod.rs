@@ -42,7 +42,7 @@ pub const DEFAULT_UI_FONT: &str = "Roboto";
 /// every shipped build — which is the whole class of bug #594 and #602
 /// were about. The setting the user just changed did not persist and
 /// will be gone at the next launch; that is not a `debug!`.
-fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
+fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) -> bool {
     if let Err(e) = signex_types::atomic_io::atomic_write(path, bytes) {
         tracing::error!(
             target: "signex::prefs",
@@ -53,7 +53,9 @@ fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
              change will be gone at the next launch — the setting itself is still \
              applied for this session"
         );
+        return false;
     }
+    true
 }
 
 /// Default canvas (schematic / PCB) font family name.
@@ -740,7 +742,7 @@ pub(crate) use prefs_file::PrefsIoHold;
 /// The one read-modify-write every preference writer in this module
 /// tree goes through (#594). Imported here rather than re-exported —
 /// the sibling modules pick it up through their own `use super::*;`.
-use prefs_file::{try_update_prefs_json, update_prefs_json};
+use prefs_file::{try_update_prefs_json, update_prefs_json, update_prefs_json_checked};
 
 /// The prefs file's health probe and its one in-app recovery (#602).
 /// Re-exported because the app shell owns the reporting: `Signex::new`

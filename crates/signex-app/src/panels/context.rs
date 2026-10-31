@@ -172,6 +172,8 @@ pub struct PanelContext {
     pub erc_focus_index: Option<usize>,
     /// An ERC run is in flight (the panel shows "Running…").
     pub erc_running: bool,
+    /// The document changed after the last ERC run (#1768).
+    pub erc_results_stale: bool,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.

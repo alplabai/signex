@@ -275,7 +275,7 @@ fn increment_step_and_paste_designators_drafts_mark_dirty_commit_on_save_and_dis
     let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
         PrefMsg::DraftPasteDesignators(PasteDesignators::NextFree),
     )));
-    assert_eq!(app.ui_state.paste_designators, PasteDesignators::Keep);
+    assert_eq!(app.ui_state.paste_designators, PasteDesignators::KeepIfFree);
 
     let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
         PrefMsg::DiscardAndClose,
@@ -283,7 +283,7 @@ fn increment_step_and_paste_designators_drafts_mark_dirty_commit_on_save_and_dis
     assert_eq!(app.ui_state.preferences_draft_increment_step, 1);
     assert_eq!(
         app.ui_state.preferences_draft_paste_designators,
-        PasteDesignators::Keep
+        PasteDesignators::KeepIfFree
     );
     assert!(!app.ui_state.preferences_dirty);
 }

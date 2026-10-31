@@ -117,7 +117,14 @@ pub struct ErcReportOptions {
     pub rule_set: Option<ErcReportRuleSet>,
     /// Stored waivers, listed by the JSON, HTML and PDF forms.
     pub waivers: Vec<report::ErcReportWaiver>,
+    /// The document changed after the run these rows came from; every form
+    /// says so (JSON as `results_stale`).
+    pub results_stale: bool,
 }
+
+/// The line every human-readable form carries when the results are stale.
+pub const STALE_RESULTS_NOTICE: &str =
+    "Results may be out of date: the sheet changed after the last ERC run.";
 
 #[derive(Debug, Clone)]
 pub struct ErcReportOutput {
@@ -153,10 +160,16 @@ impl Exporter for ErcReportExporter {
         let rows = select_rows(opts).ok_or(ErcReportError::NeverRun)?;
         let labels = sheet_labels(&rows);
         let bytes = match opts.format {
-            ErcReportFormat::Text => {
-                text::emit(&rows, &labels, opts.group_by_sheet, opts.rule_set.as_ref())
+            ErcReportFormat::Text => text::emit(
+                &rows,
+                &labels,
+                opts.group_by_sheet,
+                opts.rule_set.as_ref(),
+                opts.results_stale,
+            ),
+            ErcReportFormat::Csv => {
+                csv::emit(&rows, &labels, opts.rule_set.as_ref(), opts.results_stale)?
             }
-            ErcReportFormat::Csv => csv::emit(&rows, &labels, opts.rule_set.as_ref())?,
             ErcReportFormat::Json => json::emit(&report::build(&rows, opts))?,
             ErcReportFormat::Html => html::emit(&report::build(&rows, opts)),
             ErcReportFormat::Pdf => pdf::emit(&report::build(&rows, opts))?,
