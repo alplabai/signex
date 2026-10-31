@@ -319,6 +319,11 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("run_erc", "Electrical Rules Check", "F8"),
             MenuMessage::Erc,
         ),
+        cmd_item_gated(
+            ctx,
+            cmd("open_parameter_manager", "Parameter Manager...", ""),
+            MenuMessage::OpenParameterManager,
+        ),
         SEP,
         // The same working BOM dialog File > Export > Bill of Materials
         // opens (#1251).

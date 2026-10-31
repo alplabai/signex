@@ -178,6 +178,7 @@ shrink.
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
+| `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
 | `place_blanket` | Place blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |

@@ -16,6 +16,7 @@ impl crate::app::Signex {
         let Some(path) = self.document_state.active_path.clone() else {
             return;
         };
+        self.end_parameter_edit_runs();
         let Some(at) = self
             .document_state
             .active_engine()

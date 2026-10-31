@@ -126,6 +126,8 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
             ctx.has_schematic || ctx.has_sheets
         }
+        // The table lists the active sheet's symbols.
+        "open_parameter_manager" => ctx.has_schematic,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => {
             ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas
         }

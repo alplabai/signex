@@ -57,6 +57,7 @@ impl Signex {
     /// that sheet's colours only. Returns how many read-only sheets kept
     /// their colours (#1402).
     pub(crate) fn clear_all_net_colors_undoably(&mut self) -> usize {
+        self.end_parameter_edit_runs();
         let overrides = &self.ui_state.wire_color_overrides;
         // A read-only sheet keeps its colours: they are never touched, so
         // there is nothing for an undo step to restore (#1402).
@@ -139,6 +140,7 @@ impl Signex {
         let Some(path) = self.document_state.active_path.clone() else {
             return true;
         };
+        self.end_parameter_edit_runs();
         let at = self.engine_undo_position();
         let colors = self.active_sheet_net_colors();
         self.ui_state.net_color_redo.remove(&path);

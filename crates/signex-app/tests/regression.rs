@@ -86,6 +86,14 @@ mod net_nav;
 #[path = "regression/palette_context_filter.rs"]
 mod palette_context_filter;
 
+// #1245 - the Parameter Manager opens from a catalog command.
+#[path = "regression/parameter_manager_open.rs"]
+mod parameter_manager_open;
+
+// #1783 - the Parameter Manager table's cell drafts and deletes.
+#[path = "regression/parameter_manager_table.rs"]
+mod parameter_manager_table;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
