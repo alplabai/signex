@@ -59,11 +59,12 @@ pub fn view_custom_selection_filters_section<'a>(
                     );
                     c = c.push(
                         container(
-                            iced::widget::button(
-                                text("+ Add Filter").size(TS.body).color(primary_c),
-                            )
-                            .padding([SP.s, 10.0])
-                            .on_press(PanelMsg::AddCustomFilterPreset),
+                            iced::widget::button(text("+ Add Filter").size(TS.body))
+                                .padding([SP.s, 10.0])
+                                .on_press(PanelMsg::AddCustomFilterPreset)
+                                .style(move |theme: &Theme, status| {
+                                    add_filter_button_style(theme, status, primary_c)
+                                }),
                         )
                         .padding([SP.s, SP.m]),
                     );
@@ -721,6 +722,59 @@ pub fn preset_chip(
     .into()
 }
 
+/// Primary-fill button whose label keeps `preferred` text where it is
+/// readable on the fill the theme paints behind it.
+pub(crate) fn add_filter_button_style(
+    theme: &Theme,
+    status: iced::widget::button::Status,
+    preferred: Color,
+) -> iced::widget::button::Style {
+    use crate::styles::tokens::{UNREADABLE_CONTRAST, contrast_ratio};
+    use iced::widget::button::Status;
+    let mut style = iced::widget::button::primary(theme, status);
+    // One label for every state, so it cannot flip on hover: `preferred`
+    // when it is visible on all three fills, else white or black, whichever
+    // reads better on the weakest fill.
+    let fills: Vec<Color> = [Status::Active, Status::Hovered, Status::Pressed]
+        .into_iter()
+        .filter_map(
+            |s| match iced::widget::button::primary(theme, s).background {
+                Some(Background::Color(fill)) => Some(fill),
+                _ => None,
+            },
+        )
+        .collect();
+    let worst = |label: Color| {
+        fills
+            .iter()
+            .map(|fill| contrast_ratio(label, *fill))
+            .fold(f32::INFINITY, f32::min)
+    };
+    style.text_color = if worst(preferred) >= UNREADABLE_CONTRAST {
+        preferred
+    } else if worst(Color::WHITE) >= worst(Color::BLACK) {
+        Color::WHITE
+    } else {
+        Color::BLACK
+    };
+    style
+}
+
+/// Label colour of a segmented-button cell: the active cell sits on
+/// `active_fill`, so its text must stay readable on that fill.
+pub(crate) fn seg_text(
+    active: bool,
+    text_active: Color,
+    text_inactive: Color,
+    active_fill: Color,
+) -> Color {
+    if active {
+        crate::styles::tokens::keep_readable_on(text_active, active_fill)
+    } else {
+        text_inactive
+    }
+}
+
 /// Segmented button (for units toggle etc).
 #[expect(
     clippy::too_many_arguments,
@@ -741,7 +795,7 @@ pub fn seg_btn<'a>(
     } else {
         Color::TRANSPARENT
     };
-    let text_c = if active { text_active } else { text_inactive };
+    let text_c = seg_text(active, text_active, text_inactive, active_bg);
     iced::widget::button(
         text(label.to_string())
             .size(TS.body)

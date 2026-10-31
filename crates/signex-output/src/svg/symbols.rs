@@ -6,6 +6,7 @@
 
 use super::geometry::{arc_path_commands, circle_path};
 use super::labels::{halign_to_svg, valign_to_svg};
+use super::text::glyph_em_pt;
 use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
@@ -94,7 +95,7 @@ pub(super) fn push_symbol_lib_graphics(
                 x: xform.x(position.x),
                 y: xform.px_y(position.y),
                 font_alias: "F1",
-                size_pt: (size * xform.mm_to_unit) as f32,
+                size_pt: glyph_em_pt("F1", size, xform.mm_to_unit),
                 align: halign_to_svg(h_align),
                 v_align: valign_to_svg(v_align),
                 rotation_deg: rotation_deg as f32,
@@ -143,7 +144,6 @@ pub(super) fn push_symbol_pins(
             pin.position.y + dir_y * length,
         );
 
-        let (wx1, wy1) = symbol_world_point(sym, &pin.position);
         let (wx2, wy2) = symbol_world_point(sym, &body_end);
 
         // Direction vector in world/schematic space (for text placement).
@@ -168,58 +168,43 @@ pub(super) fn push_symbol_pins(
             pin_eval_ctx.current_pin = Some(pin.number.as_str());
             pin_eval_ctx.net_name_by_pin = pin_net_names;
 
-            let (name_pos, align, v_align, rotation_deg) = if lib.pin_name_offset.abs() < 0.01 {
-                let (nwx, nwy) = (wx1, wy1);
-                if wdx.abs() > wdy.abs() {
-                    (
-                        (nwx, nwy + 0.508),
-                        SvgTextAlign::Center,
-                        SvgTextVAlign::Bottom,
-                        0.0,
-                    )
-                } else {
-                    (
-                        (nwx + 0.508, nwy),
-                        SvgTextAlign::Left,
-                        SvgTextVAlign::Center,
-                        0.0,
-                    )
-                }
+            // The name sits inside the body, `offset` past the pin's body
+            // end, reading away from the edge: left-aligned off a left edge,
+            // right-aligned off a right edge, hung below or standing above a
+            // top or bottom edge. A library that stores no offset gets the
+            // default, so a name never straddles the pin's wire.
+            let offset = lib.name_offset_mm();
+            let name_pos = (wx2 + wdx * offset, wy2 + wdy * offset);
+            let (align, v_align) = if wdx.abs() > wdy.abs() {
+                (
+                    if wdx > 0.0 {
+                        SvgTextAlign::Left
+                    } else {
+                        SvgTextAlign::Right
+                    },
+                    SvgTextVAlign::Center,
+                )
             } else {
-                let name_pos = (
-                    wx2 + wdx * lib.pin_name_offset,
-                    wy2 + wdy * lib.pin_name_offset,
-                );
-                if wdx.abs() > wdy.abs() {
-                    (
-                        name_pos,
-                        if wdx > 0.0 {
-                            SvgTextAlign::Left
-                        } else {
-                            SvgTextAlign::Right
-                        },
-                        SvgTextVAlign::Center,
-                        0.0,
-                    )
-                } else {
-                    (
-                        name_pos,
-                        SvgTextAlign::Center,
-                        if wdy > 0.0 {
-                            SvgTextVAlign::Top
-                        } else {
-                            SvgTextVAlign::Bottom
-                        },
-                        0.0,
-                    )
-                }
+                (
+                    SvgTextAlign::Center,
+                    if wdy > 0.0 {
+                        SvgTextVAlign::Top
+                    } else {
+                        SvgTextVAlign::Bottom
+                    },
+                )
             };
+            let rotation_deg = 0.0;
 
             out.push(SvgElement::Text {
                 x: xform.x(name_pos.0),
                 y: xform.px_y(name_pos.1),
                 font_alias: "F1",
-                size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                size_pt: glyph_em_pt(
+                    "F1",
+                    signex_types::schematic::SCHEMATIC_TEXT_MM,
+                    xform.mm_to_unit,
+                ),
                 align,
                 v_align,
                 rotation_deg,
@@ -248,7 +233,11 @@ pub(super) fn push_symbol_pins(
                 x: xform.x(num_pos.0),
                 y: xform.px_y(num_pos.1),
                 font_alias: "F3",
-                size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                size_pt: glyph_em_pt(
+                    "F3",
+                    signex_types::schematic::SCHEMATIC_TEXT_MM,
+                    xform.mm_to_unit,
+                ),
                 align,
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,

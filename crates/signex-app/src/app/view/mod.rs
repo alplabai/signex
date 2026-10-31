@@ -549,7 +549,7 @@ impl Signex {
                 && let Some(editor) = self.document_state.footprint_editors.get(path)
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
-                let theme_id = self.ui_state.theme_id;
+                let theme_id = self.ui_state.effective_theme_id();
                 return crate::library::editor::standalone::view_footprint(
                     editor, tokens, theme_id,
                 )

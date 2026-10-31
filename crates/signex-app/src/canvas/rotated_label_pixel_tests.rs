@@ -78,8 +78,9 @@ fn label_at(degrees: f32) -> TextItem {
     TextItem {
         content: "L".to_string(),
         position: [a.x, a.y],
-        // `text_px` divides by MM_PER_EM, so this is GLYPH_PX pixels.
-        size_mm: GLYPH_PX * signex_gfx::primitive::text::MM_PER_EM,
+        // `text_px` divides by the default face's cap-height ratio, so this
+        // is GLYPH_PX pixels.
+        size_mm: GLYPH_PX * signex_types::font::mm_per_em(None),
         color: [1.0; 4],
         rotation: degrees.to_radians(),
         h_align: TextHAlign::Left,

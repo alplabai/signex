@@ -27,6 +27,7 @@ signex-erc -> signex-types
 signex-erc-dsl -> signex-erc
 signex-erc-dsl -> signex-types
 signex-gfx -> signex-sketch  # known debt (#664): rendering should not depend on the sketch solver
+signex-gfx -> signex-types  # per-font cap-height table (signex_types::font, #1229)
 signex-library -> signex-sketch
 signex-library -> signex-types
 signex-library-server -> signex-library

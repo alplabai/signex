@@ -566,10 +566,10 @@ impl DriftState {
         self.drifted.get(sheet).is_some_and(|d| d.contains(lib_id))
     }
 
-    /// Human-readable `Library/Symbol`, or the raw id when the library is
-    /// not mounted.
-    pub fn display_name<'a>(&'a self, lib_id: &'a str) -> &'a str {
-        self.names.get(lib_id).map_or(lib_id, String::as_str)
+    /// Human-readable `Library/Symbol`; see [`super::part_label`] for the
+    /// fallbacks when the library is not mounted.
+    pub fn display_name(&self, lib_id: &str, libs: &[super::state::OpenLibrary]) -> String {
+        super::part_label::part_library_label(lib_id, &self.names, libs)
     }
 }
 
@@ -640,7 +640,7 @@ mod tests {
     fn display_name_falls_back_to_the_raw_id() {
         let mut state = DriftState::default();
         state.names.insert("L:S".into(), "Passives/R".into());
-        assert_eq!(state.display_name("L:S"), "Passives/R");
-        assert_eq!(state.display_name("X:Y"), "X:Y");
+        assert_eq!(state.display_name("L:S", &[]), "Passives/R");
+        assert_eq!(state.display_name("X:Y", &[]), "X:Y");
     }
 }

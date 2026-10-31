@@ -526,6 +526,17 @@ pub struct LibSymbol {
 }
 
 impl LibSymbol {
+    /// Distance from a pin's body end to its name text, mm. A library that
+    /// stores none (`pin_name_offset` of 0) gets [`PIN_NAME_OFFSET_MM`], so
+    /// the name never lands on the pin's own wire.
+    pub fn name_offset_mm(&self) -> f64 {
+        if self.pin_name_offset > 0.01 {
+            self.pin_name_offset
+        } else {
+            PIN_NAME_OFFSET_MM
+        }
+    }
+
     /// Whether `other` is the same body: every stored field equal. The one
     /// comparison behind "the sheet's copy differs from the library's" for
     /// both a library placement and a paste.
@@ -817,7 +828,9 @@ pub use hotspot::{
     SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot, snap_to_hotspot,
 };
 mod power_port_symbol;
-pub use power_port_symbol::{PowerPortStyle, power_port_graphics, power_port_lib_symbol};
+pub use power_port_symbol::{
+    PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
+};
 mod symbol_geometry;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,

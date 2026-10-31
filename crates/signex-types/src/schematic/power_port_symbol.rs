@@ -9,8 +9,8 @@
 use std::borrow::Cow;
 
 use super::{
-    FillType, Graphic, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
-    SchematicSheet, Symbol,
+    FillType, Graphic, HAlign, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
+    Point, SCHEMATIC_TEXT_MM, SchematicSheet, Symbol, TextProp, VAlign,
 };
 
 /// Length of the stem from the connection point to the symbol head, mm.
@@ -186,6 +186,47 @@ fn power_port_head(style: PowerPortStyle) -> Vec<Graphic> {
     }
 }
 
+/// Gap between the far edge of a power port's head and its value text, mm.
+const VALUE_GAP_MM: f64 = 0.254;
+
+/// How far the head of `style` reaches past the connection point, mm.
+fn head_reach_mm(style: PowerPortStyle) -> f64 {
+    match style {
+        PowerPortStyle::Bar => STEM_MM,
+        PowerPortStyle::Arrow | PowerPortStyle::PowerGround | PowerPortStyle::SignalGround => {
+            STEM_MM + 1.0
+        }
+        PowerPortStyle::Circle => STEM_MM + 2.0 * HEAD_HALF_MM,
+        PowerPortStyle::Wave => STEM_MM + 0.7,
+        PowerPortStyle::Earth => STEM_MM + 0.6,
+    }
+}
+
+/// Where the value text of a power port of `lib_id`'s style, placed at `at`,
+/// sits: centred beyond the far end of the head (above a rising head, below a
+/// hanging one) so the text never touches the head or the wire the port
+/// hangs on.
+#[must_use]
+pub fn power_port_value_field(lib_id: &str, at: Point) -> TextProp {
+    let style = PowerPortStyle::of(lib_id);
+    let reach = head_reach_mm(style) + VALUE_GAP_MM;
+    // Schematic space is Y-down: a rising head is at smaller y.
+    let (dy, justify_v) = if style.hangs_down() {
+        (reach, VAlign::Top)
+    } else {
+        (-reach, VAlign::Bottom)
+    };
+    TextProp {
+        position: Point::new(at.x, at.y + dy),
+        rotation: 0.0,
+        font_size: SCHEMATIC_TEXT_MM,
+        justify_h: HAlign::Center,
+        justify_v,
+        hidden: false,
+        font_family: None,
+    }
+}
+
 /// The library entry a power port of `lib_id`'s style is placed with: the
 /// head as body graphics and one visible pin at the connection point whose
 /// stub is the stem, so a pin-reading consumer (netlist, ERC, SVG) sees the
@@ -346,6 +387,44 @@ mod tests {
                 format!("{:?}", crate::schematic::primitives_bounds(&fallback)),
                 "{lib_id}"
             );
+        }
+    }
+
+    /// The value text of every style stands clear of the head and of the
+    /// wire it hangs on: above a rising head, below a hanging one (#1798).
+    #[test]
+    fn value_text_clears_the_head_of_every_style() {
+        use crate::schematic::{lower_placed_symbol, primitives_bounds, text_aabb};
+        for style in PowerPortStyle::ALL {
+            let lib_id = format!("power:{}", style.lib_tag());
+            let at = Point::new(50.0, 40.0);
+            let sym = Symbol {
+                lib_id: lib_id.clone(),
+                is_power: true,
+                position: at,
+                unit: 1,
+                ..Default::default()
+            };
+            let head = primitives_bounds(&lower_placed_symbol(None, &sym)).expect("head");
+            let value = power_port_value_field(&lib_id, at);
+            let text = text_aabb(
+                "+3V3",
+                value.font_size,
+                (value.position.x, value.position.y),
+                0.0,
+                value.justify_h,
+                value.justify_v,
+            );
+            let overlaps = text.min_x < head.max_x
+                && text.max_x > head.min_x
+                && text.min_y < head.max_y
+                && text.max_y > head.min_y;
+            assert!(!overlaps, "{lib_id}: value {text:?} overlaps head {head:?}");
+            if style.hangs_down() {
+                assert!(text.min_y >= head.max_y, "{lib_id}: below the head");
+            } else {
+                assert!(text.max_y <= head.min_y, "{lib_id}: above the head");
+            }
         }
     }
 }

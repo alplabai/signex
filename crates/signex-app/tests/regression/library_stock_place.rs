@@ -76,3 +76,46 @@ fn placing_the_stock_resistor_puts_a_symbol_on_the_sheet() {
         "the stock R takes an R designator"
     );
 }
+
+/// #1798 — a part placed from Stock starts with its reference and value
+/// clear of the part. The fixed offset it used to get from the origin sat
+/// inside the generic IC's body, on top of its pins.
+#[test]
+fn a_placed_stock_part_has_its_fields_clear_of_its_body() {
+    let mut app = app_with_stock();
+    let (_, ic) = app
+        .library
+        .all_components()
+        .into_iter()
+        .find(|(_, c)| c.internal_pn.as_str() == "STOCK-IC_Generic")
+        .expect("Stock lists the generic IC");
+    let table = app
+        .library
+        .table_of_row(&stock_file(), ic.row_id)
+        .expect("the IC's table");
+
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::ComponentsPanelPlace {
+            library_path: stock_file(),
+            table,
+            row_id: signex_library::RowId(ic.row_id),
+        }),
+    );
+    click(&mut app, PLACE_AT);
+
+    let sheet = doc(&app);
+    let sym = &sheet.symbols[0];
+    let lib = sheet.lib_symbols.get(&sym.lib_id).expect("embedded body");
+    let parts = signex_types::schematic::lower_placed_symbol(Some(lib), sym);
+    let body = signex_types::schematic::primitives_bounds(&parts).expect("drawn body");
+    for (name, prop) in [("reference", &sym.ref_text), ("value", &sym.val_text)] {
+        let at = prop.as_ref().expect(name).position;
+        let inside =
+            at.x > body.min_x && at.x < body.max_x && at.y > body.min_y && at.y < body.max_y;
+        assert!(
+            !inside,
+            "{name} anchor {at:?} sits inside the part {body:?}"
+        );
+    }
+}

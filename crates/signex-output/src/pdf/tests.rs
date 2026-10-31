@@ -778,7 +778,9 @@ fn vertical_markup_runs_advance_along_the_baseline() {
     let origins = text_matrix_origins(&bytes);
     assert_eq!(origins.len(), 2, "two runs: {origins:?}");
     let ((x1, y1), (x2, y2)) = (origins[0], origins[1]);
-    let size_pt = 2.54 / 25.4 * 72.0;
+    // The note's 2.54 mm is the height of its capitals; the em it is drawn at
+    // is that over the cap height of Roboto, the face a note defaults to.
+    let size_pt = 2.54 / 25.4 * 72.0 / f64::from(signex_types::font::mm_per_em(Some("Roboto")));
     assert!(
         (x2 - x1 - 0.26 * size_pt).abs() < 0.01,
         "the subscript drops across the baseline: {origins:?}"

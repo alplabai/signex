@@ -39,7 +39,7 @@ impl Signex {
         use iced::widget::{Space, container, mouse_area, row, svg};
         use iced::{Alignment, Background, Border, Color, Length};
 
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let h_search = crate::icons::icon_chrome_search(theme_id);
 
         let text_c = crate::styles::ti(tokens.text);
@@ -251,7 +251,7 @@ impl Signex {
                 prefs_status: &ui.preferences_prefs_status,
                 keymap_search: &ui.preferences_keymap_search,
                 keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
-                theme_id: ui.theme_id,
+                theme_id: ui.effective_theme_id(),
             })
             .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
 
@@ -287,12 +287,12 @@ impl Signex {
             ModalId::SelectionFilterCustom => self.view_selection_filter_custom_body(),
             ModalId::About => crate::about_modal::window_view(
                 &self.document_state.panel_ctx.tokens,
-                self.ui_state.theme_id,
+                self.ui_state.effective_theme_id(),
             ),
             ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
             ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
                 &self.document_state.panel_ctx.tokens,
-                self.ui_state.theme_id,
+                self.ui_state.effective_theme_id(),
                 &self.ui_state.passive_calculator,
             ),
             ModalId::CreateChildSheet => self.view_create_child_sheet_body(),

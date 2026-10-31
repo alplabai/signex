@@ -97,9 +97,10 @@ fn flag_local(label: &Label, document_family: Option<&str>) -> ([(f64, f64); 5],
     let size_mm = label
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
-    let em_mm = size_mm / f64::from(signex_gfx::primitive::text::MM_PER_EM);
-    // The body is as wide as the text drawn in the label's resolved family.
+    // The body is as wide as the text drawn in the label's resolved family,
+    // and its height follows the em that family draws the text at.
     let family = resolve_family(label.font_family.as_deref(), document_family);
+    let em_mm = size_mm / f64::from(signex_types::font::mm_per_em(family.as_deref()));
     let monospace_w = (label.text.chars().count().max(1) as f64) * (em_mm * 0.58);
     let glyph_w =
         super::text_width::text_width_mm(&label.text, family.as_deref(), size_mm, monospace_w);
