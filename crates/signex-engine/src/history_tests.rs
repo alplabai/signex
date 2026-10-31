@@ -154,4 +154,23 @@ mod field_edit_runs {
         engine.undo().unwrap();
         assert_eq!(mpn(&engine), None);
     }
+
+    #[test]
+    fn undo_ends_the_run_even_when_the_position_comes_back() {
+        let (mut engine, id) = engine_with_symbol();
+        set(&mut engine, id, "MPN", "A");
+        engine.undo().unwrap();
+        // An unrelated edit lands the history on the position the run saw.
+        engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: true,
+            })
+            .unwrap();
+        set(&mut engine, id, "MPN", "B");
+
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine), None, "typing after the undo is its own step");
+        assert!(engine.document().symbols[0].dnp, "the unrelated edit stays");
+    }
 }

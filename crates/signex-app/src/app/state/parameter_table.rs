@@ -6,6 +6,9 @@
 
 #[derive(Debug, Clone, Default)]
 pub struct ParameterTableState {
+    /// The sheet the last cell edit went to; a different active sheet ends
+    /// the cell-typing run.
+    pub run_path: Option<std::path::PathBuf>,
     /// Name typed into the "new parameter" box.
     pub new_key: String,
     /// Case-insensitive row filter over reference / value / footprint.

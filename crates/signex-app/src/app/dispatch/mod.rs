@@ -216,7 +216,7 @@ impl Signex {
                                 self.ui_state.net_color_palette_open = false
                             }
                             ModalId::ParameterManager => {
-                                self.end_parameter_edit_run();
+                                self.end_parameter_edit_runs();
                                 self.ui_state.parameter_manager_open = false;
                                 self.ui_state.parameter_table = Default::default();
                             }
@@ -621,7 +621,7 @@ impl Signex {
                 value,
             } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
             ParameterManagerMsg::CellSubmitted => {
-                self.end_parameter_edit_run();
+                self.end_parameter_edit_runs();
                 Task::none()
             }
             ParameterManagerMsg::ParameterRemoved { key } => self.handle_parameter_removed(&key),

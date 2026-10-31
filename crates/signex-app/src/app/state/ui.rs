@@ -477,8 +477,8 @@ pub struct UiState {
     pub net_color_palette_open: bool,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
-    /// Parameter Manager table: the cell being typed into, the new-column
-    /// name and the row filter.
+    /// Parameter Manager table: the new-column name, the row filter and the
+    /// sheet of the last cell edit. Cell text itself is never held here.
     pub parameter_table: crate::app::state::ParameterTableState,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click

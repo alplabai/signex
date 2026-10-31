@@ -174,3 +174,28 @@ fn a_new_column_lands_empty_on_every_symbol_in_one_undo_step() {
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(has_mpn(&app), 0);
 }
+
+#[test]
+fn deleting_a_column_leaves_power_symbols_alone() {
+    let part = uuid::Uuid::now_v7();
+    let power = uuid::Uuid::now_v7();
+    let mut pwr = symbol(power, "#PWR01", 10.0);
+    pwr.is_power = true;
+    pwr.fields.insert("Tolerance".into(), "keep".into());
+    let (mut app, _path) = app_with(vec![symbol(part, "R1", 0.0), pwr]);
+    typed(&mut app, part, "Tolerance", "5%");
+
+    let _ = app.update(Message::ParameterManager(
+        ParameterManagerMsg::ParameterRemoved {
+            key: "Tolerance".into(),
+        },
+    ));
+
+    let doc = app.document_state.active_engine().unwrap().document();
+    assert!(!doc.symbols[0].fields.contains_key("Tolerance"));
+    assert_eq!(
+        doc.symbols[1].fields.get("Tolerance").map(String::as_str),
+        Some("keep"),
+        "the table hides power symbols, so a delete must not reach them"
+    );
+}
