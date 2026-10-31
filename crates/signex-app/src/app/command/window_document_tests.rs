@@ -572,3 +572,64 @@ fn a_save_as_completion_after_the_window_re_docked_leaves_every_tab_keyed() {
     assert_eq!(f.app.document_state.tabs[1].path, f.undocked_path);
     assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
 }
+
+/// For the main window the per-window facts are the active-tab facts.
+#[test]
+fn the_main_windows_document_facts_equal_its_active_tab_facts() {
+    let mut f = fixture();
+    for kind in [
+        TabKind::Schematic,
+        TabKind::SymbolEditor(f.main_path.clone()),
+        TabKind::FootprintEditor(f.main_path.clone()),
+        TabKind::Pcb,
+    ] {
+        f.app.document_state.tabs[0].kind = kind;
+        for window in [None, f.app.ui_state.main_window_id] {
+            let ctx = f.app.command_context(window);
+            assert_eq!(ctx.document_is_schematic, ctx.has_schematic);
+            assert_eq!(
+                ctx.document_is_editor,
+                ctx.has_symbol_editor || ctx.has_footprint_editor
+            );
+        }
+    }
+}
+
+/// A Component Preview has no file of its own: its File rows grey.
+#[test]
+fn a_component_previews_file_rows_are_greyed() {
+    let mut f = fixture();
+    let window = component_preview(&mut f.app);
+    for id in ["save_document", "save_document_as", "print"] {
+        assert!(!row_enabled(&f, Some(window), id), "{id}");
+    }
+}
+
+/// Close Document in a window whose tab is gone says so in the Messages panel.
+#[test]
+fn close_document_in_a_window_with_no_tab_is_logged() {
+    let mut f = fixture();
+    let window = f.window;
+    f.app
+        .document_state
+        .tabs
+        .retain(|t| t.path != f.undocked_path);
+    {
+        use crate::ignore::IgnoreResult;
+        crate::diagnostics::init_logging()
+            .ignore("another test in this binary already installed the same logger");
+    }
+    let reported = || {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|entry| entry.message.contains("no longer open"))
+            .count()
+    };
+    let before = reported();
+    let _ = f.app.dispatch_command(
+        &command("close_active_document"),
+        CommandArgs::none(),
+        Some(window),
+    );
+    assert_eq!(reported(), before + 1, "nothing reached the Messages panel");
+}

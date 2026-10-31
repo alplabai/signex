@@ -38,7 +38,8 @@ pub(crate) struct CommandContext {
     /// the window's own in an undocked tab window (#1813), else the main
     /// window's active tab.
     pub document_is_schematic: bool,
-    /// That document is a `.snxsym` or `.snxfpt` editor tab.
+    /// That document is a `.snxsym` or `.snxfpt` editor tab. Both fields are
+    /// false in a Component Preview window, which has no file of its own.
     pub document_is_editor: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the
@@ -222,16 +223,22 @@ impl Signex {
         } else {
             self.history_available(active_kind, document.active_path.as_ref())
         };
-        let (document_is_schematic, document_is_editor) = self.window_document_kind(window);
+        let has_schematic = document.active_engine().is_some();
+        let has_symbol_editor = matches!(active_kind, Some(TabKind::SymbolEditor(_)));
+        let has_footprint_editor = matches!(active_kind, Some(TabKind::FootprintEditor(_)));
+        let (document_is_schematic, document_is_editor) = self.window_document_kind(
+            window,
+            (has_schematic, has_symbol_editor || has_footprint_editor),
+        );
         CommandContext {
-            has_schematic: document.active_engine().is_some(),
+            has_schematic,
             has_pcb: self.has_active_pcb(),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
             document_is_schematic,
             document_is_editor,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
-            has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
-            has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
+            has_symbol_editor,
+            has_footprint_editor,
             has_selection: !self.interaction_state.active_canvas().selected.is_empty(),
             has_drawing_selection: !self.selected_drawing_ids().is_empty(),
             drawing: self.interaction_state.wire_drawing
@@ -250,18 +257,16 @@ impl Signex {
 
     /// `(is a schematic sheet, is an editor tab)` for the document the
     /// per-window commands act on in `window`: the window's own tab in an
-    /// undocked or Component Preview window (a preview is neither), else the
-    /// main window's active tab.
-    fn window_document_kind(&self, window: Option<iced::window::Id>) -> (bool, bool) {
+    /// undocked or Component Preview window (a preview is neither), else
+    /// `main`, the main window's active-tab facts.
+    fn window_document_kind(
+        &self,
+        window: Option<iced::window::Id>,
+        main: (bool, bool),
+    ) -> (bool, bool) {
         let document = &self.document_state;
         match self.document_of_window(window) {
-            None => (
-                document.active_engine().is_some(),
-                matches!(
-                    document.tabs.get(document.active_tab).map(|t| &t.kind),
-                    Some(TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_))
-                ),
-            ),
+            None => main,
             Some(super::window_document::WindowDocument::Tab(index)) => {
                 match document.tabs.get(index) {
                     Some(tab) => (

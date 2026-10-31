@@ -35,6 +35,13 @@ pub(super) fn is_window_document_command(command: &AppCommandId) -> bool {
     )
 }
 
+/// Say why a command typed in a window whose tab is gone did nothing.
+fn explain_document_gone() {
+    crate::diagnostics::log_info(
+        "This window's document is no longer open, so the command did nothing.",
+    );
+}
+
 fn is_tab_stepper(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -118,7 +125,10 @@ impl Signex {
                     crate::app::WindowMsg::WindowCloseRequested(id),
                 ))
             }
-            WindowDocument::NoTab => Task::none(),
+            WindowDocument::NoTab => {
+                explain_document_gone();
+                Task::none()
+            }
         })
     }
 
@@ -155,9 +165,7 @@ impl Signex {
                 Task::none()
             }
             WindowDocument::NoTab => {
-                crate::diagnostics::log_info(
-                    "This window's document is no longer open, so the command did nothing.",
-                );
+                explain_document_gone();
                 Task::none()
             }
         })
