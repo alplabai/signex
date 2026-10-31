@@ -212,7 +212,7 @@ impl Signex {
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
             menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(move |msg| match msg {
-                MenuMessage::Undo | MenuMessage::Redo if undocked => {
+                msg if undocked && msg.window_command().is_some() => {
                     Message::Ui(UiMsg::MenuInWindow {
                         window: window_id,
                         msg,
