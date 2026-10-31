@@ -11,6 +11,7 @@ pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
 pub(crate) mod enablement;
+mod window_close;
 
 pub(crate) use args::CommandArgs;
 use bridge::core_to_message;
@@ -66,6 +67,12 @@ impl Signex {
             return self.run_in_window(window_id, true, |app| {
                 app.dispatch_command(command, _args, None)
             });
+        }
+        // Close Document follows the window the stroke came from (#1787).
+        if command.as_str() == "close_active_document"
+            && let Some(task) = self.close_document_in_window(window)
+        {
+            return task;
         }
         if !is_enabled(command, &self.command_context(window))
             && !enablement::explains_when_unavailable(command)
