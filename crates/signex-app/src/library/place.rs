@@ -189,9 +189,8 @@ fn is_power_port(symbol: &signex_library::primitive::Symbol) -> bool {
 /// The global net name a power port stamps: its comment, or the pin name
 /// when the comment is empty or the `*` placeholder.
 fn power_port_net_name(symbol: &signex_library::primitive::Symbol) -> String {
-    let comment = symbol.comment.trim();
-    if !comment.is_empty() && comment != "*" {
-        return comment.to_owned();
+    if !super::part_label::is_unset_value(&symbol.comment) {
+        return symbol.comment.trim().to_owned();
     }
     symbol
         .pins

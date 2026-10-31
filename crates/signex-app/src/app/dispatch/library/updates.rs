@@ -544,7 +544,9 @@ impl Signex {
                 Err(why) => {
                     crate::diagnostics::log_warning(format!(
                         "Library update not applied: could not read {} ({why}).",
-                        self.library.drift.display_name(&r.lib_id)
+                        self.library
+                            .drift
+                            .display_name(&r.lib_id, &self.library.open_libraries)
                     ));
                     all_applied = false;
                 }

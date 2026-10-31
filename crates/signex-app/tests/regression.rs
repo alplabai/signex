@@ -360,6 +360,8 @@ mod text_font_family;
 mod junction_tool;
 #[path = "regression/no_erc_directive.rs"]
 mod no_erc_directive;
+#[path = "regression/place_component_menu.rs"]
+mod place_component_menu;
 
 #[path = "regression/parameter_set_no_net_label.rs"]
 mod parameter_set_no_net_label;

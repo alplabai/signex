@@ -121,6 +121,7 @@ impl Signex {
                     .font(canvas_font)
                     .size(TS.label)
                     .color(text_c)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
                     .width(Length::Fill),
             ]
             .spacing(SP.s)
@@ -134,19 +135,23 @@ impl Signex {
             "Designator",
             self.shown_designator(symbol).to_string(),
         ));
-        if !symbol.value.is_empty() {
-            rows.push(field("Value", symbol.value.clone()));
-        }
+        rows.push(field(
+            "Value",
+            crate::library::part_label::card_value(&symbol.value).to_owned(),
+        ));
         if !symbol.footprint.is_empty() {
             rows.push(field("Footprint", symbol.footprint.clone()));
         }
         if !symbol.lib_id.is_empty() {
             rows.push(field(
                 "Library",
-                self.library.drift.display_name(&symbol.lib_id).to_owned(),
+                self.library
+                    .drift
+                    .display_name(&symbol.lib_id, &self.library.open_libraries),
             ));
         }
 
+        let rows_len = rows.len();
         let card = container(column(rows).spacing(3))
             .padding(iced::Padding {
                 top: 8.0,
@@ -166,11 +171,13 @@ impl Signex {
             });
 
         // Below-right of the cursor, flipped or clamped to stay on the
-        // canvas (not the Properties panel beside it). The height is an
-        // estimate; iced lays the card out at its true size.
-        const ESTIMATED_H: f32 = 110.0;
+        // canvas (not the Properties panel beside it). Rows wrap, so the
+        // height budgets a few lines each plus the card padding; iced lays
+        // the card out at its true size.
+        const ESTIMATED_ROW_H: f32 = 28.0;
+        let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
         let (x, y) =
-            canvas_region::place_card((sx, sy), (CARD_W, ESTIMATED_H), self.card_bounds(window_id));
+            canvas_region::place_card((sx, sy), (CARD_W, estimated_h), self.card_bounds(window_id));
         Some(super::view::translate::Translate::new(card, (x, y)).into())
     }
 
