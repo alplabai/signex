@@ -108,6 +108,7 @@ impl FootprintCanvas<'_> {
                 msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
                     x_mm: world.0,
                     y_mm: world.1,
+                    px_per_mm: cstate.scale,
                 }),
             })
             .and_capture(),
@@ -168,6 +169,7 @@ impl FootprintCanvas<'_> {
                     msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
                         x_mm: world.0,
                         y_mm: world.1,
+                        px_per_mm: cstate.scale,
                     }),
                 })
                 .and_capture(),

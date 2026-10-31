@@ -38,6 +38,23 @@ impl TextMeasurer {
         }
     }
 
+    /// Cap height over em of the installed `family` (#1797): the face's
+    /// OS/2 `sCapHeight`, else the height of its `H` outline. `None` when no
+    /// installed face carries that name or neither reading works.
+    pub fn cap_height_per_em(&self, family: &str) -> Option<f32> {
+        let db = self.font_system.db();
+        let query = cryoglyph::fontdb::Query {
+            families: &[cryoglyph::fontdb::Family::Name(family)],
+            ..Default::default()
+        };
+        let id = db.query(&query)?;
+        db.with_face_data(id, |data, index| {
+            ttf_parser::Face::parse(data, index)
+                .ok()
+                .and_then(|face| cap_height_ratio(&face))
+        })?
+    }
+
     /// Width of `text` in em, single line, shaped in `family`.
     pub fn advance_em(&mut self, text: &str, family: &str) -> f32 {
         let item = TextItem {
@@ -56,6 +73,18 @@ impl TextMeasurer {
         );
         measure_text_bounds_px(&buffer)[0] / PROBE_PX
     }
+}
+
+/// `sCapHeight / unitsPerEm`, falling back to the bounding box of `H`.
+fn cap_height_ratio(face: &ttf_parser::Face<'_>) -> Option<f32> {
+    let upm = f32::from(face.units_per_em());
+    let cap = face.capital_height().filter(|&cap| cap > 0).or_else(|| {
+        let h = face.glyph_index('H')?;
+        face.glyph_bounding_box(h)
+            .map(|b| b.y_max)
+            .filter(|&y| y > 0)
+    })?;
+    (upm > 0.0).then(|| f32::from(cap) / upm)
 }
 
 #[cfg(test)]
@@ -86,5 +115,54 @@ mod tests {
         let narrow = m.advance_em("iiiiiiii", "Roboto");
         let wide = m.advance_em("WWWWWWWW", "Roboto");
         assert!(wide > narrow * 2.0, "{narrow} vs {wide}");
+    }
+
+    static SYSTEM: std::sync::OnceLock<std::sync::Mutex<TextMeasurer>> = std::sync::OnceLock::new();
+
+    fn system_cap_height(family: &str) -> Option<f32> {
+        SYSTEM
+            .get_or_init(|| std::sync::Mutex::new(TextMeasurer::new(&[], true)))
+            .lock()
+            .ok()?
+            .cap_height_per_em(family)
+    }
+
+    /// #1797 — a system family is sized by its own cap height: a 1.27 mm
+    /// label's capitals measure 1.27 mm, as in the bundled faces. Skips when
+    /// the machine has none of the common sans faces.
+    #[test]
+    fn a_system_family_label_measures_its_requested_cap_height() {
+        use crate::primitive::text::{TextSizePolicy, text_px_in};
+        signex_types::font::set_cap_height_resolver(system_cap_height);
+        let Some(family) = ["DejaVu Sans", "Liberation Sans", "Arial", "Helvetica"]
+            .into_iter()
+            .find(|f| system_cap_height(f).is_some())
+        else {
+            eprintln!("no common system font installed; skipping");
+            return;
+        };
+        // The reading must be the face's real capital height, not the 0.72
+        // fallback: measure the `H` outline independently.
+        let mut db = cryoglyph::fontdb::Database::new();
+        db.load_system_fonts();
+        let id = db
+            .query(&cryoglyph::fontdb::Query {
+                families: &[cryoglyph::fontdb::Family::Name(family)],
+                ..Default::default()
+            })
+            .expect("face");
+        let outline = db
+            .with_face_data(id, |data, index| {
+                let face = ttf_parser::Face::parse(data, index).ok()?;
+                let h = face.glyph_bounding_box(face.glyph_index('H')?)?;
+                Some(f32::from(h.y_max) / f32::from(face.units_per_em()))
+            })
+            .flatten()
+            .expect("H outline");
+
+        let policy = TextSizePolicy::new(0.0, f32::INFINITY);
+        let em_px = text_px_in(1.27, 10.0, policy, Some(family));
+        let cap_px = em_px * outline;
+        assert!((cap_px - 12.7).abs() < 0.03, "{family}: {cap_px} px");
     }
 }

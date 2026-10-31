@@ -69,6 +69,19 @@ impl Signex {
             return false;
         };
         let sheet = engine.document();
+        // A power port's designator is never drawn; its text is the net name,
+        // so a designator edit becomes the Value edit Properties uses (#1799).
+        let item = match item.kind {
+            SelectedKind::SymbolRefField
+                if sheet
+                    .symbols
+                    .iter()
+                    .any(|s| s.uuid == item.uuid && s.is_power) =>
+            {
+                SelectedItem::new(item.uuid, SelectedKind::SymbolValField)
+            }
+            _ => item,
+        };
         let sheet_path = self.document_state.active_path.clone();
         let state = |text: String, at: signex_types::schematic::Point| TextEditState {
             uuid: item.uuid,
@@ -115,6 +128,11 @@ impl Signex {
             return false;
         };
         self.interaction_state.editing_text = Some(opened);
+        // A hover card left on screen would cover the editor (#1770).
+        self.document_state.net_nav.hover.card = None;
+        self.document_state.net_nav.hover.candidate = None;
+        self.interaction_state.hover_symbol_uuid = None;
+        self.interaction_state.hover_screen_pos = None;
         true
     }
 

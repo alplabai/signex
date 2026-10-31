@@ -17,11 +17,13 @@ impl Signex {
     }
 
     /// The message a native row sends, routed like the in-window row of the
-    /// same window: Undo and Redo go to a non-main window's own history.
+    /// same window: rows that act on a document (Undo, Redo, Save, Save As,
+    /// Print, Close Document, the tab stepper) go to a non-main window's own document.
     fn native_menu_message(&self, action: MenuMessage) -> Message {
         match (&action, self.native_menu_window()) {
-            (MenuMessage::Undo | MenuMessage::Redo, Some(window))
-                if self.ui_state.main_window_id != Some(window) =>
+            (row, Some(window))
+                if row.window_command().is_some()
+                    && self.ui_state.main_window_id != Some(window) =>
             {
                 Message::Ui(UiMsg::MenuInWindow {
                     window,
@@ -201,7 +203,11 @@ mod tests {
         ));
         assert!(matches!(
             app.native_menu_message(MenuMessage::Save),
-            Message::Menu(MenuMessage::Save)
+            Message::Ui(UiMsg::MenuInWindow { window, .. }) if window == other
+        ));
+        assert!(matches!(
+            app.native_menu_message(MenuMessage::OpenAbout),
+            Message::Menu(MenuMessage::OpenAbout)
         ));
         app.ui_state.focused_window = Some(main);
         assert!(matches!(

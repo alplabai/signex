@@ -550,13 +550,7 @@ impl Signex {
         let (ww, _wh) = self.ui_state.window_size;
         let card_w = 430.0;
         let x = ((ww - card_w) * 0.5).max(0.0);
-        let y = crate::menu_bar::MENU_BAR_HEIGHT
-            + if self.document_state.tabs.is_empty() {
-                0.0
-            } else {
-                28.0
-            }
-            + 80.0;
+        let y = super::canvas_region::CHROME_TOP + 80.0;
         // Wrap in a mouse_area with on_press(Noop) so clicks inside the
         // card are captured and DON'T fall through to the dismiss
         // layer sitting beneath. Without this, clicking on the card's

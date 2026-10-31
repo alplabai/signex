@@ -53,7 +53,11 @@ pub fn scan_sheet(sheet: &SchematicSheet, needle: &str, scope: &DesignatorScope)
                 });
             }
         };
-        if scope.placements.is_empty() {
+        // A power port's designator is never drawn; its text is the net name,
+        // which the Value hit finds (#1799).
+        if symbol.is_power {
+            // no designator hit
+        } else if scope.placements.is_empty() {
             designator(None);
         } else {
             for placement in &scope.placements {

@@ -207,9 +207,15 @@ impl Signex {
     }
 
     /// Run a Ctrl+S that waited for its directory's rule, if that document is
-    /// still the one in front of the user.
+    /// still the one in front of the user: the main window's active one, or
+    /// the one an undocked window shows.
     fn resume_deferred_save(&mut self, path: PathBuf) -> Task<Message> {
         if self.document_state.active_path.as_deref() != Some(path.as_path()) {
+            if let Some(window) = self.undocked_schematic_window(&path) {
+                return self.run_in_window_document(window, |app| {
+                    app.handle_active_document_save_requested()
+                });
+            }
             let message = save_skipped_message(&path);
             crate::diagnostics::log_warning(&message);
             if self.document_state.error_notice.is_none() {

@@ -337,6 +337,26 @@ impl Signex {
         revision: u64,
         net_color_revision: u64,
     ) {
+        // The window that started the Save As shows the document, whichever
+        // tab the main window has active now (#1794).
+        if let Some(window) = self.undocked_schematic_window(from) {
+            // The closure returns `Task::none()`; there is nothing to run.
+            let _no_task = self.run_in_window_document(window, |app| {
+                app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision);
+                iced::Task::none()
+            });
+            return;
+        }
+        self.apply_saved_as_to_active(from, to, revision, net_color_revision);
+    }
+
+    fn apply_saved_as_to_active(
+        &mut self,
+        from: &std::path::Path,
+        to: PathBuf,
+        revision: u64,
+        net_color_revision: u64,
+    ) {
         let still_active = matches!(
             self.document_state.tabs.get(self.document_state.active_tab),
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from

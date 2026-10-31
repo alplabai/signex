@@ -271,6 +271,7 @@ fn a_footprint_canvas_event_after_a_requested_reload_does_not_stop_it() {
         crate::library::messages::FootprintEditorMsg::CursorAt {
             x_mm: 1.0,
             y_mm: 2.0,
+            px_per_mm: 30.0,
         },
     ));
     settle_task(&mut f.app, moved);
