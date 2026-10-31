@@ -271,3 +271,23 @@ fn a_bulk_edit_path_that_marks_a_sheet_dirty_marks_the_results_stale() {
     app.document_state.mark_document_dirty(&path);
     assert!(app.erc_results_stale());
 }
+
+#[test]
+fn only_changes_that_can_alter_a_finding_make_the_results_stale() {
+    let (mut app, path, _part) = app_with_two_findings();
+    let dir = path.parent().unwrap().to_path_buf();
+
+    // A net colour is display only: the same sheet is dirtied, no finding changes.
+    app.mark_net_colors_dirty(&path);
+    assert!(!app.erc_results_stale(), "net colour");
+    app.document_state
+        .mark_document_dirty(&dir.join("board.snxpcb"));
+    app.document_state
+        .mark_document_dirty(&dir.join("library.toml"));
+    assert!(!app.erc_results_stale(), "PCB and library manifest");
+
+    // A project change (rule edit, sheet add or remove) can.
+    app.document_state
+        .mark_document_dirty(&dir.join("ProjectA.snxprj"));
+    assert!(app.erc_results_stale(), "project file");
+}

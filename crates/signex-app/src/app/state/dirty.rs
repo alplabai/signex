@@ -63,14 +63,29 @@ impl DocumentState {
 
     /// Record unsaved edits for `path`. A draft open at `path` owns the flag;
     /// any other document is added to the stored set.
+    /// A schematic sheet or a project file also counts as a sheet edit for ERC
+    /// (see [`Self::note_sheet_edit`]); any other document (PCB, library
+    /// manifest) does not.
     pub fn mark_document_dirty(&mut self, path: &Path) {
+        self.mark_dirty_inner(path, can_change_erc_results(path));
+    }
+
+    /// [`Self::mark_document_dirty`] for an edit that only changes how a sheet or
+    /// project is shown (net colours, net classes): no finding can change.
+    pub fn mark_document_dirty_display_only(&mut self, path: &Path) {
+        self.mark_dirty_inner(path, false);
+    }
+
+    fn mark_dirty_inner(&mut self, path: &Path, affects_erc: bool) {
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.mark_dirty();
         } else if let Some(editor) = self.footprint_editors.get_mut(path) {
             editor.mark_dirty();
         } else {
             self.dirty_docs.paths.insert(path.to_path_buf());
-            self.note_sheet_edit();
+            if affects_erc {
+                self.note_sheet_edit();
+            }
         }
     }
 
@@ -139,4 +154,13 @@ impl DocumentState {
                 .get(path)
                 .is_some_and(|e| e.is_dirty())
     }
+}
+
+/// Whether a change to the document at `path` can change an ERC finding. A
+/// project file may (rules, the sheet list, a rename), so it counts; when in
+/// doubt a path counts.
+fn can_change_erc_results(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("snxsch") || e.eq_ignore_ascii_case("snxprj"))
 }

@@ -311,11 +311,15 @@ impl Signex {
         }
         // A member sheet other than the active one changed too.
         self.document_state.note_sheet_edit();
-        match active_invalidation {
+        let changed = match active_invalidation {
             Some(invalidation) => {
                 self.finish_schematic_mutation(invalidation, true, update_selection_info)
             }
             None => false,
-        }
+        };
+        // The ERC panel's out-of-date notice follows even when the active
+        // sheet itself was not touched.
+        self.refresh_panel_ctx();
+        changed
     }
 }

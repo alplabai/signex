@@ -639,3 +639,20 @@ fn reset_duplicates_leaves_the_erc_results_stale() {
     std::fs::remove_dir_all(&dir).ok();
     assert!(app.erc_results_stale());
 }
+
+#[test]
+fn reset_duplicates_of_a_closed_sheet_leaves_the_erc_results_stale() {
+    let (mut app, dir) = project(vec![], vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)]);
+    with_erc_results(&mut app, &dir);
+    assert!(!app.erc_results_stale());
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(&mut app, task);
+    let child = child_refs(&dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(
+        child,
+        ["U?", "U?"],
+        "the closed child was rewritten on disk"
+    );
+    assert!(app.erc_results_stale());
+}

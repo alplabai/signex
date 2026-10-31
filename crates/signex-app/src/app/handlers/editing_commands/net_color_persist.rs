@@ -34,7 +34,7 @@ impl Signex {
             .net_color_revision
             .entry(path.to_path_buf())
             .or_default() += 1;
-        self.document_state.mark_document_dirty(path);
+        self.document_state.mark_document_dirty_display_only(path);
         self.refresh_panel_ctx();
     }
 }

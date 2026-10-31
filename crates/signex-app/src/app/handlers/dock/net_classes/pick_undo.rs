@@ -152,7 +152,7 @@ impl crate::app::Signex {
             return false;
         }
         let project_file = project.path.clone();
-        document.mark_document_dirty(&project_file);
+        document.mark_document_dirty_display_only(&project_file);
         let steps = document.net_class_picks.entry(path).or_default();
         let (from, to) = if undoing {
             (&mut steps.undo, &mut steps.redo)

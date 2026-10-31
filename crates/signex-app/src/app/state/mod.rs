@@ -332,10 +332,11 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
-    /// Counts every edit to a schematic sheet, made through the engine or by a
-    /// bulk path (Annotate, Replace, library update, ...): every one marks its
-    /// sheet dirty through [`DocumentState::note_sheet_edit`]. ERC compares it
-    /// with the count its results were taken at to tell they are stale (#1768).
+    /// Counts the changes that can alter an ERC finding: an edit to a sheet
+    /// (through the engine, or Annotate, Replace, library update and the like),
+    /// a project-file change, and a sheet written behind the engines. Each calls
+    /// [`DocumentState::note_sheet_edit`], mostly via `mark_document_dirty`.
+    /// ERC compares it with the count its results were read at (#1768).
     pub sheet_edit_epoch: u64,
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
@@ -983,6 +984,7 @@ impl DocumentState {
     /// of that file can tell it is out of date.
     pub fn note_document_written_behind_engines(&mut self) {
         self.note_documents_changed();
+        self.note_sheet_edit();
     }
 
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
