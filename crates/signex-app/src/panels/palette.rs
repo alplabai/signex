@@ -45,6 +45,9 @@ pub struct PanelPalette {
     pub tag_hover: Color,
     /// Hovered segmented-button cell.
     pub seg_hover: Color,
+    /// Surface the panel is drawn on; text placed directly on it picks
+    /// its colour against this, not against the iced palette.
+    pub panel_bg: Color,
 }
 
 impl PanelPalette {
@@ -68,6 +71,7 @@ impl PanelPalette {
                 ..accent
             },
             seg_hover: crate::styles::ti(tokens.hover),
+            panel_bg: crate::styles::ti(tokens.panel_bg),
         }
     }
 }
