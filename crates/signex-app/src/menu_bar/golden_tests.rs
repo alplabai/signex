@@ -28,6 +28,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         with(base),
         with(CommandContext {
             has_schematic: true,
+            document_is_schematic: true,
             has_pcb: true,
             has_sheets: true,
             has_selection: true,
@@ -47,6 +48,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             has_symbol_editor: true,
+            document_is_editor: true,
             can_remove_part: true,
             has_document: true,
             ..base
@@ -62,6 +64,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             has_footprint_editor: true,
+            document_is_editor: true,
             has_document: true,
             ..base
         }),

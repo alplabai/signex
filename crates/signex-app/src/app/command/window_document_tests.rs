@@ -289,6 +289,83 @@ fn the_undocked_windows_menu_rows_run_against_its_own_document() {
     assert_eq!(std::fs::read(&f.main_path).unwrap(), OLD);
 }
 
+/// Export ▸ PDF and File ▸ Print open the same modal, so in an undocked
+/// window both preview that window's own document (#1813).
+#[test]
+fn export_pdf_in_an_undocked_window_previews_that_document() {
+    let mut f = fixture();
+    let window = f.window;
+    assert_eq!(
+        crate::menu_bar::MenuMessage::ExportPdf.window_command(),
+        Some("print")
+    );
+    let task = f.app.update(Message::Ui(crate::app::UiMsg::MenuInWindow {
+        window,
+        msg: crate::menu_bar::MenuMessage::ExportPdf,
+    }));
+    settle_task(&mut f.app, task);
+    let preview = f
+        .app
+        .document_state
+        .preview
+        .as_ref()
+        .expect("preview opened");
+    assert_eq!(preview.source, f.undocked_path);
+}
+
+fn row_enabled(f: &Fixture, window: Option<iced::window::Id>, id: &str) -> bool {
+    crate::app::command::is_enabled(&command(id), &f.app.command_context(window))
+}
+
+/// The main window shows a PCB and no sheet; the undocked window a sheet.
+fn main_shows_a_pcb(f: &mut Fixture) {
+    f.app.document_state.engines.remove(&f.main_path);
+    f.app.document_state.active_path = None;
+    f.app.document_state.tabs[0].kind = TabKind::Pcb;
+}
+
+/// The undocked window shows a PCB; the main window keeps its sheet.
+fn undocked_shows_a_pcb(f: &mut Fixture) {
+    f.app.document_state.engines.remove(&f.undocked_path);
+    f.app.document_state.tabs[1].kind = TabKind::Pcb;
+}
+
+/// #1813: Save, Save As and Print in an undocked sheet's menu enable by
+/// that sheet, whatever the main window shows.
+#[test]
+fn an_undocked_sheets_file_rows_enable_with_a_pcb_in_the_main_window() {
+    let mut f = fixture();
+    main_shows_a_pcb(&mut f);
+    for id in ["save_document", "save_document_as", "print"] {
+        assert!(row_enabled(&f, Some(f.window), id), "{id} in the window");
+        assert!(!row_enabled(&f, None, id), "{id} in the main window");
+    }
+}
+
+/// #1813: an undocked PCB greys the rows that need a sheet, so a click
+/// cannot be enabled and then refused by the retargeted window.
+#[test]
+fn an_undocked_pcbs_sheet_rows_grey_with_a_sheet_in_the_main_window() {
+    let mut f = fixture();
+    undocked_shows_a_pcb(&mut f);
+    for id in ["save_document", "save_document_as", "print"] {
+        assert!(!row_enabled(&f, Some(f.window), id), "{id} in the window");
+        assert!(row_enabled(&f, None, id), "{id} in the main window");
+    }
+}
+
+/// The main window keeps reading its own active tab.
+#[test]
+fn the_main_windows_file_rows_still_follow_its_active_tab() {
+    let mut f = fixture();
+    for id in ["save_document", "save_document_as", "print"] {
+        assert!(row_enabled(&f, None, id), "{id}");
+    }
+    main_shows_a_pcb(&mut f);
+    assert!(!row_enabled(&f, None, "print"));
+    assert!(!row_enabled(&f, None, "save_document_as"));
+}
+
 /// #1787: Ctrl+F4 in an undocked window closes that window's document and
 /// leaves the main window's active tab open.
 #[test]
@@ -494,4 +571,65 @@ fn a_save_as_completion_after_the_window_re_docked_leaves_every_tab_keyed() {
     assert_eq!(f.app.document_state.tabs[0].path, f.main_path);
     assert_eq!(f.app.document_state.tabs[1].path, f.undocked_path);
     assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+/// For the main window the per-window facts are the active-tab facts.
+#[test]
+fn the_main_windows_document_facts_equal_its_active_tab_facts() {
+    let mut f = fixture();
+    for kind in [
+        TabKind::Schematic,
+        TabKind::SymbolEditor(f.main_path.clone()),
+        TabKind::FootprintEditor(f.main_path.clone()),
+        TabKind::Pcb,
+    ] {
+        f.app.document_state.tabs[0].kind = kind;
+        for window in [None, f.app.ui_state.main_window_id] {
+            let ctx = f.app.command_context(window);
+            assert_eq!(ctx.document_is_schematic, ctx.has_schematic);
+            assert_eq!(
+                ctx.document_is_editor,
+                ctx.has_symbol_editor || ctx.has_footprint_editor
+            );
+        }
+    }
+}
+
+/// A Component Preview has no file of its own: its File rows grey.
+#[test]
+fn a_component_previews_file_rows_are_greyed() {
+    let mut f = fixture();
+    let window = component_preview(&mut f.app);
+    for id in ["save_document", "save_document_as", "print"] {
+        assert!(!row_enabled(&f, Some(window), id), "{id}");
+    }
+}
+
+/// Close Document in a window whose tab is gone says so in the Messages panel.
+#[test]
+fn close_document_in_a_window_with_no_tab_is_logged() {
+    let mut f = fixture();
+    let window = f.window;
+    f.app
+        .document_state
+        .tabs
+        .retain(|t| t.path != f.undocked_path);
+    {
+        use crate::ignore::IgnoreResult;
+        crate::diagnostics::init_logging()
+            .ignore("another test in this binary already installed the same logger");
+    }
+    let reported = || {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|entry| entry.message.contains("no longer open"))
+            .count()
+    };
+    let before = reported();
+    let _ = f.app.dispatch_command(
+        &command("close_active_document"),
+        CommandArgs::none(),
+        Some(window),
+    );
+    assert_eq!(reported(), before + 1, "nothing reached the Messages panel");
 }

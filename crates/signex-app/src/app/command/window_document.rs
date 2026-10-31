@@ -35,6 +35,13 @@ pub(super) fn is_window_document_command(command: &AppCommandId) -> bool {
     )
 }
 
+/// Say why a command typed in a window whose tab is gone did nothing.
+fn explain_document_gone() {
+    crate::diagnostics::log_info(
+        "This window's document is no longer open, so the command did nothing.",
+    );
+}
+
 fn is_tab_stepper(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -59,14 +66,7 @@ impl Signex {
             WindowKind::UndockedTab { path, .. } => {
                 Some(match tabs.iter().position(|t| &t.path == path) {
                     Some(index) => WindowDocument::Tab(index),
-                    None => {
-                        tracing::warn!(
-                            target: "signex::tabs",
-                            path = %path.display(),
-                            "undocked tab window matches no open tab, command ignored",
-                        );
-                        WindowDocument::NoTab
-                    }
+                    None => WindowDocument::NoTab,
                 })
             }
             WindowKind::ComponentEditor {
@@ -125,7 +125,10 @@ impl Signex {
                     crate::app::WindowMsg::WindowCloseRequested(id),
                 ))
             }
-            WindowDocument::NoTab => Task::none(),
+            WindowDocument::NoTab => {
+                explain_document_gone();
+                Task::none()
+            }
         })
     }
 
@@ -161,7 +164,10 @@ impl Signex {
                 self.explain_window_refusal(index, command);
                 Task::none()
             }
-            WindowDocument::NoTab => Task::none(),
+            WindowDocument::NoTab => {
+                explain_document_gone();
+                Task::none()
+            }
         })
     }
 
