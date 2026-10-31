@@ -11,10 +11,8 @@ impl Signex {
                 Task::none()
             }
             UiMsg::MenuInWindow { window, msg } => {
-                let command = match msg {
-                    MenuMessage::Undo => "undo",
-                    MenuMessage::Redo => "redo",
-                    other => return self.update(Message::Menu(other)),
+                let Some(command) = msg.window_command() else {
+                    return self.update(Message::Menu(msg));
                 };
                 match crate::keymap::AppCommandId::new(command) {
                     Ok(id) => self.dispatch_command(
@@ -542,6 +540,16 @@ impl Signex {
             .get(&target_path)
             .map(signex_engine::Engine::revision);
         let main_shows_target = saved_active_path.as_ref() == Some(&target_path);
+        // Save As re-keyed the tab the main window also had active: follow
+        // the new path rather than restore the old key.
+        let saved_active_path = match (saved_active_path, retargeted_tab) {
+            (Some(path), Some(index)) if path == target_path && !self.has_tab_for(&path) => self
+                .document_state
+                .tabs
+                .get(index)
+                .map(|tab| tab.path.clone()),
+            (path, _) => path,
+        };
         self.document_state.active_path = saved_active_path;
         if main_shows_target && revision_before != revision_after {
             self.refresh_main_canvas_from_engine(&target_path);

@@ -380,3 +380,44 @@ fn a_deferred_ctrl_s_that_lost_focus_says_nothing_was_saved() {
     );
     assert!(tab_dirty(&app, &upper));
 }
+
+/// A Ctrl+S typed in an undocked window waits for the folder's probe like any
+/// other; when the answer lands it writes that window's document, not the
+/// main window's, and does not say "nothing was saved".
+#[test]
+fn a_deferred_ctrl_s_from_an_undocked_window_saves_that_window_document() {
+    use crate::app::command::CommandArgs;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, upper, lower) = app_with_dirty_variants(dir.path(), true);
+    let sink = count_writes(&mut app);
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: lower.clone(),
+            title: "lib".to_string(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let id = crate::keymap::AppCommandId::new("save_document").unwrap();
+
+    drop(app.dispatch_command(&id, CommandArgs::none(), Some(window)));
+    assert!(
+        sink.0.lock().unwrap().is_empty(),
+        "no write before the probe"
+    );
+
+    let resumed = probe_dir(&mut app, dir.path(), CaseProbeOutcome::Decided(false));
+    feed(&mut app, resumed);
+
+    assert_eq!(*sink.0.lock().unwrap(), vec![lower.clone()]);
+    assert!(app.document_state.error_notice.is_none());
+    assert!(!tab_dirty(&app, &lower));
+    assert!(
+        tab_dirty(&app, &upper),
+        "the main window's document is untouched"
+    );
+    assert_eq!(app.document_state.active_path, Some(upper));
+}

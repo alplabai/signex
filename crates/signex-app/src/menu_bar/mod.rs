@@ -257,6 +257,24 @@ pub enum MenuMessage {
 }
 
 impl MenuMessage {
+    /// The command a row runs against the document of the window it was
+    /// clicked in, when the row is per-window (Undo / Redo #1550; Save, Save
+    /// As, Print, Close Document and the tab stepper #1794). Every other row
+    /// still arrives as `Message::Menu`.
+    pub(crate) fn window_command(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::Undo => "undo",
+            Self::Redo => "redo",
+            Self::Save => "save_document",
+            Self::SaveAs => "save_document_as",
+            Self::Print => "print",
+            Self::CloseDocument => "close_active_document",
+            Self::NextDocumentTab => "next_document_tab",
+            Self::PreviousDocumentTab => "previous_document_tab",
+            _ => return None,
+        })
+    }
+
     /// Whether this is a View-menu panel row, which carries a check mark.
     pub(crate) fn is_panel_row(&self) -> bool {
         matches!(
