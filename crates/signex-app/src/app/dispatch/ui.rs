@@ -11,10 +11,8 @@ impl Signex {
                 Task::none()
             }
             UiMsg::MenuInWindow { window, msg } => {
-                let command = match msg {
-                    MenuMessage::Undo => "undo",
-                    MenuMessage::Redo => "redo",
-                    other => return self.update(Message::Menu(other)),
+                let Some(command) = msg.window_command() else {
+                    return self.update(Message::Menu(msg));
                 };
                 match crate::keymap::AppCommandId::new(command) {
                     Ok(id) => self.dispatch_command(

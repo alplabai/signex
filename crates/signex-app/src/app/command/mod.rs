@@ -11,7 +11,7 @@ pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
 pub(crate) mod enablement;
-mod window_close;
+mod window_document;
 
 pub(crate) use args::CommandArgs;
 use bridge::core_to_message;
@@ -72,6 +72,11 @@ impl Signex {
         if command.as_str() == "close_active_document"
             && let Some(task) = self.close_document_in_window(window)
         {
+            return task;
+        }
+        // Save, Save As, Print and the tab stepper act on the document the
+        // window shows (#1794).
+        if let Some(task) = self.window_document_command(command, window) {
             return task;
         }
         if !is_enabled(command, &self.command_context(window))

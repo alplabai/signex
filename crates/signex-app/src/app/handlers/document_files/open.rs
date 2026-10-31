@@ -222,7 +222,16 @@ impl Signex {
         from_path: PathBuf,
         to_path: PathBuf,
     ) -> iced::Task<Message> {
-        match self.save_active_document_as(&from_path, to_path) {
+        // An undocked window's Save As finishes while the main window shows
+        // another document; write the window's own (#1794).
+        let save = |app: &mut Self| app.save_active_document_as(&from_path, to_path.clone());
+        let result = match self.undocked_schematic_tab(&from_path) {
+            Some(index) => self
+                .with_tab_active(index, save)
+                .unwrap_or_else(|| save(self)),
+            None => save(self),
+        };
+        match result {
             Ok(task) => task,
             Err(error) => {
                 self.report_save_failure("Failed to save active document as", &error);
