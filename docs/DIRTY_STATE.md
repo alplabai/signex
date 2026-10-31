@@ -43,6 +43,39 @@ Only `DocumentState` writes the set; the editor flag is private to
   that really makes the draft clean. While a save is still in flight the
   hold keeps it dirty until the write lands.
 
+## Undo and the save point (#1822)
+
+A schematic sheet's engine owns a save point: the history position
+(`Engine::undo_position`) it held when it last matched its file. A load
+starts at position 0; a landed save calls `Engine::mark_saved` (through
+`mark_document_clean`, and `finish_save_as`). After every history step
+(edit, undo, redo; `sync_history_dirty`) the sheet is dirty unless
+`Engine::is_at_save_point()` holds, so undoing the only edit since the save
+is clean again and Redo is dirty again.
+
+The save point is dropped, and the sheet stays dirty until the next save,
+when no history step can reproduce the file any more:
+
+- an edit after undoing below the point (it truncates the redo branch that
+  held the point);
+- a coalesced parameter-cell run (#1785) amending the entry the file was
+  saved at;
+- an unrecorded edit (`execute_unrecorded`, `set_document`) or a discarded
+  group step;
+- a save whose snapshot the document had already moved past (`mark_saved`
+  and `finish_save_as` see a different revision).
+
+`DirtyDocuments` also remembers which marked paths were marked from outside
+the history (`mark_document_dirty` and its display-only twin: a project
+edit, a net colour or class, an annotate pass, a restore). The history can
+only clear a mark it set itself, so undo never hides such a change; only a
+save clears it. This stays inside the one dirty owner: one query, one
+writer set. When #661 moves the flag into the engine, the save point and
+this split move with it.
+
+Symbol and footprint drafts keep their editor-local snapshot undo and do not
+use the save point yet.
+
 ## Why a draft can also sit in the set
 
 A save snapshot resets the editor flag ("edited since this snapshot"), but

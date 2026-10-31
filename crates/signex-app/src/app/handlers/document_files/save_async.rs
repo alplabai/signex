@@ -268,7 +268,17 @@ impl Signex {
         // A different revision means the engine was replaced (History
         // restore) or edited; "Save X" would mislabel what is committed.
         if engine.revision() != revision {
+            // The bytes that landed are a snapshot the document has moved
+            // past: no undo or redo step reproduces the file now.
+            if let Some(engine) = self.document_state.engines.get_mut(path) {
+                engine.forget_save_point();
+            }
             return;
+        }
+        // The engine's document is what is on disk, even if a colour change
+        // keeps the sheet dirty below.
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine.mark_saved();
         }
         // A colour changed while the write ran: the file lacks it, so the
         // sheet stays dirty and the next save writes it.

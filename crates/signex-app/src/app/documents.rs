@@ -152,6 +152,11 @@ impl SchematicTabSession {
         self.path = path;
         if self.engine.revision() == saved_revision {
             self.dirty = false;
+            self.engine.mark_saved();
+        } else {
+            // The new file holds a snapshot the document has moved past, so
+            // no undo or redo step reproduces it.
+            self.engine.forget_save_point();
         }
     }
 
