@@ -224,19 +224,17 @@ impl Signex {
     ) -> iced::Task<Message> {
         // An undocked window's Save As finishes while the main window shows
         // another document; write the window's own (#1794).
-        let save = |app: &mut Self| app.save_active_document_as(&from_path, to_path.clone());
-        let result = match self.undocked_schematic_tab(&from_path) {
-            Some(index) => self
-                .with_tab_active(index, save)
-                .unwrap_or_else(|| save(self)),
-            None => save(self),
-        };
-        match result {
-            Ok(task) => task,
-            Err(error) => {
-                self.report_save_failure("Failed to save active document as", &error);
-                iced::Task::none()
-            }
+        let save_as =
+            |app: &mut Self| match app.save_active_document_as(&from_path, to_path.clone()) {
+                Ok(task) => task,
+                Err(error) => {
+                    app.report_save_failure("Failed to save active document as", &error);
+                    iced::Task::none()
+                }
+            };
+        match self.undocked_schematic_window(&from_path) {
+            Some(window) => self.run_in_window_document(window, save_as),
+            None => save_as(self),
         }
     }
 

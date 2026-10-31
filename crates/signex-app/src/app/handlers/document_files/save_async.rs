@@ -339,9 +339,11 @@ impl Signex {
     ) {
         // The window that started the Save As shows the document, whichever
         // tab the main window has active now (#1794).
-        if let Some(index) = self.undocked_schematic_tab(from) {
-            let _ = self.with_tab_active(index, |app| {
+        if let Some(window) = self.undocked_schematic_window(from) {
+            // The closure returns `Task::none()`; there is nothing to run.
+            let _no_task = self.run_in_window_document(window, |app| {
                 app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision);
+                iced::Task::none()
             });
             return;
         }

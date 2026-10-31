@@ -430,3 +430,68 @@ fn close_document_in_a_window_with_no_tab_leaves_the_tabs() {
     press(&mut f, "close_active_document", Some(orphan));
     assert_eq!(f.app.document_state.tabs.len(), 2);
 }
+
+fn save_as_completion(f: &Fixture, to: &Path) -> Message {
+    Message::File(crate::app::FileMsg::DocumentSaved(
+        crate::persist::DocumentSaveDone {
+            path: to.to_path_buf(),
+            revision: 0,
+            net_color_revision: 0,
+            save_as_from: Some(f.undocked_path.clone()),
+            bytes: std::sync::Arc::new(b"saved".to_vec()),
+            sequence: 0,
+            result: Ok(crate::persist::SaveOutcome::Written),
+            recovery_hold: None,
+        },
+    ))
+}
+
+/// Close the undocked window's tab, as the user does while a dialog is open.
+fn close_undocked_tab(f: &mut Fixture) {
+    let _ = f.app.close_tab_parking_dirty(1);
+    assert_eq!(f.app.document_state.tabs.len(), 1);
+}
+
+/// A Save As dialog answered after the undocked tab closed writes nothing
+/// and leaves the main window's document alone.
+#[test]
+fn a_save_as_answered_after_the_undocked_tab_closed_writes_nothing() {
+    let mut f = fixture();
+    close_undocked_tab(&mut f);
+    let target = f.main_path.with_file_name("copy.snxsch");
+    let message = Message::File(crate::app::FileMsg::SaveAs {
+        from_path: f.undocked_path.clone(),
+        to_path: target.clone(),
+    });
+    crate::app::path_ops::settle(&mut f.app, message);
+    assert!(!target.exists());
+    assert_eq!(std::fs::read(&f.main_path).unwrap(), OLD);
+    assert_eq!(f.app.document_state.tabs[0].path, f.main_path);
+}
+
+/// A Save As write that lands after the tab closed or the window re-docked
+/// must not re-key the main window's tab.
+#[test]
+fn a_save_as_completion_after_the_tab_closed_leaves_the_main_tab_keyed() {
+    let mut f = fixture();
+    close_undocked_tab(&mut f);
+    f.app.ui_state.windows.remove(&f.window);
+    let target = f.main_path.with_file_name("copy.snxsch");
+    let message = save_as_completion(&f, &target);
+    crate::app::path_ops::settle(&mut f.app, message);
+    assert_eq!(f.app.document_state.tabs.len(), 1);
+    assert_eq!(f.app.document_state.tabs[0].path, f.main_path);
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
+
+#[test]
+fn a_save_as_completion_after_the_window_re_docked_leaves_every_tab_keyed() {
+    let mut f = fixture();
+    f.app.ui_state.windows.remove(&f.window);
+    let target = f.main_path.with_file_name("copy.snxsch");
+    let message = save_as_completion(&f, &target);
+    crate::app::path_ops::settle(&mut f.app, message);
+    assert_eq!(f.app.document_state.tabs[0].path, f.main_path);
+    assert_eq!(f.app.document_state.tabs[1].path, f.undocked_path);
+    assert_eq!(f.app.document_state.active_path, Some(f.main_path.clone()));
+}
