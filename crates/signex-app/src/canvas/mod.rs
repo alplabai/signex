@@ -464,6 +464,10 @@ pub struct CanvasViewPrefs<'a> {
     /// Content attached to the cursor, for the window whose document is the
     /// session's target sheet only (`None` everywhere else).
     pub placement: Option<&'a PlacementGhost>,
+    /// A power port is armed (app-wide `pending_power`). Every window must
+    /// treat the Component tool as a placing tool then, not only the one
+    /// whose canvas holds the cursor ghost (#1776).
+    pub power_port_pending: bool,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -883,6 +887,7 @@ mod tests {
             wire_class_revision: 0,
             selection_filters: filters,
             placement: None,
+            power_port_pending: false,
         }
     }
 
