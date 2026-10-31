@@ -244,8 +244,12 @@ then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
 snapped to the grid. The rotate and mirror keys turn the whole group about the
 cursor (a single pasted part turns about the cursor too, not about itself), a
 click places it as one **Undo** step, and the paste then ends: paste again to
-place another copy. `Esc` or a right-click drops it. Pasted parts keep
-their designators, so run **Annotate** (section 8) to renumber duplicates. The
+place another copy. `Esc` or a right-click drops it. A pasted part keeps
+its designator unless the project already uses it; then it takes the next free
+number (a pasted `R2` becomes `R3`, the original stays `R2`), and the units of
+a multi-unit part stay together. An unannotated `R?` stays `R?`. The
+**Designators on paste** preference can instead keep every designator, reset
+them to `R?`, or always take the next free number. The
 copy carries the library symbols its parts use, so it can be pasted into another
 sheet; if that sheet already holds a different version of one of those symbols,
 Signex says so in the Messages panel and the pasted parts use the sheet's

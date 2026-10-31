@@ -92,6 +92,13 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         );
     }
+    if ctx.erc_results_stale {
+        col = col.push(
+            text(STALE_RESULTS_NOTICE)
+                .size(TS.caption)
+                .color(theme_ext::warning_color(&ctx.tokens)),
+        );
+    }
     if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
         col = col.push(
             text("No ERC diagnostics yet")
@@ -124,7 +131,10 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .iter()
         .filter(|v| v.severity == ErcSeverityLite::Info)
         .count();
-    let focus_label = if let Some(i) = ctx.erc_focus_index {
+    let focus_row = ctx
+        .erc_focus_index
+        .and_then(|g| ctx.erc_diagnostics.iter().position(|v| v.global_index == g));
+    let focus_label = if let Some(i) = focus_row {
         format!("{}/{}", i + 1, ctx.erc_diagnostics.len())
     } else {
         format!("0/{}", ctx.erc_diagnostics.len())
@@ -256,6 +266,10 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .push(super::erc_waivers::violation_waivers_section(ctx))
         .into()
 }
+
+/// Shown while the document has changed since the newest ERC run.
+const STALE_RESULTS_NOTICE: &str =
+    "Results may be out of date: the sheet changed since the last run. Run ERC again.";
 
 /// Where a finding is, on one line: the sheet's file name and the point. The
 /// full path is the row's tooltip, so a long path never wraps the row.

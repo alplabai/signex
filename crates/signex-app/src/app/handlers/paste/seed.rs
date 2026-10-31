@@ -52,7 +52,7 @@ impl Signex {
                     PasteSeed {
                         failed: false,
                         counters: seed_counters(references()),
-                        used: references().map(str::to_owned).collect(),
+                        used: references().map(|r| r.trim().to_owned()).collect(),
                         unreadable: set.unreadable.clone(),
                     }
                 })

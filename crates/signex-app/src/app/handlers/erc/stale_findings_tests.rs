@@ -65,7 +65,11 @@ fn deleting_the_flagged_part_drops_its_finding_everywhere_but_keeps_the_rest() {
     assert_eq!(markers.len(), 1, "only the sheet-level marker is left");
     assert_eq!((markers[0].x, markers[0].y), (5.0, 5.0));
     assert_eq!(app.ui_state.erc_violations.len(), 1);
-    assert_eq!(app.ui_state.erc_violations_by_path[&path].len(), 1);
+    assert_eq!(
+        app.ui_state.erc_violations_by_path[&path].len(),
+        2,
+        "cache intact"
+    );
     assert_eq!(app.build_erc_diagnostic_entries().len(), 1, "panel agrees");
 }
 
@@ -84,10 +88,4 @@ fn an_edit_that_leaves_the_flagged_part_keeps_every_finding() {
 
     assert_eq!(app.interaction_state.active_canvas().erc_markers.len(), 2);
     assert_eq!(app.ui_state.erc_violations_by_path[&path].len(), 2);
-}
-
-#[test]
-fn the_bottom_dock_opens_tall_enough_for_several_finding_rows() {
-    let (app, _task) = Signex::new();
-    assert!(app.ui_state.bottom_height >= 200.0);
 }

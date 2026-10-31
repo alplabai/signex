@@ -527,3 +527,47 @@ fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
         assert_eq!(read(&path).0, expected, "stored {stored}");
     }
 }
+
+#[test]
+fn a_legacy_keep_is_migrated_once_and_an_explicit_keep_afterwards_stays() {
+    use signex_app::fonts::{
+        migrate_paste_designators_pref_at, read_paste_designators_pref_from,
+        write_paste_designators_pref_at,
+    };
+    use signex_app::paste_prefs::PasteDesignators;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("prefs.json");
+    let read = || {
+        let json = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        read_paste_designators_pref_from(json.as_ref())
+    };
+
+    // An rc.1 file: every saved Preferences wrote the old default.
+    std::fs::write(&path, r#"{"paste_designators":"keep","theme":"Signex"}"#).unwrap();
+    assert_eq!(
+        read(),
+        PasteDesignators::KeepIfFree,
+        "legacy keep reads as the new default"
+    );
+    assert!(
+        migrate_paste_designators_pref_at(&path),
+        "and is rewritten once"
+    );
+    assert_eq!(read(), PasteDesignators::KeepIfFree);
+    assert!(!migrate_paste_designators_pref_at(&path), "not again");
+
+    // A Keep the user then chooses is theirs.
+    write_paste_designators_pref_at(&path, PasteDesignators::Keep);
+    assert_eq!(read(), PasteDesignators::Keep);
+    assert!(!migrate_paste_designators_pref_at(&path));
+    assert_eq!(read(), PasteDesignators::Keep);
+
+    // Other legacy tokens are untouched; an unknown one falls back as before.
+    std::fs::write(&path, r#"{"paste_designators":"next_free"}"#).unwrap();
+    assert_eq!(read(), PasteDesignators::NextFree);
+    std::fs::write(&path, r#"{"paste_designators":"bogus"}"#).unwrap();
+    assert_eq!(read(), PasteDesignators::KeepIfFree);
+}

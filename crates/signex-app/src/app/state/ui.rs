@@ -436,6 +436,9 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
+    /// The document changed after the newest ERC run, so its findings may no
+    /// longer match it; the ERC panel says so until the next run (#1768).
+    pub erc_results_stale: bool,
     /// The rule set the newest ERC run used, for the report header (#1085).
     pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
     /// An "Update from profile" waiting for the user's confirmation, with the
@@ -671,4 +674,12 @@ impl UiState {
 pub struct NetColorStep {
     pub colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     pub at: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_bottom_dock_opens_tall_enough_for_several_finding_rows() {
+        const { assert!(super::DEFAULT_BOTTOM_PANEL_HEIGHT >= 200.0) };
+    }
 }

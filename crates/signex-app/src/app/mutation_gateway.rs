@@ -485,7 +485,7 @@ impl Signex {
                 .clear_overlay_cache();
         }
         self.prune_selected_wires();
-        self.drop_findings_of_removed_objects();
+        self.refresh_erc_after_edit();
         if update_selection_info {
             self.update_selection_info();
         }

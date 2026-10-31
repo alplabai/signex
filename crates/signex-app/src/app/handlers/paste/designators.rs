@@ -107,7 +107,7 @@ impl Signex {
                     .map(|s| s.reference.as_str())
             };
             merge_counters(&mut counters, &seed_counters(references()));
-            used.extend(references().map(str::to_owned));
+            used.extend(references().map(|r| r.trim().to_owned()));
         }
         PasteNumbering::new(mode, counters).with_used(used)
     }

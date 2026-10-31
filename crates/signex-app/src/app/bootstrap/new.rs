@@ -143,6 +143,13 @@ impl Signex {
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
+        if crate::fonts::paste_designators_needs_migration(prefs)
+            && crate::fonts::migrate_paste_designators_pref()
+        {
+            crate::diagnostics::log_info(
+                "Designators on paste: your saved \"Keep\" was the old default, so it is now \"Keep unless taken\" (a pasted part keeps its designator unless the project already uses it). Choose Keep in Preferences to turn this off.",
+            );
+        }
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
@@ -356,6 +363,7 @@ impl Signex {
                 erc_lapsed_waivers: std::collections::BTreeSet::new(),
                 erc_waive_draft: None,
                 erc_focus_global_index: None,
+                erc_results_stale: false,
                 erc_run_generation: 0,
                 erc_run_rule_set: None,
                 pending_profile_update: None,
@@ -521,6 +529,7 @@ impl Signex {
                     erc_waive_draft: None,
                     erc_focus_index: None,
                     erc_running: false,
+                    erc_results_stale: false,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL

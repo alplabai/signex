@@ -178,6 +178,7 @@ impl Signex {
         // The rows now in the cache were produced under this rule set; only a
         // successful, current run may name it in the report header.
         self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
+        self.ui_state.erc_results_stale = false;
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
         }
@@ -215,9 +216,19 @@ impl Signex {
         &mut self,
         active_path: Option<&std::path::PathBuf>,
     ) {
-        let violations = active_path
-            .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
-            .cloned()
+        let violations: Vec<signex_erc::Violation> = active_path
+            .and_then(|p| {
+                let cached = self.ui_state.erc_violations_by_path.get(p)?;
+                let present = self.findings_present_in(p, cached);
+                Some(
+                    cached
+                        .iter()
+                        .zip(present)
+                        .filter(|(_, present)| *present)
+                        .map(|(v, _)| v.clone())
+                        .collect(),
+                )
+            })
             .unwrap_or_default();
         // Only a point in THIS sheet's own coordinates may be drawn here; a
         // child-space or unplaced one would land on empty canvas (#956).
@@ -258,15 +269,24 @@ impl Signex {
         paths.sort();
 
         let mut out = Vec::new();
+        // `global_index` is the finding's place in the whole cache, so it keeps
+        // naming the same finding while an edit hides the rows before it.
+        let mut cache_index = 0;
         for path in paths {
             let sheet_name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.display().to_string());
             if let Some(list) = self.ui_state.erc_violations_by_path.get(&path) {
-                for v in list {
+                let present = self.findings_present_in(&path, list);
+                for (v, present) in list.iter().zip(present) {
+                    let global_index = cache_index;
+                    cache_index += 1;
+                    if !present {
+                        continue;
+                    }
                     out.push(crate::panels::ErcDiagnosticEntry {
-                        global_index: out.len(),
+                        global_index,
                         sheet_name: sheet_name.clone(),
                         sheet_path: path.clone(),
                         severity: match v.severity {
@@ -303,10 +323,14 @@ impl Signex {
             self.ui_state.erc_focus_global_index = None;
             return Task::none();
         }
-        let current = self.ui_state.erc_focus_global_index.unwrap_or(0) as isize;
+        // Steps among the rows shown, from the focused finding's own row.
+        let focused = self.ui_state.erc_focus_global_index;
+        let current = focused
+            .and_then(|g| entries.iter().position(|e| e.global_index == g))
+            .unwrap_or(0) as isize;
         let len = entries.len() as isize;
         let next = (current + delta).rem_euclid(len) as usize;
-        self.handle_focus_erc_diagnostic_index(next)
+        self.handle_focus_erc_diagnostic_index(entries[next].global_index)
     }
 
     /// Quick Fix dispatch from the Messages-panel chip.
@@ -320,8 +344,8 @@ impl Signex {
         if entries.is_empty() {
             return Task::none();
         }
-        let clamped = index.min(entries.len() - 1);
-        let target = entries[clamped].clone();
+        let target = Self::entry_by_global_index(&entries, index);
+        let clamped = target.global_index;
 
         // Open + activate the violation's sheet first, regardless of
         // rule kind — the engine command path operates on the active
@@ -369,14 +393,28 @@ impl Signex {
         }
     }
 
+    /// The row whose finding sits at `index` in the cache; the last row when an
+    /// edit has hidden it. `entries` is not empty.
+    fn entry_by_global_index(
+        entries: &[crate::panels::ErcDiagnosticEntry],
+        index: usize,
+    ) -> crate::panels::ErcDiagnosticEntry {
+        entries
+            .iter()
+            .find(|e| e.global_index == index)
+            .or(entries.last())
+            .cloned()
+            .expect("entries is not empty")
+    }
+
     pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
         let entries = self.build_erc_diagnostic_entries();
         if entries.is_empty() {
             self.ui_state.erc_focus_global_index = None;
             return Task::none();
         }
-        let clamped = index.min(entries.len() - 1);
-        let target = entries[clamped].clone();
+        let target = Self::entry_by_global_index(&entries, index);
+        let clamped = target.global_index;
 
         if !target.locatable {
             self.ui_state.erc_focus_global_index = Some(clamped);
