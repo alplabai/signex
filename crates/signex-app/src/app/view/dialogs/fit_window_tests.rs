@@ -88,6 +88,7 @@ fn blank_preview() -> crate::app::state::PreviewState {
         quality: PdfQuality::Draft72,
         raster_generation: 0,
         source_path: None,
+        export_status: None,
     }
 }
 

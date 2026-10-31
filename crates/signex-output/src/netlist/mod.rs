@@ -43,9 +43,10 @@ impl NetlistFormat {
         }
     }
 
-    /// Default filename offered by the save dialog.
-    pub fn default_file_name(self) -> String {
-        format!("schematic.{}", self.extension())
+    /// Filename offered by the save dialog for the document or project
+    /// named `stem`.
+    pub fn file_name(self, stem: &str) -> String {
+        format!("{stem}.{}", self.extension())
     }
 }
 
@@ -216,7 +217,7 @@ mod tests {
     fn protel_is_the_default_format() {
         assert_eq!(NetlistOptions::default().format, NetlistFormat::Protel);
         assert_eq!(NetlistFormat::Protel.extension(), "NET");
-        assert_eq!(NetlistFormat::Protel.default_file_name(), "schematic.NET");
+        assert_eq!(NetlistFormat::Protel.file_name("amp"), "amp.NET");
     }
 
     fn ctx_with(netlist: Option<Netlist>) -> ExportContext {

@@ -410,6 +410,9 @@ pub struct ExportWriteOutcome {
     pub advisory: Option<crate::app::state::ErrorNotice>,
     /// Reported to the Messages panel after a successful write.
     pub warnings: Vec<String>,
+    /// The document a PDF export was made from. Set, the outcome is also
+    /// shown in the status line of the Export PDF window open for it.
+    pub preview_source: Option<std::path::PathBuf>,
 }
 
 /// Custom Selection Filter modal message family (ADR-0001 D3).
