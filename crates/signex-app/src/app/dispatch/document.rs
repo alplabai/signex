@@ -405,6 +405,11 @@ impl Signex {
 
     /// Print-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_print_preview_message(&mut self, msg: PrintPreviewMsg) -> Task<Message> {
+        if !msg.keeps_export_status()
+            && let Some(preview) = self.document_state.preview.as_mut()
+        {
+            preview.export_status = None;
+        }
         match msg {
             PrintPreviewMsg::Requested => {
                 let task = self.handle_print_preview_requested();

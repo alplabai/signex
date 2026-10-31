@@ -339,6 +339,7 @@ impl PreviewState {
             quality: crate::app::state::PdfQuality::Draft72,
             raster_generation: 0,
             source_path: None,
+            export_status: None,
         }
     }
 }

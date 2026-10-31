@@ -110,6 +110,7 @@ fn export_erc_report_task(opts: ErcReportOptions, path: PathBuf) -> Task<Message
                     success_log: String::new(),
                     advisory: None,
                     warnings: Vec::new(),
+                    preview_source: None,
                 })
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -135,7 +136,7 @@ fn build_and_write_erc_report(
         .map_err(|e| format!("ERC report export failed: {e}"))
         .and_then(|output| {
             signex_types::atomic_io::atomic_write(path, &output.bytes)
-                .map_err(|e| format!("Could not write ERC report to {}:\n{e}", path.display()))
+                .map_err(|e| format!("{e}: could not write ERC report to {}", path.display()))
         });
     ExportWriteOutcome {
         path: path.to_path_buf(),
@@ -143,6 +144,7 @@ fn build_and_write_erc_report(
         success_log: format!("Wrote ERC report {}", path.display()),
         advisory: None,
         warnings: Vec::new(),
+        preview_source: None,
     }
 }
 
@@ -185,11 +187,11 @@ impl Signex {
     }
 
     fn refuse_erc_report_before_run(&mut self) {
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(format!(
+        self.refuse_export(format!(
             "Cannot export the ERC report: ERC has not been run. \
                  Run ERC ({}) first, then export.",
             crate::menu_bar::run_erc_menu_path()
-        )));
+        ));
     }
 
     /// Menu entry: refuse if ERC never ran, otherwise ask where to save.
@@ -198,16 +200,19 @@ impl Signex {
             self.refuse_erc_report_before_run();
             return Task::none();
         }
+        let target = self.save_target(None);
+        let file_name = target.file_name("erc-report", "-erc-report", "html");
         Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export ERC Report")
+            async move {
+                target
+                    .dialog("Export ERC Report")
+                    .await
                     .add_filter("HTML (.html)", &["html", "htm"])
                     .add_filter("PDF (.pdf)", &["pdf"])
                     .add_filter("JSON (.json)", &["json"])
                     .add_filter("CSV (.csv)", &["csv"])
                     .add_filter("Text (.txt)", &["txt"])
-                    .set_file_name("erc-report.html")
+                    .set_file_name(file_name)
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())

@@ -25,7 +25,7 @@ fn write_export_task(
             let target = path.clone();
             let result = tokio::task::spawn_blocking(move || {
                 signex_types::atomic_io::atomic_write(&path, &bytes)
-                    .map_err(|e| format!("Could not write {what} to {}:\n{e}", path.display()))
+                    .map_err(|e| format!("{e}: could not write {what} to {}", path.display()))
             })
             .await
             .unwrap_or_else(|e| Err(format!("Could not write {what}: {e}")));
@@ -35,6 +35,7 @@ fn write_export_task(
                 success_log,
                 advisory,
                 warnings,
+                preview_source: None,
             }
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -49,11 +50,13 @@ fn export_pdf_task(
     ctx: signex_output::ExportContext,
     options: signex_output::PdfOptions,
     path: PathBuf,
+    source: PathBuf,
 ) -> Task<Message> {
     let target = path.clone();
+    let failed_source = source.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || build_and_write_pdf(&ctx, &options, &path))
+            tokio::task::spawn_blocking(move || build_and_write_pdf(&ctx, &options, &path, &source))
                 .await
                 .unwrap_or_else(|e| ExportWriteOutcome {
                     path: target,
@@ -61,6 +64,7 @@ fn export_pdf_task(
                     success_log: String::new(),
                     advisory: None,
                     warnings: Vec::new(),
+                    preview_source: Some(failed_source),
                 })
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
@@ -71,6 +75,7 @@ fn build_and_write_pdf(
     ctx: &signex_output::ExportContext,
     options: &signex_output::PdfOptions,
     path: &std::path::Path,
+    source: &std::path::Path,
 ) -> ExportWriteOutcome {
     use signex_output::Exporter;
     let failed = |reason: String| ExportWriteOutcome {
@@ -79,6 +84,7 @@ fn build_and_write_pdf(
         success_log: String::new(),
         advisory: None,
         warnings: Vec::new(),
+        preview_source: Some(source.to_path_buf()),
     };
     let output = match signex_output::PdfExporter.export(ctx, options) {
         Ok(output) => output,
@@ -91,7 +97,7 @@ fn build_and_write_pdf(
         output.bytes.len(),
     );
     let result = signex_types::atomic_io::atomic_write(path, &output.bytes)
-        .map_err(|e| format!("Could not write PDF to {}:\n{e}", path.display()));
+        .map_err(|e| format!("{e}: could not write PDF to {}", path.display()));
     ExportWriteOutcome {
         path: path.to_path_buf(),
         result,
@@ -100,7 +106,36 @@ fn build_and_write_pdf(
         warnings: super::uncovered_chars_warning(&output.uncovered_chars)
             .into_iter()
             .collect(),
+        preview_source: Some(source.to_path_buf()),
     }
+}
+
+/// The Export window's one-line outcome for a PDF export.
+pub(crate) fn export_status_line(path: &std::path::Path, result: &Result<(), String>) -> String {
+    match result {
+        Ok(()) => format!("Exported {}", elide_middle(&path.display().to_string())),
+        Err(e) => format!(
+            "Export failed: {}",
+            elide_middle(&e.split_whitespace().collect::<Vec<_>>().join(" "))
+        ),
+    }
+}
+
+/// Longest text a status line shows before its middle is elided.
+const STATUS_TEXT_MAX_CHARS: usize = 72;
+
+/// `text` shortened to [`STATUS_TEXT_MAX_CHARS`] by replacing its middle with
+/// an ellipsis, so a path keeps its root and its file name.
+fn elide_middle(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= STATUS_TEXT_MAX_CHARS {
+        return text.to_string();
+    }
+    let tail = STATUS_TEXT_MAX_CHARS * 2 / 3;
+    let head = STATUS_TEXT_MAX_CHARS - tail - 1;
+    let head: String = chars[..head].iter().collect();
+    let tail: String = chars[chars.len() - tail..].iter().collect();
+    format!("{head}…{tail}")
 }
 
 /// Run `task` and every task its messages produce to completion, feeding
@@ -153,17 +188,40 @@ impl Signex {
         ctx: signex_output::ExportContext,
         options: signex_output::PdfOptions,
         path: PathBuf,
+        source: PathBuf,
     ) -> Task<Message> {
         if self.refuse_with_notice_while_project_moves(&path, "export to", ErrorNotice::export) {
             return Task::none();
         }
         // Held like any export write, so a folder rename waits for it.
         self.begin_project_write(&path);
-        export_pdf_task(ctx, options, path)
+        export_pdf_task(ctx, options, path, source)
+    }
+
+    /// An export failed for real (building or writing the file): the notice
+    /// card plus an error line in the Messages panel, so the failure outlives
+    /// the card.
+    pub(crate) fn report_export_failure(&mut self, detail: impl Into<String>) {
+        let detail = detail.into();
+        log::error!("{detail}");
+        self.document_state.error_notice = Some(ErrorNotice::export(detail));
+    }
+
+    /// An export was refused up front (a precondition or an input of the
+    /// user's): the notice card plus a warning line in the Messages panel.
+    pub(crate) fn refuse_export(&mut self, reason: impl Into<String>) {
+        let reason = reason.into();
+        crate::diagnostics::log_warning(&reason);
+        self.document_state.error_notice = Some(ErrorNotice::export(reason));
     }
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
         self.end_project_write(&outcome.path);
+        if let Some(preview) = self.document_state.preview.as_mut()
+            && outcome.preview_source.as_ref() == Some(&preview.source)
+        {
+            preview.export_status = Some(export_status_line(&outcome.path, &outcome.result));
+        }
         match outcome.result {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);
@@ -182,7 +240,7 @@ impl Signex {
                 }
             }
             Err(e) => {
-                self.document_state.error_notice = Some(ErrorNotice::export(e));
+                self.report_export_failure(e);
             }
         }
         Task::none()
