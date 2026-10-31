@@ -237,12 +237,22 @@ pub fn edit_commands(
             .collect(),
         MultiEdit::SymbolInBom(value) => flag_commands(symbol_ids(), SymbolFlag::InBom, *value),
         MultiEdit::SymbolOnBoard(value) => flag_commands(symbol_ids(), SymbolFlag::OnBoard, *value),
+        // The properties panel treats an emptied parameter as "delete it".
         MultiEdit::SymbolParameter { key, value } => symbol_ids()
             .into_iter()
-            .map(|symbol_id| Command::SetSymbolField {
-                symbol_id,
-                key: key.clone(),
-                value: value.clone(),
+            .map(|symbol_id| {
+                if value.is_empty() {
+                    Command::RemoveSymbolField {
+                        symbol_id,
+                        key: key.clone(),
+                    }
+                } else {
+                    Command::SetSymbolField {
+                        symbol_id,
+                        key: key.clone(),
+                        value: value.clone(),
+                    }
+                }
             })
             .collect(),
         MultiEdit::LabelFontSizeMm(mm) => label_props(label_ids(), Some(*mm), None, None),

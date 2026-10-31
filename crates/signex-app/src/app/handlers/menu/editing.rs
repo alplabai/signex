@@ -65,6 +65,9 @@ impl Signex {
                 Some(Task::none())
             }
             MenuMessage::Erc => Some(self.update(Message::Erc(ErcMsg::OpenDialog))),
+            MenuMessage::OpenParameterManager => {
+                Some(self.update(Message::ParameterManager(ParameterManagerMsg::Open)))
+            }
             MenuMessage::ToggleAutoFocus => {
                 Some(self.update(Message::Overlay(OverlayMsg::ToggleAutoFocus)))
             }

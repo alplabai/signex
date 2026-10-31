@@ -97,25 +97,15 @@ pub fn load_at(path: &Path) -> Vec<GlobalLibraryEntry> {
     }
 }
 
-/// Persist `entries` to `global_libraries.toml`. Creates the parent
-/// directory if missing. Errors warn through `tracing` and surface to
-/// the caller via the `Result` so the dispatcher can show a brief
-/// inline error in the Components Panel.
-pub fn save(entries: &[GlobalLibraryEntry]) -> Result<(), String> {
-    let path = prefs_path().ok_or_else(|| "no user config dir available".to_string())?;
-    save_at(&path, entries)
-}
-
-/// Variant for tests / explicit paths — [`prefs_path`] is config-dir-global,
-/// so the real `save` is untestable without one. Mirrors the
-/// `save_preferred_order` / `save_preferred_order_at` split in
-/// `library::settings::persistence`.
+/// Write the whole list. Private: a caller must hold [`with_list_lock`]
+/// across the load that produced `entries` and this write, or another
+/// process's concurrent update is lost (#1757).
 ///
 /// Crash-safe: [`signex_types::atomic_io::atomic_write`] writes to a temp
 /// sibling, fsyncs it and renames over the destination, so a crash mid-save
 /// leaves the previous library list intact rather than a truncated file. It
 /// also creates the parent directory, so no separate `create_dir_all` here.
-pub fn save_at(path: &Path, entries: &[GlobalLibraryEntry]) -> Result<(), String> {
+fn save_at(path: &Path, entries: &[GlobalLibraryEntry]) -> Result<(), String> {
     let file = GlobalPrefsFile {
         libraries: entries.to_vec(),
     };
@@ -150,6 +140,43 @@ pub fn load_for_update_at(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String
         })
 }
 
+/// Run `update` while holding an exclusive OS lock on a sidecar file
+/// (`<prefs>.lock`) next to the list. The lock spans the caller's
+/// load -> modify -> write, so two Signex processes (and two threads) cannot
+/// both load the same list and have the last writer drop the other's entry
+/// (#1757).
+///
+/// The lock is on a separate sidecar, not the list: `atomic_write` renames a
+/// new file over the list, which would orphan a lock held on the old inode.
+/// The sidecar is never replaced or deleted. `File::lock` is advisory
+/// `flock` on Unix and `LockFileEx` on Windows; it is released when the
+/// handle drops, including if the process crashes.
+///
+/// One lock for both cases, so there is no separate in-process mutex: every
+/// call opens its own `File`, and `flock` (per open file description) and
+/// `LockFileEx` (per handle) both make separate handles in the same process
+/// exclude each other, exactly as they do across processes.
+fn with_list_lock<T>(
+    prefs: &Path,
+    update: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let mut name = prefs.as_os_str().to_owned();
+    name.push(".lock");
+    let lock_path = PathBuf::from(name);
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|e| format!("open {}: {e}", lock_path.display()))?;
+    lock.lock()
+        .map_err(|e| format!("lock {}: {e}", lock_path.display()))?;
+    update()
+}
+
 /// Append a path to the global list and persist. Idempotent — already-
 /// present paths are skipped. Returns the resulting full list.
 pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
@@ -159,16 +186,18 @@ pub fn add_path(path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`add_path`] against an explicit prefs file.
 pub fn add_path_at(prefs: &Path, path: PathBuf) -> Result<Vec<GlobalLibraryEntry>, String> {
-    let mut current = load_for_update_at(prefs)?;
-    if !current.iter().any(|e| e.path == path) {
-        current.push(GlobalLibraryEntry {
-            path,
-            remote: None,
-            auto_pull: None,
-        });
-        save_at(prefs, &current)?;
-    }
-    Ok(current)
+    with_list_lock(prefs, || {
+        let mut current = load_for_update_at(prefs)?;
+        if !current.iter().any(|e| e.path == path) {
+            current.push(GlobalLibraryEntry {
+                path,
+                remote: None,
+                auto_pull: None,
+            });
+            save_at(prefs, &current)?;
+        }
+        Ok(current)
+    })
 }
 
 /// Add `path` to an in-memory list unless it is already there (same
@@ -192,13 +221,15 @@ pub fn remove_path(path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
 
 /// [`remove_path`] against an explicit prefs file.
 pub fn remove_path_at(prefs: &Path, path: &Path) -> Result<Vec<GlobalLibraryEntry>, String> {
-    let mut current = load_for_update_at(prefs)?;
-    let before = current.len();
-    current.retain(|e| e.path != path);
-    if current.len() != before {
-        save_at(prefs, &current)?;
-    }
-    Ok(current)
+    with_list_lock(prefs, || {
+        let mut current = load_for_update_at(prefs)?;
+        let before = current.len();
+        current.retain(|e| e.path != path);
+        if current.len() != before {
+            save_at(prefs, &current)?;
+        }
+        Ok(current)
+    })
 }
 
 #[cfg(test)]
@@ -223,6 +254,23 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&prefs).unwrap(), corrupt);
     }
 
+    /// Concurrent adds must all land: each used to load the same list and the
+    /// last writer dropped the others' entries.
+    #[test]
+    fn concurrent_adds_all_land() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        std::thread::scope(|scope| {
+            for n in 0..16 {
+                let prefs = &prefs;
+                scope.spawn(move || {
+                    add_path_at(prefs, PathBuf::from(format!("/lib{n}.snxlib"))).unwrap();
+                });
+            }
+        });
+        assert_eq!(load_at(&prefs).len(), 16);
+    }
+
     #[test]
     fn merge_path_keeps_existing_entries_and_skips_duplicates() {
         let mut list = vec![GlobalLibraryEntry {
@@ -235,6 +283,76 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].remote.as_deref(), Some("r"));
         assert_eq!(list[1].path, PathBuf::from("/b.snxlib"));
+    }
+
+    /// #1757: concurrent adds, each with its own lock handle, must all land.
+    /// Threads exercise the same OS lock a second process would use.
+    #[test]
+    fn concurrent_adds_and_removes_never_lose_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        let workers: Vec<_> = (0..4)
+            .map(|w| {
+                let prefs = prefs.clone();
+                std::thread::spawn(move || {
+                    for i in 0..25 {
+                        let keep = PathBuf::from(format!("/w{w}/keep{i}.snxlib"));
+                        let temp = PathBuf::from(format!("/w{w}/temp{i}.snxlib"));
+                        add_path_at(&prefs, temp.clone()).unwrap();
+                        add_path_at(&prefs, keep).unwrap();
+                        remove_path_at(&prefs, &temp).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for w in workers {
+            w.join().unwrap();
+        }
+        let list = load_at(&prefs);
+        assert_eq!(list.len(), 100, "entries lost: {}", 100 - list.len());
+        assert!(
+            list.iter()
+                .all(|e| e.path.to_string_lossy().contains("keep"))
+        );
+    }
+
+    /// #1757: the guarantee is an OS lock on the sidecar, not an in-process
+    /// mutex. A separate handle holding the sidecar (as another process
+    /// would) must block `add_path_at` until it is released.
+    #[test]
+    fn add_waits_for_a_foreign_holder_of_the_sidecar_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let prefs = tmp.path().join("global_libraries.toml");
+        let foreign = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(tmp.path().join("global_libraries.toml.lock"))
+            .unwrap();
+        foreign.lock().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let worker = {
+            let prefs = prefs.clone();
+            std::thread::spawn(move || {
+                let result = add_path_at(&prefs, PathBuf::from("/b.snxlib"));
+                done_tx.send(()).unwrap();
+                result
+            })
+        };
+        assert!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_millis(200))
+                .is_err(),
+            "add_path_at finished while another handle held the list lock"
+        );
+
+        foreign.unlock().unwrap();
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("add_path_at did not resume after the lock was released");
+        worker.join().unwrap().unwrap();
+        assert_eq!(load_at(&prefs).len(), 1);
     }
 
     #[test]

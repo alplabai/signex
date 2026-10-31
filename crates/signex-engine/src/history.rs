@@ -29,7 +29,53 @@ impl UndoGroupId {
     }
 }
 
+/// The parameter cell a run of keystrokes is editing, and where the history
+/// stood right after the run's entry was recorded.
+#[derive(Debug)]
+pub(super) struct FieldEditRun {
+    symbol_id: uuid::Uuid,
+    key: String,
+    position: usize,
+}
+
 impl Engine {
+    /// Record a `SetSymbolField` edit. Consecutive edits of the same cell
+    /// share the one history entry the first of them recorded, so typing a
+    /// value is one undo step while every keystroke is already in the
+    /// document. The run ends when anything else lands in the history, when
+    /// another cell is edited, on undo/redo, or on
+    /// [`Engine::end_field_edit_run`].
+    pub(crate) fn record_field_edit(
+        &mut self,
+        before: SchematicSheet,
+        patch_pair: PatchPair,
+        symbol_id: uuid::Uuid,
+        key: &str,
+    ) {
+        if self.history_suppressed {
+            self.record_history(before, patch_pair);
+            return;
+        }
+        let continues = self.redo_stack.is_empty()
+            && self.field_edit_run.as_ref().is_some_and(|run| {
+                run.symbol_id == symbol_id && run.key == key && run.position == self.undo_position()
+            });
+        if !continues {
+            self.record_history(before, patch_pair);
+            self.field_edit_run = Some(FieldEditRun {
+                symbol_id,
+                key: key.to_string(),
+                position: self.undo_position(),
+            });
+        }
+    }
+
+    /// Close the current cell-typing run: the next edit of the same cell
+    /// starts a new undo step. Enter, closing the Parameter Manager.
+    pub fn end_field_edit_run(&mut self) {
+        self.field_edit_run = None;
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.history.is_empty()
     }
@@ -71,6 +117,7 @@ impl Engine {
     }
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        self.field_edit_run = None;
         self.bump_revision();
         let Some(entry) = self.history.pop_back() else {
             return Ok(None);
@@ -107,6 +154,7 @@ impl Engine {
     }
 
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        self.field_edit_run = None;
         self.bump_revision();
         let Some(entry) = self.redo_stack.pop() else {
             return Ok(None);
