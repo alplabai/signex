@@ -327,11 +327,6 @@ impl CanvasSlot {
         self.drag_layers.get_mut().clear();
     }
 
-    /// Zoom percentage the status bar shows, read from the live camera.
-    pub fn zoom_percent(&self) -> f64 {
-        self.camera.borrow().zoom_percent()
-    }
-
     /// Current pan/zoom as `(offset_x_px, offset_y_px, scale_px_per_mm)`,
     /// read in `view()` from the single [`Self::camera`] home to place
     /// world-anchored overlays (the inline text editor, measurements).
