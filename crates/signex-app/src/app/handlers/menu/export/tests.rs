@@ -1007,6 +1007,7 @@ mod protel_hierarchy;
 mod bom_hierarchy;
 pub(crate) mod current_placement;
 
+mod export_status;
 mod lazy_preview;
 mod sheet_numbering;
 mod tree_nesting_pins;

@@ -59,6 +59,13 @@ pub(crate) struct CommandContext {
     /// The active project's `.snxprj` has unsaved changes, which Save
     /// writes from any tab.
     pub project_dirty: bool,
+    /// Some document or Component Preview row has unsaved edits, which
+    /// File ▸ Save All writes.
+    pub has_dirty_documents: bool,
+    /// A document tab is open, which Close Document closes.
+    pub has_document: bool,
+    /// A project is open, which Close Project closes.
+    pub has_open_project: bool,
 }
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
@@ -70,6 +77,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
     match command.as_str() {
         "save_document" => ctx.has_schematic || editor || ctx.project_dirty,
         "save_document_as" => ctx.has_schematic || editor,
+        "close_active_document" => ctx.has_document,
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
         "cut" | "copy" | "duplicate" => ctx.has_selection,
@@ -165,7 +173,8 @@ impl Signex {
     /// undocked tab never get here with that window: `dispatch_command`
     /// reruns them inside it.) Any other window (a detached
     /// panel or modal, a component editor) adds nothing, so Ctrl+S typed
-    /// there still saves the main window's document.
+    /// there still saves the main window's document. Close Document is
+    /// resolved before this, in `close_document_in_window` (#1787).
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
@@ -197,6 +206,10 @@ impl Signex {
             can_undo,
             can_redo,
             project_dirty: self.active_project_is_dirty(),
+            has_dirty_documents: document.has_dirty_documents()
+                || self.library.editors.values().any(|editor| editor.dirty),
+            has_document: !document.tabs.is_empty(),
+            has_open_project: document.active_project.is_some(),
         }
     }
 

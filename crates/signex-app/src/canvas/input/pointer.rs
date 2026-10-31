@@ -22,7 +22,7 @@ impl SchematicCanvas<'_> {
         // Listed in full so a new tool has to pick a side here.
         match self.prefs.current_tool {
             Tool::Select => false,
-            Tool::Component => self.ghost_symbol.is_some(),
+            Tool::Component => self.ghost_symbol.is_some() || self.prefs.power_port_pending,
             Tool::Wire
             | Tool::Bus
             | Tool::Label

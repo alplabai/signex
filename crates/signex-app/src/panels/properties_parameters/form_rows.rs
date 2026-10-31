@@ -20,6 +20,12 @@ fn text_on(bg: Color) -> Color {
     crate::styles::tokens::readable_on(bg)
 }
 
+/// Colour of the On/Off word beside a checkbox drawn on `surface`: the
+/// readable text colour for "On", the muted label colour for "Off".
+fn check_state_color(checked: bool, label_c: Color, surface: Color) -> Color {
+    if checked { text_on(surface) } else { label_c }
+}
+
 /// Thin 1px separator line. `pub(super)` so sibling modules
 /// (footprint_editor_properties, symbol_editor_properties, etc.)
 /// extracted from this file can share the single implementation.
@@ -189,12 +195,14 @@ where
     .into()
 }
 
-/// Checkbox form row.
+/// Checkbox form row. `surface` is the colour the row is drawn on (the
+/// panel's `panel_bg`); the "On" word picks its colour against it.
 pub fn form_check_row<'a>(
     label: &str,
     checked: bool,
     msg: PanelMsg,
     label_c: Color,
+    surface: Color,
 ) -> Element<'a, PanelMsg> {
     container(
         row![
@@ -206,7 +214,7 @@ pub fn form_check_row<'a>(
                     .spacing(SP.s),
                 text(if checked { "On" } else { "Off" })
                     .size(TS.body)
-                    .color(if checked { Color::WHITE } else { label_c }),
+                    .color(check_state_color(checked, label_c, surface)),
             ]
             .spacing(SP.m)
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -588,6 +596,33 @@ mod tests {
             assert_eq!(got, expected(id), "{id:?}");
             assert!(contrast_ratio(got, bg) >= 3.0, "{id:?}");
         }
+    }
+
+    /// #1786 — the On word is drawn on the panel surface, so it must be
+    /// readable there even when the iced background is the opposite lightness.
+    #[test]
+    fn on_label_is_readable_on_a_panel_bg_unlike_the_iced_background() {
+        use crate::styles::tokens::{MIN_TEXT_CONTRAST, contrast_ratio};
+        let iced_background = Color::from_rgb(0.05, 0.05, 0.08);
+        for panel_bg in [
+            Color::from_rgb(0.96, 0.95, 0.90),
+            Color::from_rgb(0.12, 0.13, 0.16),
+        ] {
+            let on = check_state_color(true, Color::from_rgb(0.5, 0.5, 0.5), panel_bg);
+            assert!(
+                contrast_ratio(on, panel_bg) >= MIN_TEXT_CONTRAST,
+                "{panel_bg:?}"
+            );
+        }
+        // The old choice (white, tuned to the dark iced background) fails here.
+        let light_panel = Color::from_rgb(0.96, 0.95, 0.90);
+        assert_ne!(
+            check_state_color(true, Color::BLACK, light_panel),
+            crate::styles::tokens::readable_on(iced_background)
+        );
+        // Off keeps the muted label colour.
+        let muted = Color::from_rgb(0.5, 0.5, 0.5);
+        assert_eq!(check_state_color(false, muted, light_panel), muted);
     }
 
     #[test]

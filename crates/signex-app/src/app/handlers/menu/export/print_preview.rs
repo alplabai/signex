@@ -124,6 +124,7 @@ impl Signex {
             // Filed under this document on close, wherever the active tab
             // has moved to by then.
             source_path: self.document_state.active_path.clone(),
+            export_status: None,
         };
         // The first render runs in the background like every later one; the
         // modal opens at once with an empty page area.
@@ -223,6 +224,11 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
+        // The last outcome is stale the moment Export is clicked again, also
+        // when validation refuses below.
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.export_status = None;
+        }
         // Pull the (possibly edited) options out of the live preview
         // and drive the OS save-file dialog directly. The intermediate
         // settings-only dialog was removed when PDF Export started
@@ -235,22 +241,18 @@ impl Signex {
                     let page = match parsed {
                         Some(p) if p > 0 => p,
                         _ => {
-                            self.document_state.error_notice =
-                                Some(crate::app::state::ErrorNotice::export(
-                                    "Specific page must be a positive page number (1, 2, 3, ...)."
-                                        .to_string(),
-                                ));
+                            self.refuse_export(
+                                "Specific page must be a positive page number (1, 2, 3, ...).",
+                            );
                             return Some(Task::none());
                         }
                     };
                     options.page_range = PageRange::Specific(vec![page]);
                 }
                 if preview.selected_files.is_empty() {
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(
-                            "Select at least one file in the Settings tab before exporting."
-                                .to_string(),
-                        ));
+                    self.refuse_export(
+                        "Select at least one file in the Settings tab before exporting.",
+                    );
                     return Some(Task::none());
                 }
                 // Quality is the only Settings field not stored
@@ -281,12 +283,15 @@ impl Signex {
             files,
         });
 
+        let target = self.save_target(Some(&request.source));
+        let file_name = target.file_name("schematic", "", "pdf");
         Some(Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export PDF")
+            async move {
+                target
+                    .dialog("Export PDF")
+                    .await
                     .add_filter("PDF", &["pdf"])
-                    .set_file_name("schematic.pdf")
+                    .set_file_name(file_name)
                     .save_file()
                     .await
                     .map(|file| file.path().to_path_buf())

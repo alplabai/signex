@@ -32,18 +32,24 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             can_undo: true,
             can_redo: true,
             project_dirty: true,
+            has_dirty_documents: true,
+            has_document: true,
+            has_open_project: true,
             ..base
         }),
         with(CommandContext {
             has_pcb: true,
+            has_document: true,
             ..base
         }),
         with(CommandContext {
             has_symbol_editor: true,
+            has_document: true,
             ..base
         }),
         with(CommandContext {
             has_sheets: true,
+            has_open_project: true,
             ..base
         }),
         with(CommandContext {
@@ -52,10 +58,13 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             has_footprint_editor: true,
+            has_document: true,
             ..base
         }),
         with(CommandContext {
             project_dirty: true,
+            has_dirty_documents: true,
+            has_open_project: true,
             ..base
         }),
     ]
@@ -66,6 +75,8 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "always" => true,
         "never" => false,
         "sch" => ctx.commands.has_schematic,
+        "dirty" => ctx.commands.has_dirty_documents,
+        "project" => ctx.commands.has_open_project,
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
@@ -262,7 +273,7 @@ fn model_shortcuts_follow_the_active_keymap() {
     for menu in &menu_bar_model(&ctx).menus {
         check_shortcuts(menu, &ctx, &mut checked);
     }
-    assert_eq!(checked, 31, "the Altium profile labels 31 menu rows");
+    assert_eq!(checked, 32, "the Altium profile labels 32 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

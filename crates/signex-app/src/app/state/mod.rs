@@ -844,6 +844,9 @@ pub struct PreviewState {
     /// remembered page setup is filed under this, not whichever tab is
     /// active when the preview closes.
     pub source_path: Option<PathBuf>,
+    /// Outcome of the last PDF export started from this window, shown in its
+    /// footer: where the file went, or why it was not written (#1766).
+    pub export_status: Option<String>,
 }
 
 impl PreviewState {
