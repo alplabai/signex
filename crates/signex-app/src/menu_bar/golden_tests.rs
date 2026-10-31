@@ -10,7 +10,9 @@
 
 use super::{MenuContext, cmd_label, enabled, shortcut_for};
 use crate::app::command::CommandContext;
-use crate::app::command::enablement::cycle_grid_menu_enabled;
+use crate::app::command::enablement::{
+    cycle_grid_menu_enabled, new_part_menu_enabled, remove_part_menu_enabled,
+};
 
 const GOLDEN: &str = include_str!("testdata/menu_bar.golden.tsv");
 const RECENT_GOLDEN: &str = include_str!("testdata/menu_bar_recent.golden.tsv");
@@ -35,6 +37,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             has_dirty_documents: true,
             has_document: true,
             has_open_project: true,
+            has_parent_sheet: true,
             ..base
         }),
         with(CommandContext {
@@ -44,6 +47,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             has_symbol_editor: true,
+            can_remove_part: true,
             has_document: true,
             ..base
         }),
@@ -77,6 +81,8 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "sch" => ctx.commands.has_schematic,
         "dirty" => ctx.commands.has_dirty_documents,
         "project" => ctx.commands.has_open_project,
+        "newpart" => new_part_menu_enabled(&ctx.commands),
+        "removepart" => remove_part_menu_enabled(&ctx.commands),
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");

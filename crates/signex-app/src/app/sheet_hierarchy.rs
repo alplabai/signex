@@ -26,7 +26,7 @@
 //! [`assemble_project_sheets`]: crate::app::project_sheets::assemble_project_sheets
 //! [`resolve_child_reference`]: crate::app::project_sheets::resolve_child_reference
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use signex_types::schematic::{InstancePath, Point, SchematicSheet};
@@ -230,6 +230,16 @@ impl SheetHierarchy {
         out
     }
 
+    /// The normalised key of every sheet some sheet symbol places, i.e. that
+    /// has a parent for Up Hierarchy to open.
+    pub fn keys_of_placed_sheets(&self) -> HashSet<String> {
+        self.occurrences()
+            .into_iter()
+            .filter(|(placement, _)| !placement.chain().is_empty())
+            .map(|(_, node)| normalised_key(&node.path, self.fold))
+            .collect()
+    }
+
     /// The sheet file an occurrence path stands for. The root chain names the
     /// root sheet (loose pages share it and are not reachable this way).
     pub fn sheet_path_at(&self, occurrence: &InstancePath) -> Option<PathBuf> {
@@ -261,7 +271,7 @@ struct Lookup<'a> {
     unreadable: HashMap<String, &'a str>,
 }
 
-fn normalised_key(path: &Path, fold: CaseFold) -> String {
+pub(crate) fn normalised_key(path: &Path, fold: CaseFold) -> String {
     path_key_with(&lexically_normalize(path), fold)
 }
 

@@ -20,7 +20,9 @@ use std::time::{Duration, Instant};
 use signex_widgets::tree_view::{TreeIcon, TreeNode};
 
 use crate::app::sheet_hierarchy::CaseFold;
-use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind, sheet_path_key};
+use crate::app::sheet_hierarchy::{
+    SheetHierarchy, SheetNode, SheetNodeKind, normalised_key, sheet_path_key,
+};
 
 /// Two clicks on the same row within this window are a double-click — the same
 /// 500 ms the Projects tree uses.
@@ -39,6 +41,9 @@ pub struct NavigatorModel {
     pub fingerprint: String,
     /// The occurrence tree; `None` when no project is in view.
     pub hierarchy: Option<SheetHierarchy>,
+    /// Keys of the sheets `hierarchy` places below another sheet, built once
+    /// with it so command enablement is a lookup, not a tree walk.
+    placed_sheets: HashSet<String>,
     /// Rows derived from `hierarchy`: the root, then any loose pages. Holds
     /// expand/collapse state.
     pub tree: Vec<TreeNode>,
@@ -52,6 +57,16 @@ impl NavigatorModel {
     /// The hierarchy node a tree row path stands for.
     pub fn node_at(&self, tree_path: &[usize]) -> Option<&SheetNode> {
         self.hierarchy.as_ref()?.node_at(tree_path)
+    }
+
+    /// Whether some sheet symbol in the hierarchy places the sheet at
+    /// `path`, compared under the project's key rules like Up Hierarchy.
+    pub fn is_placed_below_a_sheet(&self, path: &Path) -> bool {
+        let Some(hierarchy) = self.hierarchy.as_ref() else {
+            return false;
+        };
+        self.placed_sheets
+            .contains(&normalised_key(path, hierarchy.fold))
     }
 
     /// Swap in a freshly built hierarchy, carrying the selection, the pending
@@ -75,6 +90,7 @@ impl NavigatorModel {
             .filter_map(|path| remembered(path))
             .collect();
 
+        self.placed_sheets = hierarchy.keys_of_placed_sheets();
         self.hierarchy = Some(hierarchy);
         let new = self.hierarchy.as_ref();
         let locate = |key: &OccurrenceKey| new.and_then(|h| resolve_occurrence(h, key));
