@@ -166,7 +166,7 @@ impl Signex {
     /// Canvas right-click menu. Resolves selection state + shortcut hints
     /// from `self`, then delegates to the pure [`canvas_menu_entries`].
     pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
-        let tid = self.ui_state.theme_id;
+        let tid = self.ui_state.effective_theme_id();
         let canvas = self.interaction_state.active_canvas();
         let selection = CanvasSelection {
             has_selection: !canvas.selected.is_empty(),

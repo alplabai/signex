@@ -342,7 +342,7 @@ const ORIGIN_MARKER_MM: f32 = 1.27;
 /// This surface's readability limits. Wider than the schematic's `[6.0, 64.0]`
 /// on purpose — a symbol is edited close up, so pin text may render smaller
 /// and grow larger here. The mm→em ratio is *not* a per-surface choice and
-/// lives once in `signex_gfx::primitive::text::MM_PER_EM`; a local copy of it
+/// lives once in `signex_types::font::mm_per_em`; a local copy of it
 /// is what let this canvas and its own hit-test disagree.
 const SYMBOL_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
     signex_gfx::primitive::text::TextSizePolicy::new(2.0, 96.0);

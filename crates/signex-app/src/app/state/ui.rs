@@ -21,7 +21,6 @@ pub struct UiState {
     /// Cursor uses the point only in that document, never in another tab or
     /// window, and does nothing before the first hover (#525).
     pub cursor_document: Option<std::path::PathBuf>,
-    pub zoom: f64,
     pub grid_size_mm: f32,
     pub visible_grid_mm: f32,
     pub snap_hotspots: bool,
@@ -650,6 +649,18 @@ impl UiState {
             || self
                 .preferences_keymap_editor
                 .differs_from(&self.keymap_profiles)
+    }
+
+    /// The theme every surface paints with: the Preferences draft while
+    /// the dialog is open (the live preview), the saved theme otherwise.
+    /// Every theme-derived value (iced palette, panel tokens, icon tint)
+    /// reads this one answer so a preview never shows a mixed palette.
+    pub fn effective_theme_id(&self) -> signex_types::theme::ThemeId {
+        if self.preferences_open {
+            self.preferences_draft_theme
+        } else {
+            self.theme_id
+        }
     }
 
     /// True when closing Preferences without Save would lose work — drives

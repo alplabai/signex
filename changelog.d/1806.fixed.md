@@ -1,0 +1,1 @@
+- **F2 / Find on a power port no longer hit its hidden designator (#1799)** — Edit Designator on a power port edits its net name through the Value edit Properties uses (one undo step), Find "Designator" skips power ports, and the reference field's Visible row reads "No".

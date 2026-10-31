@@ -69,6 +69,19 @@ impl Signex {
             return false;
         };
         let sheet = engine.document();
+        // A power port's designator is never drawn; its text is the net name,
+        // so a designator edit becomes the Value edit Properties uses (#1799).
+        let item = match item.kind {
+            SelectedKind::SymbolRefField
+                if sheet
+                    .symbols
+                    .iter()
+                    .any(|s| s.uuid == item.uuid && s.is_power) =>
+            {
+                SelectedItem::new(item.uuid, SelectedKind::SymbolValField)
+            }
+            _ => item,
+        };
         let sheet_path = self.document_state.active_path.clone();
         let state = |text: String, at: signex_types::schematic::Point| TextEditState {
             uuid: item.uuid,

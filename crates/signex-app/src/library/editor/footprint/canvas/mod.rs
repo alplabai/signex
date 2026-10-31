@@ -46,15 +46,11 @@ use crate::library::messages::LibraryMessage;
 use crate::library::state::EditorAddress;
 
 use super::snap::SnapResult;
-use super::state::FootprintEditorState;
+use super::state::{DEFAULT_PX_PER_MM, FootprintEditorState};
 
 /// Drag threshold in screen pixels — below this we treat the press
 /// as a click, above this as a drag.
 const DRAG_THRESHOLD_PX: f32 = 3.0;
-
-/// Pixel-per-mm at the canvas's "100%" zoom — picked so a 5×5 mm
-/// SOT-23 fits comfortably in a 600px-wide tab.
-const DEFAULT_PX_PER_MM: f32 = 30.0;
 
 const MIN_SCALE: f32 = 5.0;
 const MAX_SCALE: f32 = 400.0;

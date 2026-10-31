@@ -48,7 +48,7 @@ impl Signex {
                 Space::new().width(Length::Fill),
                 close_x_button(
                     Message::Annotate(AnnotateMsg::ReprefixCancelled),
-                    self.ui_state.theme_id,
+                    self.ui_state.effective_theme_id(),
                     text_muted
                 ),
             ]

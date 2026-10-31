@@ -11,6 +11,7 @@ wgpu = "=27.0.1"
 glam = "0.32.1"
 bytemuck = { version = "1", features = ["derive"] }
 cryoglyph = "0.1.0"
+ttf-parser = { workspace = true }
 rstar = "0.12"
 bitflags = "2"
 log = "0.4"
@@ -18,6 +19,7 @@ log = "0.4"
 # `polygon.rs::append_fill`) already lives in signex-sketch's geom toolkit —
 # reused here rather than re-derived, per the one-authoritative-contract rule.
 signex-sketch = { workspace = true }
+signex-types = { workspace = true }
 
 [features]
 # Test-only helpers for the crates above this one (`polygon_fill_triangles`).

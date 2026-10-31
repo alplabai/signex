@@ -52,8 +52,9 @@ impl Signex {
                     });
                 task
             }
+            // No part in hand: choose one in the picker (#1767).
             ActiveBarAction::PlaceComponent => {
-                self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)))
+                self.update(Message::Library(crate::library::LibraryMessage::OpenPicker))
             }
             ActiveBarAction::PlaceTextString => {
                 // Single-point text. Altium semantics = point glyphs.
