@@ -178,7 +178,9 @@ how many ("N excluded: not a measurement in Ω."). **✕** removes the filter.
 
 To place a part, open a schematic sheet, then either:
 
-- choose **File ▸ Library ▸ Place Component…**, select a part and press
+- choose **Place ▸ Component…** (or **File ▸ Library ▸ Place Component…**,
+  `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
+  **Part** button, which all open the same picker), select a part and press
   **Place**; or
 - press **Place** at the end of a part's row in the Components panel.
 
@@ -665,7 +667,8 @@ the default Altium profile; the menu path always works.
    folder named after the project; a blank `.snxsch` in it opens in a tab.
 2. **Find a part.** Open **View ▸ Components** and expand **Stock**
    (section 5). Type in **Filter components…** to find the part.
-3. **Place it.** Choose **File ▸ Library ▸ Place Component…**, select the
+3. **Place it.** Choose **Place ▸ Component…** (or **File ▸ Library ▸ Place
+   Component…**), select the
    part and press **Place** (or press **Place** on the part's row in the
    Components panel). The part follows the cursor; click to drop it and press
    `Esc` to let go (section 5).
