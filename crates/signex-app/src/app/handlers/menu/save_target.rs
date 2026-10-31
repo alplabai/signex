@@ -5,56 +5,66 @@ use std::path::{Path, PathBuf};
 use crate::app::Signex;
 use crate::app::state::scope::{CaseFold, path_is_under};
 
-/// Folder and file stem a save panel for a project output opens with.
+/// The panels a [`SaveTarget`] starts differently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Panel {
+    /// An export of the project: its folder.
+    Export,
+    /// New Project: beside the open project's folder, never inside it.
+    NewProject,
+    /// Save As: the document's own folder.
+    SaveAs,
+}
+
+/// What a save panel for a project output opens with. Built in `update` from
+/// the model alone; the start folder is decided by [`Self::start_dir`], which
+/// reads the disk and so only runs inside the panel's async task.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SaveTarget {
-    dir: Option<PathBuf>,
+    project_dir: Option<PathBuf>,
     stem: Option<String>,
     document: Option<PathBuf>,
 }
 
 impl SaveTarget {
     /// `project_file` is the `.snxprj` the output belongs to, if any;
-    /// `document` the schematic it is made from. Without a project the panel
-    /// keeps the OS's own start folder.
+    /// `document` the schematic it is made from. Pure: no disk access.
     pub(crate) fn new(project_file: Option<&Path>, document: Option<&Path>) -> Self {
-        let dir = project_file
+        let project_dir = project_file
             .and_then(Path::parent)
-            .and_then(user_folder)
+            .filter(|dir| !dir.as_os_str().is_empty())
             .map(Path::to_path_buf);
         let stem = project_file
             .or(document)
             .and_then(Path::file_stem)
             .map(|stem| stem.to_string_lossy().into_owned());
         Self {
-            dir,
+            project_dir,
             stem,
             document: document.map(Path::to_path_buf),
         }
     }
 
-    /// The start folder, or `None` to leave it to the OS.
-    pub(crate) fn dir(&self) -> Option<&Path> {
-        self.dir.as_deref()
+    /// The folder `panel` would like to start in, before the disk is asked.
+    fn candidate(&self, panel: Panel) -> Option<&Path> {
+        match panel {
+            Panel::Export => self.project_dir.as_deref(),
+            Panel::NewProject => self.project_dir.as_deref().and_then(Path::parent),
+            Panel::SaveAs => self.document.as_deref().and_then(Path::parent),
+        }
     }
 
-    /// Where New Project starts: the folder that holds the open project's
-    /// folder, so the new project lands beside it, never inside it.
-    pub(crate) fn new_project_dir(&self) -> Option<&Path> {
-        self.dir().and_then(Path::parent).and_then(user_folder)
+    /// The start folder of `panel`, or `None` to leave it to the OS (no
+    /// project, or a folder of the app's own). Reads the disk.
+    pub(crate) fn start_dir(&self, panel: Panel) -> Option<PathBuf> {
+        self.candidate(panel)
+            .and_then(user_folder)
+            .map(Path::to_path_buf)
     }
 
     /// The project or document name, when one is known.
     pub(crate) fn stem(&self) -> Option<&str> {
         self.stem.as_deref()
-    }
-
-    /// Where Save As starts: the document's own folder.
-    pub(crate) fn save_as_dir(&self) -> Option<&Path> {
-        self.document
-            .as_deref()
-            .and_then(Path::parent)
-            .and_then(user_folder)
     }
 
     /// The document's current file name, offered by Save As.
@@ -73,21 +83,31 @@ impl SaveTarget {
     }
 
     /// A save panel titled `title`, started in the project folder when known.
-    pub(crate) fn dialog(&self, title: &str) -> rfd::AsyncFileDialog {
-        Self::dialog_in(title, self.dir())
+    pub(crate) async fn dialog(self, title: &str) -> rfd::AsyncFileDialog {
+        self.panel(title, Panel::Export).await
     }
 
     /// A Save As panel, started in the document's own folder.
-    pub(crate) fn save_as_dialog(&self, title: &str) -> rfd::AsyncFileDialog {
-        Self::dialog_in(title, self.save_as_dir())
+    pub(crate) async fn save_as_dialog(self, title: &str) -> rfd::AsyncFileDialog {
+        self.panel(title, Panel::SaveAs).await
     }
 
     /// A New Project panel, started beside the open project's folder.
-    pub(crate) fn new_project_dialog(&self, title: &str) -> rfd::AsyncFileDialog {
-        Self::dialog_in(title, self.new_project_dir())
+    pub(crate) async fn new_project_dialog(self, title: &str) -> rfd::AsyncFileDialog {
+        self.panel(title, Panel::NewProject).await
     }
 
-    fn dialog_in(title: &str, dir: Option<&Path>) -> rfd::AsyncFileDialog {
+    /// The start folder is resolved on a blocking thread: a stale network
+    /// share would otherwise stall the task's executor for its timeout.
+    async fn panel(self, title: &str, panel: Panel) -> rfd::AsyncFileDialog {
+        let dir = tokio::task::spawn_blocking(move || self.start_dir(panel))
+            .await
+            .unwrap_or_else(|e| {
+                crate::diagnostics::log_warning(format!(
+                    "Save panel: its start folder could not be resolved: {e}"
+                ));
+                None
+            });
         let dialog = rfd::AsyncFileDialog::new().set_title(title);
         match dir {
             Some(dir) => dialog.set_directory(dir),
@@ -164,26 +184,32 @@ mod tests {
             Some(&p("/work/amp/amp.snxprj")),
             Some(&p("/work/amp/a.snxsch")),
         );
-        assert_eq!(target.dir(), Some(Path::new("/work/amp")));
+        assert_eq!(
+            target.start_dir(Panel::Export).as_deref(),
+            Some(Path::new("/work/amp"))
+        );
     }
 
     #[test]
     fn new_project_starts_beside_the_open_project_not_inside_it() {
         let target = SaveTarget::new(Some(&p("/work/amp/amp.snxprj")), None);
-        assert_eq!(target.new_project_dir(), Some(Path::new("/work")));
-        assert_eq!(SaveTarget::default().new_project_dir(), None);
+        assert_eq!(
+            target.start_dir(Panel::NewProject).as_deref(),
+            Some(Path::new("/work"))
+        );
+        assert_eq!(SaveTarget::default().start_dir(Panel::NewProject), None);
     }
 
     #[test]
     fn without_a_project_the_os_keeps_its_start_folder() {
         let target = SaveTarget::new(None, Some(&p("/tmp/loose.snxsch")));
-        assert_eq!(target.dir(), None);
+        assert_eq!(target.start_dir(Panel::Export).as_deref(), None);
     }
 
     #[test]
     fn a_project_file_with_no_folder_gives_no_start_folder() {
         let target = SaveTarget::new(Some(&p("amp.snxprj")), None);
-        assert_eq!(target.dir(), None);
+        assert_eq!(target.start_dir(Panel::Export).as_deref(), None);
     }
 
     #[test]
@@ -224,9 +250,9 @@ mod tests {
         let project = config_project();
         let document = project.with_file_name("top.snxsch");
         let target = SaveTarget::new(Some(&project), Some(&document));
-        assert_eq!(target.dir(), None);
-        assert_eq!(target.new_project_dir(), None);
-        assert_eq!(target.save_as_dir(), None);
+        assert_eq!(target.start_dir(Panel::Export).as_deref(), None);
+        assert_eq!(target.start_dir(Panel::NewProject).as_deref(), None);
+        assert_eq!(target.start_dir(Panel::SaveAs).as_deref(), None);
         assert_eq!(target.save_as_file_name().as_deref(), Some("top.snxsch"));
     }
 
@@ -236,14 +262,20 @@ mod tests {
             Some(&p("/work/amp/amp.snxprj")),
             Some(&p("/work/amp/sheets/psu.snxsch")),
         );
-        assert_eq!(target.save_as_dir(), Some(Path::new("/work/amp/sheets")));
+        assert_eq!(
+            target.start_dir(Panel::SaveAs).as_deref(),
+            Some(Path::new("/work/amp/sheets"))
+        );
         assert_eq!(target.save_as_file_name().as_deref(), Some("psu.snxsch"));
     }
 
     #[test]
     fn save_as_of_a_loose_document_starts_in_its_folder_too() {
         let target = SaveTarget::new(None, Some(&p("/tmp/loose.snxsch")));
-        assert_eq!(target.save_as_dir(), Some(Path::new("/tmp")));
+        assert_eq!(
+            target.start_dir(Panel::SaveAs).as_deref(),
+            Some(Path::new("/tmp"))
+        );
     }
 
     #[test]
@@ -253,7 +285,7 @@ mod tests {
         let canonical = root.canonicalize().unwrap();
         let project = canonical.join("samples/linear-regulator/linear-regulator.snxprj");
         let target = SaveTarget::new(Some(&project), None);
-        assert_eq!(target.dir(), None);
+        assert_eq!(target.start_dir(Panel::Export).as_deref(), None);
     }
 
     #[cfg(unix)]
@@ -279,6 +311,17 @@ mod tests {
         assert_eq!(
             user_folder_under(&elsewhere, Some(&link.canonicalize().unwrap())),
             Some(elsewhere.as_path())
+        );
+    }
+
+    #[test]
+    fn building_the_target_defers_the_config_folder_decision_to_the_async_task() {
+        let project = config_project();
+        let target = SaveTarget::new(Some(&project), None);
+        assert_eq!(
+            target.candidate(Panel::Export),
+            project.parent(),
+            "`new` keeps the raw folder; only `start_dir` reads the disk"
         );
     }
 }

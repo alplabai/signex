@@ -46,6 +46,7 @@ impl Signex {
                             .new_project_dialog(
                                 "New Signex Project (a folder named after the project is created)",
                             )
+                            .await
                             .set_file_name("Untitled.snxprj")
                             .add_filter("Signex Project", &["snxprj"])
                             .save_file()
@@ -245,6 +246,7 @@ impl Signex {
                     async move {
                         let dialog = target
                             .save_as_dialog("Save Schematic As")
+                            .await
                             .add_filter("Signex Schematic", &["snxsch"]);
                         let dialog = match save_as_name {
                             Some(name) => dialog.set_file_name(name),

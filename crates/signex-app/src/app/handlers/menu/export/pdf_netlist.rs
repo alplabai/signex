@@ -119,6 +119,7 @@ impl Signex {
             async move {
                 target
                     .dialog("Export Netlist")
+                    .await
                     .add_filter(format.label(), &[format.extension()])
                     .set_file_name(file_name)
                     .save_file()

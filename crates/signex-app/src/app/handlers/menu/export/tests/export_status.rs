@@ -7,6 +7,7 @@ use super::protel_hierarchy::placed_app;
 use crate::app::contracts::ExportWriteOutcome;
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::write::export_status_line;
+use crate::app::handlers::menu::save_target::Panel;
 use crate::app::{ExportMsg, Message, PrintPreviewMsg, Signex};
 
 const DIR: &str = "/w/export_status";
@@ -49,16 +50,27 @@ fn status(app: &Signex) -> Option<String> {
         .and_then(|p| p.export_status.clone())
 }
 
-fn logged(needle: &str) -> bool {
+/// The newest Messages entry id, installing the logger first. Entries are
+/// compared by id so parallel tests cannot evict the one being looked for.
+fn mark() -> Option<u64> {
+    let _ = crate::diagnostics::init_logging();
+    crate::diagnostics::recent_entries().last().map(|e| e.id)
+}
+
+fn logged_since(since: Option<u64>, needle: &str) -> bool {
+    level_since(since, needle).is_some()
+}
+
+fn level_since(since: Option<u64>, needle: &str) -> Option<crate::diagnostics::DiagnosticLevel> {
     crate::diagnostics::recent_entries()
-        .iter()
-        .any(|e| e.message.contains(needle))
+        .into_iter()
+        .find(|e| Some(e.id) > since && e.message.contains(needle))
+        .map(|e| e.level)
 }
 
 #[test]
 fn a_written_pdf_is_confirmed_with_its_full_path_and_logged() {
-    let needle = "Wrote /work/amp/logged-once-1766.pdf";
-    let before = crate::diagnostics::logged_count(needle);
+    let since = mark();
     let mut app = open_preview(DIR);
     let src = source(&app);
     let _ = app.handle_export_written(outcome("/work/amp/logged-once-1766.pdf", Some(src), Ok(())));
@@ -68,12 +80,12 @@ fn a_written_pdf_is_confirmed_with_its_full_path_and_logged() {
         line.contains("/work/amp/logged-once-1766.pdf"),
         "got {line:?}"
     );
-    assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+    assert!(logged_since(since, "Wrote /work/amp/logged-once-1766.pdf"));
 }
 
 #[test]
 fn a_failed_pdf_write_is_reported_in_the_window_and_logged() {
-    let _ = crate::diagnostics::init_logging();
+    let since = mark();
     let mut app = open_preview(DIR);
     let src = source(&app);
     let _ = app.handle_export_written(outcome(
@@ -85,21 +97,21 @@ fn a_failed_pdf_write_is_reported_in_the_window_and_logged() {
     let line = status(&app).expect("the Export window shows a status line");
     assert!(line.contains("read-only"), "got {line:?}");
     assert!(
-        logged("read-only volume 1766"),
+        logged_since(since, "read-only volume 1766"),
         "the failure reaches Messages"
     );
 }
 
 #[test]
 fn a_failed_non_pdf_write_is_logged_too() {
-    let _ = crate::diagnostics::init_logging();
+    let since = mark();
     let mut app = open_preview(DIR);
     let _ = app.handle_export_written(outcome(
         "/ro/amp.net",
         None,
         Err("Could not write netlist: disk full 1766".to_string()),
     ));
-    assert!(logged("disk full 1766"));
+    assert!(logged_since(since, "disk full 1766"));
     assert_eq!(status(&app), None);
 }
 
@@ -174,7 +186,7 @@ fn the_status_line_is_one_short_line() {
 
 #[test]
 fn a_finished_pdf_through_the_real_message_is_written_confirmed_and_logged() {
-    let _ = crate::diagnostics::init_logging();
+    let since = mark();
     let mut app = open_preview(DIR);
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("amp.pdf");
@@ -195,14 +207,17 @@ fn a_finished_pdf_through_the_real_message_is_written_confirmed_and_logged() {
     assert!(out.exists(), "the PDF was written");
     let line = status(&app).expect("status line");
     assert!(line.contains("amp.pdf"), "got {line:?}");
-    assert!(logged(&format!("Wrote {}", out.display())));
+    assert!(logged_since(since, &format!("Wrote {}", out.display())));
 }
 
 #[test]
 fn the_save_target_of_an_open_project_is_its_folder_and_name() {
     let app = placed_app("/w/save_target_proj", &["top.snxsch"], &[], Vec::new());
     let target = app.save_target(None);
-    assert_eq!(target.dir(), Some(Path::new("/w/save_target_proj")));
+    assert_eq!(
+        target.start_dir(Panel::Export).as_deref(),
+        Some(Path::new("/w/save_target_proj"))
+    );
     assert_eq!(target.file_name("schematic", "", "pdf"), "ProjectA.pdf");
 }
 
@@ -220,29 +235,33 @@ fn the_save_target_follows_the_source_documents_project_among_several() {
     app.document_state.projects.push(other);
 
     let target = app.save_target(Some(Path::new("/w/proj_b/b.snxsch")));
-    assert_eq!(target.dir(), Some(Path::new("/w/proj_b")));
+    assert_eq!(
+        target.start_dir(Panel::Export).as_deref(),
+        Some(Path::new("/w/proj_b"))
+    );
     assert_eq!(target.file_name("schematic", "", "pdf"), "ProjectB.pdf");
     let active = app.save_target(Some(Path::new("/w/proj_a/top.snxsch")));
-    assert_eq!(active.dir(), Some(Path::new("/w/proj_a")));
-}
-
-fn level_of(needle: &str) -> Option<crate::diagnostics::DiagnosticLevel> {
-    crate::diagnostics::recent_entries()
-        .into_iter()
-        .rev()
-        .find(|e| e.message.contains(needle))
-        .map(|e| e.level)
+    assert_eq!(
+        active.start_dir(Panel::Export).as_deref(),
+        Some(Path::new("/w/proj_a"))
+    );
 }
 
 #[test]
 fn a_refusal_logs_a_warning_and_a_real_failure_logs_an_error_without_a_prefix() {
     use crate::diagnostics::DiagnosticLevel;
-    let _ = crate::diagnostics::init_logging();
+    let since = mark();
     let mut app = open_preview(DIR);
     app.refuse_export("Select something 1766-refusal");
     app.report_export_failure("BOM export failed: 1766-failure");
 
-    assert_eq!(level_of("1766-refusal"), Some(DiagnosticLevel::Warning));
-    assert_eq!(level_of("1766-failure"), Some(DiagnosticLevel::Error));
-    assert!(!logged("Export failed: BOM export failed"));
+    assert_eq!(
+        level_since(since, "1766-refusal"),
+        Some(DiagnosticLevel::Warning)
+    );
+    assert_eq!(
+        level_since(since, "1766-failure"),
+        Some(DiagnosticLevel::Error)
+    );
+    assert!(!logged_since(since, "Export failed: BOM export failed"));
 }

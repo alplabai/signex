@@ -206,6 +206,7 @@ impl Signex {
             async move {
                 target
                     .dialog("Export ERC Report")
+                    .await
                     .add_filter("HTML (.html)", &["html", "htm"])
                     .add_filter("PDF (.pdf)", &["pdf"])
                     .add_filter("JSON (.json)", &["json"])

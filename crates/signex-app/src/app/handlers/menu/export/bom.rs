@@ -253,6 +253,7 @@ impl Signex {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
                 target
                     .dialog("Export Bill of Materials")
+                    .await
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())
                     .save_file()

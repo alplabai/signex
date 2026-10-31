@@ -289,6 +289,7 @@ impl Signex {
             async move {
                 target
                     .dialog("Export PDF")
+                    .await
                     .add_filter("PDF", &["pdf"])
                     .set_file_name(file_name)
                     .save_file()
