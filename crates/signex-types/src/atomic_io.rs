@@ -25,6 +25,12 @@
 //! FUSE, vfat) refuse `chmod`, and a save that worked before must not start
 //! failing, so a refusal is logged with `tracing::warn!` and the write goes on.
 //!
+//! A read-only existing target (no write bit on Unix, the read-only attribute on
+//! Windows) is refused with [`ReadOnlyTarget`] before anything is written: the
+//! temp-then-rename dance only needs the folder to be writable, so without this
+//! check it would silently replace a file the user locked on purpose (#1825).
+//! Callers recognise the refusal with [`is_read_only_target`].
+//!
 //! The two `fsync`s are what make the power-loss guarantee real:
 //! without fsyncing the temp file before the rename, many filesystems
 //! (ext4 `data=writeback`, xfs, apfs) can persist the rename's
@@ -75,9 +81,59 @@ fn copy_existing_permissions(path: &Path, tmp: &Path) -> io::Result<()> {
     }
 }
 
+/// The write was refused because the file already at the destination is
+/// read-only. Carried as the inner error of an [`io::Error`] of kind
+/// [`io::ErrorKind::PermissionDenied`]; detect it with [`is_read_only_target`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadOnlyTarget {
+    /// The file name (no directory) that was left untouched.
+    pub file_name: String,
+}
+
+impl std::fmt::Display for ReadOnlyTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} is read-only, so it was not replaced (clear the read-only flag to save)",
+            self.file_name
+        )
+    }
+}
+
+impl std::error::Error for ReadOnlyTarget {}
+
+/// Whether `error` is the [`ReadOnlyTarget`] refusal of [`atomic_write`].
+pub fn is_read_only_target(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|inner| inner.is::<ReadOnlyTarget>())
+}
+
+/// Refuse when a regular file already at `path` is read-only.
+fn refuse_read_only_target(path: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_file() && meta.permissions().readonly() => Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            ReadOnlyTarget {
+                file_name: path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |n| n.to_string_lossy().into(),
+                ),
+            },
+        )),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 /// Atomically write `bytes` to `path`. Creates parent directories
 /// (if any) as a side effect — matches `std::fs::write` ergonomics.
+///
+/// Fails with a [`ReadOnlyTarget`] error, leaving the file untouched, when
+/// `path` is an existing read-only file.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    refuse_read_only_target(path)?;
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -184,6 +240,30 @@ mod tests {
         let tmp = dir.path().join("t.tmp");
         std::fs::write(&tmp, b"x").unwrap();
         copy_existing_permissions(dir.path(), &tmp).unwrap();
+    }
+
+    #[test]
+    fn a_read_only_destination_is_refused_and_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("locked.txt");
+        std::fs::write(&path, b"old").unwrap();
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&path, perms).unwrap();
+
+        let error = atomic_write(&path, b"new").unwrap_err();
+
+        assert!(is_read_only_target(&error), "got {error}");
+        assert!(error.to_string().contains("locked.txt"));
+        assert_eq!(std::fs::read(&path).unwrap(), b"old");
+        assert!(!has_stray_tmp(dir.path()));
+
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        std::fs::set_permissions(&path, perms).unwrap();
+        atomic_write(&path, b"new").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
     }
 
     #[test]
