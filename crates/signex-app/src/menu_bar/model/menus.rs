@@ -62,7 +62,7 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             "Import",
             vec![item("Altium Project...", MenuMessage::ImportAltium)],
         ),
-        // Export > PDF and File > Print are different flows: docs/MENU_BAR.md#file-export-pdf
+        // Export > PDF and File > Print open the same modal; only Print shows Ctrl+P: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
         cmd_item_gated(ctx, cmd("print", "Print...", "Ctrl+P"), MenuMessage::Print),
         SEP,
@@ -112,8 +112,8 @@ fn library(ctx: &MenuContext) -> Vec<MenuEntry> {
 fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
-        // No shortcut: Ctrl+P opens the print preview (File > Print), not
-        // this dialog. Gated like Print, which shares the PDF pipeline.
+        // No shortcut: Ctrl+P is shown on File > Print, which opens this
+        // same modal. Gated like Print.
         item_if("PDF…", MenuMessage::ExportPdf, enabled(ctx, "print")),
         item_if(
             "Netlist (Protel .NET)...",

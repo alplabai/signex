@@ -16,11 +16,14 @@ Component Library, then Add New ▸ Component on the library node.
 ## File ▸ Export ▸ PDF {#file-export-pdf}
 
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
-shortcut, so it was folded into Export ▸ PDF. They are different flows:
-Export ▸ PDF opens the PDF export dialog and has no shortcut, while Ctrl+P
-opens the print preview through the keymap command bridge
-(`app/command/bridge.rs`). File ▸ Print... (#1765) is the row for that
-preview and the only one that shows Ctrl+P.
+shortcut, so it was folded into Export ▸ PDF. File ▸ Print... (#1765) and
+Export ▸ PDF open the same print preview / PDF export modal (`print`, Ctrl+P,
+goes through the keymap command bridge in `app/command/bridge.rs`). Only
+File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
+
+Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
+focus to active or next window") and may never reach Signex there; the menu
+row always works.
 
 ## File: close, save all {#file-close-save-all}
 
