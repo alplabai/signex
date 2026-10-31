@@ -65,9 +65,12 @@ pub(crate) struct CommandContext {
     /// (net-colour changes have no redo).
     pub can_redo: bool,
     /// The active project's `.snxprj` has unsaved changes, which Save
-    /// writes from any tab, in a window that has a document to run Save
-    /// against (false in a Component Preview or a window with no tab).
+    /// writes from any tab of a window that has a document of its own.
     pub project_dirty: bool,
+    /// The window holds a document with a file of its own for Save to run
+    /// against. False in a Component Preview and in an undocked window whose
+    /// tab is gone, which refuse Save whatever the project holds.
+    pub document_has_file: bool,
     /// Some document or Component Preview row has unsaved edits, which
     /// File ▸ Save All writes.
     pub has_dirty_documents: bool,
@@ -90,7 +93,11 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         return false;
     }
     match command.as_str() {
-        "save_document" => ctx.document_is_schematic || ctx.document_is_editor || ctx.project_dirty,
+        "save_document" => {
+            ctx.document_is_schematic
+                || ctx.document_is_editor
+                || (ctx.document_has_file && ctx.project_dirty)
+        }
         "save_document_as" => ctx.document_is_schematic || ctx.document_is_editor,
         "print" => ctx.document_is_schematic,
         "close_active_document" => ctx.has_document,
@@ -261,7 +268,8 @@ impl Signex {
                 || !self.interaction_state.polyline_points.is_empty(),
             can_undo,
             can_redo,
-            project_dirty: own.has_file && self.active_project_is_dirty(),
+            project_dirty: self.active_project_is_dirty(),
+            document_has_file: own.has_file,
             has_dirty_documents: document.has_dirty_documents()
                 || self.library.editors.values().any(|editor| editor.dirty),
             has_document: !document.tabs.is_empty(),
@@ -714,7 +722,7 @@ mod tests {
 
     #[test]
     fn ids_that_resolve_to_the_same_message_share_their_enablement() {
-        let facts: [fn(&mut CommandContext); 13] = [
+        let facts: [fn(&mut CommandContext); 14] = [
             |c| c.has_schematic = true,
             |c| c.has_pcb = true,
             |c| c.undocked_has_canvas = true,
@@ -726,6 +734,7 @@ mod tests {
             |c| c.can_undo = true,
             |c| c.can_redo = true,
             |c| c.project_dirty = true,
+            |c| c.document_has_file = true,
             |c| c.has_parent_sheet = true,
             |c| c.can_remove_part = true,
         ];

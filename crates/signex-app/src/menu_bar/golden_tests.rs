@@ -35,6 +35,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             can_undo: true,
             can_redo: true,
             project_dirty: true,
+            document_has_file: true,
             has_dirty_documents: true,
             has_document: true,
             has_open_project: true,
@@ -70,6 +71,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
         }),
         with(CommandContext {
             project_dirty: true,
+            document_has_file: true,
             has_dirty_documents: true,
             has_open_project: true,
             ..base
