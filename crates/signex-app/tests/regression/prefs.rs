@@ -531,6 +531,7 @@ fn increment_step_and_paste_designators_round_trip_through_prefs_json() {
 #[test]
 fn a_legacy_keep_is_migrated_once_and_an_explicit_keep_afterwards_stays() {
     use signex_app::fonts::{
+        PasteDesignatorsMigration::{Migrated, NotNeeded},
         migrate_paste_designators_pref_at, read_paste_designators_pref_from,
         write_paste_designators_pref_at,
     };
@@ -552,17 +553,22 @@ fn a_legacy_keep_is_migrated_once_and_an_explicit_keep_afterwards_stays() {
         PasteDesignators::KeepIfFree,
         "legacy keep reads as the new default"
     );
-    assert!(
+    assert_eq!(
         migrate_paste_designators_pref_at(&path),
+        Migrated,
         "and is rewritten once"
     );
     assert_eq!(read(), PasteDesignators::KeepIfFree);
-    assert!(!migrate_paste_designators_pref_at(&path), "not again");
+    assert_eq!(
+        migrate_paste_designators_pref_at(&path),
+        NotNeeded,
+        "not again"
+    );
 
     // A Keep the user then chooses is theirs.
     write_paste_designators_pref_at(&path, PasteDesignators::Keep);
     assert_eq!(read(), PasteDesignators::Keep);
-    assert!(!migrate_paste_designators_pref_at(&path));
+    assert_eq!(migrate_paste_designators_pref_at(&path), NotNeeded);
     assert_eq!(read(), PasteDesignators::Keep);
 
     // Other legacy tokens are untouched; an unknown one falls back as before.

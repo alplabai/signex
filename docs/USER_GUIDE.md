@@ -542,7 +542,11 @@ The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.
 
 Before you run the check the panel shows "No ERC diagnostics yet". Run `F8`
-again after each round of edits.
+again after each round of edits. Until you do, the panel keeps the last run's
+results and warns "Results may be out of date": a finding whose part, wire or
+label you have deleted disappears from the panel and the sheet, and **Undo**
+brings it back. A wire that was split or merged can still show or hide a
+finding until the next run, so trust only a fresh run.
 
 In the picture below the check has run on the sheet from section 6. The wire
 ends on the lower pin of `R1`, but the upper pin connects to nothing, so the
@@ -607,7 +611,9 @@ A schematic without placed parts produces an empty BOM.
 
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
-itself: run it first (section 9), or the menu says so and writes nothing. The
+itself: run it first (section 9), or the menu says so and writes nothing. It
+lists the rows the ERC panel shows, and when you have edited the sheet since the
+run it says so in the file and in the Messages panel. The
 save dialog is titled **Export ERC Report**, proposes `erc-report.html`, and
 the extension you choose sets the format: `.html`, `.pdf`, `.json`, `.csv` or
 `.txt`. See [ERC_REPORT.md](ERC_REPORT.md).

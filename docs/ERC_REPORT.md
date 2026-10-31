@@ -1,7 +1,11 @@
 # ERC report
 
 File > Export > ERC Report writes the results of the newest ERC run. It never
-runs ERC itself; the rows are the ERC panel's rows, in the same order. The
+runs ERC itself; the rows are the ERC panel's rows, in the same order, so a
+finding whose part, wire or label has since been deleted is left out, as it is
+in the panel. When the document changed after the run, every form says so
+(a notice line in text, CSV, HTML and PDF; `"results_stale": true` in JSON,
+absent otherwise) and the Messages panel gets a warning. The
 format follows the extension picked in the save dialog:
 
 | Extension | Form |
@@ -24,10 +28,14 @@ HTML-escaped.
 meaning; new fields may be added within a version, so readers should ignore
 keys they do not know.
 
+`results_stale` is present, and `true`, only when the sheet changed after the run;
+it is omitted otherwise.
+
 ```json
 {
   "schema_version": 1,
   "generator": "signex",
+  "results_stale": true,
   "rule_set": { "profile": "Signex Default", "sha256": "<hex>" },
   "summary": { "errors": 1, "warnings": 2, "info": 0, "total": 3, "waived": 1 },
   "groups": [

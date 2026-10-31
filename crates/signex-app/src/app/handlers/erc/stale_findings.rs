@@ -16,9 +16,6 @@ use uuid::Uuid;
 
 use crate::app::Signex;
 
-/// Two wire ends this close (mm) are the same point; the netlist's own 1 um bucket.
-const SAME_POINT_MM: f64 = 1e-3;
-
 /// The ids of a sheet's objects, built once per check.
 struct SheetObjects {
     ids: HashSet<Uuid>,
@@ -57,9 +54,10 @@ impl SheetObjects {
             | NoErcDirective | Label | TextNote | ChildSheet => self.ids.contains(&item.uuid),
             Wire | Bus => {
                 self.ids.contains(&item.uuid)
-                    || self.line_ends.iter().any(|p| {
-                        (p.x - at.x).abs() < SAME_POINT_MM && (p.y - at.y).abs() < SAME_POINT_MM
-                    })
+                    || self
+                        .line_ends
+                        .iter()
+                        .any(|p| signex_net::pt_key(p) == signex_net::pt_key(&at))
             }
             SheetPin | Drawing => true,
         }
@@ -88,13 +86,18 @@ impl Signex {
             .collect()
     }
 
+    /// Any document change makes the last run's results possibly stale, a run
+    /// still in flight included (it read the sheets before the change).
+    pub(crate) fn mark_erc_results_stale(&mut self) {
+        if self.ui_state.erc_running || !self.ui_state.erc_violations_by_path.is_empty() {
+            self.ui_state.erc_results_stale = true;
+        }
+    }
+
     /// After an edit: the results are stale, and the active sheet's markers and
     /// list follow the document again.
     pub(crate) fn refresh_erc_after_edit(&mut self) {
-        if self.ui_state.erc_violations_by_path.is_empty() {
-            return;
-        }
-        self.ui_state.erc_results_stale = true;
+        self.mark_erc_results_stale();
         if let Some(path) = self.document_state.active_path.clone() {
             self.refresh_active_erc_from_cache(Some(&path));
         }

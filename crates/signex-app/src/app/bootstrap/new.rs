@@ -143,12 +143,18 @@ impl Signex {
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
-        if crate::fonts::paste_designators_needs_migration(prefs)
-            && crate::fonts::migrate_paste_designators_pref()
-        {
-            crate::diagnostics::log_info(
-                "Designators on paste: your saved \"Keep\" was the old default, so it is now \"Keep unless taken\" (a pasted part keeps its designator unless the project already uses it). Choose Keep in Preferences to turn this off.",
-            );
+        if crate::fonts::paste_designators_needs_migration(prefs) {
+            match crate::fonts::migrate_paste_designators_pref() {
+                crate::fonts::PasteDesignatorsMigration::Migrated => crate::diagnostics::log_info(
+                    "Designators on paste: your saved \"Keep\" was the old default, so it is now \"Keep unless taken\" (a pasted part keeps its designator unless the project already uses it). Choose Keep in Preferences to turn this off.",
+                ),
+                crate::fonts::PasteDesignatorsMigration::WriteFailed => {
+                    crate::diagnostics::log_warning(
+                        "Designators on paste: your saved \"Keep\" was the old default and is treated as \"Keep unless taken\" this session, but the preferences file could not be updated, so this is repeated at the next start. Choose Keep in Preferences to turn this off.",
+                    )
+                }
+                crate::fonts::PasteDesignatorsMigration::NotNeeded => {}
+            }
         }
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
@@ -364,6 +370,7 @@ impl Signex {
                 erc_waive_draft: None,
                 erc_focus_global_index: None,
                 erc_results_stale: false,
+                erc_stale_before_run: false,
                 erc_run_generation: 0,
                 erc_run_rule_set: None,
                 pending_profile_update: None,

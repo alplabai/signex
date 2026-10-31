@@ -336,18 +336,32 @@ pub fn read_paste_designators_pref_from(
         .unwrap_or_default()
 }
 
+/// How a migration of the legacy `keep` went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteDesignatorsMigration {
+    /// Nothing to migrate.
+    NotNeeded,
+    /// The file now holds `keep_if_free` and the schema marker.
+    Migrated,
+    /// The file could not be written; the next launch tries again.
+    WriteFailed,
+}
+
 /// Rewrite a legacy `keep` as `keep_if_free` with the schema marker, once.
-/// Returns whether it changed the file.
-pub fn migrate_paste_designators_pref_at(path: &Path) -> bool {
+pub fn migrate_paste_designators_pref_at(path: &Path) -> PasteDesignatorsMigration {
     if !paste_designators_needs_migration(read_prefs_json(path).as_ref()) {
-        return false;
+        return PasteDesignatorsMigration::NotNeeded;
     }
-    write_paste_designators_pref_at(path, crate::paste_prefs::PasteDesignators::KeepIfFree);
-    true
+    if write_paste_designators_pref_checked(path, crate::paste_prefs::PasteDesignators::KeepIfFree)
+    {
+        PasteDesignatorsMigration::Migrated
+    } else {
+        PasteDesignatorsMigration::WriteFailed
+    }
 }
 
 /// [`migrate_paste_designators_pref_at`] on the user's prefs file.
-pub fn migrate_paste_designators_pref() -> bool {
+pub fn migrate_paste_designators_pref() -> PasteDesignatorsMigration {
     migrate_paste_designators_pref_at(&prefs_path())
 }
 
@@ -356,7 +370,15 @@ pub fn write_paste_designators_pref(mode: crate::paste_prefs::PasteDesignators) 
 }
 
 pub fn write_paste_designators_pref_at(path: &Path, mode: crate::paste_prefs::PasteDesignators) {
-    update_prefs_json(path, "paste_designators", |prefs| {
+    write_paste_designators_pref_checked(path, mode);
+}
+
+/// [`write_paste_designators_pref_at`] that says whether the file was written.
+fn write_paste_designators_pref_checked(
+    path: &Path,
+    mode: crate::paste_prefs::PasteDesignators,
+) -> bool {
+    update_prefs_json_checked(path, "paste_designators", |prefs| {
         prefs.insert(
             "paste_designators".to_string(),
             serde_json::Value::String(mode.token().to_string()),

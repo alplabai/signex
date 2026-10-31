@@ -101,9 +101,13 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
     if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
         col = col.push(
-            text("No ERC diagnostics yet")
-                .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
+            text(if ctx.erc_results_stale {
+                "No findings left on this sheet since the last run"
+            } else {
+                "No ERC diagnostics yet"
+            })
+            .size(TS.caption)
+            .color(theme_ext::text_secondary(&ctx.tokens)),
         );
         col = col.push(
             text("Run ERC to populate project-wide diagnostics")

@@ -7,6 +7,7 @@ pub(super) fn emit(
     rows: &[&ErcReportRow],
     labels: &[String],
     rule_set: Option<&ErcReportRuleSet>,
+    stale: bool,
 ) -> Result<Vec<u8>, ErcReportError> {
     let mut out = Vec::new();
     // UTF-8 BOM so spreadsheets detect the encoding; CRLF line endings.
@@ -25,6 +26,11 @@ pub(super) fn emit(
             rule_set.sha256.clone(),
         ];
         write_csv_row(&mut out, &preamble).map_err(to_err)?;
+        out.extend_from_slice(b"\r\n");
+    }
+    // Only a stale export gets this row; every other one is unchanged.
+    if stale {
+        write_csv_row(&mut out, &[super::STALE_RESULTS_NOTICE.to_string()]).map_err(to_err)?;
         out.extend_from_slice(b"\r\n");
     }
     write_csv_row(&mut out, &COLUMNS).map_err(to_err)?;

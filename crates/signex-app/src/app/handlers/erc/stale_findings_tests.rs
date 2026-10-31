@@ -7,7 +7,8 @@ use signex_erc::{RuleId, RuleKind, Severity, Violation};
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
-use crate::app::{Signex, TabInfo, TabKind};
+use crate::app::{EditMsg, Message, Signex, TabInfo, TabKind};
+use crate::dock::DockMessage;
 
 fn finding(at: Point, primary: Option<SelectedItem>) -> Violation {
     let mut v = Violation::new(
@@ -88,4 +89,147 @@ fn an_edit_that_leaves_the_flagged_part_keeps_every_finding() {
 
     assert_eq!(app.interaction_state.active_canvas().erc_markers.len(), 2);
     assert_eq!(app.ui_state.erc_violations_by_path[&path].len(), 2);
+}
+
+// ---- regression probes for the read-time filter ----
+
+fn undo(app: &mut Signex) {
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+}
+
+fn delete_part(app: &mut Signex, part: SelectedItem) {
+    app.apply_engine_command(
+        signex_engine::Command::DeleteSelection { items: vec![part] },
+        true,
+        true,
+    );
+}
+
+fn report_rows(app: &Signex) -> usize {
+    app.erc_report_options(signex_output::ErcReportFormat::Text)
+        .violations
+        .expect("ERC has run")
+        .len()
+}
+
+#[test]
+fn delete_then_undo_restores_markers_panel_and_report_and_marks_stale() {
+    let (mut app, _path, part) = app_with_two_findings();
+    delete_part(&mut app, part);
+    assert_eq!(report_rows(&app), 1);
+
+    app.ui_state.erc_results_stale = false;
+    undo(&mut app);
+
+    assert_eq!(app.interaction_state.active_canvas().erc_markers.len(), 2);
+    assert_eq!(app.build_erc_diagnostic_entries().len(), 2);
+    assert_eq!(report_rows(&app), 2);
+    assert!(app.ui_state.erc_results_stale, "an undo is an edit too");
+}
+
+#[test]
+fn a_clear_resets_the_stale_flag() {
+    let (mut app, _path, part) = app_with_two_findings();
+    delete_part(&mut app, part);
+    assert!(app.ui_state.erc_results_stale);
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        crate::panels::PanelMsg::ClearErc,
+    )));
+    assert!(!app.ui_state.erc_results_stale);
+}
+
+#[test]
+fn an_edit_while_a_run_is_in_flight_keeps_the_notice() {
+    let (mut app, _path, part) = app_with_two_findings();
+    let (generation, inputs) = app.begin_erc_run();
+    assert!(
+        !app.ui_state.erc_results_stale,
+        "this run reads the sheets as they are"
+    );
+
+    delete_part(&mut app, part);
+    let outcome = Ok(super::erc_job::run_erc_job(inputs));
+    app.apply_erc_run_result(generation, &outcome);
+
+    assert!(
+        app.ui_state.erc_results_stale,
+        "the run read the sheet before the edit"
+    );
+}
+
+#[test]
+fn a_failed_run_restores_the_flag_it_found() {
+    let (mut app, _path, part) = app_with_two_findings();
+    delete_part(&mut app, part);
+    let (generation, _inputs) = app.begin_erc_run();
+    assert!(!app.ui_state.erc_results_stale);
+
+    app.apply_erc_run_result(generation, &Err("worker failed".to_string()));
+
+    assert!(
+        app.ui_state.erc_results_stale,
+        "the old results are still the old results"
+    );
+}
+
+#[test]
+fn navigation_and_quick_fix_use_the_right_row_when_an_earlier_one_is_hidden() {
+    let (mut app, _path, part) = app_with_two_findings();
+    delete_part(&mut app, part);
+    let entries = app.build_erc_diagnostic_entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].global_index, 1,
+        "stays the finding's place in the cache"
+    );
+
+    let _ = app.handle_focus_erc_diagnostic_offset(1);
+    assert_eq!(app.ui_state.erc_focus_global_index, Some(1));
+
+    let no_connects = |app: &Signex| {
+        app.document_state
+            .active_engine()
+            .unwrap()
+            .document()
+            .no_connects
+            .len()
+    };
+    let before = no_connects(&app);
+    let _ = app.handle_erc_quick_fix(0); // the hidden finding: nothing happens
+    assert_eq!(no_connects(&app), before);
+    let _ = app.handle_erc_quick_fix(1); // the shown UnusedPin: a no-connect lands
+    assert_eq!(no_connects(&app), before + 1);
+}
+
+#[test]
+fn a_wire_that_got_a_new_id_keeps_its_finding_and_the_panel_says_stale() {
+    let (mut app, path, _part) = app_with_two_findings();
+    let wire = app.document_state.active_engine().unwrap().document().wires[0].clone();
+    let dangling = finding(
+        wire.end,
+        Some(SelectedItem::new(wire.uuid, SelectedKind::Wire)),
+    );
+    app.ui_state
+        .erc_violations_by_path
+        .get_mut(&path)
+        .unwrap()
+        .push(dangling);
+    app.refresh_active_erc_from_cache(Some(&path));
+    let before = app.build_erc_diagnostic_entries().len();
+
+    let mut renewed = wire.clone();
+    renewed.uuid = uuid::Uuid::now_v7();
+    app.apply_engine_commands(
+        vec![
+            signex_engine::Command::DeleteSelection {
+                items: vec![SelectedItem::new(wire.uuid, SelectedKind::Wire)],
+            },
+            signex_engine::Command::PlaceWireSegmentAsIs { wire: renewed },
+        ],
+        true,
+        true,
+    );
+
+    assert_eq!(app.build_erc_diagnostic_entries().len(), before);
+    assert!(app.ui_state.erc_results_stale);
 }

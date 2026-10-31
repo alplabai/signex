@@ -134,6 +134,13 @@ impl Signex {
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
         };
 
+        // This run reads the sheets as they are now; an edit from here on
+        // marks its results stale again. A run that fails restores the flag
+        // (a run that replaces one still in flight keeps that one's snapshot).
+        if !self.ui_state.erc_running {
+            self.ui_state.erc_stale_before_run = self.ui_state.erc_results_stale;
+        }
+        self.ui_state.erc_results_stale = false;
         self.ui_state.erc_run_generation += 1;
         self.ui_state.erc_running = true;
         self.refresh_panel_ctx();
@@ -171,6 +178,8 @@ impl Signex {
             Ok(outcome) => outcome,
             Err(why) => {
                 crate::diagnostics::log_warning(why);
+                // The old results stand, and an edit made meanwhile still counts.
+                self.ui_state.erc_results_stale |= self.ui_state.erc_stale_before_run;
                 self.refresh_panel_ctx();
                 return false;
             }
@@ -178,7 +187,6 @@ impl Signex {
         // The rows now in the cache were produced under this rule set; only a
         // successful, current run may name it in the report header.
         self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
-        self.ui_state.erc_results_stale = false;
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
         }
@@ -344,7 +352,10 @@ impl Signex {
         if entries.is_empty() {
             return Task::none();
         }
-        let target = Self::entry_by_global_index(&entries, index);
+        // A finding an edit has hidden is not acted on.
+        let Some(target) = Self::entry_by_global_index(&entries, index) else {
+            return Task::none();
+        };
         let clamped = target.global_index;
 
         // Open + activate the violation's sheet first, regardless of
@@ -393,18 +404,13 @@ impl Signex {
         }
     }
 
-    /// The row whose finding sits at `index` in the cache; the last row when an
-    /// edit has hidden it. `entries` is not empty.
+    /// The row whose finding sits at `index` in the cache; `None` when an edit
+    /// has hidden it.
     fn entry_by_global_index(
         entries: &[crate::panels::ErcDiagnosticEntry],
         index: usize,
-    ) -> crate::panels::ErcDiagnosticEntry {
-        entries
-            .iter()
-            .find(|e| e.global_index == index)
-            .or(entries.last())
-            .cloned()
-            .expect("entries is not empty")
+    ) -> Option<crate::panels::ErcDiagnosticEntry> {
+        entries.iter().find(|e| e.global_index == index).cloned()
     }
 
     pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
@@ -413,7 +419,12 @@ impl Signex {
             self.ui_state.erc_focus_global_index = None;
             return Task::none();
         }
-        let target = Self::entry_by_global_index(&entries, index);
+        // Navigation may clamp: a hidden finding falls back to the last row.
+        let Some(target) =
+            Self::entry_by_global_index(&entries, index).or_else(|| entries.last().cloned())
+        else {
+            return Task::none();
+        };
         let clamped = target.global_index;
 
         if !target.locatable {

@@ -40,7 +40,12 @@ fn severity_color(severity: ErcSeverity) -> Color {
 /// toward white on a dark one until it reads against both (#1768).
 fn marker_stroke(severity: ErcSeverity, paper: Color, background: Color) -> Color {
     use crate::styles::tokens::{contrast_ratio, relative_luminance};
-    let toward = if relative_luminance(paper) > 0.5 {
+    // Pull toward whichever pole sits farther from both sheet colours.
+    let toward = if relative_luminance(paper).min(relative_luminance(background)) > 0.5 {
+        0.0
+    } else if relative_luminance(paper).max(relative_luminance(background)) < 0.5 {
+        1.0
+    } else if relative_luminance(paper) > 0.5 {
         0.0
     } else {
         1.0
@@ -187,17 +192,21 @@ mod tests {
     use signex_types::theme::{ThemeId, canvas_colors};
 
     #[test]
+    fn a_light_paper_on_a_dark_background_still_reads_on_the_paper() {
+        let (light, dark) = (iced::Color::WHITE, iced::Color::BLACK);
+        for severity in [ErcSeverity::Error, ErcSeverity::Warning, ErcSeverity::Info] {
+            let stroke = marker_stroke(severity, light, dark);
+            assert!(
+                contrast_ratio(stroke, light) >= MARKER_MIN_CONTRAST,
+                "{severity:?}"
+            );
+        }
+    }
+
+    #[test]
     fn ring_and_cross_read_on_every_built_in_sheet() {
         let severities = [ErcSeverity::Error, ErcSeverity::Warning, ErcSeverity::Info];
-        for id in [
-            ThemeId::CatppuccinMocha,
-            ThemeId::VsCodeDark,
-            ThemeId::Signex,
-            ThemeId::Alplab,
-            ThemeId::GitHubDark,
-            ThemeId::SolarizedLight,
-            ThemeId::Nord,
-        ] {
+        for &id in ThemeId::BUILTINS {
             let colors = canvas_colors(id);
             let (paper, background) = (to_iced(&colors.paper), to_iced(&colors.background));
             for severity in severities {

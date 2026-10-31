@@ -439,6 +439,8 @@ pub struct UiState {
     /// The document changed after the newest ERC run, so its findings may no
     /// longer match it; the ERC panel says so until the next run (#1768).
     pub erc_results_stale: bool,
+    /// `erc_results_stale` as it was when the newest run began, for a run that fails.
+    pub erc_stale_before_run: bool,
     /// The rule set the newest ERC run used, for the report header (#1085).
     pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
     /// An "Update from profile" waiting for the user's confirmation, with the

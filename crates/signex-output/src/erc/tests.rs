@@ -245,3 +245,29 @@ fn csv_without_a_recorded_profile_is_byte_identical_to_no_rule_set() {
         Some("Sheet,Severity,Rule,Message,X,Y")
     );
 }
+
+#[test]
+fn a_stale_run_says_so_in_every_form_and_a_fresh_one_does_not() {
+    for format in [
+        ErcReportFormat::Text,
+        ErcReportFormat::Csv,
+        ErcReportFormat::Html,
+    ] {
+        let fresh = run(opts(format));
+        let stale = run(ErcReportOptions {
+            results_stale: true,
+            ..opts(format)
+        });
+        assert!(!fresh.contains("out of date"), "{format:?} fresh");
+        assert!(stale.contains(STALE_RESULTS_NOTICE), "{format:?} stale");
+    }
+    let json = |stale| {
+        let text = run(ErcReportOptions {
+            results_stale: stale,
+            ..opts(ErcReportFormat::Json)
+        });
+        serde_json::from_str::<serde_json::Value>(&text).expect("json")
+    };
+    assert_eq!(json(true)["results_stale"], true);
+    assert!(json(false).get("results_stale").is_none());
+}
