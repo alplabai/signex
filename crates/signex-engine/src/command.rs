@@ -242,11 +242,19 @@ pub enum Command {
     /// `value`, and `footprint` have dedicated `UpdateSymbolFields`
     /// above — this handles every other key in `symbol.fields`, for
     /// example the Parameter Manager editing `Manufacturer` or `PartNo`.
-    /// Empty `value` removes the field.
+    /// An empty `value` keeps the field with an empty value; deleting it is
+    /// [`Command::RemoveSymbolField`].
     SetSymbolField {
         symbol_id: Uuid,
         key: String,
         value: String,
+    },
+    /// Delete a custom parameter/field from a symbol. A key the symbol does
+    /// not carry, or one of the reserved `reference` / `value` / `footprint`,
+    /// changes nothing.
+    RemoveSymbolField {
+        symbol_id: Uuid,
+        key: String,
     },
     /// [`Command::PlaceWireSegment`] that never folds the wire into a
     /// neighbour. Paste places a copied wire with it: the copy keeps the
@@ -536,7 +544,9 @@ impl Command {
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,
             Command::UpdateSymbolFootprint { .. } => CommandKind::UpdateSymbolFootprint,
             Command::UpdateSymbolFields { .. } => CommandKind::UpdateSymbolFields,
-            Command::SetSymbolField { .. } => CommandKind::UpdateSymbolFields,
+            Command::SetSymbolField { .. } | Command::RemoveSymbolField { .. } => {
+                CommandKind::UpdateSymbolFields
+            }
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::BreakWire { .. } => CommandKind::BreakWire,
             Command::PlaceWireSegmentAsIs { .. } => CommandKind::PlaceWireSegmentAsIs,

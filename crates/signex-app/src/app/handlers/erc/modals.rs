@@ -404,29 +404,6 @@ impl Signex {
         );
         Task::none()
     }
-
-    pub(crate) fn handle_parameter_manager_edit(
-        &mut self,
-        symbol_uuid: uuid::Uuid,
-        key: String,
-        value: String,
-    ) -> Task<Message> {
-        // Same reasoning as `handle_move_selection_apply` (#585). The
-        // gateway clears the content cache, syncs the canvas and refreshes
-        // the panel context, so the hand-rolled versions of those are gone;
-        // the overlay cache and the selection info were not touched before
-        // and still are not.
-        self.apply_engine_command(
-            signex_engine::Command::SetSymbolField {
-                symbol_id: symbol_uuid,
-                key,
-                value,
-            },
-            false,
-            false,
-        );
-        Task::none()
-    }
 }
 
 /// A Move Selection offset typed in the dialog. `None` means refused

@@ -86,6 +86,14 @@ mod net_nav;
 #[path = "regression/palette_context_filter.rs"]
 mod palette_context_filter;
 
+// #1245 - the Parameter Manager opens from a catalog command.
+#[path = "regression/parameter_manager_open.rs"]
+mod parameter_manager_open;
+
+// #1783 - the Parameter Manager table's cell drafts and deletes.
+#[path = "regression/parameter_manager_table.rs"]
+mod parameter_manager_table;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
@@ -249,8 +257,12 @@ mod start_screen;
 
 #[path = "regression/command_enablement.rs"]
 mod command_enablement;
+
 #[path = "regression/dead_schematic_controls.rs"]
 mod dead_schematic_controls;
+#[path = "regression/file_menu_close.rs"]
+mod file_menu_close;
+
 #[path = "regression/idle_cursor_move.rs"]
 mod idle_cursor_move;
 #[path = "regression/library_dangling_refs.rs"]
@@ -269,6 +281,8 @@ mod primitive_container_merge;
 mod primitive_save_cascade;
 #[path = "regression/reload_and_switch_state.rs"]
 mod reload_and_switch_state;
+#[path = "regression/save_all_menu.rs"]
+mod save_all_menu;
 #[path = "regression/save_as_by_document_kind.rs"]
 mod save_as_by_document_kind;
 #[path = "regression/stable_addressing.rs"]

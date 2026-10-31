@@ -2,8 +2,10 @@
 //! bring an installed menu up to date.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::app::command::CommandContext;
+use crate::keymap::CompiledKeymap;
 use crate::panels::PanelKind;
 
 use super::{ActionMap, NativeMenu, NativeMenuSpec, NativeNode};
@@ -60,7 +62,10 @@ fn same_shape(a: &[NativeMenu], b: &[NativeMenu], changes: &mut Vec<ItemChange>)
 fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<ItemChange>) -> bool {
     match (a, b) {
         (NativeNode::Item(a), NativeNode::Item(b)) => {
-            let same = a.id == b.id && a.label == b.label && a.accelerator == b.accelerator;
+            let same = a.id == b.id
+                && a.label == b.label
+                && a.shortcut == b.shortcut
+                && a.accelerator == b.accelerator;
             if same && (a.enabled != b.enabled || a.checked != b.checked) {
                 changes.push(ItemChange {
                     id: b.id.clone(),
@@ -84,15 +89,32 @@ fn same_node(a: &NativeNode, b: &NativeNode, changes: &mut Vec<ItemChange>) -> b
 
 /// Everything the native spec is built from: the enablement facts of the
 /// focused window, the recent projects, and whether a confirm dialog locks
-/// the model rows. The spec carries no shortcut text, so the keymap is not
-/// an input.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// the model rows, and the keymap the shortcut text comes from. The keymap
+/// is replaced, never edited, so pointer identity says whether it changed.
+#[derive(Debug, Clone)]
 pub(crate) struct MenuInputs {
     commands: CommandContext,
     recent: Vec<PathBuf>,
     locked: bool,
     open_panels: Vec<PanelKind>,
+    keymap: Option<Arc<CompiledKeymap>>,
 }
+
+impl PartialEq for MenuInputs {
+    fn eq(&self, other: &Self) -> bool {
+        self.commands == other.commands
+            && self.recent == other.recent
+            && self.locked == other.locked
+            && self.open_panels == other.open_panels
+            && match (&self.keymap, &other.keymap) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl Eq for MenuInputs {}
 
 impl MenuInputs {
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // built by the macOS sync
@@ -107,7 +129,19 @@ impl MenuInputs {
             recent: recent.to_vec(),
             locked,
             open_panels,
+            keymap: None,
         }
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // set by the macOS sync
+    pub(crate) fn with_keymap(mut self, keymap: Arc<CompiledKeymap>) -> Self {
+        self.keymap = Some(keymap);
+        self
+    }
+
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn keymap(&self) -> Option<Arc<CompiledKeymap>> {
+        self.keymap.clone()
     }
 
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

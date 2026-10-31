@@ -4,8 +4,12 @@ File/New Project	item	New Project	new_document	Ctrl+N	NewProject	11111111	always
 File/Open...	item	Open...	open_document	Ctrl+O	OpenProject	11111111	always
 File/Open Recent	submenu	Open Recent	-	-	-	-	-
 File/---	separator	-	-	-	-	-	-
+File/Close Document	item	Close Document	close_active_document	Ctrl+F4	CloseDocument	01110010	cmd:close_active_document
+File/Close Project	item	Close Project	-	-	CloseProject	01001001	project
+File/---	separator	-	-	-	-	-	-
 File/Save	item	Save	save_document	Ctrl+S	Save	01010011	cmd:save_document
 File/Save As...	item	Save As...	save_document_as	Ctrl+Shift+S	SaveAs	01010010	cmd:save_document_as
+File/Save All	item	Save All	-	-	SaveAll	01000001	dirty
 File/---	separator	-	-	-	-	-	-
 File/Library	submenu	Library	-	-	-	-	-
 File/Library/Open Library...	item	Open Library...	-	-	LibraryOpenLibrary	11111111	always
@@ -15,10 +19,11 @@ File/---	separator	-	-	-	-	-	-
 File/Import	submenu	Import	-	-	-	-	-
 File/Import/Altium Project...	item	Altium Project...	-	-	ImportAltium	11111111	always
 File/Export	submenu	Export	-	-	-	-	-
-File/Export/PDF…	item	PDF…	print	Ctrl+P	ExportPdf	01000000	cmd:print
+File/Export/PDF…	item	PDF…	-	-	ExportPdf	01000000	cmd:print
 File/Export/Netlist (Protel .NET)...	item	Netlist (Protel .NET)...	-	-	ExportNetlist	01000000	sch
 File/Export/Bill of Materials…	item	Bill of Materials…	-	-	ExportBom	01000000	sch
 File/Export/ERC Report…	item	ERC Report…	-	-	ExportErcReport	01000000	sch
+File/Print...	item	Print...	print	Ctrl+P	Print	01000000	cmd:print
 File/---	separator	-	-	-	-	-	-
 File/Exit	item	Exit	-	-	Exit	11111111	always
 Edit	menu	Edit	-	-	-	-	-
@@ -82,6 +87,7 @@ Design/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-
 Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
 Design/---	separator	-	-	-	-	-	-
 Design/Electrical Rules Check	item	Electrical Rules Check	run_erc	F8	Erc	01001000	cmd:run_erc
+Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/---	separator	-	-	-	-	-	-
 Design/Generate BOM	item	Generate BOM	-	-	ExportBom	01000000	sch
 Tools	menu	Tools	-	-	-	-	-

@@ -16,8 +16,8 @@ fn owned_dirs() -> impl Iterator<Item = &'static str> {
 
 pub(super) struct Snapshot {
     pub(super) tree: git2::Oid,
-    /// Every library file in the tree, with the blob committed for it.
-    files: Vec<(String, git2::Oid)>,
+    /// Every library file in the tree, with the blob and mode committed for it.
+    files: Vec<(String, git2::Oid, u32)>,
     /// Tracked library paths that are gone from disk and left the tree.
     removed: Vec<String>,
 }
@@ -63,24 +63,26 @@ pub(super) fn refuse_foreign_history<'r>(
     Ok(head)
 }
 
-/// Whether `rel` under `root_dir` exists with no symbolic link on the way.
-/// A link is never read through: it could point outside the library (at a
-/// private key, say) and the commit would carry that file's contents.
-fn is_plain_file(root_dir: &Path, rel: &str) -> bool {
+/// Whether `rel` under `root_dir` is a file or a link, with no symbolic link
+/// on the way to it. A link as the last part is committed as a link and never
+/// read; a link in a folder above it is not followed out of the library.
+fn is_committable(root_dir: &Path, rel: &str) -> bool {
     let mut path = root_dir.to_path_buf();
     let parts: Vec<&str> = rel.split('/').collect();
     for (i, part) in parts.iter().enumerate() {
         path.push(part);
         match fs::symlink_metadata(&path) {
+            Ok(meta) if i + 1 == parts.len() => {
+                return meta.is_file() || meta.file_type().is_symlink();
+            }
             Ok(meta) if meta.file_type().is_symlink() => {
                 tracing::warn!(
                     target: "signex::library",
-                    "Re-init left out {}: it is a symbolic link",
-                    path.display()
+                    "Re-init left out {}: a folder above it is a symbolic link",
+                    root_dir.join(rel).display()
                 );
                 return false;
             }
-            Ok(meta) if i + 1 == parts.len() => return meta.is_file(),
             Ok(_) => {}
             Err(_) => return false,
         }
@@ -88,7 +90,82 @@ fn is_plain_file(root_dir: &Path, rel: &str) -> bool {
     false
 }
 
-/// Library files under `root_dir`, as `/`-separated paths: the `.snxlib`,
+/// A link's blob is its target path, as git stores it; the target is never
+/// opened.
+fn link_blob(repo: &git2::Repository, path: &Path) -> Result<git2::Oid, git2::Error> {
+    let target = fs::read_link(path).map_err(|e| git2::Error::from_str(&e.to_string()))?;
+    #[cfg(unix)]
+    let bytes = std::os::unix::ffi::OsStrExt::as_bytes(target.as_os_str()).to_vec();
+    #[cfg(not(unix))]
+    let bytes = target.to_string_lossy().replace('\\', "/").into_bytes();
+    repo.blob(&bytes)
+}
+
+/// Whether the regular file at `path` is executable on disk (unix only).
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+const LINK_MODE: u32 = 0o120000;
+const FILE_MODE: u32 = 0o100644;
+const EXEC_MODE: u32 = 0o100755;
+
+/// The local branch a Re-init that made its HEAD anew continues, and its tip.
+/// Among the branches whose tip tracks this `.snxlib`: `main`, then
+/// `master`, then the branch the HEAD reflog last checked out, then the
+/// one with the newest tip commit (name order breaks a tie).
+pub(super) fn tracking_branch<'r>(
+    repo: &'r git2::Repository,
+    file_path: &Path,
+) -> Result<Option<(String, git2::Commit<'r>)>, LibraryError> {
+    let name = file_name_str(file_path)?;
+    let mut found: Vec<(String, git2::Commit)> = Vec::new();
+    let branches = repo
+        .branches(Some(git2::BranchType::Local))
+        .map_err(|e| LibraryError::Backend(format!("git branches: {e}")))?;
+    for (branch, _) in branches.flatten() {
+        let (Ok(Some(short)), Ok(tip)) = (branch.name(), branch.get().peel_to_commit()) else {
+            continue;
+        };
+        if tip.tree().is_ok_and(|t| t.get_name(&name).is_some()) {
+            found.push((short.to_owned(), tip));
+        }
+    }
+    let last_checkout = repo.reflog("HEAD").ok().and_then(|log| {
+        log.iter().find_map(|e| {
+            let msg = e.message().ok()??;
+            let rest = msg.strip_prefix("checkout: moving from ")?;
+            rest.rsplit_once(" to ").map(|(_, to)| to.to_owned())
+        })
+    });
+    let rank = |short: &str| match short {
+        "main" => 0,
+        "master" => 1,
+        s if last_checkout.as_deref() == Some(s) => 2,
+        _ => 3,
+    };
+    found.sort_by(|(a, ca), (b, cb)| {
+        rank(a)
+            .cmp(&rank(b))
+            .then(cb.time().seconds().cmp(&ca.time().seconds()))
+            .then(a.cmp(b))
+    });
+    Ok(found
+        .into_iter()
+        .next()
+        .map(|(short, tip)| (format!("refs/heads/{short}"), tip)))
+}
+
+/// Library files and links under `root_dir`, as `/`-separated paths: the `.snxlib`,
 /// the managed `.gitignore` (written here, keeping user lines), a
 /// `.gitattributes` if there is one, and every regular file in the owned
 /// folders except write-lock sidecars and what the repo's ignore rules name.
@@ -111,15 +188,15 @@ fn library_files(
         return Err(LibraryError::Backend(format!("git ignore rules: {e}")));
     }
     let snxlib = file_name_str(file_path)?;
-    if !is_plain_file(root_dir, &snxlib) {
+    if !is_committable(root_dir, &snxlib) {
         return Err(LibraryError::Backend(format!(
-            "{} is not a regular file; Re-init will not commit through a link",
+            "{} is not a file or a link to commit",
             file_path.display()
         )));
     }
     let mut out = vec![snxlib];
     for name in [super::ignore_rules::GITIGNORE_FILE, GITATTRIBUTES_FILE] {
-        if is_plain_file(root_dir, name) {
+        if is_committable(root_dir, name) {
             out.push(name.to_string());
         }
     }
@@ -136,7 +213,7 @@ fn collect_files(
     out: &mut Vec<String>,
 ) -> Result<(), LibraryError> {
     // The folder itself (and `assets/` above `assets/datasheets`) must not be
-    // a link either; `is_plain_file` is for files, so walk the parts here.
+    // a link either; `is_committable` is for files, so walk the parts here.
     let mut dir = root_dir.to_path_buf();
     for part in rel.split('/') {
         dir.push(part);
@@ -178,13 +255,7 @@ fn collect_files(
             );
         } else if kind.is_dir() {
             collect_files(repo, root_dir, &child, out)?;
-        } else if kind.is_symlink() {
-            tracing::warn!(
-                target: "signex::library",
-                "Re-init left out {}: it is a symbolic link",
-                root_dir.join(&child).display()
-            );
-        } else if kind.is_file()
+        } else if (kind.is_file() || kind.is_symlink())
             && !is_write_lock_file(Path::new(&child))
             && !super::ignore_rules::is_managed_clutter(&child)
             && !repo
@@ -252,17 +323,29 @@ pub(super) fn library_tree(
     }
     let mut blobs = Vec::with_capacity(files.len());
     for name in files {
-        let id =
-            lfs::blob_for_path(repo, root_dir, Path::new(&name)).map_err(backend("git blob"))?;
-        // A file HEAD has as executable stays executable; a link becomes a file.
-        let mode = match index.get_path(Path::new(&name), 0) {
-            Some(kept) if kept.mode == 0o100755 => 0o100755,
-            _ => 0o100644,
+        let on_disk = root_dir.join(&name);
+        let is_link = fs::symlink_metadata(&on_disk).is_ok_and(|m| m.file_type().is_symlink());
+        let (id, mode) = if is_link {
+            (
+                link_blob(repo, &on_disk).map_err(backend("git blob"))?,
+                LINK_MODE,
+            )
+        } else {
+            let id = lfs::blob_for_path(repo, root_dir, Path::new(&name))
+                .map_err(backend("git blob"))?;
+            // A file keeps the mode HEAD has for it; a new one (or one that
+            // was a link) is executable when it is on disk.
+            let mode = match index.get_path(Path::new(&name), 0) {
+                Some(kept) if kept.mode == EXEC_MODE || kept.mode == FILE_MODE => kept.mode,
+                _ if is_executable(&on_disk) => EXEC_MODE,
+                _ => FILE_MODE,
+            };
+            (id, mode)
         };
         index
             .add(&entry(&name, id, mode))
             .map_err(backend("git tree insert"))?;
-        blobs.push((name, id));
+        blobs.push((name, id, mode));
     }
     let tree = index
         .write_tree_to(repo)
@@ -290,10 +373,20 @@ pub(super) fn record_in_index(
             .map_err(backend("git index remove"))?;
     }
     let mut lfs_paths = false;
-    for (name, id) in &snapshot.files {
+    for (name, id, mode) in &snapshot.files {
         index
             .add_path(Path::new(name))
             .map_err(backend("git add"))?;
+        // Where links are not real (`core.symlinks=false`), `add_path` reads a
+        // link as a plain file; the index takes the link the commit holds.
+        if *mode == LINK_MODE
+            && let Some(mut staged) = index.get_path(Path::new(name), 0)
+            && (staged.mode != LINK_MODE || staged.id != *id)
+        {
+            staged.mode = LINK_MODE;
+            staged.id = *id;
+            index.add(&staged).map_err(backend("git add"))?;
+        }
         // An LFS path is recorded as its pointer, as the commit holds it.
         if lfs::is_lfs_path(repo, Path::new(name)).unwrap_or(false)
             && let Some(mut staged) = index.get_path(Path::new(name), 0)
