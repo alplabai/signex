@@ -221,9 +221,9 @@ pub fn part_tree_row<'a>(
     .into()
 }
 
-/// Property-row label: wraps inside its fill-portion column (by word, and by
-/// glyph for a word wider than the column), so a narrow panel grows the row
-/// instead of cutting the label; the clip keeps it off the value column.
+/// Property-row label: wraps at spaces inside its fill-portion column, so a
+/// narrow panel grows the row; a single over-long word is clipped, never split
+/// mid-word, and never reaches the value column.
 pub fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
     property_label_sized(label, color, TS.body, PROPERTY_LABEL_PORTION)
 }
@@ -243,7 +243,7 @@ fn property_label_sized<'a, M: 'a>(
         text(label.into())
             .size(size)
             .color(color)
-            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            .wrapping(iced::widget::text::Wrapping::Word),
     )
     .width(Length::FillPortion(portion))
     .clip(true)
