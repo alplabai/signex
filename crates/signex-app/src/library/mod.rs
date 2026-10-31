@@ -39,6 +39,7 @@ pub mod messages;
 pub(crate) mod modal_chrome;
 pub mod mount;
 pub mod panel;
+pub mod part_label;
 pub mod picker;
 pub mod place;
 pub mod placed_part;
