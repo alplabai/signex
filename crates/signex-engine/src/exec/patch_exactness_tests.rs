@@ -770,6 +770,13 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "RemoveSymbolField",
+        Command::RemoveSymbolField {
+            symbol_id: sym,
+            key: "MPN".into(),
+        },
+    );
+    add(
         "PlaceWireSegment",
         Command::PlaceWireSegment { wire: wire(NEW) },
     );

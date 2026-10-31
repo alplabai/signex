@@ -83,3 +83,94 @@ fn consecutive_entries_share_collections_the_step_did_not_touch() {
         assert!(shared.contains(&untouched), "{untouched} should be shared");
     }
 }
+
+mod field_edit_runs {
+    use signex_types::schematic::Symbol;
+
+    use crate::test_support::test_sheet;
+    use crate::{Command, Engine};
+
+    fn set(engine: &mut Engine, id: uuid::Uuid, key: &str, value: &str) {
+        engine
+            .execute(Command::SetSymbolField {
+                symbol_id: id,
+                key: key.into(),
+                value: value.into(),
+            })
+            .unwrap();
+    }
+
+    fn engine_with_symbol() -> (Engine, uuid::Uuid) {
+        let id = uuid::Uuid::now_v7();
+        let mut sheet = test_sheet();
+        sheet.symbols.push(Symbol {
+            uuid: id,
+            ..Default::default()
+        });
+        (Engine::new(sheet).unwrap(), id)
+    }
+
+    fn mpn(engine: &Engine) -> Option<String> {
+        engine.document().symbols[0].fields.get("MPN").cloned()
+    }
+
+    #[test]
+    fn keystrokes_in_one_cell_are_one_undo_step() {
+        let (mut engine, id) = engine_with_symbol();
+        for text in ["A", "AB", "ABC"] {
+            set(&mut engine, id, "MPN", text);
+        }
+        assert_eq!(mpn(&engine).as_deref(), Some("ABC"));
+
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine), None);
+        assert!(!engine.can_undo());
+    }
+
+    #[test]
+    fn another_cell_or_ending_the_run_starts_a_new_step() {
+        let (mut engine, id) = engine_with_symbol();
+        set(&mut engine, id, "MPN", "A");
+        set(&mut engine, id, "Note", "n");
+        set(&mut engine, id, "MPN", "AB");
+        engine.end_field_edit_run();
+        set(&mut engine, id, "MPN", "ABC");
+
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine).as_deref(), Some("AB"));
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine).as_deref(), Some("A"));
+    }
+
+    #[test]
+    fn an_edit_after_undo_does_not_fold_into_the_undone_step() {
+        let (mut engine, id) = engine_with_symbol();
+        set(&mut engine, id, "MPN", "A");
+        set(&mut engine, id, "MPN", "AB");
+        engine.undo().unwrap();
+        set(&mut engine, id, "MPN", "Z");
+
+        assert!(!engine.can_redo());
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine), None);
+    }
+
+    #[test]
+    fn undo_ends_the_run_even_when_the_position_comes_back() {
+        let (mut engine, id) = engine_with_symbol();
+        set(&mut engine, id, "MPN", "A");
+        engine.undo().unwrap();
+        // An unrelated edit lands the history on the position the run saw.
+        engine
+            .execute(Command::SetSymbolDnp {
+                symbol_id: id,
+                dnp: true,
+            })
+            .unwrap();
+        set(&mut engine, id, "MPN", "B");
+
+        engine.undo().unwrap();
+        assert_eq!(mpn(&engine), None, "typing after the undo is its own step");
+        assert!(engine.document().symbols[0].dnp, "the unrelated edit stays");
+    }
+}
