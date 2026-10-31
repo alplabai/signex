@@ -110,24 +110,32 @@ fn save_as_in_an_undocked_footprint_window_re_keys_the_window() {
     save_as_enables_the_window(Primitive::Footprint);
 }
 
-/// Save in the window writes the re-keyed document: after the Save As write
-/// lands, the file is overwritten and a Save typed in the window restores it.
+/// Save in the window writes the re-keyed document: once the Save As write
+/// has landed, a Save typed in the window logs its own write of the new
+/// file and leaves the document clean. (The write itself may skip an
+/// unchanged container, so the log line is the observable.)
 fn save_acts_after_save_as(kind: Primitive) {
     let mut f = fixture(kind);
     let (from, to) = (f.from.clone(), f.to.clone());
     let write = f.app.handle_save_primitive_as(&from, &to).expect("starts");
     crate::app::path_ops::settle_task(&mut f.app, write);
-    assert!(to.exists(), "{kind:?}: the Save As write landed");
-    std::fs::write(&to, b"stale").unwrap();
+    let needle = format!("[save] Wrote {}", to.display());
+    let before = crate::diagnostics::logged_count(&needle);
+    assert_eq!(before, 0, "{kind:?}: Save As logs as [save-as]");
     f.app.document_state.mark_document_dirty(&to);
     let window = f.window;
     let task = f
         .app
         .dispatch_command(&command("save_document"), CommandArgs::none(), Some(window));
     crate::app::path_ops::settle_task(&mut f.app, task);
-    assert!(
-        to.exists(),
+    assert_eq!(
+        crate::diagnostics::logged_count(&needle),
+        1,
         "{kind:?}: Save in the window wrote its document"
+    );
+    assert!(
+        !f.app.document_state.is_document_dirty(&to),
+        "{kind:?}: the saved document is clean"
     );
 }
 

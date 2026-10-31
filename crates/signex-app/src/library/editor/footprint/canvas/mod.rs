@@ -233,7 +233,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
     ) -> Option<canvas::Action<LibraryMessage>> {
         // First-draw camera placement + one-shot Fit-to-Window (see
         // `input::camera`). Both mutate the camera and publish the scale
-        // they settled on, consuming the event tick.
+        // they settled on, consuming the event tick. That is the canvas's
+        // first event (normally a redraw or cursor move), and the next one
+        // carries the same information, so nothing is lost.
         if let Some(action) = self.apply_initial_fit(cstate, bounds) {
             return Some(action);
         }
