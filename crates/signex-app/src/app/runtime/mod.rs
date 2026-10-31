@@ -392,6 +392,21 @@ impl Signex {
         }
     }
 
+    /// Panel tokens and icon-tint theme for the effective theme: the
+    /// Preferences draft while the dialog is open, the saved theme after.
+    pub(crate) fn panel_theme(&self) -> (signex_types::theme::ThemeTokens, ThemeId) {
+        let id = self.ui_state.effective_theme_id();
+        (self.tokens_for(id), id)
+    }
+
+    /// Point the panel context at the effective theme. The one place that
+    /// writes both fields, so tokens and icon tint cannot drift apart.
+    pub(crate) fn sync_panel_theme(&mut self) {
+        let (tokens, theme_id) = self.panel_theme();
+        self.document_state.panel_ctx.tokens = tokens;
+        self.document_state.panel_ctx.theme_id = theme_id;
+    }
+
     /// Settings the schematic canvas renders with, read fresh from app
     /// state on every frame (#631).
     ///

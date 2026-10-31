@@ -96,6 +96,12 @@ pub fn view<'a>(
     // Bucket every mounted library up-front so view_section
     // doesn't have to borrow back into the per-call Vec
     // `project_paths` (which can't live for the panel's `'a`).
+    let project_libs = ProjectLibraries::of(
+        &ctx.projects
+            .iter()
+            .map(|p| p.libraries.len())
+            .collect::<Vec<_>>(),
+    );
     let project_paths: Vec<PathBuf> = ctx
         .projects
         .iter()
@@ -115,7 +121,13 @@ pub fn view<'a>(
     drop(project_paths);
 
     for (i, src) in ComponentsMountSource::ORDER.iter().enumerate() {
-        col = col.push(view_section(*src, state, &bucketed[i], tokens));
+        col = col.push(view_section(
+            *src,
+            state,
+            &bucketed[i],
+            project_libs,
+            tokens,
+        ));
         col = col.push(thin_sep(border_c));
     }
 
@@ -144,6 +156,7 @@ fn view_section<'a>(
     src: ComponentsMountSource,
     state: &'a LibraryState,
     libs_for_source: &[&'a OpenLibrary],
+    project_libs: ProjectLibraries,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
@@ -209,20 +222,7 @@ fn view_section<'a>(
     // ── Section body (only when expanded) ────────────────────────
     if !collapsed {
         if libs_for_source.is_empty() {
-            let empty_msg = match src {
-                ComponentsMountSource::Project => {
-                    "No project libraries. Open a project to populate this section."
-                }
-                ComponentsMountSource::Installed => {
-                    "No session libraries. Click \"+ Add Library…\" to mount one."
-                }
-                ComponentsMountSource::Global => {
-                    "No global libraries. Click \"+ Add Library…\" or promote an installed library."
-                }
-                ComponentsMountSource::Stock => {
-                    "Stock library not found. Reinstall Signex to restore the bundled parts."
-                }
-            };
+            let empty_msg = empty_section_text(src, project_libs);
             section_col = section_col.push(
                 container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6.0, SP.xl]),
             );
@@ -241,6 +241,64 @@ fn view_section<'a>(
     }
 
     section_col.into()
+}
+
+/// What the workspace says about project libraries.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProjectLibraries {
+    NoProject,
+    /// A project is open and declares no library.
+    NoneDeclared,
+    /// A project declares libraries, none of them mounted (pending, missing).
+    DeclaredNotMounted,
+}
+
+impl ProjectLibraries {
+    /// `declared` is the library count each open project declares.
+    fn of(declared: &[usize]) -> Self {
+        if declared.is_empty() {
+            Self::NoProject
+        } else if declared.iter().all(|&n| n == 0) {
+            Self::NoneDeclared
+        } else {
+            Self::DeclaredNotMounted
+        }
+    }
+}
+
+/// What an empty section says. The Project section tells apart no project,
+/// a project without libraries and a project whose libraries are not mounted.
+fn empty_section_text(src: ComponentsMountSource, project: ProjectLibraries) -> &'static str {
+    match src {
+        ComponentsMountSource::Project => match project {
+            ProjectLibraries::NoProject => {
+                "No project libraries. Open a project to populate this section."
+            }
+            ProjectLibraries::NoneDeclared => {
+                "This project has no libraries yet. Right-click the project, then Add New to Project > Component Library."
+            }
+            ProjectLibraries::DeclaredNotMounted => {
+                "This project's libraries are not mounted. See the project tree."
+            }
+        },
+        ComponentsMountSource::Installed => {
+            "No session libraries. Click \"+ Add Library…\" to mount one."
+        }
+        ComponentsMountSource::Global => {
+            "No global libraries. Click \"+ Add Library…\" or promote an installed library."
+        }
+        ComponentsMountSource::Stock => {
+            "Stock library not found. Reinstall Signex to restore the bundled parts."
+        }
+    }
+}
+
+/// The left label of a component row: part number, then the MPN when set.
+fn component_row_label(internal_pn: &str, mpn: &str) -> String {
+    match mpn.trim() {
+        "" => internal_pn.to_owned(),
+        mpn => format!("{internal_pn} — {mpn}"),
+    }
 }
 
 /// Render one mounted library inside its source section: a small
@@ -338,11 +396,7 @@ fn view_row_button<'a>(
     hover_c: Color,
 ) -> Element<'a, LibraryMessage> {
     let row_id = signex_library::RowId::from_uuid(row_data.row_id);
-    let label_left = format!(
-        "{} — {}",
-        row_data.internal_pn.as_str(),
-        row_data.primary_mpn.mpn
-    );
+    let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
     let place = LibraryMessage::ComponentsPanelPlace {
         library_path: library_path.clone(),
@@ -599,5 +653,52 @@ mod tests {
             assert!(!src.key().is_empty());
             assert_ne!(src.label(), src.key());
         }
+    }
+
+    #[test]
+    fn the_project_section_tells_its_three_states_apart() {
+        let project = |state| empty_section_text(ComponentsMountSource::Project, state);
+        let none = project(ProjectLibraries::NoProject);
+        let empty = project(ProjectLibraries::NoneDeclared);
+        let unmounted = project(ProjectLibraries::DeclaredNotMounted);
+        assert!(none.contains("Open a project"), "{none}");
+        assert!(empty.contains("no libraries yet"), "{empty}");
+        assert!(
+            empty.contains("Add New to Project > Component Library"),
+            "{empty}"
+        );
+        assert!(unmounted.contains("not mounted"), "{unmounted}");
+        assert!(!unmounted.contains("no libraries yet"), "{unmounted}");
+    }
+
+    #[test]
+    fn the_state_comes_from_the_declared_libraries() {
+        assert_eq!(ProjectLibraries::of(&[]), ProjectLibraries::NoProject);
+        assert_eq!(ProjectLibraries::of(&[0]), ProjectLibraries::NoneDeclared);
+        assert_eq!(
+            ProjectLibraries::of(&[0, 2]),
+            ProjectLibraries::DeclaredNotMounted
+        );
+    }
+
+    #[test]
+    fn other_sections_ignore_the_project_state() {
+        for src in [
+            ComponentsMountSource::Installed,
+            ComponentsMountSource::Global,
+            ComponentsMountSource::Stock,
+        ] {
+            assert_eq!(
+                empty_section_text(src, ProjectLibraries::NoneDeclared),
+                empty_section_text(src, ProjectLibraries::NoProject)
+            );
+        }
+    }
+
+    #[test]
+    fn a_row_without_an_mpn_drops_the_trailing_dash() {
+        assert_eq!(component_row_label("STOCK-R", ""), "STOCK-R");
+        assert_eq!(component_row_label("STOCK-R", "  "), "STOCK-R");
+        assert_eq!(component_row_label("R0805", "RC0805"), "R0805 — RC0805");
     }
 }

@@ -57,6 +57,29 @@ pub enum ErcSeverityLite {
     Info,
 }
 
+/// Label and detail text colours of an ERC result row. A focused row is
+/// filled with the selection colour, so its text is chosen against that.
+pub(crate) fn erc_row_text(tokens: &ThemeTokens, focused: bool) -> (Color, Color) {
+    let label = theme_ext::text_primary(tokens);
+    let detail = theme_ext::text_secondary(tokens);
+    if !focused {
+        return (label, detail);
+    }
+    let fill = theme_ext::selection_color(tokens);
+    let readable = |c| crate::styles::tokens::keep_readable_on(c, fill);
+    (readable(label), readable(detail))
+}
+
+/// Colour of a row's severity letter: on a focused row it is checked
+/// against the selection fill like the rest of the row's text.
+pub(crate) fn erc_severity_text(tokens: &ThemeTokens, focused: bool, severity: Color) -> Color {
+    if focused {
+        crate::styles::tokens::keep_readable_on(severity, theme_ext::selection_color(tokens))
+    } else {
+        severity
+    }
+}
+
 pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
@@ -193,6 +216,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ErcSeverityLite::Info => "I",
         };
         let is_focused = ctx.erc_focus_index == Some(v.global_index);
+        let (label_c, detail_c) = erc_row_text(&ctx.tokens, is_focused);
+        let sev_color = erc_severity_text(&ctx.tokens, is_focused, sev_color);
         let row_bg = if is_focused {
             Some(Background::Color(theme_ext::selection_color(&ctx.tokens)))
         } else {
@@ -215,19 +240,15 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     row![
                         text(sev_label).size(9).color(sev_color),
                         Space::new().width(4).height(Length::Shrink),
-                        text(v.rule_label.clone())
-                            .size(9)
-                            .color(theme_ext::text_primary(&ctx.tokens)),
+                        text(v.rule_label.clone()).size(9).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
-                        text(v.message.clone())
-                            .size(9)
-                            .color(theme_ext::text_secondary(&ctx.tokens)),
+                        text(v.message.clone()).size(9).color(detail_c),
                         Space::new().width(6).height(Length::Shrink),
                         iced::widget::tooltip(
                             text(location_label(&v.sheet_name, v.world_x, v.world_y))
                                 .size(9)
                                 .wrapping(iced::widget::text::Wrapping::None)
-                                .color(theme_ext::text_secondary(&ctx.tokens)),
+                                .color(detail_c),
                             text(v.sheet_path.display().to_string()).size(9),
                             iced::widget::tooltip::Position::Top,
                         )

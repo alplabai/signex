@@ -30,6 +30,22 @@ use signex_types::schematic::shown_on;
 const ANCHOR_AVOID_RADIUS_MM: f64 = 1.27;
 const ANCHOR_PENALTY: u32 = 1;
 
+/// Place the reference / value fields of `symbol`, a part about to be placed
+/// from `lib`, clear of its body, as a turn or mirror of it would. The fields
+/// of a part dropped on the sheet start where the autoplacer would put them,
+/// not at a fixed offset from the origin that lands inside a body taller than
+/// the offset.
+pub fn place_fields_for_new_symbol(
+    symbol: &mut signex_types::schematic::Symbol,
+    lib: &signex_types::schematic::LibSymbol,
+) {
+    autoplace_fields(
+        symbol,
+        lib,
+        &signex_types::schematic::SchematicSheet::default(),
+    );
+}
+
 /// Pick a free side for `symbol`'s reference / value fields and write
 /// new positions / justifies / rotation into the field `TextProp`s.
 pub(super) fn autoplace_fields(

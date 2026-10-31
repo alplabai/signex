@@ -144,7 +144,6 @@ pub(super) fn push_symbol_pins(
             pin.position.y + dir_y * length,
         );
 
-        let (wx1, wy1) = symbol_world_point(sym, &pin.position);
         let (wx2, wy2) = symbol_world_point(sym, &body_end);
 
         // Direction vector in world/schematic space (for text placement).
@@ -169,52 +168,33 @@ pub(super) fn push_symbol_pins(
             pin_eval_ctx.current_pin = Some(pin.number.as_str());
             pin_eval_ctx.net_name_by_pin = pin_net_names;
 
-            let (name_pos, align, v_align, rotation_deg) = if lib.pin_name_offset.abs() < 0.01 {
-                let (nwx, nwy) = (wx1, wy1);
-                if wdx.abs() > wdy.abs() {
-                    (
-                        (nwx, nwy + 0.508),
-                        SvgTextAlign::Center,
-                        SvgTextVAlign::Bottom,
-                        0.0,
-                    )
-                } else {
-                    (
-                        (nwx + 0.508, nwy),
-                        SvgTextAlign::Left,
-                        SvgTextVAlign::Center,
-                        0.0,
-                    )
-                }
+            // The name sits inside the body, `offset` past the pin's body
+            // end, reading away from the edge: left-aligned off a left edge,
+            // right-aligned off a right edge, hung below or standing above a
+            // top or bottom edge. A library that stores no offset gets the
+            // default, so a name never straddles the pin's wire.
+            let offset = lib.name_offset_mm();
+            let name_pos = (wx2 + wdx * offset, wy2 + wdy * offset);
+            let (align, v_align) = if wdx.abs() > wdy.abs() {
+                (
+                    if wdx > 0.0 {
+                        SvgTextAlign::Left
+                    } else {
+                        SvgTextAlign::Right
+                    },
+                    SvgTextVAlign::Center,
+                )
             } else {
-                let name_pos = (
-                    wx2 + wdx * lib.pin_name_offset,
-                    wy2 + wdy * lib.pin_name_offset,
-                );
-                if wdx.abs() > wdy.abs() {
-                    (
-                        name_pos,
-                        if wdx > 0.0 {
-                            SvgTextAlign::Left
-                        } else {
-                            SvgTextAlign::Right
-                        },
-                        SvgTextVAlign::Center,
-                        0.0,
-                    )
-                } else {
-                    (
-                        name_pos,
-                        SvgTextAlign::Center,
-                        if wdy > 0.0 {
-                            SvgTextVAlign::Top
-                        } else {
-                            SvgTextVAlign::Bottom
-                        },
-                        0.0,
-                    )
-                }
+                (
+                    SvgTextAlign::Center,
+                    if wdy > 0.0 {
+                        SvgTextVAlign::Top
+                    } else {
+                        SvgTextVAlign::Bottom
+                    },
+                )
             };
+            let rotation_deg = 0.0;
 
             out.push(SvgElement::Text {
                 x: xform.x(name_pos.0),

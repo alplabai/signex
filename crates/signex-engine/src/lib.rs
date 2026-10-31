@@ -104,6 +104,7 @@ pub use sheet_placement::{
 };
 use signex_types::schematic::{SchematicSheet, SelectedItem};
 pub(crate) use transform::TouchingPairs;
+pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
     BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
     moved_pin_tips,
