@@ -169,9 +169,13 @@ pub(crate) fn remove_part_menu_enabled(ctx: &CommandContext) -> bool {
 /// Commands whose handler explains to the user why it did nothing. The
 /// menu greys them by [`is_enabled`], but a keystroke still reaches the
 /// handler so the explanation is not lost (Save As in a PCB tab, #671;
-/// Print with no schematic).
+/// Print with no schematic; Up Hierarchy on a top-level sheet, whose handler
+/// also assembles the sheets itself when the Navigator cache is cold).
 pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
-    matches!(command.as_str(), "save_document_as" | "print") || is_planned_command(command)
+    matches!(
+        command.as_str(),
+        "save_document_as" | "print" | "leave_sheet" | "navigate_up_hierarchy"
+    ) || is_planned_command(command)
 }
 
 /// An Active Bar command whose tool is a planned placeholder (#1249). It is
@@ -236,20 +240,16 @@ impl Signex {
     }
 
     /// Whether the Navigator's hierarchy places the active tab's sheet
-    /// below another sheet. Reads the cached hierarchy, never the disk: this
-    /// runs on every menu draw.
+    /// below another sheet: one set lookup, since this runs on every menu
+    /// draw.
     fn active_sheet_has_parent(&self) -> bool {
         let document = &self.document_state;
-        let Some(hierarchy) = document.panel_ctx.navigator.hierarchy.as_ref() else {
-            return false;
-        };
-        let Some(path) = document.tabs.get(document.active_tab).map(|t| &t.path) else {
-            return false;
-        };
-        hierarchy
-            .placements_of(path)
-            .iter()
-            .any(|placement| !placement.chain().is_empty())
+        document.tabs.get(document.active_tab).is_some_and(|tab| {
+            document
+                .panel_ctx
+                .navigator
+                .is_placed_below_a_sheet(&tab.path)
+        })
     }
 
     /// Whether the active symbol editor is on a part Remove Part accepts:
@@ -938,10 +938,31 @@ mod tests {
             crate::app::state::scope::CaseFold::host_default(),
         );
         let (mut app, _task) = Signex::new();
-        app.document_state.panel_ctx.navigator.hierarchy = Some(hierarchy);
+        app.document_state
+            .panel_ctx
+            .navigator
+            .replace_hierarchy(hierarchy, None, &[]);
         let active = if active_is_child { &child } else { &root };
         push_tab(&mut app, active, TabKind::Schematic);
         app
+    }
+
+    /// The answer follows the active tab with no hierarchy rebuild between.
+    #[test]
+    fn up_hierarchy_follows_the_active_tab_without_a_rebuild() {
+        let mut app = with_hierarchy(false);
+        let child = PathBuf::from("/p/child.snxsch");
+        assert!(!enabled(&app, "navigate_up_hierarchy"));
+        push_tab(&mut app, &child, TabKind::Schematic);
+        assert!(enabled(&app, "navigate_up_hierarchy"));
+        app.document_state.active_tab = 0;
+        assert!(!enabled(&app, "navigate_up_hierarchy"));
+    }
+
+    #[test]
+    fn up_hierarchy_shortcut_is_explained_not_dropped() {
+        assert!(explains_when_unavailable(&id("navigate_up_hierarchy")));
+        assert!(explains_when_unavailable(&id("leave_sheet")));
     }
 
     #[test]
