@@ -162,6 +162,7 @@ impl SchematicCanvas<'_> {
             || self.tool_preview.is_some()
             || self.ghost_label.is_some()
             || self.ghost_symbol.is_some()
+            || self.prefs.power_port_pending
             || self.ghost_text.is_some()
         {
             return None;
