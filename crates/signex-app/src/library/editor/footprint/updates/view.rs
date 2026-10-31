@@ -16,7 +16,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
         FootprintEditorMsg::ToggleAutoFit => toggle_auto_fit(editor),
         FootprintEditorMsg::SetMode(mode) => set_mode(editor, mode),
         FootprintEditorMsg::TogglePlacementPause => toggle_placement_pause(editor),
-        FootprintEditorMsg::FitConsumed => fit_consumed(editor),
+        FootprintEditorMsg::FitConsumed { px_per_mm } => fit_consumed(editor, px_per_mm),
         // v0.26-E — clipboard ops intercepted at the call site
         // (apply_footprint_clipboard_op needs split-borrow with
         // document_state.pad_clipboard). The match arm here is
@@ -98,8 +98,9 @@ fn toggle_placement_pause(editor: &mut crate::app::FootprintDocument) {
     editor.canvas_cache.clear();
 }
 
-fn fit_consumed(editor: &mut crate::app::FootprintDocument) {
+fn fit_consumed(editor: &mut crate::app::FootprintDocument, px_per_mm: f32) {
     editor.state.fit_pending = false;
+    editor.state.view_px_per_mm = px_per_mm;
 }
 
 fn set_pads_tool(

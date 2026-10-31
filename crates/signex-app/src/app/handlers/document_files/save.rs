@@ -345,8 +345,8 @@ impl Signex {
         }
     }
 
-    /// Move the symbol / footprint editor, its tab(s) and the dirty
-    /// marker from `from` to `to`. `title` overrides the tab title (used
+    /// Move the symbol / footprint editor, its tab(s), the dirty marker and
+    /// any undocked window showing it from `from` to `to`. `title` overrides the tab title (used
     /// by the rollback); `None` derives it from `to`'s file stem.
     /// Returns the title the first moved tab had before the move.
     ///
@@ -402,6 +402,12 @@ impl Signex {
             }
         }
         self.document_state.rekey_document_dirty(from, to);
+        // An undocked window showing the editor follows it, so its
+        // per-window commands still find the document (#1801). The rollback
+        // of a failed Save As runs through here too.
+        if from != to {
+            self.rekey_undocked_windows(from, to);
+        }
         Ok(previous_title)
     }
 

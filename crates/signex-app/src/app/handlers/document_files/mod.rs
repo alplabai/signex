@@ -35,6 +35,8 @@ mod restore_library_tests;
 #[cfg(test)]
 mod restore_pending_commit_tests;
 mod save;
+#[cfg(test)]
+mod undocked_primitive_save_tests;
 pub(crate) use save::log_foreign_column_offenders;
 mod save_async;
 #[cfg(test)]

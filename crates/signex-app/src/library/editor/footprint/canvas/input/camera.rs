@@ -24,20 +24,33 @@ impl FootprintCanvas<'_> {
     ///   (0, 0) at screen pixel (0, 0) — the user's drawing area
     ///   starts in the corner and they have to pan to find the
     ///   centre.
+    ///
+    /// Returns the scale the fit settled on as a published message, since
+    /// the camera lives in the widget and the status bar's zoom reads the
+    /// model (#1808).
     pub(in crate::library::editor::footprint::canvas) fn apply_initial_fit(
         &self,
         cstate: &mut FootprintCanvasState,
         bounds: Rectangle,
-    ) {
-        if !cstate.did_initial_fit && bounds.width > 0.0 && bounds.height > 0.0 {
-            if let Some(bbox) = self.state.content_bbox_mm() {
-                cstate.fit_to_bounds(bbox, bounds);
-            } else {
-                cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
-                // Keep DEFAULT_PX_PER_MM scale.
-            }
-            cstate.did_initial_fit = true;
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        if cstate.did_initial_fit || bounds.width <= 0.0 || bounds.height <= 0.0 {
+            return None;
         }
+        if let Some(bbox) = self.state.content_bbox_mm() {
+            cstate.fit_to_bounds(bbox, bounds);
+        } else {
+            cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
+            // Keep DEFAULT_PX_PER_MM scale.
+        }
+        cstate.did_initial_fit = true;
+        Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::ViewScaleChanged {
+                px_per_mm: cstate.scale,
+            }),
+        }))
     }
 
     /// v0.26-C — one-shot Fit-to-Window from the right-click menu.
@@ -62,7 +75,9 @@ impl FootprintCanvas<'_> {
                 library_path: self.address.library_path.clone(),
                 table: self.address.table.clone(),
                 row_id: self.address.row_id,
-                msg: EditorMsg::Footprint(FootprintEditorMsg::FitConsumed),
+                msg: EditorMsg::Footprint(FootprintEditorMsg::FitConsumed {
+                    px_per_mm: cstate.scale,
+                }),
             }));
         }
         None

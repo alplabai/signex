@@ -568,3 +568,125 @@ mod wheel_zoom {
         );
     }
 }
+
+/// #1808: the first-draw fit changes the camera scale, so it publishes the
+/// scale and the status bar reads it before the cursor ever moves.
+mod initial_fit {
+    use iced::widget::canvas::{self, Program};
+    use iced::{Color, Event, Point, Rectangle, mouse, window};
+
+    use crate::library::editor::footprint::state::{CourtyardRect, FootprintEditorState};
+    use crate::library::messages::{EditorMsg, LibraryMessage};
+    use crate::library::state::EditorAddress;
+
+    use super::super::{FootprintCanvas, FootprintCanvasState};
+
+    const BOUNDS: Rectangle = Rectangle {
+        x: 0.0,
+        y: 0.0,
+        width: 800.0,
+        height: 600.0,
+    };
+
+    /// The message the canvas publishes on its first event, with the
+    /// camera it left behind.
+    fn first_event(state: &FootprintEditorState) -> (Option<LibraryMessage>, FootprintCanvasState) {
+        let cache = canvas::Cache::new();
+        let fpc = FootprintCanvas {
+            state,
+            address: EditorAddress::new(
+                std::path::PathBuf::from("/tmp/lib.snxlib"),
+                "footprints".to_string(),
+                signex_library::RowId::new(),
+            ),
+            bg_color: Color::WHITE,
+            grid_color: Color::BLACK,
+            cache: &cache,
+            sketch: None,
+            silk_f: &[],
+            silk_b: &[],
+            zoom_step: 1.1,
+        };
+        let mut cstate = FootprintCanvasState::default();
+        let event = Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
+        let action = fpc.update(
+            &mut cstate,
+            &event,
+            BOUNDS,
+            mouse::Cursor::Available(Point::new(1.0, 1.0)),
+        );
+        (action.and_then(|a| a.into_inner().0), cstate)
+    }
+
+    fn state_with_content() -> FootprintEditorState {
+        let mut state = FootprintEditorState::empty();
+        state.courtyard_mm = Some(CourtyardRect {
+            min_x: -1.0,
+            min_y: -1.0,
+            max_x: 1.0,
+            max_y: 1.0,
+        });
+        state
+    }
+
+    /// #1808: a right-click Fit to Window publishes the scale it settled on.
+    #[test]
+    fn a_pending_fit_publishes_the_fitted_scale() {
+        let mut state = state_with_content();
+        state.fit_pending = true;
+        let cache = canvas::Cache::new();
+        let fpc = FootprintCanvas {
+            state: &state,
+            address: EditorAddress::new(
+                std::path::PathBuf::from("/tmp/lib.snxlib"),
+                "footprints".to_string(),
+                signex_library::RowId::new(),
+            ),
+            bg_color: Color::WHITE,
+            grid_color: Color::BLACK,
+            cache: &cache,
+            sketch: None,
+            silk_f: &[],
+            silk_b: &[],
+            zoom_step: 1.1,
+        };
+        let mut cstate = FootprintCanvasState::default();
+        let message = fpc
+            .apply_pending_fit(&mut cstate, BOUNDS)
+            .and_then(|action| action.into_inner().0);
+        let Some(LibraryMessage::EditorEvent {
+            msg:
+                EditorMsg::Footprint(crate::library::messages::FootprintEditorMsg::FitConsumed {
+                    px_per_mm,
+                }),
+            ..
+        }) = message
+        else {
+            panic!("the pending fit published no FitConsumed: {message:?}");
+        };
+        assert_eq!(px_per_mm, cstate.scale);
+        assert_ne!(px_per_mm, super::super::DEFAULT_PX_PER_MM, "it did fit");
+    }
+
+    #[test]
+    fn the_first_fit_publishes_the_fitted_scale() {
+        let (message, cstate) = first_event(&state_with_content());
+        let Some(LibraryMessage::EditorEvent {
+            msg: EditorMsg::Footprint(msg),
+            ..
+        }) = message
+        else {
+            panic!("the first fit published nothing: {message:?}");
+        };
+        let mut editor = crate::app::FootprintDocument::new(
+            std::path::PathBuf::from("fit.snxfpt"),
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f")),
+        );
+        crate::library::editor::footprint::updates::apply_footprint_primitive_edit(
+            &mut editor,
+            msg,
+        );
+        assert_ne!(cstate.scale, super::super::DEFAULT_PX_PER_MM, "it did fit");
+        assert_eq!(editor.state.view_px_per_mm, cstate.scale);
+    }
+}

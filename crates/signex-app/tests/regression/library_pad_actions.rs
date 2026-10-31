@@ -415,16 +415,21 @@ fn v026c_fit_consumed_clears_fit_pending() {
         .fit_pending = true;
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
-        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::FitConsumed),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::FitConsumed { px_per_mm: 42.0 }),
     }));
+    let state = &app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .unwrap()
+        .state;
     assert!(
-        !app.document_state
-            .footprint_editors
-            .get(&path)
-            .unwrap()
-            .state
-            .fit_pending,
+        !state.fit_pending,
         "FitConsumed must clear fit_pending so the next event tick doesn't re-fit"
+    );
+    assert_eq!(
+        state.view_px_per_mm, 42.0,
+        "the fitted scale reaches the model"
     );
 }
 

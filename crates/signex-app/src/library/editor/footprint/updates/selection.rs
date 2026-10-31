@@ -20,6 +20,9 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
             y_mm,
             px_per_mm,
         } => cursor_at(editor, x_mm, y_mm, px_per_mm),
+        FootprintEditorMsg::ViewScaleChanged { px_per_mm } => {
+            editor.state.view_px_per_mm = px_per_mm;
+        }
         FootprintEditorMsg::SelectPad(sel) => select_pad(editor, sel),
         FootprintEditorMsg::SelectPads(pads) => select_pads(editor, pads),
         FootprintEditorMsg::DeleteSelected => delete_selected(editor),

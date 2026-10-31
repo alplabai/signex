@@ -111,6 +111,13 @@ pub enum FootprintEditorMsg {
         px_per_mm: f32,
     },
 
+    /// The canvas fitted its camera on the first draw, so the scale changed
+    /// with no cursor event to carry it; the status bar's zoom reads it
+    /// from the model (#1808).
+    ViewScaleChanged {
+        px_per_mm: f32,
+    },
+
     /// Select / deselect a pad. `None` deselects everything.
     SelectPad(Option<usize>),
 
@@ -191,7 +198,10 @@ pub enum FootprintEditorMsg {
 
     /// v0.26-C — canvas signals that the pending Fit-to-Window
     /// request has been honoured. See EditorMsg::Footprint(FootprintEditorMsg::FitConsumed).
-    FitConsumed,
+    /// `px_per_mm` is the scale the fit settled on (the status bar reads it).
+    FitConsumed {
+        px_per_mm: f32,
+    },
 
     /// v0.26-E — clipboard ops on the selected pad.
     CopyPad,
