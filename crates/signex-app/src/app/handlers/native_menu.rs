@@ -63,19 +63,21 @@ impl Signex {
 
     /// Rebuild the native spec and apply it, only when what it reads
     /// (enablement facts of the focused window, recent projects, the
-    /// confirm-dialog lock) moved since the last sync.
+    /// confirm-dialog lock, the keymap) moved since the last sync.
     #[cfg(target_os = "macos")]
     pub(crate) fn sync_native_menu(&mut self) {
         use crate::menu_bar::MenuContext;
         use crate::menu_bar::model::menu_bar_model;
         use crate::menu_bar::native::{MenuInputs, build};
+        use std::sync::Arc;
 
         let inputs = MenuInputs::new(
             self.command_context(self.native_menu_window()),
             self.ui_state.recent_projects.entries(),
             self.has_locking_confirm_modal(),
             self.open_panels(),
-        );
+        )
+        .with_keymap(Arc::clone(&self.ui_state.active_keymap));
         if !self.native_menu.needs_sync(&inputs) {
             return;
         }
@@ -83,6 +85,7 @@ impl Signex {
             commands: inputs.commands(),
             recent_projects: inputs.recent(),
             open_panels: inputs.open_panels().to_vec(),
+            active_keymap: inputs.keymap(),
             ..MenuContext::default()
         };
         let built = build(&menu_bar_model(&ctx), inputs.locked());
