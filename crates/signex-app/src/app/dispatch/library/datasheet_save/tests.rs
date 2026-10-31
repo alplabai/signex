@@ -1035,3 +1035,140 @@ fn save_all_reports_the_library_hold_as_a_refusal() {
     assert!(!datasheet_asset_path(&file, &hash).is_some_and(|p| p.exists()));
     assert!(editor(&app, &address).dirty, "the row stays owed");
 }
+
+/// A Save All of the staged row in the order the runtime delivers it: the
+/// store completes, the settle step runs, and only then does the row write
+/// the store started run. Returns that write and the settle's own task.
+fn settle_before_the_row_write(
+    app: &mut Signex,
+    task: iced::Task<Message>,
+) -> (iced::Task<Message>, iced::Task<Message>) {
+    let mut messages = crate::persist::run_task::outputs(task).into_iter();
+    let stored = messages.next().expect("the store completion");
+    let settled = messages.next().expect("the settle step");
+    assert!(messages.next().is_none());
+    let row_write = app.update(stored);
+    let after_settle = app.update(settled);
+    (row_write, after_settle)
+}
+
+/// #1728 C -- the settle step must not act while the row write the PDF
+/// store started is still queued: the close gate would see a dirty row.
+#[test]
+fn close_library_waits_for_the_row_write_the_store_started() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let needle = format!("refresh of {}", file.display());
+    let before = crate::diagnostics::logged_count(&needle);
+    let task = close_library_save_all(&mut app, &address);
+
+    let (row_write, after_settle) = settle_before_the_row_write(&mut app, task);
+    settle(&mut app, after_settle);
+    assert!(app.library.library_at(&file).is_some(), "still open");
+    assert!(
+        app.library.close_library_confirm.is_none(),
+        "the gate does not prompt for a row whose write is running"
+    );
+
+    settle(&mut app, row_write);
+    assert!(app.library.library_at(&file).is_none(), "closed");
+    assert!(app.document_state.parked_save_all_settles.is_empty());
+    assert!(app.library.batch_rows_in_flight.is_empty());
+    assert_eq!(
+        crate::diagnostics::logged_count(&needle),
+        before,
+        "no refresh was attempted on the library the close unmounted"
+    );
+}
+
+/// #1728 C -- a row write that fails after the settle step ran is listed
+/// by that Save All and leaves nothing behind.
+#[test]
+fn a_late_row_write_failure_is_listed_by_its_save_all() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let task = start_save_all(&mut app, &address);
+
+    let (row_write, after_settle) = settle_before_the_row_write(&mut app, task);
+    settle(&mut app, after_settle);
+    assert!(app.document_state.error_notice.is_none(), "not settled yet");
+
+    // Another writer moves the stored row on: the whole-row write is refused.
+    let library_id = app.library.library_at(&file).unwrap().library_id;
+    let mut moved = stored_row(&app, &file, &address);
+    moved.datasheet_label = "someone else".into();
+    app.library
+        .set
+        .get(library_id)
+        .unwrap()
+        .update_row(TABLE, moved, "other writer")
+        .unwrap();
+    settle(&mut app, row_write);
+
+    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    assert!(format!("{notice:?}").contains("stayed open"), "{notice:?}");
+    assert!(app.library.batch_row_failures.is_empty(), "no leaked entry");
+    assert!(app.document_state.parked_save_all_settles.is_empty());
+    assert!(app.library.batch_rows_in_flight.is_empty());
+}
+
+/// #1728 C -- the editor closed (through `update`) after the Save All
+/// began but before the store finished: the abandoned-save exit must not
+/// leave the batch's row in flight, or the settle parks forever.
+#[test]
+fn closing_the_editor_before_the_store_finishes_does_not_park_the_settle() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let task = close_library_save_all(&mut app, &address);
+    let _ = app.update(event(&address, EditorMsg::CloseEditor));
+    assert!(!app.library.editors.contains_key(&address));
+
+    let mut messages = crate::persist::run_task::outputs(task).into_iter();
+    let stored = messages.next().expect("the store completion");
+    let settled = messages.next().expect("the settle step");
+    let after_store = app.update(stored);
+    settle(&mut app, after_store);
+    assert!(app.library.batch_rows_in_flight.is_empty());
+    let after_settle = app.update(settled);
+    settle(&mut app, after_settle);
+
+    assert!(app.document_state.parked_save_all_settles.is_empty());
+    assert!(app.library.batch_rows_in_flight.is_empty());
+    assert!(
+        app.library.library_at(&file).is_some(),
+        "the close needs its editors"
+    );
+}
+
+/// #1728 C -- the editor closing while the settle waits must not leave it
+/// parked forever.
+#[test]
+fn a_parked_settle_resumes_when_the_editor_is_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (mut app, address, file) = app_with_git_library(tmp.path());
+    pick(&mut app, &address, PDF);
+    let task = close_library_save_all(&mut app, &address);
+
+    let (row_write, after_settle) = settle_before_the_row_write(&mut app, task);
+    settle(&mut app, after_settle);
+    assert_eq!(
+        app.document_state.parked_save_all_settles.len(),
+        1,
+        "waiting"
+    );
+    let _ = app.update(event(&address, EditorMsg::CloseEditor));
+    settle(&mut app, row_write);
+
+    assert!(
+        app.document_state.parked_save_all_settles.is_empty(),
+        "not parked forever"
+    );
+    assert!(app.library.batch_rows_in_flight.is_empty());
+    assert!(
+        app.library.library_at(&file).is_some(),
+        "other mount rules apply"
+    );
+}

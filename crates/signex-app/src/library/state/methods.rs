@@ -65,6 +65,7 @@ impl Default for LibraryState {
             panel_search: String::new(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
+            batch_rows_in_flight: HashMap::new(),
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
             shown_browser: None,
@@ -106,6 +107,23 @@ impl Default for LibraryState {
 }
 
 impl LibraryState {
+    /// Labels of the rows of Save All `batch` still writing, comma separated.
+    pub fn batch_rows_in_flight_labels(&self, batch: u64) -> String {
+        let mut labels: Vec<String> = self
+            .batch_rows_in_flight
+            .values()
+            .filter(|(b, _)| *b == batch)
+            .map(|(_, address)| self.editor_label(address))
+            .collect();
+        labels.sort();
+        labels.join(", ")
+    }
+
+    /// A row of Save All `batch` still has its PDF store or write running.
+    pub fn batch_has_rows_in_flight(&self, batch: u64) -> bool {
+        self.batch_rows_in_flight.values().any(|(b, _)| *b == batch)
+    }
+
     /// Look up an open library by its on-disk root path.
     pub fn library_at(&self, path: &Path) -> Option<&OpenLibrary> {
         self.open_libraries.iter().find(|lib| lib.root == path)

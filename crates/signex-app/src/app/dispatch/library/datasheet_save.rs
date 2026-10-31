@@ -208,6 +208,12 @@ impl Signex {
         state.saving_batch = batch;
         let generation = self.document_state.document_saves.mint_generation();
         state.saving_generation = generation;
+        if let Some(batch) = batch {
+            // Settled by `preview_row_saved` or an early exit below.
+            self.library
+                .batch_rows_in_flight
+                .insert(generation, (batch, address.clone()));
+        }
         let staged = state.staged_assets_in_use();
         let in_flight = self
             .document_state
@@ -263,7 +269,8 @@ impl Signex {
                     "Save abandoned: the editor was closed before its datasheet PDFs were stored",
                 ),
             }
-            return Task::none();
+            let batch = self.library.batch_rows_in_flight.remove(&generation);
+            return self.resume_parked_settle(batch.map(|(batch, _)| batch));
         }
         let batch = self
             .library
@@ -278,21 +285,55 @@ impl Signex {
             })
             .map_err(anyhow::Error::msg);
         let started = stored.and_then(|written| self.begin_row_write(address, &written, batch));
-        started.unwrap_or_else(|e| {
-            match batch {
-                // A Save All is waiting on this row: its settle step
-                // reports the failure and keeps the window / library open.
-                Some(batch) => {
-                    let label = self.library.editor_label(address);
-                    crate::diagnostics::log_error(&format!("Save All: could not save {label}"), &e);
-                    self.library
-                        .batch_row_failures
-                        .insert((batch, address.clone()), (label, format!("{e:#}")));
-                }
-                None => self.report_save_row_failure(&e),
+        match started {
+            // `preview_row_saved` ends this row's part of the batch.
+            Ok(task) => task,
+            Err(e) => {
+                self.library.batch_rows_in_flight.remove(&generation);
+                self.record_row_failure(address, batch, &e);
+                self.resume_parked_settle(batch)
             }
-            Task::none()
-        })
+        }
+    }
+
+    /// A row write failed or never started: report it to the Save All waiting on it
+    /// (its settle step lists it), or raise the Save Failed card.
+    pub(super) fn record_row_failure(
+        &mut self,
+        address: &EditorAddress,
+        batch: Option<u64>,
+        e: &anyhow::Error,
+    ) {
+        match batch {
+            // A Save All is waiting on this row: its settle step
+            // reports the failure and keeps the window / library open.
+            Some(batch) => {
+                let label = self.library.editor_label(address);
+                crate::diagnostics::log_error(&format!("Save All: could not save {label}"), e);
+                self.library
+                    .batch_row_failures
+                    .insert((batch, address.clone()), (label, format!("{e:#}")));
+            }
+            None => self.report_save_row_failure(e),
+        }
+    }
+
+    /// Run the Save All settle parked for `batch` once none of its rows has
+    /// a write in flight (#1728).
+    pub(super) fn resume_parked_settle(&mut self, batch: Option<u64>) -> Task<Message> {
+        let Some(batch) = batch else {
+            return Task::none();
+        };
+        if self.library.batch_has_rows_in_flight(batch) {
+            return Task::none();
+        }
+        match self.document_state.parked_save_all_settles.remove(&batch) {
+            Some(settle) => {
+                crate::diagnostics::log_info("Save All: its rows finished saving, continuing");
+                self.handle_save_all_settled(settle)
+            }
+            None => Task::none(),
+        }
     }
 }
 

@@ -273,6 +273,16 @@ impl Signex {
     /// Every write of a Save All completed: continue into the close / quit,
     /// or stay open and name what did not save.
     pub(crate) fn handle_save_all_settled(&mut self, settle: SaveAllSettle) -> Task<Message> {
+        if self.library.batch_has_rows_in_flight(settle.batch) {
+            let waiting = self.library.batch_rows_in_flight_labels(settle.batch);
+            crate::diagnostics::log_warning(format!(
+                "Save All: waiting for {waiting} to finish saving before it continues"
+            ));
+            self.document_state
+                .parked_save_all_settles
+                .insert(settle.batch, settle);
+            return Task::none();
+        }
         let SaveAllSettle {
             next,
             items,
