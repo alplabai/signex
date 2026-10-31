@@ -39,6 +39,16 @@ impl Signex {
         )
     }
 
+    /// Where a hover card may go in `window_id`: the canvas in the main
+    /// window, the whole window elsewhere.
+    pub(super) fn card_bounds(&self, window_id: iced::window::Id) -> iced::Rectangle {
+        canvas_region::card_bounds(
+            self.ui_state.main_window_id == Some(window_id),
+            self.canvas_bounds(),
+            self.ui_state.window_size,
+        )
+    }
+
     /// Hover tooltip card showing the placed symbol's designator,
     /// value, footprint, and library id. Only paints after the cursor
     /// has dwelled on a Symbol hit for >= 250 ms — gates impulsive
@@ -46,7 +56,10 @@ impl Signex {
     /// hasn't tripped, when no schematic is active, or when the
     /// uuid no longer resolves (e.g. the symbol was deleted while
     /// the dwell timer was running).
-    pub(super) fn view_hover_tooltip(&self) -> Option<Element<'_, Message>> {
+    pub(super) fn view_hover_tooltip(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container, text};
         use iced::{Background, Border};
 
@@ -56,7 +69,7 @@ impl Signex {
         // A net card (a wire, pin or label, #1270) takes the place of the
         // symbol card while the pointer rests on a pin.
         if let Some(card) = &self.document_state.net_nav.hover.card {
-            return Some(self.view_net_hover_card(card));
+            return Some(self.view_net_hover_card(card, window_id));
         }
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
@@ -157,7 +170,7 @@ impl Signex {
         // estimate; iced lays the card out at its true size.
         const ESTIMATED_H: f32 = 110.0;
         let (x, y) =
-            canvas_region::place_card((sx, sy), (CARD_W, ESTIMATED_H), self.canvas_bounds());
+            canvas_region::place_card((sx, sy), (CARD_W, ESTIMATED_H), self.card_bounds(window_id));
         Some(super::view::translate::Translate::new(card, (x, y)).into())
     }
 

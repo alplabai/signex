@@ -56,6 +56,25 @@ pub(in crate::app) fn canvas_bounds(
     }
 }
 
+/// Where hover cards may go: the canvas in the main window (its docks are
+/// the ones laid out), the whole window anywhere else.
+pub(in crate::app) fn card_bounds(
+    is_main_window: bool,
+    canvas: Rectangle,
+    window: (f32, f32),
+) -> Rectangle {
+    if is_main_window {
+        canvas
+    } else {
+        Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: window.0,
+            height: window.1,
+        }
+    }
+}
+
 /// Top-left of a `size` card shown beside `pointer`, kept inside `bounds`:
 /// below-right of the pointer, flipped to the other side at an edge, then
 /// clamped when it fits on neither.
@@ -150,6 +169,25 @@ mod tests {
         let b = canvas_bounds((500.0, 400.0), dock(240.0), dock(220.0), NONE);
         let (x, _) = place_card((b.x + 10.0, 200.0), (260.0, 50.0), b);
         assert_eq!(x, b.x);
+    }
+
+    #[test]
+    fn cards_are_kept_on_the_canvas_in_the_main_window_only() {
+        let canvas = bounds();
+        assert_eq!(card_bounds(true, canvas, (1400.0, 900.0)), canvas);
+        let other = card_bounds(false, canvas, (800.0, 600.0));
+        assert_eq!(
+            other,
+            Rectangle {
+                x: 0.0,
+                y: 0.0,
+                width: 800.0,
+                height: 600.0
+            }
+        );
+        // Trunk's clamp: a card near the right edge of a 800 px window.
+        let (x, _) = place_card((700.0, 300.0), (260.0, 100.0), other);
+        assert_eq!(x, 700.0 - POINTER_GAP - 260.0);
     }
 
     #[test]
