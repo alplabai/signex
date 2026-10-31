@@ -17,7 +17,7 @@ pub struct SceneDrawOptions {
     pub min_stroke_px: f32,
     /// Readability limits in logical pixels — a per-surface view decision, so
     /// each replay supplies its own. The mm→em ratio is *not* here: it is one
-    /// constant (`signex_gfx::primitive::text::MM_PER_EM`) because it encodes
+    /// rule (`signex_types::font::mm_per_em`) because it encodes
     /// the model's millimetre contract, not a view preference, and a second
     /// copy is how the replays drifted apart.
     pub text_min_px: f32,
@@ -143,11 +143,12 @@ impl SceneDrawOptions {
         (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
 
-    fn text_px(self, size_mm: f32) -> f32 {
-        signex_gfx::primitive::text::text_px(
+    fn text_px(self, size_mm: f32, family: Option<&str>) -> f32 {
+        signex_gfx::primitive::text::text_px_in(
             size_mm,
             self.scale_px_per_mm,
             signex_gfx::primitive::text::TextSizePolicy::new(self.text_min_px, self.text_max_px),
+            family,
         )
     }
 }
@@ -485,7 +486,7 @@ fn draw_text_items<'a, F>(
             content: text.content.clone(),
             position: Point::ORIGIN,
             color: color_from_rgba(text.color),
-            size: iced::Pixels(options.text_px(text.size_mm)),
+            size: iced::Pixels(options.text_px(text.size_mm, text.family.as_deref())),
             line_height: iced::widget::text::LineHeight::Relative(
                 signex_gfx::primitive::text::LINE_HEIGHT_EM,
             ),
