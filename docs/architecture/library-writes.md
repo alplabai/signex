@@ -135,3 +135,15 @@ bad file stall the library:
   the pricing walk)
   when the job ends. An adapter dropped with files nobody asked for names
   them itself, as a safety net.
+
+## Save All and rows with staged PDFs (#1728)
+
+A staged-PDF row of a Save All stores its PDFs on a worker, and
+`AssetsStored` then starts the row write as a task the batch's chain does not
+hold. `LibraryState.batch_rows_in_flight` (keyed by save generation) lists
+those rows until `preview_row_saved` or an early exit of
+`finish_staged_asset_store` ends them. A `SaveAllSettled` that arrives while
+its batch has one is parked in `LibraryState.parked_settles`; the last
+write to end resumes it, so a late failure lands in that Save All's listing
+and a closed editor or abandoned save cannot leave it parked. Plain rows are
+unaffected: their write task is in the chain.

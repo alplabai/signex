@@ -301,9 +301,15 @@ impl Signex {
                 }
             }
         }
+        // The batch's settle waits for this write, success or failure.
+        self.library.batch_rows_in_flight.remove(&generation);
+        let resumed = self.resume_parked_settle(batch);
         // The editor stays dirty on its old base revision after a failure;
         // the refresh shows what is stored.
-        self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing)
+        Task::batch([
+            self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing),
+            resumed,
+        ])
     }
 
     /// Everything a row save needs, taken from the editor: the copy to
