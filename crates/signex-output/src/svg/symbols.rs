@@ -6,6 +6,7 @@
 
 use super::geometry::{arc_path_commands, circle_path};
 use super::labels::{halign_to_svg, valign_to_svg};
+use super::text::glyph_em_pt;
 use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
@@ -94,7 +95,7 @@ pub(super) fn push_symbol_lib_graphics(
                 x: xform.x(position.x),
                 y: xform.px_y(position.y),
                 font_alias: "F1",
-                size_pt: (size * xform.mm_to_unit) as f32,
+                size_pt: glyph_em_pt("F1", size, xform.mm_to_unit),
                 align: halign_to_svg(h_align),
                 v_align: valign_to_svg(v_align),
                 rotation_deg: rotation_deg as f32,
@@ -219,7 +220,11 @@ pub(super) fn push_symbol_pins(
                 x: xform.x(name_pos.0),
                 y: xform.px_y(name_pos.1),
                 font_alias: "F1",
-                size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                size_pt: glyph_em_pt(
+                    "F1",
+                    signex_types::schematic::SCHEMATIC_TEXT_MM,
+                    xform.mm_to_unit,
+                ),
                 align,
                 v_align,
                 rotation_deg,
@@ -248,7 +253,11 @@ pub(super) fn push_symbol_pins(
                 x: xform.x(num_pos.0),
                 y: xform.px_y(num_pos.1),
                 font_alias: "F3",
-                size_pt: (signex_types::schematic::SCHEMATIC_TEXT_MM * xform.mm_to_unit) as f32,
+                size_pt: glyph_em_pt(
+                    "F3",
+                    signex_types::schematic::SCHEMATIC_TEXT_MM,
+                    xform.mm_to_unit,
+                ),
                 align,
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,
