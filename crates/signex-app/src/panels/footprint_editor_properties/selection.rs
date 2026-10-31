@@ -35,6 +35,7 @@ pub(super) fn view_selection<'a>(
         border: border_c,
         input_bg,
         input_bdr,
+        panel_bg,
         ..
     } = palette;
     match (
@@ -223,8 +224,8 @@ pub(super) fn view_selection<'a>(
                 // v0.16.4 — role sub-forms. Render when the
                 // matching `*Attr` is set on the selected entity.
                 col = render_pour_subform(col, fp, id, muted, primary, border_c);
-                col = render_keepout_subform(col, fp, id, muted, primary, border_c);
-                col = render_cutout_subform(col, fp, id, muted, primary, border_c);
+                col = render_keepout_subform(col, fp, id, muted, primary, border_c, panel_bg);
+                col = render_cutout_subform(col, fp, id, muted, primary, border_c, panel_bg);
                 col = render_sketch_pad_subform(
                     col,
                     fp,
