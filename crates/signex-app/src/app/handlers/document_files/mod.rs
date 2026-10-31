@@ -41,6 +41,9 @@ mod save_as_target_tests;
 #[cfg(test)]
 mod undocked_primitive_save_tests;
 pub(crate) use save::log_foreign_column_offenders;
+mod save_as_project;
+#[cfg(test)]
+mod save_as_project_tests;
 mod save_async;
 #[cfg(test)]
 mod save_async_tests;

@@ -1,0 +1,1 @@
+- **Save As keeps the project in step (#1824)** — Save As of a project sheet into the project folder now re-points the project's page list, root sheet and open parents' sheet symbols to the new file and writes the project file, so reopening shows the edit; a copy saved outside the folder is reported as not part of the project.

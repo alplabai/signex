@@ -184,6 +184,52 @@ impl Signex {
         parents
     }
 
+    /// After a Save As moved the sheet `from` to `to` inside the project:
+    /// re-point the references of every parent that is open, through the
+    /// engine (dirty, undoable). Parents that are not open are not read on
+    /// the UI thread; their names are returned so the caller can say they
+    /// still name `from`.
+    pub(crate) fn repoint_open_parents_after_save_as(
+        &mut self,
+        project_idx: usize,
+        from: &Path,
+        to: &Path,
+    ) -> Vec<String> {
+        let leaf = to
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        let mut plan = self.plan_reference_rewrites(project_idx, from, &leaf);
+        let mut unrewritten = Vec::new();
+        plan.rewrites.retain_mut(|rewrite| {
+            let name = rewrite.parent.file_name().map_or_else(
+                || rewrite.parent.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            // The new spelling is relative to the parent, not to the project.
+            let parent_dir = rewrite.parent.parent().unwrap_or_else(|| Path::new(""));
+            let Ok(relative) = to.strip_prefix(parent_dir) else {
+                unrewritten.push(name);
+                return false;
+            };
+            rewrite.to = relative
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+            if self.document_state.engines.contains_key(&rewrite.parent) {
+                return true;
+            }
+            unrewritten.push(name);
+            false
+        });
+        plan.unchecked.clear();
+        let outcome = self.apply_reference_rewrites(&plan, ParentSheets::new());
+        unrewritten.extend(outcome.failed);
+        unrewritten.sort();
+        unrewritten.dedup();
+        unrewritten
+    }
+
     fn apply_one_rewrite(
         &mut self,
         rewrite: &ReferenceRewrite,
