@@ -43,9 +43,7 @@ impl Signex {
             ..BomOptions::default()
         };
         let Some((table, validation_report)) = self.rebuild_bom_table(&opts) else {
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                "Cannot build BOM: no active schematic.".to_string(),
-            ));
+            self.refuse_export("Cannot build BOM: no active schematic.");
             return Task::none();
         };
         // Default sort: ascending by the Designator column when it
@@ -232,13 +230,14 @@ impl Signex {
         };
         let options = preview.options.clone();
         let source = preview.source.clone();
-        let (default_name, format_filter) = match options.format {
-            BomFormat::Csv => ("bom.csv", ("CSV (.csv)", &["csv"][..])),
-            BomFormat::Xlsx => ("bom.xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
-            BomFormat::Html => ("bom.html", ("HTML (.html)", &["html", "htm"][..])),
+        let (ext, format_filter) = match options.format {
+            BomFormat::Csv => ("csv", ("CSV (.csv)", &["csv"][..])),
+            BomFormat::Xlsx => ("xlsx", ("Excel (.xlsx)", &["xlsx"][..])),
+            BomFormat::Html => ("html", ("HTML (.html)", &["html", "htm"][..])),
         };
         let (filter_label, filter_exts) = format_filter;
-        let default_name_owned = default_name.to_string();
+        let target = self.save_target(Some(&source));
+        let default_name_owned = target.file_name("bom", "-bom", ext);
         let filter_label_owned = filter_label.to_string();
         let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
@@ -252,8 +251,9 @@ impl Signex {
         let dialog = Task::perform(
             async move {
                 let exts_refs: Vec<&str> = filter_exts_owned.iter().map(String::as_str).collect();
-                rfd::AsyncFileDialog::new()
-                    .set_title("Export Bill of Materials")
+                target
+                    .dialog("Export Bill of Materials")
+                    .await
                     .add_filter(filter_label_owned.as_str(), &exts_refs)
                     .set_file_name(default_name_owned.as_str())
                     .save_file()
@@ -331,13 +331,10 @@ impl Signex {
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
-                    let reason = format!(
+                    self.refuse_export(format!(
                         "Cannot export BOM: the source document {} is no longer open.",
                         source.display()
-                    );
-                    crate::diagnostics::log_warning(reason.clone());
-                    self.document_state.error_notice =
-                        Some(crate::app::state::ErrorNotice::export(reason));
+                    ));
                     return Task::none();
                 }
             };
@@ -386,9 +383,7 @@ impl Signex {
                 );
             }
             Err(e) => {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
-                    format!("BOM export failed: {e}"),
-                ));
+                self.report_export_failure(format!("BOM export failed: {e}"));
             }
         }
 

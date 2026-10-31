@@ -589,8 +589,12 @@ Both exports are under **File ▸ Export** and need a schematic open.
 1. Choose **File ▸ Export ▸ PDF…** (or press `Ctrl+P`).
 2. A preview window opens with **Preview** and **Settings** tabs. Choose colour
    or gray, which pages, and the other options.
-3. Press **Export PDF**. A save dialog titled **Export PDF** opens with the
-   name `schematic.pdf`. Choose where to save.
+3. Press **Export PDF**. A save dialog titled **Export PDF** opens in the
+   project's folder with the name `<project or document>.pdf` (`schematic.pdf`
+   only when neither is known). Choose where to save. When the file is written,
+   the footer of the export window names the written file (a long path is
+   shortened in the middle; the Messages panel has the full path). Changing a setting
+   brings the page count back.
 
 **BOM (bill of materials)**
 
@@ -601,11 +605,17 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 A schematic without placed parts produces an empty BOM.
 
+Export save dialogs open in the project's folder, **File ▸ New Project** beside
+it, and **Save As** in the document's own folder. With no project open, or for
+the bundled Sample Project (which lives in the app's config folder), the export
+and New Project dialogs leave the folder to the operating system.
+
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. The
-save dialog is titled **Export ERC Report**, proposes `erc-report.html`, and
-the extension you choose sets the format: `.html`, `.pdf`, `.json`, `.csv` or
+save dialog is titled **Export ERC Report**, proposes
+`<project or document>-erc-report.html` (`erc-report.html` when neither is
+known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, `.csv` or
 `.txt`. See [ERC_REPORT.md](ERC_REPORT.md).
 
 ### Title block, project parameters and special strings
