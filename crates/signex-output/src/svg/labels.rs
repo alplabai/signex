@@ -13,9 +13,14 @@ use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::{RichSegment, parse_signex_markup};
 use signex_types::schematic::{HAlign, LabelType, VAlign};
 
-pub(super) fn label_size_pt(font_size_mm: f64, mm_to_unit: f64, scale: &PdfScale) -> f32 {
+pub(super) fn label_size_pt(
+    font_size_mm: f64,
+    mm_to_unit: f64,
+    scale: &PdfScale,
+    font_alias: &str,
+) -> f32 {
     if font_size_mm > 0.0 {
-        (font_size_mm * mm_to_unit) as f32
+        super::text::em_for_glyph_height(font_alias, (font_size_mm * mm_to_unit) as f32)
     } else {
         match scale {
             PdfScale::OneToOne | PdfScale::FitToPage | PdfScale::Percent(_) => 9.0,
