@@ -217,6 +217,29 @@ fn glyph_advance(face: &Face<'_>, gid: GlyphId, scale: f32) -> f32 {
         .unwrap_or(0.5 * face.units_per_em() as f32 * scale)
 }
 
+/// The em size, in the same unit, at which the capitals of text drawn in
+/// `alias` measure `glyph_height` (#1229).
+///
+/// A schematic text's stored size is the height its glyphs should have on the
+/// sheet, not an em: the canvas converts it through the face's cap height, so
+/// the export must too or a printed label is shorter than the one on screen
+/// and a Roboto label differs from an Iosevka one.
+pub(super) fn em_for_glyph_height(alias: &str, glyph_height: f32) -> f32 {
+    let ratio = face_for_alias(alias)
+        .and_then(|face| {
+            let upm = f32::from(face.units_per_em());
+            let cap = f32::from(face.capital_height()?);
+            (upm > 0.0 && cap > 0.0).then_some(cap / upm)
+        })
+        .unwrap_or(signex_types::font::FALLBACK_MM_PER_EM);
+    glyph_height / ratio
+}
+
+/// [`em_for_glyph_height`] for a glyph height in millimetres.
+pub(super) fn glyph_em_pt(alias: &str, glyph_height_mm: f64, mm_to_unit: f64) -> f32 {
+    em_for_glyph_height(alias, (glyph_height_mm * mm_to_unit) as f32)
+}
+
 fn face_for_alias(alias: &str) -> Option<Face<'static>> {
     match alias {
         "F1" => Face::parse(
@@ -317,5 +340,33 @@ impl OutlineBuilder for TinyPathOutlineBuilder {
 
     fn close(&mut self) {
         self.pb.close();
+    }
+}
+
+#[cfg(test)]
+mod cap_height_tests {
+    use super::*;
+
+    /// The table the canvas converts with (`signex_types::font`) must be the
+    /// bundled faces' own OS/2 numbers, or the canvas and the export disagree.
+    #[test]
+    fn the_canvas_cap_height_table_matches_the_bundled_font_files() {
+        for (alias, family, upm, cap) in [
+            ("F3", "Iosevka", 1000.0, 735.0),
+            ("F1", "Roboto", 2048.0, 1456.0),
+        ] {
+            let face = face_for_alias(alias).expect("bundled face");
+            assert_eq!(f32::from(face.units_per_em()), upm, "{family}");
+            assert_eq!(f32::from(face.capital_height().unwrap()), cap, "{family}");
+            let table = signex_types::font::bundled_cap_height_per_em(family).unwrap();
+            assert!((table - cap / upm).abs() < 1e-6, "{family}: {table}");
+            assert!((em_for_glyph_height(alias, 1.27) - 1.27 / table).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn an_unknown_alias_keeps_the_fallback_ratio() {
+        let em = em_for_glyph_height("F9", 1.0);
+        assert!((em - 1.0 / signex_types::font::FALLBACK_MM_PER_EM).abs() < 1e-6);
     }
 }

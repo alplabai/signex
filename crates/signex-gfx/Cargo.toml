@@ -18,6 +18,7 @@ log = "0.4"
 # `polygon.rs::append_fill`) already lives in signex-sketch's geom toolkit —
 # reused here rather than re-derived, per the one-authoritative-contract rule.
 signex-sketch = { workspace = true }
+signex-types = { workspace = true }
 
 [features]
 # Test-only helpers for the crates above this one (`polygon_fill_triangles`).
