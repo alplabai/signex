@@ -494,9 +494,6 @@ pub struct LibraryState {
     /// keyed by the save's generation: `(batch id, row)`. A settle step
     /// waits until its batch has none (#1728).
     pub batch_rows_in_flight: HashMap<u64, (u64, EditorAddress)>,
-    /// A Save All's settle that ran while rows of its batch were still
-    /// writing, by batch id; resumed by the last of those writes.
-    pub parked_settles: HashMap<u64, crate::app::contracts::SaveAllSettle>,
     /// Bundled + per-library parameter templates. Reference-counted
     /// because both the editor and the validator borrow it. The
     /// Component Preview tab + the validator both read through this

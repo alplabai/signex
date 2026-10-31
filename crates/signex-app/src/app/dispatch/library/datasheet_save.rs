@@ -290,20 +290,20 @@ impl Signex {
             Ok(task) => task,
             Err(e) => {
                 self.library.batch_rows_in_flight.remove(&generation);
-                let failed = self.record_row_start_failure(address, batch, &e);
-                Task::batch([failed, self.resume_parked_settle(batch)])
+                self.record_row_failure(address, batch, &e);
+                self.resume_parked_settle(batch)
             }
         }
     }
 
-    /// The row write never started: report it to the Save All waiting on it
+    /// A row write failed or never started: report it to the Save All waiting on it
     /// (its settle step lists it), or raise the Save Failed card.
-    fn record_row_start_failure(
+    pub(super) fn record_row_failure(
         &mut self,
         address: &EditorAddress,
         batch: Option<u64>,
         e: &anyhow::Error,
-    ) -> Task<Message> {
+    ) {
         match batch {
             // A Save All is waiting on this row: its settle step
             // reports the failure and keeps the window / library open.
@@ -316,7 +316,6 @@ impl Signex {
             }
             None => self.report_save_row_failure(e),
         }
-        Task::none()
     }
 
     /// Run the Save All settle parked for `batch` once none of its rows has
@@ -328,8 +327,11 @@ impl Signex {
         if self.library.batch_has_rows_in_flight(batch) {
             return Task::none();
         }
-        match self.library.parked_settles.remove(&batch) {
-            Some(settle) => self.handle_save_all_settled(settle),
+        match self.document_state.parked_save_all_settles.remove(&batch) {
+            Some(settle) => {
+                crate::diagnostics::log_info("Save All: its rows finished saving, continuing");
+                self.handle_save_all_settled(settle)
+            }
             None => Task::none(),
         }
     }

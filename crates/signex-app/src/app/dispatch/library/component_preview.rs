@@ -283,33 +283,16 @@ impl Signex {
                 }
                 let error =
                     anyhow::anyhow!("update row in table {}: {}", address.table, failure.reason);
-                match batch {
-                    // A Save All is waiting on this row: its settle step
-                    // reports the failure and keeps the window / library
-                    // open.
-                    Some(batch) => {
-                        let label = self.library.editor_label(&address);
-                        crate::diagnostics::log_error(
-                            &format!("Save All: could not save {label}"),
-                            &error,
-                        );
-                        self.library
-                            .batch_row_failures
-                            .insert((batch, address.clone()), (label, format!("{error:#}")));
-                    }
-                    None => self.report_save_row_failure(&error),
-                }
+                self.record_row_failure(&address, batch, &error);
             }
         }
         // The batch's settle waits for this write, success or failure.
         self.library.batch_rows_in_flight.remove(&generation);
-        let resumed = self.resume_parked_settle(batch);
         // The editor stays dirty on its old base revision after a failure;
-        // the refresh shows what is stored.
-        Task::batch([
-            self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing),
-            resumed,
-        ])
+        // the refresh shows what is stored. Built before the resume: a
+        // resumed Close Library unmounts at once.
+        let refresh = self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing);
+        Task::batch([refresh, self.resume_parked_settle(batch)])
     }
 
     /// Everything a row save needs, taken from the editor: the copy to
