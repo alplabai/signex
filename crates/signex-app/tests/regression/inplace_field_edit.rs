@@ -280,6 +280,99 @@ fn a_commit_whose_object_is_gone_says_so_in_messages() {
     assert!(logged(&["In-place edit discarded", "no longer exists"]));
 }
 
+/// The actions a task yields, as the iced runtime would receive them.
+fn actions(task: iced::Task<Message>) -> Vec<iced_runtime::Action<Message>> {
+    use futures::StreamExt as _;
+    let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+        return Vec::new();
+    };
+    tokio::runtime::Runtime::new()
+        .expect("runtime")
+        .block_on(async {
+            let mut out = Vec::new();
+            while let Some(action) = stream.next().await {
+                out.push(action);
+            }
+            out
+        })
+}
+
+/// A focusable widget standing in for the editor's `text_input`: records
+/// whether the operations in a task focused it.
+struct Probe {
+    focused: bool,
+}
+
+impl iced::advanced::widget::operation::Focusable for Probe {
+    fn is_focused(&self) -> bool {
+        self.focused
+    }
+    fn focus(&mut self) {
+        self.focused = true;
+    }
+    fn unfocus(&mut self) {
+        self.focused = false;
+    }
+}
+
+/// Whether a widget operation in `acts` focuses the widget with `id`.
+fn focuses(acts: Vec<iced_runtime::Action<Message>>, id: &iced::widget::Id) -> bool {
+    use iced::advanced::widget::Operation as _;
+    let bounds = iced::Rectangle::default();
+    acts.into_iter().any(|action| {
+        let iced_runtime::Action::Widget(mut op) = action else {
+            return false;
+        };
+        let mut probe = Probe { focused: false };
+        op.focusable(Some(id), bounds, &mut probe);
+        probe.focused
+    })
+}
+
+/// #1770 — opening the editor focuses its input in the same task, so typing
+/// goes in at once (the iced runtime rebuilds the view before it runs it).
+#[test]
+fn double_clicking_a_label_focuses_the_editor_input() {
+    let mut app = app();
+    let task = app.update(Message::CanvasEvent(CanvasEvent::DoubleClicked {
+        world_x: 20.0,
+        world_y: 100.0,
+        screen_x: 0.0,
+        screen_y: 0.0,
+    }));
+    assert!(editing(&app).is_some(), "the label editor should be open");
+    assert!(focuses(
+        actions(task),
+        &signex_app::app::contracts::TEXT_EDIT_INPUT_ID
+    ));
+}
+
+#[test]
+fn a_field_edit_command_focuses_the_editor_input() {
+    let mut app = app();
+    hover(&mut app, (20.0, 100.0));
+    let task = app.update(Message::TextEdit(TextEditMsg::Requested(
+        TextEditTarget::Text,
+    )));
+    assert!(editing(&app).is_some(), "the editor should be open");
+    assert!(focuses(
+        actions(task),
+        &signex_app::app::contracts::TEXT_EDIT_INPUT_ID
+    ));
+}
+
+#[test]
+fn a_command_with_nothing_to_edit_focuses_nothing() {
+    let mut app = app();
+    let task = app.update(Message::TextEdit(TextEditMsg::Requested(
+        TextEditTarget::Value,
+    )));
+    assert!(!focuses(
+        actions(task),
+        &signex_app::app::contracts::TEXT_EDIT_INPUT_ID
+    ));
+}
+
 /// #1799 — a power port's designator is never drawn, so F2 / Edit Designator
 /// edits what is drawn: the net name, through the Value edit Properties uses.
 #[test]

@@ -34,9 +34,10 @@ impl Signex {
     }
 
     /// The hover card shows only with the preference on and nothing being
-    /// placed or dragged.
+    /// placed, dragged or edited in place.
     fn net_hover_allowed(&self) -> bool {
         self.ui_state.net_hover_enabled
+            && self.interaction_state.editing_text.is_none()
             && self.interaction_state.current_tool == crate::app::Tool::Select
             && self.interaction_state.placement.is_none()
     }

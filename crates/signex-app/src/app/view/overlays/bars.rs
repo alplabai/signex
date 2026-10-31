@@ -213,8 +213,7 @@ impl Signex {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let y_offset: f32 =
-            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 = canvas_region::CHROME_TOP;
         let bar_has_selection = !interaction.canvas.selected.is_empty();
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
@@ -255,8 +254,7 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 =
-            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 = canvas_region::CHROME_TOP;
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
@@ -452,8 +450,7 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 =
-            crate::menu_bar::MENU_BAR_HEIGHT + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+        let y_offset: f32 = canvas_region::CHROME_TOP;
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
@@ -579,7 +576,6 @@ impl Signex {
     /// position through the live camera into a window-absolute screen
     /// position each frame.
     pub(in crate::app::view) fn text_edit_overlay(&self) -> Option<Element<'_, Message>> {
-        let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         if !self.has_active_schematic() {
@@ -588,34 +584,21 @@ impl Signex {
         let edit_state = interaction.editing_text.as_ref()?;
         let text = edit_state.text.clone();
         let placeholder = crate::app::handlers::canvas::editor_placeholder(edit_state.kind);
-        // Convert object world position → window-absolute screen position.
-        // The canvas Program publishes its latest camera into this Cell each
-        // frame — that's the only way to read it from outside the Program.
-        let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera();
-        let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
-        let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
-        // Canvas top-left within the window: menu bar + tab bar above,
-        // left dock + left resize handle (5px when shown) to the side.
-        let tabs_h: f32 = if document.tabs.is_empty() { 0.0 } else { 28.0 };
-        let y_canvas_origin: f32 = crate::menu_bar::MENU_BAR_HEIGHT + tabs_h;
-        let has_left = document.dock.has_panels(crate::dock::PanelPosition::Left);
-        let left_col = document.dock.is_collapsed(crate::dock::PanelPosition::Left);
-        let left_dock_w: f32 = if !has_left {
-            0.0
-        } else if left_col {
-            28.0
-        } else {
-            ui.left_width
-        };
-        let left_handle_w: f32 = if has_left && !left_col { 5.0 } else { 0.0 };
-        let x_canvas_origin: f32 = left_dock_w + left_handle_w;
+        // Object world position -> window position through the live camera
+        // and the canvas rectangle, so the editor opens on the label.
+        let camera = interaction.canvas.live_camera();
+        let (abs_x, abs_y) = canvas_region::world_to_window(
+            (edit_state.world_x, edit_state.world_y),
+            camera,
+            self.canvas_bounds(),
+        );
         // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
-        let font_px = (cam_scale * 1.8).clamp(10.0, 64.0);
+        let font_px = (camera.2 * 1.8).clamp(10.0, 64.0);
         // Estimate width from text length to keep the input snug.
         let approx_w = ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
-        // Offset the input so the baseline sits on top of the label text.
-        let abs_x = x_canvas_origin + canvas_local_x - 2.0;
-        let abs_y = y_canvas_origin + canvas_local_y - font_px - 2.0;
+        // Sit the input's baseline on the label text.
+        let abs_x = abs_x - 2.0;
+        let abs_y = abs_y - font_px - 2.0;
         let paper_c = crate::styles::ti(document.panel_ctx.tokens.paper);
         let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
         let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);

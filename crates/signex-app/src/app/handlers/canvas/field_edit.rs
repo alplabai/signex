@@ -128,6 +128,11 @@ impl Signex {
             return false;
         };
         self.interaction_state.editing_text = Some(opened);
+        // A hover card left on screen would cover the editor (#1770).
+        self.document_state.net_nav.hover.card = None;
+        self.document_state.net_nav.hover.candidate = None;
+        self.interaction_state.hover_symbol_uuid = None;
+        self.interaction_state.hover_screen_pos = None;
         true
     }
 

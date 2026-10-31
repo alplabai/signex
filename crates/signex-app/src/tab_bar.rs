@@ -52,15 +52,42 @@ pub fn reveal_active_tab<M: Send + 'static>(active: usize, count: usize) -> iced
     iced::widget::operation::snap_to(TAB_STRIP_ID, reveal_offset(active, count))
 }
 
+/// The hover text of a tab, or `None` when tooltips are off. They are off
+/// while the tab's context menu is open, since the tooltip hangs below the
+/// tab and would cover the menu's first row (#1770).
+fn tab_tooltip(path: &std::path::Path, read_only: bool, enabled: bool) -> Option<String> {
+    if !enabled {
+        return None;
+    }
+    let mut tip = path.display().to_string();
+    if read_only {
+        tip.push('\n');
+        tip.push_str(READ_ONLY_TOOLTIP);
+    }
+    Some(tip)
+}
+
+/// Per-tab state the strip marks: unsaved edits, a read-only sheet, and
+/// whether hovering shows the path tooltip.
+pub struct TabMarks<'p> {
+    pub dirty_paths: &'p std::collections::HashSet<std::path::PathBuf>,
+    pub read_only_paths: &'p std::collections::HashSet<std::path::PathBuf>,
+    pub tooltips_enabled: bool,
+}
+
 pub fn view<'a>(
     tabs: &[TabInfo],
     active: usize,
     dragging: Option<usize>,
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
-    dirty_paths: &std::collections::HashSet<std::path::PathBuf>,
-    read_only_paths: &std::collections::HashSet<std::path::PathBuf>,
+    marks: &TabMarks<'_>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
+    let TabMarks {
+        dirty_paths,
+        read_only_paths,
+        tooltips_enabled,
+    } = *marks;
     // Tabs sit flush against each other — Altium parity. The active
     // pill's accent underline distinguishes it from neighbours; no
     // gap or vertical divider needed.
@@ -147,18 +174,17 @@ pub fn view<'a>(
             .interaction(cursor)
             .into();
         // The pill shows an ellipsized title; hovering names the full path.
-        let mut tip = tab.path.display().to_string();
-        if is_read_only {
-            tip.push('\n');
-            tip.push_str(READ_ONLY_TOOLTIP);
-        }
-        let tab_el: Element<'_, TabMessage> = tooltip(
-            tab_el,
-            container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
-            tooltip::Position::Bottom,
-        )
-        .style(styles::context_menu(tokens))
-        .into();
+        let tab_el: Element<'_, TabMessage> =
+            match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
+                Some(tip) => tooltip(
+                    tab_el,
+                    container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    tooltip::Position::Bottom,
+                )
+                .style(styles::context_menu(tokens))
+                .into(),
+                None => tab_el,
+            };
         bar = bar.push(tab_el);
     }
 
@@ -349,8 +375,8 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
 #[cfg(test)]
 mod tests {
     use super::{
-        dirty_dot_diameter, dirty_tab_paths, ellipsize_title, read_only_tab_paths,
-        reveal_active_tab, reveal_offset, tab_is_dirty,
+        READ_ONLY_TOOLTIP, dirty_dot_diameter, dirty_tab_paths, ellipsize_title,
+        read_only_tab_paths, reveal_active_tab, reveal_offset, tab_is_dirty, tab_tooltip,
     };
     use crate::app::{TabInfo, TabKind};
     use std::collections::HashSet;
@@ -369,7 +395,12 @@ mod tests {
         assert_eq!(placeholder.as_widget().size().height, fixed);
 
         let none = HashSet::new();
-        let strip = super::view(&[], 0, None, &none, &none, &none, &tokens);
+        let marks = super::TabMarks {
+            dirty_paths: &none,
+            read_only_paths: &none,
+            tooltips_enabled: true,
+        };
+        let strip = super::view(&[], 0, None, &none, &marks, &tokens);
         assert_eq!(strip.as_widget().size().height, fixed);
     }
 
@@ -494,6 +525,24 @@ mod tests {
     #[test]
     fn revealing_a_tab_emits_a_scroll_task() {
         assert_eq!(reveal_active_tab::<()>(1, 3).units(), 1);
+    }
+
+    #[test]
+    fn a_tab_has_no_tooltip_while_its_context_menu_is_open() {
+        let path = std::path::Path::new("a/b.snxsch");
+        assert_eq!(tab_tooltip(path, false, false), None);
+        assert_eq!(tab_tooltip(path, true, false), None);
+    }
+
+    #[test]
+    fn a_tab_tooltip_names_the_path_and_the_read_only_reason() {
+        let path = std::path::Path::new("a/b.snxsch");
+        assert_eq!(
+            tab_tooltip(path, false, true).as_deref(),
+            Some("a/b.snxsch")
+        );
+        let tip = tab_tooltip(path, true, true).expect("a tooltip");
+        assert!(tip.ends_with(READ_ONLY_TOOLTIP));
     }
 
     #[test]

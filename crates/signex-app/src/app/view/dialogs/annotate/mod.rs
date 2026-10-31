@@ -366,7 +366,8 @@ impl Signex {
             Space::new().height(4),
             text("Scope / Start / Suffix columns are visual for v0.7 — multi-sheet wiring lands in v1.1.")
                 .size(TS.caption)
-                .color(text_muted),
+                .color(text_muted)
+                .width(Length::Fill),
         ]
         .spacing(SP.s);
 
@@ -384,7 +385,7 @@ impl Signex {
             sheets_table,
         ]
         .spacing(0)
-        .width(Length::FillPortion(10));
+        .width(Length::Fill);
 
         // ── Right column: Proposed Change List ──
         let right_title = text("Proposed Change List").size(TS.label).color(text_c);
@@ -533,7 +534,7 @@ impl Signex {
             container(text(reprefix_note).size(TS.caption).color(text_muted)).padding([SP.s, SP.s]),
         ]
         .spacing(0)
-        .width(Length::FillPortion(11))
+        .width(Length::Fill)
         .height(Length::Fill);
 
         // ── Footer ──
@@ -598,14 +599,20 @@ impl Signex {
         .align_y(iced::Alignment::Center);
 
         let body_row = row![
-            container(scrollable(left_col)).padding([14, 14]),
+            // Fill portions bound each column, so long lines wrap instead
+            // of running past the dialog edge (#1770).
+            container(scrollable(left_col))
+                .padding([14, 14])
+                .width(Length::FillPortion(10)),
             container(iced::widget::Space::new().width(1).height(Length::Fill),).style(
                 move |_: &Theme| container::Style {
                     background: Some(Background::Color(border_c)),
                     ..container::Style::default()
                 }
             ),
-            container(right_col).padding([14, 14]),
+            container(right_col)
+                .padding([14, 14])
+                .width(Length::FillPortion(11)),
         ]
         .spacing(0)
         .height(Length::Fill);
