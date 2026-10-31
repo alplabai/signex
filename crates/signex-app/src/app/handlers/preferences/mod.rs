@@ -681,6 +681,7 @@ impl Signex {
                     Ok(custom) => {
                         self.ui_state.custom_theme = Some(custom);
                         self.ui_state.preferences_draft_theme = ThemeId::Custom;
+                        self.sync_panel_theme();
                         // Preview the imported colours on every open canvas.
                         self.apply_canvas_theme(ThemeId::Custom);
                         // Import swaps the live `custom_theme` in place — the

@@ -203,3 +203,45 @@ fn on_label_reads_on_the_panel_background_of_every_builtin() {
         }
     }
 }
+
+#[test]
+fn white_on_accent_segments_are_unchanged_on_every_builtin() {
+    // The multi-selection justify and rotation rows pass white text on the
+    // raw accent fill.
+    for &id in ThemeId::BUILTINS {
+        let tokens = theme_tokens(id);
+        let accent = ti(tokens.accent);
+        let muted = ti(tokens.text_secondary);
+        assert_eq!(
+            seg_text(true, Color::WHITE, muted, accent),
+            Color::WHITE,
+            "{id:?}"
+        );
+        assert_eq!(
+            seg_text(false, Color::WHITE, muted, accent),
+            muted,
+            "{id:?}"
+        );
+    }
+}
+
+#[test]
+fn dark_add_filter_label_is_unchanged_in_every_button_state() {
+    for id in dark_themes() {
+        let p = PanelPalette::from_tokens(&theme_tokens(id));
+        let theme = Signex::id_to_iced_theme(id, None);
+        let resting = add_filter_button_style(&theme, button::Status::Active, p.primary);
+        let fill = solid(resting.background);
+        if contrast_ratio(p.primary, fill) < UNREADABLE_CONTRAST {
+            continue; // the corrected case, covered above
+        }
+        for status in [
+            button::Status::Active,
+            button::Status::Hovered,
+            button::Status::Pressed,
+        ] {
+            let style = add_filter_button_style(&theme, status, p.primary);
+            assert_eq!(style.text_color, p.primary, "{id:?} {status:?}");
+        }
+    }
+}

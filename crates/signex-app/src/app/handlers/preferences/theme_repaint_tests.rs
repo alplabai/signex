@@ -207,3 +207,41 @@ fn discarding_after_a_refresh_restores_the_tokens_and_the_icon_theme() {
     assert_eq!(ctx.theme_id, saved);
     assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(saved));
 }
+
+fn custom_theme_file(source: ThemeId) -> String {
+    let file = signex_types::theme::CustomThemeFile {
+        name: "Imported".to_string(),
+        tokens: signex_types::theme::theme_tokens(source),
+        canvas: signex_types::theme::canvas_colors(source),
+    };
+    serde_json::to_string(&file).unwrap()
+}
+
+/// #1769 - importing a theme file previews it on the panels at once, and
+/// importing a second file replaces the first one's tokens.
+#[test]
+fn importing_a_theme_file_moves_the_panel_theme_without_a_refresh() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.preferences_open = true;
+
+    send(
+        &mut app,
+        PrefMsg::ThemeFileLoaded(custom_theme_file(ThemeId::SolarizedLight)),
+    );
+    let ctx = &app.document_state.panel_ctx;
+    assert_eq!(ctx.theme_id, ThemeId::Custom);
+    assert_eq!(
+        ctx.tokens,
+        signex_types::theme::theme_tokens(ThemeId::SolarizedLight)
+    );
+
+    send(
+        &mut app,
+        PrefMsg::ThemeFileLoaded(custom_theme_file(ThemeId::Nord)),
+    );
+    assert_eq!(
+        app.document_state.panel_ctx.tokens,
+        signex_types::theme::theme_tokens(ThemeId::Nord),
+        "a second import replaces the first one's tokens"
+    );
+}
