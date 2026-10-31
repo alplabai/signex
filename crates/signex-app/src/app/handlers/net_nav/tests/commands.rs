@@ -74,6 +74,9 @@ fn the_up_commands_go_to_the_parent_sheet() {
     for id in ["leave_sheet", "navigate_up_hierarchy"] {
         let mut p = project();
         p.focus(&p.mid.clone());
+        // Up Hierarchy is enabled from the Navigator's hierarchy (#1772).
+        p.app.refresh_panel_ctx();
+        p.app.settle_navigator();
         run(&mut p, id);
         assert_eq!(p.active(), Some(p.root.clone()), "{id}");
     }

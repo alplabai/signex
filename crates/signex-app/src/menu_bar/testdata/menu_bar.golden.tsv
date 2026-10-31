@@ -97,10 +97,10 @@ Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	stub	Design Rule Check	-	-	-	00000000	never
 Tools/Net Inspector	stub	Net Inspector	-	-	-	00000000	never
 Tools/---	separator	-	-	-	-	-	-
-Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	sch
+Tools/Up Hierarchy	item	Up Hierarchy	-	-	AscendToParentSheet	01000000	cmd:navigate_up_hierarchy
 Tools/---	separator	-	-	-	-	-	-
-Tools/New Part	item	New Part	-	-	ToolsNewPart	11111111	always
-Tools/Remove Part	item	Remove Part	-	-	ToolsRemovePart	11111111	always
+Tools/New Part	item	New Part	-	-	ToolsNewPart	00010000	newpart
+Tools/Remove Part	item	Remove Part	-	-	ToolsRemovePart	00010000	removepart
 Tools/---	separator	-	-	-	-	-	-
 Tools/Document Options...	item	Document Options...	-	-	ToolsDocumentOptions	11111111	always
 Tools/---	separator	-	-	-	-	-	-

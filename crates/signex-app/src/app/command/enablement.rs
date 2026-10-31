@@ -66,6 +66,13 @@ pub(crate) struct CommandContext {
     pub has_document: bool,
     /// A project is open, which Close Project closes.
     pub has_open_project: bool,
+    /// The active sheet is placed by a sheet symbol of another sheet in the
+    /// Navigator's hierarchy, which Up Hierarchy opens. A top-level page has
+    /// none.
+    pub has_parent_sheet: bool,
+    /// The active symbol editor's current part can be removed: a symbol
+    /// keeps its first part, so Remove Part refuses part 1.
+    pub can_remove_part: bool,
 }
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
@@ -96,6 +103,9 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         // The Export menu row is gated on `has_schematic`; without an
         // engine the handler does nothing.
         "report_manager_bom" => ctx.has_schematic,
+        // Up Hierarchy opens the sheet whose symbol places the active one;
+        // a top-level page has none (#1772).
+        "leave_sheet" | "navigate_up_hierarchy" => ctx.has_parent_sheet,
         // The footprint editor deletes its own selection, which is not the
         // schematic canvas's; with none it is a no-op.
         "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
@@ -144,6 +154,16 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
 /// taken from.
 pub(crate) fn cycle_grid_menu_enabled(ctx: &CommandContext) -> bool {
     ctx.has_schematic || ctx.has_pcb
+}
+
+/// Tools ▸ New Part: the handler acts only on a `.snxsym` editor tab.
+pub(crate) fn new_part_menu_enabled(ctx: &CommandContext) -> bool {
+    ctx.has_symbol_editor
+}
+
+/// Tools ▸ Remove Part: a symbol editor on a part the handler accepts.
+pub(crate) fn remove_part_menu_enabled(ctx: &CommandContext) -> bool {
+    ctx.has_symbol_editor && ctx.can_remove_part
 }
 
 /// Commands whose handler explains to the user why it did nothing. The
@@ -209,7 +229,41 @@ impl Signex {
                 || self.library.editors.values().any(|editor| editor.dirty),
             has_document: !document.tabs.is_empty(),
             has_open_project: document.active_project.is_some(),
+            has_parent_sheet: self.active_sheet_has_parent(),
+            can_remove_part: self.active_symbol_part_is_removable(),
         }
+    }
+
+    /// Whether the Navigator's hierarchy places the active tab's sheet
+    /// below another sheet. Reads the cached hierarchy, never the disk: this
+    /// runs on every menu draw.
+    fn active_sheet_has_parent(&self) -> bool {
+        let document = &self.document_state;
+        let Some(hierarchy) = document.panel_ctx.navigator.hierarchy.as_ref() else {
+            return false;
+        };
+        let Some(path) = document.tabs.get(document.active_tab).map(|t| &t.path) else {
+            return false;
+        };
+        hierarchy
+            .placements_of(path)
+            .iter()
+            .any(|placement| !placement.chain().is_empty())
+    }
+
+    /// Whether the active symbol editor is on a part Remove Part accepts:
+    /// the symbol has several parts and the current one is not the first.
+    fn active_symbol_part_is_removable(&self) -> bool {
+        let document = &self.document_state;
+        let Some(TabKind::SymbolEditor(path)) =
+            document.tabs.get(document.active_tab).map(|t| &t.kind)
+        else {
+            return false;
+        };
+        document.symbol_editors.get(path).is_some_and(|editor| {
+            crate::library::editor::symbol::state::max_part_number(editor.primitive()) > 1
+                && editor.active_part > 1
+        })
     }
 
     /// The document path of `window` when it is an undocked tab window
@@ -595,7 +649,7 @@ mod tests {
 
     #[test]
     fn ids_that_resolve_to_the_same_message_share_their_enablement() {
-        let facts: [fn(&mut CommandContext); 11] = [
+        let facts: [fn(&mut CommandContext); 13] = [
             |c| c.has_schematic = true,
             |c| c.has_pcb = true,
             |c| c.undocked_has_canvas = true,
@@ -607,6 +661,8 @@ mod tests {
             |c| c.can_undo = true,
             |c| c.can_redo = true,
             |c| c.project_dirty = true,
+            |c| c.has_parent_sheet = true,
+            |c| c.can_remove_part = true,
         ];
         let mut contexts = vec![CommandContext::default()];
         contexts.extend(facts.iter().map(|set| {
@@ -860,5 +916,74 @@ mod tests {
         assert!(explains_when_unavailable(&id("save_document_as")));
         assert!(explains_when_unavailable(&id("print")));
         assert!(!explains_when_unavailable(&id("save_document")));
+    }
+
+    /// #1772: a root sheet and a sheet placed by a symbol on it, with the
+    /// Navigator's hierarchy built over them and `active` focused.
+    fn with_hierarchy(active_is_child: bool) -> Signex {
+        use crate::app::handlers::menu::export::tests::sheet_with_net;
+        use crate::app::sheet_hierarchy::build_sheet_hierarchy;
+        let root = PathBuf::from("/p/root.snxsch");
+        let child = PathBuf::from("/p/child.snxsch");
+        let sheets = std::collections::HashMap::from([
+            (root.clone(), sheet_with_net("R1", "N", &["child.snxsch"])),
+            (child.clone(), sheet_with_net("R2", "N", &[])),
+        ]);
+        let hierarchy = build_sheet_hierarchy(
+            &sheets,
+            &[],
+            &root,
+            &[],
+            crate::app::state::scope::CaseFold::host_default(),
+        );
+        let (mut app, _task) = Signex::new();
+        app.document_state.panel_ctx.navigator.hierarchy = Some(hierarchy);
+        let active = if active_is_child { &child } else { &root };
+        push_tab(&mut app, active, TabKind::Schematic);
+        app
+    }
+
+    #[test]
+    fn up_hierarchy_needs_a_parent_sheet() {
+        let top = with_hierarchy(false);
+        let child = with_hierarchy(true);
+        for name in ["navigate_up_hierarchy", "leave_sheet"] {
+            assert!(!enabled(&top, name), "{name} on a top-level sheet");
+            assert!(enabled(&child, name), "{name} on a child sheet");
+        }
+    }
+
+    #[test]
+    fn up_hierarchy_is_off_without_a_hierarchy() {
+        let app = with_schematic();
+        assert!(!enabled(&app, "navigate_up_hierarchy"));
+    }
+
+    #[test]
+    fn part_commands_need_a_symbol_editor() {
+        let schematic = with_schematic();
+        let ctx = schematic.command_context(None);
+        assert!(!new_part_menu_enabled(&ctx));
+        assert!(!remove_part_menu_enabled(&ctx));
+        let (editor, _) = with_symbol_editor();
+        assert!(new_part_menu_enabled(&editor.command_context(None)));
+    }
+
+    #[test]
+    fn remove_part_needs_a_second_part_to_be_current() {
+        let (mut app, path) = with_symbol_editor();
+        assert!(!remove_part_menu_enabled(&app.command_context(None)));
+        let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
+        editor.primitive_mut().part_count = 2;
+        assert!(
+            !remove_part_menu_enabled(&app.command_context(None)),
+            "on part 1"
+        );
+        app.document_state
+            .symbol_editors
+            .get_mut(&path)
+            .unwrap()
+            .active_part = 2;
+        assert!(remove_part_menu_enabled(&app.command_context(None)));
     }
 }
