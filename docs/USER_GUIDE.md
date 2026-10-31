@@ -592,7 +592,8 @@ Both exports are under **File ▸ Export** and need a schematic open.
 3. Press **Export PDF**. A save dialog titled **Export PDF** opens in the
    project's folder with the name `<project or document>.pdf` (`schematic.pdf`
    only when neither is known). Choose where to save. When the file is written,
-   the footer of the export window names its full path; changing a setting
+   the footer of the export window names the written file (a long path is
+   shortened in the middle; the Messages panel has the full path). Changing a setting
    brings the page count back.
 
 **BOM (bill of materials)**
@@ -606,8 +607,8 @@ A schematic without placed parts produces an empty BOM.
 
 Export save dialogs open in the project's folder, **File ▸ New Project** beside
 it, and **Save As** in the document's own folder. With no project open, or for
-the bundled Sample Project (which lives in the app's config folder), the folder
-is left to the operating system.
+the bundled Sample Project (which lives in the app's config folder), the export
+and New Project dialogs leave the folder to the operating system.
 
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC

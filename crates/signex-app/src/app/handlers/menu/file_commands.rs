@@ -241,7 +241,7 @@ impl Signex {
             Some(TabKind::Schematic) => {
                 let from_path = self.active_tab_path().unwrap_or_default();
                 let target = self.save_target(Some(&from_path));
-                let save_as_name = target.save_as_file_name();
+                let save_as_name = target.save_as_suggested_name();
                 Task::perform(
                     async move {
                         let dialog = target

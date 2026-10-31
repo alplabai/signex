@@ -67,10 +67,11 @@ impl SaveTarget {
         self.stem.as_deref()
     }
 
-    /// The document's current file name, offered by Save As.
-    pub(crate) fn save_as_file_name(&self) -> Option<String> {
-        let name = self.document.as_deref()?.file_name()?;
-        Some(name.to_string_lossy().into_owned())
+    /// The file name Save As offers: none. Pre-filling the document's own
+    /// name lets Enter plus the OS Replace prompt save onto the same file
+    /// through the Save As path, which skips the plain-save bookkeeping.
+    pub(crate) fn save_as_suggested_name(&self) -> Option<String> {
+        None
     }
 
     /// `<name><suffix>.<ext>`, the name being the project or document name;
@@ -97,8 +98,9 @@ impl SaveTarget {
         self.panel(title, Panel::NewProject).await
     }
 
-    /// The start folder is resolved on a blocking thread: a stale network
-    /// share would otherwise stall the task's executor for its timeout.
+    /// The start folder is resolved on a blocking thread, so a stale network
+    /// share cannot stall the UI or the task's executor. The panel still waits
+    /// for that decision: a stalled share delays the panel, not the window.
     async fn panel(self, title: &str, panel: Panel) -> rfd::AsyncFileDialog {
         let dir = tokio::task::spawn_blocking(move || self.start_dir(panel))
             .await
@@ -253,11 +255,11 @@ mod tests {
         assert_eq!(target.start_dir(Panel::Export).as_deref(), None);
         assert_eq!(target.start_dir(Panel::NewProject).as_deref(), None);
         assert_eq!(target.start_dir(Panel::SaveAs).as_deref(), None);
-        assert_eq!(target.save_as_file_name().as_deref(), Some("top.snxsch"));
+        assert_eq!(target.save_as_suggested_name(), None);
     }
 
     #[test]
-    fn save_as_starts_in_the_documents_own_folder_with_its_name() {
+    fn save_as_starts_in_the_documents_own_folder_without_a_suggested_name() {
         let target = SaveTarget::new(
             Some(&p("/work/amp/amp.snxprj")),
             Some(&p("/work/amp/sheets/psu.snxsch")),
@@ -266,7 +268,11 @@ mod tests {
             target.start_dir(Panel::SaveAs).as_deref(),
             Some(Path::new("/work/amp/sheets"))
         );
-        assert_eq!(target.save_as_file_name().as_deref(), Some("psu.snxsch"));
+        assert_eq!(
+            target.save_as_suggested_name(),
+            None,
+            "no name: Enter would replace the same file"
+        );
     }
 
     #[test]

@@ -69,7 +69,7 @@ fn level_since(since: Option<u64>, needle: &str) -> Option<crate::diagnostics::D
 }
 
 #[test]
-fn a_written_pdf_is_confirmed_with_its_full_path_and_logged() {
+fn a_written_pdf_is_confirmed_in_the_window_and_its_full_path_logged() {
     let since = mark();
     let mut app = open_preview(DIR);
     let src = source(&app);
