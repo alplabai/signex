@@ -208,12 +208,12 @@ impl SvgRenderContext {
             let spin = label_spin_style(label.justify, label.rotation);
             let (off_x, off_y) = match label.label_type {
                 LabelType::Net => schematic_text_offset_net(spin),
-                LabelType::Global => schematic_text_offset_global(&label.shape, spin),
-                LabelType::Hierarchical => schematic_text_offset_hier(
-                    &label.text,
-                    signex_types::schematic::SCHEMATIC_TEXT_MM,
-                    spin,
-                ),
+                LabelType::Global => {
+                    schematic_text_offset_global(&label.shape, spin, label.font_size)
+                }
+                LabelType::Hierarchical => {
+                    schematic_text_offset_hier(&label.text, label.font_size, spin)
+                }
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);

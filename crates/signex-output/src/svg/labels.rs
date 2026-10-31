@@ -75,7 +75,8 @@ pub(super) fn schematic_text_offset_hier(
     font_size_mm: f64,
     spin: SpinStyle,
 ) -> (f64, f64) {
-    let dist = font_size_mm * 0.4
+    let unit = label_offset_unit_mm(font_size_mm);
+    let dist = unit * 0.4
         + (parse_signex_markup(&normalize_standard_text(text))
             .iter()
             .map(|seg| match seg {
@@ -89,7 +90,7 @@ pub(super) fn schematic_text_offset_hier(
                 RichSegment::Link { label, .. } => label.chars().count(),
             })
             .sum::<usize>() as f64)
-            * font_size_mm
+            * unit
             * 0.6;
     match spin {
         SpinStyle::Left => (-dist, 0.0),
@@ -99,12 +100,25 @@ pub(super) fn schematic_text_offset_hier(
     }
 }
 
-pub(super) fn schematic_text_offset_global(shape: &str, spin: SpinStyle) -> (f64, f64) {
-    let mut horiz = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.5;
-    let vert = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.0715;
+/// The glyph height label offsets are measured in: the label's own size, and
+/// never below the schematic default, as the canvas sizes its flags. The
+/// offsets used to be fixed at the default, so a larger label's text ran
+/// into the flag it sits beside (#1229).
+pub(super) fn label_offset_unit_mm(font_size_mm: f64) -> f64 {
+    font_size_mm.max(signex_types::schematic::SCHEMATIC_TEXT_MM)
+}
+
+pub(super) fn schematic_text_offset_global(
+    shape: &str,
+    spin: SpinStyle,
+    font_size_mm: f64,
+) -> (f64, f64) {
+    let unit = label_offset_unit_mm(font_size_mm);
+    let mut horiz = unit * 0.5;
+    let vert = unit * 0.0715;
 
     if matches!(shape, "input" | "bidirectional" | "tri_state") {
-        horiz += signex_types::schematic::SCHEMATIC_TEXT_MM * 0.75;
+        horiz += unit * 0.75;
     }
 
     match spin {
@@ -153,6 +167,26 @@ pub(super) fn valign_to_svg(v: VAlign) -> SvgTextVAlign {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1229 — label text grows with the label's size, so the distance it
+    /// keeps from its anchor does too; the default size keeps the old numbers.
+    #[test]
+    fn label_offsets_scale_with_the_label_size_and_keep_the_default() {
+        const DEFAULT: f64 = signex_types::schematic::SCHEMATIC_TEXT_MM;
+        let (x, y) = schematic_text_offset_global("input", SpinStyle::Right, DEFAULT);
+        assert!((x - DEFAULT * 1.25).abs() < 1e-9 && (y - DEFAULT * 0.0715).abs() < 1e-9);
+        let (big_x, big_y) = schematic_text_offset_global("input", SpinStyle::Right, 2.0 * DEFAULT);
+        assert!((big_x - 2.0 * x).abs() < 1e-9 && (big_y - 2.0 * y).abs() < 1e-9);
+
+        let (hx, _) = schematic_text_offset_hier("ABCD", DEFAULT, SpinStyle::Right);
+        assert!((hx - (DEFAULT * 0.4 + 4.0 * DEFAULT * 0.6)).abs() < 1e-9);
+        let (big_hx, _) = schematic_text_offset_hier("ABCD", 2.0 * DEFAULT, SpinStyle::Right);
+        assert!((big_hx - 2.0 * hx).abs() < 1e-9);
+
+        // Smaller than the default is still the default, as on the canvas.
+        let (small_x, _) = schematic_text_offset_global("output", SpinStyle::Right, 0.5);
+        assert!((small_x - DEFAULT * 0.5).abs() < 1e-9);
+    }
 
     /// Every label orientation exports upright or bottom-to-top text.
     #[test]
