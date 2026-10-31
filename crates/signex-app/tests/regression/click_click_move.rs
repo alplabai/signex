@@ -430,6 +430,7 @@ fn deliver(
             placement: with_ghost
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
                 .flatten(),
+            power_port_pending: false,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
         view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))
