@@ -61,7 +61,7 @@ impl Signex {
             prefs_status: &ui.preferences_prefs_status,
             keymap_search: &ui.preferences_keymap_search,
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
-            theme_id: ui.theme_id,
+            theme_id: ui.effective_theme_id(),
         })
         .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
         Some(pref_view)
@@ -121,7 +121,7 @@ impl Signex {
         };
         Some(iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
             &self.document_state.panel_ctx.tokens,
-            ui.theme_id,
+            ui.effective_theme_id(),
             sections,
         )))
     }
@@ -139,7 +139,7 @@ impl Signex {
         };
         crate::keyboard_shortcuts_modal::window_view(
             &self.document_state.panel_ctx.tokens,
-            ui.theme_id,
+            ui.effective_theme_id(),
             sections,
         )
     }
@@ -152,7 +152,7 @@ impl Signex {
         }
         Some(iced::widget::opaque(crate::about_modal::view(
             &self.document_state.panel_ctx.tokens,
-            ui.theme_id,
+            ui.effective_theme_id(),
         )))
     }
 
@@ -166,7 +166,7 @@ impl Signex {
         }
         Some(crate::passive_calculator_modal::view(
             &self.document_state.panel_ctx.tokens,
-            ui.theme_id,
+            ui.effective_theme_id(),
             &ui.passive_calculator,
         ))
     }

@@ -345,7 +345,7 @@ impl Signex {
         &self,
         kind: ContextSubmenu,
     ) -> Element<'_, Message> {
-        let tid = self.ui_state.theme_id;
+        let tid = self.ui_state.effective_theme_id();
         let tokens = &self.document_state.panel_ctx.tokens;
         let entries = match kind {
             ContextSubmenu::Place => place_entries(tid, &|id| self.keymap_shortcut_label(id)),

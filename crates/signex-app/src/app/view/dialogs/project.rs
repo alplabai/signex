@@ -49,7 +49,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let error_c = Color::from_rgb(0.90, 0.35, 0.30);
 
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let title = if st.is_project_rename {
             "Rename Project"
         } else {
@@ -161,7 +161,7 @@ impl Signex {
             return container(Space::new()).into();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
@@ -327,7 +327,7 @@ impl Signex {
             return container(Space::new()).into();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
@@ -521,7 +521,7 @@ impl Signex {
             return container(Space::new()).into();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
