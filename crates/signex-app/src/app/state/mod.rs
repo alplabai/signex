@@ -332,6 +332,11 @@ pub struct PdfExportRequest {
 }
 
 pub struct DocumentState {
+    /// Counts every edit to a schematic sheet, made through the engine or by a
+    /// bulk path (Annotate, Replace, library update, ...): every one marks its
+    /// sheet dirty through [`DocumentState::note_sheet_edit`]. ERC compares it
+    /// with the count its results were taken at to tell they are stale (#1768).
+    pub sheet_edit_epoch: u64,
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
     /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.

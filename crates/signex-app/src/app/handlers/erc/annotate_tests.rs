@@ -603,3 +603,39 @@ fn annotate_is_refused_while_a_declared_page_outside_the_folder_moves() {
 fn annotate_is_refused_while_a_file_in_the_project_folder_moves() {
     assert_annotate_refused_while("moved_page.snxsch", "unlisted.snxsch");
 }
+
+/// A past ERC result on the root sheet, as after Run ERC.
+fn with_erc_results(app: &mut Signex, dir: &std::path::Path) {
+    app.ui_state.erc_violations_by_path.insert(
+        dir.join("a_root.snxsch"),
+        vec![signex_erc::Violation::new(
+            signex_erc::RuleId::builtin(signex_erc::RuleKind::DuplicateRefDesignator),
+            signex_erc::RuleKind::DuplicateRefDesignator,
+            signex_erc::Severity::Error,
+            "Duplicate reference designator",
+            Point::new(0.0, 0.0),
+        )],
+    );
+    app.ui_state.erc_epoch = app.document_state.sheet_edit_epoch;
+}
+
+#[test]
+fn annotate_leaves_the_erc_results_stale() {
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)], vec![]);
+    with_erc_results(&mut app, &dir);
+    assert!(!app.erc_results_stale());
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    crate::app::path_ops::settle_task(&mut app, task);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(app.erc_results_stale());
+}
+
+#[test]
+fn reset_duplicates_leaves_the_erc_results_stale() {
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0), unit("U1", 1, 10.0)], vec![]);
+    with_erc_results(&mut app, &dir);
+    let task = app.handle_reset_duplicate_designators();
+    crate::app::path_ops::settle_task(&mut app, task);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(app.erc_results_stale());
+}

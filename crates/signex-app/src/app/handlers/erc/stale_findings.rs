@@ -86,18 +86,20 @@ impl Signex {
             .collect()
     }
 
-    /// Any document change makes the last run's results possibly stale, a run
-    /// still in flight included (it read the sheets before the change).
-    pub(crate) fn mark_erc_results_stale(&mut self) {
-        if self.ui_state.erc_running || !self.ui_state.erc_violations_by_path.is_empty() {
-            self.ui_state.erc_results_stale = true;
-        }
+    /// Whether the cached ERC results come from before the latest sheet edit.
+    /// While a run is in flight the cache is still the previous run's, so it is
+    /// judged against that run's epoch, not the new one's.
+    pub(crate) fn erc_results_stale(&self) -> bool {
+        !self.ui_state.erc_violations_by_path.is_empty()
+            && self.document_state.sheet_edit_epoch != self.ui_state.erc_epoch
     }
 
-    /// After an edit: the results are stale, and the active sheet's markers and
-    /// list follow the document again.
+    /// After an edit to the active sheet: its markers and list follow the
+    /// document again.
     pub(crate) fn refresh_erc_after_edit(&mut self) {
-        self.mark_erc_results_stale();
+        if self.ui_state.erc_violations_by_path.is_empty() {
+            return;
+        }
         if let Some(path) = self.document_state.active_path.clone() {
             self.refresh_active_erc_from_cache(Some(&path));
         }

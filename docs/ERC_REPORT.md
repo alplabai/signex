@@ -35,8 +35,8 @@ it is omitted otherwise.
 {
   "schema_version": 1,
   "generator": "signex",
-  "results_stale": true,
   "rule_set": { "profile": "Signex Default", "sha256": "<hex>" },
+  "results_stale": true,
   "summary": { "errors": 1, "warnings": 2, "info": 0, "total": 3, "waived": 1 },
   "groups": [
     {

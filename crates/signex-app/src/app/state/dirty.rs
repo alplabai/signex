@@ -70,7 +70,13 @@ impl DocumentState {
             editor.mark_dirty();
         } else {
             self.dirty_docs.paths.insert(path.to_path_buf());
+            self.note_sheet_edit();
         }
+    }
+
+    /// A schematic sheet changed: ERC results taken earlier no longer describe it.
+    pub fn note_sheet_edit(&mut self) {
+        self.sheet_edit_epoch += 1;
     }
 
     /// A draft's save snapshot reset its edit flag, but the write has not

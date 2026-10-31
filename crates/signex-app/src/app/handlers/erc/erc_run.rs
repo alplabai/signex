@@ -135,12 +135,9 @@ impl Signex {
         };
 
         // This run reads the sheets as they are now; an edit from here on
-        // marks its results stale again. A run that fails restores the flag
-        // (a run that replaces one still in flight keeps that one's snapshot).
-        if !self.ui_state.erc_running {
-            self.ui_state.erc_stale_before_run = self.ui_state.erc_results_stale;
-        }
-        self.ui_state.erc_results_stale = false;
+        // leaves its results stale. The cached results keep their own epoch
+        // until this run's are applied.
+        self.ui_state.erc_run_epoch = self.document_state.sheet_edit_epoch;
         self.ui_state.erc_run_generation += 1;
         self.ui_state.erc_running = true;
         self.refresh_panel_ctx();
@@ -178,8 +175,6 @@ impl Signex {
             Ok(outcome) => outcome,
             Err(why) => {
                 crate::diagnostics::log_warning(why);
-                // The old results stand, and an edit made meanwhile still counts.
-                self.ui_state.erc_results_stale |= self.ui_state.erc_stale_before_run;
                 self.refresh_panel_ctx();
                 return false;
             }
@@ -187,6 +182,7 @@ impl Signex {
         // The rows now in the cache were produced under this rule set; only a
         // successful, current run may name it in the report header.
         self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
+        self.ui_state.erc_epoch = self.ui_state.erc_run_epoch;
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
         }

@@ -310,7 +310,7 @@ impl Signex {
             record.dropped.extend(dropped_now);
         }
         // A member sheet other than the active one changed too.
-        self.mark_erc_results_stale();
+        self.document_state.note_sheet_edit();
         match active_invalidation {
             Some(invalidation) => {
                 self.finish_schematic_mutation(invalidation, true, update_selection_info)

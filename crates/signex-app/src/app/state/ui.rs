@@ -436,11 +436,12 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
-    /// The document changed after the newest ERC run, so its findings may no
-    /// longer match it; the ERC panel says so until the next run (#1768).
-    pub erc_results_stale: bool,
-    /// `erc_results_stale` as it was when the newest run began, for a run that fails.
-    pub erc_stale_before_run: bool,
+    /// `DocumentState::sheet_edit_epoch` when the sheets behind the cached ERC
+    /// results were read; the results are stale once the document is past it.
+    pub erc_epoch: u64,
+    /// The epoch the newest run read the sheets at, adopted by `erc_epoch` when
+    /// that run's results are applied (#1768).
+    pub erc_run_epoch: u64,
     /// The rule set the newest ERC run used, for the report header (#1085).
     pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
     /// An "Update from profile" waiting for the user's confirmation, with the

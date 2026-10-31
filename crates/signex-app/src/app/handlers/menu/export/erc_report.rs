@@ -176,7 +176,7 @@ impl Signex {
             format,
             violations: self.erc_report_rows(),
             rule_set: self.ui_state.erc_run_rule_set.clone(),
-            results_stale: self.ui_state.erc_results_stale,
+            results_stale: self.erc_results_stale(),
             waivers: self
                 .erc_violation_waiver_entries()
                 .iter()

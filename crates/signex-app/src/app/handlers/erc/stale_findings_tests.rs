@@ -118,24 +118,24 @@ fn delete_then_undo_restores_markers_panel_and_report_and_marks_stale() {
     delete_part(&mut app, part);
     assert_eq!(report_rows(&app), 1);
 
-    app.ui_state.erc_results_stale = false;
+    app.ui_state.erc_epoch = app.document_state.sheet_edit_epoch;
     undo(&mut app);
 
     assert_eq!(app.interaction_state.active_canvas().erc_markers.len(), 2);
     assert_eq!(app.build_erc_diagnostic_entries().len(), 2);
     assert_eq!(report_rows(&app), 2);
-    assert!(app.ui_state.erc_results_stale, "an undo is an edit too");
+    assert!(app.erc_results_stale(), "an undo is an edit too");
 }
 
 #[test]
 fn a_clear_resets_the_stale_flag() {
     let (mut app, _path, part) = app_with_two_findings();
     delete_part(&mut app, part);
-    assert!(app.ui_state.erc_results_stale);
+    assert!(app.erc_results_stale());
     let _ = app.update(Message::Dock(DockMessage::Panel(
         crate::panels::PanelMsg::ClearErc,
     )));
-    assert!(!app.ui_state.erc_results_stale);
+    assert!(!app.erc_results_stale());
 }
 
 #[test]
@@ -143,8 +143,8 @@ fn an_edit_while_a_run_is_in_flight_keeps_the_notice() {
     let (mut app, _path, part) = app_with_two_findings();
     let (generation, inputs) = app.begin_erc_run();
     assert!(
-        !app.ui_state.erc_results_stale,
-        "this run reads the sheets as they are"
+        !app.erc_results_stale(),
+        "nothing changed since the results"
     );
 
     delete_part(&mut app, part);
@@ -152,7 +152,7 @@ fn an_edit_while_a_run_is_in_flight_keeps_the_notice() {
     app.apply_erc_run_result(generation, &outcome);
 
     assert!(
-        app.ui_state.erc_results_stale,
+        app.erc_results_stale(),
         "the run read the sheet before the edit"
     );
 }
@@ -162,12 +162,15 @@ fn a_failed_run_restores_the_flag_it_found() {
     let (mut app, _path, part) = app_with_two_findings();
     delete_part(&mut app, part);
     let (generation, _inputs) = app.begin_erc_run();
-    assert!(!app.ui_state.erc_results_stale);
+    assert!(
+        app.erc_results_stale(),
+        "while it runs the old results are still on show"
+    );
 
     app.apply_erc_run_result(generation, &Err("worker failed".to_string()));
 
     assert!(
-        app.ui_state.erc_results_stale,
+        app.erc_results_stale(),
         "the old results are still the old results"
     );
 }
@@ -231,5 +234,40 @@ fn a_wire_that_got_a_new_id_keeps_its_finding_and_the_panel_says_stale() {
     );
 
     assert_eq!(app.build_erc_diagnostic_entries().len(), before);
-    assert!(app.ui_state.erc_results_stale);
+    assert!(app.erc_results_stale());
+}
+
+#[test]
+fn an_edit_marks_the_results_stale_and_a_run_clears_it() {
+    let (mut app, _path, part) = app_with_two_findings();
+    assert!(!app.erc_results_stale());
+    delete_part(&mut app, part);
+    assert!(app.erc_results_stale());
+    app.run_erc_blocking();
+    assert!(!app.erc_results_stale());
+}
+
+#[test]
+fn old_results_stay_stale_while_a_run_is_in_flight_and_after_it_lands_clean() {
+    let (mut app, _path, part) = app_with_two_findings();
+    delete_part(&mut app, part);
+    let (generation, inputs) = app.begin_erc_run();
+    assert!(app.erc_results_stale(), "in flight: the old cache is shown");
+    let panel = app.erc_report_options(signex_output::ErcReportFormat::Text);
+    assert!(panel.results_stale, "and exported as stale");
+
+    let outcome = Ok(super::erc_job::run_erc_job(inputs));
+    app.apply_erc_run_result(generation, &outcome);
+    assert!(
+        !app.erc_results_stale(),
+        "the new run read the current sheet"
+    );
+}
+
+#[test]
+fn a_bulk_edit_path_that_marks_a_sheet_dirty_marks_the_results_stale() {
+    let (mut app, path, _part) = app_with_two_findings();
+    assert!(!app.erc_results_stale());
+    app.document_state.mark_document_dirty(&path);
+    assert!(app.erc_results_stale());
 }
