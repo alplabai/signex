@@ -249,10 +249,14 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                                 .size(9)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),
-                            text(v.sheet_path.display().to_string()).size(9),
+                            iced::widget::container(
+                                text(v.sheet_path.display().to_string()).size(9),
+                            )
+                            .padding([SP.xs, 6.0]),
                             iced::widget::tooltip::Position::Top,
                         )
-                        .gap(4),
+                        .gap(4)
+                        .style(crate::styles::context_menu(&ctx.tokens)),
                     ]
                     .align_y(iced::Alignment::Center)
                     .width(Length::Fill),
