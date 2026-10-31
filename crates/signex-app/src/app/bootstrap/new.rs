@@ -143,6 +143,19 @@ impl Signex {
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
         let paste_designators = crate::fonts::read_paste_designators_pref_from(prefs);
+        if crate::fonts::paste_designators_needs_migration(prefs) {
+            match crate::fonts::migrate_paste_designators_pref() {
+                crate::fonts::PasteDesignatorsMigration::Migrated => crate::diagnostics::log_info(
+                    "Designators on paste: your saved \"Keep\" was the old default, so it is now \"Keep unless taken\" (a pasted part keeps its designator unless the project already uses it). Choose Keep in Preferences to turn this off.",
+                ),
+                crate::fonts::PasteDesignatorsMigration::WriteFailed => {
+                    crate::diagnostics::log_warning(
+                        "Designators on paste: your saved \"Keep\" was the old default and is treated as \"Keep unless taken\" this session, but the preferences file could not be updated, so this is repeated at the next start. Choose Keep in Preferences to turn this off.",
+                    )
+                }
+                crate::fonts::PasteDesignatorsMigration::NotNeeded => {}
+            }
+        }
         let window_controls_placement =
             crate::fonts::read_window_controls_placement_pref_from(prefs);
         let autosave_enabled = crate::fonts::read_autosave_enabled_pref_from(prefs);
@@ -254,7 +267,7 @@ impl Signex {
                 canvas_font_italic: false,
                 left_width: 240.0,
                 right_width: 220.0,
-                bottom_height: 120.0,
+                bottom_height: crate::app::state::DEFAULT_BOTTOM_PANEL_HEIGHT,
                 window_size: (1400.0, 900.0),
                 main_window_scale: 1.0,
                 panel_list_open: false,
@@ -355,6 +368,8 @@ impl Signex {
                 erc_lapsed_waivers: std::collections::BTreeSet::new(),
                 erc_waive_draft: None,
                 erc_focus_global_index: None,
+                erc_epoch: 0,
+                erc_run_epoch: 0,
                 erc_run_generation: 0,
                 erc_run_rule_set: None,
                 pending_profile_update: None,
@@ -437,6 +452,7 @@ impl Signex {
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
                 recovery_check_due: Vec::new(),
+                sheet_edit_epoch: 0,
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),
@@ -520,6 +536,7 @@ impl Signex {
                     erc_waive_draft: None,
                     erc_focus_index: None,
                     erc_running: false,
+                    erc_results_stale: false,
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     selection_filters: crate::active_bar::SelectionFilter::ALL

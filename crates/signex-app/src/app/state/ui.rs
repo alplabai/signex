@@ -10,6 +10,10 @@ use super::{
     ReorderPicker, WindowKind,
 };
 
+/// Height of the bottom dock at first run: the tab strip, the ERC header and
+/// several finding rows (#1768).
+pub const DEFAULT_BOTTOM_PANEL_HEIGHT: f32 = 220.0;
+
 pub struct UiState {
     pub theme_id: ThemeId,
     pub unit: Unit,
@@ -431,6 +435,12 @@ pub struct UiState {
     pub erc_run_generation: u64,
     /// An ERC run is in flight; the ERC panel shows "Running…".
     pub erc_running: bool,
+    /// `DocumentState::sheet_edit_epoch` when the sheets behind the cached ERC
+    /// results were read; the results are stale once the document is past it.
+    pub erc_epoch: u64,
+    /// The epoch the newest run read the sheets at, adopted by `erc_epoch` when
+    /// that run's results are applied (#1768).
+    pub erc_run_epoch: u64,
     /// The rule set the newest ERC run used, for the report header (#1085).
     pub erc_run_rule_set: Option<signex_output::ErcReportRuleSet>,
     /// An "Update from profile" waiting for the user's confirmation, with the
@@ -678,4 +688,12 @@ impl UiState {
 pub struct NetColorStep {
     pub colors: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     pub at: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_bottom_dock_opens_tall_enough_for_several_finding_rows() {
+        const { assert!(super::DEFAULT_BOTTOM_PANEL_HEIGHT >= 200.0) };
+    }
 }

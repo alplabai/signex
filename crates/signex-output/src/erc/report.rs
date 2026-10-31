@@ -65,6 +65,9 @@ pub struct ErcReport {
     pub schema_version: u32,
     pub generator: &'static str,
     pub rule_set: Option<ReportRuleSet>,
+    /// Present, and true, only when the document changed after the run.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub results_stale: bool,
     pub summary: ReportSummary,
     /// Severity groups, Error first, each with its sheets in first-seen order.
     pub groups: Vec<SeverityGroup>,
@@ -159,6 +162,7 @@ pub fn build(rows: &[&ErcReportRow], opts: &ErcReportOptions) -> ErcReport {
         schema_version: ERC_REPORT_SCHEMA_VERSION,
         generator: "signex",
         rule_set: opts.rule_set.as_ref().map(rule_set),
+        results_stale: opts.results_stale,
         summary,
         groups,
         waivers,

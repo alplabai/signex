@@ -34,6 +34,12 @@ pub(super) fn emit(report: &ErcReport) -> Vec<u8> {
     out.push_str("<title>ERC report</title>\n<style>");
     out.push_str(STYLE);
     out.push_str("</style>\n</head>\n<body>\n<h1>ERC report</h1>\n");
+    if report.results_stale {
+        out.push_str(&format!(
+            "<p class=\"muted\"><strong>{}</strong></p>\n",
+            escape(super::STALE_RESULTS_NOTICE)
+        ));
+    }
     if let Some(rs) = &report.rule_set {
         let profile = rs.profile.as_deref().unwrap_or("no profile");
         out.push_str(&format!(

@@ -186,26 +186,38 @@ pub(super) fn update_prefs_json(
     context: &str,
     mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
 ) {
+    update_prefs_json_checked(path, context, mutator);
+}
+
+/// [`update_prefs_json`] that says whether the file was written.
+pub(super) fn update_prefs_json_checked(
+    path: &Path,
+    context: &str,
+    mutator: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) -> bool {
     let _io = prefs_io_lock();
     let mut prefs = match load_for_update(path) {
         Ok(prefs) => prefs,
         Err(error) => {
             report_refusal(path, context, &error);
-            return;
+            return false;
         }
     };
     forget_refusal(path);
     mutator(&mut prefs);
     match serde_json::to_string_pretty(&serde_json::Value::Object(prefs)) {
         Ok(serialized) => write_pref_atomic(path, serialized.as_bytes(), context),
-        Err(error) => tracing::error!(
-            target: "signex::prefs",
-            path = %path.display(),
-            context = context,
-            error = %error,
-            "preferences were not saved: the new value could not be serialised to JSON; \
-             the existing file was left unchanged so no other setting was lost"
-        ),
+        Err(error) => {
+            tracing::error!(
+                target: "signex::prefs",
+                path = %path.display(),
+                context = context,
+                error = %error,
+                "preferences were not saved: the new value could not be serialised to JSON; \
+                 the existing file was left unchanged so no other setting was lost"
+            );
+            false
+        }
     }
 }
 

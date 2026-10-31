@@ -92,6 +92,8 @@ pub struct PasteCounters {
     /// The sheet they were read for.
     pub target: PathBuf,
     pub counters: std::collections::HashMap<String, u32>,
+    /// Every numbered designator the project uses, for Keep unless taken.
+    pub used: std::collections::HashSet<String>,
 }
 
 /// What "Repeat last item" arms again: the text-bearing tool that placed

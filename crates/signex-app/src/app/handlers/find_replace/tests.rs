@@ -1154,3 +1154,23 @@ fn project_replace_skips_a_locked_label_and_replaces_the_rest() {
     assert!(logged("locked object(s): label TOP_NET"));
     assert!(!logged("Nothing was replaced"));
 }
+
+#[test]
+fn project_replace_leaves_the_erc_results_stale() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, _child) = placed_twice_on_disk(&dir);
+    app.ui_state.erc_violations_by_path.insert(
+        top,
+        vec![signex_erc::Violation::new(
+            signex_erc::RuleId::builtin(signex_erc::RuleKind::UnusedPin),
+            signex_erc::RuleKind::UnusedPin,
+            signex_erc::Severity::Warning,
+            "Unused pin",
+            signex_types::schematic::Point::new(0.0, 0.0),
+        )],
+    );
+    app.ui_state.erc_epoch = app.document_state.sheet_edit_epoch;
+    assert!(!app.erc_results_stale());
+    replace_in_project(&mut app, "net", "X");
+    assert!(app.erc_results_stale());
+}

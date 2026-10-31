@@ -246,8 +246,12 @@ then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
 snapped to the grid. The rotate and mirror keys turn the whole group about the
 cursor (a single pasted part turns about the cursor too, not about itself), a
 click places it as one **Undo** step, and the paste then ends: paste again to
-place another copy. `Esc` or a right-click drops it. Pasted parts keep
-their designators, so run **Annotate** (section 8) to renumber duplicates. The
+place another copy. `Esc` or a right-click drops it. A pasted part keeps
+its designator unless the project already uses it; then it takes the next free
+number (a pasted `R2` becomes `R3`, the original stays `R2`), and the units of
+a multi-unit part stay together. An unannotated `R?` stays `R?`. The
+**Designators on paste** preference can instead keep every designator, reset
+them to `R?`, or always take the next free number. The
 copy carries the library symbols its parts use, so it can be pasted into another
 sheet; if that sheet already holds a different version of one of those symbols,
 Signex says so in the Messages panel and the pasted parts use the sheet's
@@ -540,7 +544,11 @@ The **Messages** panel (**View ▸ Messages**) is the application's runtime
 log, not the ERC results. Read ERC results in the ERC panel.
 
 Before you run the check the panel shows "No ERC diagnostics yet". Run `F8`
-again after each round of edits.
+again after each round of edits. Until you do, the panel keeps the last run's
+results and warns "Results may be out of date": a finding whose part, wire or
+label you have deleted disappears from the panel and the sheet, and **Undo**
+brings it back. A wire that was split or merged can still show or hide a
+finding until the next run, so trust only a fresh run.
 
 In the picture below the check has run on the sheet from section 6. The wire
 ends on the lower pin of `R1`, but the upper pin connects to nothing, so the
@@ -614,7 +622,9 @@ and New Project dialogs leave the folder to the operating system.
 
 The same menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
 The ERC report writes the results of the newest ERC run and does not run ERC
-itself: run it first (section 9), or the menu says so and writes nothing. The
+itself: run it first (section 9), or the menu says so and writes nothing. It
+lists the rows the ERC panel shows, and when you have edited the sheet since the
+run it says so in the file and in the Messages panel. The
 save dialog is titled **Export ERC Report**, proposes
 `<project or document>-erc-report.html` (`erc-report.html` when neither is
 known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, `.csv` or

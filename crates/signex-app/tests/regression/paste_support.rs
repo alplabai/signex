@@ -3,7 +3,6 @@
 //! window can give — is delivered by hand.
 
 use signex_app::app::{EditMsg, Message, PasteIntent, PasteRequest, Signex};
-use signex_app::paste_prefs::PasteDesignators;
 
 /// The request a paste made now would carry.
 pub(crate) fn request(app: &Signex, intent: PasteIntent) -> PasteRequest {
@@ -29,9 +28,9 @@ pub(crate) fn settle(app: &mut Signex, task: iced::Task<Message>, reads_numbers:
     }
 }
 
-/// Every intent reads the project's numbers only under Next free.
+/// Every intent reads the project's numbers only when the preference needs them.
 fn reads_numbers(app: &Signex) -> bool {
-    app.ui_state.paste_designators == PasteDesignators::NextFree
+    app.ui_state.paste_designators.reads_project()
 }
 
 /// Send `message` and settle the numbering read it starts, for Duplicate and

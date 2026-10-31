@@ -14,6 +14,9 @@ fn line(style: LineStyle, text: impl Into<String>) -> TextLine {
 
 pub(super) fn emit(report: &ErcReport) -> Result<Vec<u8>, ErcReportError> {
     let mut lines = vec![line(LineStyle::Title, "ERC report")];
+    if report.results_stale {
+        lines.push(line(LineStyle::Body, super::STALE_RESULTS_NOTICE));
+    }
     if let Some(rs) = &report.rule_set {
         let profile = rs.profile.as_deref().unwrap_or("no profile");
         lines.push(line(

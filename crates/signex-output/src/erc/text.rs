@@ -13,9 +13,14 @@ pub(super) fn emit(
     labels: &[String],
     grouped: bool,
     rule_set: Option<&ErcReportRuleSet>,
+    stale: bool,
 ) -> Vec<u8> {
     let mut out = String::new();
     out.push_str(&format!("ERC report: {} violation(s)\n", rows.len()));
+    if stale {
+        out.push_str(super::STALE_RESULTS_NOTICE);
+        out.push('\n');
+    }
     if let Some(rule_set) = rule_set {
         out.push_str(&format!("Rule set: {}\n", flatten(&rule_set.summary())));
     }

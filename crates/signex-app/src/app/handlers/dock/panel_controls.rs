@@ -109,6 +109,7 @@ impl Signex {
                 self.ui_state.erc_run_generation += 1;
                 self.ui_state.erc_running = false;
                 self.ui_state.erc_violations.clear();
+                self.ui_state.erc_epoch = self.document_state.sheet_edit_epoch;
                 self.ui_state.erc_violations_by_path.clear();
                 self.ui_state.erc_focus_global_index = None;
                 self.interaction_state
