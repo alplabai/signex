@@ -26,6 +26,17 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
+        cmd_item_gated(
+            ctx,
+            cmd("close_active_document", "Close Document", "Ctrl+F4"),
+            MenuMessage::CloseDocument,
+        ),
+        item_if(
+            "Close Project",
+            MenuMessage::CloseProject,
+            ctx.commands.has_open_project,
+        ),
+        SEP,
         // Save gating: docs/MENU_BAR.md#file-save
         cmd_item_gated(
             ctx,
@@ -37,6 +48,12 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             cmd("save_document_as", "Save As...", "Ctrl+Shift+S"),
             MenuMessage::SaveAs,
         ),
+        // Greyed when nothing is unsaved; runs the shared Save All flow.
+        item_if(
+            "Save All",
+            MenuMessage::SaveAll,
+            ctx.commands.has_dirty_documents,
+        ),
         SEP,
         // No New Component row here: docs/MENU_BAR.md#file-library
         submenu("Library", library(ctx)),
@@ -45,8 +62,9 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
             "Import",
             vec![item("Altium Project...", MenuMessage::ImportAltium)],
         ),
-        // Print Preview lives under Export > PDF: docs/MENU_BAR.md#file-export-pdf
+        // Export > PDF and File > Print open the same modal; only Print shows Ctrl+P: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
+        cmd_item_gated(ctx, cmd("print", "Print...", "Ctrl+P"), MenuMessage::Print),
         SEP,
         item("Exit", MenuMessage::Exit),
     ]
@@ -94,7 +112,9 @@ fn library(ctx: &MenuContext) -> Vec<MenuEntry> {
 fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
-        cmd_item_gated(ctx, cmd("print", "PDF…", "Ctrl+P"), MenuMessage::ExportPdf),
+        // No shortcut: Ctrl+P is shown on File > Print, which opens this
+        // same modal. Gated like Print.
+        item_if("PDF…", MenuMessage::ExportPdf, enabled(ctx, "print")),
         item_if(
             "Netlist (Protel .NET)...",
             MenuMessage::ExportNetlist,
@@ -298,6 +318,11 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
             ctx,
             cmd("run_erc", "Electrical Rules Check", "F8"),
             MenuMessage::Erc,
+        ),
+        cmd_item_gated(
+            ctx,
+            cmd("open_parameter_manager", "Parameter Manager...", ""),
+            MenuMessage::OpenParameterManager,
         ),
         SEP,
         // The same working BOM dialog File > Export > Bill of Materials

@@ -386,6 +386,7 @@ impl Signex {
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,
+                parameter_table: crate::app::state::ParameterTableState::default(),
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),

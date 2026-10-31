@@ -14,6 +14,7 @@ mod chrome;
 mod context_menu;
 mod modals;
 mod overlays;
+mod parameter_manager;
 mod pdf_preview;
 mod print_preview;
 

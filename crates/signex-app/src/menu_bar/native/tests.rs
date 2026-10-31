@@ -46,8 +46,17 @@ fn all_ids(spec: &NativeMenuSpec) -> Vec<String> {
 /// labels and enablement; a placeholder is disabled.
 fn assert_mirrors(menu: &Menu, native: &NativeMenu) {
     assert_eq!(menu.title, native.title);
-    assert_eq!(menu.entries.len(), native.nodes.len(), "{}", menu.title);
-    for (entry, node) in menu.entries.iter().zip(&native.nodes) {
+    // The app menu carries Quit, so the native File menu drops Exit and the
+    // separator above it.
+    let entries: Vec<&MenuEntry> = if menu.title == "File" {
+        let mut kept: Vec<&MenuEntry> = menu.entries.iter().collect();
+        kept.truncate(kept.len() - 2);
+        kept
+    } else {
+        menu.entries.iter().collect()
+    };
+    assert_eq!(entries.len(), native.nodes.len(), "{}", menu.title);
+    for (entry, node) in entries.into_iter().zip(&native.nodes) {
         match (entry, node) {
             (MenuEntry::Separator, NativeNode::Separator) => {}
             (MenuEntry::Submenu(sub), NativeNode::Submenu(inner)) => assert_mirrors(sub, inner),
@@ -55,6 +64,12 @@ fn assert_mirrors(menu: &Menu, native: &NativeMenu) {
                 assert_eq!(item.label, native.label);
                 assert_eq!(item.is_enabled(), native.enabled, "{}", item.label);
                 assert!(native.accelerator.is_none(), "model rows carry no key");
+                assert_eq!(
+                    item.shortcut.as_ref().map(|s| s.text.as_str()),
+                    native.shortcut.as_deref(),
+                    "{}",
+                    item.label
+                );
             }
             (entry, node) => panic!("shape differs: {entry:?} vs {node:?}"),
         }
@@ -370,4 +385,103 @@ fn the_native_menu_carries_and_refreshes_the_check_mark() {
         }
         other => panic!("a check mark moving must refresh in place, got {other:?}"),
     }
+}
+
+fn built_in_keymap_context() -> MenuContext<'static> {
+    let keymap = crate::keymap::ShortcutProfileSet::built_ins()
+        .expect("built-in profiles")
+        .compile_active();
+    MenuContext {
+        active_keymap: Some(std::sync::Arc::new(keymap)),
+        ..MenuContext::default()
+    }
+}
+
+fn file_menu(spec: &NativeMenuSpec) -> &NativeMenu {
+    spec.menus.iter().find(|m| m.title == "File").unwrap()
+}
+
+fn item_labelled<'a>(menu: &'a NativeMenu, label: &str) -> Option<&'a NativeItem> {
+    menu.nodes.iter().find_map(|node| match node {
+        NativeNode::Item(item) if item.label == label => Some(item),
+        _ => None,
+    })
+}
+
+/// #1765: a native row shows its keymap shortcut but registers no key
+/// equivalent, so AppKit cannot take the key before the keymap sees it.
+#[test]
+fn native_rows_show_the_keymap_shortcut_without_a_key_equivalent() {
+    let spec = build(&menu_bar_model(&built_in_keymap_context()), false).spec;
+    let save = item_labelled(file_menu(&spec), "Save").unwrap();
+    assert_eq!(save.shortcut.as_deref(), Some("Ctrl+S"));
+    assert!(save.accelerator.is_none());
+    let redo = spec.menus.iter().find(|m| m.title == "Edit").unwrap();
+    assert_eq!(
+        item_labelled(redo, "Redo").unwrap().shortcut.as_deref(),
+        Some("Ctrl+Y")
+    );
+}
+
+/// The shortcut is part of what is on screen: a rebind must rebuild.
+#[test]
+fn a_changed_shortcut_rebuilds_the_native_menu() {
+    let with = build(&menu_bar_model(&built_in_keymap_context()), false).spec;
+    let mut rebound = with.clone();
+    for menu in &mut rebound.menus {
+        for node in &mut menu.nodes {
+            if let NativeNode::Item(item) = node
+                && item.shortcut.is_some()
+            {
+                item.shortcut = Some("F2".into());
+            }
+        }
+    }
+    assert_ne!(with, rebound);
+    assert_eq!(plan_refresh(Some(&with), &rebound), Refresh::Rebuild);
+}
+
+#[test]
+fn the_menu_inputs_follow_the_active_keymap() {
+    let first = std::sync::Arc::new(
+        crate::keymap::ShortcutProfileSet::built_ins()
+            .unwrap()
+            .compile_active(),
+    );
+    let again = std::sync::Arc::new(
+        crate::keymap::ShortcutProfileSet::built_ins()
+            .unwrap()
+            .compile_active(),
+    );
+    let base = || MenuInputs::new(CommandContext::default(), &[], false, Vec::new());
+    assert_eq!(
+        base().with_keymap(first.clone()),
+        base().with_keymap(first.clone())
+    );
+    assert_ne!(base().with_keymap(first), base().with_keymap(again));
+}
+
+/// #1765: File gains Close Document, Close Project and Print, and loses Exit
+/// natively (Quit Signex lives in the app menu).
+#[test]
+fn the_native_file_menu_has_the_approved_rows() {
+    let built = build(&menu_bar_model(&variants().remove(1)), false);
+    let file = file_menu(&built.spec);
+    for label in ["Close Document", "Close Project", "Print..."] {
+        assert!(item_labelled(file, label).is_some(), "{label}");
+    }
+    assert!(item_labelled(file, "Exit").is_none());
+    assert!(!matches!(file.nodes.last(), Some(NativeNode::Separator)));
+    let at = |id: &str| built.actions.get(id);
+    assert!(matches!(
+        at("File/Close Document"),
+        Some(MenuMessage::CloseDocument)
+    ));
+    assert!(matches!(
+        at("File/Close Project"),
+        Some(MenuMessage::CloseProject)
+    ));
+    assert!(matches!(at("File/Print..."), Some(MenuMessage::Print)));
+    let print = item_labelled(file, "Print...").unwrap();
+    assert!(print.accelerator.is_none());
 }

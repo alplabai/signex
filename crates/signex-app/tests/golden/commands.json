@@ -520,6 +520,11 @@
     "category": "view"
   },
   {
+    "id": "open_parameter_manager",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "open_preferences",
     "group": "General",
     "category": "preferences"

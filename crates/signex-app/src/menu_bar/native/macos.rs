@@ -12,7 +12,9 @@ use muda::accelerator::{Accelerator as KeyEquivalent, CMD_OR_CTRL, Code};
 use muda::{CheckMenuItem, Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
 
 use super::state::{ItemChange, MenuInputs, NativeMenuState, Refresh, plan_refresh};
-use super::{Accelerator, NativeBuild, NativeMenu, NativeMenuSpec, NativeNode, Predefined};
+use super::{
+    Accelerator, NativeBuild, NativeItem, NativeMenu, NativeMenuSpec, NativeNode, Predefined,
+};
 use crate::diagnostics::{log_info, log_warning};
 
 /// A native row's handle: a plain item, or a check item with a mark.
@@ -55,6 +57,18 @@ impl Shell {
     }
 }
 
+/// Gap between a row's label and its shortcut text.
+const SHORTCUT_GAP: &str = "    ";
+
+/// The title AppKit shows. The shortcut is text in the title, not a key
+/// equivalent: a registered one would take the key before the keymap sees it.
+fn title(item: &NativeItem) -> String {
+    match &item.shortcut {
+        Some(shortcut) => format!("{}{SHORTCUT_GAP}{shortcut}", item.label),
+        None => item.label.clone(),
+    }
+}
+
 fn submenu(menu: &NativeMenu, items: &mut HashMap<String, Handle>) -> Result<Submenu, muda::Error> {
     let sub = Submenu::new(&menu.title, true);
     for node in &menu.nodes {
@@ -66,7 +80,7 @@ fn submenu(menu: &NativeMenu, items: &mut HashMap<String, Handle>) -> Result<Sub
                     Some(checked) => {
                         let native = CheckMenuItem::with_id(
                             id,
-                            &item.label,
+                            title(item),
                             item.enabled,
                             checked,
                             accelerator,
@@ -75,7 +89,7 @@ fn submenu(menu: &NativeMenu, items: &mut HashMap<String, Handle>) -> Result<Sub
                         Handle::Check(native)
                     }
                     None => {
-                        let native = MenuItem::with_id(id, &item.label, item.enabled, accelerator);
+                        let native = MenuItem::with_id(id, title(item), item.enabled, accelerator);
                         sub.append(&native)?;
                         Handle::Plain(native)
                     }

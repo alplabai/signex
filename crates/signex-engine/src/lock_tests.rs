@@ -163,6 +163,13 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
             },
         ),
         (
+            "delete a parameter",
+            Command::RemoveSymbolField {
+                symbol_id: id(1),
+                key: "MPN".into(),
+            },
+        ),
+        (
             "edit the text size",
             Command::UpdateSymbolTextSize {
                 symbol_id: id(1),
