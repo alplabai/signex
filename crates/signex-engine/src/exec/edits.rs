@@ -433,11 +433,8 @@ impl Engine {
             } => {
                 // Reject overwrites of reserved keys — those have their
                 // own commands so ref/value/footprint moves stay tracked.
-                match key.to_lowercase().as_str() {
-                    "reference" | "value" | "footprint" => {
-                        return Ok(CommandResult::unchanged());
-                    }
-                    _ => {}
+                if crate::is_reserved_symbol_key(&key) {
+                    return Ok(CommandResult::unchanged());
                 }
                 let changed = self
                     .document
@@ -445,17 +442,35 @@ impl Engine {
                     .iter_mut()
                     .find(|s| s.uuid == symbol_id)
                     .map(|symbol| {
-                        if value.is_empty() {
-                            symbol.fields.remove(&key).is_some()
-                        } else if symbol.fields.get(&key) == Some(&value) {
+                        if symbol.fields.get(&key) == Some(&value) {
                             false
                         } else {
-                            symbol.fields.insert(key, value);
+                            symbol.fields.insert(key.clone(), value);
                             true
                         }
                     })
                     .unwrap_or(false);
                 if !changed {
+                    return Ok(CommandResult::unchanged());
+                }
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::SymbolFieldsUpdated,
+                    document: DocumentPatch::SYMBOLS,
+                };
+                self.record_field_edit(before, patch_pair, symbol_id, &key);
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::RemoveSymbolField { symbol_id, key } => {
+                if crate::is_reserved_symbol_key(&key) {
+                    return Ok(CommandResult::unchanged());
+                }
+                let removed = self
+                    .document
+                    .symbols
+                    .iter_mut()
+                    .find(|s| s.uuid == symbol_id)
+                    .is_some_and(|symbol| symbol.fields.remove(&key).is_some());
+                if !removed {
                     return Ok(CommandResult::unchanged());
                 }
                 let patch_pair = PatchPair {

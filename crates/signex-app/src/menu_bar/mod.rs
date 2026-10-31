@@ -119,6 +119,18 @@ pub enum MenuMessage {
     ImportAltium,
     Save,
     SaveAs,
+    /// File ▸ Save All — saves every unsaved document and Component Preview
+    /// row, then does nothing else (no close, no quit).
+    SaveAll,
+    /// File ▸ Close Document — closes the active tab like the tab menu's
+    /// Close; nothing when no tab is open.
+    CloseDocument,
+    /// File ▸ Close Project — closes the active project like the project
+    /// tree's Close Project, through its unsaved-changes gate; nothing when
+    /// no project is open.
+    CloseProject,
+    /// File ▸ Print... — the Ctrl+P print preview.
+    Print,
     ExportPdf,
     ExportNetlist,
     ExportBom,
@@ -204,6 +216,8 @@ pub enum MenuMessage {
     AnnotateBack,
     AnnotateSheets,
     Erc,
+    /// Design ▸ Parameter Manager... - the active sheet's parameter table.
+    OpenParameterManager,
     ToggleAutoFocus,
     // Tools
     /// Open the Preferences dialog.
@@ -374,6 +388,9 @@ mod view;
 #[cfg(test)]
 pub(crate) mod panel_check_tests;
 #[cfg(test)]
+mod parameter_manager_tests;
+
+#[cfg(test)]
 mod planned_tests;
 
 pub use view::view;
@@ -410,7 +427,7 @@ fn enabled(ctx: &MenuContext<'_>, command_id: &str) -> bool {
 /// bind (or the user unbound) shows no hint (#1378).
 fn shortcut_for(ctx: &MenuContext<'_>, command_id: &str, fallback: &str) -> Option<String> {
     let Some(keymap) = ctx.active_keymap.as_ref() else {
-        return Some(fallback.to_string());
+        return (!fallback.is_empty()).then(|| fallback.to_string());
     };
     let command = AppCommandId::new(command_id).ok()?;
     keymap.shortcut_label(&command)

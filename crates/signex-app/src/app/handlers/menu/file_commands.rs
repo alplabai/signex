@@ -38,6 +38,15 @@ impl Signex {
             )),
             MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
+            MenuMessage::SaveAll => Some(self.save_all_dirty()),
+            MenuMessage::CloseDocument => {
+                let active = self.document_state.active_tab;
+                Some(self.handle_tab_context_action(crate::app::TabContextAction::Close(active)))
+            }
+            MenuMessage::CloseProject => Some(self.close_active_project()),
+            MenuMessage::Print => {
+                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
+            }
             MenuMessage::NewProject => {
                 let target = self.save_target(None);
                 Some(Task::perform(
@@ -229,6 +238,27 @@ impl Signex {
 }
 
 impl Signex {
+    /// File ▸ Save All: every dirty document and row through the shared
+    /// Save All flow, with nothing to do afterwards.
+    fn save_all_dirty(&mut self) -> Task<Message> {
+        let rows = self.library.dirty_editors();
+        let mut paths: Vec<std::path::PathBuf> = self
+            .document_state
+            .dirty_document_paths()
+            .into_iter()
+            .collect();
+        paths.sort();
+        if paths.is_empty() && rows.is_empty() {
+            return Task::none();
+        }
+        self.begin_save_all(
+            "Save All",
+            &paths,
+            &rows,
+            crate::app::contracts::SaveAllNext::Nothing,
+        )
+    }
+
     /// Pick the Save As dialog by the active tab's document kind (#671).
     /// Kinds without Save As log a message and open nothing.
     fn save_as_dialog_for_active_tab(&mut self) -> Task<Message> {

@@ -553,7 +553,7 @@ Press `Ctrl+S` or choose **File ▸ Save**. Signex writes the sheet to its
 greyed out when no schematic is open.
 
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
-`Ctrl+Y`.
+`Ctrl+Y` or `Ctrl+Shift+Z`.
 
 **Library saves are different.** A component library (`.snxlib`) is a git
 repository, and each library save writes the file and then commits it. If the
@@ -725,7 +725,7 @@ Shortcuts used in this guide, in the default Altium profile:
 | Open | `Ctrl+O` |
 | Save | `Ctrl+S` |
 | Print / export PDF | `Ctrl+P` |
-| Undo / redo | `Ctrl+Z` / `Ctrl+Y` |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Y` or `Ctrl+Shift+Z` |
 | Place wire | `P W` or `Ctrl+W` |
 | Place net label | `P N` |
 | Cancel the current tool | `Esc` |

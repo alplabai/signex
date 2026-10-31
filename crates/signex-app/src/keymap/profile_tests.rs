@@ -752,3 +752,38 @@ fn a_rebind_after_an_unbind_shows_the_rebound_stroke() {
     ]));
     assert_eq!(keymap.shortcut_label(&print).as_deref(), Some("Ctrl+P"));
 }
+
+/// #1765: Ctrl+Shift+Z redoes in every built-in profile, Ctrl+Y keeps
+/// working, no other command owns the stroke, and the menu still advertises
+/// the primary Ctrl+Y.
+#[test]
+fn ctrl_shift_z_redoes_in_every_built_in_profile() {
+    let redo = AppCommandId::new("redo").unwrap();
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    for profile in set.profiles() {
+        let mut set = set.clone();
+        set.set_active_profile(profile.id.clone()).unwrap();
+        let keymap = set.compile_active();
+        for keys in ["Ctrl+Shift+Z", "Ctrl+Y"] {
+            let stroke = KeyStroke::from_str(keys).unwrap();
+            let lookup = keymap.lookup(&[stroke], &[ShortcutContext::Global]);
+            assert_eq!(
+                lookup.command.as_ref(),
+                Some(&redo),
+                "{keys} in {}",
+                profile.id
+            );
+        }
+        let owners = profile
+            .bindings
+            .iter()
+            .filter(|binding| {
+                binding
+                    .triggers
+                    .contains(&ShortcutTrigger::parse("Ctrl+Shift+Z").unwrap())
+            })
+            .count();
+        assert_eq!(owners, 1, "Ctrl+Shift+Z has one owner in {}", profile.id);
+        assert_eq!(keymap.shortcut_label(&redo).as_deref(), Some("Ctrl+Y"));
+    }
+}

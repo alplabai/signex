@@ -4,8 +4,8 @@
 //! CI platforms: the [`MenuBarModel`] becomes a [`NativeMenuSpec`] tree with
 //! stable ids, plus the id -> [`MenuMessage`] map the activation path reads.
 //! Only `macos.rs` touches `muda`. Build timing, the id scheme, the sync rule
-//! and why no row carries a key equivalent: docs/MENU_BAR.md, "Native macOS
-//! menu".
+//! and why a row shows its shortcut but carries no key equivalent:
+//! docs/MENU_BAR.md, "Native macOS menu".
 
 use std::collections::HashMap;
 
@@ -54,6 +54,9 @@ pub(crate) struct NativeItem {
     pub enabled: bool,
     /// `Some` renders a check item showing this state.
     pub checked: Option<bool>,
+    /// The keymap's shortcut for the row, shown beside the label. Display
+    /// only: it registers nothing with AppKit.
+    pub shortcut: Option<String>,
     pub accelerator: Option<Accelerator>,
 }
 
@@ -155,8 +158,12 @@ impl Builder {
 
     fn menu(&mut self, menu: &Menu, parent_path: &str) -> NativeMenu {
         let path = join(parent_path, &menu.title);
-        let nodes = menu
-            .entries
+        let entries = if parent_path.is_empty() {
+            without_exit(&menu.entries)
+        } else {
+            &menu.entries[..]
+        };
+        let nodes = entries
             .iter()
             .map(|entry| match entry {
                 MenuEntry::Separator => NativeNode::Separator,
@@ -186,6 +193,7 @@ impl Builder {
         let mut node = self.item_keyed(path, &key, &item.label, action, enabled, None);
         if let NativeNode::Item(native) = &mut node {
             native.checked = item.checked;
+            native.shortcut = item.shortcut.as_ref().map(|s| s.text.clone());
         }
         node
     }
@@ -219,6 +227,7 @@ impl Builder {
             label: label.to_owned(),
             enabled,
             checked: None,
+            shortcut: None,
             accelerator,
         })
     }
@@ -231,6 +240,28 @@ impl Builder {
         } else {
             format!("{id}#{count}")
         }
+    }
+}
+
+/// A root menu's entries without the Exit row and the separator above it:
+/// the app menu carries Quit Signex.
+fn without_exit(entries: &[MenuEntry]) -> &[MenuEntry] {
+    let is_exit = |entry: &MenuEntry| {
+        matches!(
+            entry,
+            MenuEntry::Item(MenuItem {
+                state: ItemState::Live {
+                    action: MenuMessage::Exit,
+                    ..
+                },
+                ..
+            })
+        )
+    };
+    match entries {
+        [rest @ .., MenuEntry::Separator, last] if is_exit(last) => rest,
+        [rest @ .., last] if is_exit(last) => rest,
+        _ => entries,
     }
 }
 

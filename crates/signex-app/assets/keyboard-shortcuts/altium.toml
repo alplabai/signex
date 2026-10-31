@@ -64,6 +64,7 @@ context = "global"
 [keyboard_shortcuts.sections.bindings]
 "Delete" = "delete_selection"
 "Ctrl+Z" = "undo"
+"Ctrl+Shift+Z" = "redo"
 "Ctrl+Y" = "redo"
 "Ctrl+A" = "select_all"
 "Shift+Click" = "toggle_selection"
