@@ -22,8 +22,12 @@ fn text_on(bg: Color) -> Color {
 
 /// Colour of the On/Off word beside a checkbox drawn on `surface`: the
 /// readable text colour for "On", the muted label colour for "Off".
-fn check_state_color(checked: bool, label_c: Color, surface: Color) -> Color {
-    if checked { text_on(surface) } else { label_c }
+pub(crate) fn check_state_color(checked: bool, label_c: Color, surface: Color) -> Color {
+    if checked {
+        text_on(surface)
+    } else {
+        crate::styles::tokens::keep_readable_on(label_c, surface)
+    }
 }
 
 /// Thin 1px separator line. `pub(super)` so sibling modules

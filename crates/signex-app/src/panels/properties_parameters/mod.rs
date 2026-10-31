@@ -15,11 +15,15 @@ mod general;
 mod net_params;
 mod title_block;
 
+#[cfg(test)]
+pub(crate) use form_rows::check_state_color;
 pub use form_rows::{
     PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
     form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
     form_label, form_mm_edit_row, form_pick_row, section_hdr, thin_sep, typed_mm,
 };
+#[cfg(test)]
+pub(crate) use general::{add_filter_button_style, seg_text};
 pub use general::{
     props_tab_btn, seg_btn, view_custom_selection_filters_section, view_properties_general,
     view_properties_parameters,

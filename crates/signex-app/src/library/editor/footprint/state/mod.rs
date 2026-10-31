@@ -177,6 +177,10 @@ pub struct FootprintEditorState {
     pub(super) courtyard_outline_pads: Vec<[f64; 5]>,
     /// Last known cursor world position in mm.
     pub cursor_mm: Option<(f64, f64)>,
+    /// The canvas camera's scale (pixels per mm) as the last cursor event
+    /// reported it. The camera itself lives in the canvas widget; this copy
+    /// feeds the status bar's zoom readout (#1789).
+    pub view_px_per_mm: f32,
     /// Phase 5.3: which editor mode the user has switched to.
     pub mode: EditorMode,
     /// Phase 5.3: shared LM solver config.
@@ -289,7 +293,16 @@ pub struct FootprintEditorState {
     pub fit_pending: bool,
 }
 
+/// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
+/// fits comfortably in a 600px-wide tab.
+pub const DEFAULT_PX_PER_MM: f32 = 30.0;
+
 impl FootprintEditorState {
+    /// The canvas zoom as a percentage, `100.0` at [`DEFAULT_PX_PER_MM`].
+    pub fn zoom_percent(&self) -> f64 {
+        f64::from(self.view_px_per_mm) / f64::from(DEFAULT_PX_PER_MM) * 100.0
+    }
+
     /// Build canvas state from the primitive's pad list.
     pub fn from_footprint(fp: &Footprint) -> Self {
         let mut pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
@@ -337,6 +350,7 @@ impl FootprintEditorState {
             courtyard_outline_mm: None,
             courtyard_outline_pads: Vec::new(),
             cursor_mm: None,
+            view_px_per_mm: DEFAULT_PX_PER_MM,
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,

@@ -372,3 +372,26 @@ fn a_command_with_nothing_to_edit_focuses_nothing() {
         &signex_app::app::contracts::TEXT_EDIT_INPUT_ID
     ));
 }
+
+/// #1799 — a power port's designator is never drawn, so F2 / Edit Designator
+/// edits what is drawn: the net name, through the Value edit Properties uses.
+#[test]
+fn f2_on_a_power_port_edits_its_net_name_in_one_undo_step() {
+    let mut sheet = empty_sheet();
+    let mut port = part("#PWR01", "+5V", R1_AT);
+    port.is_power = true;
+    sheet.symbols = vec![port];
+    let mut app = app_with(sheet);
+    select(&mut app, &[(0, SelectedKind::Symbol)]);
+    request(&mut app, TextEditTarget::Designator);
+    assert_eq!(
+        editing(&app),
+        Some((SelectedKind::SymbolValField, "+5V".into()))
+    );
+    type_and_submit(&mut app, "+3V3");
+    assert_eq!(doc(&app).symbols[0].value, "+3V3");
+    assert_eq!(doc(&app).symbols[0].reference, "#PWR01");
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(doc(&app).symbols[0].value, "+5V");
+    assert!(!app.document_state.active_engine().unwrap().can_undo());
+}

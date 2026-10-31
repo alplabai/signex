@@ -40,6 +40,8 @@ mod symbol_context;
 mod widgets;
 
 #[cfg(test)]
+mod contrast_tests;
+#[cfg(test)]
 mod planned_tests;
 
 pub(crate) use element_properties::{

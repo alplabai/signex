@@ -1483,6 +1483,7 @@ fn cursor_tracking_during_a_drag_neither_solves_nor_settles() {
         FootprintEditorMsg::CursorAt {
             x_mm: 1.0,
             y_mm: 2.0,
+            px_per_mm: 30.0,
         },
     );
 

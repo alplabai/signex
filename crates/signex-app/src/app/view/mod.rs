@@ -273,12 +273,14 @@ impl Signex {
                 .map(|f| f.to_string_lossy().into_owned())
                 .unwrap_or_else(|| run.input.display().to_string())
         });
+        let (cursor_x, cursor_y) = self.status_cursor(window_id);
+        let zoom = self.status_zoom(window_id);
         let status = status_bar::view(
-            ui.cursor_x,
-            ui.cursor_y,
+            cursor_x,
+            cursor_y,
             ui.grid_visible,
             ui.snap_enabled,
-            ui.zoom,
+            zoom,
             ui.unit,
             &interaction.current_tool,
             ui.grid_size_mm,
@@ -553,7 +555,7 @@ impl Signex {
                 && let Some(editor) = self.document_state.footprint_editors.get(path)
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
-                let theme_id = self.ui_state.theme_id;
+                let theme_id = self.ui_state.effective_theme_id();
                 return crate::library::editor::standalone::view_footprint(
                     editor, tokens, theme_id,
                 )

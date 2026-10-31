@@ -221,7 +221,7 @@ impl Signex {
             interaction.draw_mode,
             &interaction.last_tool,
             &document.panel_ctx.tokens,
-            self.ui_state.theme_id,
+            self.ui_state.effective_theme_id(),
             bar_has_selection,
             bar_has_net_colors,
         )
@@ -255,7 +255,7 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::CHROME_TOP;
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         // Task 6 — footprint-native presets (`SelectionFilterKind`),
         // not the schematic `custom_filter_presets`.
@@ -451,7 +451,7 @@ impl Signex {
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         let y_offset: f32 = canvas_region::CHROME_TOP;
-        let theme_id = self.ui_state.theme_id;
+        let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
         let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
