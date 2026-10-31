@@ -32,7 +32,7 @@ fn em_mm(label: &Label) -> f64 {
     label
         .font_size
         .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
-        / f64::from(signex_gfx::primitive::text::MM_PER_EM)
+        / f64::from(signex_types::font::mm_per_em(label.font_family.as_deref()))
 }
 
 /// Width of the flag body (anchor to the far edge).
@@ -112,8 +112,8 @@ fn iosevka_geometry_is_the_monospace_estimate_it_always_was() {
     let flag = label(LabelType::Global, None);
     let em = em_mm(&flag);
     let want = TEXT.chars().count() as f64 * em * 0.58 + 2.0 * em * 0.325;
-    // Both `em_mm` and the geometry's own estimate divide by
-    // `f64::from(MM_PER_EM)`; the tolerance only absorbs the different
+    // Both `em_mm` and the geometry's own estimate divide by the face's
+    // cap-height ratio; the tolerance only absorbs the different
     // order of float operations between the two sums.
     assert!((flag_body_width(&flag, None) - want).abs() < 1e-6);
     assert_eq!(
@@ -147,4 +147,26 @@ fn default_face_text_box_is_the_shared_types_box() {
         (got.min_x, got.min_y, got.max_x, got.max_y),
         (want.min_x, want.min_y, want.max_x, want.max_y)
     );
+}
+
+/// #1229 — a flag is sized from the em its text is drawn at, so in units of
+/// the label's own capital height it is the same shape in every bundled face.
+#[test]
+fn a_flag_is_as_tall_as_its_capitals_say_in_every_face() {
+    let height_in_caps = |family: Option<&str>| {
+        let flag = label(LabelType::Global, family);
+        let vertices = label::marker_vertices(&flag, None);
+        let cap_mm = flag
+            .font_size
+            .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
+        (vertices[3].1 - vertices[2].1) / cap_mm
+    };
+    let (iosevka, roboto) = (height_in_caps(None), height_in_caps(Some("Roboto")));
+    // half_h is 0.62 em; an em is `cap / ratio`.
+    assert!((iosevka - 2.0 * 0.62 / 0.735).abs() < 1e-6, "{iosevka}");
+    assert!(
+        (roboto - 2.0 * 0.62 / (1456.0 / 2048.0)).abs() < 1e-6,
+        "{roboto}"
+    );
+    assert!(roboto > iosevka, "Roboto's capitals fill less of its em");
 }

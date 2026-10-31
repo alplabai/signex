@@ -16,9 +16,27 @@ Component Library, then Add New ▸ Component on the library node.
 ## File ▸ Export ▸ PDF {#file-export-pdf}
 
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
-shortcut. The two were consolidated under Export ▸ PDF so one surface opens
-the preview flow. Ctrl+P still opens the preview through the keymap command
-bridge (`app/command/bridge.rs`); only the menu row moved.
+shortcut, so it was folded into Export ▸ PDF. File ▸ Print... (#1765) and
+Export ▸ PDF open the same print preview / PDF export modal (`print`, Ctrl+P,
+goes through the keymap command bridge in `app/command/bridge.rs`). Only
+File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
+
+Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
+focus to active or next window") and may never reach Signex there; the menu
+row always works.
+
+## File: close, save all {#file-close-save-all}
+
+Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
+profile, closes the active tab like the tab menu's Close and parks a dirty
+draft) is greyed when no tab is open. Close Project (the project tree's Close
+Project for the active project, behind its unsaved-changes gate) is greyed when
+no project is open. Save All writes every unsaved document and Component
+Preview row through the same Save All flow the close and quit prompts use
+(`SaveAllNext::Nothing`: no close, no quit afterwards). It is greyed when
+nothing is unsaved (`CommandContext::has_dirty_documents`), has no shortcut
+(the catalog has no `save_all` command), and reports "Save All: saved N
+item(s)" or the failures in the Messages panel.
 
 ## Save and Save As {#file-save}
 
@@ -64,15 +82,19 @@ itself on a click, so choosing one drops the applied spec and the next sync
 redraws every mark from the Model. A panel row opens or reveals its panel;
 the panel's shortcut toggles it.
 
-**No accelerators on model rows.** An AppKit key equivalent fires before iced
-sees the key, which bypasses the widget-capture rule in `app/dispatch/input.rs`
-(a focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap
-treats `Ctrl` as the physical Control key on every OS (#1441), so a native
-Command key equivalent would disagree with the profile. Native rows show no
-shortcut and
-register no key equivalent; keys keep going through the keymap.
-`Shortcut::command_id` stays in the model for a later change. The four
-app-menu key equivalents are the only ones, and none collides with editing.
+**Shortcuts on model rows are text, not key equivalents.** Each native row
+shows its keymap shortcut (`Shortcut::text`, from the active keymap, so a
+rebind shows up and the keymap change rebuilds the menu) as text after its
+label. It registers no AppKit key equivalent: one fires before iced sees the
+key, which bypasses the widget-capture rule in `app/dispatch/input.rs` (a
+focused text input owns Ctrl/Command + C, V, X, A, Z), and the keymap treats
+`Ctrl` as the physical Control key on every OS (#1441), so a native Command
+key equivalent would disagree with the profile. Keys keep going through the
+keymap, so a key is never dispatched twice. The four app-menu key equivalents
+are the only registered ones, and none collides with editing.
+
+**Exit.** The native File menu leaves out Exit and the separator above it:
+Quit Signex in the app menu replaces it. Windows and Linux keep Exit.
 
 **Ids.** `<title path>/<label>`, for example `File/Save` or
 `File/Export/PDF`. A recent project uses its full path instead of its file

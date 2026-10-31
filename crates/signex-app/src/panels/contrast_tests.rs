@@ -2,7 +2,7 @@
 //! on the light built-in theme, and the dark themes must not change.
 
 use super::palette::PanelPalette;
-use super::properties_parameters::{add_filter_button_style, check_state_text, seg_text};
+use super::properties_parameters::{add_filter_button_style, check_state_color, seg_text};
 use super::status::{erc_row_text, erc_severity_text};
 use crate::app::Signex;
 use crate::styles::ti;
@@ -69,7 +69,7 @@ fn checkbox_state_word_is_readable_on_solarized_light() {
         theme.extended_palette().background.base.color,
     ];
     for surface in surfaces {
-        assert_readable("On", check_state_text(true, p.muted, surface), surface);
+        assert_readable("On", check_state_color(true, p.muted, surface), surface);
     }
 }
 
@@ -122,13 +122,13 @@ fn dark_themes_keep_every_label_that_was_visible() {
         assert_unchanged_unless_lost(
             &format!("{id:?} On"),
             Color::WHITE,
-            check_state_text(true, p.muted, surface),
+            check_state_color(true, p.muted, surface),
             surface,
         );
         assert_unchanged_unless_lost(
             &format!("{id:?} Off"),
             p.muted,
-            check_state_text(false, p.muted, surface),
+            check_state_color(false, p.muted, surface),
             surface,
         );
         let style = add_filter_button_style(&theme, button::Status::Active, p.primary);
@@ -188,7 +188,7 @@ fn on_label_reads_on_the_panel_background_of_every_builtin() {
         let tokens = theme_tokens(id);
         let p = PanelPalette::from_tokens(&tokens);
         let theme = Signex::id_to_iced_theme(id, None);
-        let on = check_state_text(
+        let on = check_state_color(
             true,
             p.muted,
             theme.extended_palette().background.base.color,

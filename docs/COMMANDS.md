@@ -85,7 +85,7 @@ shrink.
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
 | `print` | Print | file | `Ctrl+P` | `Ctrl+P` |
-| `redo` | Redo | edit | `Ctrl+Y` | `Ctrl+Y` |
+| `redo` | Redo | edit | `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
 | `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |

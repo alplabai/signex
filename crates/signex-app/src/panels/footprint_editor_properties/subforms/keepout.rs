@@ -19,6 +19,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
     muted: Color,
     primary: Color,
     _border_c: Color,
+    panel_bg: Color,
 ) -> Column<'a, PanelMsg> {
     let Some(k) = fp.selected_keepout.as_ref() else {
         return col;
@@ -41,6 +42,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
             value: !k.no_routing,
         },
         muted,
+        panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
         "No components",
@@ -51,6 +53,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
             value: !k.no_components,
         },
         muted,
+        panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
         "No copper",
@@ -61,6 +64,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
             value: !k.no_copper,
         },
         muted,
+        panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
         "No vias",
@@ -71,6 +75,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
             value: !k.no_vias,
         },
         muted,
+        panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
         "No drilling",
@@ -81,6 +86,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
             value: !k.no_drilling,
         },
         muted,
+        panel_bg,
     ));
     col = col.push(super::super::super::form_check_row(
         "No pours",
@@ -91,6 +97,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
             value: !k.no_pours,
         },
         muted,
+        panel_bg,
     ));
 
     col

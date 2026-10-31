@@ -16,7 +16,7 @@ mod net_params;
 mod title_block;
 
 #[cfg(test)]
-pub(crate) use form_rows::check_state_text;
+pub(crate) use form_rows::check_state_color;
 pub use form_rows::{
     PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
     form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_input_row,

@@ -448,6 +448,7 @@ impl Signex {
             wire_class_revision: self.ui_state.net_class_styles.revision(),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
+            power_port_pending: self.interaction_state.pending_power.is_some(),
         }
     }
 

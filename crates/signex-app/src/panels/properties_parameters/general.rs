@@ -142,6 +142,7 @@ pub fn view_properties_general<'a>(
         input_bg,
         input_bdr,
         seg_hover,
+        panel_bg,
         ..
     } = palette;
 
@@ -413,6 +414,7 @@ pub fn view_properties_general<'a>(
                     sheet_frame.show_border,
                     PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(!sheet_frame.show_border)),
                     muted,
+                    panel_bg,
                 ));
                 c = c.push(form_check_row(
                     "Show Title Block",
@@ -421,6 +423,7 @@ pub fn view_properties_general<'a>(
                         !sheet_frame.show_title_block,
                     )),
                     muted,
+                    panel_bg,
                 ));
                 let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
                 c = c.push(form_pick_row(

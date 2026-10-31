@@ -214,6 +214,8 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
         "placement_accept" => Message::Selection(selection_request::SelectionRequest::LassoCommit),
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
+        // The same message File > Close Document sends.
+        "close_active_document" => Message::Menu(MenuMessage::CloseDocument),
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
@@ -453,7 +455,7 @@ mod tests {
     #[rustfmt::skip]
     const UNMAPPED_CATALOG_IDS: &[&str] = &[
         "autoplace_fields", "center_on_cursor",
-        "close_active_document", "copy_attributes_or_add_vertex", "cycle_fast_grid",
+        "copy_attributes_or_add_vertex", "cycle_fast_grid",
         "cycle_wiring_mode",
         "fast_grid_1", "fast_grid_2",
         "import_graphics",

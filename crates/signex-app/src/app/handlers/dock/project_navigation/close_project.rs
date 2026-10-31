@@ -9,6 +9,21 @@ use crate::app::state::sheet_refs::{SheetRefs, StaleRefs};
 use crate::app::state::volume_case::directory_ignores_case;
 
 impl Signex {
+    /// File ▸ Close Project: close the active project through the same gate
+    /// as the project tree's Close Project; nothing when none is open.
+    pub(crate) fn close_active_project(&mut self) -> Task<Message> {
+        let active = self.document_state.active_project;
+        let index = self
+            .document_state
+            .projects
+            .iter()
+            .position(|project| Some(project.id) == active);
+        match index {
+            Some(index) => self.close_project_at_tree_path(&[index]),
+            None => Task::none(),
+        }
+    }
+
     /// Close every tab backed by the project whose root is at
     /// `tree_path[0]`, then drop the project from the workspace and
     /// promote a sibling (or `None`) to active. Mirrors Altium's

@@ -369,10 +369,10 @@ impl Signex {
                     ..iced::widget::button::Style::default()
                 },
             );
-        let footer_caption = if preview.pages.is_empty() {
-            "No files selected for export".to_string()
-        } else {
-            format!("{} page(s)", preview.pages.len())
+        let footer_caption = match (&preview.export_status, preview.pages.is_empty()) {
+            (Some(status), _) => status.clone(),
+            (None, true) => "No files selected for export".to_string(),
+            (None, false) => format!("{} page(s)", preview.pages.len()),
         };
         let footer = container(
             row![
