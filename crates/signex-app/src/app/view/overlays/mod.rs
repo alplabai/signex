@@ -8,6 +8,7 @@
 //! entry point `collect_overlays` stays in `view/mod.rs` alongside the
 //! other composition-core methods.
 
+use super::canvas_region;
 use super::*;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -20,6 +21,34 @@ mod net_hover;
 pub(super) mod read_only_badge;
 
 impl Signex {
+    /// The canvas rectangle in window coordinates, from the live dock sizes.
+    pub(super) fn canvas_bounds(&self) -> iced::Rectangle {
+        use crate::dock::PanelPosition::{Bottom, Left, Right};
+        let dock = &self.document_state.dock;
+        let extent = |pos, size| canvas_region::DockExtent {
+            present: dock.has_panels(pos),
+            collapsed: dock.is_collapsed(pos),
+            size,
+        };
+        let ui = &self.ui_state;
+        canvas_region::canvas_bounds(
+            ui.window_size,
+            extent(Left, ui.left_width),
+            extent(Right, ui.right_width),
+            extent(Bottom, ui.bottom_height),
+        )
+    }
+
+    /// Where a hover card may go in `window_id`: the canvas in the main
+    /// window, the whole window elsewhere.
+    pub(super) fn card_bounds(&self, window_id: iced::window::Id) -> iced::Rectangle {
+        canvas_region::card_bounds(
+            self.ui_state.main_window_id == Some(window_id),
+            self.canvas_bounds(),
+            self.ui_state.window_size,
+        )
+    }
+
     /// Hover tooltip card showing the placed symbol's designator,
     /// value, footprint, and library id. Only paints after the cursor
     /// has dwelled on a Symbol hit for >= 250 ms — gates impulsive
@@ -27,14 +56,20 @@ impl Signex {
     /// hasn't tripped, when no schematic is active, or when the
     /// uuid no longer resolves (e.g. the symbol was deleted while
     /// the dwell timer was running).
-    pub(super) fn view_hover_tooltip(&self) -> Option<Element<'_, Message>> {
+    pub(super) fn view_hover_tooltip(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container, text};
         use iced::{Background, Border};
 
+        if self.interaction_state.editing_text.is_some() {
+            return None;
+        }
         // A net card (a wire, pin or label, #1270) takes the place of the
         // symbol card while the pointer rests on a pin.
         if let Some(card) = &self.document_state.net_nav.hover.card {
-            return Some(self.view_net_hover_card(card));
+            return Some(self.view_net_hover_card(card, window_id));
         }
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
@@ -135,28 +170,14 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        // Offset to bottom-right so the card never sits directly under
-        // the cursor — keeps the underlying symbol visible and avoids
-        // hover flicker when the tooltip itself enters the cursor's
-        // hover rectangle.
-        const OFFSET: f32 = 16.0;
-        let (ww, wh) = self.ui_state.window_size;
-        // Conservative card-size estimate for edge clamping. The
-        // actual size depends on font metrics so this is a guess
-        // intended to keep the card on-screen near the right/bottom
-        // edges; the iced layout will still render at its true size.
-        const ESTIMATED_W: f32 = CARD_W;
-        // Rows wrap, so budget a few lines each plus the card padding.
+        // Below-right of the cursor, flipped or clamped to stay on the
+        // canvas (not the Properties panel beside it). Rows wrap, so the
+        // height budgets a few lines each plus the card padding; iced lays
+        // the card out at its true size.
         const ESTIMATED_ROW_H: f32 = 28.0;
         let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
-        let mut x = sx + OFFSET;
-        let mut y = sy + OFFSET;
-        if x + ESTIMATED_W > ww {
-            x = (sx - OFFSET - ESTIMATED_W).max(0.0);
-        }
-        if y + estimated_h > wh {
-            y = (sy - OFFSET - estimated_h).max(0.0);
-        }
+        let (x, y) =
+            canvas_region::place_card((sx, sy), (CARD_W, estimated_h), self.card_bounds(window_id));
         Some(super::view::translate::Translate::new(card, (x, y)).into())
     }
 
@@ -361,8 +382,7 @@ impl Signex {
         let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
         // Bar bottom: MENU_BAR_HEIGHT + tabs + top margin + bar height,
         // plus a small gap so the dropdown visually touches.
-        let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
-            + if document.tabs.is_empty() { 0.0 } else { 28.0 }
+        let ab_y: f32 = canvas_region::CHROME_TOP
             + crate::active_bar::BAR_TOP_MARGIN_PX
             + crate::active_bar::BAR_HEIGHT_PX
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;

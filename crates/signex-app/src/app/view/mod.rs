@@ -10,6 +10,7 @@ pub(crate) mod dialogs;
 pub(crate) mod overlay_id;
 pub(crate) mod translate;
 
+mod canvas_region;
 mod chrome;
 mod context_menu;
 mod modals;
@@ -374,8 +375,11 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
-                    &dirty_paths,
-                    &read_only_paths,
+                    &tab_bar::TabMarks {
+                        dirty_paths: &dirty_paths,
+                        read_only_paths: &read_only_paths,
+                        tooltips_enabled: interaction.tab_context_menu.is_none(),
+                    },
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg }),
@@ -417,7 +421,7 @@ impl Signex {
             .locking_confirm_window()
             .is_some()
             .then(|| self.locked_window_layer());
-        let mut overlays = self.collect_overlays(lock);
+        let mut overlays = self.collect_overlays(lock, window_id);
         // Tab drag ghost: only renders once the cursor has travelled past
         // the same 6 px threshold the cursor gating uses
         // (`tab_bar::view`). Mirrors that gate here so press-without-move
@@ -721,6 +725,7 @@ impl Signex {
     fn collect_overlays<'a>(
         &'a self,
         mut lock: Option<Element<'a, Message>>,
+        window_id: iced::window::Id,
     ) -> Vec<Element<'a, Message>> {
         let mut layers = Vec::new();
         for id in overlay_id::visible(self.has_blocking_modal()) {
@@ -731,7 +736,7 @@ impl Signex {
                 layers.push(layer);
             }
             let first_new = layers.len();
-            self.extend_overlay(&mut layers, *id);
+            self.extend_overlay(&mut layers, *id, window_id);
             // #562 — stop the wheel here rather than let it reach the
             // canvas. Applied per overlay id, not per builder: most
             // builders wrap their card in neither `wrap_modal` nor

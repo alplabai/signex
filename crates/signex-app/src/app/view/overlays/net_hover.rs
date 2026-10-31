@@ -9,11 +9,13 @@ use crate::app::state::net_nav::HoverCard;
 const CARD_W: f32 = 240.0;
 const ROW_H: f32 = 16.0;
 const CARD_PAD_H: f32 = 40.0;
-/// Gap from the pointer, so the card never sits under it.
-const OFFSET: f32 = 16.0;
 
 impl Signex {
-    pub(super) fn view_net_hover_card(&self, card: &HoverCard) -> Element<'_, Message> {
+    pub(super) fn view_net_hover_card(
+        &self,
+        card: &HoverCard,
+        window_id: iced::window::Id,
+    ) -> Element<'_, Message> {
         use iced::widget::{column, container, row, text};
         use iced::{Background, Border};
 
@@ -71,16 +73,11 @@ impl Signex {
                 ..container::Style::default()
             });
 
-        let (window_w, window_h) = self.ui_state.window_size;
-        let (px, py) = (card.screen.0 as f32, card.screen.1 as f32);
-        let mut x = px + OFFSET;
-        let mut y = py + OFFSET;
-        if x + CARD_W > window_w {
-            x = (px - OFFSET - CARD_W).max(0.0);
-        }
-        if y + height > window_h {
-            y = (py - OFFSET - height).max(0.0);
-        }
+        let (x, y) = canvas_region::place_card(
+            (card.screen.0 as f32, card.screen.1 as f32),
+            (CARD_W, height),
+            self.card_bounds(window_id),
+        );
         super::super::view::translate::Translate::new(body, (x, y)).into()
     }
 }

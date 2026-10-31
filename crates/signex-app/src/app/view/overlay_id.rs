@@ -305,6 +305,7 @@ impl Signex {
         &'a self,
         layers: &mut Vec<Element<'a, Message>>,
         id: OverlayId,
+        window_id: iced::window::Id,
     ) {
         match id {
             OverlayId::ErrorNotice => layers.extend(self.error_notice_overlay()),
@@ -370,7 +371,7 @@ impl Signex {
             OverlayId::CloseLibraryConfirm => layers.extend(self.close_library_confirm_overlay()),
             OverlayId::LibraryRecovery => layers.extend(self.library_recovery_overlay()),
             OverlayId::CommandPalette => layers.extend(self.command_palette_overlay()),
-            OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip()),
+            OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),
         }
     }
