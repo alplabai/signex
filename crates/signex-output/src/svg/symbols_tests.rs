@@ -222,3 +222,83 @@ fn power_port_library_entry_draws_its_pin_like_the_built_in_body() {
         assert_eq!(with_entry, built_in, "{lib_id}");
     }
 }
+
+/// A pin name sits inside the body, past the pin's body end, even when the
+/// library stores no offset: centred on the connection point it would straddle
+/// the wire (#1798).
+#[test]
+fn a_pin_name_is_inside_the_body_past_the_pin_end() {
+    use signex_types::schematic::{LibPin, PIN_NAME_OFFSET_MM, PinDirection, PinShapeStyle};
+    let pin = |x: f64, y: f64, rotation: f64, name: &str| LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(x, y),
+            rotation,
+            length: 2.54,
+            name: name.into(),
+            number: "1".into(),
+            visible: true,
+            name_visible: true,
+            number_visible: false,
+        },
+    };
+    let mut lib = lib_text();
+    lib.show_pin_names = true;
+    lib.pin_name_offset = 0.0;
+    // Left pin: tip at x = -5.08, body edge at x = -2.54. Top pin: tip at
+    // y = 5.08 (library Y is up), body edge 2.54 below it on screen.
+    lib.pins.push(pin(-5.08, 0.0, 0.0, "IN"));
+    lib.pins.push(pin(0.0, 5.08, 270.0, "TOP"));
+    let sym = Symbol::default();
+    let xform = PageTransform {
+        mm_to_unit: 1.0,
+        translate_x: 0.0,
+        translate_y: 0.0,
+    };
+    let mut out = Vec::new();
+    push_symbol_pins(
+        &mut out,
+        &sym,
+        &lib,
+        &xform,
+        &signex_types::markup::ExpressionEvalContext::default(),
+        None,
+        &SchematicPalette::classic(),
+    );
+    let names: Vec<_> = out
+        .iter()
+        .filter_map(|e| match e {
+            SvgElement::Text {
+                x,
+                y,
+                align,
+                v_align,
+                text,
+                ..
+            } if text == "IN" || text == "TOP" => Some((
+                text.clone(),
+                *x,
+                *y,
+                format!("{align:?}"),
+                format!("{v_align:?}"),
+            )),
+            _ => None,
+        })
+        .collect();
+    let off = PIN_NAME_OFFSET_MM as f32;
+    let (_, x, y, align, _) = names.iter().find(|n| n.0 == "IN").expect("IN");
+    assert!((x - (-2.54 + off)).abs() < 1e-4, "IN starts inside: {x}");
+    assert!(y.abs() < 1e-4, "IN is on the pin line: {y}");
+    assert_eq!(align, "Left");
+    let (_, x, y, align, v_align) = names.iter().find(|n| n.0 == "TOP").expect("TOP");
+    assert!(x.abs() < 1e-4, "TOP is centred on the pin: {x}");
+    // Screen Y is down: the body end is at y = 2.54 - 5.08 below the tip.
+    assert!(
+        (y - (-5.08 + 2.54 + off)).abs() < 1e-4,
+        "TOP hangs inside: {y}"
+    );
+    assert_eq!((align.as_str(), v_align.as_str()), ("Center", "Top"));
+}

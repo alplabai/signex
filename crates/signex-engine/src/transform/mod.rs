@@ -523,6 +523,7 @@ mod merge;
 pub(crate) mod rubber_band;
 mod wire_index;
 use autoplace::autoplace_fields;
+pub use autoplace::place_fields_for_new_symbol;
 pub(crate) use merge::TouchingPairs;
 use wire_index::WireIndex;
 
