@@ -18,7 +18,7 @@ impl Signex {
 
     /// The message a native row sends, routed like the in-window row of the
     /// same window: rows that act on a document (Undo, Redo, Save, Save As,
-    /// Print, Close Document, the tab stepper) go to a non-main window's own document.
+    /// Print, Export ▸ PDF, Close Document, the tab stepper) go to a non-main window's own document.
     fn native_menu_message(&self, action: MenuMessage) -> Message {
         match (&action, self.native_menu_window()) {
             (row, Some(window))
