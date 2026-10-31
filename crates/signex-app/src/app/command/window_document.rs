@@ -20,8 +20,6 @@ pub(super) enum WindowDocument {
     Tab(usize),
     /// A document window whose tab is gone; there is nothing to act on.
     NoTab,
-    /// A detached modal or panel: hosts no document.
-    NotADocumentWindow,
 }
 
 /// Commands that act on the document the window shows (see
@@ -37,9 +35,17 @@ pub(super) fn is_window_document_command(command: &AppCommandId) -> bool {
     )
 }
 
+fn is_tab_stepper(command: &AppCommandId) -> bool {
+    matches!(
+        command.as_str(),
+        "next_document_tab" | "previous_document_tab"
+    )
+}
+
 impl Signex {
     /// The document the window `window` shows, or `None` when it is the main
-    /// window (or names none) and the ordinary handlers apply.
+    /// window, a detached panel or modal, or names none; the ordinary
+    /// handlers then apply to the main window's document.
     pub(super) fn document_of_window(
         &self,
         window: Option<iced::window::Id>,
@@ -79,9 +85,9 @@ impl Signex {
                     None => WindowDocument::NoTab,
                 },
             ),
-            WindowKind::DetachedModal(_) | WindowKind::DetachedPanel(_) => {
-                Some(WindowDocument::NotADocumentWindow)
-            }
+            // A detached panel or modal edits the main window's document, so
+            // its strokes keep the main-window behaviour.
+            WindowKind::DetachedModal(_) | WindowKind::DetachedPanel(_) => None,
         }
     }
 
@@ -92,12 +98,21 @@ impl Signex {
     ///   through `close_tab_parking_dirty` (dirty drafts are parked), which
     ///   also closes the window. A Component Preview whose tab is gone is
     ///   closed as the OS close button does (`WindowCloseRequested`).
-    /// - Detached modal or panel: hosts no document, so nothing happens.
+    /// - Detached modal or panel: nothing happens.
     pub(super) fn close_document_in_window(
         &mut self,
         window: Option<iced::window::Id>,
     ) -> Option<Task<Message>> {
         let id = window?;
+        // Close Document in a detached panel or modal does nothing (#1792):
+        // closing the main window's tab from a tool window is surprising.
+        if matches!(
+            self.ui_state.windows.get(&id),
+            Some(WindowKind::DetachedModal(_) | WindowKind::DetachedPanel(_))
+        ) && self.ui_state.main_window_id != Some(id)
+        {
+            return Some(Task::none());
+        }
         Some(match self.document_of_window(window)? {
             WindowDocument::Tab(index) => self.close_tab_parking_dirty(index),
             WindowDocument::NoTab
@@ -110,7 +125,7 @@ impl Signex {
                     crate::app::WindowMsg::WindowCloseRequested(id),
                 ))
             }
-            WindowDocument::NoTab | WindowDocument::NotADocumentWindow => Task::none(),
+            WindowDocument::NoTab => Task::none(),
         })
     }
 
@@ -123,8 +138,10 @@ impl Signex {
     /// - Next / Previous Document Tab does nothing there: the window holds a
     ///   single document, so there is no tab to step to, and the main
     ///   window's tab strip is not the user's focus.
-    /// - A Component Preview, a window with no tab, or a detached modal or
-    ///   panel does nothing: none has a file for these commands to write.
+    /// - A Component Preview does nothing but say why in the Messages panel;
+    ///   a window with no tab does nothing.
+    /// - A detached panel or modal keeps the main-window behaviour: it edits
+    ///   the main window's document.
     pub(super) fn window_document_command(
         &mut self,
         command: &AppCommandId,
@@ -139,8 +156,28 @@ impl Signex {
                     app.dispatch_command(command, super::CommandArgs::none(), None)
                 })
                 .unwrap_or_else(Task::none),
-            _ => Task::none(),
+            WindowDocument::Tab(index) => {
+                self.explain_preview_refusal(index, command);
+                Task::none()
+            }
+            WindowDocument::NoTab => Task::none(),
         })
+    }
+
+    /// A Component Preview has no file for Save, Save As or Print; say so
+    /// instead of leaving the keystroke silent. The tab stepper needs no word.
+    fn explain_preview_refusal(&self, index: usize, command: &AppCommandId) {
+        let is_preview = self
+            .document_state
+            .tabs
+            .get(index)
+            .is_some_and(|tab| tab.kind.is_component_editor());
+        if is_preview && is_window_document_command(command) && !is_tab_stepper(command) {
+            crate::diagnostics::log_info(
+                "A Component Preview has no file of its own: Save, Save As and Print \
+                 do nothing here. Save the component from the library table.",
+            );
+        }
     }
 
     /// Whether the tab at `index` is one `command` should run against: not a
@@ -148,14 +185,12 @@ impl Signex {
     /// Preview, which has no file of its own for Save, Save As or Print to
     /// write (the main window's Save there would write the project instead).
     fn tab_takes_window_command(&self, index: usize, command: &AppCommandId) -> bool {
-        !matches!(
-            command.as_str(),
-            "next_document_tab" | "previous_document_tab"
-        ) && self
-            .document_state
-            .tabs
-            .get(index)
-            .is_some_and(|tab| !tab.kind.is_component_editor())
+        !is_tab_stepper(command)
+            && self
+                .document_state
+                .tabs
+                .get(index)
+                .is_some_and(|tab| !tab.kind.is_component_editor())
     }
 
     /// The index of the schematic tab at `path` when an undocked window
@@ -183,6 +218,11 @@ impl Signex {
     /// tabs does not leave the main window pointing at another document; a
     /// handler that renames the tab (Save As) moves the main window's
     /// choice with it when it was that same tab.
+    ///
+    /// Sibling of `run_in_window`, which retargets for canvas events and
+    /// swaps the window's canvas into the main slot. This one retargets the
+    /// document only, for handlers that read `active_tab` / `active_path`
+    /// (Save, Save As, Print) and never touch a canvas.
     pub(crate) fn with_tab_active<R>(
         &mut self,
         index: usize,
@@ -208,6 +248,9 @@ impl Signex {
             Some(path) if path == target => document.tabs.get(index).map(|t| t.path.clone()),
             other => other,
         };
+        // Panels and History were built from the window's document while it
+        // was active; show the main window's again at once.
+        self.refresh_panel_ctx();
         Some(result)
     }
 }

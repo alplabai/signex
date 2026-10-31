@@ -343,10 +343,6 @@ impl Signex {
             let _ = self.with_tab_active(index, |app| {
                 app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision);
             });
-            // Only a Save As that landed re-keyed the tab.
-            if self.document_state.tabs.iter().any(|tab| tab.path == to) {
-                self.rekey_undocked_windows(from, &to);
-            }
             return;
         }
         self.apply_saved_as_to_active(from, to, revision, net_color_revision);

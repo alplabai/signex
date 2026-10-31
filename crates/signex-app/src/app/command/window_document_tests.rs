@@ -165,27 +165,40 @@ fn save_in_a_window_with_no_tab_writes_nothing() {
 }
 
 #[test]
-fn save_in_a_component_preview_or_panel_window_writes_nothing() {
+fn save_in_a_component_preview_writes_nothing_and_in_a_panel_saves_the_main_document() {
     let mut f = fixture();
-    let preview = iced::window::Id::unique();
-    f.app.ui_state.windows.insert(
-        preview,
-        WindowKind::ComponentEditor {
-            library_path: PathBuf::from("parts.snxlib"),
-            table: "Resistors".to_string(),
-            row_id: signex_library::RowId::new(),
-        },
-    );
+    let preview = component_preview(&mut f.app);
+    press(&mut f, "save_document", Some(preview));
+    assert_eq!(std::fs::read(&f.main_path).unwrap(), OLD);
+    assert_eq!(std::fs::read(&f.undocked_path).unwrap(), OLD);
+
     let panel = iced::window::Id::unique();
     f.app.ui_state.windows.insert(
         panel,
         WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
     );
-    for window in [preview, panel] {
-        press(&mut f, "save_document", Some(window));
-        assert_eq!(std::fs::read(&f.main_path).unwrap(), OLD);
-        assert_eq!(std::fs::read(&f.undocked_path).unwrap(), OLD);
-    }
+    press(&mut f, "save_document", Some(panel));
+    assert_ne!(std::fs::read(&f.main_path).unwrap(), OLD, "main saved");
+    assert_eq!(std::fs::read(&f.undocked_path).unwrap(), OLD);
+}
+
+/// A detached panel edits the main document, so the tab stepper and Print
+/// keep acting on the main window.
+#[test]
+fn tab_stepping_and_print_in_a_detached_panel_act_on_the_main_window() {
+    let mut f = fixture();
+    let panel = iced::window::Id::unique();
+    f.app.ui_state.windows.insert(
+        panel,
+        WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
+    );
+    press(&mut f, "print", Some(panel));
+    assert_eq!(
+        f.app.document_state.preview.as_ref().unwrap().source,
+        f.main_path
+    );
+    press(&mut f, "next_document_tab", Some(panel));
+    assert_eq!(active_title(&f.app), "b");
 }
 
 /// The dialog is asynchronous, so its completion arrives while the main
