@@ -173,7 +173,8 @@ impl Signex {
     /// undocked tab never get here with that window: `dispatch_command`
     /// reruns them inside it.) Any other window (a detached
     /// panel or modal, a component editor) adds nothing, so Ctrl+S typed
-    /// there still saves the main window's document.
+    /// there still saves the main window's document. Close Document is
+    /// resolved before this, in `close_document_in_window` (#1787).
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
