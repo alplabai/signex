@@ -1,0 +1,1 @@
+Arming a power port in the main window and clicking over an item in an undocked schematic window no longer places two power ports; placement mode now reads the app-wide pending power port in every window.

@@ -79,6 +79,38 @@ fn a_power_port_on_the_cursor_over_an_item_publishes_one_click() {
     assert_eq!(clicks(&messages), 1, "{messages:?}");
 }
 
+/// An armed power port with no ghost on this window's canvas (the ghost
+/// lives on the main slot only) must still place once (#1776).
+#[test]
+fn an_armed_power_port_over_an_item_in_another_window_publishes_one_click() {
+    let slot = slot_with_wire();
+    let at = screen(&slot, 20.0, 10.0);
+    let all: std::collections::HashSet<_> = crate::active_bar::SelectionFilter::ALL
+        .iter()
+        .copied()
+        .collect();
+    let overrides = std::collections::HashMap::new();
+    let mut state = CanvasState::default();
+    let mut out = Vec::new();
+    for pressed in [true, false] {
+        let mut prefs = test_prefs(&overrides, &all);
+        prefs.current_tool = Tool::Component;
+        prefs.power_port_pending = true;
+        let view = SchematicCanvas::new(&slot, prefs);
+        let button = mouse::Button::Left;
+        let event = Event::Mouse(if pressed {
+            mouse::Event::ButtonPressed(button)
+        } else {
+            mouse::Event::ButtonReleased(button)
+        });
+        let action = view.update(&mut state, &event, BOUNDS, mouse::Cursor::Available(at));
+        if let Some((Some(message), _, _)) = action.map(|a| a.into_inner()) {
+            out.push(message);
+        }
+    }
+    assert_eq!(clicks(&out), 1, "{out:?}");
+}
+
 #[test]
 fn the_component_tool_without_a_part_still_selects_like_select() {
     let messages = gesture_messages(Tool::Component, false);
