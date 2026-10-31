@@ -59,14 +59,7 @@ impl Signex {
             WindowKind::UndockedTab { path, .. } => {
                 Some(match tabs.iter().position(|t| &t.path == path) {
                     Some(index) => WindowDocument::Tab(index),
-                    None => {
-                        tracing::warn!(
-                            target: "signex::tabs",
-                            path = %path.display(),
-                            "undocked tab window matches no open tab, command ignored",
-                        );
-                        WindowDocument::NoTab
-                    }
+                    None => WindowDocument::NoTab,
                 })
             }
             WindowKind::ComponentEditor {
@@ -161,7 +154,12 @@ impl Signex {
                 self.explain_window_refusal(index, command);
                 Task::none()
             }
-            WindowDocument::NoTab => Task::none(),
+            WindowDocument::NoTab => {
+                crate::diagnostics::log_info(
+                    "This window's document is no longer open, so the command did nothing.",
+                );
+                Task::none()
+            }
         })
     }
 

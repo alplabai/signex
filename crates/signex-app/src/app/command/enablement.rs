@@ -30,9 +30,16 @@ pub(crate) struct CommandContext {
     /// The main window's active tab is a PCB.
     pub has_pcb: bool,
     /// The undocked tab window the command came from shows a schematic or
-    /// a PCB. Only Fit All acts on that window's own canvas; every other
-    /// handler acts on the main window's active tab.
+    /// a PCB. Fit All acts on that window's own canvas; the per-window
+    /// document commands read [`Self::document_is_schematic`] and
+    /// [`Self::document_is_editor`] instead.
     pub undocked_has_canvas: bool,
+    /// The document Save, Save As and Print act on is a schematic sheet:
+    /// the window's own in an undocked tab window (#1813), else the main
+    /// window's active tab.
+    pub document_is_schematic: bool,
+    /// That document is a `.snxsym` or `.snxfpt` editor tab.
+    pub document_is_editor: bool,
     /// ERC and annotation have sheets to work on: a project is open, or
     /// some schematic is. They assemble the project's sheets, not only the
     /// active tab's.
@@ -80,10 +87,10 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
     if is_planned_command(command) {
         return false;
     }
-    let editor = ctx.has_symbol_editor || ctx.has_footprint_editor;
     match command.as_str() {
-        "save_document" => ctx.has_schematic || editor || ctx.project_dirty,
-        "save_document_as" => ctx.has_schematic || editor,
+        "save_document" => ctx.document_is_schematic || ctx.document_is_editor || ctx.project_dirty,
+        "save_document_as" => ctx.document_is_schematic || ctx.document_is_editor,
+        "print" => ctx.document_is_schematic,
         "close_active_document" => ctx.has_document,
         "undo" => ctx.can_undo,
         "redo" => ctx.can_redo,
@@ -110,8 +117,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
         // schematic canvas's; with none it is a no-op.
         "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
         "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
-        "print"
-        | "paste"
+        "paste"
         | "smart_paste"
         | "paste_special"
         | "paste_array"
@@ -190,15 +196,15 @@ impl Signex {
     /// The [`CommandContext`] for a command invoked from `window` (`None`:
     /// the main window).
     ///
-    /// The handlers act on the main window's active tab, from whichever
-    /// window the key came in, so the facts are the main window's. The
-    /// only exception is `undocked_has_canvas`, for Fit All, which an
-    /// undocked tab routes to its own canvas. (Undo / Redo from an
-    /// undocked tab never get here with that window: `dispatch_command`
-    /// reruns them inside it.) Any other window (a detached
-    /// panel or modal, a component editor) adds nothing, so Ctrl+S typed
-    /// there still saves the main window's document. Close Document is
-    /// resolved before this, in `close_document_in_window` (#1787).
+    /// Most handlers act on the main window's active tab, from whichever
+    /// window the key came in, so most facts are the main window's. The
+    /// per-window commands are the exception (#1800): Save, Save As and Print
+    /// act on the document the window shows, so `document_is_schematic` /
+    /// `document_is_editor` come from that window's own tab, and so do Undo /
+    /// Redo's history and Fit All's `undocked_has_canvas`. A detached panel
+    /// or modal shows no document of its own, so Ctrl+S typed there still
+    /// saves the main window's. Close Document is resolved before this, in
+    /// `close_document_in_window` (#1787).
     pub(crate) fn command_context(&self, window: Option<iced::window::Id>) -> CommandContext {
         let document = &self.document_state;
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
@@ -216,10 +222,13 @@ impl Signex {
         } else {
             self.history_available(active_kind, document.active_path.as_ref())
         };
+        let (document_is_schematic, document_is_editor) = self.window_document_kind(window);
         CommandContext {
             has_schematic: document.active_engine().is_some(),
             has_pcb: self.has_active_pcb(),
             undocked_has_canvas: self.undocked_tab_has_canvas(window),
+            document_is_schematic,
+            document_is_editor,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
             has_symbol_editor: matches!(active_kind, Some(TabKind::SymbolEditor(_))),
             has_footprint_editor: matches!(active_kind, Some(TabKind::FootprintEditor(_))),
@@ -236,6 +245,37 @@ impl Signex {
             has_open_project: document.active_project.is_some(),
             has_parent_sheet: self.active_sheet_has_parent(),
             can_remove_part: self.active_symbol_part_is_removable(),
+        }
+    }
+
+    /// `(is a schematic sheet, is an editor tab)` for the document the
+    /// per-window commands act on in `window`: the window's own tab in an
+    /// undocked or Component Preview window (a preview is neither), else the
+    /// main window's active tab.
+    fn window_document_kind(&self, window: Option<iced::window::Id>) -> (bool, bool) {
+        let document = &self.document_state;
+        match self.document_of_window(window) {
+            None => (
+                document.active_engine().is_some(),
+                matches!(
+                    document.tabs.get(document.active_tab).map(|t| &t.kind),
+                    Some(TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_))
+                ),
+            ),
+            Some(super::window_document::WindowDocument::Tab(index)) => {
+                match document.tabs.get(index) {
+                    Some(tab) => (
+                        matches!(tab.kind, TabKind::Schematic)
+                            && document.engines.contains_key(&tab.path),
+                        matches!(
+                            tab.kind,
+                            TabKind::SymbolEditor(_) | TabKind::FootprintEditor(_)
+                        ),
+                    ),
+                    None => (false, false),
+                }
+            }
+            Some(super::window_document::WindowDocument::NoTab) => (false, false),
         }
     }
 
@@ -708,16 +748,19 @@ mod tests {
         assert!(enabled(&app, "redo"));
     }
 
-    /// #907 review: an undocked tab window counts only for Fit All, which
-    /// it routes to its own canvas. Copy and the rest act on the main
-    /// window's tab, so they stay disabled with no document there.
+    /// An undocked tab window counts for Fit All (its own canvas) and for
+    /// the per-window document commands, Save, Save As and Print (#1813).
+    /// Copy and the rest act on the main window's tab, so they stay disabled
+    /// with no document there.
     #[test]
-    fn an_undocked_schematic_enables_fit_all_only() {
+    fn an_undocked_schematic_enables_fit_all_and_its_file_rows() {
         let (mut app, _task) = Signex::new();
         let path = PathBuf::from("undocked.snxsch");
         let engine =
             signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
         app.document_state.engines.insert(path.clone(), engine);
+        push_tab(&mut app, &path, TabKind::Schematic);
+        app.document_state.active_tab = usize::MAX;
         let window = iced::window::Id::unique();
         app.ui_state.windows.insert(
             window,
@@ -730,8 +773,14 @@ mod tests {
         let ctx = app.command_context(Some(window));
 
         assert!(is_enabled(&id("zoom_to_fit"), &ctx));
+        assert!(is_enabled(&id("save_document"), &ctx));
+        assert!(is_enabled(&id("save_document_as"), &ctx));
+        assert!(is_enabled(&id("print"), &ctx));
         assert!(!is_enabled(&id("paste"), &ctx));
-        assert!(!is_enabled(&id("save_document_as"), &ctx));
+        assert!(
+            !enabled(&app, "save_document_as"),
+            "the main window has no sheet"
+        );
     }
 
     /// An undocked schematic window whose sheet has one undo step, its tab

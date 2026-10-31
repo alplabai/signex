@@ -18,7 +18,8 @@ Component Library, then Add New ▸ Component on the library node.
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
 shortcut, so it was folded into Export ▸ PDF. File ▸ Print... (#1765) and
 Export ▸ PDF open the same print preview / PDF export modal (`print`, Ctrl+P,
-goes through the keymap command bridge in `app/command/bridge.rs`). Only
+goes through the keymap command bridge in `app/command/bridge.rs`; Export ▸ PDF
+runs as `print` in an undocked window, so both preview that window's document). Only
 File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
 
 Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
@@ -110,8 +111,10 @@ unknown, stale or disabled id is ignored and logged to the Messages panel.
 
 **Focused window.** The bar acts on the focused window (`UiState::focused_window`,
 fed by window focus events), falling back to the main window. Enablement comes
-from that window's `CommandContext`, and Undo / Redo from a non-main window
-route through `UiMsg::MenuInWindow`, as the in-window row does (#1546).
+from that window's `CommandContext`. The per-window rows (Undo, Redo, Save,
+Save As, Print, Export ▸ PDF, Close Document, the tab stepper) from a non-main
+window route through `UiMsg::MenuInWindow`, as the in-window row does (#1546,
+#1794, #1813), and Save, Save As and Print enable by that window's own document.
 
 **Confirm dialogs lock the bar.** While a confirm or warning dialog is open
 (`Signex::has_locking_confirm_modal`: quit and project-close confirms, error
