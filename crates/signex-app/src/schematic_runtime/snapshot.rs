@@ -450,6 +450,11 @@ pub(super) fn field_text_input(
     color: [f32; 4],
     document_family: Option<&str>,
 ) -> Option<TextInput> {
+    // A power port is a net name, not a part: its designator is never drawn,
+    // as in the SVG/PDF export (#1771).
+    if !symbol.draws_reference() && matches!(slot, FieldSlot::Reference) {
+        return None;
+    }
     if let Some(prop) = prop {
         if prop.hidden {
             return None;

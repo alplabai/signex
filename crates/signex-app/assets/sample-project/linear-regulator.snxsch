@@ -406,13 +406,13 @@ y = 97.79
 [extras.symbols.5a3c0000-0000-4000-8000-000000000008.val_text]
 rotation = 0.0
 font_size = 1.27
-justify_h = "left"
+justify_h = "center"
 justify_v = "center"
-hidden = true
+hidden = false
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000008.val_text.position]
 x = 57.15
-y = 100.33
+y = 96.4
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000009]
 footprint = ""
@@ -449,13 +449,13 @@ y = 97.79
 [extras.symbols.5a3c0000-0000-4000-8000-000000000009.val_text]
 rotation = 0.0
 font_size = 1.27
-justify_h = "left"
+justify_h = "center"
 justify_v = "center"
-hidden = true
+hidden = false
 
 [extras.symbols.5a3c0000-0000-4000-8000-000000000009.val_text.position]
 x = 104.14
-y = 100.33
+y = 96.4
 
 [extras.symbols.5a3c0000-0000-4000-8000-00000000000a]
 footprint = ""
@@ -492,13 +492,13 @@ y = 118.11
 [extras.symbols.5a3c0000-0000-4000-8000-00000000000a.val_text]
 rotation = 0.0
 font_size = 1.27
-justify_h = "left"
+justify_h = "center"
 justify_v = "center"
-hidden = true
+hidden = false
 
 [extras.symbols.5a3c0000-0000-4000-8000-00000000000a.val_text.position]
 x = 88.9
-y = 120.64999999999999
+y = 123.2
 
 [extras.sheet]
 child_sheets = []
@@ -979,14 +979,13 @@ reference = "#PWR"
 value = ""
 footprint = ""
 datasheet = ""
-description = "Power port +3V3"
-keywords = ""
+description = "Bar power port"
+keywords = "power"
 fp_filters = ""
 in_bom = false
 on_board = false
 in_pos_files = false
 duplicate_pin_numbers_are_jumpers = false
-pins = []
 show_pin_numbers = false
 show_pin_names = false
 pin_name_offset = 0.0
@@ -1001,29 +1000,31 @@ width = 0.0
 fill = "none"
 
 [[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
-x = 0.0
-y = 0.0
-
-[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
-x = 0.0
+x = -0.635
 y = 1.27
 
-[[extras.sheet.lib_symbols."power:+3V3".graphics]]
+[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
+x = 0.635
+y = 1.27
+
+[[extras.sheet.lib_symbols."power:+3V3".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:+3V3".graphics.graphic]
-type = "polyline"
-width = 0.0
-fill = "none"
+[extras.sheet.lib_symbols."power:+3V3".pins.pin]
+direction = "power_input"
+shape_style = "plain"
+rotation = 90.0
+length = 1.27
+name = ""
+number = "1"
+visible = true
+name_visible = false
+number_visible = false
 
-[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
-x = -1.27
-y = 1.27
-
-[[extras.sheet.lib_symbols."power:+3V3".graphics.graphic.points]]
-x = 1.27
-y = 1.27
+[extras.sheet.lib_symbols."power:+3V3".pins.pin.position]
+x = 0.0
+y = 0.0
 
 [extras.sheet.lib_symbols."power:+5V"]
 id = "power:+5V"
@@ -1031,14 +1032,13 @@ reference = "#PWR"
 value = ""
 footprint = ""
 datasheet = ""
-description = "Power port +5V"
-keywords = ""
+description = "Bar power port"
+keywords = "power"
 fp_filters = ""
 in_bom = false
 on_board = false
 in_pos_files = false
 duplicate_pin_numbers_are_jumpers = false
-pins = []
 show_pin_numbers = false
 show_pin_names = false
 pin_name_offset = 0.0
@@ -1053,29 +1053,31 @@ width = 0.0
 fill = "none"
 
 [[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
-x = 0.0
-y = 0.0
-
-[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
-x = 0.0
+x = -0.635
 y = 1.27
 
-[[extras.sheet.lib_symbols."power:+5V".graphics]]
+[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
+x = 0.635
+y = 1.27
+
+[[extras.sheet.lib_symbols."power:+5V".pins]]
 unit = 0
 body_style = 1
 
-[extras.sheet.lib_symbols."power:+5V".graphics.graphic]
-type = "polyline"
-width = 0.0
-fill = "none"
+[extras.sheet.lib_symbols."power:+5V".pins.pin]
+direction = "power_input"
+shape_style = "plain"
+rotation = 90.0
+length = 1.27
+name = ""
+number = "1"
+visible = true
+name_visible = false
+number_visible = false
 
-[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
-x = -1.27
-y = 1.27
-
-[[extras.sheet.lib_symbols."power:+5V".graphics.graphic.points]]
-x = 1.27
-y = 1.27
+[extras.sheet.lib_symbols."power:+5V".pins.pin.position]
+x = 0.0
+y = 0.0
 
 [extras.sheet.lib_symbols."power:GND"]
 id = "power:GND"
@@ -1083,14 +1085,13 @@ reference = "#PWR"
 value = ""
 footprint = ""
 datasheet = ""
-description = "Power port GND"
-keywords = ""
+description = "Power Ground power port"
+keywords = "power"
 fp_filters = ""
 in_bom = false
 on_board = false
 in_pos_files = false
 duplicate_pin_numbers_are_jumpers = false
-pins = []
 show_pin_numbers = false
 show_pin_names = false
 pin_name_offset = 0.0
@@ -1105,60 +1106,62 @@ width = 0.0
 fill = "none"
 
 [[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = -0.9525
+y = -1.27
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.9525
+y = -1.27
+
+[[extras.sheet.lib_symbols."power:GND".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = -0.6
+y = -1.77
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.6
+y = -1.77
+
+[[extras.sheet.lib_symbols."power:GND".graphics]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".graphics.graphic]
+type = "polyline"
+width = 0.0
+fill = "none"
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = -0.25
+y = -2.27
+
+[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
+x = 0.25
+y = -2.27
+
+[[extras.sheet.lib_symbols."power:GND".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."power:GND".pins.pin]
+direction = "power_input"
+shape_style = "plain"
+rotation = 270.0
+length = 1.27
+name = ""
+number = "1"
+visible = true
+name_visible = false
+number_visible = false
+
+[extras.sheet.lib_symbols."power:GND".pins.pin.position]
 x = 0.0
 y = 0.0
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = 0.0
-y = -1.27
-
-[[extras.sheet.lib_symbols."power:GND".graphics]]
-unit = 0
-body_style = 1
-
-[extras.sheet.lib_symbols."power:GND".graphics.graphic]
-type = "polyline"
-width = 0.0
-fill = "none"
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = -1.27
-y = -1.27
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = 1.27
-y = -1.27
-
-[[extras.sheet.lib_symbols."power:GND".graphics]]
-unit = 0
-body_style = 1
-
-[extras.sheet.lib_symbols."power:GND".graphics.graphic]
-type = "polyline"
-width = 0.0
-fill = "none"
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = -0.762
-y = -1.905
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = 0.762
-y = -1.905
-
-[[extras.sheet.lib_symbols."power:GND".graphics]]
-unit = 0
-body_style = 1
-
-[extras.sheet.lib_symbols."power:GND".graphics.graphic]
-type = "polyline"
-width = 0.0
-fill = "none"
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = -0.254
-y = -2.54
-
-[[extras.sheet.lib_symbols."power:GND".graphics.graphic.points]]
-x = 0.254
-y = -2.54

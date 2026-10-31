@@ -157,4 +157,50 @@ mod tests {
         assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM);
         assert_eq!(app.status_cursor(window), (7.0, 8.0));
     }
+
+    fn viewport() -> iced::Rectangle {
+        iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0))
+    }
+
+    /// #1771 — a zoom change with no cursor event in between (a fit on the
+    /// first frame) shows in the readout.
+    #[test]
+    fn the_readout_follows_the_camera_without_any_cursor_event() {
+        let (app, window, _path) = app_showing(|_| TabKind::Schematic);
+        let before = app.status_zoom(window);
+        app.interaction_state.canvas.set_viewport(viewport());
+
+        assert!(app.interaction_state.canvas.zoom_about_centre(true, 1.5));
+
+        let after = app.status_zoom(window);
+        assert!(after > before + 1.0, "{before} -> {after}");
+    }
+
+    /// #1771 — an undocked schematic window's readout follows its own
+    /// camera, not the main window's, and each window keeps its own PCB
+    /// camera to read.
+    #[test]
+    fn an_undocked_window_reads_its_own_camera() {
+        let (mut app, main, _path) = app_showing(|_| TabKind::Schematic);
+        let sch_window = iced::window::Id::unique();
+        let pcb_window = iced::window::Id::unique();
+        let sch = crate::canvas::CanvasSlot::new();
+        sch.set_viewport(viewport());
+        sch.zoom_about_centre(true, 1.5);
+        let pcb = crate::pcb_canvas::PcbCanvas::new();
+        pcb.set_viewport(viewport());
+        pcb.zoom_about_centre(false, 1.5);
+        app.interaction_state.canvases.insert(sch_window, sch);
+        app.interaction_state.pcb_canvases.insert(pcb_window, pcb);
+
+        let main_zoom = app.status_zoom(main);
+        let own_sch = app.status_zoom(sch_window);
+        let interaction = &app.interaction_state;
+        let main_pcb = interaction.pcb_canvas_for_window(main).zoom_percent();
+        let own_pcb = interaction.pcb_canvas_for_window(pcb_window).zoom_percent();
+
+        assert_eq!(main_zoom, SCHEMATIC_ZOOM);
+        assert!(own_sch > main_zoom + 1.0, "{own_sch} vs {main_zoom}");
+        assert!(own_pcb < main_pcb - 1.0, "{own_pcb} vs {main_pcb}");
+    }
 }

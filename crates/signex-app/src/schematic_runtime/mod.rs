@@ -598,7 +598,11 @@ fn collect_item_bounds_with(
             });
         }
 
-        if let Some(ref_text) = symbol.ref_text.as_ref().filter(|p| !p.hidden) {
+        if let Some(ref_text) = symbol
+            .ref_text
+            .as_ref()
+            .filter(|p| !p.hidden && symbol.draws_reference())
+        {
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolRefField),
                 bbox: text_prop_aabb(
@@ -1039,6 +1043,8 @@ pub fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
 mod drawings_tests;
 #[cfg(test)]
 mod font_geometry_tests;
+#[cfg(test)]
+mod sample_layout_tests;
 #[cfg(test)]
 mod scene_cache_tests;
 #[cfg(test)]
