@@ -96,6 +96,9 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        // A Save completed behind the quit prompt must not leave it listing
+        // files that are no longer unsaved (#1833).
+        self.prune_settled_quit_confirm();
         tasks.extend(self.sync_detached_modals());
         #[cfg(target_os = "macos")]
         self.sync_native_menu();

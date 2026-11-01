@@ -122,6 +122,9 @@ mod document_save_async;
 // #1826 / #1827 / #1828 — a save writes the file the document is.
 #[path = "regression/external_save_target.rs"]
 mod external_save_target;
+
+#[path = "regression/quit_prompt_after_save.rs"]
+mod quit_prompt_after_save;
 // #859 — rename / History restore wait for an in-flight document write.
 #[path = "regression/document_save_ordering.rs"]
 mod document_save_ordering;
