@@ -341,6 +341,17 @@ impl SchDrawing {
         }
     }
 
+    /// Give the drawing a new id, whichever shape it is.
+    pub fn set_uuid(&mut self, id: Uuid) {
+        match self {
+            Self::Line { uuid, .. }
+            | Self::Rect { uuid, .. }
+            | Self::Circle { uuid, .. }
+            | Self::Arc { uuid, .. }
+            | Self::Polyline { uuid, .. } => *uuid = id,
+        }
+    }
+
     /// Whether the drawing is locked (#1573), whichever shape it is.
     pub fn is_locked(&self) -> bool {
         match self {

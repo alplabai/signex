@@ -46,6 +46,12 @@ pub fn mm_as_stored_nm(mm: f64) -> Option<i64> {
     mm_to_nm(mm, "length").ok()
 }
 
+/// Whether `nm` converts to mm and back without hitting the [`mm_to_nm`]
+/// refusal, i.e. whether a document holding it can be saved.
+pub(in crate::format) fn nm_survives_round_trip(nm: i64) -> bool {
+    mm_to_nm(nm_to_mm(nm), "length").is_ok()
+}
+
 pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {
     (nm as f64) * MM_PER_NM
 }

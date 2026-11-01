@@ -10,7 +10,7 @@
 //! the container `SnxSchematic` can reach them.
 
 use super::extras::{JunctionExtras, SymbolExtras};
-use super::tsv::{format_f64, parse_f64, parse_i64, parse_uuid};
+use super::tsv::{format_f64, parse_f64, parse_nm, parse_uuid};
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
 use super::unknown_columns::impl_unknown_columns_accessors;
 use super::*;
@@ -68,8 +68,8 @@ impl SnxTable for SchComponentRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             ref_des: values[1].to_string(),
             library: values[2].to_string(),
-            pos_x: parse_i64(values[3], block, row, "pos_x")?,
-            pos_y: parse_i64(values[4], block, row, "pos_y")?,
+            pos_x: parse_nm(values[3], block, row, "pos_x")?,
+            pos_y: parse_nm(values[4], block, row, "pos_y")?,
             rotation: parse_f64(values[5], block, row, "rotation")?,
             value: values[6].to_string(),
             mpn: values[7].to_string(),
@@ -118,10 +118,10 @@ impl SnxTable for SchWireRow {
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchWireRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
-            start_x: parse_i64(values[1], block, row, "start_x")?,
-            start_y: parse_i64(values[2], block, row, "start_y")?,
-            end_x: parse_i64(values[3], block, row, "end_x")?,
-            end_y: parse_i64(values[4], block, row, "end_y")?,
+            start_x: parse_nm(values[1], block, row, "start_x")?,
+            start_y: parse_nm(values[2], block, row, "start_y")?,
+            end_x: parse_nm(values[3], block, row, "end_x")?,
+            end_y: parse_nm(values[4], block, row, "end_y")?,
             stroke_width: parse_f64(values[5], block, row, "stroke_width")?,
             unknown_columns: UnknownColumns::default(),
         })
@@ -157,8 +157,8 @@ impl SnxTable for SchJunctionRow {
     fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
         Ok(SchJunctionRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
-            pos_x: parse_i64(values[1], block, row, "pos_x")?,
-            pos_y: parse_i64(values[2], block, row, "pos_y")?,
+            pos_x: parse_nm(values[1], block, row, "pos_x")?,
+            pos_y: parse_nm(values[2], block, row, "pos_y")?,
             diameter: parse_f64(values[3], block, row, "diameter")?,
             unknown_columns: UnknownColumns::default(),
         })
@@ -218,8 +218,8 @@ impl SnxTable for SchLabelRow {
         Ok(SchLabelRow {
             uuid: parse_uuid(values[0], block, row, "uuid")?,
             text: values[1].to_string(),
-            pos_x: parse_i64(values[2], block, row, "pos_x")?,
-            pos_y: parse_i64(values[3], block, row, "pos_y")?,
+            pos_x: parse_nm(values[2], block, row, "pos_x")?,
+            pos_y: parse_nm(values[3], block, row, "pos_y")?,
             rotation: parse_f64(values[4], block, row, "rotation")?,
             kind: values[5].to_string(),
             shape: values[6].to_string(),

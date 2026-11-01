@@ -106,12 +106,10 @@ pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T
     if let Some(path) = first_non_finite_toml_path(&value) {
         return Err(TomlFiniteError::NonFinite { path });
     }
-    // `Value::try_into` has no spans, so on a schema error re-parse straight
-    // into `T` to get the error with its line/column. Error path only.
-    value
-        .try_into()
-        .or_else(|_| toml::from_str::<T>(text))
-        .map_err(TomlFiniteError::Toml)
+    // Deserialise from the text, not `Value::try_into`: the `Value` deserializer
+    // hands a datetime to serde as a plain string, which a flattened unknown-fields
+    // bag would keep as a string (#1875). This also gives errors line/column spans.
+    toml::from_str::<T>(text).map_err(TomlFiniteError::Toml)
 }
 
 /// Key path (`extras.board.outline[0].x`) of the first NaN or infinite

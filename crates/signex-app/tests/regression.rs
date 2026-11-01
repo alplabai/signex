@@ -198,6 +198,9 @@ mod sketch_state;
 #[path = "regression/file_open_async.rs"]
 mod file_open_async;
 
+#[path = "regression/open_format_integrity.rs"]
+mod open_format_integrity;
+
 #[path = "regression/startup_open.rs"]
 mod startup_open;
 
