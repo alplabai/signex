@@ -426,7 +426,7 @@ impl Engine {
             return Err(EngineError::MissingPath);
         };
         let content = self.serialize_with_net_colors(colors)?;
-        signex_types::atomic_io::atomic_write(&path, content.as_bytes())
+        signex_types::atomic_io::atomic_write_existing_dir(&path, content.as_bytes())
             .map_err(EngineError::SaveFailed)
     }
 
@@ -435,7 +435,7 @@ impl Engine {
         // HI-6: atomic write — a crash mid-save no longer truncates the
         // destination. The user's prior file stays intact until the
         // rename succeeds.
-        signex_types::atomic_io::atomic_write(path, content.as_bytes())
+        signex_types::atomic_io::atomic_write_existing_dir(path, content.as_bytes())
             .map_err(EngineError::SaveFailed)?;
         self.path = Some(path.to_path_buf());
         Ok(())
