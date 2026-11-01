@@ -413,7 +413,7 @@ fn render_schematic_with_renderer(
 
 /// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
 /// Items outside `bounds` (screen space under `transform`) are culled.
-pub(crate) fn build_schematic_scene(
+pub fn build_schematic_scene(
     snapshot: &SchematicRenderSnapshot,
     transform: &ScreenTransform,
     colors: &CanvasColors,
@@ -459,7 +459,7 @@ pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolic
     signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
 
 /// The replay options of the schematic CPU path at `transform`.
-fn schematic_draw_options(
+pub fn schematic_draw_options(
     transform: &ScreenTransform,
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
     crate::renderer_scene_canvas::SceneDrawOptions {

@@ -135,7 +135,8 @@ pub fn min_stroke_px(width_px: f32) -> f32 {
 }
 
 impl SceneDrawOptions {
-    fn stroke_px(self, width_mm: f32) -> f32 {
+    /// Pre-snap width in logical pixels a `width_mm` stroke replays at.
+    pub fn stroke_px(self, width_mm: f32) -> f32 {
         (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
     }
 

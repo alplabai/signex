@@ -542,12 +542,7 @@ impl<'a> SymbolCanvas<'a> {
             frame,
             &scene,
             |point| iced::Point::new(ox + point[0] * scale, oy - point[1] * scale),
-            crate::renderer_scene_canvas::SceneDrawOptions {
-                scale_px_per_mm: scale,
-                min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-                text_min_px: SYMBOL_TEXT_SIZE.min_px,
-                text_max_px: SYMBOL_TEXT_SIZE.max_px,
-            },
+            symbol_draw_options(scale),
         );
     }
 
@@ -811,7 +806,19 @@ impl<'a> SymbolCanvas<'a> {
     }
 }
 
+/// The replay options of the Symbol Editor at `scale` px/mm.
+fn symbol_draw_options(scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    crate::renderer_scene_canvas::SceneDrawOptions {
+        scale_px_per_mm: scale,
+        min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+        text_min_px: SYMBOL_TEXT_SIZE.min_px,
+        text_max_px: SYMBOL_TEXT_SIZE.max_px,
+    }
+}
+
 #[cfg(test)]
 mod rotate_keys_tests;
+#[cfg(test)]
+mod stroke_law_tests;
 #[cfg(test)]
 mod tests;
