@@ -408,6 +408,9 @@ them, so the rest is on the author.
   `crates/signex-app/src/app/command/bridge.rs`, a ratchet that only shrinks.
   Ids are public API: never renamed or removed without an alias. A command is
   not a `Message`.
+- **Decided behaviour** ([docs/DECISIONS.md](docs/DECISIONS.md)): golden tests
+  pin the menus, command catalog and built-in shortcuts; changing one needs a
+  maintainer decision that names it.
 - **Deferred work**
   ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
   owed work is explicit model state. Every boundary (save, undo, redo,
