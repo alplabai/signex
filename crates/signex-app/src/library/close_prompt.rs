@@ -53,7 +53,7 @@ pub fn view<'a>(
     let summary = text(format!(
         "'{}' has {} unsaved draft(s). What would you like to do?",
         confirm.library_name,
-        confirm.dirty_editors.len()
+        confirm.dirty_editors.len() + confirm.dirty_paths.len()
     ))
     .size(ts.body)
     .color(muted);
@@ -69,6 +69,17 @@ pub fn view<'a>(
             .get(address)
             .map(|st| st.row.internal_pn.as_str().to_string())
             .unwrap_or_else(|| format!("({} / {})", address.table, address.row_id));
+        rows.push(
+            container(text(label).size(ts.body).color(text_c))
+                .padding([sp.s, sp.m])
+                .into(),
+        );
+    }
+    for path in &confirm.dirty_paths {
+        let label = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
         rows.push(
             container(text(label).size(ts.body).color(text_c))
                 .padding([sp.s, sp.m])

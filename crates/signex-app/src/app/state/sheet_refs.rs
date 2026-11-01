@@ -616,7 +616,14 @@ impl DocumentState {
         let project_file = keys.key(&project.path);
         let mut scan = CloseScan::default();
         let dirty = self.dirty_document_paths();
+        let primitives: HashSet<PathBuf> = self.dirty_primitive_paths().collect();
         for path in &dirty {
+            // A symbol or footprint draft is placed by its library, not by the
+            // sheet walk, like a Component Preview row below.
+            if primitives.contains(path) && self.primitive_is_closing_projects(closing, path) {
+                scan.mine.push(path.clone());
+                continue;
+            }
             let reached = reach.reached_by(closing, path);
             let is_project_file = keys.key(path) == project_file;
             let backs_tab = self
@@ -655,6 +662,34 @@ impl DocumentState {
         scan.mine.sort();
         scan.kept.sort();
         scan
+    }
+
+    /// Does the symbol / footprint draft at `path` belong to `projects[closing]`
+    /// alone: it sits in the folder of one of that project's own libraries, no
+    /// other open project lists a library there, and it is not inside another
+    /// open project's directory (the rule a Component Preview row follows).
+    fn primitive_is_closing_projects(&self, closing: usize, path: &Path) -> bool {
+        let in_library_of = |idx: usize| {
+            self.projects.get(idx).is_some_and(|p| {
+                p.data.libraries.iter().any(|entry| {
+                    p.data
+                        .resolve_library_path(entry)
+                        .parent()
+                        .is_some_and(|dir| scope::path_is_under(path, dir, p.case_fold))
+                })
+            })
+        };
+        let inside_other = self
+            .projects
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != closing)
+            .any(|(_, p)| scope::path_is_under(path, p.dir(), p.case_fold));
+        in_library_of(closing)
+            && !inside_other
+            && !(0..self.projects.len())
+                .filter(|i| *i != closing)
+                .any(in_library_of)
     }
 
     /// File-identity keys of the library files `projects[idx]` mounts.

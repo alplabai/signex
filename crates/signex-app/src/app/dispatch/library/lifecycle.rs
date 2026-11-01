@@ -126,7 +126,7 @@ impl Signex {
     /// All / Discard All / Cancel rather than lose the edits silently.
     pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
         let dirty = self.library.dirty_editors_for_library(&path);
-        if dirty.is_empty() {
+        if dirty.is_empty() && self.dirty_primitive_paths_of_library(&path).is_empty() {
             self.close_library_or_defer(&path);
         } else {
             self.raise_close_library_prompt(path, dirty);
@@ -152,11 +152,32 @@ impl Signex {
         dirty_editors: Vec<EditorAddress>,
     ) {
         let library_name = self.library.library_label(&library_path);
+        let dirty_paths = self.dirty_primitive_paths_of_library(&library_path);
         self.library.close_library_confirm = Some(CloseLibraryConfirmState {
             library_path,
             library_name,
             dirty_editors,
+            dirty_paths,
         });
+    }
+
+    /// Dirty symbol and footprint drafts that live in the library mounted at
+    /// `root`, sorted. Same collector as the quit and Close Project prompts.
+    pub(crate) fn dirty_primitive_paths_of_library(
+        &self,
+        root: &std::path::Path,
+    ) -> Vec<std::path::PathBuf> {
+        let mut paths: Vec<std::path::PathBuf> = self
+            .document_state
+            .dirty_primitive_paths()
+            .filter(|p| {
+                self.library
+                    .containing_library(p)
+                    .is_some_and(|lib| lib.root == root)
+            })
+            .collect();
+        paths.sort();
+        paths
     }
 
     /// User picked Save All / Discard All / Cancel in the close prompt.
@@ -182,7 +203,12 @@ impl Signex {
                 self.library
                     .editors
                     .retain(|key, _| key.library_path != *root);
+                let mut tasks = Vec::new();
+                for path in &confirm.dirty_paths {
+                    tasks.push(self.discard_primitive_editor(path));
+                }
                 self.close_library_or_defer(root);
+                return Task::batch(tasks);
             }
             CloseLibraryChoice::SaveAll => {
                 // Persist every dirty editor's row through the adapter
@@ -193,7 +219,7 @@ impl Signex {
                 // (#110). The user can retry, or pick Discard All.
                 return self.begin_save_all(
                     "Close Library",
-                    &[],
+                    &confirm.dirty_paths,
                     &confirm.dirty_editors,
                     crate::app::contracts::SaveAllNext::CloseLibrary {
                         library_path: confirm.library_path,
