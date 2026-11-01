@@ -123,21 +123,17 @@ impl Signex {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
                 // that would otherwise clobber the main-window state.
+                // Every window re-reads its scale: winit resizes a window
+                // that moves to a monitor with another DPI (#1887).
+                let scale_task = window_scale_task(id);
                 if self.ui_state.main_window_id == Some(id) {
                     self.ui_state.window_size = (w, h);
-                    // Windows fires a resize event whenever DWM moves
-                    // the window to a monitor with a different DPI, so
-                    // re-querying the scale factor here keeps the
-                    // wordmark-PNG tier picker in sync after a
-                    // cross-monitor drag.
-                    let scale_task = iced::window::scale_factor(id)
-                        .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
                     return Task::batch([scale_task, self.main_window_mode_task(id)]);
                 }
-                Task::none()
+                scale_task
             }
-            WindowMsg::MainWindowScaleChanged(scale) => {
-                self.ui_state.main_window_scale = scale;
+            WindowMsg::WindowScaleChanged(id, scale) => {
+                self.ui_state.set_window_os_scale(id, scale);
                 Task::none()
             }
             WindowMsg::MainWindowOpened(id) => {
@@ -158,8 +154,7 @@ impl Signex {
                 // Stash the scale factor so the wordmark PNG picker
                 // can render at native device-pixel count. Re-queried
                 // on every resize to track monitor moves.
-                let scale_task = iced::window::scale_factor(id)
-                    .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                let scale_task = window_scale_task(id);
                 // Re-add Windows 11 DWM rounded corners + drop shadow
                 // (silently no-ops on Windows 10 and non-Windows). Has
                 // to run after the HWND is alive, hence here rather than
@@ -172,6 +167,7 @@ impl Signex {
                 if self.ui_state.main_window_id == Some(id) {
                     return self.flush_quit_writes_then(iced::exit());
                 }
+                self.ui_state.forget_window_os_scale(id);
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
                 }
@@ -369,6 +365,7 @@ impl Signex {
                 Task::batch([
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
+                    window_scale_task(id),
                 ])
             }
             WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
@@ -437,7 +434,7 @@ impl Signex {
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.
-                iced::window::gain_focus(id)
+                Task::batch([iced::window::gain_focus(id), window_scale_task(id)])
             }
             WindowMsg::ReattachTab(id) => {
                 // Pre-remove so the tab bar shows the reattached tab on
@@ -464,7 +461,7 @@ impl Signex {
                     .insert(id, super::state::WindowKind::DetachedPanel(kind));
                 // Raise + focus the detached panel window — same
                 // `Level::Normal` open-behind issue as the modal/tab.
-                iced::window::gain_focus(id)
+                Task::batch([iced::window::gain_focus(id), window_scale_task(id)])
             }
             WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_drag(id),
@@ -636,4 +633,11 @@ impl Signex {
             }
         }
     }
+}
+
+/// Ask winit for a window's OS scale; the answer lands as
+/// `WindowMsg::WindowScaleChanged` (#1887).
+fn window_scale_task(id: iced::window::Id) -> Task<Message> {
+    iced::window::scale_factor(id)
+        .map(move |s| Message::Window(WindowMsg::WindowScaleChanged(id, s)))
 }

@@ -62,7 +62,10 @@ fn editor_widths_px(symbol: &Symbol, scale: f32) -> (f32, f32) {
         DirtyFlags::LINES | DirtyFlags::POLYGONS,
         &mut scene,
     );
-    let options = symbol_draw_options(scale);
+    let options = symbol_draw_options(
+        scale,
+        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    );
     let body = scene
         .polygons
         .iter()
@@ -96,6 +99,7 @@ fn schematic_widths_px(symbol: &Symbol, scale: f32) -> (f32, f32) {
         offset_x: 400.0,
         offset_y: 400.0,
         scale,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
     let scene = build_schematic_scene(
@@ -146,9 +150,22 @@ fn symbol_editor_and_schematic_draw_a_symbol_at_the_same_px_width() {
 #[test]
 fn a_selected_stroke_is_wider_than_the_floor_when_zoomed_out() {
     let scale = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 0.25;
-    let options = symbol_draw_options(scale);
-    let plain = options.stroke_px(symbol_stroke_mm(0.254, false, scale));
-    let selected = options.stroke_px(symbol_stroke_mm(0.254, true, scale));
+    let options = symbol_draw_options(
+        scale,
+        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    );
+    let plain = options.stroke_px(symbol_stroke_mm(
+        0.254,
+        false,
+        scale,
+        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    ));
+    let selected = options.stroke_px(symbol_stroke_mm(
+        0.254,
+        true,
+        scale,
+        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    ));
     assert_eq!(plain, signex_types::schematic::min_stroke_logical_px(1.0));
     assert!(
         selected > plain * 1.5,

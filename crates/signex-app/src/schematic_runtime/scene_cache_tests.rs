@@ -29,6 +29,7 @@ fn at(
         offset_x: x,
         offset_y: 0.0,
         scale,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     cache
         .scene_for(
@@ -137,6 +138,7 @@ fn invalidate_forces_a_rebuild_and_a_theme_change_does_too() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let other = canvas_colors(ThemeId::Nord);
     cache.scene_for(
@@ -160,6 +162,7 @@ fn a_panned_scene_still_contains_the_wire() {
             offset_x: x,
             offset_y: 0.0,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let scene = cache.scene_for(
             &sheet,
@@ -197,6 +200,7 @@ fn replay_after_pan(sheet: &SchematicRenderSnapshot, dx: f32, dy: f32) -> (bool,
             offset_x: x,
             offset_y: y,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let scene = cache.scene_for(
             sheet,
@@ -253,6 +257,7 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let widget = Rectangle::new(iced::Point::new(250.0, 90.0), iced::Size::new(800.0, 600.0));
     let raw = build_schematic_scene(
@@ -284,6 +289,7 @@ fn setting_the_render_cache_drops_the_cached_scene() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let _ = slot.content_scene_for_test().scene_for(
         &sheet,

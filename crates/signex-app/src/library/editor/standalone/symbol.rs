@@ -34,6 +34,7 @@ pub fn view_symbol<'a>(
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     path: &'a std::path::Path,
+    device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
@@ -42,7 +43,7 @@ pub fn view_symbol<'a>(
     // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
     // renders just toolbar + canvas; the bar is layered on top there,
     // which is also where the theme id for its icons is resolved.
-    let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
+    let canvas_widget = view_symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
 
     let body = column![toolbar, canvas_widget]
         .spacing(6)
@@ -309,6 +310,7 @@ fn view_symbol_canvas<'a>(
     editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
+    device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let program = SymbolCanvas::new(
@@ -333,7 +335,8 @@ fn view_symbol_canvas<'a>(
         },
     )
     .with_selection_filter(editor.selection_filter)
-    .with_view_pending(editor.pending_view.is_some());
+    .with_view_pending(editor.pending_view.is_some())
+    .with_device_px_per_logical_px(device_px_per_logical_px);
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)

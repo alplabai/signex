@@ -422,7 +422,10 @@ impl Signex {
     /// `grid_style` comes from the draft field on purpose: that is the
     /// effective value, carrying the Preferences live preview while the
     /// dialog is open and equal to the committed one otherwise (#630).
-    pub(crate) fn canvas_view_prefs(&self) -> crate::canvas::CanvasViewPrefs<'_> {
+    pub(crate) fn canvas_view_prefs(
+        &self,
+        window: iced::window::Id,
+    ) -> crate::canvas::CanvasViewPrefs<'_> {
         // The DRAFT theme, not the committed one: picking a theme in
         // Preferences previews it on the canvas immediately, which is
         // what the `PrefMsg::DraftTheme` arm used to push by hand.
@@ -452,6 +455,7 @@ impl Signex {
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),
+            device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
         }
     }
 
@@ -560,7 +564,7 @@ mod tests {
         // it borrows `wire_color_overrides`, so holding it would block the
         // mutations below.
         let (visible_before, grid_visible_before, snap_before) = {
-            let before = app.canvas_view_prefs();
+            let before = app.canvas_view_prefs(iced::window::Id::unique());
             (
                 before.visible_grid_mm,
                 before.grid_visible,
@@ -576,7 +580,7 @@ mod tests {
         app.ui_state.snap_enabled = !snap_before;
 
         // Assert
-        let after = app.canvas_view_prefs();
+        let after = app.canvas_view_prefs(iced::window::Id::unique());
         assert_eq!(after.visible_grid_mm, wanted_visible);
         assert_eq!(after.grid_visible, !grid_visible_before);
         assert_eq!(after.snap_enabled, !snap_before);
@@ -603,7 +607,8 @@ mod tests {
 
         // Assert
         assert_eq!(
-            app.canvas_view_prefs().canvas_colors,
+            app.canvas_view_prefs(iced::window::Id::unique())
+                .canvas_colors,
             signex_types::theme::canvas_colors(other),
             "the canvas must render the previewed theme"
         );
@@ -630,7 +635,8 @@ mod tests {
             "the previewed theme must start equal to the saved one"
         );
         assert_eq!(
-            app.canvas_view_prefs().canvas_colors,
+            app.canvas_view_prefs(iced::window::Id::unique())
+                .canvas_colors,
             app.canvas_colors_for(app.ui_state.theme_id),
             "so the first frame renders the saved theme's canvas colours"
         );
@@ -657,7 +663,9 @@ mod tests {
 
         // Assert
         assert_eq!(
-            app.canvas_view_prefs().wire_color_overrides.get(&uuid),
+            app.canvas_view_prefs(iced::window::Id::unique())
+                .wire_color_overrides
+                .get(&uuid),
             Some(&color),
             "the renderer must see the override without a copy step"
         );
@@ -667,7 +675,9 @@ mod tests {
 
         // Assert
         assert!(
-            app.canvas_view_prefs().wire_color_overrides.is_empty(),
+            app.canvas_view_prefs(iced::window::Id::unique())
+                .wire_color_overrides
+                .is_empty(),
             "a cleared override must not survive on a canvas copy"
         );
     }

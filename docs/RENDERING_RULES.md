@@ -166,9 +166,12 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
 4. **Then the whole-pixel snap** (#1674, `scene_line_snap.rs`) rounds
    axis-aligned hairlines under 4 device pixels to whole device pixels.
 5. **Display scale.** The floor and the snap are defined in device pixels.
-   The CPU canvas does not receive the window's scale factor yet, so both
-   still run with one device pixel per logical pixel
-   (`UNSCALED_DEVICE_PX_PER_LOGICAL_PX`) and the GPU path matches it.
+   Each window's scale (OS factor times the interface scale,
+   `UiState::device_px_per_logical_px`) reaches its canvas through
+   `CanvasViewPrefs` and `ScreenTransform`, and a window moved to another
+   display re-renders with that display's factor. The GPU path floors at one
+   device pixel too. Only a surface with no window uses
+   `UNSCALED_DEVICE_PX_PER_LOGICAL_PX` (one device pixel per logical pixel).
 6. **Output** (PDF, SVG, print) uses mm widths only, with no pixel floor and
    no snap. Output keeps each item's stored width (a width of `0` gets the
    exporter's default); the 0.15 mm minimum of rule 1 is the screen rule.

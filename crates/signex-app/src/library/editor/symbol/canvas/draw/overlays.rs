@@ -102,7 +102,11 @@ impl SymbolCanvas<'_> {
                 &canvas::Path::rectangle(rect_origin, rect_size),
                 canvas::Stroke::default()
                     .with_color(preview_color)
-                    .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                    .with_width(stroke_px(
+                        symbol_stroke_mm(0.0, false, scale, self.device_px_per_logical_px),
+                        scale,
+                        self.device_px_per_logical_px,
+                    )),
             );
         }
     }
@@ -139,8 +143,14 @@ impl SymbolCanvas<'_> {
             canvas::Stroke::default()
                 .with_color(preview_color)
                 .with_width(stroke_px(
-                    symbol_stroke_mm(self.pin_stroke_mm(), false, cam.scale),
+                    symbol_stroke_mm(
+                        self.pin_stroke_mm(),
+                        false,
+                        cam.scale,
+                        self.device_px_per_logical_px,
+                    ),
                     cam.scale,
+                    self.device_px_per_logical_px,
                 ))
                 .with_line_cap(canvas::LineCap::Round),
         );
@@ -172,7 +182,11 @@ impl SymbolCanvas<'_> {
                 &canvas::Path::line(p0, p1),
                 canvas::Stroke::default()
                     .with_color(preview_color)
-                    .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale))
+                    .with_width(stroke_px(
+                        symbol_stroke_mm(0.0, false, scale, self.device_px_per_logical_px),
+                        scale,
+                        self.device_px_per_logical_px,
+                    ))
                     .with_line_cap(canvas::LineCap::Round),
             );
         }
@@ -216,7 +230,11 @@ impl SymbolCanvas<'_> {
                 &canvas::Path::circle(center_p, radius_screen),
                 canvas::Stroke::default()
                     .with_color(preview_color)
-                    .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                    .with_width(stroke_px(
+                        symbol_stroke_mm(0.0, false, scale, self.device_px_per_logical_px),
+                        scale,
+                        self.device_px_per_logical_px,
+                    )),
             );
         }
     }
@@ -304,7 +322,11 @@ impl SymbolCanvas<'_> {
                         &arc_path,
                         canvas::Stroke::default()
                             .with_color(preview_color)
-                            .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                            .with_width(stroke_px(
+                                symbol_stroke_mm(0.0, false, scale, self.device_px_per_logical_px),
+                                scale,
+                                self.device_px_per_logical_px,
+                            )),
                     );
                 }
             } else if let Some((cur_x, cur_y)) = state.arc_cursor {
@@ -358,7 +380,11 @@ impl SymbolCanvas<'_> {
             &path,
             canvas::Stroke::default()
                 .with_color(preview_color)
-                .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                .with_width(stroke_px(
+                    symbol_stroke_mm(0.0, false, scale, self.device_px_per_logical_px),
+                    scale,
+                    self.device_px_per_logical_px,
+                )),
         );
         for &(x, y) in self.polygon_vertices {
             frame.fill(&canvas::Path::circle(w2s(x, y), 3.0), preview_color);

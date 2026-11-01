@@ -294,7 +294,7 @@ impl SchematicCanvas<'_> {
             let placed_width = signex_types::schematic::stroke_px(
                 placed_mm as f32,
                 cam.scale,
-                signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+                self.prefs.device_px_per_logical_px,
             );
             let preview_stroke = canvas::Stroke::default()
                 .with_color(wire_color_iced)

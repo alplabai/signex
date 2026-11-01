@@ -56,7 +56,14 @@ impl SchematicCanvas<'_> {
             }
 
             let frame_color = crate::render_config::to_iced(&self.prefs.canvas_colors.body);
-            draw_sheet_frame(frame, &cam, bounds, &self.sheet_frame, frame_color);
+            draw_sheet_frame(
+                frame,
+                &cam,
+                bounds,
+                &self.sheet_frame,
+                frame_color,
+                self.prefs.device_px_per_logical_px,
+            );
         })
     }
 }
@@ -69,6 +76,7 @@ fn draw_sheet_frame(
     bounds: Rectangle,
     primitives: &[FramePrimitive],
     color: Color,
+    device_px_per_logical_px: f32,
 ) {
     let at = |x: f64, y: f64| cam.world_to_screen(iced::Point::new(x as f32, y as f32), bounds);
     // Frame lines follow the stroke law and the whole-pixel snap (#1858).
@@ -76,13 +84,13 @@ fn draw_sheet_frame(
         let width = signex_types::schematic::stroke_px(
             width_mm as f32,
             cam.scale,
-            signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            device_px_per_logical_px,
         );
         let (p0, p1, width) = crate::scene_line_snap::snap_hairline(
             at(from.0, from.1),
             at(to.0, to.1),
             width,
-            signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            device_px_per_logical_px,
         );
         frame.stroke(
             &canvas::Path::line(p0, p1),
