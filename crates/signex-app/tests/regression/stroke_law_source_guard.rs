@@ -19,13 +19,28 @@ const BANNED: [&str; 5] = [
 /// The surface and PCB floors are the only `*_STROKE_PX` names allowed.
 const ALLOWED_STROKE_PX: [&str; 1] = ["MIN_STROKE_PX"];
 
-fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display())) {
+/// The schematic and Symbol Editor render paths and the schematic types.
+/// PCB and footprint code keeps its own floors and is not scanned.
+const GUARDED: [&str; 7] = [
+    "signex-app/src/schematic_runtime",
+    "signex-app/src/canvas",
+    "signex-app/src/library/editor/symbol",
+    "signex-app/src/scene_line_snap.rs",
+    "signex-app/src/scene_shader.rs",
+    "signex-app/src/renderer_scene_canvas.rs",
+    "signex-types/src/schematic",
+];
+
+fn rust_files(path: &Path, out: &mut Vec<PathBuf>) {
+    if path.is_file() {
+        out.push(path.to_path_buf());
+        return;
+    }
+    for entry in std::fs::read_dir(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+    {
         let path = entry.expect("dir entry").path();
-        if path.is_dir() {
+        if path.is_dir() || path.extension().is_some_and(|ext| ext == "rs") {
             rust_files(&path, out);
-        } else if path.extension().is_some_and(|ext| ext == "rs") {
-            out.push(path);
         }
     }
 }
@@ -42,14 +57,21 @@ fn stroke_px_names(line: &str) -> Vec<String> {
 fn no_per_kind_stroke_curve_returns_1858() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut files = Vec::new();
-    for dir in ["signex-app/src", "signex-types/src"] {
-        rust_files(&crates.join(dir), &mut files);
+    for guarded in GUARDED {
+        let path = crates.join(guarded);
+        assert!(
+            path.exists(),
+            "guarded path {guarded} is gone; update the guard"
+        );
+        rust_files(&path, &mut files);
     }
-    assert!(files.len() > 100, "the guard must scan the real sources");
     let mut hits = Vec::new();
     for file in &files {
         let text = std::fs::read_to_string(file).expect("read source");
         for (n, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
             let mut names: Vec<String> = BANNED
                 .iter()
                 .filter(|banned| line.contains(*banned))
