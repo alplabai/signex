@@ -167,7 +167,7 @@ impl Signex {
         // moves, while the hierarchy walk can still reach it.
         // Only a schematic sheet can be a child-sheet target; any other
         // file skips the walk so a malformed sheet cannot raise a notice.
-        let is_sheet = state.target_path.extension().and_then(|e| e.to_str()) == Some("snxsch");
+        let is_sheet = crate::app::file_extension::has_extension(&state.target_path, "snxsch");
         let plan = state
             .tree_path
             .first()

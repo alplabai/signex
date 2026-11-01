@@ -20,6 +20,7 @@ mod dir_listing;
 pub(crate) mod dispatch;
 pub mod document_read;
 mod documents;
+pub(crate) mod file_extension;
 mod handlers;
 mod helpers;
 #[cfg(test)]
