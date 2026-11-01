@@ -601,6 +601,19 @@ pub(super) fn synthesize_manifest(snx: &SnxlibManifest) -> Manifest {
     }
 }
 
+/// Fail with [`LibraryError::LibraryFileMissing`] only when the filesystem
+/// says the `.snxlib` does not exist. An uninspectable path (permission
+/// denied on a parent, IO error) is `Io`, never "missing".
+pub(super) fn require_library_file(p: &Path) -> Result<(), LibraryError> {
+    match p.try_exists() {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(LibraryError::LibraryFileMissing {
+            path: p.to_path_buf(),
+        }),
+        Err(e) => Err(LibraryError::Io(e)),
+    }
+}
+
 pub(super) fn parent_dir(p: &Path) -> Result<PathBuf, LibraryError> {
     p.parent().map(Path::to_path_buf).ok_or_else(|| {
         LibraryError::Backend(format!(

@@ -262,12 +262,7 @@ impl LocalGitAdapter {
     pub fn open(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
         let file_path = file_path.as_ref().to_path_buf();
         Self::validate_file_path(&file_path)?;
-        if !file_path.exists() {
-            return Err(LibraryError::NotFound(format!(
-                "no .snxlib at {}",
-                file_path.display()
-            )));
-        }
+        require_library_file(&file_path)?;
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
@@ -390,12 +385,7 @@ impl LocalGitAdapter {
     pub fn recover_init(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
         let file_path = file_path.as_ref().to_path_buf();
         Self::validate_file_path(&file_path)?;
-        if !file_path.exists() {
-            return Err(LibraryError::NotFound(format!(
-                "cannot recover-init: no .snxlib at {}",
-                file_path.display()
-            )));
-        }
+        require_library_file(&file_path)?;
         let root_dir = parent_dir(&file_path)?;
 
         // Refuse before `git init` touches disk: an unresolvable user

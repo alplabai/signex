@@ -32,13 +32,10 @@ use signex_library::{LibraryError, LocalGitAdapter};
 /// not recoverable, or an earlier recovery dialog is still open and must
 /// not be clobbered — so the caller has to raise the error card itself.
 ///
-/// String-matches the error message produced by `LocalGitAdapter::open`
-/// because the underlying `LibraryError` enum doesn't carry structured
-/// "missing-snxlib" / "missing-git" variants in v0.9. This is the
-/// lower-effort path called out in `v0.9-snxlib-as-file-plan.md` §2
-/// Stage H — adding `LibraryError::MissingGitRepo` /
-/// `LibraryError::MissingSnxlibFile` variants is a clean follow-up
-/// once the rest of v0.9 settles.
+/// Missing-file recovery keys on `LibraryError::LibraryFileMissing`
+/// (the file is confirmed absent), never on message text: Remove from
+/// project must not be offered for a library that exists but failed to
+/// open for another reason.
 pub(crate) fn route_open_error(
     state: &mut LibraryState,
     path: &std::path::Path,
@@ -51,11 +48,9 @@ pub(crate) fn route_open_error(
         return false;
     }
     let dialog = match err {
-        LibraryError::NotFound(msg) if msg.contains("no .snxlib") => {
-            Some(RecoveryDialog::LibraryMissing {
-                path: path.to_path_buf(),
-            })
-        }
+        LibraryError::LibraryFileMissing { .. } => Some(RecoveryDialog::LibraryMissing {
+            path: path.to_path_buf(),
+        }),
         LibraryError::Backend(msg) if msg.starts_with("git open") => {
             // v0.9: no remote field on the manifest yet. Stage 13+ will
             // populate this from `[users.<remote>]` so the

@@ -55,10 +55,10 @@ impl Signex {
     ///    panicking because a dropped mount is a stale cache, not a
     ///    corrupt one.
     ///
-    /// A prepare error only warns, which is exactly what both converted
-    /// call sites did synchronously. The `rfd` directory-pick path
-    /// (`handle_open_library_at`) is deliberately still synchronous and
-    /// keeps routing its errors into the recovery flow.
+    /// A prepare error is logged; a missing `.snxlib` opens the Library
+    /// Missing dialog, any other failure a card for a user-asked mount.
+    /// The `rfd` directory-pick path (`handle_open_library_at`) is still
+    /// synchronous and routes its errors the same way.
     pub(super) fn handle_mount_finished(
         &mut self,
         path: std::path::PathBuf,
@@ -85,20 +85,32 @@ impl Signex {
         // project's libraries — popping a blocking card there would
         // greet the user with one modal per stale path at startup, for
         // an operation they never invoked.
-        let mut report = |path: &std::path::Path, reason: &str| {
-            let error = anyhow::anyhow!("could not open library {}: {reason}", path.display());
-            crate::diagnostics::log_error("Failed to mount library", &error);
-            if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
-            }
-        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        let report =
+            |this: &mut Self, path: &std::path::Path, err: &signex_library::LibraryError| {
+                let error = anyhow::anyhow!("could not open library {}: {err}", path.display());
+                // Lead with the library name: the Messages panel cuts long lines.
+                crate::diagnostics::log_error(&format!("Failed to mount library {name}"), &error);
+                // A missing file gets the recovery dialog whatever the intent
+                // (it is the only way to Locate or Remove it); other failures
+                // raise a card only for a mount the user asked for (#532).
+                if route_open_error(&mut this.library, path, err) {
+                    return;
+                }
+                if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
+                    this.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                }
+            };
         match result {
             Ok(prepared) => {
                 let library_id = prepared.entry.library_id;
                 let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
                 if let Err(e) = self.library.mount_prepared(prepared) {
-                    report(&path, &e.to_string());
+                    report(self, &path, &e);
                     return Task::none();
                 }
                 self.library.drift.check_pending = true;
@@ -109,7 +121,7 @@ impl Signex {
                 }
             }
             Err(e) => {
-                report(&path, &e);
+                report(self, &path, &e);
                 return Task::none();
             }
         }
