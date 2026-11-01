@@ -306,14 +306,16 @@ fn symbol_tool_button_style(
     }
 }
 
-fn view_symbol_canvas<'a>(
+/// The canvas program the view draws: the editor's document and the window's
+/// display scale (#1887).
+fn symbol_canvas<'a>(
     editor: &'a SymbolDocument,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     device_px_per_logical_px: f32,
-) -> Element<'a, LibraryMessage> {
+) -> SymbolCanvas<'a> {
     let tokens = &panel_ctx.tokens;
-    let program = SymbolCanvas::new(
+    SymbolCanvas::new(
         editor.primitive(),
         editor.selected.clone(),
         editor.tool,
@@ -336,7 +338,16 @@ fn view_symbol_canvas<'a>(
     )
     .with_selection_filter(editor.selection_filter)
     .with_view_pending(editor.pending_view.is_some())
-    .with_device_px_per_logical_px(device_px_per_logical_px);
+    .with_device_px_per_logical_px(device_px_per_logical_px)
+}
+
+fn view_symbol_canvas<'a>(
+    editor: &'a SymbolDocument,
+    panel_ctx: &'a PanelContext,
+    display: LibraryDisplaySettings,
+    device_px_per_logical_px: f32,
+) -> Element<'a, LibraryMessage> {
+    let program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -488,5 +499,22 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
             pin_indices,
             graphic_indices,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The view hands the window's display scale to the canvas it draws.
+    #[test]
+    fn the_view_builds_the_canvas_with_the_windows_display_scale() {
+        let (app, _task) = crate::app::Signex::new();
+        let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
+        let editor = SymbolDocument::new(std::path::PathBuf::from("s.snxsym"), file);
+        let panel_ctx = &app.document_state.panel_ctx;
+        let build = |dpi| symbol_canvas(&editor, panel_ctx, LibraryDisplaySettings::default(), dpi);
+        assert_eq!(build(1.0).device_px_per_logical_px, 1.0);
+        assert_eq!(build(2.0).device_px_per_logical_px, 2.0);
     }
 }

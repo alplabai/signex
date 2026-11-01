@@ -119,6 +119,16 @@ impl SchematicCanvas<'_> {
         }
     }
 
+    /// The width a placed bus entry draws at: the stroke law at wire weight,
+    /// on this window's device-pixel grid.
+    pub(crate) fn placed_bus_entry_stroke_px(&self, scale: f32) -> f32 {
+        signex_types::schematic::stroke_px(
+            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            scale,
+            self.prefs.device_px_per_logical_px,
+        )
+    }
+
     /// Ghost bus entry: the bus end follows the cursor, snapping onto the
     /// nearest bus within one grid step exactly as a click would, and the
     /// other end follows the stored orientation.
@@ -128,9 +138,7 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
-        use signex_types::schematic::{
-            Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM, snap_to_bus, stroke_px,
-        };
+        use signex_types::schematic::{Point as SchPoint, snap_to_bus};
         let Some(size) = self.ghost_bus_entry else {
             return;
         };
@@ -159,12 +167,7 @@ impl SchematicCanvas<'_> {
             to_screen(start),
             to_screen(SchPoint::new(start.x + size.0, start.y + size.1)),
         );
-        // The placed entry's width under the same law (wire weight).
-        let width = stroke_px(
-            SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
-            cam.scale,
-            self.prefs.device_px_per_logical_px,
-        );
+        let width = self.placed_bus_entry_stroke_px(cam.scale);
         frame.stroke(
             &path,
             canvas::Stroke::default()

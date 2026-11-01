@@ -137,6 +137,21 @@ mod tests {
         assert!(tab_after.0 > tab_before.0 && tab_after.1 > tab_before.1);
         assert_eq!(clears(&app, main), main_before, "other windows untouched");
 
+        let panel = {
+            let id = iced::window::Id::unique();
+            app.ui_state.windows.insert(
+                id,
+                WindowKind::DetachedPanel(crate::panels::PanelKind::Properties),
+            );
+            id
+        };
+        scale_changed(&mut app, panel, 2.0);
+        assert_eq!(
+            clears(&app, main),
+            main_before,
+            "a detached window has no canvas and leaves main's caches alone"
+        );
+
         scale_changed(&mut app, main, 1.5);
         let main_after = clears(&app, main);
         assert!(main_after.0 > main_before.0 && main_after.1 > main_before.1);
@@ -162,12 +177,14 @@ mod tests {
             );
             let (from, to) = (iced::Point::new(0.0, 5.3), iced::Point::new(9.0, 5.3));
             let (a, _, frame_width) = canvas.sheet_frame_line(from, to, 0.0, zoomed_out);
-            (canvas.placed_wire_stroke_px(zoomed_out), frame_width, a.y)
+            let wire = canvas.placed_wire_stroke_px(zoomed_out);
+            let entry = canvas.placed_bus_entry_stroke_px(zoomed_out);
+            ((wire, entry), frame_width, a.y)
         };
         let (wire_1x, frame_1x, _) = probe(main);
-        assert_eq!((wire_1x, frame_1x), (1.0, 1.0));
+        assert_eq!((wire_1x, frame_1x), ((1.0, 1.0), 1.0));
         let (wire_2x, frame_2x, y_2x) = probe(tab);
-        assert_eq!((wire_2x, frame_2x), (0.5, 0.5));
+        assert_eq!((wire_2x, frame_2x), ((0.5, 0.5), 0.5));
         assert_eq!((y_2x * 2.0).fract(), 0.5, "snapped on the device grid");
     }
 

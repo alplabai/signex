@@ -133,7 +133,11 @@ impl Signex {
                 // The CPU canvas caches its geometry, which was drawn with the
                 // old scale; a move to another display keeps the logical
                 // bounds, so nothing else would redraw it (#1887).
-                if self.ui_state.set_window_os_scale(id, scale) {
+                // A window without a canvas (a detached modal or panel) has
+                // nothing to redraw, and must not clear the main canvas.
+                let has_canvas = self.ui_state.main_window_id == Some(id)
+                    || self.interaction_state.canvases.contains_key(&id);
+                if self.ui_state.set_window_os_scale(id, scale) && has_canvas {
                     let slot = self.interaction_state.canvas_for_window_mut(id);
                     slot.clear_bg_cache();
                     slot.clear_content_cache();
