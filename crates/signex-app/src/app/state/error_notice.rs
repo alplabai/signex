@@ -44,25 +44,21 @@ impl ErrorNotice {
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let (title, detail) = match drift {
+        let what = drift.describe();
+        let (title, advice) = match drift {
             crate::persist::DiskDrift::Changed => (
                 "File Changed on Disk",
-                format!(
-                    "{name} was changed by another program since it was opened or last saved. \
-                     Saving now would discard that change.\n\n\
-                     Overwrite replaces the file with this document. Reload from disk loads the \
-                     file and discards the unsaved edits in this document."
-                ),
+                "Saving now would discard that change.\n\n\
+                 Overwrite replaces the file with this document. Reload from disk loads the \
+                 file and discards the unsaved edits in this document."
+                    .to_owned(),
             ),
             crate::persist::DiskDrift::Missing => (
                 "File Missing on Disk",
-                format!(
-                    "{name} was deleted or moved since it was opened or last saved.\n\n\
-                     Re-create writes this document to {}.",
-                    path.display()
-                ),
+                format!("Re-create writes this document to {}.", path.display()),
             ),
         };
+        let detail = format!("{name} {what}. {advice}");
         Self {
             title: title.to_owned(),
             detail,

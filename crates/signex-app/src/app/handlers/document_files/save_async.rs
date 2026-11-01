@@ -24,6 +24,24 @@ impl Signex {
         target: PathBuf,
         save_as_from: Option<PathBuf>,
     ) -> Result<Task<Message>> {
+        self.begin_schematic_save_checked(target, save_as_from, true)
+    }
+
+    /// A plain save the user chose to run over a changed file: this one write
+    /// is not compared with disk, and a failure leaves the baseline as it was.
+    pub(crate) fn begin_schematic_save_unchecked(
+        &mut self,
+        target: PathBuf,
+    ) -> Result<Task<Message>> {
+        self.begin_schematic_save_checked(target, None, false)
+    }
+
+    fn begin_schematic_save_checked(
+        &mut self,
+        target: PathBuf,
+        save_as_from: Option<PathBuf>,
+        compare_with_disk: bool,
+    ) -> Result<Task<Message>> {
         let source = save_as_from.clone().unwrap_or_else(|| target.clone());
         // A rename or delete still moving either file would recreate it or
         // lose these bytes (#859).
@@ -44,8 +62,7 @@ impl Signex {
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
         // loaded or last saved; a Save As target was confirmed by the dialog.
-        let expected = save_as_from
-            .is_none()
+        let expected = (compare_with_disk && save_as_from.is_none())
             .then(|| self.document_state.document_saves.baseline(&target))
             .flatten();
         let job = self

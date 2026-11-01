@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{CaseProbeOutcome, FileMsg, Message, OverlayMsg, Signex, TabKind};
 use signex_app::diagnostics;
+use signex_app::dock::DockMessage;
 use signex_app::menu_bar::MenuMessage;
+use signex_app::panels::PanelMsg;
+use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
 use tempfile::TempDir;
 
 fn sheet_text(paper: &str) -> String {
@@ -299,4 +302,162 @@ fn a_save_of_an_unchanged_file_after_open_goes_through() {
 
     assert!(fs::read_to_string(&path).unwrap().contains("A3"));
     assert!(!conflict_card_is_up(&app));
+}
+
+fn add_project(app: &mut Signex, dir: &Path) {
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path: dir.join("P.snxprj"),
+            data: signex_types::project::ProjectData {
+                description: None,
+                name: "P".into(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: false,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+}
+
+// ---- review fixes ------------------------------------------------------
+
+#[test]
+fn save_after_a_history_restore_writes_without_a_card() {
+    signex_library::git_identity::test_identity::install();
+    let (dir, path) = fixture("Restore1826.snxsch", "A4");
+    let adapter = LocalGitProjectAdapter::open_or_init(dir.path().to_path_buf()).unwrap();
+    let first = adapter
+        .commit_path(Path::new("Restore1826.snxsch"), "first")
+        .unwrap()
+        .expect("a commit")
+        .to_string();
+    fs::write(&path, sheet_text("A3")).unwrap();
+    adapter
+        .commit_path(Path::new("Restore1826.snxsch"), "second")
+        .unwrap();
+    let (mut app, _boot) = Signex::new();
+    add_project(&mut app, dir.path());
+    open(&mut app, &path);
+
+    crate::settle_support::settle(
+        &mut app,
+        Message::Dock(DockMessage::Panel(PanelMsg::HistoryRestoreClicked {
+            sha: first,
+        })),
+    );
+    assert_eq!(
+        app.document_state.engines[&path].document().paper_size,
+        "A4"
+    );
+    edit(&mut app, &path, "A2");
+    save(&mut app);
+
+    assert!(!conflict_card_is_up(&app), "the restore is not drift");
+    assert!(fs::read_to_string(&path).unwrap().contains("A2"));
+}
+
+#[test]
+fn a_failed_overwrite_keeps_the_baseline_so_the_next_save_still_asks() {
+    let dir = TempDir::new().unwrap();
+    let project = dir.path().join("Proj");
+    fs::create_dir(&project).unwrap();
+    let path = project.join("FailOverwrite1826.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    fs::write(&path, sheet_text("A0")).unwrap();
+    edit(&mut app, &path, "A3");
+    save(&mut app);
+    let theirs = fs::read_to_string(&path).unwrap();
+    // The write cannot land: the file is locked.
+    let mut perms = fs::metadata(&path).unwrap().permissions();
+    perms.set_readonly(true);
+    fs::set_permissions(&path, perms).unwrap();
+    crate::settle_support::settle(
+        &mut app,
+        Message::Overlay(OverlayMsg::DiskConflictOverwriteChosen),
+    );
+    let mut perms = fs::metadata(&path).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    fs::set_permissions(&path, perms).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), theirs);
+    let _ = app.update(Message::Overlay(OverlayMsg::DismissErrorNotice));
+
+    save(&mut app);
+
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        theirs,
+        "still not overwritten"
+    );
+    assert!(conflict_card_is_up(&app), "the user is asked again");
+}
+
+#[test]
+fn a_file_put_back_to_an_earlier_save_after_a_reload_is_drift() {
+    let (_dir, path) = fixture("Revert1826.snxsch", "A4");
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    edit(&mut app, &path, "A3");
+    save(&mut app);
+    let mine = fs::read_to_string(&path).unwrap();
+    fs::write(&path, sheet_text("A0")).unwrap();
+    edit(&mut app, &path, "A2");
+    save(&mut app);
+    crate::settle_support::settle(
+        &mut app,
+        Message::Overlay(OverlayMsg::DiskConflictReloadChosen),
+    );
+    // Another program (a git checkout) puts back the bytes this run saved.
+    fs::write(&path, &mine).unwrap();
+    edit(&mut app, &path, "A1");
+
+    save(&mut app);
+
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        mine,
+        "not overwritten silently"
+    );
+    assert!(conflict_card_is_up(&app));
+}
+
+#[test]
+fn a_sheet_with_no_baseline_still_cannot_recreate_a_moved_folder() {
+    let dir = TempDir::new().unwrap();
+    let project = dir.path().join("Proj");
+    fs::create_dir(&project).unwrap();
+    let path = project.join("NoBaseline1828.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    app.document_state.document_saves.forget_baseline(&path);
+    edit(&mut app, &path, "A3");
+    fs::rename(&project, dir.path().join("Proj_moved")).unwrap();
+
+    save(&mut app);
+
+    assert!(
+        !project.exists(),
+        "the sink itself refuses to create the folder"
+    );
+    assert!(app.document_state.is_document_dirty(&path));
+    assert!(messages_mention("NoBaseline1828.snxsch"));
 }

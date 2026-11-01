@@ -136,7 +136,19 @@ struct Newest {
     sequence: u64,
     path: PathBuf,
     /// What that write put on disk, so a later job's disk check accepts it.
-    hash: super::ContentHash,
+    /// `None` once a read of the file made that write's bytes stale.
+    hash: Option<super::ContentHash>,
+}
+
+/// The fingerprints a save of one file accepts: the baseline, and what this
+/// process's own earlier writes to the file put there.
+fn known_hashes<'a>(
+    baseline: super::ContentHash,
+    own_writes: impl Iterator<Item = &'a Newest>,
+) -> Vec<super::ContentHash> {
+    std::iter::once(baseline)
+        .chain(own_writes.filter_map(|newest| newest.hash))
+        .collect()
 }
 
 #[derive(Default)]
@@ -259,13 +271,13 @@ impl DocumentSaveJob {
         }
         if let Some(expected) = self.expected {
             // A sibling write of this process that already landed is not drift.
-            let mut known = vec![expected];
-            known.extend(
+            let known = known_hashes(
+                expected,
                 files
                     .iter()
                     .zip(&matches)
                     .filter(|(_, relation)| **relation == SameFile::Same)
-                    .map(|(newest, _)| newest.hash),
+                    .map(|(newest, _)| newest),
             );
             let drift = super::drift_from(&self.path, &known)
                 .map_err(|error| format!("read {} before saving: {error}", self.path.display()))?;
@@ -286,12 +298,12 @@ impl DocumentSaveJob {
             Some(index) => {
                 files[index].sequence = self.sequence;
                 files[index].path = self.path.clone();
-                files[index].hash = hash;
+                files[index].hash = Some(hash);
             }
             None => files.push(Newest {
                 sequence: self.sequence,
                 path: self.path.clone(),
-                hash,
+                hash: Some(hash),
             }),
         }
         Ok(SaveOutcome::Written)
@@ -362,8 +374,41 @@ impl DocumentSaves {
         self.baselines.get(path).copied()
     }
 
+    /// A write of this process landed: `hash` is what the file holds now.
     pub fn set_baseline(&mut self, path: PathBuf, hash: super::ContentHash) {
         self.baselines.insert(path, hash);
+    }
+
+    /// A read of the file (open, reload, restore) took `hash`. Earlier writes
+    /// of this process no longer describe the file, so a save stops accepting
+    /// their bytes: a file put back to one of them by another program is drift.
+    pub fn set_baseline_from_read(&mut self, path: PathBuf, hash: super::ContentHash) {
+        let slot = relock(&self.ledger.newest_written)
+            .get(&ledger_key(&path))
+            .cloned();
+        if let Some(slot) = slot {
+            for newest in relock(&slot).iter_mut().filter(|n| n.path == path) {
+                newest.hash = None;
+            }
+        }
+        self.baselines.insert(path, hash);
+    }
+
+    /// Whether `path` still holds what its document was loaded from or last
+    /// saved as, or what an earlier write of this process put there. A
+    /// blocking read, for the one caller that cannot go through a job.
+    pub fn drift_of(&self, path: &Path) -> io::Result<Option<super::DiskDrift>> {
+        let Some(baseline) = self.baseline(path) else {
+            return Ok(None);
+        };
+        let slot = relock(&self.ledger.newest_written)
+            .get(&ledger_key(path))
+            .cloned();
+        let known = match slot {
+            Some(slot) => known_hashes(baseline, relock(&slot).iter().filter(|n| n.path == path)),
+            None => vec![baseline],
+        };
+        super::drift_from(path, &known)
     }
 
     pub fn set_real_path(&mut self, path: PathBuf, real: PathBuf) {

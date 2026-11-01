@@ -93,11 +93,12 @@ impl Signex {
             .map(|p| p.id)
     }
 
-    /// The fingerprint a read of `path` just took; later saves compare to it.
+    /// The fingerprint a read of `path` just took (open, reload, restore);
+    /// later saves compare to it.
     pub(crate) fn record_disk_baseline(&mut self, path: &Path, hash: ContentHash) {
         self.document_state
             .document_saves
-            .set_baseline(path.to_path_buf(), hash);
+            .set_baseline_from_read(path.to_path_buf(), hash);
     }
 
     /// A schematic write landed: the file now holds `saved`. Only the newest
@@ -115,31 +116,31 @@ impl Signex {
         {
             return;
         }
-        self.record_disk_baseline(path, ContentHash::of(&saved.bytes));
+        self.document_state
+            .document_saves
+            .set_baseline(path.to_path_buf(), ContentHash::of(&saved.bytes));
     }
 
-    /// For the blocking Save All leg of a project close or quit, which writes
-    /// the engine itself: refuse when the file drifted from the baseline. No
-    /// card here; the close flow's own failure report carries the reason.
+    /// For the blocking save of `try_save_dirty_path_with` (Exclude from
+    /// Project on a dirty sheet), which writes the engine itself: refuse when
+    /// the file drifted. No card here; the caller reports the error.
     pub(crate) fn refuse_if_disk_drifted(&self, path: &Path) -> anyhow::Result<()> {
-        let Some(baseline) = self.document_state.document_saves.baseline(path) else {
-            return Ok(());
-        };
-        let drift = crate::persist::drift_from(path, &[baseline]).map_err(|e| {
-            anyhow::anyhow!("could not read {} before saving: {e}", file_label(path))
-        })?;
+        let drift = self
+            .document_state
+            .document_saves
+            .drift_of(path)
+            .map_err(|e| {
+                anyhow::anyhow!("could not read {} before saving: {e}", file_label(path))
+            })?;
         let Some(drift) = drift else {
             return Ok(());
         };
-        let what = match drift {
-            DiskDrift::Changed => "changed on disk",
-            DiskDrift::Missing => "is missing on disk",
-        };
         let name = file_label(path);
+        let what = drift.describe();
         crate::diagnostics::log_warning(format!("[save] {name} {what}; not saved, still modified"));
         anyhow::bail!(
-            "{name} {what} since it was opened or last saved, so it was not overwritten. Save it \
-             from its tab to choose Overwrite or Reload"
+            "{name} {what}, so it was not overwritten. Save it from its tab to choose \
+             Overwrite or Reload"
         )
     }
 
@@ -155,10 +156,7 @@ impl Signex {
     /// A save refused to write because the file drifted. Nothing was written,
     /// so the sheet stays modified; the user is asked once per card.
     pub(crate) fn handle_save_found_disk_drift(&mut self, path: PathBuf, drift: DiskDrift) {
-        let what = match drift {
-            DiskDrift::Changed => "changed on disk since it was opened or last saved",
-            DiskDrift::Missing => "is missing on disk (deleted or moved)",
-        };
+        let what = drift.describe();
         let name = file_label(&path);
         crate::diagnostics::log_warning(format!("[save] {name} {what}; not saved, still modified"));
         self.document_state
@@ -190,8 +188,7 @@ impl Signex {
             "[save] Overwriting {} as the user chose",
             file_label(&path)
         ));
-        self.document_state.document_saves.forget_baseline(&path);
-        match self.begin_schematic_save(path, None) {
+        match self.begin_schematic_save_unchecked(path) {
             Ok(task) => task,
             Err(error) => {
                 self.report_save_failure("Failed to save active document", &error);

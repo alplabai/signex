@@ -925,9 +925,32 @@ pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);
 /// or `None` to leave it as it is.
 pub type FileRewrite<'a> = dyn FnMut(Option<&[u8]>) -> Result<Option<Vec<u8>>, LibraryError> + 'a;
 
+/// A first primitive file of a library goes into a folder (`symbols/`,
+/// `footprints/`) the library has not made yet: create that one folder, when it
+/// sits directly in a library root (a folder holding a `.snxlib`). A folder
+/// further out that is gone means the library or project moved, and stays
+/// missing so the write is refused (#1828).
+fn create_missing_library_subdir(abs_path: &Path) -> std::io::Result<()> {
+    let Some(dir) = abs_path.parent().filter(|dir| !dir.exists()) else {
+        return Ok(());
+    };
+    let in_library_root = dir.parent().is_some_and(|root| {
+        std::fs::read_dir(root).is_ok_and(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .any(|e| e.path().extension().is_some_and(|ext| ext == "snxlib"))
+        })
+    });
+    if in_library_root {
+        std::fs::create_dir(dir)?;
+    }
+    Ok(())
+}
+
 /// The read and write of [`LibraryAdapter::rewrite_file_locked`], with no
 /// lock. Used directly for a primitive file that belongs to no mounted
-/// library. The write is atomic.
+/// library. The write is atomic, and it refuses a missing folder rather than
+/// creating it (#1828); a caller that means to create the folder does so first.
 pub fn rewrite_file(
     abs_path: &Path,
     rewrite: &mut crate::adapter::FileRewrite<'_>,
@@ -940,7 +963,10 @@ pub fn rewrite_file(
     let Some(bytes) = rewrite(current.as_deref())? else {
         return Ok(false);
     };
-    signex_types::atomic_io::atomic_write(abs_path, &bytes)?;
+    if current.is_none() {
+        create_missing_library_subdir(abs_path)?;
+    }
+    signex_types::atomic_io::atomic_write_existing_dir(abs_path, &bytes)?;
     Ok(true)
 }
 

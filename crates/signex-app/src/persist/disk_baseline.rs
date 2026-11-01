@@ -56,6 +56,17 @@ pub enum DiskDrift {
     Missing,
 }
 
+impl DiskDrift {
+    /// The one wording of the difference, for Messages, errors and the card:
+    /// "<file> {describe}".
+    pub fn describe(self) -> &'static str {
+        match self {
+            Self::Changed => "changed on disk since it was opened or last saved",
+            Self::Missing => "is missing on disk (deleted or moved)",
+        }
+    }
+}
+
 /// Whether `path` still holds one of the `known` fingerprints. A blocking
 /// read: call it from a worker, never from `update`.
 pub fn drift_from(path: &Path, known: &[ContentHash]) -> io::Result<Option<DiskDrift>> {
