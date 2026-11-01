@@ -566,6 +566,10 @@ pub struct SaveAsProjectPatched {
     pub from: PathBuf,
     pub to: PathBuf,
     pub result: Result<crate::app::project_entry_disk::EntryPatch, String>,
+    /// The parent references planned for the new file, and what the worker
+    /// did to the saved parents (#1849).
+    pub plan: crate::app::path_ops::ReferencePlan,
+    pub parent_disk: crate::app::parent_reference_disk::ParentDiskOutcomes,
 }
 
 /// Project lifecycle message family (ADR-0001 D3). Namespaced under

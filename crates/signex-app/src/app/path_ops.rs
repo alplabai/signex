@@ -397,6 +397,8 @@ pub struct FileRenameDone {
     /// What the move did to the saved `.snxprj` entry (#1821).
     pub result: Result<crate::app::project_entry_disk::EntryPatch, RenameIoError>,
     pub parents: ParentSheets,
+    /// What the move did to the saved parent sheets' references (#1849).
+    pub parent_disk: crate::app::parent_reference_disk::ParentDiskOutcomes,
 }
 
 // ---- rename library ---------------------------------------------------------
@@ -477,6 +479,8 @@ pub enum DeleteIo {
 pub struct DeleteDone {
     pub request: DeleteRequest,
     pub io: DeleteIo,
+    /// What the delete did to the saved `.snxprj` entry (#1849).
+    pub entry: crate::app::project_entry_disk::EntryPatch,
 }
 
 /// Drive a message and every task it produces to completion without an iced

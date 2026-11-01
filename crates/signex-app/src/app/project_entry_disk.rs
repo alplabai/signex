@@ -105,6 +105,64 @@ pub(crate) fn add_sheet_entry(
     write_patched(project_file, &data)
 }
 
+/// Drop every sheet, PCB, schematic-root and library entry that resolves to
+/// `target`. Shared by the in-memory project and the saved one. Returns
+/// whether anything changed.
+pub(crate) fn remove_entries(
+    data: &mut ProjectData,
+    dir: &Path,
+    target: &Path,
+    fold: CaseFold,
+) -> bool {
+    let is_target = |entry: &str| entry_resolves_to(dir, entry, target, fold);
+    let mut changed = false;
+    let before = data.sheets.len();
+    data.sheets.retain(|entry| !is_target(&entry.filename));
+    changed |= data.sheets.len() != before;
+    if data.schematic_root.as_deref().is_some_and(is_target) {
+        data.schematic_root = None;
+        changed = true;
+    }
+    if data.pcb_file.as_deref().is_some_and(is_target) {
+        data.pcb_file = None;
+        changed = true;
+    }
+    // By resolved path, not file name: two libraries may share a name and only
+    // the targeted one goes (#742).
+    let keep: Vec<bool> = data
+        .libraries
+        .iter()
+        .map(|entry| data.resolve_library_path(entry) != target)
+        .collect();
+    let mut keep = keep.into_iter();
+    let libraries = data.libraries.len();
+    data.libraries.retain(|_| keep.next().unwrap_or(true));
+    changed |= data.libraries.len() != libraries;
+    changed
+}
+
+/// Remove the entries for `target` from the saved project, leaving everything
+/// else as the user last saved it (#1849). Unreadable projects are reported
+/// and never overwritten.
+pub(crate) fn remove_entry(
+    project_file: &Path,
+    target: &Path,
+    fold: CaseFold,
+) -> Result<EntryPatch, ProjectError> {
+    if !project_file.exists() {
+        return Ok(EntryPatch::NoProjectFile);
+    }
+    let mut data = match parse_project(project_file) {
+        Ok(data) => data,
+        Err(e) => return Ok(EntryPatch::Unreadable(e.to_string())),
+    };
+    let dir = project_file.parent().unwrap_or_else(|| Path::new(""));
+    if !remove_entries(&mut data, dir, target, fold) {
+        return Ok(EntryPatch::NotListed);
+    }
+    write_patched(project_file, &data)
+}
+
 /// The one place a sheet row is built, shared by the in-memory project and
 /// the saved one. `true` when a row was added.
 pub(crate) fn register_entry(data: &mut ProjectData, filename: &str, fold: CaseFold) -> bool {

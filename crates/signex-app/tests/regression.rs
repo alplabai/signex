@@ -44,8 +44,11 @@ mod close_support;
 #[path = "regression/settle_support.rs"]
 mod settle_support;
 
+#[path = "regression/delete_and_parent_refs_commit.rs"]
+mod delete_and_parent_refs_commit;
 #[path = "regression/pending_path_ops.rs"]
 mod pending_path_ops;
+
 #[path = "regression/sheet_entry_commits_project.rs"]
 mod sheet_entry_commits_project;
 

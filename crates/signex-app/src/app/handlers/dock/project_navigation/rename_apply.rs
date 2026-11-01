@@ -19,6 +19,7 @@ impl Signex {
             request,
             result,
             parents,
+            parent_disk,
         } = done;
         self.document_state.pending_path_ops.finish(request.id);
         let patch = match result {
@@ -32,7 +33,7 @@ impl Signex {
         self.document_state.note_document_written_behind_engines();
         match &request.kind {
             FileRenameKind::Document(plan) => {
-                self.apply_document_rename(&request, plan, parents, patch)
+                self.apply_document_rename(&request, plan, parents, &parent_disk, patch)
             }
         }
         if self.dialog_targets(&request.from) {
@@ -114,6 +115,7 @@ impl Signex {
         request: &FileRenameRequest,
         plan: &ReferencePlan,
         parents: ParentSheets,
+        parent_disk: &crate::app::parent_reference_disk::ParentDiskOutcomes,
         patch: EntryPatch,
     ) {
         let new_name = request.new_name.as_str();
@@ -147,7 +149,7 @@ impl Signex {
         if owner_idx.is_none() {
             return;
         }
-        let outcome = self.apply_reference_rewrites(plan, parents);
+        let outcome = self.apply_reference_rewrites(plan, parents, parent_disk);
         if !outcome.is_clean() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
                 super::sheet_references::rename_incomplete_detail(
