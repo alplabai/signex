@@ -17,6 +17,8 @@ fn hierarchy(pin: &str, child_labels: Vec<ErcLabel>) -> ErcContext {
             uuid: Uuid::now_v7(),
             name: pin.into(),
             position: pt(0.0, 40.0),
+            direction: String::new(),
+            connected: false,
         }],
     });
     let mut child = ctx(Vec::new(), Vec::new(), Vec::new(), Vec::new());

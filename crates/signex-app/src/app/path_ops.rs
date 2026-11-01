@@ -450,6 +450,35 @@ pub struct LibraryRollbackDone {
 
 // ---- delete -------------------------------------------------------------------
 
+/// One sheet symbol that places a file: the sheet it sits on and its name.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PlacingSymbol {
+    pub parent: PathBuf,
+    pub name: String,
+    /// `ChildSheet.uuid`, so two symbols of one name stay two.
+    pub id: uuid::Uuid,
+}
+
+impl PlacingSymbol {
+    /// `"name" on parent.snxsch`, for the dialog and Messages.
+    pub fn describe(&self) -> String {
+        let sheet = self.parent.file_name().map_or_else(
+            || self.parent.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        format!("\"{}\" on {sheet}", self.name)
+    }
+
+    /// Several symbols as one sentence fragment.
+    pub fn describe_all(symbols: &[PlacingSymbol]) -> String {
+        symbols
+            .iter()
+            .map(PlacingSymbol::describe)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DeleteRequest {
     pub id: PathOpId,
@@ -459,6 +488,9 @@ pub struct DeleteRequest {
     /// The Remove dialog the delete came from: the completion prunes the
     /// project entry from it once the file is gone.
     pub dialog: crate::app::RemoveDialogState,
+    /// Sheet symbols that placed the file when the delete began; the ones
+    /// that are left pointing at nothing once it is gone.
+    pub placing: Vec<PlacingSymbol>,
 }
 
 /// What the delete worker found or did.
