@@ -62,10 +62,7 @@ fn editor_widths_px(symbol: &Symbol, scale: f32) -> (f32, f32) {
         DirtyFlags::LINES | DirtyFlags::POLYGONS,
         &mut scene,
     );
-    let options = symbol_draw_options(
-        scale,
-        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-    );
+    let options = canvas.draw_options(scale);
     let body = scene
         .polygons
         .iter()
@@ -143,6 +140,46 @@ fn symbol_editor_and_schematic_draw_a_symbol_at_the_same_px_width() {
              {schematic:?} (#1858)"
         );
     }
+}
+
+/// #1887: an editor in a 2x window floors the replay and the previews at one
+/// device pixel (0.5 logical); in a 1x window at a whole logical pixel. The
+/// canvas is built the way the view builds it.
+#[test]
+fn an_editor_in_a_2x_window_floors_replay_and_previews_at_one_device_pixel() {
+    let symbol = library_symbol();
+    let camera = crate::canvas::Camera::default();
+    let zoomed_out = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 0.25;
+    let canvas_in = |dpi: f32| {
+        SymbolCanvas::new(
+            &symbol,
+            None,
+            SymbolTool::Select,
+            &[],
+            state::PartView::normal(1),
+            false,
+            &camera,
+            1.27,
+            true,
+            crate::render_config::GridStyle::default(),
+            true,
+            Color::WHITE,
+            Color::from_rgb(0.2, 0.4, 0.9),
+            Color::BLACK,
+            Color::BLACK,
+            Color::BLACK,
+        )
+        .with_device_px_per_logical_px(dpi)
+    };
+    let (one_x, two_x) = (canvas_in(1.0), canvas_in(2.0));
+    assert_eq!(one_x.draw_options(zoomed_out).stroke_px(0.0), 1.0);
+    assert_eq!(two_x.draw_options(zoomed_out).stroke_px(0.0), 0.5);
+    assert_eq!(one_x.preview_stroke_px(0.0, zoomed_out), 1.0);
+    assert_eq!(two_x.preview_stroke_px(0.0, zoomed_out), 0.5);
+    assert_eq!(
+        two_x.preview_stroke_px(one_x.pin_stroke_mm(), zoomed_out),
+        0.5
+    );
 }
 
 /// A selected stroke stays visibly wider even where the floor raises the

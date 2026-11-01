@@ -193,6 +193,11 @@ impl<'a> SymbolCanvas<'a> {
         }
     }
 
+    /// The scene replay options at `scale` px/mm in this canvas's window.
+    fn draw_options(&self, scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptions {
+        symbol_draw_options(scale, self.device_px_per_logical_px)
+    }
+
     /// Draw with the stroke floor of a window with this display scale.
     pub fn with_device_px_per_logical_px(mut self, device_px_per_logical_px: f32) -> Self {
         self.device_px_per_logical_px = device_px_per_logical_px;
@@ -552,7 +557,7 @@ impl<'a> SymbolCanvas<'a> {
             frame,
             &scene,
             |point| iced::Point::new(ox + point[0] * scale, oy - point[1] * scale),
-            symbol_draw_options(scale, self.device_px_per_logical_px),
+            self.draw_options(scale),
         );
     }
 

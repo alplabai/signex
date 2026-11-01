@@ -123,17 +123,21 @@ impl Signex {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
                 // that would otherwise clobber the main-window state.
-                // Every window re-reads its scale: winit resizes a window
-                // that moves to a monitor with another DPI (#1887).
-                let scale_task = window_scale_task(id);
                 if self.ui_state.main_window_id == Some(id) {
                     self.ui_state.window_size = (w, h);
-                    return Task::batch([scale_task, self.main_window_mode_task(id)]);
+                    return self.main_window_mode_task(id);
                 }
-                scale_task
+                Task::none()
             }
             WindowMsg::WindowScaleChanged(id, scale) => {
-                self.ui_state.set_window_os_scale(id, scale);
+                // The CPU canvas caches its geometry, which was drawn with the
+                // old scale; a move to another display keeps the logical
+                // bounds, so nothing else would redraw it (#1887).
+                if self.ui_state.set_window_os_scale(id, scale) {
+                    let slot = self.interaction_state.canvas_for_window_mut(id);
+                    slot.clear_bg_cache();
+                    slot.clear_content_cache();
+                }
                 Task::none()
             }
             WindowMsg::MainWindowOpened(id) => {
@@ -151,9 +155,9 @@ impl Signex {
                 let size_task = iced::window::size(id).map(move |size| {
                     Message::Window(WindowMsg::WindowResizedFor(id, size.width, size.height))
                 });
-                // Stash the scale factor so the wordmark PNG picker
-                // can render at native device-pixel count. Re-queried
-                // on every resize to track monitor moves.
+                // Read the scale factor: it picks the wordmark PNG tier and
+                // sets the stroke floor of the canvases. Later changes (a
+                // move to another screen) arrive as `Rescaled` events.
                 let scale_task = window_scale_task(id);
                 // Re-add Windows 11 DWM rounded corners + drop shadow
                 // (silently no-ops on Windows 10 and non-Windows). Has

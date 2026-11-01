@@ -15,12 +15,14 @@ impl UiState {
 
     /// Record a window's OS scale. Only a window the app tracks is stored,
     /// so a reading that arrives after the window closed does not bring its
-    /// entry back. A non-finite or non-positive reading is dropped.
-    pub fn set_window_os_scale(&mut self, window: iced::window::Id, os_scale: f32) {
+    /// entry back. A non-finite or non-positive reading is dropped. Returns
+    /// whether the stored scale changed.
+    pub fn set_window_os_scale(&mut self, window: iced::window::Id, os_scale: f32) -> bool {
         let tracked = self.main_window_id == Some(window) || self.windows.contains_key(&window);
-        if tracked && os_scale.is_finite() && os_scale > 0.0 {
-            self.window_os_scales.insert(window, os_scale);
+        if !tracked || !os_scale.is_finite() || os_scale <= 0.0 {
+            return false;
         }
+        self.window_os_scales.insert(window, os_scale) != Some(os_scale)
     }
 
     /// Forget a closed window's scale.
@@ -103,6 +105,70 @@ mod tests {
         scale_changed(&mut app, tab, 1.25);
         assert!(!app.ui_state.window_os_scales.contains_key(&tab));
         assert_eq!(app.ui_state.window_os_scales.len(), 1);
+    }
+
+    fn clears(app: &Signex, id: iced::window::Id) -> (u32, u32) {
+        let slot = match app.interaction_state.canvases.get(&id) {
+            Some(slot) => slot,
+            None => &app.interaction_state.canvas,
+        };
+        (slot.bg_cache_clears, slot.content_cache_clears)
+    }
+
+    /// The CPU canvas keeps its geometry in caches that a move to another
+    /// screen does not invalidate by itself (the logical bounds stay), so a
+    /// changed scale must clear them, for that window's canvas alone.
+    #[test]
+    fn a_changed_scale_clears_that_windows_canvas_caches_and_an_unchanged_one_does_not() {
+        let (mut app, main) = app_with_main();
+        let tab = undocked(&mut app);
+        app.interaction_state
+            .canvases
+            .insert(tab, crate::canvas::CanvasSlot::new());
+        scale_changed(&mut app, main, 1.0);
+        scale_changed(&mut app, tab, 1.0);
+        let (main_before, tab_before) = (clears(&app, main), clears(&app, tab));
+
+        scale_changed(&mut app, tab, 1.0);
+        assert_eq!(clears(&app, tab), tab_before, "same value: nothing cleared");
+
+        scale_changed(&mut app, tab, 2.0);
+        let tab_after = clears(&app, tab);
+        assert!(tab_after.0 > tab_before.0 && tab_after.1 > tab_before.1);
+        assert_eq!(clears(&app, main), main_before, "other windows untouched");
+
+        scale_changed(&mut app, main, 1.5);
+        let main_after = clears(&app, main);
+        assert!(main_after.0 > main_before.0 && main_after.1 > main_before.1);
+        assert_eq!(clears(&app, tab), tab_after);
+    }
+
+    /// The sheet frame and the wire preview read the scale of the window the
+    /// canvas is in, through `canvas_view_prefs`.
+    #[test]
+    fn the_sheet_frame_and_wire_preview_use_the_windows_scale() {
+        let (mut app, main) = app_with_main();
+        let tab = undocked(&mut app);
+        app.interaction_state
+            .canvases
+            .insert(tab, crate::canvas::CanvasSlot::new());
+        scale_changed(&mut app, main, 1.0);
+        scale_changed(&mut app, tab, 2.0);
+        let zoomed_out = 0.1;
+        let probe = |window| {
+            let canvas = crate::canvas::SchematicCanvas::new(
+                app.interaction_state.canvas_for_window(window),
+                app.canvas_view_prefs(window),
+            );
+            let (from, to) = (iced::Point::new(0.0, 5.3), iced::Point::new(9.0, 5.3));
+            let (a, _, frame_width) = canvas.sheet_frame_line(from, to, 0.0, zoomed_out);
+            (canvas.placed_wire_stroke_px(zoomed_out), frame_width, a.y)
+        };
+        let (wire_1x, frame_1x, _) = probe(main);
+        assert_eq!((wire_1x, frame_1x), (1.0, 1.0));
+        let (wire_2x, frame_2x, y_2x) = probe(tab);
+        assert_eq!((wire_2x, frame_2x), (0.5, 0.5));
+        assert_eq!((y_2x * 2.0).fract(), 0.5, "snapped on the device grid");
     }
 
     #[test]
