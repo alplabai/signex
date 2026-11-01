@@ -12,6 +12,21 @@ use signex_types::format::SheetLoadRepair;
 /// thousands of repeats does not flood Messages.
 const SHOWN: usize = 20;
 
+/// Take the repairs off a sheet a pass is about to write or keep, and log
+/// them: the file will hold the repaired sheet. True when there were any.
+pub(crate) fn take_and_log(
+    path: &Path,
+    sheet: &mut signex_types::schematic::SchematicSheet,
+) -> bool {
+    log_sheet_repairs(path, &sheet.take_load_repairs())
+}
+
+/// The one line a read-only scan of a project says about a repaired sheet.
+pub(crate) fn summary_line(path: &Path, count: usize) -> String {
+    let file = path.file_name().unwrap_or_default().to_string_lossy();
+    format!("{file} has {count} repeated ids; open and save it to fix")
+}
+
 /// Log `repairs` of the sheet at `path` to Messages; true when there were any.
 pub(crate) fn log_sheet_repairs(path: &Path, repairs: &[SheetLoadRepair]) -> bool {
     let file = path.file_name().unwrap_or_default().to_string_lossy();
@@ -87,9 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn a_closed_sheet_read_for_a_bulk_pass_reports_its_repairs() {
-        // Annotate, Reset, Replace, re-prefix and reference fixes read closed
-        // sheets through `load_sheet` and may write them back (#1830).
+    fn a_pass_that_writes_a_closed_sheet_reports_its_repairs_and_a_scan_does_not() {
         let _ = crate::diagnostics::init_logging();
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("ClosedBulk1830.snxsch");
@@ -109,16 +122,24 @@ mod tests {
             .expect("serialise");
         std::fs::write(&path, text).expect("write");
         let app = app_workspace("/w/proj", &[]);
-        let loaded = crate::app::project_sheets::load_sheet(&app.document_state, &path)
+        let told = || {
+            crate::diagnostics::recent_entries()
+                .iter()
+                .filter(|e| {
+                    e.message
+                        .starts_with("ClosedBulk1830.snxsch repaired on load")
+                })
+                .count()
+        };
+        // A scan reads the sheet through the shared read: silent.
+        let mut loaded = crate::app::project_sheets::load_sheet(&app.document_state, &path)
             .expect("reads")
             .expect("present");
-        assert_eq!(loaded.wires.len(), 2);
-        assert!(loaded.unknown.load_repairs.is_empty(), "taken at the read");
-        let told = crate::diagnostics::recent_entries().iter().any(|e| {
-            e.message
-                .starts_with("ClosedBulk1830.snxsch repaired on load: wire #2")
-        });
-        assert!(told, "Messages must name the repair");
+        assert_eq!(told(), 0);
+        // A pass that writes it takes and reports the repairs.
+        assert!(super::take_and_log(&path, &mut loaded));
+        assert_eq!(told(), 1);
+        assert!(loaded.unknown.load_repairs.is_empty());
     }
 
     #[test]

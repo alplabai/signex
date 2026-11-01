@@ -11,7 +11,7 @@ use super::annotate_job::PassKind;
 /// or parked) holds the user's unsaved edits and is annotated in place instead
 /// (#669).
 pub(super) fn annotate_unopened_for_write(
-    sheet: signex_types::schematic::SchematicSheet,
+    mut sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
     mode: signex_engine::AnnotateMode,
     next_by_prefix: &mut std::collections::HashMap<String, u32>,
@@ -19,6 +19,7 @@ pub(super) fn annotate_unopened_for_write(
     assigned: &mut std::collections::HashMap<usize, String>,
 ) -> Option<Vec<u8>> {
     let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let repairs = sheet.take_load_repairs();
     let mut engine = match signex_engine::Engine::new(sheet) {
         Ok(engine) => engine,
         Err(error) => {
@@ -27,7 +28,10 @@ pub(super) fn annotate_unopened_for_write(
         }
     };
     match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
-        Ok(true) => {}
+        Ok(true) => {
+            // The sheet is written with the repairs: say so.
+            crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
+        }
         Ok(false) => return None,
         Err(error) => {
             crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
@@ -66,7 +70,7 @@ pub(super) fn encode_unopened(
 /// Re-prefix uses this; plain Annotate uses `annotate_unopened_for_write`.
 /// `Err` means the sheet failed and was logged.
 pub(super) fn annotate_unopened_in_memory(
-    sheet: signex_types::schematic::SchematicSheet,
+    mut sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
     mode: signex_engine::AnnotateMode,
     next_by_prefix: &mut std::collections::HashMap<String, u32>,
@@ -74,6 +78,7 @@ pub(super) fn annotate_unopened_in_memory(
     assigned: &mut std::collections::HashMap<usize, String>,
 ) -> Result<Option<signex_engine::Engine>, PassFailed> {
     let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let repairs = sheet.take_load_repairs();
     let mut engine = match signex_engine::Engine::new(sheet) {
         Ok(engine) => engine,
         Err(error) => {
@@ -83,7 +88,10 @@ pub(super) fn annotate_unopened_in_memory(
     };
     engine.set_path(Some(path.to_path_buf()));
     match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
-        Ok(true) => Ok(Some(engine)),
+        Ok(true) => {
+            crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
+            Ok(Some(engine))
+        }
         Ok(false) => Ok(None),
         Err(error) => {
             crate::diagnostics::log_error(&context, &anyhow::Error::new(error));

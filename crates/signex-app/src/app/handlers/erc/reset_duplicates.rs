@@ -197,6 +197,7 @@ fn reset_unopened(
         if !reset_in(&mut sheet, duplicates) {
             continue;
         }
+        crate::app::sheet_repairs::take_and_log(&path, &mut sheet);
         let engine = match signex_engine::Engine::new(sheet) {
             Ok(engine) => engine,
             Err(error) => {

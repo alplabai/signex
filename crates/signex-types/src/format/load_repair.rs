@@ -8,9 +8,24 @@
 
 use uuid::Uuid;
 
-/// The kind a repaired sheet symbol reports under; its re-minted id needs
-/// the designators placed under it annotated again.
-pub(in crate::format) const SHEET_SYMBOL: &str = "sheet symbol";
+/// The names a repair gives each kind of sheet object. A sheet symbol's
+/// re-minted id needs the designators placed under it annotated again.
+pub(in crate::format) mod kind {
+    pub const SYMBOL: &str = "symbol";
+    pub const WIRE: &str = "wire";
+    pub const JUNCTION: &str = "junction";
+    pub const LABEL: &str = "label";
+    pub const SHEET_SYMBOL: &str = "sheet symbol";
+    pub const SHEET_PIN: &str = "sheet pin";
+    pub const NO_CONNECT: &str = "no-connect";
+    pub const TEXT_NOTE: &str = "text note";
+    pub const BUS: &str = "bus";
+    pub const BUS_ENTRY: &str = "bus entry";
+    pub const DRAWING: &str = "drawing";
+    pub const NO_ERC_DIRECTIVE: &str = "no-ERC directive";
+    /// The sheet's own id, which no object may take.
+    pub const SHEET: &str = "sheet";
+}
 
 /// The object a repair names: its kind, its label or reference when it has
 /// one, and its 1-based position among objects of that kind.
@@ -32,6 +47,9 @@ pub enum SheetLoadRepair {
         object: RepairedObject,
         old: Uuid,
         new: Uuid,
+        /// What the first holder of `old` is: another kind means the entries
+        /// keyed by `old` belonged to this object, not to the holder.
+        holder: &'static str,
         /// The sheet symbol a sheet pin belongs to.
         owner: Option<String>,
     },
@@ -69,12 +87,13 @@ impl SheetLoadRepair {
                 old,
                 new,
                 owner,
+                ..
             } => {
                 let mut text = format!("{} repeated uuid {old}; new uuid {new}", object.label());
                 if let Some(owner) = owner {
                     text.push_str(&format!(" on sheet symbol {owner}"));
                 }
-                if object.kind == SHEET_SYMBOL {
+                if object.kind == kind::SHEET_SYMBOL {
                     text.push_str("; re-annotate its placed designators");
                 }
                 text

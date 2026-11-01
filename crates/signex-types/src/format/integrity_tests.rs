@@ -490,3 +490,31 @@ fn a_re_minted_wire_keeps_its_net_colour_and_a_drawing_its_placement() {
         crate::schematic::DrawingPlacement::Above
     );
 }
+
+#[test]
+fn a_drawing_colliding_with_another_kind_moves_its_placement() {
+    let mut sheet = empty_sheet();
+    sheet.wires = vec![wire(8, 5.0)];
+    sheet.drawings = vec![SchDrawing::Line {
+        uuid: id(8),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(1.0, 0.0),
+        width: 0.0,
+        stroke_color: None,
+        locked: false,
+    }];
+    sheet
+        .drawing_placements
+        .insert(id(8), crate::schematic::DrawingPlacement::Above);
+    let loaded = load(&save(&sheet));
+    let new = loaded.drawings[0].uuid();
+    assert_ne!(new, id(8));
+    assert_eq!(
+        loaded.drawing_placement(new),
+        crate::schematic::DrawingPlacement::Above
+    );
+    assert!(
+        !loaded.drawing_placements.contains_key(&id(8)),
+        "no orphan entry stays behind to be written back"
+    );
+}

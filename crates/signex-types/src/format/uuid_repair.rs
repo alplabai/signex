@@ -11,89 +11,113 @@
 //! - otherwise it is a different object that collided: it keeps its
 //!   content and gets a new uuid.
 //!
-//! The new uuid is derived from the sheet uuid, the kind, the row and the
-//! old id, so every parse of the same file agrees (ERC findings, waivers and
-//! navigation made from a separate read name the ids the open tab has).
-//! The first holder of an id is never changed.
+//! The new uuid is derived from the sheet uuid, the kind, the position and
+//! the old id, so every parse of the same file agrees (ERC findings,
+//! waivers and navigation made from a separate read name the ids the open
+//! tab has). The first holder of an id is never changed.
 //!
 //! A symbol's per-pin ids (`pin_uuids`) are scoped to the symbol, not the
 //! sheet: nothing looks a pin up by that id alone, and pasting or placing a
 //! copy of a symbol legitimately repeats them on another symbol.
+//!
+//! [`IdSpace`] and [`SheetLoadRepair`] know nothing about sheets beyond the
+//! kind names; another document (a board) builds its own wiring on them.
 
 use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
-use super::load_repair::{RepairedObject, SHEET_SYMBOL, SheetLoadRepair};
+use super::load_repair::{RepairedObject, SheetLoadRepair, kind};
 use crate::schematic::SchematicSheet;
 
-/// The ids taken so far and the repairs made so far.
-struct Repairs {
-    sheet: Uuid,
-    seen: HashSet<Uuid>,
+/// The ids taken in one document, who first took each, and the repairs
+/// made so far.
+pub(in crate::format) struct IdSpace {
+    root: Uuid,
+    taken: HashMap<Uuid, &'static str>,
     made: Vec<SheetLoadRepair>,
 }
 
-impl Repairs {
-    /// Make the ids in `items` unique; `name` says what a repaired object is
-    /// called in the repair record.
-    fn check<T: PartialEq>(
+impl IdSpace {
+    /// A document whose own id is `root`: no object may take it.
+    pub(in crate::format) fn new(root: Uuid) -> Self {
+        Self {
+            root,
+            taken: HashMap::from([(root, kind::SHEET)]),
+            made: Vec::new(),
+        }
+    }
+
+    pub(in crate::format) fn into_repairs(self) -> Vec<SheetLoadRepair> {
+        self.made
+    }
+
+    /// Make the ids in `items` (all of one `kind`) unique. `owner` names the
+    /// object they belong to, `name` what a repaired item is called.
+    pub(in crate::format) fn check<T: PartialEq>(
         &mut self,
         items: &mut Vec<T>,
         kind: &'static str,
         owner: Option<&str>,
-        uuid: fn(&T) -> Uuid,
-        set_uuid: fn(&mut T, Uuid),
-        name: fn(&T) -> String,
+        access: Access<T>,
     ) {
         let mut kept: Vec<T> = Vec::with_capacity(items.len());
         // Index in `kept` of the object that first held each id, so a
         // repeat is compared with that one object, not with every earlier one.
         let mut holders: HashMap<Uuid, usize> = HashMap::new();
         for (index, mut item) in std::mem::take(items).into_iter().enumerate() {
-            let id = uuid(&item);
-            if self.seen.insert(id) {
+            let id = (access.uuid)(&item);
+            if let Some(&holder) = self.taken.get(&id) {
+                let object = RepairedObject {
+                    kind,
+                    name: (access.name)(&item),
+                    position: index + 1,
+                };
+                if holders.get(&id).is_some_and(|&held| kept[held] == item) {
+                    self.made
+                        .push(SheetLoadRepair::CopyDropped { object, uuid: id });
+                    continue;
+                }
+                let new = self.fresh_uuid(kind, index + 1, id, "");
+                (access.set_uuid)(&mut item, new);
+                self.taken.insert(new, kind);
+                self.made.push(SheetLoadRepair::UuidReminted {
+                    object,
+                    old: id,
+                    new,
+                    holder,
+                    owner: owner.map(str::to_string),
+                });
+            } else {
+                self.taken.insert(id, kind);
                 holders.insert(id, kept.len());
-                kept.push(item);
-                continue;
             }
-            let object = RepairedObject {
-                kind,
-                name: name(&item),
-                position: index + 1,
-            };
-            if holders.get(&id).is_some_and(|&held| kept[held] == item) {
-                self.made
-                    .push(SheetLoadRepair::CopyDropped { object, uuid: id });
-                continue;
-            }
-            let new = self.fresh_uuid(kind, index + 1, id, "");
-            set_uuid(&mut item, new);
-            self.made.push(SheetLoadRepair::UuidReminted {
-                object,
-                old: id,
-                new,
-                owner: owner.map(str::to_string),
-            });
             kept.push(item);
         }
         *items = kept;
     }
 
-    /// A uuid not yet taken, derived from the file's content (see the module
-    /// doc). `scope` tells repairs of the same row apart.
-    fn fresh_uuid(&mut self, kind: &str, row: usize, old: Uuid, scope: &str) -> Uuid {
+    /// A uuid not yet taken, derived from the document's content. `scope`
+    /// tells repairs of the same position apart.
+    fn fresh_uuid(&self, kind: &str, position: usize, old: Uuid, scope: &str) -> Uuid {
         for attempt in 0u32.. {
             let candidate = derived_uuid(&format!(
-                "{}|{kind}|{row}|{old}|{scope}|{attempt}",
-                self.sheet
+                "{}|{kind}|{position}|{old}|{scope}|{attempt}",
+                self.root
             ));
-            if self.seen.insert(candidate) {
+            if !self.taken.contains_key(&candidate) {
                 return candidate;
             }
         }
-        unreachable!("the attempt counter outlasts any sheet")
+        unreachable!("the attempt counter outlasts any document")
     }
+}
+
+/// How [`IdSpace::check`] reads and changes the id of a `T` and names it.
+pub(in crate::format) struct Access<T> {
+    pub uuid: fn(&T) -> Uuid,
+    pub set_uuid: fn(&mut T, Uuid),
+    pub name: fn(&T) -> String,
 }
 
 /// A version-8 UUID holding the FNV-1a 128-bit hash of `name`.
@@ -108,145 +132,143 @@ fn derived_uuid(name: &str) -> Uuid {
     Uuid::from_u128((hash & !(0xFu128 << 76) & !(0x3u128 << 62)) | version | variant)
 }
 
+/// The name of an object that has none.
+fn no_name<T>(_: &T) -> String {
+    String::new()
+}
+
+/// An [`Access`] for objects whose id is a plain `uuid` field.
+macro_rules! by_field {
+    ($name:expr) => {
+        Access {
+            uuid: |x| x.uuid,
+            set_uuid: |x, u| x.uuid = u,
+            name: $name,
+        }
+    };
+}
+
 /// Make every object uuid on `sheet` unique, returning what was repaired
 /// (empty when nothing repeated).
 pub(in crate::format) fn repair_duplicate_uuids(
     sheet: &mut SchematicSheet,
 ) -> Vec<SheetLoadRepair> {
-    let mut r = Repairs {
-        sheet: sheet.uuid,
-        seen: HashSet::from([sheet.uuid]),
-        made: Vec::new(),
-    };
-    r.check(
+    let mut ids = IdSpace::new(sheet.uuid);
+    repair_objects(&mut ids, sheet);
+    repair_sheet_pins(&mut ids, sheet);
+    for symbol in &mut sheet.symbols {
+        repair_pin_uuids(symbol, &mut ids);
+    }
+    let made = ids.into_repairs();
+    move_side_map_entries(sheet, &made);
+    made
+}
+
+/// The objects a sheet lists, one kind after another.
+fn repair_objects(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
+    ids.check(
         &mut sheet.symbols,
-        "symbol",
+        kind::SYMBOL,
         None,
-        |s| s.uuid,
-        |s, u| s.uuid = u,
-        |s| s.reference.clone(),
+        by_field!(|s| s.reference.clone()),
     );
-    r.check(
-        &mut sheet.wires,
-        "wire",
-        None,
-        |w| w.uuid,
-        |w, u| w.uuid = u,
-        |_| String::new(),
-    );
-    r.check(
+    ids.check(&mut sheet.wires, kind::WIRE, None, by_field!(no_name));
+    ids.check(
         &mut sheet.junctions,
-        "junction",
+        kind::JUNCTION,
         None,
-        |j| j.uuid,
-        |j, u| j.uuid = u,
-        |_| String::new(),
+        by_field!(no_name),
     );
-    r.check(
+    ids.check(
         &mut sheet.labels,
-        "label",
+        kind::LABEL,
         None,
-        |l| l.uuid,
-        |l, u| l.uuid = u,
-        |l| l.text.clone(),
+        by_field!(|l| l.text.clone()),
     );
-    r.check(
+    ids.check(
         &mut sheet.child_sheets,
-        SHEET_SYMBOL,
+        kind::SHEET_SYMBOL,
         None,
-        |c| c.uuid,
-        |c, u| c.uuid = u,
-        |c| c.name.clone(),
+        by_field!(|c| c.name.clone()),
     );
-    r.check(
+    ids.check(
         &mut sheet.no_connects,
-        "no-connect",
+        kind::NO_CONNECT,
         None,
-        |n| n.uuid,
-        |n, u| n.uuid = u,
-        |_| String::new(),
+        by_field!(no_name),
     );
-    r.check(
+    ids.check(
         &mut sheet.text_notes,
-        "text note",
+        kind::TEXT_NOTE,
         None,
-        |t| t.uuid,
-        |t, u| t.uuid = u,
-        |t| t.text.clone(),
+        by_field!(|t| t.text.clone()),
     );
-    r.check(
-        &mut sheet.buses,
-        "bus",
-        None,
-        |b| b.uuid,
-        |b, u| b.uuid = u,
-        |_| String::new(),
-    );
-    r.check(
+    ids.check(&mut sheet.buses, kind::BUS, None, by_field!(no_name));
+    ids.check(
         &mut sheet.bus_entries,
-        "bus entry",
+        kind::BUS_ENTRY,
         None,
-        |b| b.uuid,
-        |b, u| b.uuid = u,
-        |_| String::new(),
+        by_field!(no_name),
     );
-    r.check(
-        &mut sheet.drawings,
-        "drawing",
-        None,
-        |d| d.uuid(),
-        |d, u| d.set_uuid(u),
-        |_| String::new(),
-    );
-    r.check(
+    let drawing = Access {
+        uuid: |d: &crate::schematic::SchDrawing| d.uuid(),
+        set_uuid: |d, u| d.set_uuid(u),
+        name: no_name,
+    };
+    ids.check(&mut sheet.drawings, kind::DRAWING, None, drawing);
+    ids.check(
         &mut sheet.no_erc_directives,
-        "no-ERC directive",
+        kind::NO_ERC_DIRECTIVE,
         None,
-        |n| n.uuid,
-        |n, u| n.uuid = u,
-        |_| String::new(),
+        by_field!(no_name),
     );
+}
+
+/// The pins of each sheet symbol; they share the sheet's id space.
+fn repair_sheet_pins(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
     for child in &mut sheet.child_sheets {
         let owner = child.name.clone();
-        r.check(
+        ids.check(
             &mut child.pins,
-            "sheet pin",
+            kind::SHEET_PIN,
             Some(&owner),
-            |p| p.uuid,
-            |p, u| p.uuid = u,
-            |p| p.name.clone(),
+            by_field!(|p| p.name.clone()),
         );
     }
-    for symbol in &mut sheet.symbols {
-        repair_pin_uuids(symbol, &mut r);
-    }
-    move_side_map_entries(sheet, &r.made);
-    r.made
 }
 
 /// Maps keyed by object uuid (`net_colors` for wires and junctions,
-/// `drawing_placements` for drawings): a re-minted object takes a copy of its
-/// old id's entry, so it keeps the colour or placement it was read with.
+/// `drawing_placements` for drawings). A re-minted object takes its old
+/// id's entry: copied when the first holder is the same sort of object (the
+/// entry may be both's), moved when the holder is another kind (the entry
+/// was never the holder's, and must not stay behind to be written back).
 fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]) {
+    let colored = |k: &str| k == kind::WIRE || k == kind::JUNCTION;
     for repair in repairs {
         let SheetLoadRepair::UuidReminted {
-            object, old, new, ..
+            object,
+            old,
+            new,
+            holder,
+            ..
         } = repair
         else {
             continue;
         };
-        match object.kind {
-            "wire" | "junction" => {
-                if let Some(color) = sheet.net_colors.get(old).copied() {
-                    sheet.net_colors.insert(*new, color);
+        if colored(object.kind) {
+            if let Some(color) = sheet.net_colors.get(old).copied() {
+                sheet.net_colors.insert(*new, color);
+                if !colored(holder) {
+                    sheet.net_colors.remove(old);
                 }
             }
-            "drawing" => {
-                if let Some(placement) = sheet.drawing_placements.get(old).copied() {
-                    sheet.drawing_placements.insert(*new, placement);
+        } else if object.kind == kind::DRAWING {
+            if let Some(placement) = sheet.drawing_placements.get(old).copied() {
+                sheet.drawing_placements.insert(*new, placement);
+                if *holder != kind::DRAWING {
+                    sheet.drawing_placements.remove(old);
                 }
             }
-            _ => {}
         }
     }
 }
@@ -254,7 +276,7 @@ fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]
 /// A symbol's per-pin ids (`pin_uuids`, by pin number): two pins of one
 /// symbol must not share one. The pin cannot be dropped, so the later pin
 /// (in lexicographic pin-number order) is always re-minted.
-fn repair_pin_uuids(symbol: &mut crate::schematic::Symbol, r: &mut Repairs) {
+fn repair_pin_uuids(symbol: &mut crate::schematic::Symbol, ids: &mut IdSpace) {
     let mut numbers: Vec<String> = symbol.pin_uuids.keys().cloned().collect();
     numbers.sort();
     let mut own: HashSet<Uuid> = HashSet::new();
@@ -264,14 +286,12 @@ fn repair_pin_uuids(symbol: &mut crate::schematic::Symbol, r: &mut Repairs) {
             continue;
         }
         let scope = format!("{}|{number}", symbol.uuid);
-        let new = loop {
-            let candidate = r.fresh_uuid("pin", 0, old, &scope);
-            if own.insert(candidate) {
-                break candidate;
-            }
-        };
+        let new = (0u32..)
+            .map(|extra| ids.fresh_uuid("pin", extra as usize, old, &scope))
+            .find(|candidate| own.insert(*candidate))
+            .expect("an unused candidate exists");
         symbol.pin_uuids.insert(number.clone(), new);
-        r.made.push(SheetLoadRepair::PinUuidReminted {
+        ids.made.push(SheetLoadRepair::PinUuidReminted {
             symbol: symbol.reference.clone(),
             pin: number,
             old,

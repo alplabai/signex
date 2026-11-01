@@ -228,13 +228,10 @@ fn load_sheet_with(
         Err(e) => return Err(format!("could not be read ({e})")),
     };
     match signex_types::format::SnxSchematic::parse(&text) {
-        Ok(mut parsed) => {
-            // Every bulk pass (Annotate, Reset, Replace, re-prefix, reference
-            // fixes) reads closed sheets here and may write them back, so the
-            // repairs reach Messages before they can reach the disk.
-            super::sheet_repairs::log_sheet_repairs(path, &parsed.sheet.take_load_repairs());
-            Ok(Some(parsed.sheet))
-        }
+        // The repairs stay on the sheet: a pass that writes it reports them
+        // (`sheet_repairs::take_and_log`); a scan that only reads says nothing,
+        // and the project walk names the sheet once per session.
+        Ok(parsed) => Ok(Some(parsed.sheet)),
         Err(e) => Err(format!("could not be parsed ({e})")),
     }
 }
