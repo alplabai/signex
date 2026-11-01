@@ -635,10 +635,15 @@ impl Signex {
                         .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
                 },
                 move |result| {
+                    let (result, disk) = match result {
+                        Ok((board, disk)) => (Ok(Box::new(board)), Some(disk)),
+                        Err(message) => (Err(message), None),
+                    };
                     Message::File(FileMsg::PcbOpenFinished {
                         path,
                         title,
-                        result: result.map(Box::new),
+                        result,
+                        disk,
                     })
                 },
             ),
@@ -673,13 +678,16 @@ fn read_and_parse_schematic(
 
 /// Read + parse a `.snxpcb` off the UI thread — see
 /// `read_and_parse_schematic`.
-fn read_and_parse_pcb(path: &std::path::Path) -> Result<signex_types::pcb::PcbBoard, String> {
+fn read_and_parse_pcb(
+    path: &std::path::Path,
+) -> Result<(signex_types::pcb::PcbBoard, crate::persist::DiskRead), String> {
     std::fs::read_to_string(path)
         .with_context(|| format!("read pcb {}", path.display()))
         .and_then(|text| {
+            let disk = crate::persist::DiskRead::of(path, &text);
             signex_types::format::SnxPcb::parse(&text)
                 .with_context(|| format!("parse pcb {}", path.display()))
-                .map(|pcb| pcb.board)
+                .map(|pcb| (pcb.board, disk))
         })
         .map_err(|err| format!("{err:#}"))
 }

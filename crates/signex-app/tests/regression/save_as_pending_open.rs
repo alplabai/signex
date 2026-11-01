@@ -266,6 +266,7 @@ fn a_late_pcb_open_result_for_an_owned_path_is_dropped_with_a_warning() {
     let path = tmp.path().join("OwnedPcb1089.snxpcb");
     let (mut app, _boot) = Signex::new();
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "first".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
@@ -274,6 +275,7 @@ fn a_late_pcb_open_result_for_an_owned_path_is_dropped_with_a_warning() {
     app.document_state.pending_opens.insert(path.clone());
 
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "late".to_string(),
         result: Ok(Box::new(empty_pcb_board())),

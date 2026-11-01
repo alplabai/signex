@@ -211,6 +211,7 @@ pub enum LoadedDocument {
     Pcb {
         title: String,
         board: Box<PcbBoard>,
+        disk: crate::persist::DiskRead,
     },
     Symbol(Box<signex_library::SymbolFile>),
     Footprint(Box<signex_library::FootprintFile>),
@@ -318,17 +319,17 @@ fn read_schematic(path: &Path, title: String) -> Result<LoadedDocument, OpenFail
 }
 
 fn read_pcb(path: &Path, title: String) -> Result<LoadedDocument, OpenFailure> {
-    let board = std::fs::read_to_string(path)
+    let text = std::fs::read_to_string(path)
         .with_context(|| format!("read pcb {}", path.display()))
-        .and_then(|text| {
-            signex_types::format::SnxPcb::parse(&text)
-                .with_context(|| format!("parse pcb {}", path.display()))
-        })
+        .map_err(|e| OpenFailure::LogOnly(format!("{e:#}")))?;
+    let board = signex_types::format::SnxPcb::parse(&text)
+        .with_context(|| format!("parse pcb {}", path.display()))
         .map_err(|e| OpenFailure::LogOnly(format!("{e:#}")))?
         .board;
     Ok(LoadedDocument::Pcb {
         title,
         board: Box::new(board),
+        disk: crate::persist::DiskRead::of(path, &text),
     })
 }
 

@@ -235,6 +235,9 @@ mod zoom_speed_pref;
 #[path = "regression/ui_scale_pref.rs"]
 mod ui_scale_pref;
 
+#[path = "regression/external_change_followups.rs"]
+mod external_change_followups;
+
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 
