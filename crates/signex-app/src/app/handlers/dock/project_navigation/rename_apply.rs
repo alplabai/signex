@@ -19,6 +19,7 @@ impl Signex {
             request,
             result,
             parents,
+            parent_disk,
         } = done;
         self.document_state.pending_path_ops.finish(request.id);
         let patch = match result {
@@ -32,7 +33,7 @@ impl Signex {
         self.document_state.note_document_written_behind_engines();
         match &request.kind {
             FileRenameKind::Document(plan) => {
-                self.apply_document_rename(&request, plan, parents, patch)
+                self.apply_document_rename(&request, plan, parents, &parent_disk, patch)
             }
         }
         if self.dialog_targets(&request.from) {
@@ -114,6 +115,7 @@ impl Signex {
         request: &FileRenameRequest,
         plan: &ReferencePlan,
         parents: ParentSheets,
+        parent_disk: &crate::app::parent_reference_disk::ParentDiskOutcomes,
         patch: EntryPatch,
     ) {
         let new_name = request.new_name.as_str();
@@ -144,10 +146,34 @@ impl Signex {
         // rebuild sees the new filenames.
         self.rekey_open_document(&request.from, &request.to);
 
+        self.commit_written_parents(
+            parent_disk,
+            &format!(
+                "Re-point sheet reference to {}",
+                request
+                    .to
+                    .file_name()
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+            ),
+        );
         if owner_idx.is_none() {
+            // The project closed meanwhile, but the saved parents already name
+            // the new file and a sheet another open project reaches may still
+            // hold an engine with the old name: follow on disk's side so
+            // memory equals disk and a later save cannot write the old name back.
+            let written = ReferencePlan {
+                rewrites: plan
+                    .rewrites
+                    .iter()
+                    .filter(|r| parent_disk.get(&r.parent).is_some_and(|d| d.is_written()))
+                    .cloned()
+                    .collect(),
+                ..Default::default()
+            };
+            self.apply_reference_rewrites(&written, parents, parent_disk);
             return;
         }
-        let outcome = self.apply_reference_rewrites(plan, parents);
+        let outcome = self.apply_reference_rewrites(plan, parents, parent_disk);
         if !outcome.is_clean() {
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
                 super::sheet_references::rename_incomplete_detail(

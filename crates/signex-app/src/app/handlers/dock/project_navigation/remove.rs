@@ -7,7 +7,7 @@
 use super::*;
 use crate::app::path_op_jobs::{DeleteJob, run_blocking};
 use crate::app::path_ops::{DeleteDone, DeleteIo, DeleteRequest, PathOpKind};
-use crate::app::state::library_entry::entry_resolves_to;
+use crate::app::project_entry_disk::{EntryPatch, remove_entries};
 use crate::app::state::scope::{CaseFold, path_is_under, path_key_with};
 
 impl Signex {
@@ -171,14 +171,45 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
-        let id = self.document_state.pending_path_ops.begin(
+        // The worker also removes the owning project's saved `.snxprj` entry
+        // (#1849), a read-modify-write: a project save in flight would land
+        // afterwards and put the entry back, so refuse before anything moves.
+        let project_file = state
+            .tree_path
+            .first()
+            .and_then(|i| self.document_state.projects.get(*i))
+            .map(|p| p.path.clone());
+        if let Some(project_file) = &project_file {
+            let busy = self
+                .refuse_start_while_path_op(project_file, "deleted")
+                .err()
+                .map(|e| e.to_string())
+                .or_else(|| {
+                    self.document_state
+                        .document_saves
+                        .is_saving(project_file)
+                        .then(|| {
+                            "The project file is still being saved; try again in a moment."
+                                .to_string()
+                        })
+                });
+            if let Some(refusal) = busy {
+                crate::diagnostics::log_warning(&refusal);
+                self.document_state.error_notice =
+                    Some(crate::app::state::ErrorNotice::delete(refusal));
+                return iced::Task::none();
+            }
+        }
+        let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::Delete,
             vec![state.target_path.clone()],
+            project_file.iter().cloned().collect(),
             fold,
         );
         // A background read of the file (project Replace) is out of date.
         self.document_state.note_documents_changed();
         let job = DeleteJob {
+            project: project_file.map(|file| (file, fold)),
             target: state.target_path.clone(),
             project_root: self.project_root_for_tree_path(&state.tree_path),
             shared_libraries,
@@ -192,8 +223,13 @@ impl Signex {
             dialog: state.clone(),
         };
         iced::Task::perform(run_blocking(move || job.run()), move |joined| {
-            let io = joined.unwrap_or_else(DeleteIo::Failed);
-            Message::Remove(RemoveMsg::Deleted(Box::new(DeleteDone { request, io })))
+            let (io, entry) =
+                joined.unwrap_or_else(|e| (DeleteIo::Failed(e), EntryPatch::NotListed));
+            Message::Remove(RemoveMsg::Deleted(Box::new(DeleteDone {
+                request,
+                io,
+                entry,
+            })))
         })
     }
 
@@ -203,10 +239,11 @@ impl Signex {
     /// is still on disk, and says why. A refusal (shared library, outside the
     /// project) removes the entry only.
     pub(crate) fn handle_path_deleted(&mut self, done: DeleteDone) -> iced::Task<Message> {
-        let DeleteDone { request, io } = done;
+        let DeleteDone { request, io, entry } = done;
         self.document_state.pending_path_ops.finish(request.id);
         let target = request.target.as_path();
         let mut tasks = Vec::new();
+        let stale_project = matches!(io, DeleteIo::FailedProjectStale(_));
         match io {
             // A tab may still hold the target (#736), and one opened by a
             // route that does not consult the pending set must not outlive
@@ -214,10 +251,10 @@ impl Signex {
             DeleteIo::Orphan | DeleteIo::Deleted => {
                 tasks = self.close_tabs_of_removed(target, true, request.fold);
                 self.drop_deleted_documents(target, request.fold);
-                self.prune_removed_entry(&request.dialog);
+                self.settle_removed_entry(&request, entry);
             }
             DeleteIo::Refused => {
-                self.prune_removed_entry(&request.dialog);
+                self.prune_removed_entry(&request.dialog, true);
                 self.document_state.error_notice =
                     Some(crate::app::state::ErrorNotice::delete(format!(
                         "\"{}\" is a shared library or lives outside this project's folder, so \
@@ -225,7 +262,19 @@ impl Signex {
                         request.display_name
                     )));
             }
-            DeleteIo::Failed(e) => {
+            DeleteIo::Failed(e) | DeleteIo::FailedProjectStale(e) => {
+                if stale_project {
+                    // The saved project lost the entry: only a save of the
+                    // in-memory project (which still lists it) repairs that.
+                    let project_file = self
+                        .repointed_dialog(&request.dialog)
+                        .and_then(|d| d.tree_path.first().copied())
+                        .and_then(|idx| self.document_state.projects.get(idx))
+                        .map(|p| p.path.clone());
+                    if let Some(project_file) = project_file {
+                        self.document_state.mark_document_dirty(&project_file);
+                    }
+                }
                 crate::diagnostics::log_error(
                     "Failed to delete project file",
                     &anyhow::anyhow!("{}: {e}", target.display()),
@@ -468,97 +517,96 @@ impl Signex {
             tasks.push(self.begin_delete(&state, fold));
             return iced::Task::batch(tasks);
         }
-        self.prune_removed_entry(&state);
+        self.prune_removed_entry(&state, true);
         self.refresh_panel_ctx();
         iced::Task::batch(tasks)
     }
 
-    /// Drop the removed file from its owning project's in-memory lists (page
-    /// list, root, PCB, libraries, pending registrations) and dirty the
-    /// project. Re-resolves the dialog's project first: it may have moved or
-    /// closed while a delete worker ran.
-    fn prune_removed_entry(&mut self, dialog: &crate::app::RemoveDialogState) {
-        let Some(state) = self.repointed_dialog(dialog) else {
-            return;
+    /// The file is gone: bring the in-memory project in line with what the
+    /// worker did to the saved one. A patched project already lists the change
+    /// on disk, so the project is not dirtied and its other unsaved edits stay
+    /// unsaved (#1849); anything else leaves the removal for the user to save.
+    fn settle_removed_entry(&mut self, request: &DeleteRequest, entry: EntryPatch) {
+        let project_file = self
+            .repointed_dialog(&request.dialog)
+            .and_then(|d| d.tree_path.first().copied())
+            .and_then(|idx| self.document_state.projects.get(idx))
+            .map(|p| p.path.clone());
+        let name = &request.display_name;
+        let why = match entry {
+            EntryPatch::Patched(bytes) => {
+                self.prune_removed_entry(&request.dialog, false);
+                if let Some(project_file) = project_file {
+                    let other_edits = self.document_state.is_document_dirty(&project_file);
+                    crate::diagnostics::log_info(format!(
+                        "Deleted {name}; the saved project file no longer lists it{}.",
+                        if other_edits {
+                            " (its other unsaved changes were not written)"
+                        } else {
+                            ""
+                        }
+                    ));
+                    self.commit_bytes_to_project_git(
+                        &project_file,
+                        &format!("Delete {name}"),
+                        crate::app::state::CommitBytes { bytes, sequence: 0 },
+                    );
+                }
+                return;
+            }
+            EntryPatch::NotListed => None,
+            EntryPatch::NoProjectFile => Some("the project has not been saved yet"),
+            EntryPatch::Unreadable(_) => Some("the saved project file could not be updated"),
         };
-        // Drop the sheet from the *owning* project's in-memory data so
-        // the tree rebuild reflects the removal. Resolves project via
-        // the dialog's `tree_path[0]` so removing a sheet of project B
-        // doesn't accidentally mutate active project A. Session-scoped:
-        // reopening the project rescans disk and (for Exclude)
-        // re-discovers the file, until proper project-write support
-        // lands. (#54)
-        let owner_idx = state.tree_path.first().copied();
-        let mut mutated = false;
-        let mut project_path: Option<std::path::PathBuf> = None;
-        if let Some(idx) = owner_idx
-            && let Some(loaded) = self.document_state.projects.get_mut(idx)
+        let changed = self.prune_removed_entry(&request.dialog, true);
+        if let Some(why) = why
+            && changed
         {
-            project_path = Some(loaded.path.clone());
-            // By resolved path, not file name: a sheet registered from a
-            // subdirectory is `sub/Power.snxsch` (#1367).
-            let fold = loaded.case_fold;
-            let dir = loaded.dir().to_path_buf();
-            let is_target = |entry: &str| entry_resolves_to(&dir, entry, &state.target_path, fold);
-            let before = loaded.data.sheets.len();
-            loaded
-                .data
-                .sheets
-                .retain(|entry| !is_target(&entry.filename));
-            if loaded.data.sheets.len() != before {
-                mutated = true;
-            }
-            if loaded.data.schematic_root.as_deref().is_some_and(is_target) {
-                loaded.data.schematic_root = None;
-                mutated = true;
-            }
-            if loaded.data.pcb_file.as_deref().is_some_and(is_target) {
-                loaded.data.pcb_file = None;
-                mutated = true;
-            }
-            // F23 — also prune library entries. Library file_name on
-            // the entry is the `.snxlib` filename for both
-            // ProjectLocal (relative path stored on the entry) and
-            // Shared (absolute path stored), so the same file_name
-            // match works for both kinds.
-            // Match by resolved path, not file name: two libraries may share
-            // a name (`Power.snxlib`) and only the targeted one goes (#742).
-            let lib_before = loaded.data.libraries.len();
-            let data = &loaded.data;
-            let keep: Vec<bool> = data
-                .libraries
-                .iter()
-                .map(|entry| data.resolve_library_path(entry) != state.target_path)
-                .collect();
-            let mut keep = keep.into_iter();
-            loaded
-                .data
-                .libraries
-                .retain(|_| keep.next().unwrap_or(true));
-            if loaded.data.libraries.len() != lib_before {
-                mutated = true;
-            }
-            // Drop any pending registration too, in case the user
-            // saved-then-removed within a single session before
-            // materialise ran (rare but possible if materialise failed
-            // and the entry stayed pending).
-            let pending_before = loaded.pending_libraries.len();
-            loaded
-                .pending_libraries
-                .retain(|_, spec| spec.lib_path != state.target_path);
-            if loaded.pending_libraries.len() != pending_before {
-                mutated = true;
-            }
+            crate::diagnostics::log_warning(format!(
+                "Save the project to drop {name} from it; {why}."
+            ));
         }
-        if mutated && let Some(p) = project_path {
-            // Match Add Existing — Remove from Project also dirties the
-            // .snxprj so the project root row gets the red dot until
-            // the user saves the metadata change. The on-disk file
-            // delete already happened above when DeleteFile was picked;
-            // the dirty bit only tracks the project's *list* of
-            // children, which lives in the .snxprj.
-            self.document_state.mark_document_dirty(&p);
+    }
+
+    /// Drop the removed file from its owning project's in-memory lists (page
+    /// list, root, PCB, libraries, pending registrations) and, when
+    /// `mark_dirty`, dirty the project. Re-resolves the dialog's project
+    /// first: it may have moved or closed while a delete worker ran. Returns
+    /// whether anything was dropped.
+    fn prune_removed_entry(
+        &mut self,
+        dialog: &crate::app::RemoveDialogState,
+        mark_dirty: bool,
+    ) -> bool {
+        let Some(state) = self.repointed_dialog(dialog) else {
+            return false;
+        };
+        // Resolves the project via the dialog's `tree_path[0]` so removing a
+        // sheet of project B doesn't mutate active project A. (#54)
+        let Some(idx) = state.tree_path.first().copied() else {
+            return false;
+        };
+        let Some(loaded) = self.document_state.projects.get_mut(idx) else {
+            return false;
+        };
+        let project_path = loaded.path.clone();
+        let (dir, fold) = (loaded.dir().to_path_buf(), loaded.case_fold);
+        // By resolved path, not file name: a sheet registered from a
+        // subdirectory is `sub/Power.snxsch` (#1367).
+        let mut mutated = remove_entries(&mut loaded.data, &dir, &state.target_path, fold);
+        // A pending registration too, in case the user saved-then-removed
+        // within a single session before materialise ran.
+        let pending_before = loaded.pending_libraries.len();
+        loaded
+            .pending_libraries
+            .retain(|_, spec| spec.lib_path != state.target_path);
+        mutated |= loaded.pending_libraries.len() != pending_before;
+        if mutated && mark_dirty {
+            // Remove from Project also dirties the .snxprj so the project root
+            // row gets the red dot until the metadata change is saved.
+            self.document_state.mark_document_dirty(&project_path);
         }
+        mutated
     }
 }
 

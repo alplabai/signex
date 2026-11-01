@@ -8,8 +8,10 @@ use std::path::{Path, PathBuf};
 
 use signex_types::project::{LibraryRetarget, retarget_library_entry};
 
+use crate::app::parent_reference_disk::{ParentDiskOutcomes, Renamed, patch_parents};
+use crate::app::path_ops::ReferenceRewrite;
 use crate::app::path_ops::{DeleteIo, LibraryRenameIo, ParentSheets, RenameIoError};
-use crate::app::project_entry_disk::{EntryPatch, retarget_sheet_entry};
+use crate::app::project_entry_disk::{EntryPatch, remove_entry, retarget_sheet_entry};
 use crate::persist::SaveBarrier;
 
 /// Runs a blocking job on tokio's blocking pool. A worker that panicked or was
@@ -33,7 +35,22 @@ pub struct RenameJob {
     /// name: its entry for `from` is re-pointed in the same job, so the saved
     /// project never names a file that is gone (#1821).
     pub project: Option<ProjectEntryPatch>,
+    /// Every parent reference to the file: re-pointed on disk once the move
+    /// and the project entry have landed (#1849).
+    pub rewrites: Vec<ReferenceRewrite>,
+    /// The saved parents to scan for references to the file, which may be
+    /// more than `rewrites` names (#1849).
+    pub parent_candidates: Vec<PathBuf>,
+    pub fold: crate::app::state::scope::CaseFold,
 }
+
+/// A finished rename job: the move and project patch, the parents read for the
+/// in-memory fallback, and what the saved parents took.
+pub type RenameJobDone = (
+    Result<EntryPatch, RenameIoError>,
+    ParentSheets,
+    ParentDiskOutcomes,
+);
 
 /// The saved project a rename commits its entry change to.
 pub struct ProjectEntryPatch {
@@ -43,13 +60,28 @@ pub struct ProjectEntryPatch {
 }
 
 impl RenameJob {
-    pub fn run(self) -> (Result<EntryPatch, RenameIoError>, ParentSheets) {
+    pub fn run(self) -> RenameJobDone {
         // A write still running for this file would recreate the old name or
         // land after the move; let it finish first. New writes are refused
         // while the operation is registered, so nothing can start after this.
         self.saves.wait();
         let parents = read_parent_sheets(&self.parents_to_read);
-        (self.move_and_patch(), parents)
+        let result = self.move_and_patch();
+        // The file moved and the project follows (or had nothing to patch):
+        // the parents' saved references must follow it too, whatever the
+        // project said. A failed move or a moved-back file changes none.
+        let parent_disk = if result.is_ok() {
+            let new_name = self.to.file_name().unwrap_or_default().to_string_lossy();
+            let renamed = Renamed {
+                old: &self.from,
+                new_name: &new_name,
+                fold: self.fold,
+            };
+            patch_parents(&self.parent_candidates, &self.rewrites, &renamed)
+        } else {
+            ParentDiskOutcomes::new()
+        };
+        (result, parents, parent_disk)
     }
 
     /// Move the file, then re-point the saved project's entry. When the
@@ -170,29 +202,93 @@ pub struct DeleteJob {
     /// Resolved paths of the project's Shared and Global libraries.
     pub shared_libraries: Vec<PathBuf>,
     pub saves: SaveBarrier,
+    /// The owning project's saved `.snxprj` and case rules: its entry for the
+    /// target is removed in the same job, so the saved project never names a
+    /// file that is gone (#1849).
+    pub project: Option<(PathBuf, crate::app::state::scope::CaseFold)>,
 }
 
 impl DeleteJob {
-    pub fn run(self) -> DeleteIo {
+    pub fn run(self) -> (DeleteIo, EntryPatch) {
         match self.target.try_exists() {
             Ok(true) => {}
-            Ok(false) => return DeleteIo::Orphan,
-            Err(e) => return DeleteIo::CheckFailed(e.to_string()),
+            // Nothing to delete, but the saved project still lists the row.
+            Ok(false) => {
+                return (
+                    DeleteIo::Orphan,
+                    self.drop_entry().unwrap_or_else(unwritten),
+                );
+            }
+            Err(e) => return (DeleteIo::CheckFailed(e.to_string()), EntryPatch::NotListed),
         }
         if !self.is_deletable() {
-            return DeleteIo::Refused;
+            return (DeleteIo::Refused, EntryPatch::NotListed);
         }
         // A write still running for this file would recreate it after the
         // delete; let it finish first.
         self.saves.wait();
+        self.delete_and_drop_entry()
+    }
+
+    /// Remove the project's entry first, then the file: a project that cannot
+    /// be written deletes nothing, and a file that cannot be deleted gets its
+    /// entry back, so disk never holds a project naming a deleted file nor an
+    /// orphaned file the project forgot.
+    fn delete_and_drop_entry(&self) -> (DeleteIo, EntryPatch) {
+        let original = self
+            .project
+            .as_ref()
+            .and_then(|(file, _)| std::fs::read(file).ok());
+        let entry = match self.drop_entry() {
+            Ok(entry) => entry,
+            Err(e) => {
+                let why =
+                    format!("the project file could not be written ({e}); nothing was deleted");
+                return (DeleteIo::Failed(why), EntryPatch::NotListed);
+            }
+        };
         let removed = if self.target.is_dir() {
             std::fs::remove_dir_all(&self.target)
         } else {
             std::fs::remove_file(&self.target)
         };
-        match removed {
-            Ok(()) => DeleteIo::Deleted,
-            Err(e) => DeleteIo::Failed(e.to_string()),
+        let Err(e) = removed else {
+            return (DeleteIo::Deleted, entry);
+        };
+        let mut why = e.to_string();
+        if self.target.is_dir() {
+            why.push_str("; some of its contents may already be gone");
+        }
+        let EntryPatch::Patched(_) = &entry else {
+            return (DeleteIo::Failed(why), EntryPatch::NotListed);
+        };
+        let Some((file, _)) = &self.project else {
+            return (DeleteIo::Failed(why), EntryPatch::NotListed);
+        };
+        // The entry is gone from the saved project: put the original bytes
+        // back, and when that is impossible say the project is stale.
+        let restored = match &original {
+            Some(original) => signex_types::atomic_io::atomic_write(file, original)
+                .map_err(|back| back.to_string()),
+            None => Err("the original could not be read".to_string()),
+        };
+        match restored {
+            Ok(()) => (DeleteIo::Failed(why), EntryPatch::NotListed),
+            Err(back) => (
+                DeleteIo::FailedProjectStale(format!(
+                    "{why}; the project file {} no longer lists it and could not be restored \
+                     ({back}). Save the project to list it again",
+                    file.display()
+                )),
+                EntryPatch::NotListed,
+            ),
+        }
+    }
+
+    fn drop_entry(&self) -> Result<EntryPatch, signex_types::project::ProjectError> {
+        match &self.project {
+            Some((file, fold)) => remove_entry(file, &self.target, *fold),
+            None => Ok(EntryPatch::NotListed),
         }
     }
 
@@ -207,6 +303,12 @@ impl DeleteJob {
                 .iter()
                 .any(|library| same_path(library, &self.target))
     }
+}
+
+/// An orphan row whose project entry could not be dropped on disk: the
+/// in-memory removal then waits for a save, as before.
+fn unwritten(error: signex_types::project::ProjectError) -> EntryPatch {
+    EntryPatch::Unreadable(error.to_string())
 }
 
 /// Is `target` a path strictly inside `project_root`, after symlinks and

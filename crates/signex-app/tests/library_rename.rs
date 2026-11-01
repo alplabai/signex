@@ -1365,7 +1365,7 @@ fn saving_the_project_while_a_library_rename_runs_is_refused() {
         diagnostics::recent_entries()
             .iter()
             .any(|e| e.message.contains(
-                "proj.snxprj cannot be saved while the rename of alpha.snxlib is still rewriting it"
+                "proj.snxprj cannot be saved while the rename of alpha.snxlib updates the project's files"
             )),
         "the refusal names its cause"
     );
@@ -1423,7 +1423,7 @@ fn reopening_the_project_during_a_library_rename_is_refused() {
     assert!(
         diagnostics::recent_entries().iter().any(|e| e
             .message
-            .contains("proj.snxprj cannot be opened while the rename of alpha.snxlib is still rewriting it")),
+            .contains("proj.snxprj cannot be opened while the rename of alpha.snxlib updates the project's files")),
         "the refusal names its cause"
     );
 
