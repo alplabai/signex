@@ -51,6 +51,9 @@ pub struct SymbolEditorPanelContext {
     /// All symbols in the open `.snxsym` container — feeds the SCH
     /// Library left-dock panel's components list.
     pub symbols_in_file: Vec<SymbolFileEntry>,
+    /// A Delete of `symbols_in_file[idx]` waiting for the user's answer
+    /// because rows or sheets still use the symbol (#1845).
+    pub delete_warning: Option<SymbolDeleteWarning>,
     /// Index into `symbols_in_file` for the symbol currently being
     /// edited. The SCH Library panel's row click rewrites this.
     pub active_idx: usize,
@@ -253,4 +256,14 @@ pub enum GraphicFieldId {
     TextSize,
     /// All variants — `SymbolGraphic.stroke_width`.
     StrokeWidth,
+}
+
+/// What the SCH Library panel shows before a Delete of a symbol that is
+/// still in use (#1845).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolDeleteWarning {
+    pub idx: usize,
+    pub name: String,
+    /// One line per kind of user (component rows, open sheets).
+    pub lines: Vec<String>,
 }

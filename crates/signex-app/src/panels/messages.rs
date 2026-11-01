@@ -918,6 +918,10 @@ pub enum PanelMsg {
     /// the open container. Refuses to delete the last remaining
     /// symbol — the file would be empty otherwise.
     SchLibraryDeleteSymbol(usize),
+    /// The user confirmed deleting a symbol the warning listed users of.
+    SchLibraryDeleteConfirmed(usize),
+    /// The user backed out of that Delete.
+    SchLibraryDeleteCancelled,
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
     /// Numeric text_input keystroke for a drawing field. The string
     /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /

@@ -494,6 +494,8 @@ pub struct LibraryState {
     pub datasheet_opener: crate::library::placed_part::OpenDatasheet,
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
+    /// A symbol Delete waiting for the user's answer (#1845).
+    pub pending_symbol_delete: Option<super::symbol_delete::PendingSymbolDelete>,
     /// Latest switch request per placed symbol (#1230).
     pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in

@@ -71,6 +71,7 @@ impl Signex {
         let libs = self.mounted_libraries();
         if libs.is_empty() {
             self.library.drift.drifted.clear();
+            self.library.drift.missing.clear();
             self.library.drift.names.clear();
             self.update_selection_info();
             return None;
@@ -108,7 +109,7 @@ impl Signex {
         };
         let drift = &mut self.library.drift;
         drift.names.retain(|lib_id, _| mounted(lib_id));
-        for rows in drift.drifted.values_mut() {
+        for rows in drift.drifted.values_mut().chain(drift.missing.values_mut()) {
             rows.retain(|lib_id| mounted(lib_id));
         }
     }
@@ -147,11 +148,44 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
+        self.record_missing_symbols(report.missing);
         let mut names = report.names;
         keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
         self.library.drift.names = names;
         self.update_selection_info();
         Task::none()
+    }
+
+    /// Store which placed symbols lost their library symbol (#1845) and say
+    /// so once per change, naming the sheet; the Properties panel shows the
+    /// state on each placed part.
+    fn record_missing_symbols(
+        &mut self,
+        mut missing: std::collections::HashMap<
+            std::path::PathBuf,
+            std::collections::BTreeSet<String>,
+        >,
+    ) {
+        missing.retain(|sheet, _| self.document_state.engines.contains_key(sheet));
+        for (sheet, ids) in &missing {
+            if self.library.drift.missing.get(sheet) == Some(ids) {
+                continue;
+            }
+            let names: Vec<String> = ids
+                .iter()
+                .map(|id| {
+                    self.library
+                        .drift
+                        .display_name(id, &self.library.open_libraries)
+                })
+                .collect();
+            crate::diagnostics::log_warning(format!(
+                "{}: library symbol missing for {}; the sheet keeps its embedded copy.",
+                sheet.display(),
+                names.join(", ")
+            ));
+        }
+        self.library.drift.missing = missing;
     }
 
     /// Properties ▸ "Update from library" for the placed symbol `uuid`: the
@@ -172,6 +206,15 @@ impl Signex {
         else {
             return Task::none();
         };
+        if self.library.drift.is_missing(&sheet, &lib_id) {
+            crate::diagnostics::log_warning(format!(
+                "{} is missing from its library; this sheet keeps its embedded copy, so there is nothing to update from.",
+                self.library
+                    .drift
+                    .display_name(&lib_id, &self.library.open_libraries)
+            ));
+            return Task::none();
+        }
         if !self.library.drift.is_drifted(&sheet, &lib_id) {
             crate::diagnostics::log_warning(format!(
                 "{} has no pending library update on this sheet.",

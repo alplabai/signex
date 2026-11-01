@@ -339,6 +339,8 @@ mod library_stock_copy;
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+#[path = "regression/library_symbol_missing.rs"]
+mod library_symbol_missing;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.

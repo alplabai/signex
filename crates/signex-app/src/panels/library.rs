@@ -300,7 +300,44 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .padding([6.0, SP.m]),
     );
 
+    if let Some(warning) = sym.delete_warning.as_ref() {
+        col = col.push(delete_warning_block(warning, primary, muted));
+    }
+
     scrollable(col).width(Length::Fill).into()
+}
+
+/// The in-use warning shown instead of deleting at once (#1845): names the
+/// rows and sheets, and lets the user delete anyway.
+fn delete_warning_block<'a>(
+    warning: &'a crate::panels::SymbolDeleteWarning,
+    primary: Color,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    let mut block: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).push(
+        text(format!("Symbol \"{}\" is still in use", warning.name))
+            .size(TS.body)
+            .color(primary),
+    );
+    for line in &warning.lines {
+        block = block.push(text(line.as_str()).size(TS.caption).color(muted));
+    }
+    block = block.push(
+        text("Deleting it leaves placed parts on their embedded copy; the library symbol will be missing.")
+            .size(TS.caption)
+            .color(muted),
+    );
+    let confirm = iced::widget::button(text("Delete anyway").size(TS.body))
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::SchLibraryDeleteConfirmed(warning.idx));
+    let cancel = iced::widget::button(text("Cancel").size(TS.body))
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::SchLibraryDeleteCancelled);
+    block = block.push(row![confirm, cancel].spacing(SP.m));
+    container(block)
+        .padding([6.0, SP.m])
+        .width(Length::Fill)
+        .into()
 }
 
 /// v0.18.8 — Footprint Library panel. Mirror of Altium's PCB Library

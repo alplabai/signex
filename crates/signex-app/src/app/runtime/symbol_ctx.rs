@@ -150,6 +150,12 @@ pub(super) fn build_symbol_editor_panel_ctx(
         graphic_fill_picker: editor.graphic_fill_picker,
         local_color_picker: editor.local_color_picker,
         symbols_in_file,
+        delete_warning: app
+            .library
+            .pending_symbol_delete
+            .as_ref()
+            .filter(|p| p.path == editor.path)
+            .map(|p| p.warning.clone()),
         active_idx: editor.active_idx,
         active_part: editor.active_part,
         active_max_part,

@@ -54,6 +54,7 @@ impl Default for LibraryState {
         Self {
             datasheet_opener: crate::library::placed_part::opener::open,
             drift: Default::default(),
+            pending_symbol_delete: None,
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
