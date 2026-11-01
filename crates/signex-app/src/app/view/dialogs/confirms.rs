@@ -168,16 +168,6 @@ impl Signex {
         }
         // Delete is only offered when no other sheet places the file
         // (`blocks_delete`), so every listed symbol sits on the row's own parent.
-        debug_assert!(
-            blockers.blocks_delete(is_dir)
-                || blockers.symbols.iter().all(|s| {
-                    let fold = crate::app::state::scope::CaseFold::host_default();
-                    blockers.own_parent.as_ref().is_some_and(|own| {
-                        crate::app::state::scope::path_key_with(own, fold)
-                            == crate::app::state::scope::path_key_with(&s.parent, fold)
-                    })
-                })
-        );
         if !blockers.blocks_delete(is_dir)
             && !st.is_outside_project
             && blockers.own_parent.is_some()

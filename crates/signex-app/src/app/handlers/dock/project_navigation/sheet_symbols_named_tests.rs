@@ -17,23 +17,29 @@ fn child_key(app: &super::Signex) -> TreeKey {
 }
 
 /// `top.snxsch` placing `child.snxsch` twice, as "Driver A" and "Driver B".
-fn write_top_with_two_symbols(dir: &std::path::Path) {
+fn top_with_two_symbols() -> signex_types::schematic::SchematicSheet {
     let mut top = sheet_with_net("R_TOP", "N", &["child.snxsch", "child.snxsch"]);
     for (symbol, name) in top.child_sheets.iter_mut().zip(["Driver A", "Driver B"]) {
         symbol.name = name.to_string();
         symbol.uuid = uuid::Uuid::now_v7();
     }
-    let text = signex_types::format::SnxSchematic::new(top)
+    top
+}
+
+fn write_top_with_two_symbols(dir: &std::path::Path) -> signex_types::schematic::SchematicSheet {
+    let top = top_with_two_symbols();
+    let text = signex_types::format::SnxSchematic::new(top.clone())
         .write_string()
         .expect("encode");
     std::fs::write(dir.join("top.snxsch"), text).expect("write top");
+    top
 }
 
 #[test]
 fn the_dialog_names_the_symbols_and_messages_names_the_parents_left_dangling() {
     let _ = crate::diagnostics::init_logging();
     let tmp = tempfile::tempdir().expect("tempdir");
-    write_top_with_two_symbols(tmp.path());
+    let _ = write_top_with_two_symbols(tmp.path());
     write_sheet(tmp.path(), "child.snxsch", &[]);
     let dir = tmp.path().to_string_lossy().into_owned();
     let mut app = app_workspace(&dir, &["top.snxsch", "child.snxsch"]);
@@ -100,4 +106,24 @@ fn deleting_a_sheet_nothing_places_adds_no_dangling_warning() {
     let _ = app.handle_project_tree_action(ProjectTreeAction::OpenRemoveDialog(key));
     let dialog = app.ui_state.remove_dialog.clone().expect("dialog opens");
     assert!(app.remove_blockers(&dialog).symbols.is_empty());
+}
+
+#[test]
+fn a_symbol_seen_by_the_walk_and_the_open_document_is_listed_once() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let top = write_top_with_two_symbols(tmp.path());
+    write_sheet(tmp.path(), "child.snxsch", &[]);
+    let dir = tmp.path().to_string_lossy().into_owned();
+    let mut app = app_workspace(&dir, &["top.snxsch", "child.snxsch"]);
+    // The same two symbols, now also read from the open document.
+    crate::app::handlers::menu::export::tests::open_with(
+        &mut app.document_state,
+        &tmp.path().join("top.snxsch"),
+        top,
+    );
+    settle(&mut app, false);
+
+    let _ = app.handle_project_tree_action(ProjectTreeAction::OpenRemoveDialog(child_key(&app)));
+    let dialog = app.ui_state.remove_dialog.clone().expect("dialog opens");
+    assert_eq!(app.remove_blockers(&dialog).symbols.len(), 2);
 }

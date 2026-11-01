@@ -118,6 +118,13 @@ impl Signex {
         };
         let (own, other): (Vec<PathBuf>, Vec<PathBuf>) =
             users.parents.iter().cloned().partition(|p| is_own(p));
+        // Delete is only offered when no other sheet places the file, so every
+        // symbol it would leave dangling sits on the row's own parent.
+        debug_assert!(
+            !other.is_empty() || users.symbols.iter().all(|s| is_own(&s.parent)),
+            "{:?}",
+            users.symbols
+        );
         RemoveBlockers {
             unlisted: self
                 .sheet_info_at(&state.tree_path)
