@@ -56,7 +56,6 @@ mod missing_mount_tests;
 mod new_component;
 mod new_row;
 mod pricing;
-
 #[cfg(test)]
 mod pricing_tests;
 mod primitive_copy;

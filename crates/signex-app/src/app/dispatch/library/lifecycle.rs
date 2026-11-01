@@ -59,6 +59,17 @@ impl Signex {
     /// Missing dialog, any other failure a card for a user-asked mount.
     /// The `rfd` directory-pick path (`handle_open_library_at`) is still
     /// synchronous and routes its errors the same way.
+    /// True when `path` is a library entry of an open project.
+    fn is_open_project_library(&self, path: &std::path::Path) -> bool {
+        self.document_state.projects.iter().any(|project| {
+            project
+                .data
+                .libraries
+                .iter()
+                .any(|e| project.data.resolve_library_path(e) == path)
+        })
+    }
+
     pub(super) fn handle_mount_finished(
         &mut self,
         path: std::path::PathBuf,
@@ -94,10 +105,18 @@ impl Signex {
                 let error = anyhow::anyhow!("could not open library {}: {err}", path.display());
                 // Lead with the library name: the Messages panel cuts long lines.
                 crate::diagnostics::log_error(&format!("Failed to mount library {name}"), &error);
-                // A missing file gets the recovery dialog whatever the intent
-                // (it is the only way to Locate or Remove it); other failures
-                // raise a card only for a mount the user asked for (#532).
-                if route_open_error(&mut this.library, path, err) {
+                // A background mount only logs, except a project library whose
+                // file is gone: that gets Library Missing (#1846). Global and
+                // stock libraries, and git trouble, never pop a dialog at
+                // startup (#532). A mount the user asked for routes fully.
+                let routable = match intent {
+                    crate::library::mount::MountIntent::OpenBrowserTab => true,
+                    crate::library::mount::MountIntent::Silent => {
+                        matches!(err, signex_library::LibraryError::LibraryFileMissing { .. })
+                            && this.is_open_project_library(path)
+                    }
+                };
+                if routable && route_open_error(&mut this.library, path, err) {
                     return;
                 }
                 if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {

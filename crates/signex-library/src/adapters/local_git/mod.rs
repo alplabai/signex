@@ -262,7 +262,7 @@ impl LocalGitAdapter {
     pub fn open(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
         let file_path = file_path.as_ref().to_path_buf();
         Self::validate_file_path(&file_path)?;
-        require_library_file(&file_path)?;
+        Self::require_library_file(&file_path)?;
         // Stamp first: a write racing the read then costs one extra reload.
         let disk_stamp = disk_sync::DiskStamp::of(&file_path)?;
         let text = fs::read_to_string(&file_path)?;
@@ -385,7 +385,7 @@ impl LocalGitAdapter {
     pub fn recover_init(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
         let file_path = file_path.as_ref().to_path_buf();
         Self::validate_file_path(&file_path)?;
-        require_library_file(&file_path)?;
+        Self::require_library_file(&file_path)?;
         let root_dir = parent_dir(&file_path)?;
 
         // Refuse before `git init` touches disk: an unresolvable user
@@ -461,6 +461,19 @@ impl LocalGitAdapter {
     /// than silently rewriting; the file picker should be filtering,
     /// but defensively block anyway so a misnamed path doesn't end up
     /// committed to history.
+    /// Fail with [`LibraryError::LibraryFileMissing`] only when the filesystem
+    /// says the `.snxlib` does not exist. An uninspectable path (permission
+    /// denied on a parent, IO error) is `Io`, never "missing".
+    fn require_library_file(p: &Path) -> Result<(), LibraryError> {
+        match p.try_exists() {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(LibraryError::LibraryFileMissing {
+                path: p.to_path_buf(),
+            }),
+            Err(e) => Err(LibraryError::Io(e)),
+        }
+    }
+
     fn validate_file_path(p: &Path) -> Result<(), LibraryError> {
         let ext_ok = p
             .extension()
