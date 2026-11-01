@@ -98,10 +98,10 @@ impl PreparedMount {
 /// second read should never happen — it degrades to `None` rather than a
 /// panic because a dropped mount is a stale cache, not a corrupt one.
 #[derive(Clone)]
-pub struct PreparedMountCell(Arc<Mutex<Option<Result<PreparedMount, String>>>>);
+pub struct PreparedMountCell(Arc<Mutex<Option<Result<PreparedMount, LibraryError>>>>);
 
 impl PreparedMountCell {
-    pub(crate) fn new(result: Result<PreparedMount, String>) -> Self {
+    pub(crate) fn new(result: Result<PreparedMount, LibraryError>) -> Self {
         Self(Arc::new(Mutex::new(Some(result))))
     }
 
@@ -111,7 +111,7 @@ impl PreparedMountCell {
     /// writer is this type's own `take`, so poisoning means a panic
     /// happened elsewhere while the guard was held and the `Option` is
     /// still structurally sound.
-    pub fn take(&self) -> Option<Result<PreparedMount, String>> {
+    pub fn take(&self) -> Option<Result<PreparedMount, LibraryError>> {
         self.0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -136,15 +136,15 @@ impl std::fmt::Debug for PreparedMountCell {
 /// passing a directory fails at runtime through `validate_file_path`
 /// with a `Backend` error, not at compile time.
 ///
-/// Errors are stringified because they have to survive the
-/// `Task::perform` boundary and `Message` is `Clone` while
-/// [`LibraryError`] is not — the same reason `read_and_parse_schematic`
-/// returns `Result<_, String>`.
+/// The typed [`LibraryError`] crosses the `Task::perform` boundary inside
+/// [`PreparedMountCell`] (an `Arc`, so `Message` stays `Clone`); the
+/// completion handler needs the variant to route a missing file to the
+/// recovery dialog.
 ///
 /// Always prepared writable; [`LibraryState::mount_prepared`] mounts the
 /// bundled stock library read-only whatever prepared it.
-pub fn prepare_mount(path: &Path) -> Result<PreparedMount, String> {
-    let adapter = LocalGitAdapter::open(path).map_err(|e: LibraryError| e.to_string())?;
+pub fn prepare_mount(path: &Path) -> Result<PreparedMount, LibraryError> {
+    let adapter = LocalGitAdapter::open(path)?;
     let manifest = adapter.manifest();
     let mut entry = OpenLibrary {
         root: path.to_path_buf(),
@@ -296,7 +296,7 @@ impl LibraryState {
 pub async fn prepare_mount_off_thread(path: PathBuf) -> PreparedMountCell {
     let result = tokio::task::spawn_blocking(move || prepare_mount(&path))
         .await
-        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")));
+        .unwrap_or_else(|e| Err(LibraryError::Backend(format!("spawn_blocking: {e}"))));
     PreparedMountCell::new(result)
 }
 
