@@ -5,6 +5,26 @@ The rule list itself is `RuleKind` in `crates/signex-erc/src/lib.rs`; every
 rule's stable id, label and default severity live there and in `rule.rs` /
 `project_rules.rs`.
 
+## Sheet pin rules
+
+Added for #1836. Both read the sheet symbols on the sheet being checked, so
+they run whether or not the child file loaded. Each has a default severity
+(Warning), can be overridden per project, appears in rule profiles and is
+waivable like any other finding.
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `sheet_pin_unconnected` | Warning | A sheet symbol pin with no wire, bus end or No-Connect on it; the child's port of that name floats. |
+| `sheet_pin_direction_conflict` | Warning | Two or more `output` sheet pins on one net of the sheet (nets joined by a same-name Global or local label count as one). |
+
+`bad_hier_sheet_pin` also reports a hierarchical label in the child that no
+pin of the parent's symbol exposes. That finding is filed under the child
+sheet (its coordinates), and its message names the parent's sheet symbol; a
+child placed by several symbols gets one finding per symbol.
+
+Sync Sheet Pins gives a new pin the direction of its child label's shape, so
+`sheet_pin_direction_conflict` only sees what the labels' shapes say.
+
 ## Completeness rules
 
 Added for #1286. They are the usual pre-fabrication checks: is every part

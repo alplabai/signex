@@ -240,6 +240,8 @@ pub struct ErcSheetPin {
     pub uuid: Uuid,
     pub name: String,
     pub position: Point,
+    /// `SheetPin::direction` as stored (`input`, `output`, `bidirectional`, ...).
+    pub direction: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -448,6 +450,7 @@ impl ErcContext {
                         uuid: p.uuid,
                         name: p.name.clone(),
                         position: p.position,
+                        direction: p.direction.clone(),
                     })
                     .collect(),
             })

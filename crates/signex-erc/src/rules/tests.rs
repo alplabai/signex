@@ -763,6 +763,7 @@ fn child_sheet(filename: &str) -> ErcChildSheet {
             uuid: Uuid::now_v7(),
             name: "IN".into(),
             position: pt(1.0, 1.0),
+            direction: String::new(),
         }],
     }
 }
@@ -993,6 +994,7 @@ mod bus_runs_tests;
 mod bus_tests;
 mod completeness_tests;
 mod index_equivalence;
+mod sheet_pin_tests;
 
 fn hier_label(text: &str, pos: Point) -> ErcLabel {
     ErcLabel {

@@ -31,6 +31,8 @@ mod net_members;
 pub(crate) use net_completeness::net_completeness;
 mod off_grid;
 pub(crate) use off_grid::off_grid;
+mod sheet_pins;
+pub(crate) use sheet_pins::{sheet_pin_direction_conflict, sheet_pin_unconnected};
 mod units_not_placed;
 pub(crate) use units_not_placed::{
     PlacedUnit, finding as units_finding, missing_units, units_not_placed,
@@ -649,12 +651,13 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                     Diagnostic::new(
                         RuleKind::BadHierSheetPin,
                         format!(
-                            "Hierarchical label '{}' in '{}' is not exposed as a sheet pin on the parent",
-                            lbl.text, child.filename,
+                            "Hierarchical label '{}' in '{}' is not exposed as a sheet pin on the parent (sheet symbol '{}')",
+                            lbl.text, child.filename, child.name,
                         ),
                         lbl.position,
                     )
                     .with_severity(Severity::Warning)
+                    .tagged(child.uuid.to_string())
                     .in_child_sheet(child.filename.as_str())
                     .with_primary(sel(lbl.uuid, SelectedKind::Label)),
                 );

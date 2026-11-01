@@ -132,6 +132,11 @@ pub enum RuleKind {
     OffGrid,
     /// A net carries labels and wires but no pin.
     LabelsOnlyNet,
+    /// A sheet symbol's pin has no wire, bus or no-connect on it, so the
+    /// child's port of that name floats.
+    SheetPinUnconnected,
+    /// Two or more sheet pins set to `output` drive one net.
+    SheetPinDirectionConflict,
 }
 
 impl RuleKind {
@@ -169,6 +174,8 @@ impl RuleKind {
             RuleKind::UnitsNotPlaced => "Part units not placed",
             RuleKind::OffGrid => "Off-grid pin or wire",
             RuleKind::LabelsOnlyNet => "Net carries only labels",
+            RuleKind::SheetPinUnconnected => "Sheet pin not connected",
+            RuleKind::SheetPinDirectionConflict => "Sheet pin direction conflict",
         }
     }
 
@@ -192,7 +199,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 31] = [
+    pub const ALL: [RuleKind; 33] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -224,6 +231,8 @@ impl RuleKind {
         RuleKind::UnitsNotPlaced,
         RuleKind::OffGrid,
         RuleKind::LabelsOnlyNet,
+        RuleKind::SheetPinUnconnected,
+        RuleKind::SheetPinDirectionConflict,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -258,7 +267,9 @@ impl RuleKind {
             | RuleKind::NetWithNoDriver
             | RuleKind::PowerInputNotDriven
             | RuleKind::UnitsNotPlaced
-            | RuleKind::LabelsOnlyNet => Severity::Warning,
+            | RuleKind::LabelsOnlyNet
+            | RuleKind::SheetPinUnconnected
+            | RuleKind::SheetPinDirectionConflict => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {
