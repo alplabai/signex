@@ -160,13 +160,14 @@ impl LocalGitAdapter {
         if self.root_dir.is_dir() {
             return Ok(());
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            signex_types::atomic_io::MissingParentDir {
-                dir: self.root_dir.clone(),
-            },
-        )
-        .into())
+        // The caller appends no path here, so name the library folder.
+        let refusal = signex_types::atomic_io::MissingParentDir {
+            dir: self.root_dir.clone(),
+        };
+        Err(LibraryError::Backend(format!(
+            "{}: {refusal}",
+            self.root_dir.display()
+        )))
     }
 
     fn prepare_primitive_write(

@@ -154,7 +154,6 @@ impl std::fmt::Display for MissingParentDir {
         // Short on purpose: the Messages panel keeps ~157 bytes and callers
         // append the file path, which must survive the cut. The folder is in
         // that path, so it is not repeated here.
-        let _ = &self.dir;
         write!(f, "folder is gone (moved?), nothing written")
     }
 }
