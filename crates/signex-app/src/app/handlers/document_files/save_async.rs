@@ -198,20 +198,23 @@ impl Signex {
         // The real file is now at least as new as any recovery copy of
         // the document it was saved from (or over).
         let recovery_keys = [Some(path.clone()), save_as_from.clone()];
+        let mut project_write = Task::none();
         match save_as_from {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision, saved),
             None => self.mark_saved(&path, revision, net_color_revision, saved),
-            Some(from) => self.apply_saved_as(&from, path, revision, net_color_revision),
+            Some(from) => {
+                project_write = self.apply_saved_as(&from, path, revision, net_color_revision);
+            }
         }
         self.warn_unwritten_spellings(&outcome_path);
         self.refresh_panel_ctx();
-        Task::batch(
-            recovery_keys
-                .iter()
-                .flatten()
-                .map(|key| self.autosave_after_save(key))
-                .collect::<Vec<_>>(),
-        )
+        let mut tasks: Vec<Task<Message>> = recovery_keys
+            .iter()
+            .flatten()
+            .map(|key| self.autosave_after_save(key))
+            .collect();
+        tasks.push(project_write);
+        Task::batch(tasks)
     }
 
     /// Once no write to the file `path` names (under any spelling) is still owed, warn about
@@ -353,18 +356,15 @@ impl Signex {
         to: PathBuf,
         revision: u64,
         net_color_revision: u64,
-    ) {
+    ) -> Task<Message> {
         // The window that started the Save As shows the document, whichever
         // tab the main window has active now (#1794).
         if let Some(window) = self.undocked_schematic_window(from) {
-            // The closure returns `Task::none()`; there is nothing to run.
-            let _no_task = self.run_in_window_document(window, |app| {
-                app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision);
-                iced::Task::none()
+            return self.run_in_window_document(window, |app| {
+                app.apply_saved_as_to_active(from, to.clone(), revision, net_color_revision)
             });
-            return;
         }
-        self.apply_saved_as_to_active(from, to, revision, net_color_revision);
+        self.apply_saved_as_to_active(from, to, revision, net_color_revision)
     }
 
     fn apply_saved_as_to_active(
@@ -373,7 +373,7 @@ impl Signex {
         to: PathBuf,
         revision: u64,
         net_color_revision: u64,
-    ) {
+    ) -> Task<Message> {
         let still_active = matches!(
             self.document_state.tabs.get(self.document_state.active_tab),
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from
@@ -399,8 +399,11 @@ impl Signex {
                     super::save::file_label(&to)
                 ));
             }
-            return;
+            return Task::none();
         }
+        // The project that listed the sheet, found while the engine is still
+        // keyed by the old path.
+        let owner = self.document_state.document_project(from).map(|p| p.id);
         let renamed = self.with_active_schematic_session_mut(|session| {
             session.finish_save_as(to.clone(), revision);
         });
@@ -414,7 +417,9 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
+            return self.follow_save_as_in_project(owner, from, &to);
         }
+        Task::none()
     }
 }
 

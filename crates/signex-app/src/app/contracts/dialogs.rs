@@ -554,6 +554,18 @@ pub enum FileMsg {
         from_path: PathBuf,
         to_path: PathBuf,
     },
+    /// The off-thread patch of the saved `.snxprj` after a sheet Save As
+    /// finished (#1824).
+    SaveAsProjectPatched(Box<SaveAsProjectPatched>),
+}
+
+/// What a sheet Save As did to the saved project file.
+#[derive(Debug, Clone)]
+pub struct SaveAsProjectPatched {
+    pub project_id: crate::app::state::ProjectId,
+    pub from: PathBuf,
+    pub to: PathBuf,
+    pub result: Result<crate::app::project_entry_disk::EntryPatch, String>,
 }
 
 /// Project lifecycle message family (ADR-0001 D3). Namespaced under
