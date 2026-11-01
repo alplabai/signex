@@ -46,6 +46,8 @@ mod rubber_band_power_tests;
 mod rubber_band_tests;
 #[cfg(test)]
 mod rubber_band_turn_tests;
+#[cfg(test)]
+mod save_point_tests;
 
 #[cfg(test)]
 mod sheet_identity_tests;
@@ -132,6 +134,13 @@ pub struct Engine {
     /// Entries evicted from the front of `history` by the cap, so
     /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
     history_evicted: usize,
+    /// The `undo_position` the document held when it last matched its file
+    /// (set by [`Engine::open`] and [`Engine::mark_saved`]); `None` when it is
+    /// unknown or no step of the history can reproduce the file, which
+    /// reads as dirty. An engine built from content that is not known to be
+    /// on disk (`new`, a recovery copy) starts there. See
+    /// [`Engine::is_at_save_point`].
+    saved_point: Option<usize>,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
     /// records one coalesced entry when the loop finishes. Always `false`
@@ -239,6 +248,7 @@ impl Engine {
             history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
+            saved_point: None,
             history_suppressed: false,
             field_edit_run: None,
             #[cfg(test)]
@@ -272,6 +282,7 @@ impl Engine {
             history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
+            saved_point: Some(0),
             history_suppressed: false,
             field_edit_run: None,
             #[cfg(test)]
@@ -545,6 +556,7 @@ impl Engine {
 
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
+        self.saved_point = None;
         self.bump_revision();
         self.bump_connectivity_revision();
         self.document = document;

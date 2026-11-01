@@ -629,7 +629,10 @@ mod tests {
 
     #[test]
     fn a_folded_key_copy_is_not_adopted_while_a_case_variant_file_exists() {
-        let tmp = tempfile::tempdir().unwrap();
+        // The folded key lowercases the whole path, the sensitive key keeps it.
+        // A random temp name without a capital (a few runs in a hundred) makes the two
+        // the same file, so the name carries one.
+        let tmp = tempfile::Builder::new().prefix("Case").tempdir().unwrap();
         let rec = tmp.path().join("rec");
         let (upper, lower) = (
             tmp.path().join("Sheet.snxsch"),

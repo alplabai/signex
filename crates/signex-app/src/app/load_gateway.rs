@@ -66,11 +66,11 @@ impl Signex {
             return None;
         };
 
-        let dirty = self.document_state.is_document_dirty(&old_path);
+        let was_dirty = self.document_state.is_document_dirty(&old_path);
         // Panic guard: the engine moves into `session`, so a panicking
         // closure drops it. We cannot get it back; catch the unwind only
         // to clear `active_path` (no dangling key) before re-raising.
-        let session = SchematicTabSession::new(engine, title, old_path.clone(), dirty);
+        let session = SchematicTabSession::new(engine, title, old_path.clone(), was_dirty);
         let update_result = catch_unwind(AssertUnwindSafe(move || {
             let mut session = session;
             let r = update(&mut session);
@@ -100,13 +100,18 @@ impl Signex {
                     self.document_state.tab_placements.forget(&old_path);
                     self.rekey_undocked_windows(&old_path, &new_path);
                 }
-                if dirty {
-                    self.document_state.mark_document_dirty(&new_path);
-                } else {
-                    self.document_state.mark_document_clean(&new_path);
-                }
-
                 self.document_state.insert_engine(new_path.clone(), engine);
+
+                // Write back only a change the closure made: a dirty mark
+                // re-written here would count as one from outside the
+                // history and keep undo from ever clearing it.
+                if new_path != old_path || dirty != was_dirty {
+                    if dirty {
+                        self.document_state.mark_document_dirty(&new_path);
+                    } else {
+                        self.document_state.mark_document_clean(&new_path);
+                    }
+                }
                 self.document_state.active_path = Some(new_path);
                 Some(result)
             }
@@ -445,6 +450,12 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        // Read from disk: the opened document is the saved state, so undoing
+        // every edit made since returns to a clean sheet. (A recovery copy
+        // is installed by a different path and stays dirty-safe.)
+        if let Some(engine) = self.document_state.engines.get_mut(&scan_path) {
+            engine.mark_saved();
+        }
         self.note_sheet_focused();
         // Every schematic open funnels through here; `finish_update` starts
         // the (once per project) per-placement designator note off-thread.

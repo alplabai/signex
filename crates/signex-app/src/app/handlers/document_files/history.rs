@@ -255,6 +255,14 @@ impl Signex {
             // is judged by the dirty marker, not only by an open tab.
             let has_edits =
                 wrote && (tab_idx.is_some() || self.document_state.is_document_dirty(&path));
+            // The file now holds the restored revision, but the engine that
+            // survives (open, or parked with its edits) was not given it: its
+            // save point names the file as it was before the restore, so
+            // undoing back to it must not read clean.
+            if wrote && let Some(engine) = self.document_state.engines.get_mut(&path) {
+                engine.forget_save_point();
+                self.document_state.mark_document_dirty(&path);
+            }
             self.report_restore_without_tab(&path, sha, &result, has_edits);
             return Task::none();
         };
@@ -315,6 +323,11 @@ impl Signex {
     /// disk; the unsaved edits stay in the tab rather than being replaced, and
     /// nothing is committed. The user chooses by saving or closing.
     fn report_restore_over_edits(&mut self, path: &std::path::Path, sha: &str) {
+        // The file holds the restored revision, not the one the engine's save
+        // point names.
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine.forget_save_point();
+        }
         self.document_state.mark_document_dirty(path);
         self.report_restore_failure(format!(
             "{} was edited while its restore to {sha} ran, so the unsaved edits were kept and \
@@ -405,6 +418,10 @@ impl Signex {
                     );
                 } else {
                     self.install_schematic_at(&path, *sheet);
+                }
+                // The restored bytes are on disk and are what the engine holds.
+                if let Some(engine) = self.document_state.engines.get_mut(&path) {
+                    engine.mark_saved();
                 }
                 // A restored sheet from a newer Signex is read-only and can
                 // never be saved: leaving it dirty would make quit ask to

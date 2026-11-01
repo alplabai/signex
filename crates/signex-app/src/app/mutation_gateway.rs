@@ -350,10 +350,21 @@ impl Signex {
         // Any history-recording edit ends the colour redo branch.
         self.clear_active_net_color_redo();
         self.document_state.note_sheet_edit();
-        self.with_active_schematic_session_mut(|session| {
-            session.set_dirty(true);
-        })
-        .is_some()
+        self.sync_active_history_dirty()
+    }
+
+    /// Re-derive the active sheet's dirty mark from its engine history after
+    /// a step (edit, undo, redo). `false` when no engine backs the active
+    /// document.
+    fn sync_active_history_dirty(&mut self) -> bool {
+        let Some(path) = self.document_state.active_path.clone() else {
+            return false;
+        };
+        if !self.document_state.engines.contains_key(&path) {
+            return false;
+        }
+        self.document_state.sync_history_dirty(&path);
+        true
     }
 
     /// Undo one step of the **active** engine's own history.
@@ -459,12 +470,7 @@ impl Signex {
         }
 
         self.document_state.note_sheet_edit();
-        if self
-            .with_active_schematic_session_mut(|session| {
-                session.set_dirty(true);
-            })
-            .is_none()
-        {
+        if !self.sync_active_history_dirty() {
             return false;
         }
         self.sync_canvas_from_visible_schematic(invalidation);
