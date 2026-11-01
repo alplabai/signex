@@ -32,6 +32,8 @@ pub struct CloseLibraryConfirmState {
     pub library_path: PathBuf,
     pub library_name: String,
     pub dirty_editors: Vec<EditorAddress>,
+    /// Symbol / footprint drafts of this library with unsaved edits.
+    pub dirty_paths: Vec<PathBuf>,
 }
 
 // ─────────────────────────────────────────────────────────────────────

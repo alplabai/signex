@@ -159,7 +159,7 @@ impl Signex {
     /// All / Discard All / Cancel rather than lose the edits silently.
     pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
         let dirty = self.library.dirty_editors_for_library(&path);
-        if dirty.is_empty() {
+        if dirty.is_empty() && self.dirty_primitive_paths_of_library(&path).is_empty() {
             self.close_library_or_defer(&path);
         } else {
             self.raise_close_library_prompt(path, dirty);
@@ -185,11 +185,55 @@ impl Signex {
         dirty_editors: Vec<EditorAddress>,
     ) {
         let library_name = self.library.library_label(&library_path);
+        let dirty_paths = self.dirty_primitive_paths_of_library(&library_path);
         self.library.close_library_confirm = Some(CloseLibraryConfirmState {
             library_path,
             library_name,
             dirty_editors,
+            dirty_paths,
         });
+    }
+
+    /// Every `.snxlib` a symbol / footprint draft can belong to: the mounted
+    /// libraries plus those the open projects list. The candidate set for
+    /// [`owning_library`](crate::app::state::scope::owning_library).
+    pub(crate) fn draft_library_roots(&self) -> Vec<std::path::PathBuf> {
+        let mut roots: Vec<std::path::PathBuf> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| lib.root.clone())
+            .collect();
+        for project in &self.document_state.projects {
+            for entry in &project.data.libraries {
+                roots.push(project.data.resolve_library_path(entry));
+            }
+        }
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
+    /// Dirty symbol and footprint drafts owned by the library at `root`
+    /// (deepest containing library folder), sorted. Same collector as the
+    /// quit and Close Project prompts.
+    pub(crate) fn dirty_primitive_paths_of_library(
+        &self,
+        root: &std::path::Path,
+    ) -> Vec<std::path::PathBuf> {
+        use crate::app::state::scope::{owning_library, path_key_with};
+        let roots = self.draft_library_roots();
+        let mut paths: Vec<std::path::PathBuf> = self
+            .document_state
+            .dirty_primitive_paths()
+            .filter(|path| {
+                let fold = self.identity_decision(path).fold;
+                owning_library(path, &roots, fold)
+                    .is_some_and(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
+            })
+            .collect();
+        paths.sort();
+        paths
     }
 
     /// User picked Save All / Discard All / Cancel in the close prompt.
@@ -208,6 +252,24 @@ impl Signex {
                     .cancel_pending_close(&confirm.library_path, "the close prompt was cancelled");
             }
             CloseLibraryChoice::DiscardAll => {
+                // Discard only what the user was shown: an edit made since
+                // is not in the list, so the prompt is raised again with
+                // the live list and nothing is discarded.
+                let live_rows = self
+                    .library
+                    .dirty_editors_for_library(&confirm.library_path);
+                let live_paths = self.dirty_primitive_paths_of_library(&confirm.library_path);
+                if live_rows.iter().any(|r| !confirm.dirty_editors.contains(r))
+                    || live_paths.iter().any(|p| !confirm.dirty_paths.contains(p))
+                {
+                    crate::diagnostics::log_warning(format!(
+                        "Close Library '{}': the unsaved edits changed since the prompt; \
+                         review the list and confirm again. Nothing was discarded",
+                        confirm.library_name
+                    ));
+                    self.raise_close_library_prompt(confirm.library_path, live_rows);
+                    return Task::none();
+                }
                 // Drop the library's editors now: a close that waits for
                 // writes must not find the discarded drafts dirty and ask
                 // again when it comes due.
@@ -215,7 +277,12 @@ impl Signex {
                 self.library
                     .editors
                     .retain(|key, _| key.library_path != *root);
+                let mut tasks = Vec::new();
+                for path in &confirm.dirty_paths {
+                    tasks.push(self.discard_document_draft(path));
+                }
                 self.close_library_or_defer(root);
+                return Task::batch(tasks);
             }
             CloseLibraryChoice::SaveAll => {
                 // Persist every dirty editor's row through the adapter
@@ -226,7 +293,7 @@ impl Signex {
                 // (#110). The user can retry, or pick Discard All.
                 return self.begin_save_all(
                     "Close Library",
-                    &[],
+                    &confirm.dirty_paths,
                     &confirm.dirty_editors,
                     crate::app::contracts::SaveAllNext::CloseLibrary {
                         library_path: confirm.library_path,
