@@ -653,7 +653,13 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 let shared = ctx
                     .child_sheets
                     .iter()
-                    .filter(|c| c.filename == child.filename)
+                    .filter(|c| {
+                        c.filename == child.filename
+                            || ctx
+                                .children
+                                .get(c.filename.as_str())
+                                .is_some_and(|other| std::sync::Arc::ptr_eq(other, child_ctx))
+                    })
                     .count()
                     > 1;
                 let d = Diagnostic::new(

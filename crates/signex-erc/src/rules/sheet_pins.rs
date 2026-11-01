@@ -7,25 +7,20 @@ use std::collections::HashMap;
 use signex_net::SegmentIndex;
 use signex_types::schematic::SelectedKind;
 
-use super::{on_any_bus_endpoint, on_any_wire, wire_connectivity, wire_pairs};
+use super::{on_any_bus_endpoint, wire_connectivity, wire_pairs};
 use crate::context::{ErcChildSheet, ErcContext, ErcSheetPin};
 use crate::diagnostic::Diagnostic;
 use crate::{RuleKind, sel};
 
-/// A pin is connected when the shared connectivity gate says something lands
-/// on it (`ErcSheetPin::connected`: a wire end, junction, label or No-Connect,
-/// as the netlist anchors them), when a wire passes through it, or when a bus
-/// ends on it. A bus is matched at its ends only, like the label rules
-/// (ADR-0002 D5.4): a bus-typed pin sitting mid-bus is reported, since the
-/// netlist does not anchor buses by interior.
+/// A pin is connected when `ErcSheetPin::connected` says so (the netlist's
+/// own contact rules, `signex_net::SheetPinContacts`) or a bus ends on it. A
+/// bus is matched at its ends only, like the label rules (ADR-0002 D5.4): a
+/// bus-typed pin mid-bus is reported, since the netlist does not anchor buses
+/// by interior.
 pub(crate) fn sheet_pin_unconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let wires = SegmentIndex::new(&wire_pairs(ctx));
     for sheet in &ctx.child_sheets {
         for pin in &sheet.pins {
-            if pin.connected
-                || on_any_wire(&pin.position, &wires)
-                || on_any_bus_endpoint(&pin.position, ctx)
-            {
+            if pin.connected || on_any_bus_endpoint(&pin.position, ctx) {
                 continue;
             }
             out.push(
@@ -69,6 +64,21 @@ pub(crate) fn sheet_pin_direction_conflict(ctx: &ErcContext, out: &mut Vec<Diagn
             .filter(|l| !l.text.is_empty())
             .map(|l| (l.position, l.label_type, l.text.as_str())),
         &pairs,
+    );
+    let junctions: Vec<_> = ctx.junctions.iter().map(|j| j.position).collect();
+    let power_pins: Vec<_> = ctx
+        .symbols
+        .iter()
+        .filter(|s| s.is_power && !s.value.is_empty() && !signex_net::is_power_flag(&s.lib_id))
+        .flat_map(|s| s.pins.iter().map(|p| (p.world_pos, s.value.as_str())))
+        .collect();
+    conn.merge_power_ports(
+        power_pins,
+        ctx.labels
+            .iter()
+            .map(|l| (l.position, l.label_type, l.text.as_str())),
+        &pairs,
+        &junctions,
     );
     // Anchor every pin before reading any root, so a later union cannot
     // leave an earlier pin's root stale.

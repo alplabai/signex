@@ -132,8 +132,10 @@ pub enum RuleKind {
     OffGrid,
     /// A net carries labels and wires but no pin.
     LabelsOnlyNet,
-    /// A sheet symbol's pin has no wire, bus or no-connect on it, so the
-    /// child's port of that name floats.
+    /// A sheet symbol's pin joins nothing: no wire, label, junction,
+    /// No-Connect, power-port tip, bus end or other sheet symbol's pin is on
+    /// it (the contacts the netlist applies), so the child's port of that
+    /// name floats.
     SheetPinUnconnected,
     /// Two or more sheet pins set to `output` drive one net.
     SheetPinDirectionConflict,

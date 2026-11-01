@@ -242,10 +242,9 @@ pub struct ErcSheetPin {
     pub position: Point,
     /// `SheetPin::direction` as stored (`input`, `output`, `bidirectional`, ...).
     pub direction: String,
-    /// Something electrical lands on the pin: the shared
-    /// `signex_net::ConnectedPoints` gate (wire end, junction, label,
-    /// no-connect), as for [`ErcPin::connected`]. A wire passing through the
-    /// pin is not in the gate; the rule checks that itself.
+    /// The pin joins something besides itself, per
+    /// `signex_net::SheetPinContacts` (wire end or interior, label,
+    /// junction, no-connect, power-port tip, another sheet symbol's pin).
     pub connected: bool,
 }
 
@@ -524,8 +523,10 @@ impl ErcContext {
             pin.connected = gate.contains(&pin.world_pos);
         }
 
+        // The netlist's own answer to "what does a sheet pin join".
+        let contacts = signex_net::SheetPinContacts::of_sheet(snapshot);
         for pin in child_sheets.iter_mut().flat_map(|c| c.pins.iter_mut()) {
-            pin.connected = gate.contains(&pin.position);
+            pin.connected = contacts.joins_pin_at(pin.position.x, pin.position.y);
         }
 
         // --- Step 3: derive logical nets ----------------------------------

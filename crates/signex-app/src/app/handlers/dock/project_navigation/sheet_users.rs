@@ -150,8 +150,10 @@ impl Signex {
         // The hierarchy walk and the open-document scan can both list one
         // symbol, spelling its parent differently; the symbol's uuid plus the
         // case-folded parent key is its identity.
-        users.symbols.sort();
         let fold = CaseFold::host_default();
+        users
+            .symbols
+            .sort_by_cached_key(|s| (path_key_with(&s.parent, fold), s.id, s.name.clone()));
         users.symbols.dedup_by(|a, b| {
             a.id == b.id && path_key_with(&a.parent, fold) == path_key_with(&b.parent, fold)
         });

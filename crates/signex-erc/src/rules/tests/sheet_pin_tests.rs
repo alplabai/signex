@@ -51,27 +51,6 @@ fn a_sheet_pin_with_nothing_on_it_is_reported_with_the_floating_port() {
 }
 
 #[test]
-fn a_sheet_pin_on_a_wire_end_or_interior_or_a_bus_end_is_connected() {
-    let mut c = with_sheets(
-        vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))],
-        vec![sheet(
-            "S",
-            vec![
-                pin("END", pt(0.0, 0.0), "input"),
-                pin("MID", pt(5.0, 0.0), "input"),
-                pin("BUS", pt(0.0, 20.0), "input"),
-            ],
-        )],
-    );
-    c.buses.push(ErcBus {
-        uuid: Uuid::now_v7(),
-        start: pt(0.0, 20.0),
-        end: pt(10.0, 20.0),
-    });
-    assert!(found(&c, RuleKind::SheetPinUnconnected).is_empty());
-}
-
-#[test]
 fn two_output_sheet_pins_on_one_net_conflict_and_name_each_other() {
     let w = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
     let c = with_sheets(
@@ -318,4 +297,123 @@ fn two_placements_get_distinct_waiver_identities() {
         .map(|d| waiver_key(&Violation::from(d), &sheet).expect("waivable"))
         .collect();
     assert_ne!(keys[0].objects, keys[1].objects);
+}
+
+// ---- contacts the netlist applies ------------------------------------------
+
+fn pin_at(sheet: &mut signex_types::schematic::SchematicSheet, name: &str, at: Point) {
+    let mut pin = sheet.child_sheets[0].pins[0].clone();
+    pin.uuid = Uuid::now_v7();
+    pin.name = name.into();
+    pin.position = at;
+    sheet.child_sheets[0].pins.push(pin);
+}
+
+/// A power port `value` whose single pin tip sits at `at`.
+fn power_port(sheet: &mut signex_types::schematic::SchematicSheet, value: &str, at: Point) {
+    use signex_types::schematic::{LibPin, LibSymbol, Pin, PinShapeStyle, Symbol};
+    let id = format!("power:{value}");
+    sheet.lib_symbols.insert(
+        id.clone(),
+        LibSymbol {
+            id: id.clone(),
+            reference: "#PWR".into(),
+            value: value.into(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: false,
+            on_board: false,
+            in_pos_files: false,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: vec![LibPin {
+                unit: 0,
+                body_style: 1,
+                pin: Pin {
+                    direction: PinDirection::PowerInput,
+                    shape_style: PinShapeStyle::Plain,
+                    position: Point::new(0.0, 0.0),
+                    rotation: 0.0,
+                    length: 0.0,
+                    name: "1".into(),
+                    number: "1".into(),
+                    visible: true,
+                    name_visible: true,
+                    number_visible: true,
+                },
+            }],
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.0,
+        },
+    );
+    sheet.symbols.push(Symbol {
+        uuid: Uuid::now_v7(),
+        lib_id: id,
+        reference: "#PWR01".into(),
+        value: value.into(),
+        position: at,
+        is_power: true,
+        ..Default::default()
+    });
+}
+
+#[test]
+fn a_wire_end_or_interior_a_power_port_tip_or_another_pin_connects_a_sheet_pin() {
+    let at = Point::new(5.0, 5.0);
+    let wire_end = pin_sheet(|s| s.wires.push(sw(at, Point::new(0.0, 5.0))));
+    let wire_mid = pin_sheet(|s| {
+        s.wires
+            .push(sw(Point::new(0.0, 5.0), Point::new(10.0, 5.0)))
+    });
+    let power = pin_sheet(|s| power_port(s, "+3V3", at));
+    for (what, c) in [
+        ("wire end", wire_end),
+        ("wire interior", wire_mid),
+        ("power tip", power),
+    ] {
+        assert!(
+            found(&c, RuleKind::SheetPinUnconnected).is_empty(),
+            "{what}"
+        );
+    }
+    // Two sheet pins on one point join each other: both connected. Apart,
+    // each is bare.
+    let together = pin_sheet(|s| pin_at(s, "Q", at));
+    assert!(found(&together, RuleKind::SheetPinUnconnected).is_empty());
+    let apart = pin_sheet(|s| pin_at(s, "Q", Point::new(5.0, 7.0)));
+    assert_eq!(found(&apart, RuleKind::SheetPinUnconnected).len(), 2);
+}
+
+fn sw(a: Point, b: Point) -> signex_types::schematic::Wire {
+    signex_types::schematic::Wire {
+        start: a,
+        end: b,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn outputs_joined_by_a_power_port_conflict() {
+    let mut c = with_sheets(
+        vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(0.0, 20.0), pt(10.0, 20.0)),
+        ],
+        vec![
+            sheet("A", vec![pin("OUT", pt(0.0, 0.0), "output")]),
+            sheet("B", vec![pin("OUT", pt(0.0, 20.0), "output")]),
+        ],
+    );
+    for y in [0.0, 20.0] {
+        let mut port = symbol_with_pin("#PWR", pt(10.0, y), true);
+        port.is_power = true;
+        port.value = "+3V3".into();
+        port.lib_id = "power:+3V3".into();
+        c.symbols.push(port);
+    }
+    assert_eq!(found(&c, RuleKind::SheetPinDirectionConflict).len(), 1);
 }

@@ -170,8 +170,13 @@ impl Signex {
         // (`blocks_delete`), so every listed symbol sits on the row's own parent.
         debug_assert!(
             blockers.blocks_delete(is_dir)
-                || blockers.symbols.is_empty()
-                || blockers.own_parent.is_some()
+                || blockers.symbols.iter().all(|s| {
+                    let fold = crate::app::state::scope::CaseFold::host_default();
+                    blockers.own_parent.as_ref().is_some_and(|own| {
+                        crate::app::state::scope::path_key_with(own, fold)
+                            == crate::app::state::scope::path_key_with(&s.parent, fold)
+                    })
+                })
         );
         if !blockers.blocks_delete(is_dir)
             && !st.is_outside_project
