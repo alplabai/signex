@@ -84,7 +84,7 @@ fn save_as_of_the_root_sheet_inside_the_project_re_points_the_project() {
     assert!(std::fs::read_to_string(&to).unwrap().contains("EDITED"));
     assert!(
         !fx.app.document_state.is_document_dirty(&fx.project),
-        "the project file is written, not left dirty"
+        "the project file is patched on disk, not left dirty"
     );
 }
 
@@ -102,6 +102,75 @@ fn save_as_of_a_child_sheet_re_points_the_open_parent_reference() {
     assert_eq!(parent.child_sheets[0].filename, "kid.snxsch");
     assert!(fx.app.document_state.is_document_dirty(&fx.top));
     assert!(fx.child.exists(), "old file stays on disk");
+}
+
+/// Mark the project as holding an unsaved edit that is not a sheet entry.
+fn dirty_the_project(fx: &mut Fx) {
+    fx.app.document_state.projects[0].data.description = Some("UNSAVED".to_string());
+    let project = fx.project.clone();
+    fx.app.document_state.mark_document_dirty(&project);
+}
+
+#[test]
+fn save_as_does_not_write_the_projects_unrelated_unsaved_edits() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    dirty_the_project(&mut fx);
+
+    save_as(&mut fx.app, &fx.top.clone(), dir.path().join("new.snxsch"));
+
+    let on_disk = reopened(&fx.project);
+    assert_eq!(listed(&on_disk), ["new.snxsch", "child.snxsch"]);
+    assert_eq!(on_disk.description, None, "the unsaved edit is not on disk");
+    let project = fx.app.document_state.projects[0].data.clone();
+    assert_eq!(project.description.as_deref(), Some("UNSAVED"));
+    assert_eq!(listed(&project), ["new.snxsch", "child.snxsch"]);
+    assert!(
+        fx.app.document_state.is_document_dirty(&fx.project),
+        "the edit is still unsaved, so Discard All reverts it"
+    );
+}
+
+#[test]
+fn save_as_into_a_subfolder_leaves_the_project_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    std::fs::create_dir(dir.path().join("sub")).unwrap();
+    let project_bytes = std::fs::read(&fx.project).unwrap();
+
+    save_as(
+        &mut fx.app,
+        &fx.top.clone(),
+        dir.path().join("sub/x.snxsch"),
+    );
+
+    assert!(dir.path().join("sub/x.snxsch").exists());
+    assert_eq!(std::fs::read(&fx.project).unwrap(), project_bytes);
+    assert_eq!(
+        listed(&fx.app.document_state.projects[0].data),
+        ["top.snxsch", "child.snxsch"]
+    );
+}
+
+#[test]
+fn save_as_while_the_project_is_being_saved_keeps_the_change_in_memory() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    let project_bytes = std::fs::read(&fx.project).unwrap();
+    let _running = fx
+        .app
+        .document_state
+        .document_saves
+        .begin(fx.project.clone(), Vec::new());
+
+    save_as(&mut fx.app, &fx.top.clone(), dir.path().join("new.snxsch"));
+
+    assert_eq!(std::fs::read(&fx.project).unwrap(), project_bytes);
+    assert_eq!(
+        listed(&fx.app.document_state.projects[0].data),
+        ["new.snxsch", "child.snxsch"]
+    );
+    assert!(fx.app.document_state.is_document_dirty(&fx.project));
 }
 
 #[test]

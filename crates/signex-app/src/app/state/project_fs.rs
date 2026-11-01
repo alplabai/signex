@@ -119,6 +119,7 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | FileMsg::DocumentSaved(_)
                 | FileMsg::PrimitiveSaved(_)
                 | FileMsg::SavePrimitiveAs { .. }
+                | FileMsg::SaveAsProjectPatched(_)
         ),
         Message::Rename(m) => matches!(
             m,

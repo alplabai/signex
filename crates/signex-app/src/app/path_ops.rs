@@ -27,6 +27,8 @@ pub enum PathOpKind {
     /// Add New Schematic writing a blank sheet and listing it in the saved
     /// project file.
     AddSheet,
+    /// A sheet Save As re-pointing the project file's entry for the sheet.
+    SaveAsSheet,
 }
 
 impl PathOpKind {
@@ -36,6 +38,7 @@ impl PathOpKind {
             Self::Delete => "delete",
             Self::ProjectRewrite => "project-wide rewrite",
             Self::AddSheet => "new-sheet add",
+            Self::SaveAsSheet => "Save As",
         }
     }
 }
@@ -110,6 +113,17 @@ impl PendingPathOps {
             .flat_map(|op| op.paths.iter().map(move |p| (p, op.fold)))
             .find(|(p, fold)| path_is_under(p, dir, *fold))
             .map(|(p, _)| p.clone())
+    }
+
+    /// Finish the [`PathOpKind::SaveAsSheet`] operation whose new sheet is
+    /// `sheet`. Returns whether one was registered.
+    pub fn finish_save_as_sheet(&mut self, sheet: &Path) -> bool {
+        let before = self.ops.len();
+        self.ops.retain(|op| {
+            !(op.kind == PathOpKind::SaveAsSheet
+                && op.paths.first().map(PathBuf::as_path) == Some(sheet))
+        });
+        self.ops.len() != before
     }
 
     /// Finish the [`PathOpKind::AddSheet`] operation that creates `sheet`.

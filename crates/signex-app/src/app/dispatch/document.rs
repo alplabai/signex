@@ -162,6 +162,10 @@ impl Signex {
                 };
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::SaveAsProjectPatched(done) => {
+                self.handle_save_as_project_patched(*done);
+                self.finish_update()
+            }
             FileMsg::DocumentReadFinished { request, result } => {
                 let task = self.handle_document_read_finished(request, result);
                 Task::batch([task, self.finish_update()])

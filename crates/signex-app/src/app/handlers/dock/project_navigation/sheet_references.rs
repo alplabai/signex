@@ -32,6 +32,15 @@ pub(super) fn read_only_parents_detail(parents: &[PathBuf]) -> String {
     )
 }
 
+/// What a Save As left unchanged among the other sheets.
+#[derive(Debug, Default)]
+pub(crate) struct SaveAsParentsLeft {
+    /// Parents whose reference to the old file was not re-pointed.
+    pub(crate) not_rewritten: Vec<String>,
+    /// Sheets that could not be read, so their references are unknown.
+    pub(crate) unchecked: Vec<String>,
+}
+
 /// What applying a [`ReferencePlan`] could not finish.
 #[derive(Debug, Default)]
 pub(super) struct RewriteOutcome {
@@ -148,7 +157,18 @@ impl Signex {
     pub(super) fn apply_reference_rewrites(
         &mut self,
         plan: &ReferencePlan,
+        parents: ParentSheets,
+    ) -> RewriteOutcome {
+        self.apply_reference_rewrites_for(plan, parents, "rename")
+    }
+
+    /// [`Self::apply_reference_rewrites`] logging failures under `context`
+    /// (the operation that planned them).
+    fn apply_reference_rewrites_for(
+        &mut self,
+        plan: &ReferencePlan,
         mut parents: ParentSheets,
+        context: &str,
     ) -> RewriteOutcome {
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
@@ -160,7 +180,7 @@ impl Signex {
         // dangling or unverified reference visible after it is gone.
         for line in failures.iter().chain(&plan.unchecked) {
             crate::diagnostics::log_error(
-                "rename: sheet reference not updated",
+                &format!("{context}: sheet reference not updated"),
                 &anyhow::anyhow!("{line}"),
             );
         }
@@ -184,50 +204,41 @@ impl Signex {
         parents
     }
 
-    /// After a Save As moved the sheet `from` to `to` inside the project:
-    /// re-point the references of every parent that is open, through the
-    /// engine (dirty, undoable). Parents that are not open are not read on
-    /// the UI thread; their names are returned so the caller can say they
-    /// still name `from`.
+    /// After a Save As moved the sheet `from` to `to` (same folder): re-point
+    /// the references of every parent that is open, through the engine (dirty,
+    /// undoable). Parents that are not open are not rewritten, and sheets that
+    /// could not be read are not checked; both are returned for the caller to
+    /// report.
     pub(crate) fn repoint_open_parents_after_save_as(
         &mut self,
         project_idx: usize,
         from: &Path,
         to: &Path,
-    ) -> Vec<String> {
+    ) -> SaveAsParentsLeft {
         let leaf = to
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let mut plan = self.plan_reference_rewrites(project_idx, from, &leaf);
-        let mut unrewritten = Vec::new();
-        plan.rewrites.retain_mut(|rewrite| {
-            let name = rewrite.parent.file_name().map_or_else(
-                || rewrite.parent.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            );
-            // The new spelling is relative to the parent, not to the project.
-            let parent_dir = rewrite.parent.parent().unwrap_or_else(|| Path::new(""));
-            let Ok(relative) = to.strip_prefix(parent_dir) else {
-                unrewritten.push(name);
-                return false;
-            };
-            rewrite.to = relative
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/");
+        let mut left = SaveAsParentsLeft {
+            unchecked: std::mem::take(&mut plan.unchecked),
+            ..Default::default()
+        };
+        plan.rewrites.retain(|rewrite| {
             if self.document_state.engines.contains_key(&rewrite.parent) {
                 return true;
             }
-            unrewritten.push(name);
+            left.not_rewritten
+                .push(rewrite.parent.file_name().map_or_else(
+                    || rewrite.parent.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                ));
             false
         });
-        plan.unchecked.clear();
-        let outcome = self.apply_reference_rewrites(&plan, ParentSheets::new());
-        unrewritten.extend(outcome.failed);
-        unrewritten.sort();
-        unrewritten.dedup();
-        unrewritten
+        let outcome = self.apply_reference_rewrites_for(&plan, ParentSheets::new(), "save-as");
+        left.not_rewritten.extend(outcome.failed);
+        left.not_rewritten.sort();
+        left.not_rewritten.dedup();
+        left
     }
 
     fn apply_one_rewrite(
