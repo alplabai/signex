@@ -495,7 +495,13 @@ impl Signex {
             ));
             return false;
         };
+        let disk = crate::persist::DiskRead::of(path, &text);
+        if self.focus_alias_if_open(path, &disk) {
+            self.sync_active_tab();
+            return true;
+        }
         self.open_schematic_tab(path.clone(), title, sheet);
+        self.record_disk_read(path, disk);
         self.sync_active_tab();
         true
     }

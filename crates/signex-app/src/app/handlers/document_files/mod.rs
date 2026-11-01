@@ -8,7 +8,9 @@ mod altium_import;
 #[cfg(test)]
 mod commit_bytes_tests;
 mod dir_case;
+mod external_change;
 pub(crate) use dir_case::FoldAnswer;
+pub(crate) use external_change::ReloadedSheet;
 #[cfg(test)]
 mod dir_case_tests;
 mod git;

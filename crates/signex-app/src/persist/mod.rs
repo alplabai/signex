@@ -2,12 +2,14 @@
 //! layout and the search-box preferences (#692, #859).
 
 mod debounced;
+mod disk_baseline;
 mod document_save;
 mod primitive_save;
 mod project_save;
 mod search_prefs;
 
 pub use debounced::{DebouncedStore, DebouncedSync, PendingWrite, WriteBarrier};
+pub use disk_baseline::{ContentHash, DiskDrift, DiskRead, drift_from};
 pub use document_save::{
     AtomicFileSink, DocumentSaveDone, DocumentSaveJob, DocumentSaves, DocumentSink, InFlight,
     SameFile, SaveBarrier, SaveOutcome, SharedBytes,

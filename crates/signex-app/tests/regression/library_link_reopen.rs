@@ -44,6 +44,7 @@ fn reopen(app: &mut Signex, sheet: SchematicSheet) -> PathBuf {
         path: path.clone(),
         title: "reopen-1338".into(),
         result: Ok(Box::new(sheet)),
+        disk: None,
     }));
     path
 }
@@ -195,6 +196,7 @@ fn reopen_at(app: &mut Signex, sheet: SchematicSheet, name: &str) -> PathBuf {
         path: path.clone(),
         title: name.into(),
         result: Ok(Box::new(sheet)),
+        disk: None,
     }));
     path
 }

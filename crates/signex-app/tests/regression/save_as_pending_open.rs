@@ -114,6 +114,7 @@ fn race(dir: &Path) -> (Signex, uuid::Uuid, std::path::PathBuf, std::path::PathB
         path: p.clone(),
         title: "P".to_string(),
         result: Ok(Box::new(on_disk)),
+        disk: None,
     }));
     (app, a_uuid, a, p)
 }
@@ -217,6 +218,7 @@ fn a_late_open_result_for_an_owned_path_is_dropped_with_a_warning() {
         path: owned.clone(),
         title: "late".to_string(),
         result: Ok(Box::new(sheet_with(Vec::new()))),
+        disk: None,
     }));
 
     assert_eq!(tab_count(&app, &owned), 1, "no second tab");
@@ -320,6 +322,7 @@ fn an_open_started_during_the_save_as_write_refuses_the_rekey_and_reports_it() {
         path: p.clone(),
         title: "P".to_string(),
         result: Ok(Box::new(on_disk)),
+        disk: None,
     }));
 
     let engine = app
@@ -358,6 +361,7 @@ fn a_clean_tabless_engine_does_not_block_a_later_open() {
         path: q.clone(),
         title: "Q".to_string(),
         result: Ok(Box::new(fresh)),
+        disk: None,
     }));
 
     assert_eq!(tab_count(&app, &q), 1, "the open must not be dropped");
@@ -391,6 +395,7 @@ fn a_superseded_open_attaches_a_tab_to_a_dirty_parked_engine() {
         path: parent.clone(),
         title: "Parent".to_string(),
         result: Ok(Box::new(sheet_with(Vec::new()))),
+        disk: None,
     }));
 
     assert_eq!(tab_count(&app, &parent), 1, "the requested tab must appear");
@@ -476,6 +481,7 @@ fn a_dropped_late_open_result_leads_with_its_reason_not_the_path() {
         path: owned.clone(),
         title: "late".to_string(),
         result: Ok(Box::new(sheet_with(Vec::new()))),
+        disk: None,
     }));
 
     let message = panel_message_with(&app, "ReasonOwned1137.snxsch", "already owns that path");
@@ -574,6 +580,7 @@ fn a_dropped_duplicate_open_activates_the_owning_tab() {
         path: owned.clone(),
         title: "late".to_string(),
         result: Ok(Box::new(sheet_with(Vec::new()))),
+        disk: None,
     }));
 
     assert_eq!(app.document_state.active_tab, 0, "the owner takes focus");

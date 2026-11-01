@@ -345,17 +345,22 @@ impl Signex {
         let parse_result = std::fs::read_to_string(&path)
             .map_err(anyhow::Error::from)
             .and_then(|text| {
+                let disk = crate::persist::DiskRead::of(&path, &text);
                 signex_types::format::SnxSchematic::parse(&text)
-                    .map(|snx| snx.sheet)
+                    .map(|snx| (snx.sheet, disk))
                     .map_err(anyhow::Error::from)
             });
         match parse_result {
-            Ok(sheet) => {
+            Ok((sheet, disk)) => {
+                if self.focus_alias_if_open(&path, &disk) {
+                    return true;
+                }
                 let title = path
                     .file_stem()
                     .map(|stem| stem.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Schematic".to_string());
-                self.open_schematic_tab(path, title, sheet);
+                self.open_schematic_tab(path.clone(), title, sheet);
+                self.record_disk_read(&path, disk);
                 true
             }
             Err(error) => {

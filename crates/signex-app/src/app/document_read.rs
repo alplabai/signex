@@ -205,6 +205,8 @@ pub enum LoadedDocument {
     Schematic {
         title: String,
         sheet: Box<SchematicSheet>,
+        /// What the read learned about the file behind `sheet` (#1826, #1827).
+        disk: crate::persist::DiskRead,
     },
     Pcb {
         title: String,
@@ -301,17 +303,17 @@ fn child_checked(path: &Path) -> Result<(), OpenFailure> {
 }
 
 fn read_schematic(path: &Path, title: String) -> Result<LoadedDocument, OpenFailure> {
-    let sheet = std::fs::read_to_string(path)
+    let text = std::fs::read_to_string(path)
         .with_context(|| format!("read schematic {}", path.display()))
-        .and_then(|text| {
-            signex_types::format::SnxSchematic::parse(&text)
-                .with_context(|| format!("parse schematic {}", path.display()))
-        })
+        .map_err(|e| OpenFailure::LogOnly(format!("{e:#}")))?;
+    let sheet = signex_types::format::SnxSchematic::parse(&text)
+        .with_context(|| format!("parse schematic {}", path.display()))
         .map_err(|e| OpenFailure::LogOnly(format!("{e:#}")))?
         .sheet;
     Ok(LoadedDocument::Schematic {
         title,
         sheet: Box::new(sheet),
+        disk: crate::persist::DiskRead::of(path, &text),
     })
 }
 

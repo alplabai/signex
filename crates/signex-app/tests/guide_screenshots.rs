@@ -498,6 +498,7 @@ fn render_readme_screenshots() {
         path: sheet_path,
         title: "sensor-node".into(),
         result: Ok(Box::new(readme_sheet())),
+        disk: None,
     }));
     let _ = draw(&mut renderer, &app);
     // Frame the circuit rather than the whole A4 page: select it, fit the
@@ -553,6 +554,7 @@ fn render_guide_screenshots() {
         path: PathBuf::from("guide.snxsch"),
         title: "guide".into(),
         result: Ok(Box::new(sheet())),
+        disk: None,
     }));
     // The canvas learns its size from a first frame; only then can it fit.
     let _ = draw(&mut renderer, &app);

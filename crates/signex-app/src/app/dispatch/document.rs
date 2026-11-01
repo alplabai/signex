@@ -132,6 +132,10 @@ impl Signex {
                 );
                 self.finish_update()
             }
+            FileMsg::DiskReloadFinished { path, result } => {
+                let task = self.handle_disk_reload_finished(path, result);
+                Task::batch([task, self.finish_update()])
+            }
             FileMsg::DocumentSaved(done) => {
                 let task = self.handle_document_saved(done);
                 iced::Task::batch([task, self.finish_update()])
@@ -183,6 +187,7 @@ impl Signex {
                 path,
                 title,
                 result,
+                disk,
             } => {
                 // #478 review — clear the in-flight guard before acting
                 // on the result so a duplicate open fired while this one
@@ -195,9 +200,16 @@ impl Signex {
                 }
                 match result {
                     Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
+                    Ok(_)
+                        if disk
+                            .as_ref()
+                            .is_some_and(|d| self.focus_alias_if_open(&path, d)) => {}
                     Ok(sheet) => {
                         // `update` starts the recovery check of every tab opened.
-                        self.open_schematic_tab(path, title, *sheet);
+                        self.open_schematic_tab(path.clone(), title, *sheet);
+                        if let Some(disk) = disk {
+                            self.record_disk_read(&path, disk);
+                        }
                     }
                     Err(message) => self.report_open_failure(message),
                 }

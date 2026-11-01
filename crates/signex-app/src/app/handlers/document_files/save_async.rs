@@ -42,10 +42,17 @@ impl Signex {
             .serialize_with_net_colors(&self.ui_state.wire_color_overrides)
             .with_context(|| format!("encode schematic {}", source.display()))?
             .into_bytes();
+        // A plain save is compared with what the file held when the sheet was
+        // loaded or last saved; a Save As target was confirmed by the dialog.
+        let expected = save_as_from
+            .is_none()
+            .then(|| self.document_state.document_saves.baseline(&target))
+            .flatten();
         let job = self
             .document_state
             .document_saves
-            .begin(target.clone(), bytes);
+            .begin(target.clone(), bytes)
+            .expecting(expected);
         let hold = self.document_state.autosave.hold_for_save();
         Ok(Self::spawn_document_write(
             job,
@@ -177,6 +184,10 @@ impl Signex {
                 "{} was not written: a newer write to it landed first",
                 path.display()
             )),
+            Ok(SaveOutcome::DiskChanged(drift)) => {
+                self.handle_save_found_disk_drift(path, drift);
+                return Task::none();
+            }
             Err(reason) => Some(reason),
         };
         if let Some(reason) = reason {
@@ -195,6 +206,7 @@ impl Signex {
             return Task::none();
         }
         self.document_state.document_saves.clear_failure(&path);
+        self.note_written_baseline(&path, &saved);
         // The real file is now at least as new as any recovery copy of
         // the document it was saved from (or over).
         let recovery_keys = [Some(path.clone()), save_as_from.clone()];
@@ -203,6 +215,7 @@ impl Signex {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision, saved),
             None => self.mark_saved(&path, revision, net_color_revision, saved),
             Some(from) => {
+                self.document_state.document_saves.forget_baseline(&from);
                 project_write = self.apply_saved_as(&from, path, revision, net_color_revision);
             }
         }
