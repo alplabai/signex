@@ -88,6 +88,22 @@ impl Signex {
     /// (newer minor) is refused with an error. The completion routes through the
     /// same `DocumentSaved` message as a schematic save.
     pub(crate) fn begin_pcb_save(&mut self, path: PathBuf) -> Result<Option<Task<Message>>> {
+        self.begin_pcb_save_checked(path, true)
+    }
+
+    /// The PCB twin of [`Self::begin_schematic_save_unchecked`].
+    pub(crate) fn begin_pcb_save_unchecked(
+        &mut self,
+        path: PathBuf,
+    ) -> Result<Option<Task<Message>>> {
+        self.begin_pcb_save_checked(path, false)
+    }
+
+    fn begin_pcb_save_checked(
+        &mut self,
+        path: PathBuf,
+        compare_with_disk: bool,
+    ) -> Result<Option<Task<Message>>> {
         self.refuse_while_path_op(&path, "saved")?;
         self.refuse_while_project_moves(&path, "save")?;
         let tab = self
@@ -126,10 +142,14 @@ impl Signex {
             .write_string()
             .with_context(|| format!("encode PCB {}", path.display()))?
             .into_bytes();
+        let expected = compare_with_disk
+            .then(|| self.document_state.document_saves.baseline(&path))
+            .flatten();
         let job = self
             .document_state
             .document_saves
-            .begin(path.clone(), bytes);
+            .begin(path.clone(), bytes)
+            .expecting(expected);
         let hold = self.document_state.autosave.hold_for_save();
         // Net colours are a schematic concern; a board has none, so 0.
         Ok(Some(Self::spawn_document_write(
@@ -232,7 +252,10 @@ impl Signex {
             None if is_pcb_path(&path) => self.mark_pcb_saved(&path, revision, saved),
             None => self.mark_saved(&path, revision, net_color_revision, saved),
             Some(from) => {
-                self.document_state.document_saves.forget_baseline(&from);
+                self.document_state
+                    .document_saves
+                    .forget_disk_records(&from);
+                self.record_real_path_of(&path);
                 project_write = self.apply_saved_as(&from, path, revision, net_color_revision);
             }
         }
@@ -363,6 +386,7 @@ impl Signex {
         if !self.document_is_held_open(path) {
             self.forget_net_colors_of(path);
             self.document_state.remove_engine(path);
+            self.document_state.document_saves.forget_disk_records(path);
         }
         let label = path
             .file_name()

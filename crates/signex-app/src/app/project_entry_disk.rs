@@ -195,7 +195,7 @@ fn write_patched(project_file: &Path, data: &ProjectData) -> Result<EntryPatch, 
         source,
     };
     let bytes = encode_project(data).map_err(|e| io(std::io::Error::other(e.to_string())))?;
-    let written = signex_types::atomic_io::atomic_write(project_file, &bytes);
+    let written = signex_types::atomic_io::atomic_write_existing_dir(project_file, &bytes);
     settle_write(project_file, &bytes, written).map_err(io)?;
     Ok(EntryPatch::Patched(std::sync::Arc::new(bytes)))
 }
@@ -247,5 +247,30 @@ mod tests {
         assert!(settle_write(&file, b"patched", failed).is_err());
         let missing = dir.path().join("Gone.snxprj");
         assert!(settle_write(&missing, b"patched", Err(std::io::Error::other("x"))).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn patching_a_symlinked_project_file_writes_through_and_keeps_the_link() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let real = dir.path().join("Real.snxprj");
+        std::fs::write(&real, b"").expect("marker");
+        let mut data = parse_project(&real).expect("parse");
+        signex_types::project::write_project(&real, &data).expect("write");
+        let link = dir.path().join("Link.snxprj");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+        register_entry(&mut data, "a.snxsch", CaseFold::default());
+
+        write_patched(&link, &data).expect("patch");
+
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .expect("meta")
+                .file_type()
+                .is_symlink(),
+            "the link must survive"
+        );
+        let text = std::fs::read_to_string(&real).expect("read");
+        assert!(text.contains("a.snxsch"), "the target holds the entry");
     }
 }

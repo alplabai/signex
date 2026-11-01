@@ -244,7 +244,10 @@ impl Signex {
         // The restore wrote these exact bytes outside the save ledger: the
         // next save compares with them, not with what the sheet was opened from.
         if let Ok(restored) = &result
-            && matches!(restored.document, RestoreJobDocument::Schematic(_))
+            && matches!(
+                restored.document,
+                RestoreJobDocument::Schematic(_) | RestoreJobDocument::Pcb(_)
+            )
         {
             self.record_disk_baseline(&path, crate::persist::ContentHash::of(&restored.bytes));
         }
@@ -396,6 +399,18 @@ impl Signex {
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
     ) -> Task<Message> {
+        self.apply_reloaded_with(idx, outcome, restored_bytes, true)
+    }
+
+    /// [`Self::apply_reloaded`]; `commit` false installs the document without
+    /// a "Restore" commit (a disk-conflict Reload restores nothing).
+    pub(crate) fn apply_reloaded_with(
+        &mut self,
+        idx: usize,
+        outcome: Result<RestoreJobDocument, RestoreFailure>,
+        restored_bytes: Option<crate::persist::SharedBytes>,
+        commit: bool,
+    ) -> Task<Message> {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Task::none();
         };
@@ -441,7 +456,9 @@ impl Signex {
                     .is_some_and(|engine| engine.document().is_read_only());
                 if read_only {
                     self.set_reloaded_dirty(&path, false);
-                    self.commit_restore(&path, restored_bytes);
+                    if commit {
+                        self.commit_restore(&path, restored_bytes);
+                    }
                 }
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
@@ -455,7 +472,9 @@ impl Signex {
                 // re-encode the board and drop the restored file's comments
                 // and formatting, so commit the on-disk bytes as they are.
                 self.set_reloaded_dirty(&path, false);
-                self.commit_restore(&path, restored_bytes);
+                if commit {
+                    self.commit_restore(&path, restored_bytes);
+                }
             }
             Ok(RestoreJobDocument::Footprint(file)) => {
                 let snap_disabled = !self.ui_state.snap_enabled;
@@ -474,7 +493,9 @@ impl Signex {
                 if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                     editor.canvas_cache.clear();
                 }
-                self.commit_restore(&path, restored_bytes);
+                if commit {
+                    self.commit_restore(&path, restored_bytes);
+                }
             }
             Ok(RestoreJobDocument::Symbol(file)) => {
                 let state = crate::app::SymbolDocument::new(path.clone(), *file);
@@ -485,7 +506,9 @@ impl Signex {
                 // The reloaded editor is clean, so the stale dirty marker must
                 // go or quit asks about a file that matches disk.
                 self.set_reloaded_dirty(&path, false);
-                self.commit_restore(&path, restored_bytes);
+                if commit {
+                    self.commit_restore(&path, restored_bytes);
+                }
             }
             Ok(RestoreJobDocument::Library) => return self.reload_library_tab(&kind),
         }

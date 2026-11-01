@@ -265,6 +265,7 @@ fn opening_the_same_pcb_twice_before_it_completes_spawns_only_one_task() {
     // Only one real Task was ever spawned — simulate that sole
     // completion and confirm exactly one tab results.
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: pcb_path.clone(),
         title: "Dup".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
@@ -296,6 +297,7 @@ fn pcb_open_finished_ok_opens_the_tab_like_the_old_sync_path_did() {
 
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "board".to_string(),
         result: Ok(Box::new(board)),
@@ -324,6 +326,7 @@ fn pcb_open_finished_err_opens_no_tab_and_does_not_panic() {
 
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "broken".to_string(),
         result: Err("parse broken.snxpcb: TSV block malformed".to_string()),
@@ -383,6 +386,7 @@ fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
 
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path,
         title: "board".to_string(),
         result: Ok(Box::new(board)),

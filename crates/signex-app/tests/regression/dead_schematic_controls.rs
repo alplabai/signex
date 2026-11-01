@@ -398,6 +398,7 @@ fn center_view_at_cursor_ignores_a_point_from_another_document() {
 fn center_view_at_cursor_recentres_a_pcb() {
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: PathBuf::from("/tmp/does-not-matter/board.snxpcb"),
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
@@ -425,6 +426,7 @@ fn an_undocked_pcb_window_moves_its_own_camera_not_the_main_one() {
     let (mut app, _t) = Signex::new();
     let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
@@ -477,6 +479,7 @@ fn an_undocked_pcb_window_still_centres_while_the_main_window_shows_a_schematic(
     let (mut app, sheet) = app_with(vec![symbol(uuid::Uuid::now_v7(), "R1", 0.0)]);
     let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
@@ -525,6 +528,7 @@ fn an_event_from_a_closed_pcb_tabs_window_leaves_the_main_view_alone() {
     let (mut app, _t) = Signex::new();
     let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),
@@ -546,6 +550,7 @@ fn an_event_from_a_closed_pcb_tabs_window_leaves_the_main_view_alone() {
         .expect("via"),
     );
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: PathBuf::from("/tmp/does-not-matter/other.snxpcb"),
         title: "other".to_string(),
         result: Ok(Box::new(other)),
@@ -577,6 +582,7 @@ fn an_undocked_pcb_canvas_follows_the_grid_toggle_and_is_dropped_on_reattach() {
     let (mut app, _t) = Signex::new();
     let path = PathBuf::from("/tmp/does-not-matter/board.snxpcb");
     let _ = app.update(Message::File(FileMsg::PcbOpenFinished {
+        disk: None,
         path: path.clone(),
         title: "board".to_string(),
         result: Ok(Box::new(empty_pcb_board())),

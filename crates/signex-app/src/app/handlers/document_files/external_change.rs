@@ -11,26 +11,33 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 
 use super::save::file_label;
-use crate::app::restore_job::RestoreJobDocument;
+use crate::app::restore_job::{EditStamp, RestoreJobDocument};
 use crate::app::state::{ErrorNotice, NoticeAction};
 use crate::app::{FileMsg, Message, Signex, TabKind};
 use crate::persist::{ContentHash, DiskDrift};
 
-/// A sheet read back from disk for a Reload, with the fingerprint of the bytes
-/// it was parsed from.
+/// A sheet or board read back from disk for a Reload, with the fingerprint of
+/// the bytes it was parsed from.
 #[derive(Debug, Clone)]
-pub struct ReloadedSheet {
-    pub sheet: Box<signex_types::schematic::SchematicSheet>,
+pub struct ReloadedFile {
+    pub document: RestoreJobDocument,
     pub hash: ContentHash,
 }
 
 /// Blocking half of a Reload; run it on a worker.
-fn read_for_reload(path: &Path) -> Result<Box<ReloadedSheet>, String> {
+fn read_for_reload(path: &Path, is_pcb: bool) -> Result<Box<ReloadedFile>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("could not be read: {e}"))?;
-    let parsed = signex_types::format::SnxSchematic::parse(&text)
-        .map_err(|e| format!("could not be parsed: {e}"))?;
-    Ok(Box::new(ReloadedSheet {
-        sheet: Box::new(parsed.sheet),
+    let parse_failed = |e: &dyn std::fmt::Display| format!("could not be parsed: {e}");
+    let document = if is_pcb {
+        let parsed = signex_types::format::SnxPcb::parse(&text).map_err(|e| parse_failed(&e))?;
+        RestoreJobDocument::Pcb(Box::new(parsed.board))
+    } else {
+        let parsed =
+            signex_types::format::SnxSchematic::parse(&text).map_err(|e| parse_failed(&e))?;
+        RestoreJobDocument::Schematic(Box::new(parsed.sheet))
+    };
+    Ok(Box::new(ReloadedFile {
+        document,
         hash: ContentHash::of(text.as_bytes()),
     }))
 }
@@ -41,6 +48,16 @@ impl Signex {
     pub(crate) fn record_disk_read(&mut self, path: &Path, disk: crate::persist::DiskRead) {
         self.record_disk_baseline(path, disk.hash);
         if let Some(real) = disk.real_path {
+            self.document_state
+                .document_saves
+                .set_real_path(path.to_path_buf(), real);
+        }
+    }
+
+    /// The real file behind `path`, taken now: after a rename or Save As the
+    /// document is a different path, and a symlink to it must still focus its tab.
+    pub(crate) fn record_real_path_of(&mut self, path: &Path) {
+        if let Ok(real) = std::fs::canonicalize(path) {
             self.document_state
                 .document_saves
                 .set_real_path(path.to_path_buf(), real);
@@ -108,11 +125,10 @@ impl Signex {
         path: &Path,
         saved: &crate::app::state::CommitBytes,
     ) {
-        if super::save_async::is_pcb_path(path)
-            || !self
-                .document_state
-                .document_saves
-                .is_newest_begun(path, saved.sequence)
+        if !self
+            .document_state
+            .document_saves
+            .is_newest_begun(path, saved.sequence)
         {
             return;
         }
@@ -137,27 +153,11 @@ impl Signex {
         };
         let name = file_label(path);
         let what = drift.describe();
-        crate::diagnostics::log_warning(format!("[save] {name} {what}; not saved, still modified"));
+        crate::diagnostics::log_warning(format!("[save] {name} {what}; {}", drift.outcome()));
         anyhow::bail!(
-            "{name} {what}, so it was not overwritten. Save it from its tab to choose \
-             Overwrite or Reload"
+            "{name} {what}, so it was not overwritten. {}",
+            drift.next_step()
         )
-    }
-
-    /// After the blocking Save All leg wrote `path`: what is on disk is now
-    /// the baseline.
-    pub(crate) fn refresh_baseline_from_disk(&mut self, path: &Path) {
-        match std::fs::read(path) {
-            Ok(bytes) => self.record_disk_baseline(path, ContentHash::of(&bytes)),
-            Err(e) => {
-                crate::diagnostics::log_warning(format!(
-                    "[save] {} could not be read back after saving ({e}); its next save is \
-                     not compared with the file",
-                    file_label(path)
-                ));
-                self.document_state.document_saves.forget_baseline(path);
-            }
-        }
     }
 
     /// A parent sheet was re-pointed on disk outside the save ledger (#1849).
@@ -183,8 +183,8 @@ impl Signex {
                 self.record_disk_baseline(parent, ContentHash::of(bytes));
             } else {
                 crate::diagnostics::log_warning(format!(
-                    "[save] {} was changed on disk by another program before its sheet \
-                     reference was updated; saving it will ask first",
+                    "[save] {} was changed on disk by another program (or is being saved) \
+                     before its sheet reference was updated; saving it will ask first",
                     file_label(parent)
                 ));
             }
@@ -196,7 +196,7 @@ impl Signex {
     pub(crate) fn handle_save_found_disk_drift(&mut self, path: PathBuf, drift: DiskDrift) {
         let what = drift.describe();
         let name = file_label(&path);
-        crate::diagnostics::log_warning(format!("[save] {name} {what}; not saved, still modified"));
+        crate::diagnostics::log_warning(format!("[save] {name} {what}; {}", drift.outcome()));
         self.document_state
             .document_saves
             .record_failure(path.clone(), format!("{name} {what}"));
@@ -222,11 +222,21 @@ impl Signex {
         let Some(path) = self.take_disk_conflict() else {
             return Task::none();
         };
-        crate::diagnostics::log_info(format!(
-            "[save] Overwriting {} as the user chose",
-            file_label(&path)
-        ));
-        match self.begin_schematic_save_unchecked(path) {
+        let name = file_label(&path);
+        crate::diagnostics::log_info(format!("[save] Overwriting {name} as the user chose"));
+        let begun = if super::save_async::is_pcb_path(&path) {
+            self.begin_pcb_save_unchecked(path).map(|task| {
+                task.unwrap_or_else(|| {
+                    crate::diagnostics::log_info(format!(
+                        "[save] {name} has no unsaved changes; nothing was written"
+                    ));
+                    Task::none()
+                })
+            })
+        } else {
+            self.begin_schematic_save_unchecked(path)
+        };
+        match begun {
             Ok(task) => task,
             Err(error) => {
                 self.report_save_failure("Failed to save active document", &error);
@@ -249,20 +259,30 @@ impl Signex {
             return Task::none();
         }
         let read_path = path.clone();
+        let is_pcb = super::save_async::is_pcb_path(&path);
+        // Edits made while the read runs are not in the file being read.
+        let edit_stamp = self.edit_stamp(&path);
         Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || read_for_reload(&read_path))
+                tokio::task::spawn_blocking(move || read_for_reload(&read_path, is_pcb))
                     .await
                     .unwrap_or_else(|e| Err(format!("the reload worker failed: {e}")))
             },
-            move |result| Message::File(FileMsg::DiskReloadFinished { path, result }),
+            move |result| {
+                Message::File(FileMsg::DiskReloadFinished {
+                    path,
+                    edit_stamp,
+                    result,
+                })
+            },
         )
     }
 
     pub(crate) fn handle_disk_reload_finished(
         &mut self,
         path: PathBuf,
-        result: Result<Box<ReloadedSheet>, String>,
+        edit_stamp: EditStamp,
+        result: Result<Box<ReloadedFile>, String>,
     ) -> Task<Message> {
         let name = file_label(&path);
         let reloaded = match result {
@@ -274,19 +294,29 @@ impl Signex {
                 return Task::none();
             }
         };
-        let Some(idx) = self
-            .document_state
-            .tabs
-            .iter()
-            .position(|tab| tab.path == path && matches!(tab.kind, TabKind::Schematic))
-        else {
+        let Some(idx) = self.document_state.tabs.iter().position(|tab| {
+            tab.path == path && matches!(tab.kind, TabKind::Schematic | TabKind::Pcb)
+        }) else {
             crate::diagnostics::log_warning(format!(
                 "[reload] {name} is no longer open; nothing was reloaded"
             ));
             return Task::none();
         };
-        let ReloadedSheet { sheet, hash } = *reloaded;
-        let task = self.apply_reloaded(idx, Ok(RestoreJobDocument::Schematic(sheet)), None);
+        // Same rule as a History restore: edits made during the read are kept.
+        // The card comes back, so the user chooses again with the new edits.
+        if self.edit_stamp(&path) != edit_stamp {
+            crate::diagnostics::log_warning(format!(
+                "[reload] {name} was edited while it reloaded; the edits were kept, nothing \
+                 was reloaded"
+            ));
+            if self.document_state.error_notice.is_none() {
+                self.document_state.error_notice =
+                    Some(ErrorNotice::disk_changed(path, DiskDrift::Changed));
+            }
+            return Task::none();
+        }
+        let ReloadedFile { document, hash } = *reloaded;
+        let task = self.apply_reloaded_with(idx, Ok(document), None, false);
         self.document_state.mark_document_clean(&path);
         self.document_state.document_saves.clear_failure(&path);
         self.record_disk_baseline(&path, hash);

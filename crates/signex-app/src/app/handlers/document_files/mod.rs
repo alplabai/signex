@@ -10,7 +10,7 @@ mod commit_bytes_tests;
 mod dir_case;
 mod external_change;
 pub(crate) use dir_case::FoldAnswer;
-pub(crate) use external_change::ReloadedSheet;
+pub(crate) use external_change::ReloadedFile;
 #[cfg(test)]
 mod dir_case_tests;
 mod git;

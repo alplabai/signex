@@ -433,17 +433,19 @@ impl Engine {
     }
 
     /// [`Self::save`] writing `colors` as the net colour overrides; see
-    /// [`Self::serialize_with_net_colors`].
+    /// [`Self::serialize_with_net_colors`]. Returns the bytes written, so a
+    /// caller fingerprints what it wrote instead of re-reading the file.
     pub fn save_with_net_colors(
         &mut self,
         colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    ) -> Result<(), EngineError> {
+    ) -> Result<Vec<u8>, EngineError> {
         let Some(path) = self.path.clone() else {
             return Err(EngineError::MissingPath);
         };
-        let content = self.serialize_with_net_colors(colors)?;
-        signex_types::atomic_io::atomic_write_existing_dir(&path, content.as_bytes())
-            .map_err(EngineError::SaveFailed)
+        let bytes = self.serialize_with_net_colors(colors)?.into_bytes();
+        signex_types::atomic_io::atomic_write_existing_dir(&path, &bytes)
+            .map_err(EngineError::SaveFailed)?;
+        Ok(bytes)
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {

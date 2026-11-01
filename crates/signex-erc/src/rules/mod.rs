@@ -356,6 +356,11 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for pin in ctx.symbols.iter().flat_map(|s| s.pins.iter()) {
         non_wire.insert(pin.world_pos, ());
     }
+    // Sheet-symbol pins sit in world coordinates, as `build_netlist` anchors
+    // them (issue #1834).
+    for pin in ctx.child_sheets.iter().flat_map(|c| c.pins.iter()) {
+        non_wire.insert(pin.position, ());
+    }
     for j in &ctx.junctions {
         non_wire.insert(j.position, ());
     }
