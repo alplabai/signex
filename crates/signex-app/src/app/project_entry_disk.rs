@@ -137,6 +137,57 @@ fn write_patched(project_file: &Path, data: &ProjectData) -> Result<EntryPatch, 
         source,
     };
     let bytes = encode_project(data).map_err(|e| io(std::io::Error::other(e.to_string())))?;
-    signex_types::atomic_io::atomic_write(project_file, &bytes).map_err(io)?;
+    let written = signex_types::atomic_io::atomic_write(project_file, &bytes);
+    settle_write(project_file, &bytes, written).map_err(io)?;
     Ok(EntryPatch::Patched(std::sync::Arc::new(bytes)))
+}
+
+/// `atomic_write` can fail after its rename already replaced the file (the
+/// parent-directory fsync). Rolling the sheet back then would leave the saved
+/// project naming a file that is not there, so a write error is judged by what
+/// is on disk: if the file already holds exactly `bytes`, the write counts as
+/// committed and the failure is only warned about.
+fn settle_write(
+    project_file: &Path,
+    bytes: &[u8],
+    written: std::io::Result<()>,
+) -> std::io::Result<()> {
+    let Err(error) = written else {
+        return Ok(());
+    };
+    if std::fs::read(project_file).is_ok_and(|on_disk| on_disk == bytes) {
+        crate::diagnostics::log_warning(format!(
+            "{} was updated, but flushing it to disk reported an error ({error}); the change is kept.",
+            project_file
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        ));
+        return Ok(());
+    }
+    Err(error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_write_error_after_the_rename_landed_counts_as_committed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("P.snxprj");
+        std::fs::write(&file, b"patched").expect("write");
+        let fsync_failed = Err(std::io::Error::other("fsync of parent failed"));
+        assert!(settle_write(&file, b"patched", fsync_failed).is_ok());
+    }
+
+    #[test]
+    fn a_write_error_with_the_old_bytes_on_disk_stays_an_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("P.snxprj");
+        std::fs::write(&file, b"old").expect("write");
+        let failed = Err(std::io::Error::other("denied"));
+        assert!(settle_write(&file, b"patched", failed).is_err());
+        let missing = dir.path().join("Gone.snxprj");
+        assert!(settle_write(&missing, b"patched", Err(std::io::Error::other("x"))).is_err());
+    }
 }
