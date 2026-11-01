@@ -287,6 +287,15 @@ impl Signex {
             self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
+        // A parked draft keeps its baseline; nothing left means a later engine
+        // for the file must start without one (#1865).
+        if !self.document_state.engines.contains_key(&closing_path)
+            && !self.has_tab_for(&closing_path)
+        {
+            self.document_state
+                .document_saves
+                .forget_disk_records(&closing_path);
+        }
         self.document_state.tab_placements.forget(&closing_path);
         // The remembered page setup is session memory for an open document;
         // once no tab holds the path any more it has nothing to restore into.

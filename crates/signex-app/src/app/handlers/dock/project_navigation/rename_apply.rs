@@ -298,9 +298,11 @@ impl Signex {
                 .document_saves
                 .record_failure(new_path.to_path_buf(), reason);
         }
-        self.document_state
-            .document_saves
-            .rekey_disk_records(old_path, new_path);
+        self.document_state.document_saves.rekey_disk_records(
+            old_path,
+            new_path,
+            std::fs::canonicalize(new_path).ok(),
+        );
         // A PCB's save revision is keyed by path (#1040); without the move
         // every later save would compare against a missing key.
         if let Some(revision) = self.document_state.pcb_revisions.remove(old_path) {

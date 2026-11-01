@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, TryLockError};
 
 /// The key a write to `path` is ordered under.
 ///
@@ -161,6 +161,20 @@ struct Ledger {
     /// Jobs handed out and not yet finished (or dropped unrun).
     in_flight: Mutex<usize>,
     idle: Condvar,
+    /// Per ledger key: paths whose own-write hashes a read (or a close) made
+    /// stale while a job held the slot. The next holder of the slot applies
+    /// them, so the update thread never waits on a write.
+    stale_hashes: Mutex<HashMap<String, Vec<PathBuf>>>,
+}
+
+/// Apply the stale-hash requests queued under `key` to the slot's records.
+fn apply_stale_hashes(ledger: &Ledger, key: &str, files: &mut [Newest]) {
+    let Some(paths) = relock(&ledger.stale_hashes).remove(key) else {
+        return;
+    };
+    for newest in files.iter_mut().filter(|n| paths.contains(&n.path)) {
+        newest.hash = None;
+    }
 }
 
 fn relock<G>(mutex: &Mutex<G>) -> MutexGuard<'_, G> {
@@ -254,6 +268,7 @@ impl DocumentSaveJob {
                 .or_default(),
         );
         let mut files = relock(&slot);
+        apply_stale_hashes(&self.ledger, &self.key, &mut files);
         let matches: Vec<SameFile> = files
             .iter()
             .map(|newest| self.relation_to(&newest.path))
@@ -383,15 +398,34 @@ impl DocumentSaves {
     /// of this process no longer describe the file, so a save stops accepting
     /// their bytes: a file put back to one of them by another program is drift.
     pub fn set_baseline_from_read(&mut self, path: PathBuf, hash: super::ContentHash) {
-        let slot = relock(&self.ledger.newest_written)
-            .get(&ledger_key(&path))
-            .cloned();
-        if let Some(slot) = slot {
-            for newest in relock(&slot).iter_mut().filter(|n| n.path == path) {
-                newest.hash = None;
-            }
-        }
+        self.forget_own_write_hashes(&path);
         self.baselines.insert(path, hash);
+    }
+
+    /// Stop accepting what this process's earlier writes put in `path`. Never
+    /// waits for a running job: when one holds the file's slot the request is
+    /// queued and the next holder applies it (see [`Ledger::stale_hashes`]).
+    pub fn forget_own_write_hashes(&mut self, path: &Path) {
+        let key = ledger_key(path);
+        let slot = relock(&self.ledger.newest_written).get(&key).cloned();
+        let Some(slot) = slot else {
+            return;
+        };
+        let mut files = match slot.try_lock() {
+            Ok(files) => files,
+            Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(TryLockError::WouldBlock) => {
+                relock(&self.ledger.stale_hashes)
+                    .entry(key)
+                    .or_default()
+                    .push(path.to_path_buf());
+                return;
+            }
+        };
+        apply_stale_hashes(&self.ledger, &key, &mut files);
+        for newest in files.iter_mut().filter(|n| n.path == path) {
+            newest.hash = None;
+        }
     }
 
     /// Whether `hash` is a state of `path` this document knew: its baseline,
@@ -403,8 +437,11 @@ impl DocumentSaves {
         let slot = relock(&self.ledger.newest_written)
             .get(&ledger_key(path))
             .cloned();
-        let own = slot
-            .map(|slot| known_hashes(baseline, relock(&slot).iter().filter(|n| n.path == path)));
+        let own = slot.map(|slot| {
+            let mut files = relock(&slot);
+            apply_stale_hashes(&self.ledger, &ledger_key(path), &mut files);
+            known_hashes(baseline, files.iter().filter(|n| n.path == path))
+        });
         own.unwrap_or_else(|| vec![baseline]).contains(&hash)
     }
 
@@ -419,7 +456,11 @@ impl DocumentSaves {
             .get(&ledger_key(path))
             .cloned();
         let known = match slot {
-            Some(slot) => known_hashes(baseline, relock(&slot).iter().filter(|n| n.path == path)),
+            Some(slot) => {
+                let mut files = relock(&slot);
+                apply_stale_hashes(&self.ledger, &ledger_key(path), &mut files);
+                known_hashes(baseline, files.iter().filter(|n| n.path == path))
+            }
             None => vec![baseline],
         };
         super::drift_from(path, &known)
@@ -445,17 +486,27 @@ impl DocumentSaves {
     }
 
     /// A document's file was renamed: its content, hence its baseline, is the
-    /// same. The real path is not carried; the renamed document is simply not
-    /// matched against symlink aliases until it is read again.
-    pub fn rekey_disk_records(&mut self, old: &Path, new: &Path) {
+    /// same. `new_real` is the renamed file's real path, read by the caller
+    /// (a symlink to it must still find the open tab, #1865).
+    pub fn rekey_disk_records(&mut self, old: &Path, new: &Path, new_real: Option<PathBuf>) {
         if let Some(hash) = self.baselines.remove(old) {
             self.baselines.insert(new.to_path_buf(), hash);
         }
         self.real_paths.remove(old);
+        if let Some(real) = new_real {
+            self.real_paths.insert(new.to_path_buf(), real);
+        }
     }
 
-    /// Stop comparing saves of `path` with disk: a Save As left the old path,
-    /// or the file could not be read back after a save.
+    /// The document at `path` is gone (its tab closed with nothing parked):
+    /// a later engine for the file must not compare with its old records.
+    pub fn forget_disk_records(&mut self, path: &Path) {
+        self.baselines.remove(path);
+        self.real_paths.remove(path);
+        self.forget_own_write_hashes(path);
+    }
+
+    /// Stop comparing saves of `path` with disk, keeping its other records.
     pub fn forget_baseline(&mut self, path: &Path) {
         self.baselines.remove(path);
     }
@@ -878,5 +929,95 @@ mod tests {
             SaveOutcome::DiskChanged(super::super::DiskDrift::Changed)
         );
         assert_eq!(std::fs::read(&path).unwrap(), b"theirs");
+    }
+
+    /// A sink whose write stays open until the test releases it.
+    struct GatedSink {
+        entered: Mutex<std::sync::mpsc::Sender<()>>,
+        release: Mutex<std::sync::mpsc::Receiver<()>>,
+    }
+
+    impl DocumentSink for GatedSink {
+        fn write(&self, _path: &Path, _bytes: &[u8]) -> io::Result<()> {
+            relock(&self.entered).send(()).unwrap();
+            relock(&self.release).recv().unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_read_does_not_wait_for_a_running_write_and_its_update_still_lands() {
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let mut saves = DocumentSaves::new(Arc::new(GatedSink {
+            entered: Mutex::new(entered_tx),
+            release: Mutex::new(release_rx),
+        }));
+        let path = PathBuf::from("a.snxsch");
+        let job = saves.begin(path.clone(), b"mine".to_vec());
+        let running = std::thread::spawn(move || job.run());
+        entered_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the write started");
+        let read = super::super::ContentHash::of(b"read from disk");
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                saves.set_baseline_from_read(path.clone(), read);
+                done_tx.send(()).unwrap();
+            });
+            let returned = done_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok();
+            release_tx.send(()).unwrap();
+            assert!(returned, "set_baseline_from_read waited for the write");
+        });
+        assert_eq!(running.join().unwrap().unwrap(), SaveOutcome::Written);
+
+        // The deferred update landed: the write that ran meanwhile is no
+        // longer a fingerprint a later save accepts.
+        assert_eq!(saves.baseline(&path), Some(read));
+        assert!(!saves.knows(&path, super::super::ContentHash::of(b"mine")));
+        assert!(saves.knows(&path, read));
+    }
+
+    #[test]
+    fn forgetting_a_documents_records_drops_baseline_real_path_and_own_writes() {
+        let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
+        let path = PathBuf::from("a.snxsch");
+        saves.begin(path.clone(), b"mine".to_vec()).run().unwrap();
+        let base = super::super::ContentHash::of(b"base");
+        saves.set_baseline(path.clone(), base);
+        saves.set_real_path(path.clone(), PathBuf::from("/real/a.snxsch"));
+        assert!(saves.knows(&path, super::super::ContentHash::of(b"mine")));
+
+        saves.forget_disk_records(&path);
+
+        assert_eq!(saves.baseline(&path), None);
+        assert_eq!(
+            saves.alias_of(Path::new("b"), Path::new("/real/a.snxsch"), |_| true),
+            None
+        );
+        saves.set_baseline(path.clone(), base);
+        assert!(
+            !saves.knows(&path, super::super::ContentHash::of(b"mine")),
+            "an earlier write of a closed document is not accepted by a later one"
+        );
+    }
+
+    #[test]
+    fn a_rename_re_derives_the_real_path() {
+        let mut saves = DocumentSaves::new(Arc::new(Recorder::default()));
+        saves.set_real_path("old.snxsch".into(), "/real/old.snxsch".into());
+        saves.rekey_disk_records(
+            Path::new("old.snxsch"),
+            Path::new("new.snxsch"),
+            Some("/real/new.snxsch".into()),
+        );
+        let alias = saves.alias_of(Path::new("link"), Path::new("/real/new.snxsch"), |_| true);
+        assert_eq!(alias, Some(PathBuf::from("new.snxsch")));
+        let stale = saves.alias_of(Path::new("link"), Path::new("/real/old.snxsch"), |_| true);
+        assert_eq!(stale, None);
     }
 }

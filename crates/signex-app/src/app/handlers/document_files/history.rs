@@ -244,7 +244,10 @@ impl Signex {
         // The restore wrote these exact bytes outside the save ledger: the
         // next save compares with them, not with what the sheet was opened from.
         if let Ok(restored) = &result
-            && matches!(restored.document, RestoreJobDocument::Schematic(_))
+            && matches!(
+                restored.document,
+                RestoreJobDocument::Schematic(_) | RestoreJobDocument::Pcb(_)
+            )
         {
             self.record_disk_baseline(&path, crate::persist::ContentHash::of(&restored.bytes));
         }

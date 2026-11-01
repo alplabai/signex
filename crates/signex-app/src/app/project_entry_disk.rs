@@ -195,7 +195,7 @@ fn write_patched(project_file: &Path, data: &ProjectData) -> Result<EntryPatch, 
         source,
     };
     let bytes = encode_project(data).map_err(|e| io(std::io::Error::other(e.to_string())))?;
-    let written = signex_types::atomic_io::atomic_write(project_file, &bytes);
+    let written = signex_types::atomic_io::atomic_write_existing_dir(project_file, &bytes);
     settle_write(project_file, &bytes, written).map_err(io)?;
     Ok(EntryPatch::Patched(std::sync::Arc::new(bytes)))
 }
