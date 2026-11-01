@@ -413,10 +413,20 @@ fn rename_re_points_a_saved_reference_the_open_parent_no_longer_holds() {
 /// and the stale open is reported.
 #[test]
 fn a_parent_whose_open_is_in_flight_is_not_patched_behind_it() {
+    for spelling in ["Root.snxsch", "root.snxsch"] {
+        in_flight_open_is_not_patched_behind(spelling);
+    }
+}
+
+fn in_flight_open_is_not_patched_behind(spelling: &str) {
     let mut f = fixture();
     let root = f.dir.join("Root.snxsch");
     let before = std::fs::read(&root).expect("read root");
-    f.app.document_state.pending_opens.insert(root.clone());
+    // The open may be spelled differently in case on a case-insensitive volume.
+    f.app
+        .document_state
+        .pending_opens
+        .insert(f.dir.join(spelling));
 
     rename(&mut f, "Child.snxsch", "Kid.snxsch");
 

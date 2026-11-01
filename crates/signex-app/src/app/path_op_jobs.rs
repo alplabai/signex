@@ -255,7 +255,10 @@ impl DeleteJob {
         let Err(e) = removed else {
             return (DeleteIo::Deleted, entry);
         };
-        let why = e.to_string();
+        let mut why = e.to_string();
+        if self.target.is_dir() {
+            why.push_str("; some of its contents may already be gone");
+        }
         let EntryPatch::Patched(_) = &entry else {
             return (DeleteIo::Failed(why), EntryPatch::NotListed);
         };

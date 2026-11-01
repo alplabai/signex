@@ -212,6 +212,16 @@ impl Signex {
         }
     }
 
+    /// Is an open of `path` still reading it? Compared case-folded whatever the
+    /// volume does: a spelling that differs only in case can only make this
+    /// refuse more, never miss an open the volume would treat as the same file.
+    pub(crate) fn open_in_flight(&self, path: &Path) -> bool {
+        let key = path_key_with(path, crate::app::state::scope::CaseFold::from_probe(true));
+        self.document_state.pending_opens.paths().any(|open| {
+            path_key_with(open, crate::app::state::scope::CaseFold::from_probe(true)) == key
+        })
+    }
+
     /// Parents the disk job scanned that the plan did not name (a reference
     /// that exists only in the saved file). One that was rewritten differs from
     /// an open engine that still holds the old state, so it gets the external
@@ -223,16 +233,29 @@ impl Signex {
         disk: &ParentDiskOutcomes,
         context: &str,
     ) {
-        for (parent, outcome) in disk {
+        let mut outcomes: Vec<_> = disk.iter().collect();
+        outcomes.sort_by_key(|(parent, _)| *parent);
+        for (parent, outcome) in outcomes {
             if plan.rewrites.iter().any(|r| &r.parent == parent) {
                 continue;
             }
+            let open = self.document_state.engines.contains_key(parent);
             match outcome {
-                ParentDisk::Written(_) if self.document_state.engines.contains_key(parent) => {
+                ParentDisk::Written(_) if open => {
                     self.document_state.mark_document_dirty(parent);
+                    crate::diagnostics::log_warning(format!(
+                        "{context}: {} names the renamed sheet only in its saved file; the \
+                         saved copy now names the new file, so undoing the unsaved change in \
+                         the open sheet would bring the old name back.",
+                        parent.display()
+                    ));
                 }
                 ParentDisk::Skipped(why) => crate::diagnostics::log_warning(format!(
                     "{context}: {} {why}, so its saved reference was not updated.",
+                    parent.display()
+                )),
+                ParentDisk::Unchecked(why) if open => crate::diagnostics::log_warning(format!(
+                    "{context}: {} {why}, so whether it references the sheet is unknown.",
                     parent.display()
                 )),
                 _ => {}
@@ -251,16 +274,16 @@ impl Signex {
         plan: &ReferencePlan,
         from: &Path,
     ) -> Vec<PathBuf> {
-        let mut candidates: Vec<PathBuf> = plan
-            .rewrites
-            .iter()
-            .map(|rewrite| rewrite.parent.clone())
-            .collect();
         let is_sheet = |path: &Path| path.extension().is_some_and(|e| e == "snxsch");
         // Only a renamed sheet can be placed by a sheet symbol.
         if !is_sheet(from) {
             return Vec::new();
         }
+        let mut candidates: Vec<PathBuf> = plan
+            .rewrites
+            .iter()
+            .map(|rewrite| rewrite.parent.clone())
+            .collect();
         if let Some(project) = owner.and_then(|id| self.document_state.project_by_id(id)) {
             let fold = project.case_fold;
             candidates.extend(
@@ -282,7 +305,7 @@ impl Signex {
                 .pending_path_ops
                 .blocking_start(parent)
                 .is_none()
-                && !self.document_state.pending_opens.contains(parent)
+                && !self.open_in_flight(parent)
         });
         candidates
     }
@@ -396,8 +419,15 @@ impl Signex {
                     ));
             }
         }
+        // A planned parent left behind is reported once, through `left`.
+        let mut disk = disk.clone();
+        for rewrite in &plan.rewrites {
+            if !followed.rewrites.contains(rewrite) {
+                disk.remove(&rewrite.parent);
+            }
+        }
         let outcome =
-            self.apply_reference_rewrites_for(&followed, ParentSheets::new(), disk, "save-as");
+            self.apply_reference_rewrites_for(&followed, ParentSheets::new(), &disk, "save-as");
         left.not_rewritten.extend(outcome.failed);
         left.not_rewritten.sort();
         left.not_rewritten.dedup();
@@ -415,7 +445,7 @@ impl Signex {
         // An open of this parent that started before the rename is still in
         // flight: it read the old bytes and would install them as a clean
         // engine, whatever the disk now holds.
-        if loaded_here && self.document_state.pending_opens.contains(parent) {
+        if loaded_here && self.open_in_flight(parent) {
             return Err("is still opening, so its reference was not updated".to_string());
         }
         // The saved parent already names the new file and no engine holds it:
