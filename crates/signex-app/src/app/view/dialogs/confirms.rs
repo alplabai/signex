@@ -444,11 +444,16 @@ impl Signex {
         rows: &[crate::library::state::EditorAddress],
         text_c: iced::Color,
     ) -> Vec<Element<'_, Message>> {
+        let roots = self.draft_library_roots();
+        let drafts: std::collections::HashSet<_> =
+            self.document_state.dirty_primitive_paths().collect();
         let path_labels = paths.iter().map(|path| {
-            path.file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("(unnamed)")
-                .to_string()
+            let dir = drafts.contains(path).then(|| {
+                let fold = self.identity_decision(path).fold;
+                crate::app::state::scope::owning_library(path, &roots, fold)
+                    .and_then(|lib| lib.parent())
+            });
+            crate::library::close_prompt::dirty_path_label(path, dir.flatten())
         });
         let row_labels = rows
             .iter()

@@ -125,3 +125,115 @@ fn a_symbol_and_a_row_are_both_listed_and_both_discarded() {
     assert!(!f.app.document_state.is_document_dirty(&symbol));
     assert!(f.app.library.editors.is_empty());
 }
+
+/// A second library mounted in a subfolder of the fixture's library folder
+/// (display entry only; nothing is written through it).
+fn mount_nested_library(f: &mut Fixture) -> PathBuf {
+    let root = f.file.parent().unwrap().join("vendor").join("V.snxlib");
+    f.app.library.open_libraries.push(OpenLibrary {
+        root: root.clone(),
+        display_name: "V".into(),
+        library_id: Uuid::now_v7(),
+        tables: std::collections::HashMap::new(),
+        cached_components: Vec::new(),
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+        pricing: Default::default(),
+    });
+    root
+}
+
+fn nested_symbol(f: &Fixture) -> PathBuf {
+    f.file
+        .parent()
+        .unwrap()
+        .join("vendor")
+        .join("symbols")
+        .join("x.snxsym")
+}
+
+#[test]
+fn closing_the_nested_library_prompts_for_its_own_draft() {
+    let mut f = fixture();
+    let nested = mount_nested_library(&mut f);
+    let symbol = nested_symbol(&f);
+    open_dirty_symbol(&mut f, &symbol);
+
+    send(&mut f, LibraryMessage::CloseLibrary(nested));
+
+    let confirm = f
+        .app
+        .library
+        .close_library_confirm
+        .as_ref()
+        .expect("the nested library owns the draft, so closing it asks");
+    assert_eq!(confirm.dirty_paths, vec![symbol]);
+}
+
+#[test]
+fn closing_the_outer_library_does_not_offer_the_nested_librarys_draft() {
+    let mut f = fixture();
+    let _nested = mount_nested_library(&mut f);
+    let symbol = nested_symbol(&f);
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+
+    assert!(
+        f.app.library.close_library_confirm.is_none(),
+        "the draft is the nested library's, not the outer one's"
+    );
+    assert!(
+        f.app.document_state.is_document_dirty(&symbol),
+        "the draft is untouched"
+    );
+}
+
+#[test]
+fn discard_all_asks_again_when_a_draft_became_dirty_behind_the_prompt() {
+    let mut f = fixture();
+    let first = symbol_in_library(&f, "first.snxsym");
+    open_dirty_symbol(&mut f, &first);
+    request_close(&mut f);
+    let second = symbol_in_library(&f, "second.snxsym");
+    open_dirty_symbol(&mut f, &second);
+
+    send(
+        &mut f,
+        LibraryMessage::CloseLibraryConfirm(CloseLibraryChoice::DiscardAll),
+    );
+
+    assert!(
+        f.app.document_state.is_document_dirty(&first),
+        "nothing discarded"
+    );
+    assert!(f.app.document_state.is_document_dirty(&second));
+    let confirm = f
+        .app
+        .library
+        .close_library_confirm
+        .as_ref()
+        .expect("asked again");
+    assert_eq!(confirm.dirty_paths, vec![first, second]);
+    assert!(f.app.library.library_at(&f.file).is_some(), "still mounted");
+}
+
+#[test]
+fn drafts_are_labelled_by_their_path_in_the_library() {
+    use crate::library::close_prompt::dirty_path_label;
+    let dir = std::path::Path::new("/w/Lib");
+    let nested = dir.join("vendor").join("symbols").join("s.snxsym");
+    let plain = dir.join("symbols").join("s.snxsym");
+    assert_eq!(
+        dirty_path_label(&nested, Some(dir)),
+        "vendor/symbols/s.snxsym"
+    );
+    assert_eq!(dirty_path_label(&plain, Some(dir)), "symbols/s.snxsym");
+    assert_eq!(dirty_path_label(&plain, None), "s.snxsym");
+}

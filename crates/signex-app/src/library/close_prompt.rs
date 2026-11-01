@@ -23,6 +23,28 @@ use super::messages::{CloseLibraryChoice, LibraryMessage};
 use super::modal_chrome::{close_x, primary_btn, secondary_btn};
 use super::state::{CloseLibraryConfirmState, LibraryState};
 
+/// How a confirm modal names an unsaved file: relative to its library's
+/// folder when it has one (`vendor/symbols/s.snxsym`, so same-named drafts of
+/// different folders differ), else its file name.
+pub(crate) fn dirty_path_label(
+    path: &std::path::Path,
+    library_dir: Option<&std::path::Path>,
+) -> String {
+    let relative = library_dir.and_then(|dir| path.strip_prefix(dir).ok());
+    match relative {
+        Some(rest) => rest
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/"),
+        None => path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("(unnamed)")
+            .to_string(),
+    }
+}
+
 pub fn view<'a>(
     state: &'a LibraryState,
     confirm: &'a CloseLibraryConfirmState,
@@ -75,15 +97,16 @@ pub fn view<'a>(
                 .into(),
         );
     }
+    let library_dir = confirm.library_path.parent();
     for path in &confirm.dirty_paths {
-        let label = path.file_name().map_or_else(
-            || path.display().to_string(),
-            |n| n.to_string_lossy().into_owned(),
-        );
         rows.push(
-            container(text(label).size(ts.body).color(text_c))
-                .padding([sp.s, sp.m])
-                .into(),
+            container(
+                text(dirty_path_label(path, library_dir))
+                    .size(ts.body)
+                    .color(text_c),
+            )
+            .padding([sp.s, sp.m])
+            .into(),
         );
     }
     let list = scrollable(column(rows).spacing(0))

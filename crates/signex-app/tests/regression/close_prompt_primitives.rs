@@ -4,6 +4,7 @@
 use signex_app::app::{
     Message, ProjectCloseChoice, ProjectMsg, Signex, SymbolDocument, TabInfo, TabKind,
 };
+use signex_types::project::LibraryEntryKind;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
@@ -118,7 +119,7 @@ fn a_symbol_and_a_row_are_listed_together() {
 }
 
 #[test]
-fn a_symbol_of_a_nested_project_is_not_offered_to_the_outer_one() {
+fn an_outer_project_does_not_claim_the_drafts_of_a_nested_project() {
     let tmp = TempDir::new().unwrap();
     let mut app = app_with_open_project(tmp.path());
     let sub = tmp.path().join("sub");
@@ -132,4 +133,61 @@ fn a_symbol_of_a_nested_project_is_not_offered_to_the_outer_one() {
         "B's symbol is not A's to save or discard",
     );
     assert!(app.document_state.is_document_dirty(&symbol_path(&sub)));
+}
+
+/// Re-list project `index`'s library entry as `kind`, at `path`.
+fn relist_library(app: &mut Signex, index: usize, kind: LibraryEntryKind, path: PathBuf) {
+    let entry = &mut app.document_state.projects[index].data.libraries[0];
+    entry.kind = kind;
+    entry.path = path;
+}
+
+#[test]
+fn a_shared_librarys_draft_is_kept_on_close_project_and_not_listed() {
+    // The shared library stays mounted when the project closes, so its draft
+    // is not the project's to save or discard: it stays open and dirty.
+    let tmp = TempDir::new().unwrap();
+    let lib = tmp.path().join("shared").join("g.snxlib");
+    let draft = lib.parent().unwrap().join("footprints").join("d.snxfpt");
+    let mut app = app_with_open_project(tmp.path());
+    relist_library(&mut app, 0, LibraryEntryKind::Shared, lib);
+    open_footprint_editor(&mut app, &draft);
+    edit_description_via_panel(&mut app);
+
+    crate::close_support::close_first_project(&mut app);
+
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "a shared library's draft is not offered to Close Project",
+    );
+    assert!(app.document_state.projects.is_empty(), "the project closes");
+    assert!(app.document_state.is_document_dirty(&draft));
+    assert!(app.document_state.footprint_editors.contains_key(&draft));
+    assert!(app.document_state.tabs.iter().any(|t| t.path == draft));
+}
+
+#[test]
+fn a_library_listed_by_two_open_projects_keeps_its_drafts() {
+    let tmp = TempDir::new().unwrap();
+    let common = tmp.path().join("common").join("lib.snxlib");
+    let mut app = app_with_open_project(&tmp.path().join("a"));
+    push_project(&mut app, &tmp.path().join("b"), "b");
+    for index in 0..2 {
+        relist_library(
+            &mut app,
+            index,
+            LibraryEntryKind::ProjectLocal,
+            PathBuf::from("../common/lib.snxlib"),
+        );
+    }
+    let draft = common.parent().unwrap().join("symbols").join("s.snxsym");
+    open_dirty_symbol(&mut app, &draft);
+
+    crate::close_support::close_first_project(&mut app);
+
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "the other open project lists the library too",
+    );
+    assert!(app.document_state.is_document_dirty(&draft));
 }
