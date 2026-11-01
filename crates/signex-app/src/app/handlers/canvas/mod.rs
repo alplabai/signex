@@ -28,6 +28,8 @@ mod sync_sheet_pins;
 mod tests;
 #[cfg(test)]
 mod wire_merge_tests;
+#[cfg(test)]
+mod wire_undo_tests;
 
 /// Default stroke width applied when the user hasn't edited the
 /// pre_placement Width value yet. Standard's "default line width"
