@@ -68,6 +68,7 @@ impl Engine {
         assigned: &mut HashMap<usize, String>,
     ) -> Result<bool, EngineError> {
         self.refuse_if_read_only(None)?;
+        let mark = self.revision_mark();
         self.bump_revision();
         // A designator names the nets nothing else names, so renumbering can
         // rename a net.
@@ -147,6 +148,7 @@ impl Engine {
             // Nothing to reset: no undo step, and an unopened sheet is not
             // rewritten on disk (the caller saves on `Ok(true)`).
             if !changed {
+                self.restore_revision(mark);
                 return Ok(false);
             }
             let patch_pair = PatchPair {
@@ -231,6 +233,7 @@ impl Engine {
                 .zip(&before.symbols)
                 .any(|(now, was)| now.reference != was.reference);
         if !changed {
+            self.restore_revision(mark);
             return Ok(false);
         }
         let patch_pair = PatchPair {

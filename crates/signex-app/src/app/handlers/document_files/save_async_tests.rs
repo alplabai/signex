@@ -44,6 +44,16 @@ fn a_completion_for_the_current_revision_commits_to_git() {
 }
 
 #[test]
+fn an_empty_undo_while_the_write_runs_still_lands_the_save() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path, revision) = app_with_engine(dir.path());
+    let engine = app.document_state.engines.get_mut(&path).expect("engine");
+    assert_eq!(engine.undo().expect("undo"), None);
+    land(&mut app, &path, revision);
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
+#[test]
 fn a_completion_for_another_revision_makes_no_save_commit() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, path, revision) = app_with_engine(dir.path());

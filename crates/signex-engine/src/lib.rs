@@ -339,9 +339,10 @@ impl Engine {
             .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error)))
     }
 
-    /// Changes whenever the document may have changed (any command, undo,
-    /// redo, annotate or replace). Equal revisions mean an unchanged document;
-    /// revisions are unique across engine instances.
+    /// Changes whenever the document changed (a command, undo, redo,
+    /// annotate or replace that did something, or one that failed part-way).
+    /// One that changed nothing keeps it. Equal revisions mean an unchanged
+    /// document; revisions are unique across engine instances.
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -385,6 +386,21 @@ impl Engine {
     pub(crate) fn bump_revision(&mut self) {
         self.base_revision = self.revision;
         self.revision = crate::next_revision();
+    }
+
+    /// The revisions as they stood before an entry point bumped them.
+    pub(crate) fn revision_mark(&self) -> RevisionMark {
+        RevisionMark {
+            revision: self.revision,
+            base_revision: self.base_revision,
+        }
+    }
+
+    /// An entry point that bumped up front and then changed nothing puts the
+    /// revisions back: a no-op must not read as an edit (#1755 step 0).
+    pub(crate) fn restore_revision(&mut self, mark: RevisionMark) {
+        self.revision = mark.revision;
+        self.base_revision = mark.base_revision;
     }
 
     /// Identity of this engine instance; unlike [`Self::revision`] it does
@@ -461,6 +477,7 @@ impl Engine {
         if let Some(refusal) = self.locked_item_refusal(&cmd) {
             return Err(refusal);
         }
+        let mark = self.revision_mark();
         self.bump_revision();
         let before = self.pre_image(&cmd);
 
@@ -523,6 +540,9 @@ impl Engine {
             }
         };
         self.note_command_result(&result);
+        if result.as_ref().is_ok_and(|done| !done.changed) {
+            self.restore_revision(mark);
+        }
         result
     }
 
@@ -563,6 +583,13 @@ impl Engine {
     }
 }
 
+/// See [`Engine::revision_mark`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RevisionMark {
+    revision: u64,
+    base_revision: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,7 +603,16 @@ mod tests {
     fn every_mutating_entry_point_moves_the_revision() {
         use crate::command::AnnotateMode;
         use signex_types::schematic::AnnotateOrder;
-        let mut engine = Engine::new(test_sheet()).unwrap();
+        let mut sheet = test_sheet();
+        // Something for annotate to number: an entry point that changes
+        // nothing keeps the revision.
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::now_v7(),
+            lib_id: "Device:R".to_string(),
+            reference: "R?".to_string(),
+            ..Default::default()
+        });
+        let mut engine = Engine::new(sheet).unwrap();
         let mut last = engine.revision();
         let mut moved = |engine: &Engine, what: &str| {
             assert_ne!(engine.revision(), last, "{what} must move the revision");
@@ -598,13 +634,14 @@ mod tests {
         moved(&engine, "undo");
         engine.redo().unwrap();
         moved(&engine, "redo");
-        engine
+        let numbered = engine
             .annotate_with_seed(
                 AnnotateMode::Incremental,
                 &mut Default::default(),
                 AnnotateOrder::UpThenAcross,
             )
             .unwrap();
+        assert!(numbered, "annotate numbered R?");
         moved(&engine, "annotate");
         engine.set_document(test_sheet());
         moved(&engine, "set_document");
@@ -1152,6 +1189,46 @@ mod tests {
             child.pins[0].uuid, original_uuid,
             "delete does not survive reconcile once #359 wires it in"
         );
+    }
+
+    #[test]
+    fn an_edit_that_changes_nothing_keeps_the_revision() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let paper = |size: &str| Command::SetPaperSize {
+            paper_size: size.to_string(),
+        };
+        engine.execute(paper("A3")).expect("set");
+        let (revision, base) = (engine.revision(), engine.base_revision());
+
+        assert!(!engine.execute(paper("A3")).expect("no-op").changed);
+        assert!(!engine.execute_batch([paper("A3")]).expect("batch").changed);
+        assert_eq!(
+            (engine.revision(), engine.base_revision()),
+            (revision, base),
+            "a command or batch that changed nothing is not an edit"
+        );
+
+        assert!(engine.execute(paper("A2")).expect("set").changed);
+        assert_ne!(engine.revision(), revision);
+        assert_eq!(engine.base_revision(), revision);
+    }
+
+    #[test]
+    fn undo_and_redo_on_an_empty_stack_keep_the_revision() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        let revision = engine.revision();
+        assert_eq!(engine.undo().expect("undo"), None);
+        assert_eq!(engine.redo().expect("redo"), None);
+        assert_eq!(engine.revision(), revision);
+
+        engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".to_string(),
+            })
+            .expect("set");
+        let edited = engine.revision();
+        engine.undo().expect("undo");
+        assert_ne!(engine.revision(), edited, "a real undo still moves it");
     }
 
     #[test]
