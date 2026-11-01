@@ -567,7 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn an_undecided_probe_keeps_case_and_a_missing_folder_gives_the_same_answer() {
+    fn a_missing_folder_gives_the_same_answer_as_its_nearest_existing_one() {
         let tmp = tempfile::tempdir().unwrap();
         let doc = tmp.path().join("Gone/Sheet.snxsch");
         // The folder does not exist: the nearest existing one is asked, not
@@ -578,6 +578,31 @@ mod tests {
         assert_eq!(keys::stable_ignores_case(&doc), before);
         std::fs::remove_dir_all(doc.parent().unwrap()).unwrap();
         assert_eq!(keys::stable_ignores_case(&doc), before);
+    }
+
+    #[test]
+    fn an_undecided_probe_answers_the_host_rule_every_time_it_fails() {
+        // The probe fails differently from call to call (an entry deleted by
+        // another process, nothing lettered to flip): the key must not.
+        let tmp = tempfile::tempdir().unwrap();
+        let doc = tmp.path().join("Sheet.snxsch");
+        let vanished = |_: &Path| Err("entry vanished during the probe".to_string());
+        let nothing_lettered = |_: &Path| Ok(None);
+
+        let first = keys::stable_ignores_case_with(&doc, vanished);
+        let second = keys::stable_ignores_case_with(&doc, nothing_lettered);
+
+        assert_eq!(first, keys::HOST_IGNORES_CASE);
+        assert_eq!(second, first);
+        // A decided probe still wins over the host rule.
+        assert!(keys::stable_ignores_case_with(&doc, |_| Ok(Some(true))));
+        assert!(!keys::stable_ignores_case_with(&doc, |_| Ok(Some(false))));
+        // So does the sidecar path computed from either failure.
+        let rec = tmp.path().join("rec");
+        assert_eq!(
+            sidecar_path_with(&rec, &doc, first),
+            sidecar_path_with(&rec, &doc, second)
+        );
     }
 
     #[test]
