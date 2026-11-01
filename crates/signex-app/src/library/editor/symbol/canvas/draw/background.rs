@@ -241,13 +241,13 @@ impl SymbolCanvas<'_> {
                 &h,
                 canvas::Stroke::default()
                     .with_color(self.axis_color)
-                    .with_width(stroke_px_at_zoom(SYMBOL_AXIS_STROKE_PX_AT_100, scale)),
+                    .with_width(SYMBOL_AXIS_LINE_PX),
             );
             frame.stroke(
                 &v,
                 canvas::Stroke::default()
                     .with_color(self.axis_color)
-                    .with_width(stroke_px_at_zoom(SYMBOL_AXIS_STROKE_PX_AT_100, scale)),
+                    .with_width(SYMBOL_AXIS_LINE_PX),
             );
             frame.fill(
                 &canvas::Path::circle(origin, (marker_half * 0.14).clamp(1.0, 2.5)),

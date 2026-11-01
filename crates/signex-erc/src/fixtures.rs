@@ -85,6 +85,8 @@ fn sheet_pin(name: &str) -> ErcSheetPin {
         uuid: Uuid::now_v7(),
         name: name.into(),
         position: pt(1.0, 1.0),
+        direction: String::new(),
+        connected: false,
     }
 }
 
@@ -259,6 +261,28 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.symbols.push(s);
         }
         RuleKind::OffGrid => c.wires.push(wire(pt(0.0, 0.0), pt(1.0, 0.0))),
+        RuleKind::SheetPinUnconnected => c.child_sheets.push(ErcChildSheet {
+            uuid: Uuid::now_v7(),
+            name: "Sub".into(),
+            filename: "sub.snxsch".into(),
+            position: pt(0.0, 0.0),
+            pins: vec![sheet_pin("IN")],
+        }),
+        RuleKind::SheetPinDirectionConflict => {
+            c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+            let output_pin = |at: Point| ErcSheetPin {
+                position: at,
+                direction: "output".into(),
+                ..sheet_pin("OUT")
+            };
+            c.child_sheets.push(ErcChildSheet {
+                uuid: Uuid::now_v7(),
+                name: "Sub".into(),
+                filename: "sub.snxsch".into(),
+                position: pt(0.0, 0.0),
+                pins: vec![output_pin(pt(0.0, 0.0)), output_pin(pt(10.0, 0.0))],
+            });
+        }
         RuleKind::LabelsOnlyNet => {
             c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
             c.labels.push(label("N", pt(0.0, 0.0), LabelType::Net));

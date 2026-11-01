@@ -51,6 +51,8 @@ mod external_edits;
 #[cfg(test)]
 mod grid_window_tests;
 mod lifecycle;
+#[cfg(test)]
+mod missing_mount_tests;
 mod new_component;
 mod new_row;
 mod pricing;
@@ -117,6 +119,8 @@ impl Signex {
         let task = Task::batch([task, self.refresh_components_details_if_stale()]);
         if per_event {
             self.sync_diagnostics_panel_ctx();
+            // A part-number keystroke in the preview retitles its tab.
+            self.sync_component_tab_titles();
             return task;
         }
         Task::batch([task, self.finish_update()])

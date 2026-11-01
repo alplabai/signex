@@ -14,6 +14,7 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
+use crate::app::path_ops::PlacingSymbol;
 use crate::app::project_sheets::{lexically_normalize, resolve_child_reference};
 use crate::app::sheet_hierarchy::{SheetHierarchy, SheetNode, SheetNodeKind};
 use crate::app::state::scope::{CaseFold, path_key_with};
@@ -29,6 +30,9 @@ pub(crate) struct RemoveBlockers {
     /// The row's own parent, when it places the file: after a delete its
     /// symbol shows the sheet as missing.
     pub(crate) own_parent: Option<PathBuf>,
+    /// The sheet symbols that place the file (every one when delete is not
+    /// blocked, since then only the row's own parent places it).
+    pub(crate) symbols: Vec<PlacingSymbol>,
     /// Some sheet places the file, so excluding it from the project does not
     /// take it out of the design.
     pub(crate) placed: bool,
@@ -63,6 +67,9 @@ fn names(paths: &[PathBuf]) -> String {
 pub(crate) struct SheetUsers {
     /// Sorted, no repeats.
     pub(crate) parents: Vec<PathBuf>,
+    /// The symbols on those sheets that place the file, sorted, one per
+    /// symbol.
+    pub(crate) symbols: Vec<PlacingSymbol>,
     /// Set when some project or document could not be ruled out.
     pub(crate) unknown: Option<String>,
 }
@@ -111,6 +118,13 @@ impl Signex {
         };
         let (own, other): (Vec<PathBuf>, Vec<PathBuf>) =
             users.parents.iter().cloned().partition(|p| is_own(p));
+        // Delete is only offered when no other sheet places the file, so every
+        // symbol it would leave dangling sits on the row's own parent.
+        debug_assert!(
+            !other.is_empty() || users.symbols.iter().all(|s| is_own(&s.parent)),
+            "{:?}",
+            users.symbols
+        );
         RemoveBlockers {
             unlisted: self
                 .sheet_info_at(&state.tree_path)
@@ -118,6 +132,7 @@ impl Signex {
             other_parents: other,
             own_parent: own.into_iter().next(),
             placed: !users.parents.is_empty(),
+            symbols: users.symbols,
             unknown: users.unknown,
         }
     }
@@ -139,6 +154,16 @@ impl Signex {
         self.collect_open_users(&target, skip_project, &mut users);
         users.parents.sort();
         users.parents.dedup();
+        // The hierarchy walk and the open-document scan can both list one
+        // symbol, spelling its parent differently; the symbol's uuid plus the
+        // case-folded parent key is its identity.
+        let fold = CaseFold::host_default();
+        users
+            .symbols
+            .sort_by_cached_key(|s| (path_key_with(&s.parent, fold), s.id, s.name.clone()));
+        users.symbols.dedup_by(|a, b| {
+            a.id == b.id && path_key_with(&a.parent, fold) == path_key_with(&b.parent, fold)
+        });
         users
     }
 
@@ -180,7 +205,7 @@ impl Signex {
                 );
             }
             for top in SheetHierarchy::top_level(hierarchy) {
-                collect_parents(top, target, hierarchy.fold, &mut users.parents);
+                collect_parents(top, target, hierarchy.fold, users);
             }
         }
     }
@@ -199,12 +224,22 @@ impl Signex {
             let fold = crate::app::state::project_case::fold_of(owner);
             let dir = path.parent().unwrap_or_else(|| Path::new(""));
             let wanted = path_key_with(target, fold);
-            let places = engine.document().child_sheets.iter().any(|c| {
-                resolve_child_reference(dir, &c.filename)
-                    .is_some_and(|p| path_key_with(&p, fold) == wanted)
-            });
+            let parent = lexically_normalize(path);
+            let mut places = false;
+            for c in &engine.document().child_sheets {
+                let hit = resolve_child_reference(dir, &c.filename)
+                    .is_some_and(|p| path_key_with(&p, fold) == wanted);
+                if hit {
+                    places = true;
+                    users.symbols.push(PlacingSymbol {
+                        parent: parent.clone(),
+                        name: c.name.clone(),
+                        id: c.uuid,
+                    });
+                }
+            }
             if places {
-                users.parents.push(lexically_normalize(path));
+                users.parents.push(parent);
             }
         }
     }
@@ -231,15 +266,23 @@ fn incomplete_node<'a>(hierarchy: &'a SheetHierarchy, target: &Path) -> Option<&
     SheetHierarchy::top_level(hierarchy).find_map(|top| find(top, target, fold))
 }
 
-fn collect_parents(node: &SheetNode, target: &Path, fold: CaseFold, out: &mut Vec<PathBuf>) {
-    let places_target = node
-        .children
-        .iter()
-        .any(|c| c.kind != SheetNodeKind::Rejected && c.is_at(target, fold));
+fn collect_parents(node: &SheetNode, target: &Path, fold: CaseFold, users: &mut SheetUsers) {
+    let mut places_target = false;
+    for c in &node.children {
+        if c.kind == SheetNodeKind::Rejected || !c.is_at(target, fold) {
+            continue;
+        }
+        places_target = true;
+        users.symbols.push(PlacingSymbol {
+            parent: node.path.clone(),
+            name: c.name.clone(),
+            id: c.placed_as.unwrap_or_default(),
+        });
+    }
     if places_target {
-        out.push(node.path.clone());
+        users.parents.push(node.path.clone());
     }
     for child in &node.children {
-        collect_parents(child, target, fold, out);
+        collect_parents(child, target, fold, users);
     }
 }

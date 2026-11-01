@@ -330,6 +330,92 @@ fn a_rename_onto_an_existing_file_leaves_everything_unchanged() {
     );
 }
 
+/// The names in `dir`, as the filesystem spells them.
+fn names_in(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .expect("read dir")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// #1832 — on a case-insensitive volume (Windows, macOS) the new spelling of
+/// a case-only rename "exists" because it is the same file. It must move, not
+/// be refused as a collision, and everything re-keys to the new spelling.
+fn assert_case_only_rename_lands(new_name: &str) {
+    let mut f = fixture(true);
+    let new = f.tmp.path().join(new_name);
+    let task = start_rename(&mut f.app, &f.old.clone(), new_name);
+    complete(&mut f.app, task);
+
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert_eq!(error, None, "the rename was not refused");
+    assert_eq!(names_in(f.tmp.path()), vec![new_name.to_string()]);
+    assert_eq!(std::fs::read(&new).unwrap(), b"x", "content kept");
+    assert!(f.app.document_state.engines.contains_key(&new));
+    assert!(f.app.document_state.is_document_dirty(&new));
+    assert_eq!(f.app.document_state.tabs[0].path, new);
+    assert_eq!(
+        f.app.document_state.projects[0].data.sheets[0].filename,
+        new_name
+    );
+}
+
+#[test]
+fn a_case_only_rename_of_a_sheet_moves_it_to_the_new_spelling() {
+    assert_case_only_rename_lands("power.snxsch");
+}
+
+#[test]
+fn a_case_only_rename_to_all_capitals_keeps_the_native_extension() {
+    assert_case_only_rename_lands("POWER.snxsch");
+}
+
+/// #1881 — on a case-sensitive volume a hard link `power.snxsch` beside
+/// `Power.snxsch` is the same file on disk but a name of its own. A rename
+/// onto it is a collision: nothing moves and no temporary link is left.
+#[cfg(unix)]
+#[test]
+fn a_case_only_rename_onto_a_hard_link_is_refused_and_moves_nothing() {
+    let mut f = fixture(true);
+    let link = f.tmp.path().join("power.snxsch");
+    if let Err(e) = std::fs::hard_link(&f.old, &link) {
+        // A case-insensitive volume (macOS) has no room for the second name.
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists, "{e}");
+        return;
+    }
+    let task = start_rename(&mut f.app, &f.old.clone(), "power.snxsch");
+    complete(&mut f.app, task);
+
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert_eq!(
+        error.as_deref(),
+        Some("A file with that name already exists.")
+    );
+    assert_eq!(
+        names_in(f.tmp.path()),
+        vec!["Power.snxsch".to_string(), "power.snxsch".to_string()],
+        "nothing moved and no temporary link left"
+    );
+    assert_eq!(std::fs::read(&f.old).unwrap(), b"x");
+    assert_eq!(f.app.document_state.tabs[0].path, f.old);
+    assert_eq!(
+        f.app.document_state.projects[0].data.sheets[0].filename,
+        "Power.snxsch"
+    );
+}
+
 #[test]
 fn a_rename_the_os_refuses_leaves_everything_unchanged_and_says_why() {
     let mut f = fixture(true);

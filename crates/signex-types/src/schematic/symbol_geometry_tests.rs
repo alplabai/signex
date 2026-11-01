@@ -394,3 +394,21 @@ fn lower_placed_symbol_gives_a_power_port_without_a_library_its_body() {
     };
     assert!(lower_placed_symbol(None, &plain).is_empty());
 }
+
+/// #1858: a pin strokes at its symbol's library width, like the body.
+#[test]
+fn pins_carry_the_symbols_library_stroke_width() {
+    let mut body = rect(10.0, 10.0);
+    if let Graphic::Rectangle { width, .. } = &mut body {
+        *width = 0.254;
+    }
+    let l = lib(vec![body], vec![pin(-5.0, 0.0, 180.0, 2.54)]);
+    let pin_width = lower_symbol(&l, &placed(0.0, 0.0, 0.0))
+        .into_iter()
+        .find_map(|p| match p {
+            SymbolPrimitive::Pin { width, .. } => Some(width),
+            _ => None,
+        })
+        .expect("a pin");
+    assert_eq!(pin_width, 0.254);
+}

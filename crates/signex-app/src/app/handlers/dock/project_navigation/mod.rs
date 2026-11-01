@@ -60,6 +60,8 @@ mod save_all_gate_tests;
 #[cfg(test)]
 mod save_all_tests;
 mod sheet_references;
+#[cfg(test)]
+mod sheet_symbols_named_tests;
 pub(crate) mod sheet_users;
 #[cfg(test)]
 mod subdir_entry_tests;

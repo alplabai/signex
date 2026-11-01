@@ -52,7 +52,7 @@ impl canvas::Program<crate::app::Message> for OneLabel {
         // World is pixels here (1 px per mm), so the anchor is where we say.
         let options = SceneDrawOptions {
             scale_px_per_mm: 1.0,
-            min_stroke_px: 0.5,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             text_min_px: 1.0,
             text_max_px: 400.0,
         };

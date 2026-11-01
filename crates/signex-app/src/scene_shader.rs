@@ -101,8 +101,8 @@ pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// Thinnest a stroke may render, in logical pixels — the same floor this
     /// surface's CPU replay applies, so zooming out thins geometry to the same
     /// minimum on both paths instead of letting the GPU fade it away. Per
-    /// surface because the two disagree: the schematic clamps to 0.6 px
-    /// (`SCHEMATIC_RENDER_MIN_STROKE_PX`), the PCB to 0.5 px.
+    /// surface because the two disagree: the schematic uses the stroke law's
+    /// floor (`signex_types::schematic::min_stroke_logical_px`), the PCB 0.5 px.
     const MIN_STROKE_PX: f32;
 
     /// Smallest a circle may render, in logical pixels. Both CPU replays use
@@ -140,7 +140,10 @@ pub struct SchematicSurface;
 impl SceneSurface for SchematicSurface {
     const LABEL: &'static str = "schematic";
     const TEXT_SIZE: TextSizePolicy = crate::schematic_runtime::SCHEMATIC_TEXT_SIZE;
-    const MIN_STROKE_PX: f32 = signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX;
+    // Logical px like the CPU canvas, which has no display scale yet (#1858).
+    const MIN_STROKE_PX: f32 = signex_types::schematic::min_stroke_logical_px(
+        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    );
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
@@ -720,7 +723,14 @@ mod tests {
         );
         assert_eq!(
             SchematicSurface::MIN_STROKE_PX,
-            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX
+            crate::schematic_runtime::schematic_draw_options(
+                &crate::schematic_runtime::ScreenTransform {
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    scale: 1.0,
+                }
+            )
+            .stroke_px(0.0)
         );
         assert_eq!(
             SchematicSurface::MIN_RADIUS_PX,

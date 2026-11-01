@@ -350,3 +350,40 @@ fn an_unnamed_net_without_an_object_is_waived_by_its_pin_set() {
     let out = split(grown, &sheet, &waivers);
     assert_eq!((out.kept.len(), out.lapsed.len()), (1, 0));
 }
+
+#[test]
+fn a_sheet_pin_finding_is_waivable() {
+    use signex_types::schematic::{ChildSheet, FillType, SheetPin};
+    let pin_id = Uuid::now_v7();
+    let sheet = SchematicSheet {
+        child_sheets: vec![ChildSheet {
+            uuid: Uuid::now_v7(),
+            name: "Driver".into(),
+            filename: "driver.snxsch".into(),
+            position: Point::new(0.0, 0.0),
+            size: (10.0, 10.0),
+            stroke_width: 0.0,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: pin_id,
+                name: "IN".into(),
+                direction: "input".into(),
+                position: Point::new(0.0, 2.54),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        }],
+        ..Default::default()
+    };
+    let mut v = finding_on(pin_id, RuleKind::SheetPinUnconnected);
+    v.primary = Some(SelectedItem::new(pin_id, SelectedKind::SheetPin));
+    let waivers = vec![waive(&v, &sheet)];
+    let out = split(v, &sheet, &waivers);
+    assert!(out.kept.is_empty(), "the waiver hides the finding");
+    assert_eq!(out.waived.len(), 1);
+}

@@ -94,6 +94,8 @@ impl LibraryState {
                 .retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.
             self.drift.check_pending = true;
+            // Its tabs show nothing once it is gone (#1844).
+            self.unmounted.push(root.to_path_buf());
         }
     }
 }

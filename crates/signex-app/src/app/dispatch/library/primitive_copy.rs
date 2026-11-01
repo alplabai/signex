@@ -7,6 +7,7 @@
 //! line.
 
 use super::*;
+use crate::app::file_extension::has_extension;
 use crate::library::loose_symbols::{
     LooseRead, LooseSymbol, copy_into_library, read_loose_symbols,
 };
@@ -201,12 +202,6 @@ impl Signex {
         }
         Task::none()
     }
-}
-
-fn has_extension(path: &std::path::Path, ext: &str) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case(ext))
 }
 
 fn read_loose_task(files: Vec<PathBuf>, from_browse: bool) -> Task<Message> {

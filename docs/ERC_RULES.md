@@ -5,6 +5,26 @@ The rule list itself is `RuleKind` in `crates/signex-erc/src/lib.rs`; every
 rule's stable id, label and default severity live there and in `rule.rs` /
 `project_rules.rs`.
 
+## Sheet pin rules
+
+Added for #1836. Both read the sheet symbols on the sheet being checked, so
+they run whether or not the child file loaded. Each has a default severity
+(Warning), can be overridden per project, appears in rule profiles and is
+waivable like any other finding.
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `sheet_pin_unconnected` | Warning | A sheet symbol pin that joins nothing: no wire (end or interior), label, junction, No-Connect, power-port tip, bus end, or another sheet symbol's pin on the same point (the contacts `signex_net::SheetPinContacts` takes from the netlist). The child's port of that name floats. A bus-typed pin mid-bus is reported. |
+| `sheet_pin_direction_conflict` | Warning | Two or more `output` sheet pins on one net of the sheet. Scope is that one sheet: wires, junctions, same-name Global / local labels and power ports join nets; buses, hierarchical ports and other sheets do not. |
+
+`bad_hier_sheet_pin` also reports a hierarchical label in the child that no
+pin of the parent's symbol exposes. That finding is filed under the child
+sheet (its coordinates), and its message names the parent's sheet symbol; a
+child placed by several symbols gets one finding per symbol.
+
+Sync Sheet Pins gives a new pin the direction of its child label's shape, so
+`sheet_pin_direction_conflict` only sees what the labels' shapes say.
+
 ## Completeness rules
 
 Added for #1286. They are the usual pre-fabrication checks: is every part
@@ -106,7 +126,7 @@ provenance. Each entry holds:
 | Field | Meaning |
 |---|---|
 | `rule_id` | Stable rule id, `builtin::...` or `user::...`. |
-| `objects` | Sorted identity of the finding: the UUID of its primary object and `peer:<uuid>` of its peer (the role is kept, so A-against-B and B-against-A stay two findings); `pin:<number>@<x>,<y>` for a finding anchored at one pin (the tip in the symbol's own coordinates, in µm, so two pins sharing a number or name stay apart and moving the part changes nothing), `pin:<a>/<b>` for a pin pair; `tag:<x>` where a rule has several findings on the same objects (a part's placement designator, only for a symbol placed several times, so re-annotating a single placement lapses its waiver; `no-pins` / `not-loaded` on one sheet symbol, the child port a sheet pin disagrees with, `nets:<rails>` for a power-port short, which also carries the two ports' pin numbers); and for a net-level finding the net on its sheet, `net:<name>@<sheet id>`, or `pins:<R1.1,U2.3>@<sheet id>` for an unnamed net. |
+| `objects` | Sorted identity of the finding: the UUID of its primary object and `peer:<uuid>` of its peer (the role is kept, so A-against-B and B-against-A stay two findings); `pin:<number>@<x>,<y>` for a finding anchored at one pin (the tip in the symbol's own coordinates, in µm, so two pins sharing a number or name stay apart and moving the part changes nothing), `pin:<a>/<b>` for a pin pair; `tag:<x>` where a rule has several findings on the same objects (a part's placement designator, only for a symbol placed several times, so re-annotating a single placement lapses its waiver; `no-pins` / `not-loaded` on one sheet symbol; `symbol:<uuid>` on a child's unexposed hierarchical label, only when several sheet symbols place the same child file (one placement stays untagged), the child port a sheet pin disagrees with, `nets:<rails>` for a power-port short, which also carries the two ports' pin numbers); and for a net-level finding the net on its sheet, `net:<name>@<sheet id>`, or `pins:<R1.1,U2.3>@<sheet id>` for an unnamed net. A sheet-pin direction conflict is keyed by the extra output pin (primary) and the first output pin on the net (`peer:<uuid>`), with no tag. |
 | `fingerprint` | SHA-256 over the rule id and the canonical JSON (keys sorted) of each involved object. |
 | `reason`, `author` | Required; an entry missing either is kept on disk but never honoured. |
 | `date` | `YYYY-MM-DD` the waiver was made. |

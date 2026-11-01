@@ -371,7 +371,7 @@ mod tests {
             let pins: Vec<_> = lowered
                 .iter()
                 .filter_map(|p| match p {
-                    SymbolPrimitive::Pin { tip, body } => Some((*tip, *body)),
+                    SymbolPrimitive::Pin { tip, body, .. } => Some((*tip, *body)),
                     _ => None,
                 })
                 .collect();

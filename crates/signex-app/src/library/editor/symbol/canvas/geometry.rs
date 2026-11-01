@@ -18,10 +18,6 @@ pub(super) fn text_size_px_from_mm(size_mm: f32, scale: f32) -> f32 {
     signex_gfx::primitive::text::text_px(size_mm, scale, SYMBOL_TEXT_SIZE)
 }
 
-pub(super) fn stroke_px_at_zoom(base_width_px_at_100: f32, _scale: f32) -> f32 {
-    base_width_px_at_100
-}
-
 /// Unwrap a raw `atan2` angle (in degrees, range `[-180, 180]`) so that
 /// the result stays within 180° of `prev`. This removes the ±180° branch
 /// cut when tracking a continuously-moving cursor angle.
@@ -39,9 +35,27 @@ pub(super) fn unwrap_angle(prev: f64, raw: f64) -> f64 {
     prev + delta
 }
 
-pub(super) fn stroke_world_mm(base_width_px_at_100: f32, scale: f32) -> f32 {
-    (base_width_px_at_100 / scale.max(0.001))
-        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32)
+/// World width (mm) a symbol stroke stored as `width_mm` draws at, thickened
+/// by [`SELECTED_STROKE_FACTOR`] while selected. The schematic's law (#1858);
+/// the thickening applies after the floor, so a selected stroke stays wider
+/// when zoomed out.
+pub(super) fn symbol_stroke_mm(width_mm: f64, selected: bool, scale: f32) -> f32 {
+    let mm = signex_types::schematic::effective_stroke_mm(width_mm) as f32;
+    if selected {
+        stroke_px(mm, scale) * SELECTED_STROKE_FACTOR / scale.max(f32::MIN_POSITIVE)
+    } else {
+        mm
+    }
+}
+
+/// Screen width of a stroke drawn straight to the frame (previews), under
+/// the same law the scene replay applies.
+pub(super) fn stroke_px(width_mm: f32, scale: f32) -> f32 {
+    signex_types::schematic::stroke_px(
+        width_mm,
+        scale,
+        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    )
 }
 
 pub(super) fn screen_px_to_world_mm(px: f32, scale: f32) -> f32 {

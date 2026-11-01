@@ -101,10 +101,7 @@ pub fn build_renderer_snapshot(
                 transform.scale,
             ),
         );
-        let width_mm = stroke_world_mm(
-            signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_STROKE_PX,
-            transform.scale,
-        );
+        let width_mm = signex_types::schematic::SCHEMATIC_NO_CONNECT_STROKE_MM as f32;
         let (cx, cy) = (no_connect.position.x as f32, no_connect.position.y as f32);
         let len = len_mm as f32;
         wires.push(WireInput {
@@ -138,10 +135,7 @@ pub fn build_renderer_snapshot(
                 transform.scale,
             ),
         ) as f32;
-        let width_mm = stroke_world_mm(
-            signex_types::schematic::SCHEMATIC_RENDER_NO_CONNECT_STROKE_PX,
-            transform.scale,
-        );
+        let width_mm = signex_types::schematic::SCHEMATIC_NO_CONNECT_STROKE_MM as f32;
         let (cx, cy) = (directive.position.x as f32, directive.position.y as f32);
         let corners = [
             [cx, cy - half],
@@ -272,10 +266,7 @@ pub fn build_renderer_snapshot(
             ],
             fill_color: [0.0, 0.0, 0.0, 0.0],
             stroke_color: Some(to_rgba(color)),
-            stroke_width_mm: stroke_world_mm(
-                signex_types::schematic::SCHEMATIC_RENDER_CHILD_SHEET_STROKE_PX,
-                transform.scale,
-            ),
+            stroke_width_mm: signex_types::schematic::SCHEMATIC_SHEET_FRAME_STROKE_MM as f32,
         });
 
         parameter_texts.push(TextInput {
@@ -345,7 +336,6 @@ pub fn build_renderer_snapshot(
                 label,
                 color,
                 [0.0, 0.0, 0.0, 0.0],
-                transform,
                 document_family,
             ));
             let ((tx, ty), rotation, h_align) = label::flag_text(label, document_family);

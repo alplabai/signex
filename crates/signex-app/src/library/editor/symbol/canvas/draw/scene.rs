@@ -46,7 +46,7 @@ impl SymbolCanvas<'_> {
                         &path,
                         canvas::Stroke::default()
                             .with_color(self.selected_color)
-                            .with_width(stroke_px_at_zoom(SYMBOL_HANDLE_STROKE_PX_AT_100, scale)),
+                            .with_width(SYMBOL_HANDLE_LINE_PX),
                     );
                 }
             }

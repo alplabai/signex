@@ -49,6 +49,8 @@ impl RuleKind {
             RuleKind::UnitsNotPlaced => "units_not_placed",
             RuleKind::OffGrid => "off_grid",
             RuleKind::LabelsOnlyNet => "labels_only_net",
+            RuleKind::SheetPinUnconnected => "sheet_pin_unconnected",
+            RuleKind::SheetPinDirectionConflict => "sheet_pin_direction_conflict",
         }
     }
 

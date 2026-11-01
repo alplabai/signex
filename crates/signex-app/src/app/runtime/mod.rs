@@ -66,6 +66,8 @@ impl Signex {
         };
         self.library.note_shown_browser(shown_browser.as_deref());
         self.library.sync_view_caches();
+        let library_tabs = self.close_tabs_of_unmounted_libraries();
+        self.sync_component_tab_titles();
         let class_styles = self.refresh_net_class_styles();
         let net_nav = self.refresh_net_nav();
         self.sync_label_class_pick();
@@ -101,6 +103,7 @@ impl Signex {
             annotate_preview,
             reprefix_window,
             instance_note,
+            library_tabs,
             class_styles,
             net_nav,
         ])

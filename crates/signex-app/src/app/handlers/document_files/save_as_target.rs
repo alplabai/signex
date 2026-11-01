@@ -9,13 +9,7 @@ use anyhow::Result;
 
 use super::super::super::*;
 use super::save::file_label;
-
-/// Whether `path` carries extension `ext`, ignoring case.
-fn has_extension(path: &Path, ext: &str) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case(ext))
-}
+use crate::app::file_extension::has_extension;
 
 impl Signex {
     /// Refuse a Save As of a document of extension `ext` onto a project file

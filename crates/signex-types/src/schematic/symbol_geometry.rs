@@ -51,8 +51,23 @@ pub enum SymbolPrimitive {
         h_align: HAlign,
         v_align: VAlign,
     },
-    /// Pin stub from its connection point (`tip`) to the body end.
-    Pin { tip: Point, body: Point },
+    /// Pin stub from its connection point (`tip`) to the body end, stroked at
+    /// the symbol's library width ([`super::symbol_stroke_mm`]).
+    Pin { tip: Point, body: Point, width: f64 },
+}
+
+impl SymbolPrimitive {
+    /// Stored stroke width (mm) of a stroked body primitive; `None` for text.
+    #[must_use]
+    pub fn stroke_width(&self) -> Option<f64> {
+        match self {
+            Self::Path { width, .. }
+            | Self::Circle { width, .. }
+            | Self::Arc { width, .. }
+            | Self::Pin { width, .. } => Some(*width),
+            Self::Text { .. } => None,
+        }
+    }
 }
 
 /// Library pins that belong to `sym`'s unit and body style.
@@ -88,6 +103,7 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
             lower_graphic(&lg.graphic, &t, &mut out);
         }
     }
+    let pin_width = super::symbol_stroke_mm(out.iter().filter_map(SymbolPrimitive::stroke_width));
     for lp in instance_pins(lib, sym).filter(|lp| lp.pin.visible) {
         let pin = &lp.pin;
         let (dx, dy) = pin_direction(pin.rotation);
@@ -100,6 +116,7 @@ pub fn lower_symbol(lib: &LibSymbol, sym: &Symbol) -> Vec<SymbolPrimitive> {
         out.push(SymbolPrimitive::Pin {
             tip: t.apply(pin.position),
             body: t.apply(body),
+            width: pin_width,
         });
     }
     out
@@ -324,7 +341,7 @@ fn primitive_bounds(primitive: &SymbolPrimitive) -> Option<Aabb> {
             *h_align,
             *v_align,
         )),
-        SymbolPrimitive::Pin { tip, body } => points_bounds(&[*tip, *body]),
+        SymbolPrimitive::Pin { tip, body, .. } => points_bounds(&[*tip, *body]),
     }
 }
 

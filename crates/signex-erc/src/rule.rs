@@ -49,6 +49,8 @@ impl RuleId {
             RuleKind::UnitsNotPlaced => "builtin::part_units_not_placed",
             RuleKind::OffGrid => "builtin::off_grid_pin_or_wire",
             RuleKind::LabelsOnlyNet => "builtin::net_carries_only_labels",
+            RuleKind::SheetPinUnconnected => "builtin::sheet_pin_not_connected",
+            RuleKind::SheetPinDirectionConflict => "builtin::sheet_pin_direction_conflict",
         };
         RuleId(id.to_string())
     }
@@ -166,7 +168,7 @@ mod tests {
 
     /// Every built-in id string is persisted in saved profiles and project
     /// rule sets, so it must never follow a label rewording.
-    const PINNED_IDS: [(RuleKind, &str); 31] = [
+    const PINNED_IDS: [(RuleKind, &str); 33] = [
         (RuleKind::UnusedPin, "builtin::unused_pin"),
         (
             RuleKind::DuplicateRefDesignator,
@@ -240,6 +242,14 @@ mod tests {
         (RuleKind::UnitsNotPlaced, "builtin::part_units_not_placed"),
         (RuleKind::OffGrid, "builtin::off_grid_pin_or_wire"),
         (RuleKind::LabelsOnlyNet, "builtin::net_carries_only_labels"),
+        (
+            RuleKind::SheetPinUnconnected,
+            "builtin::sheet_pin_not_connected",
+        ),
+        (
+            RuleKind::SheetPinDirectionConflict,
+            "builtin::sheet_pin_direction_conflict",
+        ),
     ];
 
     #[test]

@@ -94,14 +94,12 @@ pub(super) struct SymbolSink<'a> {
     pub texts: &'a mut Vec<TextInput>,
 }
 
-impl SymbolStyle {
-    fn stroke_mm(&self, width: f64) -> f32 {
-        (width as f32).max(stroke_world_mm(
-            signex_types::schematic::SCHEMATIC_RENDER_SYMBOL_BODY_STROKE_PX,
-            self.scale,
-        ))
-    }
+/// The world width a symbol stroke stored as `width` draws at (#1858).
+fn stroke_mm(width: f64) -> f32 {
+    signex_types::schematic::effective_stroke_mm(width) as f32
+}
 
+impl SymbolStyle {
     fn fill_rgba(&self, fill: FillType) -> [f32; 4] {
         match fill {
             FillType::None => [0.0, 0.0, 0.0, 0.0],
@@ -134,7 +132,7 @@ pub(super) fn push_fallback_box(
         vertices: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
         fill_color: to_rgba(style.fill),
         stroke_color: Some(color),
-        stroke_width_mm: style.stroke_mm(0.0),
+        stroke_width_mm: stroke_mm(0.0),
     });
     for (i, (p0, p1)) in [([x0, y0], [x1, y1]), ([x0, y1], [x1, y0])]
         .into_iter()
@@ -144,7 +142,7 @@ pub(super) fn push_fallback_box(
             id: style.id.wrapping_add(i as u64),
             p0,
             p1,
-            width_mm: style.stroke_mm(0.0),
+            width_mm: stroke_mm(0.0),
             explicit_color: Some(color),
         });
     }
@@ -192,11 +190,11 @@ pub(super) fn push_primitives(
                         vertices: points.iter().map(|p| [p.x as f32, p.y as f32]).collect(),
                         fill_color: style.fill_rgba(*fill),
                         stroke_color: Some(stroke),
-                        stroke_width_mm: style.stroke_mm(*width),
+                        stroke_width_mm: stroke_mm(*width),
                     });
                 } else {
                     for pair in points.windows(2) {
-                        segment(sink, pair[0], pair[1], style.stroke_mm(*width), stroke);
+                        segment(sink, pair[0], pair[1], stroke_mm(*width), stroke);
                     }
                 }
             }
@@ -209,7 +207,7 @@ pub(super) fn push_primitives(
                 vertices: circle_vertices([center.x, center.y], *radius as f32, 40),
                 fill_color: style.fill_rgba(*fill),
                 stroke_color: Some(stroke),
-                stroke_width_mm: style.stroke_mm(*width),
+                stroke_width_mm: stroke_mm(*width),
             }),
             SymbolPrimitive::Arc {
                 start,
@@ -233,7 +231,7 @@ pub(super) fn push_primitives(
                     [*start, *mid, *end],
                     ArcStroke {
                         id: style.id,
-                        width_mm: style.stroke_mm(*width),
+                        width_mm: stroke_mm(*width),
                         color: stroke,
                     },
                     style.scale,
@@ -260,8 +258,8 @@ pub(super) fn push_primitives(
                 h_align: *h_align,
                 v_align: *v_align,
             }),
-            SymbolPrimitive::Pin { tip, body } => {
-                segment(sink, *tip, *body, style.stroke_mm(0.0), to_rgba(style.pin));
+            SymbolPrimitive::Pin { tip, body, width } => {
+                segment(sink, *tip, *body, stroke_mm(*width), to_rgba(style.pin));
             }
         }
     }

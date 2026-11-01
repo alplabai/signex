@@ -302,3 +302,55 @@ fn a_pin_name_is_inside_the_body_past_the_pin_end() {
     );
     assert_eq!((align.as_str(), v_align.as_str()), ("Center", "Top"));
 }
+
+/// #1858: output pins stroke at the symbol's library width, like the body
+/// and like the canvas, in mm with no screen floor.
+#[test]
+fn pins_stroke_at_the_symbols_library_width() {
+    let mut lib: LibSymbol =
+        serde_json::from_value(serde_json::json!({ "id": "L:S" })).expect("lib symbol");
+    lib.graphics.push(LibGraphic {
+        unit: 0,
+        body_style: 1,
+        graphic: Graphic::Rectangle {
+            start: Point::new(-2.54, -2.54),
+            end: Point::new(2.54, 2.54),
+            width: 0.254,
+            fill: FillType::None,
+        },
+    });
+    lib.pins.push(signex_types::schematic::LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: signex_types::schematic::PinDirection::Passive,
+            shape_style: signex_types::schematic::PinShapeStyle::Plain,
+            position: Point::new(-5.08, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: String::new(),
+            number: "1".into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    });
+    // The pin stub is the one open two-point path; the body outline closes.
+    let widths: Vec<(bool, f32)> = emit(&lib, &Symbol::default())
+        .iter()
+        .filter_map(|e| match e {
+            SvgElement::Path { commands, style } => Some((
+                !commands.iter().any(|c| matches!(c, SvgPathCommand::Close)),
+                style.stroke_width,
+            )),
+            _ => None,
+        })
+        .collect();
+    let pin = widths.iter().find(|(open, _)| *open).expect("a pin stub");
+    let body = widths
+        .iter()
+        .find(|(open, _)| !*open)
+        .expect("a body outline");
+    assert_eq!(pin.1, 0.254);
+    assert_eq!(pin.1, body.1);
+}

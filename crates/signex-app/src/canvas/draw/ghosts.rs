@@ -126,8 +126,8 @@ impl SchematicCanvas<'_> {
         cursor_pos: iced::Point,
     ) {
         use signex_types::schematic::{
-            Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM,
-            SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX, snap_to_bus,
+            Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM, UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            snap_to_bus, stroke_px,
         };
         let Some(size) = self.ghost_bus_entry else {
             return;
@@ -157,8 +157,12 @@ impl SchematicCanvas<'_> {
             to_screen(start),
             to_screen(SchPoint::new(start.x + size.0, start.y + size.1)),
         );
-        let width = (SCHEMATIC_RENDER_MIN_STROKE_MM as f32 * cam.scale)
-            .max(SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX);
+        // The placed entry's width under the same law (wire weight).
+        let width = stroke_px(
+            SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            cam.scale,
+            UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        );
         frame.stroke(
             &path,
             canvas::Stroke::default()

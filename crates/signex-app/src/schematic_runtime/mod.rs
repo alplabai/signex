@@ -413,7 +413,7 @@ fn render_schematic_with_renderer(
 
 /// Lower `snapshot` to a world-space [`Scene`]; `None` when nothing is drawn.
 /// Items outside `bounds` (screen space under `transform`) are culled.
-pub(crate) fn build_schematic_scene(
+pub fn build_schematic_scene(
     snapshot: &SchematicRenderSnapshot,
     transform: &ScreenTransform,
     colors: &CanvasColors,
@@ -459,12 +459,13 @@ pub(crate) const SCHEMATIC_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolic
     signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
 
 /// The replay options of the schematic CPU path at `transform`.
-fn schematic_draw_options(
+pub fn schematic_draw_options(
     transform: &ScreenTransform,
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
     crate::renderer_scene_canvas::SceneDrawOptions {
         scale_px_per_mm: transform.scale,
-        min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+        // The window's display scale is not plumbed into the CPU canvas yet.
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
         text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
     }
@@ -503,7 +504,6 @@ fn label_marker_polygon(
     label: &Label,
     stroke_color: Color,
     fill_color: [f32; 4],
-    transform: &ScreenTransform,
     document_family: Option<&str>,
 ) -> PolygonInput {
     PolygonInput {
@@ -513,10 +513,7 @@ fn label_marker_polygon(
             .collect(),
         fill_color,
         stroke_color: Some(to_rgba(stroke_color)),
-        stroke_width_mm: stroke_world_mm(
-            signex_types::schematic::SCHEMATIC_RENDER_LABEL_GLYPH_STROKE_PX,
-            transform.scale,
-        ),
+        stroke_width_mm: signex_types::schematic::SCHEMATIC_LABEL_MARKER_STROKE_MM as f32,
     }
 }
 
@@ -538,11 +535,6 @@ fn draw_renderer_snapshot(
 
 fn to_rgba(color: Color) -> [f32; 4] {
     [color.r, color.g, color.b, color.a]
-}
-
-fn stroke_world_mm(base_width_px_at_100: f32, scale: f32) -> f32 {
-    (stroke_px_at_zoom(base_width_px_at_100, scale) / scale.max(0.001))
-        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32)
 }
 
 fn screen_px_to_world_mm(px: f32, scale: f32) -> f64 {
@@ -932,17 +924,6 @@ fn point_to_segment_distance(p: Point, a: Point, b: Point) -> f64 {
 fn point_in_polygon(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
     let polygon: Vec<signex_sketch::geom::Point2> = polygon.iter().map(|&p| p.into()).collect();
     signex_sketch::geom::point_in_polygon(point, &polygon)
-}
-
-fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
-    let zoom_factor = (scale / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE).max(0.0);
-    let scaled = base_width_px_at_100 * zoom_factor;
-    let max_stroke = base_width_px_at_100
-        * signex_types::schematic::SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER;
-    scaled.clamp(
-        signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-        max_stroke,
-    )
 }
 
 fn to_iced(color: &ThemeColor) -> Color {

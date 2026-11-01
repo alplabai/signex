@@ -244,7 +244,8 @@ impl Signex {
             .extension()
             .and_then(|extension| extension.to_str())
             .unwrap_or("");
-        let task = match ext {
+        // `PUSHPULL.SNXSCH` is a sheet: extensions match in any case (#1832).
+        let task = match ext.to_ascii_lowercase().as_str() {
             // Returns the project's cold `.snxlib` mount preparations
             // (#99 part 2c) — must be propagated, not dropped. Dropping
             // it leaves every library recorded as pending and never

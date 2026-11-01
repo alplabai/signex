@@ -94,7 +94,7 @@ pub(super) fn push_drawing(
         fill: fill_color_for(fill, stroke_color, colors)
             .map(to_rgba)
             .unwrap_or(CLEAR),
-        width_mm: width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM) as f32,
+        width_mm: signex_types::schematic::effective_stroke_mm(width) as f32,
     };
 
     match drawing {
