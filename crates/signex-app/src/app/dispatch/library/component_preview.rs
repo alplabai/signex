@@ -528,4 +528,28 @@ impl Signex {
         self.library.editors.remove(address);
         Task::none()
     }
+
+    /// Title every Component Preview tab with its row's current part
+    /// number, so a part number set after the tab opened (a new component
+    /// named in the browser, an edit in the preview) shows on the tab
+    /// (#1844).
+    pub(crate) fn sync_component_tab_titles(&mut self) {
+        for tab in &mut self.document_state.tabs {
+            let crate::app::TabKind::ComponentEditor(preview) = &tab.kind else {
+                continue;
+            };
+            let address = EditorAddress::new(
+                preview.library_path.clone(),
+                preview.table.clone(),
+                preview.row_id,
+            );
+            let Some(editor) = self.library.editors.get(&address) else {
+                continue;
+            };
+            let part_number = editor.row.internal_pn.as_str();
+            if tab.title != part_number {
+                tab.title = part_number.to_string();
+            }
+        }
+    }
 }
