@@ -36,11 +36,13 @@ pub(super) fn unwrap_angle(prev: f64, raw: f64) -> f64 {
 }
 
 /// World width (mm) a symbol stroke stored as `width_mm` draws at, thickened
-/// by [`SELECTED_STROKE_FACTOR`] while selected. The schematic's law (#1858).
-pub(super) fn symbol_stroke_mm(width_mm: f64, selected: bool) -> f32 {
+/// by [`SELECTED_STROKE_FACTOR`] while selected. The schematic's law (#1858);
+/// the thickening applies after the floor, so a selected stroke stays wider
+/// when zoomed out.
+pub(super) fn symbol_stroke_mm(width_mm: f64, selected: bool, scale: f32) -> f32 {
     let mm = signex_types::schematic::effective_stroke_mm(width_mm) as f32;
     if selected {
-        mm * SELECTED_STROKE_FACTOR
+        stroke_px(mm, scale) * SELECTED_STROKE_FACTOR / scale.max(f32::MIN_POSITIVE)
     } else {
         mm
     }

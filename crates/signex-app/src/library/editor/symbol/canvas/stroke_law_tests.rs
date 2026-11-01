@@ -140,3 +140,18 @@ fn symbol_editor_and_schematic_draw_a_symbol_at_the_same_px_width() {
         );
     }
 }
+
+/// A selected stroke stays visibly wider even where the floor raises the
+/// unselected one (zoomed out).
+#[test]
+fn a_selected_stroke_is_wider_than_the_floor_when_zoomed_out() {
+    let scale = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 0.25;
+    let options = symbol_draw_options(scale);
+    let plain = options.stroke_px(symbol_stroke_mm(0.254, false, scale));
+    let selected = options.stroke_px(symbol_stroke_mm(0.254, true, scale));
+    assert_eq!(plain, signex_types::schematic::min_stroke_logical_px(1.0));
+    assert!(
+        selected > plain * 1.5,
+        "selected {selected} px vs {plain} px"
+    );
+}

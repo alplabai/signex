@@ -581,7 +581,7 @@ impl<'a> SymbolCanvas<'a> {
             } else {
                 self.body_color
             };
-            let stroke_mm = symbol_stroke_mm(g.stroke_width, is_selected);
+            let stroke_mm = symbol_stroke_mm(g.stroke_width, is_selected, scale);
 
             match &g.kind {
                 SymbolGraphicKind::Rectangle { from, to } => {
@@ -718,7 +718,7 @@ impl<'a> SymbolCanvas<'a> {
                 id: 100_000 + i as u64,
                 p0: tip_f32,
                 p1: body_f32,
-                width_mm: symbol_stroke_mm(pin_stroke_mm, selected),
+                width_mm: symbol_stroke_mm(pin_stroke_mm, selected, scale),
                 explicit_color: Some(to_rgba(stroke_color)),
             });
 
