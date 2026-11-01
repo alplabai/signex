@@ -151,9 +151,6 @@ impl LocalGitAdapter {
         )
     }
 
-    /// Refuse before touching disk if the commit cannot be made, create the
-    /// primitive directory, and return the (repo-relative, absolute) path.
-    /// Symbols go through `save_symbol_in_container` instead.
     /// Refuse a write into a library whose folder is gone (moved or deleted
     /// outside the app) instead of re-creating it (#1828).
     fn require_root_dir(&self) -> Result<(), LibraryError> {
@@ -170,6 +167,9 @@ impl LocalGitAdapter {
         )))
     }
 
+    /// Refuse before touching disk if the commit cannot be made, create the
+    /// primitive directory, and return the (repo-relative, absolute) path.
+    /// Symbols go through `save_symbol_in_container` instead.
     fn prepare_primitive_write(
         &self,
         kind: PrimitiveKind,

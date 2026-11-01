@@ -132,8 +132,12 @@ impl Signex {
                 );
                 self.finish_update()
             }
-            FileMsg::DiskReloadFinished { path, result } => {
-                let task = self.handle_disk_reload_finished(path, result);
+            FileMsg::DiskReloadFinished {
+                path,
+                edit_stamp,
+                result,
+            } => {
+                let task = self.handle_disk_reload_finished(path, edit_stamp, result);
                 Task::batch([task, self.finish_update()])
             }
             FileMsg::DocumentSaved(done) => {
@@ -230,6 +234,7 @@ impl Signex {
                 path,
                 title,
                 result,
+                disk,
             } => {
                 // #478 review — same in-flight guard clear as above.
                 self.document_state.pending_opens.remove_untracked(&path);
@@ -239,7 +244,17 @@ impl Signex {
                 }
                 match result {
                     Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
-                    Ok(board) => self.open_pcb_tab(path, title, *board),
+                    Ok(board) => {
+                        if let Some(disk) = &disk
+                            && self.focus_alias_if_open(&path, disk)
+                        {
+                            return self.finish_update();
+                        }
+                        self.open_pcb_tab(path.clone(), title, *board);
+                        if let Some(disk) = disk {
+                            self.record_disk_read(&path, disk);
+                        }
+                    }
                     Err(message) => self.report_open_failure(message),
                 }
                 self.finish_update()

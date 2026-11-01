@@ -54,6 +54,9 @@ pub enum DiskDrift {
     Changed,
     /// The file is gone.
     Missing,
+    /// The folder that held the file is gone too (moved or deleted). A save
+    /// cannot re-create it (#1828), so the card offers no Re-create (#1864).
+    FolderMissing,
 }
 
 impl DiskDrift {
@@ -63,6 +66,25 @@ impl DiskDrift {
         match self {
             Self::Changed => "changed on disk since it was opened or last saved",
             Self::Missing => "is missing on disk (deleted or moved)",
+            Self::FolderMissing => "cannot be saved: its folder is gone (moved or deleted)",
+        }
+    }
+}
+
+impl DiskDrift {
+    /// What became of the save, for Messages.
+    pub fn outcome(self) -> &'static str {
+        match self {
+            Self::FolderMissing => "nothing written, still modified",
+            _ => "not saved, still modified",
+        }
+    }
+
+    /// What the user can do next, for an error that has no card.
+    pub fn next_step(self) -> &'static str {
+        match self {
+            Self::FolderMissing => "Put the folder back, then save again",
+            _ => "Save it from its tab to choose Overwrite or Reload",
         }
     }
 }
@@ -72,7 +94,16 @@ impl DiskDrift {
 pub fn drift_from(path: &Path, known: &[ContentHash]) -> io::Result<Option<DiskDrift>> {
     match std::fs::read(path) {
         Ok(bytes) => Ok((!known.contains(&ContentHash::of(&bytes))).then_some(DiskDrift::Changed)),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Some(DiskDrift::Missing)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Some(
+            if path
+                .parent()
+                .is_some_and(|dir| !dir.as_os_str().is_empty() && !dir.is_dir())
+            {
+                DiskDrift::FolderMissing
+            } else {
+                DiskDrift::Missing
+            },
+        )),
         Err(e) => Err(e),
     }
 }
@@ -93,6 +124,16 @@ mod tests {
         assert_eq!(
             drift_from(&path, &[one, ContentHash::of(b"two")]).unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn a_vanished_folder_is_not_a_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let known = [ContentHash::of(b"x")];
+        assert_eq!(
+            drift_from(&dir.path().join("gone").join("a.snxsch"), &known).unwrap(),
+            Some(DiskDrift::FolderMissing)
         );
     }
 

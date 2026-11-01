@@ -143,6 +143,8 @@ fn refuse_read_only_target(path: &Path) -> io::Result<()> {
 /// The folder a document save targets does not exist (moved or deleted
 /// outside the app). Carried as the inner error of an [`io::Error`] of kind
 /// [`io::ErrorKind::NotFound`]; detect it with [`is_missing_parent_refusal`].
+/// The library adapter also formats it into a `LibraryError::Backend` message
+/// that names the library folder first.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MissingParentDir {
     /// The folder that is gone.
@@ -151,9 +153,9 @@ pub struct MissingParentDir {
 
 impl std::fmt::Display for MissingParentDir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Short on purpose: the Messages panel keeps ~157 bytes and callers
-        // append the file path, which must survive the cut. The folder is in
-        // that path, so it is not repeated here.
+        // Short on purpose: the Messages panel keeps ~157 bytes. An io caller
+        // appends the file path (which holds the folder); the library adapter
+        // puts the folder in front itself.
         write!(f, "folder is gone (moved?), nothing written")
     }
 }

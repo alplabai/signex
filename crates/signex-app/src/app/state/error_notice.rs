@@ -57,6 +57,13 @@ impl ErrorNotice {
                 "File Missing on Disk",
                 format!("Re-create writes this document to {}.", path.display()),
             ),
+            crate::persist::DiskDrift::FolderMissing => (
+                "Folder Missing on Disk",
+                format!(
+                    "Nothing was written. Put the folder back at {}, then save again.",
+                    path.parent().unwrap_or(&path).display()
+                ),
+            ),
         };
         let detail = format!("{name} {what}. {advice}");
         Self {

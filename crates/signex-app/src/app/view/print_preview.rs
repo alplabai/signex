@@ -442,5 +442,7 @@ fn notice_choice_buttons<'a>(
             choice("Overwrite", OverlayMsg::DiskConflictOverwriteChosen),
         ],
         DiskDrift::Missing => vec![choice("Re-create", OverlayMsg::DiskConflictOverwriteChosen)],
+        // Writing would have to re-create the folder, which a save refuses.
+        DiskDrift::FolderMissing => Vec::new(),
     }
 }

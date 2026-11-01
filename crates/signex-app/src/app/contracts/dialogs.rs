@@ -489,6 +489,8 @@ pub enum FileMsg {
         path: PathBuf,
         title: String,
         result: Result<Box<signex_types::pcb::PcbBoard>, String>,
+        /// What the read learned about the file (#1863).
+        disk: Option<crate::persist::DiskRead>,
     },
     /// Completion of an off-thread schematic / PCB / primitive read started
     /// from the project tree or a primitive open (#859). Applied only while
@@ -517,7 +519,10 @@ pub enum FileMsg {
     /// back from the file that changed under an open document.
     DiskReloadFinished {
         path: PathBuf,
-        result: Result<Box<crate::app::handlers::document_files::ReloadedSheet>, String>,
+        /// The document's edit stamp when Reload was chosen; a later one means
+        /// the user edited during the read.
+        edit_stamp: crate::app::restore_job::EditStamp,
+        result: Result<Box<crate::app::handlers::document_files::ReloadedFile>, String>,
     },
     /// Completion of an off-thread document write (Save / Save As). The
     /// dirty marker clears only if the document has not changed since the
