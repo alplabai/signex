@@ -263,7 +263,10 @@ fn undoing_while_a_save_is_in_flight_is_dirty_once_the_write_lands() {
     // The save snapshots the edited sheet but has not run yet.
     let write = d.app.update(Message::File(FileMsg::Save));
     d.undo();
-    assert!(!d.dirty(), "at the state the file held when Undo ran");
+    assert!(
+        d.dirty(),
+        "the write has not landed and will carry the edit"
+    );
     drive(&mut d.app, write);
     assert!(
         d.dirty(),
@@ -292,4 +295,102 @@ fn save_as_with_an_undo_during_the_write_stays_dirty() {
     );
     d.undo();
     assert!(d.app.document_state.is_document_dirty(&target));
+}
+
+#[test]
+fn quitting_after_an_undo_during_the_write_prompts() {
+    let mut d = opened_from_disk();
+    d.edit();
+    let write = d.app.update(Message::File(FileMsg::Save));
+    d.undo();
+    let _quit = d.app.handle_app_quit_requested();
+    assert!(
+        d.app.ui_state.app_quit_confirm.is_some(),
+        "the file is about to receive an edit the document no longer has"
+    );
+    drive(&mut d.app, write);
+    assert!(d.dirty());
+}
+
+#[test]
+fn closing_the_tab_after_an_undo_during_the_write_keeps_the_sheet() {
+    let mut d = opened_from_disk();
+    d.edit();
+    let write = d.app.update(Message::File(FileMsg::Save));
+    d.undo();
+    let _close = d.app.close_tab_now(0);
+    assert!(
+        d.app.document_state.engines.contains_key(&d.file),
+        "a sheet that reads dirty is parked, not dropped"
+    );
+    drive(&mut d.app, write);
+    assert!(d.dirty());
+    assert!(d.app.document_state.engines.contains_key(&d.file));
+}
+
+#[test]
+fn a_failed_write_lets_an_undo_to_the_save_point_read_clean() {
+    let mut d = opened_from_disk();
+    d.edit();
+    let _write = d.app.update(Message::File(FileMsg::Save));
+    d.undo();
+    assert!(d.dirty());
+    // The write never runs; its failure completes the save.
+    let _ = d.app.update(Message::File(FileMsg::DocumentSaved(
+        crate::persist::DocumentSaveDone {
+            path: d.file.clone(),
+            revision: 0,
+            net_color_revision: 0,
+            save_as_from: None,
+            bytes: std::sync::Arc::new(Vec::new()),
+            sequence: 0,
+            result: Err("disk full".to_string()),
+            recovery_hold: None,
+        },
+    )));
+    assert!(!d.dirty(), "the file still holds what the undo restored");
+}
+
+#[test]
+fn a_restore_nothing_applied_to_leaves_a_parked_sheet_dirty_through_undo() {
+    use crate::app::document_read::ReadRequest;
+    use crate::app::restore_job::{EditStamp, RestoreJobDocument, RestoredFile};
+
+    let mut d = opened_from_disk();
+    d.edit();
+    let _close = d.app.close_tab_now(0);
+    assert!(d.app.document_state.engines.contains_key(&d.file), "parked");
+    // The restore worker reports after the tab closed, having rewritten the
+    // file; nothing in memory follows it.
+    let restored = RestoredFile {
+        document: RestoreJobDocument::Schematic(Box::default()),
+        bytes: std::sync::Arc::new(Vec::new()),
+    };
+    let _ = d.app.handle_history_restore_finished(
+        ReadRequest {
+            path: d.file.clone(),
+            generation: 0,
+        },
+        "abc1234",
+        EditStamp(0),
+        Ok(Box::new(restored)),
+    );
+    // Reopen the parked sheet and undo back to where the file used to be.
+    d.app.document_state.tabs.push(crate::app::TabInfo {
+        title: "flow".to_string(),
+        path: d.file.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    d.app.document_state.active_tab = 0;
+    d.app.document_state.active_path = Some(d.file.clone());
+    assert!(d.dirty());
+    d.undo();
+    assert!(
+        d.dirty(),
+        "the file holds the restored revision, not the old save"
+    );
+    d.redo();
+    assert!(d.dirty());
 }

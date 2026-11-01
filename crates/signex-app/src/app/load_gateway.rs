@@ -453,7 +453,7 @@ impl Signex {
         // Read from disk: the opened document is the saved state, so undoing
         // every edit made since returns to a clean sheet. (A recovery copy
         // is installed by a different path and stays dirty-safe.)
-        if let Some(engine) = self.document_state.active_engine_mut() {
+        if let Some(engine) = self.document_state.engines.get_mut(&scan_path) {
             engine.mark_saved();
         }
         self.note_sheet_focused();

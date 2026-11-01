@@ -58,6 +58,20 @@ revision still matches (`Engine::mark_saved`, called from
 `Engine::is_at_save_point()` holds, so undoing the only edit since the save
 is clean again and Redo is dirty again.
 
+While a write is in flight the sheet reads dirty whatever the history says
+(`sync_history_dirty` checks `document_saves.is_saving`), so an Undo during
+the write cannot hide the snapshot that is about to land; the completion
+settles the mark (clean on a matching revision, otherwise re-synced). A
+History restore that rewrites the file without the result being applied to
+the surviving engine forgets its save point and marks the sheet dirty.
+
+An autosave recovery copy reads dirty because its engine has no save point,
+not because of an outside mark.
+
+Known limit: a change to the file made outside Signex (a git checkout,
+another editor) is not detected by the save point; the engine's point still
+names the content it last saved or loaded.
+
 The save point is dropped, and the sheet stays dirty until the next save,
 when no history step can reproduce the file any more:
 

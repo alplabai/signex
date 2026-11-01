@@ -100,11 +100,17 @@ impl DocumentState {
     /// nothing outside the history marked it. Undoing the only edit since the
     /// last save is clean again; redoing it is dirty again.
     pub fn sync_history_dirty(&mut self, path: &Path) {
-        let at_save_point = self
-            .engines
-            .get(path)
-            .is_some_and(|engine| engine.is_at_save_point());
-        if at_save_point && !self.dirty_docs.external.contains(path) {
+        let Some(engine) = self.engines.get(path) else {
+            return;
+        };
+        // A write that has not landed holds the sheet dirty: an Undo back to
+        // the old save point during it would otherwise read clean while the
+        // file is about to receive the newer snapshot. The completion
+        // settles the mark (clean on a matching revision, re-synced else).
+        let clean = engine.is_at_save_point()
+            && !self.dirty_docs.external.contains(path)
+            && !self.document_saves.is_saving(path);
+        if clean {
             self.dirty_docs.paths.remove(path);
         } else {
             self.dirty_docs.paths.insert(path.to_path_buf());
