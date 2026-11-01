@@ -71,20 +71,30 @@ fn draw_sheet_frame(
     color: Color,
 ) {
     let at = |x: f64, y: f64| cam.world_to_screen(iced::Point::new(x as f32, y as f32), bounds);
-    // Hairlines stay visible when zoomed out and thin when zoomed in.
-    let stroke = |width_mm: f64| {
-        canvas::Stroke::default()
-            .with_color(color)
-            .with_width((width_mm as f32 * cam.scale).clamp(1.0, 3.0))
+    // Frame lines follow the stroke law and the whole-pixel snap (#1858).
+    let line = |frame: &mut canvas::Frame, from: (f64, f64), to: (f64, f64), width_mm: f64| {
+        let width = signex_types::schematic::stroke_px(
+            width_mm as f32,
+            cam.scale,
+            signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        );
+        let (p0, p1, width) = crate::scene_line_snap::snap_hairline(
+            at(from.0, from.1),
+            at(to.0, to.1),
+            width,
+            signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        );
+        frame.stroke(
+            &canvas::Path::line(p0, p1),
+            canvas::Stroke::default()
+                .with_color(color)
+                .with_width(width)
+                .with_line_cap(canvas::LineCap::Square),
+        );
     };
     for primitive in primitives {
         match primitive {
-            FramePrimitive::Line { from, to, width_mm } => {
-                frame.stroke(
-                    &canvas::Path::line(at(from.0, from.1), at(to.0, to.1)),
-                    stroke(*width_mm),
-                );
-            }
+            FramePrimitive::Line { from, to, width_mm } => line(frame, *from, *to, *width_mm),
             FramePrimitive::Rect {
                 x,
                 y,
@@ -92,11 +102,15 @@ fn draw_sheet_frame(
                 h,
                 width_mm,
             } => {
-                let top_left = at(*x, *y);
-                let bottom_right = at(x + w, y + h);
-                let size =
-                    iced::Size::new(bottom_right.x - top_left.x, bottom_right.y - top_left.y);
-                frame.stroke(&canvas::Path::rectangle(top_left, size), stroke(*width_mm));
+                let (x0, y0, x1, y1) = (*x, *y, x + w, y + h);
+                for (from, to) in [
+                    ((x0, y0), (x1, y0)),
+                    ((x1, y0), (x1, y1)),
+                    ((x1, y1), (x0, y1)),
+                    ((x0, y1), (x0, y0)),
+                ] {
+                    line(frame, from, to, *width_mm);
+                }
             }
             FramePrimitive::Text {
                 x,
