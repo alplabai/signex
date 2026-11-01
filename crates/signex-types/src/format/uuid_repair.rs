@@ -255,19 +255,20 @@ fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]
         else {
             continue;
         };
-        if colored(object.kind) {
-            if let Some(color) = sheet.net_colors.get(old).copied() {
-                sheet.net_colors.insert(*new, color);
-                if !colored(holder) {
-                    sheet.net_colors.remove(old);
-                }
+        if colored(object.kind)
+            && let Some(color) = sheet.net_colors.get(old).copied()
+        {
+            sheet.net_colors.insert(*new, color);
+            if !colored(holder) {
+                sheet.net_colors.remove(old);
             }
-        } else if object.kind == kind::DRAWING {
-            if let Some(placement) = sheet.drawing_placements.get(old).copied() {
-                sheet.drawing_placements.insert(*new, placement);
-                if *holder != kind::DRAWING {
-                    sheet.drawing_placements.remove(old);
-                }
+        }
+        if object.kind == kind::DRAWING
+            && let Some(placement) = sheet.drawing_placements.get(old).copied()
+        {
+            sheet.drawing_placements.insert(*new, placement);
+            if *holder != kind::DRAWING {
+                sheet.drawing_placements.remove(old);
             }
         }
     }
