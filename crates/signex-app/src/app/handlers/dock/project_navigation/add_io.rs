@@ -141,10 +141,10 @@ pub(crate) fn create_sheet_with_entry(
         // only the file name follows.
         match std::fs::remove_file(path) {
             Ok(()) => {
-                format!("the project file could not be updated, so {entry} was not kept ({e})")
+                format!("the project file could not be written, so {entry} was not kept ({e})")
             }
             Err(rm) => format!(
-                "the project file could not be updated and {} could not be removed ({rm}); \
+                "the project file could not be written and {} could not be removed ({rm}); \
                  delete it by hand ({e})",
                 path.display()
             ),

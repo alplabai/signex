@@ -53,7 +53,7 @@ impl RenameJob {
     }
 
     /// Move the file, then re-point the saved project's entry. When the
-    /// project cannot follow the move is undone, so disk never holds a
+    /// project cannot be written the move is undone, so disk never holds a
     /// renamed file under an unrenamed project (#1821).
     fn move_and_patch(&self) -> Result<EntryPatch, RenameIoError> {
         move_file(&self.from, &self.to)?;
@@ -67,7 +67,7 @@ impl RenameJob {
             project.fold,
         )
         .map_err(|e| RenameIoError::ProjectNotPatched {
-            reason: format!("the project file could not be updated ({e}); nothing was changed"),
+            reason: format!("the project file could not be written ({e})"),
             moved_back: std::fs::rename(&self.to, &self.from).map_err(|e| e.to_string()),
         })
     }
@@ -120,7 +120,7 @@ impl LibraryRenameJob {
         match retarget_library_entry(&self.project_path, &self.old, new_name) {
             Ok(outcome) => LibraryRenameIo::Moved(outcome),
             Err(e) => LibraryRenameIo::ProjectNotPatched {
-                reason: format!("the project file could not be updated ({e}); nothing was changed"),
+                reason: format!("the project file could not be written ({e})"),
                 moved_back: std::fs::rename(&self.new, &self.old).map_err(|e| e.to_string()),
             },
         }

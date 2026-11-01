@@ -62,7 +62,6 @@ fn fixture() -> Fixture {
     let prj = dir.join("proj.snxprj");
     write_sheet(&root, sheet(&["child.snxsch"]));
     write_sheet(&child, sheet(&[]));
-    fs::write(&prj, b"{}").expect("write prj");
 
     let entry = |f: &str| SheetEntry {
         name: f.to_string(),
@@ -100,6 +99,9 @@ fn fixture() -> Fixture {
         case_decided: false,
     });
     app.document_state.active_project = Some(id);
+    // A readable project: a sheet rename re-points its saved entry (#1821).
+    signex_types::project::write_project(&prj, &app.document_state.projects[0].data)
+        .expect("write prj");
     Fixture {
         app,
         _tmp: tmp,
@@ -154,8 +156,8 @@ fn renaming_a_child_sheet_updates_the_unopened_parents_reference() {
         "the parent is NOT silently written"
     );
     assert!(
-        f.app.document_state.is_document_dirty(&f.prj),
-        "the project's sheet list changed in memory"
+        !f.app.document_state.is_document_dirty(&f.prj),
+        "the saved project was updated with the move, so it is not left dirty (#1821)"
     );
     let data = &f.app.document_state.projects[0].data;
     assert!(data.sheets.iter().any(|s| s.filename == "renamed.snxsch"));
@@ -415,7 +417,10 @@ fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
         .as_ref()
         .expect("the dirty tab-less parent still prompts");
     assert!(modal.dirty_paths.contains(&f.root));
-    assert!(modal.dirty_paths.contains(&f.prj));
+    assert!(
+        !modal.dirty_paths.contains(&f.prj),
+        "the project entry was committed with the move (#1821)"
+    );
 
     let _ = f.app.update(Message::Project(ProjectMsg::CloseConfirm(
         ProjectCloseChoice::DiscardAll,

@@ -65,10 +65,10 @@ impl Signex {
             }
             (RenameIoError::ProjectNotPatched { reason, moved_back }, _) => {
                 let shown = match moved_back {
-                    Ok(()) => format!("Rename cancelled: {reason}. The file was renamed back."),
+                    Ok(()) => format!("Rename cancelled: {reason}. Nothing was changed."),
                     Err(back) => format!(
-                        "{reason}. The file could not be moved back ({back}): it is now at {} \
-                         while the project still lists {}. Move it back by hand.",
+                        "Rename failed: {reason}, and the file could not be moved back ({back}). \
+                         It is now at {} while the project still lists {}. Move it back by hand.",
                         request.to.display(),
                         request.from.display()
                     ),
@@ -191,9 +191,13 @@ impl Signex {
             );
         } else if repointed {
             self.document_state.mark_document_dirty(project_file);
+            let why = match &patch {
+                EntryPatch::NoProjectFile => "the project has not been saved yet",
+                EntryPatch::Unreadable(_) => "the saved project file could not be read",
+                _ => "the saved project file does not list it",
+            };
             crate::diagnostics::log_warning(format!(
-                "Save the project to keep the new name of {old} (renamed to {new}); \
-                 the saved project file does not list it."
+                "Save the project to keep the new name of {old} (renamed to {new}); {why}."
             ));
         }
     }

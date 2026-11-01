@@ -305,10 +305,18 @@ impl Signex {
                 crate::app::state::CommitBytes { bytes, sequence: 0 },
             );
         } else if self.register_project_file(project_id, &path) {
+            let why = match &patch {
+                EntryPatch::NoProjectFile => "the project has not been saved yet",
+                EntryPatch::Unreadable(_) => "the saved project file could not be read",
+                // The saved project already lists it: nothing is left to save.
+                _ => {
+                    self.refresh_panel_ctx();
+                    return;
+                }
+            };
             self.document_state.mark_document_dirty(&project_path);
             crate::diagnostics::log_warning(format!(
-                "Save the project to list the new sheet {name}; the saved project file does not \
-                 yet."
+                "Save the project to list the new sheet {name}; {why}."
             ));
         }
         self.refresh_panel_ctx();

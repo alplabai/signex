@@ -133,10 +133,13 @@ fn add_new(f: &mut Fixture, name: &str) -> PathBuf {
     path
 }
 
-fn logged(fragment: &str) -> bool {
+/// How many entries of the process-wide diagnostics ring carry `fragment`:
+/// compare before and after, so another test's line cannot satisfy this one.
+fn logged_count(fragment: &str) -> usize {
     signex_app::diagnostics::recent_entries()
         .iter()
-        .any(|e| e.message.contains(fragment))
+        .filter(|e| e.message.contains(fragment))
+        .count()
 }
 
 /// What Discard All then reopen shows: the project as saved on disk.
@@ -150,18 +153,21 @@ fn names(data: &ProjectData) -> Vec<String> {
 
 #[test]
 fn rename_then_discard_all_reopens_with_the_renamed_sheet() {
+    let said =
+        "Renamed Second.snxsch to ThirdA.snxsch; the saved project file now lists the new name";
+    let before = logged_count(said);
     let mut f = fixture(true);
-    rename(&mut f.app, &f.dir.join("Second.snxsch"), "Third.snxsch");
+    rename(&mut f.app, &f.dir.join("Second.snxsch"), "ThirdA.snxsch");
 
-    assert!(f.dir.join("Third.snxsch").exists());
+    assert!(f.dir.join("ThirdA.snxsch").exists());
     let saved = reopened(&f);
-    assert_eq!(names(&saved), ["Third.snxsch"], "no (missing) sheet");
-    assert_eq!(saved.schematic_root.as_deref(), Some("Third.snxsch"));
+    assert_eq!(names(&saved), ["ThirdA.snxsch"], "no (missing) sheet");
+    assert_eq!(saved.schematic_root.as_deref(), Some("ThirdA.snxsch"));
     assert!(
         !f.app.document_state.is_document_dirty(&f.prj),
         "the project was committed with the move, so nothing is left unsaved"
     );
-    assert!(logged("the saved project file now lists the new name"));
+    assert_eq!(logged_count(said), before + 1);
 }
 
 #[test]
@@ -191,31 +197,60 @@ fn rename_does_not_write_other_unsaved_project_edits() {
 
 #[test]
 fn rename_in_a_project_never_saved_leaves_it_dirty_and_says_so() {
+    let said = "renamed to ThirdB.snxsch); the project has not been saved yet";
+    let before = logged_count(said);
     let mut f = fixture(false);
-    rename(&mut f.app, &f.dir.join("Second.snxsch"), "Third.snxsch");
+    rename(&mut f.app, &f.dir.join("Second.snxsch"), "ThirdB.snxsch");
 
     assert!(!f.prj.exists(), "no project file is created by a rename");
     assert_eq!(
         names(&f.app.document_state.projects[0].data),
-        ["Third.snxsch"]
+        ["ThirdB.snxsch"]
     );
     assert!(f.app.document_state.is_document_dirty(&f.prj));
-    assert!(logged("Save the project to keep the new name"));
+    assert_eq!(logged_count(said), before + 1);
 }
 
+/// A damaged `.snxprj` is never overwritten and never makes the rename
+/// impossible: the move stands and the in-memory project is left dirty.
 #[test]
-fn rename_is_undone_when_the_saved_project_cannot_be_updated() {
+fn rename_with_an_unreadable_saved_project_moves_the_file_and_leaves_it_dirty() {
+    let said = "renamed to ThirdC.snxsch); the saved project file could not be read";
+    let before = logged_count(said);
     let mut f = fixture(true);
-    std::fs::write(&f.prj, b"{ broken").expect("corrupt the project");
+    std::fs::write(&f.prj, b"{ broken").expect("damage the project");
+    rename(&mut f.app, &f.dir.join("Second.snxsch"), "ThirdC.snxsch");
+
+    assert!(f.dir.join("ThirdC.snxsch").exists());
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        b"{ broken",
+        "not overwritten"
+    );
+    assert_eq!(
+        names(&f.app.document_state.projects[0].data),
+        ["ThirdC.snxsch"]
+    );
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
+    assert_eq!(logged_count(said), before + 1);
+}
+
+#[cfg(unix)]
+fn read_only(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o444)).expect("chmod");
+}
+
+/// The saved project cannot be written: the move is undone.
+#[cfg(unix)]
+#[test]
+fn rename_is_undone_when_the_saved_project_cannot_be_written() {
+    let mut f = fixture(true);
+    read_only(&f.prj);
     rename(&mut f.app, &f.dir.join("Second.snxsch"), "Third.snxsch");
 
     assert!(f.dir.join("Second.snxsch").exists(), "the file moved back");
     assert!(!f.dir.join("Third.snxsch").exists());
-    assert_eq!(
-        std::fs::read(&f.prj).unwrap(),
-        b"{ broken",
-        "an unreadable project is never overwritten"
-    );
     assert_eq!(
         names(&f.app.document_state.projects[0].data),
         ["Second.snxsch"],
@@ -225,13 +260,15 @@ fn rename_is_undone_when_the_saved_project_cannot_be_updated() {
 
 #[test]
 fn add_new_schematic_then_discard_all_reopens_with_the_sheet() {
+    let said = "Added AddedA.snxsch; the saved project file now lists it";
+    let before = logged_count(said);
     let mut f = fixture(true);
-    let path = add_new(&mut f, "Added.snxsch");
+    let path = add_new(&mut f, "AddedA.snxsch");
 
     assert!(path.exists());
-    assert_eq!(names(&reopened(&f)), ["Second.snxsch", "Added.snxsch"]);
+    assert_eq!(names(&reopened(&f)), ["Second.snxsch", "AddedA.snxsch"]);
     assert!(!f.app.document_state.is_document_dirty(&f.prj));
-    assert!(logged("the saved project file now lists it"));
+    assert_eq!(logged_count(said), before + 1);
 }
 
 #[test]
@@ -247,20 +284,39 @@ fn add_new_schematic_does_not_write_other_unsaved_project_edits() {
     assert!(f.app.document_state.is_document_dirty(&f.prj));
 }
 
+#[cfg(unix)]
 #[test]
-fn add_new_schematic_leaves_no_orphan_when_the_project_cannot_be_updated() {
+fn add_new_schematic_leaves_no_orphan_when_the_project_cannot_be_written() {
+    let said = "the project file could not be written, so AddedB.snxsch was not kept";
+    let before = logged_count(said);
     let mut f = fixture(true);
-    std::fs::write(&f.prj, b"{ broken").expect("corrupt the project");
-    let path = add_new(&mut f, "Added.snxsch");
+    read_only(&f.prj);
+    let path = add_new(&mut f, "AddedB.snxsch");
 
     assert!(!path.exists(), "no sheet file is left unlisted");
     assert_eq!(
         names(&f.app.document_state.projects[0].data),
         ["Second.snxsch"]
     );
-    assert!(logged(
-        "the project file could not be updated, so Added.snxsch was not kept"
-    ));
+    assert_eq!(logged_count(said), before + 1);
+}
+
+#[test]
+fn add_new_schematic_with_an_unreadable_saved_project_keeps_the_sheet_and_stays_dirty() {
+    let said = "list the new sheet AddedC.snxsch; the saved project file could not be read";
+    let before = logged_count(said);
+    let mut f = fixture(true);
+    std::fs::write(&f.prj, b"{ broken").expect("damage the project");
+    let path = add_new(&mut f, "AddedC.snxsch");
+
+    assert!(path.exists());
+    assert_eq!(
+        std::fs::read(&f.prj).unwrap(),
+        b"{ broken",
+        "not overwritten"
+    );
+    assert!(f.app.document_state.is_document_dirty(&f.prj));
+    assert_eq!(logged_count(said), before + 1);
 }
 
 #[test]

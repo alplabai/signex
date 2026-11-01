@@ -24,6 +24,10 @@ pub enum EntryPatch {
     NoProjectFile,
     /// The saved project has no entry to change; nothing was written.
     NotListed,
+    /// The `.snxprj` on disk cannot be read (damaged or edited outside
+    /// Signex); it is left untouched and the reason is kept for the user. The
+    /// change then waits for a save of the in-memory project, as before.
+    Unreadable(String),
 }
 
 /// Point every sheet, PCB and schematic-root entry that resolves to `from`
@@ -58,7 +62,8 @@ pub(crate) fn repoint_entries(
 }
 
 /// Re-point the saved project's entries for `from` at `new_name`. The file is
-/// parsed first, so a corrupt project is reported and never overwritten.
+/// parsed first, so an unreadable project is reported (`Unreadable`) and never
+/// overwritten; only a failed write is an error.
 pub(crate) fn retarget_sheet_entry(
     project_file: &Path,
     from: &Path,
@@ -68,7 +73,10 @@ pub(crate) fn retarget_sheet_entry(
     if !project_file.exists() {
         return Ok(EntryPatch::NoProjectFile);
     }
-    let mut data = parse_project(project_file)?;
+    let mut data = match parse_project(project_file) {
+        Ok(data) => data,
+        Err(e) => return Ok(EntryPatch::Unreadable(e.to_string())),
+    };
     let dir = project_file.parent().unwrap_or_else(|| Path::new(""));
     if !repoint_entries(&mut data, dir, from, new_name, fold) {
         return Ok(EntryPatch::NotListed);
@@ -87,7 +95,10 @@ pub(crate) fn add_sheet_entry(
     if !project_file.exists() {
         return Ok(EntryPatch::NoProjectFile);
     }
-    let mut data = parse_project(project_file)?;
+    let mut data = match parse_project(project_file) {
+        Ok(data) => data,
+        Err(e) => return Ok(EntryPatch::Unreadable(e.to_string())),
+    };
     if !register_entry(&mut data, entry, fold) {
         return Ok(EntryPatch::NotListed);
     }
