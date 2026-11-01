@@ -47,15 +47,22 @@ fn save_as_onto_the_projects_snxprj_is_refused_and_leaves_it_unchanged() {
 }
 
 #[test]
-fn save_as_onto_a_differently_cased_snxprj_is_refused() {
+fn save_as_onto_a_project_file_that_is_not_loaded_is_refused() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, sheet, project) = schematic_fixture(dir.path());
-    let shouted = dir.path().join("PROJECTA.SNXPRJ");
-    assert!(
-        app.save_active_document_as(&sheet, shouted).is_err(),
-        "{project:?}"
-    );
-    assert_eq!(std::fs::read(&project).unwrap(), PROJECT_BYTES);
+    let (mut app, sheet, _project) = schematic_fixture(dir.path());
+    let other = dir.path().join("Other.SNXPRJ");
+    std::fs::write(&other, PROJECT_BYTES).unwrap();
+    let error = app
+        .save_active_document_as(&sheet, other.clone())
+        .expect_err("any project file is refused");
+    assert!(error.to_string().contains("project file"), "{error}");
+    assert_eq!(std::fs::read(&other).unwrap(), PROJECT_BYTES);
+}
+
+#[test]
+fn an_upper_case_footprint_extension_is_a_footprint() {
+    assert_eq!(super::primitive_extension(Path::new("X.SNXFPT")), "snxfpt");
+    assert_eq!(super::primitive_extension(Path::new("x.snxsym")), "snxsym");
 }
 
 #[test]

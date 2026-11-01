@@ -69,8 +69,9 @@ fn primitive_save_as_message(from_path: PathBuf, to_path: PathBuf) -> Message {
 
 /// Extension of the primitive kind the source path belongs to.
 pub(crate) fn primitive_extension(from_path: &std::path::Path) -> &'static str {
+    // Case-folded, as the open path does: `X.SNXFPT` is a footprint.
     match from_path.extension().and_then(|s| s.to_str()) {
-        Some("snxfpt") => "snxfpt",
+        Some(ext) if ext.eq_ignore_ascii_case("snxfpt") => "snxfpt",
         _ => "snxsym",
     }
 }

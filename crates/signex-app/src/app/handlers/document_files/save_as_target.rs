@@ -17,35 +17,24 @@ fn has_extension(path: &Path, ext: &str) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case(ext))
 }
 
-/// Whether both paths name one file, by spelling (case-folded) or on disk.
-fn same_file(a: &Path, b: &Path) -> bool {
-    if a.to_string_lossy()
-        .eq_ignore_ascii_case(&b.to_string_lossy())
-    {
-        return true;
-    }
-    matches!((a.canonicalize(), b.canonicalize()), (Ok(x), Ok(y)) if x == y)
-}
-
 impl Signex {
-    /// Refuse a Save As of a document of extension `ext` onto `target` when
-    /// `target` is a loaded project's `.snxprj` or does not carry `ext`.
+    /// Refuse a Save As of a document of extension `ext` onto a project file
+    /// (`.snxprj`, whether or not that project is loaded) or onto anything
+    /// without `ext`. A project file is recognised by its extension alone, so
+    /// no path comparison (and no second case-fold rule) is involved.
     /// Nothing has been written when this errs, and the document stays dirty.
     pub(super) fn refuse_save_as_target(&self, target: &Path, ext: &str) -> Result<()> {
-        if self
-            .document_state
-            .projects
-            .iter()
-            .any(|project| same_file(&project.path, target))
-        {
+        if has_extension(target, "snxprj") {
             anyhow::bail!(
                 "that file is a project file; nothing was written: {}",
                 file_label(target)
             );
         }
         if !has_extension(target, ext) {
+            // A dotted name ("v1.2") has an extension the app does not know.
             anyhow::bail!(
-                "a Save As target must be a .{ext} file; nothing was written: {}",
+                "a Save As target must be a .{ext} file (add .{ext} to the name); nothing \
+                 was written: {}",
                 file_label(target)
             );
         }
