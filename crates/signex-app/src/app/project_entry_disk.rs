@@ -9,16 +9,17 @@
 
 use std::path::Path;
 
-use signex_types::project::{ProjectData, ProjectError, parse_project, write_project};
+use signex_types::project::{ProjectData, ProjectError, encode_project, parse_project};
 
 use crate::app::state::library_entry::{entry_resolves_to, with_new_leaf};
 use crate::app::state::scope::CaseFold;
 
 /// What a patch did to the project file on disk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryPatch {
-    /// The saved project was changed and rewritten atomically.
-    Patched,
+    /// The saved project was changed and rewritten atomically; holds the
+    /// exact bytes written, so the follow-up git commit records them.
+    Patched(crate::persist::SharedBytes),
     /// There is no `.snxprj` on disk yet; nothing was written.
     NoProjectFile,
     /// The saved project has no entry to change; nothing was written.
@@ -72,8 +73,7 @@ pub(crate) fn retarget_sheet_entry(
     if !repoint_entries(&mut data, dir, from, new_name, fold) {
         return Ok(EntryPatch::NotListed);
     }
-    write_project(project_file, &data)?;
-    Ok(EntryPatch::Patched)
+    write_patched(project_file, &data)
 }
 
 /// List the sheet `entry` (relative to the project folder) in the saved
@@ -91,8 +91,7 @@ pub(crate) fn add_sheet_entry(
     if !register_entry(&mut data, entry, fold) {
         return Ok(EntryPatch::NotListed);
     }
-    write_project(project_file, &data)?;
-    Ok(EntryPatch::Patched)
+    write_patched(project_file, &data)
 }
 
 /// The one place a sheet row is built, shared by the in-memory project and
@@ -118,4 +117,15 @@ pub(crate) fn register_entry(data: &mut ProjectData, filename: &str, fold: CaseF
         data.schematic_root = Some(filename.to_owned());
     }
     true
+}
+
+/// Encode `data` and write exactly those bytes atomically.
+fn write_patched(project_file: &Path, data: &ProjectData) -> Result<EntryPatch, ProjectError> {
+    let io = |source: std::io::Error| ProjectError::Io {
+        path: project_file.display().to_string(),
+        source,
+    };
+    let bytes = encode_project(data).map_err(|e| io(std::io::Error::other(e.to_string())))?;
+    signex_types::atomic_io::atomic_write(project_file, &bytes).map_err(io)?;
+    Ok(EntryPatch::Patched(std::sync::Arc::new(bytes)))
 }

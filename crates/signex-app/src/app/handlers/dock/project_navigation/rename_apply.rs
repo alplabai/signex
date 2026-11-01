@@ -174,7 +174,7 @@ impl Signex {
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
         };
         let (old, new) = (leaf(&request.from), leaf(&request.to));
-        if patch == EntryPatch::Patched {
+        if let EntryPatch::Patched(bytes) = patch {
             let other_edits = self.document_state.is_document_dirty(project_file);
             crate::diagnostics::log_info(format!(
                 "Renamed {old} to {new}; the saved project file now lists the new name{}.",
@@ -184,7 +184,11 @@ impl Signex {
                     ""
                 }
             ));
-            self.commit_save_to_project_git(project_file, &format!("Rename sheet {old} to {new}"));
+            self.commit_bytes_to_project_git(
+                project_file,
+                &format!("Rename sheet {old} to {new}"),
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            );
         } else if repointed {
             self.document_state.mark_document_dirty(project_file);
             crate::diagnostics::log_warning(format!(

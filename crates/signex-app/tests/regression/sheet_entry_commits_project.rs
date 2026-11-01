@@ -262,3 +262,35 @@ fn add_new_schematic_leaves_no_orphan_when_the_project_cannot_be_updated() {
         "the project file could not be updated, so Added.snxsch was not kept"
     ));
 }
+
+#[test]
+fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
+    use signex_app::app::path_ops::RenameIoError;
+
+    let mut f = fixture(true);
+    let from = f.dir.join("Second.snxsch");
+    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: from.clone(),
+        tree_path: vec![0],
+        buffer: "Third.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    let task = f.app.update(Message::Rename(RenameMsg::Submit));
+    let mut messages = run(task);
+    if let Some(Message::Rename(RenameMsg::FileRenamed(done))) = messages.first_mut() {
+        done.result = Err(RenameIoError::ProjectNotPatched {
+            reason: "the project file could not be updated".to_string(),
+            moved_back: Err("denied".to_string()),
+        });
+    }
+    f.app.ui_state.rename_dialog = None;
+    for message in messages {
+        let _ = f.app.update(message);
+    }
+    assert!(
+        f.app.document_state.error_notice.is_some(),
+        "the stranded file raises a card"
+    );
+}

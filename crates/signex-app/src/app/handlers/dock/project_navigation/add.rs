@@ -44,8 +44,9 @@ impl Signex {
 
     /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
     /// directory; result returns through [`ProjectMsg::AddNewSchematicPicked`].
-    /// The handler writes a blank `.snxsch`, registers the entry on
-    /// the project, and marks the .snxprj dirty.
+    /// The handler writes a blank `.snxsch` and lists it in the saved
+    /// `.snxprj` in one worker job (#1821); the project is dirtied only when
+    /// the saved project could not take the entry.
     pub(crate) fn add_new_schematic(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
@@ -224,6 +225,17 @@ impl Signex {
             crate::diagnostics::log_warning(format!("Add New Schematic refused: {error}"));
             return iced::Task::none();
         }
+        // The job reads, patches and rewrites the saved `.snxprj`, so the
+        // project file is registered for its whole run: a project save, a
+        // sheet or library rename or a second Add New started meanwhile is
+        // refused instead of racing the read-modify-write. Released by the
+        // completion, whatever its result.
+        self.document_state.pending_path_ops.begin_with_dependents(
+            crate::app::path_ops::PathOpKind::AddSheet,
+            vec![path.clone()],
+            vec![project_path.clone()],
+            fold,
+        );
         self.begin_project_write(&path);
         // The blank sheet and its project entry are committed together off
         // the update thread; the project is looked up again by id when the
@@ -266,6 +278,7 @@ impl Signex {
         result: Result<EntryPatch, String>,
     ) {
         self.end_project_write(&path);
+        self.document_state.pending_path_ops.finish_add_sheet(&path);
         let patch = match result {
             Ok(patch) => patch,
             Err(e) => {
@@ -281,12 +294,16 @@ impl Signex {
         let name = path
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        if patch == EntryPatch::Patched {
+        if let EntryPatch::Patched(bytes) = patch {
             self.register_project_file(project_id, &path);
             crate::diagnostics::log_info(format!(
                 "Added {name}; the saved project file now lists it."
             ));
-            self.commit_save_to_project_git(&project_path, &format!("Add sheet {name}"));
+            self.commit_bytes_to_project_git(
+                &project_path,
+                &format!("Add sheet {name}"),
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            );
         } else if self.register_project_file(project_id, &path) {
             self.document_state.mark_document_dirty(&project_path);
             crate::diagnostics::log_warning(format!(
