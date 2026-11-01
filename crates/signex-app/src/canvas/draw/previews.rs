@@ -285,10 +285,17 @@ impl SchematicCanvas<'_> {
         if self.drawing_mode && !self.wire_preview.is_empty() {
             let wire_color = self.prefs.canvas_colors.wire;
             let wire_color_iced = crate::render_config::to_iced(&wire_color);
-            // Match the placed-wire stroke width (0.15 mm in world),
-            // scaled by cam. Previously fixed 1.5 px which looked
-            // thin at higher zooms.
-            let placed_width = (cam.scale * 0.15).max(1.0);
+            // The width the placed wire or bus draws at, under the stroke law.
+            let placed_mm = if self.prefs.current_tool == crate::app::Tool::Bus {
+                signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM
+            } else {
+                signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM
+            };
+            let placed_width = signex_types::schematic::stroke_px(
+                placed_mm as f32,
+                cam.scale,
+                signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            );
             let preview_stroke = canvas::Stroke::default()
                 .with_color(wire_color_iced)
                 .with_width(placed_width);
