@@ -42,7 +42,7 @@ mod ui;
 pub(crate) mod volume_case;
 
 pub use case_fold::CaseFold;
-pub use error_notice::ErrorNotice;
+pub use error_notice::{ErrorNotice, NoticeAction};
 pub use interaction::InteractionState;
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::ParameterTableState;

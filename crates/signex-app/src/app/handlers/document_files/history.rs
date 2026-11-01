@@ -241,6 +241,13 @@ impl Signex {
         }
         let tab_idx = self.document_state.tabs.iter().position(|t| t.path == path);
         let wrote = !matches!(result, Err(RestoreFailure::NotRestored(_)));
+        // The restore wrote these exact bytes outside the save ledger: the
+        // next save compares with them, not with what the sheet was opened from.
+        if let Ok(restored) = &result
+            && matches!(restored.document, RestoreJobDocument::Schematic(_))
+        {
+            self.record_disk_baseline(&path, crate::persist::ContentHash::of(&restored.bytes));
+        }
         // A cancelled restore may meet a tab reopened for the same file. If
         // that tab holds no edits, the restored file is what it should show:
         // apply the result to it. An edited one keeps its edits.

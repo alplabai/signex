@@ -107,6 +107,7 @@ fn failed_async_schematic_read_raises_the_open_failed_notice() {
         path: "gone.snxsch".into(),
         title: "gone".into(),
         result: Err("read gone.snxsch: not found".to_string()),
+        disk: None,
     }));
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     assert_eq!(notice.title, "Open Failed");

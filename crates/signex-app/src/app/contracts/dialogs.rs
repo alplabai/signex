@@ -476,6 +476,8 @@ pub enum FileMsg {
         path: PathBuf,
         title: String,
         result: Result<Box<SchematicSheet>, String>,
+        /// What the read learned about the file (#1826, #1827).
+        disk: Option<crate::persist::DiskRead>,
     },
     /// The per-placement-designator load note, computed off the UI thread
     /// after a schematic opened (`Ok(None)`: nothing to say; `Err`: the
@@ -511,6 +513,12 @@ pub enum FileMsg {
         >,
     },
     Save,
+    /// The read behind "Reload from disk" finished (#1826): the sheet read
+    /// back from the file that changed under an open document.
+    DiskReloadFinished {
+        path: PathBuf,
+        result: Result<Box<crate::app::handlers::document_files::ReloadedSheet>, String>,
+    },
     /// Completion of an off-thread document write (Save / Save As). The
     /// dirty marker clears only if the document has not changed since the
     /// snapshot; see `handlers/document_files/save_async.rs`.

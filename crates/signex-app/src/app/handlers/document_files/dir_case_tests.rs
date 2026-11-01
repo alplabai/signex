@@ -54,6 +54,7 @@ fn finish_open(app: &mut Signex, path: PathBuf) {
         title: "Lib".to_string(),
         path,
         result: Ok(Box::new(sheet())),
+        disk: None,
     }));
 }
 

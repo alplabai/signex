@@ -213,6 +213,11 @@ pub enum OverlayMsg {
     /// message named for one caller is how it ended up showing "Export
     /// Failed" over a failed save.
     DismissErrorNotice,
+    /// "Overwrite" on a File Changed on Disk card: save over the other
+    /// program's change (#1826).
+    DiskConflictOverwriteChosen,
+    /// "Reload from disk" on the same card: replace the document with the file.
+    DiskConflictReloadChosen,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {

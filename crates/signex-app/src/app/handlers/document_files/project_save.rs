@@ -299,6 +299,8 @@ impl Signex {
             // Defensive: one writer per file, so no newer write can have
             // landed first. If one ever did, its completion decides.
             Ok(SaveOutcome::Superseded) => return false,
+            // Defensive: a project write carries no disk expectation.
+            Ok(SaveOutcome::DiskChanged(_)) => return false,
             // Defensive, same reason: only the newest write's failure counts.
             Err(reason) if !newest => {
                 crate::diagnostics::log_warning(format!(

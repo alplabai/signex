@@ -121,6 +121,7 @@ fn saving_a_primitive_refreshes_the_picker_cache_and_the_open_preview() {
         mut app,
         path,
         address,
+        _dir,
         ..
     } = fixture();
     let task = app.save_primitive_tab_at(&path).expect("save starts");
@@ -151,6 +152,7 @@ fn a_library_closed_while_the_preview_read_runs_closes_when_it_lands() {
         mut app,
         file,
         path,
+        _dir,
         ..
     } = fixture();
     let save = app.save_primitive_tab_at(&path).expect("save starts");
@@ -204,6 +206,7 @@ fn the_blocking_save_is_not_refused_by_a_pending_read() {
         mut app,
         file,
         path,
+        _dir,
         ..
     } = fixture();
     let read = app.library.writes.read_turn(&file);
@@ -225,6 +228,7 @@ fn the_blocking_save_is_still_refused_while_a_write_is_pending() {
         mut app,
         file,
         path,
+        _dir,
         ..
     } = fixture();
     let _write = app.library.writes.turn(&file);

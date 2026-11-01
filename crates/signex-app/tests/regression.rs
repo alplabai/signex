@@ -119,6 +119,9 @@ mod dock_layout_persist;
 
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
+// #1826 / #1827 / #1828 — a save writes the file the document is.
+#[path = "regression/external_save_target.rs"]
+mod external_save_target;
 // #859 — rename / History restore wait for an in-flight document write.
 #[path = "regression/document_save_ordering.rs"]
 mod document_save_ordering;

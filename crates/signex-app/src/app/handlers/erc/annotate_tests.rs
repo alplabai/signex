@@ -431,6 +431,7 @@ fn a_read_landing_on_a_dirty_parked_engine_keeps_its_edits() {
         Ok(Box::new(LoadedDocument::Schematic {
             title: "z_child".into(),
             sheet: Box::new(stale),
+            disk: crate::persist::DiskRead::of_bytes(b""),
         })),
     );
 

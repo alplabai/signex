@@ -145,6 +145,7 @@ mod flows {
                 path: path.clone(),
                 title: "t".into(),
                 result: Ok(Box::new(sheet)),
+                disk: None,
             }));
         }
         assert_eq!(app.document_state.active_path.as_deref(), Some(a.as_path()));

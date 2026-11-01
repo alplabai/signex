@@ -21,6 +21,7 @@ mod local_git_concurrent_primitives;
 mod local_git_datasheet_asset;
 mod local_git_external_edits;
 mod local_git_lock_order;
+mod local_git_moved_root;
 mod local_git_project_adapter;
 mod local_git_rollback;
 mod local_git_row_base;
