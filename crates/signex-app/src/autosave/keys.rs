@@ -11,8 +11,7 @@
 //! The case rule is probed, and the probe has to give the same answer
 //! before and after the document's folder is renamed or moved. It is
 //! therefore asked of the nearest folder that exists, and an answer that
-//! cannot be had means "keep case": an undecided probe never merges two
-//! spellings into one key. Because a probe can still change its mind, a lookup
+//! cannot be had means the host's usual rule, the same every time. Because a probe can still change its mind, a lookup
 //! never trusts the current rule alone: [`all_keys`] lists every form a copy
 //! may have been filed under, with either rule, and the older builds' forms.
 
@@ -50,8 +49,24 @@ impl KeyForm {
 
 /// Whether the volume of `document` ignores case, for keying. Asked of the
 /// nearest existing folder (the document's own folder may be mid-rename), and
-/// `false` when the probe cannot decide. Disk IO: recovery tasks only.
+/// the host's usual rule ([`HOST_IGNORES_CASE`]) when the probe cannot decide.
+/// Disk IO: recovery tasks only.
 pub(super) fn stable_ignores_case(document: &Path) -> bool {
+    stable_ignores_case_with(document, probe_directory_case)
+}
+
+/// What an undecided probe (`Err`, or `None`: nothing lettered to flip)
+/// answers. A fixed host rule rather than "keep case": a probe that fails now
+/// and then (an entry deleted by another process mid-probe) must give the
+/// same answer every time it fails, and the one that matches the volumes the
+/// host normally has. A copy filed under the other rule is still found
+/// ([`all_keys`]).
+pub(super) const HOST_IGNORES_CASE: bool = cfg!(any(windows, target_os = "macos"));
+
+pub(super) fn stable_ignores_case_with(
+    document: &Path,
+    probe: impl Fn(&Path) -> Result<Option<bool>, String>,
+) -> bool {
     let mut dir = document.parent();
     while let Some(d) = dir {
         let probed = if d.as_os_str().is_empty() {
@@ -60,11 +75,11 @@ pub(super) fn stable_ignores_case(document: &Path) -> bool {
             d
         };
         if probed.is_dir() {
-            return matches!(probe_directory_case(probed), Ok(Some(true)));
+            return probe(probed).ok().flatten().unwrap_or(HOST_IGNORES_CASE);
         }
         dir = d.parent();
     }
-    false
+    HOST_IGNORES_CASE
 }
 
 fn file_name_of(path: &Path) -> String {
