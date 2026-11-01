@@ -711,6 +711,24 @@ impl Signex {
         Task::none()
     }
 
+    /// Drop entries from the open quit prompt that are no longer unsaved — a
+    /// Save made while it is up wrote them — and close the prompt once
+    /// nothing is left (#1833). Entries are only ever removed here: an edit
+    /// made behind the prompt is caught by the Discard All re-check instead.
+    pub(crate) fn prune_settled_quit_confirm(&mut self) {
+        let Some(confirm) = self.ui_state.app_quit_confirm.as_mut() else {
+            return;
+        };
+        let live = self.document_state.dirty_document_paths();
+        let live_rows = self.library.dirty_editors();
+        confirm.dirty_paths.retain(|p| live.contains(p));
+        confirm.dirty_rows.retain(|r| live_rows.contains(r));
+        if confirm.dirty_paths.is_empty() && confirm.dirty_rows.is_empty() {
+            self.ui_state.app_quit_confirm = None;
+            self.ui_state.quit_confirm_refreshed = false;
+        }
+    }
+
     /// Actually close the main window. In `iced::daemon` this fires a
     /// `Closed` event → `SecondaryWindowClosed(main)` → `iced::exit()`,
     /// so all shutdown bookkeeping stays on the existing path.

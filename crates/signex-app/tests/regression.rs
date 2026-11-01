@@ -119,6 +119,9 @@ mod dock_layout_persist;
 
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
+
+#[path = "regression/quit_prompt_after_save.rs"]
+mod quit_prompt_after_save;
 // #859 — rename / History restore wait for an in-flight document write.
 #[path = "regression/document_save_ordering.rs"]
 mod document_save_ordering;
