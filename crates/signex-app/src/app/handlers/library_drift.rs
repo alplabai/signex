@@ -148,7 +148,7 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
-        self.record_missing_symbols(report.missing);
+        self.record_missing_symbols(report.missing, &report.unreadable);
         let mut names = report.names;
         keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
         self.library.drift.names = names;
@@ -165,7 +165,22 @@ impl Signex {
             std::path::PathBuf,
             std::collections::BTreeSet<String>,
         >,
+        unreadable: &std::collections::HashSet<String>,
     ) {
+        // An unreadable lookup says nothing about a removal: keep the
+        // previous state, as `keep_unreadable_rows` does for drift.
+        for (sheet, previous) in &self.library.drift.missing {
+            let kept: Vec<&String> = previous
+                .iter()
+                .filter(|id| unreadable.contains(*id))
+                .collect();
+            if !kept.is_empty() {
+                missing
+                    .entry(sheet.clone())
+                    .or_default()
+                    .extend(kept.into_iter().cloned());
+            }
+        }
         missing.retain(|sheet, _| self.document_state.engines.contains_key(sheet));
         for (sheet, ids) in &missing {
             if self.library.drift.missing.get(sheet) == Some(ids) {
@@ -174,9 +189,11 @@ impl Signex {
             let names: Vec<String> = ids
                 .iter()
                 .map(|id| {
-                    self.library
+                    let name = self
+                        .library
                         .drift
-                        .display_name(id, &self.library.open_libraries)
+                        .display_name(id, &self.library.open_libraries);
+                    format!("{name} [{id}]")
                 })
                 .collect();
             crate::diagnostics::log_warning(format!(

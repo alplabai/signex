@@ -22,7 +22,24 @@ const MAX_LISTED: usize = 6;
 pub struct PendingSymbolDelete {
     pub path: PathBuf,
     pub symbol: Uuid,
+    /// `(undo, redo)` depths of the editor when the warning was raised; an
+    /// edit, undo or redo since then makes the warning stale.
+    pub history: (usize, usize),
     pub warning: SymbolDeleteWarning,
+}
+
+impl PendingSymbolDelete {
+    /// The warning still describes `editor`: same container, same history,
+    /// and the symbol it names is still at its slot.
+    pub fn is_current(&self, editor: &crate::app::SymbolDocument) -> bool {
+        editor.path == self.path
+            && (editor.undo_snapshots.len(), editor.redo_snapshots.len()) == self.history
+            && editor
+                .file
+                .symbols
+                .get(self.warning.idx)
+                .is_some_and(|s| s.uuid == self.symbol)
+    }
 }
 
 /// The lines naming every row and open sheet that use `symbol`; empty when

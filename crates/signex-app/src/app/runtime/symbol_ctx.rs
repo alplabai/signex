@@ -154,7 +154,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
             .library
             .pending_symbol_delete
             .as_ref()
-            .filter(|p| p.path == editor.path)
+            .filter(|p| p.is_current(editor))
             .map(|p| p.warning.clone()),
         active_idx: editor.active_idx,
         active_part: editor.active_part,

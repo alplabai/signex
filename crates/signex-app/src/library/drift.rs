@@ -122,15 +122,18 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
                         // A symbol the library no longer has is a real
                         // removal (its row goes); anything else is a failed
                         // read, which says nothing about drift.
+                        // A removal is reported once per change as "library
+                        // symbol missing"; only a failed read is a problem
+                        // on every pass.
                         if matches!(e, LibraryError::NotFound(_)) {
                             removed.insert(lib_id.clone());
                         } else {
                             report.unreadable.insert(lib_id.clone());
+                            report.problems.push(format!(
+                                "Could not check library symbol {lib_id} in {}: {e}",
+                                lib.display_name
+                            ));
                         }
-                        report.problems.push(format!(
-                            "Could not check library symbol {lib_id} in {}: {e}",
-                            lib.display_name
-                        ));
                         None
                     }
                 }

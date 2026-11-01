@@ -515,6 +515,7 @@ impl Signex {
             return true;
         }
         let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
+        let history = (editor.undo_snapshots.len(), editor.redo_snapshots.len());
         let name = editor.file.symbols[idx].name.clone();
         // A symbol rows or open sheets still use is not deleted until the
         // user has seen who (#1845).
@@ -524,6 +525,7 @@ impl Signex {
             self.library.pending_symbol_delete = Some(PendingSymbolDelete {
                 path,
                 symbol,
+                history,
                 warning: SymbolDeleteWarning { idx, name, lines },
             });
             self.refresh_panel_ctx();
@@ -537,13 +539,16 @@ impl Signex {
         let Some(pending) = self.library.pending_symbol_delete.take() else {
             return true;
         };
-        let current = self
-            .active_symbol_editor_mut()
-            .filter(|e| e.path == pending.path)
-            .and_then(|e| e.file.symbols.get(idx))
-            .map(|s| s.uuid);
         // The container changed under the warning: nothing is deleted.
-        if current != Some(pending.symbol) {
+        let unchanged = pending.warning.idx == idx
+            && self
+                .active_symbol_editor_mut()
+                .is_some_and(|e| pending.is_current(e));
+        if !unchanged {
+            crate::diagnostics::log_warning(format!(
+                "{} changed since the warning; press Delete again.",
+                pending.warning.name
+            ));
             self.refresh_panel_ctx();
             return true;
         }
