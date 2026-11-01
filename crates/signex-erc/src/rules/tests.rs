@@ -1125,3 +1125,43 @@ fn a_wire_on_a_bus_entrys_far_end_is_not_dangling() {
     dangling_wire(&c, &mut out);
     assert!(out.is_empty(), "wire meets the entry's far end: {out:?}");
 }
+
+#[test]
+fn a_wire_ending_on_a_sheet_pin_is_not_dangling() {
+    // Issue #1834: `child_sheet` puts its IN pin at (1, 1); the wire's other
+    // end carries a net label, so neither end may be reported.
+    let mut c = ctx(
+        vec![wire(pt(1.0, 1.0), pt(10.0, 1.0))],
+        Vec::new(),
+        vec![ErcLabel {
+            uuid: Uuid::nil(),
+            text: "IN".into(),
+            position: pt(10.0, 1.0),
+            label_type: LabelType::Net,
+        }],
+        Vec::new(),
+    );
+    c.child_sheets.push(child_sheet("child.snxsch"));
+    let mut out = Vec::new();
+    dangling_wire(&c, &mut out);
+    assert!(out.is_empty(), "wire ends on a sheet pin: {out:?}");
+}
+
+#[test]
+fn a_wire_end_beside_a_sheet_pin_still_dangles() {
+    let mut c = ctx(
+        vec![wire(pt(3.54, 1.0), pt(10.0, 1.0))],
+        Vec::new(),
+        vec![ErcLabel {
+            uuid: Uuid::nil(),
+            text: "IN".into(),
+            position: pt(10.0, 1.0),
+            label_type: LabelType::Net,
+        }],
+        Vec::new(),
+    );
+    c.child_sheets.push(child_sheet("child.snxsch"));
+    let mut out = Vec::new();
+    dangling_wire(&c, &mut out);
+    assert_eq!(out.len(), 1, "the free end is still dangling: {out:?}");
+}
