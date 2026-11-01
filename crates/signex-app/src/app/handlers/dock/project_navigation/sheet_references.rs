@@ -242,7 +242,7 @@ impl Signex {
             }
             let open = self.document_state.engines.contains_key(parent);
             match outcome {
-                ParentDisk::Written(_) if open => {
+                ParentDisk::Written(..) if open => {
                     self.document_state.mark_document_dirty(parent);
                     crate::diagnostics::log_warning(format!(
                         "{context}: {} names the renamed sheet only in its saved file; the \
@@ -317,7 +317,7 @@ impl Signex {
         let mut written: Vec<_> = disk
             .iter()
             .filter_map(|(path, outcome)| match outcome {
-                ParentDisk::Written(bytes) => Some((path.clone(), bytes.clone())),
+                ParentDisk::Written(bytes, _) => Some((path.clone(), bytes.clone())),
                 _ => None,
             })
             .collect();
@@ -664,7 +664,10 @@ mod tests {
         app.document_state.mark_document_clean(&parent);
         let disk = std::collections::HashMap::from([(
             parent.clone(),
-            crate::app::parent_reference_disk::ParentDisk::Written(std::sync::Arc::new(vec![])),
+            crate::app::parent_reference_disk::ParentDisk::Written(
+                std::sync::Arc::new(vec![]),
+                crate::persist::ContentHash::of(b""),
+            ),
         )]);
         let outcome = app.apply_reference_rewrites(
             &super::ReferencePlan {

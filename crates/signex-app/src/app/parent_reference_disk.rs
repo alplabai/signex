@@ -17,14 +17,16 @@ use std::path::{Path, PathBuf};
 use crate::app::path_ops::ReferenceRewrite;
 use crate::app::state::library_entry::with_new_leaf;
 use crate::app::state::scope::{CaseFold, path_key_with};
-use crate::persist::SharedBytes;
+use crate::persist::{ContentHash, SharedBytes};
 
 /// What re-pointing one parent on disk did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParentDisk {
     /// The saved parent was rewritten with the new filename; holds the exact
-    /// bytes written, so the follow-up git commit records them.
-    Written(SharedBytes),
+    /// bytes written, so the follow-up git commit records them, and the
+    /// fingerprint of the text that was read and patched, so the open
+    /// document's save baseline only follows when that was the file it knew.
+    Written(SharedBytes, ContentHash),
     /// The saved parent has no reference to change; nothing was written.
     NothingToChange,
     /// The saved parent has a reference to change but could not be changed
@@ -39,7 +41,7 @@ pub enum ParentDisk {
 
 impl ParentDisk {
     pub fn is_written(&self) -> bool {
-        matches!(self, Self::Written(_))
+        matches!(self, Self::Written(..))
     }
 }
 
@@ -79,6 +81,7 @@ fn patch_parent(parent: &Path, planned: &[&ReferenceRewrite], renamed: &Renamed<
         Ok(text) => text,
         Err(e) => return ParentDisk::Unchecked(format!("could not be read: {e}")),
     };
+    let read = ContentHash::of(text.as_bytes());
     let mut parsed = match signex_types::format::SnxSchematic::parse(&text) {
         Ok(parsed) => parsed,
         Err(e) => return ParentDisk::Unchecked(format!("could not be parsed: {e}")),
@@ -110,7 +113,7 @@ fn patch_parent(parent: &Path, planned: &[&ReferenceRewrite], renamed: &Renamed<
         Err(e) => return ParentDisk::Skipped(format!("could not be encoded: {e}")),
     };
     match signex_types::atomic_io::atomic_write_existing_dir(parent, &bytes) {
-        Ok(()) => ParentDisk::Written(std::sync::Arc::new(bytes)),
+        Ok(()) => ParentDisk::Written(std::sync::Arc::new(bytes), read),
         Err(e) => ParentDisk::Skipped(format!("could not be written: {e}")),
     }
 }
@@ -153,7 +156,7 @@ mod tests {
 
         let out = patch_parents(std::slice::from_ref(&parent), &[], &renamed);
 
-        let ParentDisk::Written(bytes) = &out[&parent] else {
+        let ParentDisk::Written(bytes, _) = &out[&parent] else {
             panic!("{out:?}");
         };
         assert_eq!(**bytes, std::fs::read(&parent).unwrap());

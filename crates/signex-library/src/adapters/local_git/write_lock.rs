@@ -142,7 +142,7 @@ pub fn rewrite_file_under_library_lock(
 ) -> Result<bool, LibraryError> {
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let _write_lock = acquire(library_file, &WARNED)?;
-    crate::adapter::rewrite_file(abs_path, rewrite)
+    crate::adapter::rewrite_file_within(library_file.parent(), abs_path, rewrite)
 }
 
 /// The `.snxlib` of the library whose directory holds `path`, if any: the

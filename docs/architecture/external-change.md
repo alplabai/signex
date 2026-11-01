@@ -61,7 +61,11 @@ quit go through the async Save All, which uses the job.
 
 ## Not covered
 
-- A sheet with no baseline (created in memory, renamed in the project tree,
-  opened by a route that does not record one) is saved without the comparison.
+- A sheet with no baseline (created in memory, or opened by a route that does
+  not record one) is saved without the comparison. A renamed sheet keeps its
+  baseline; its real-path entry for symlink dedupe is dropped.
+- A parent sheet re-pointed on disk by a rename (#1849) becomes the new baseline
+  only when the text it patched was the file the document knew; otherwise the
+  old baseline stays and the next save asks.
 - PCB saves are not compared.
 - There is no background poll: a change is found when the user saves.

@@ -200,11 +200,12 @@ impl Signex {
                 }
                 match result {
                     Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
-                    Ok(_)
-                        if disk
-                            .as_ref()
-                            .is_some_and(|d| self.focus_alias_if_open(&path, d)) => {}
                     Ok(sheet) => {
+                        if let Some(disk) = &disk
+                            && self.focus_alias_if_open(&path, disk)
+                        {
+                            return self.finish_update();
+                        }
                         // `update` starts the recovery check of every tab opened.
                         self.open_schematic_tab(path.clone(), title, *sheet);
                         if let Some(disk) = disk {

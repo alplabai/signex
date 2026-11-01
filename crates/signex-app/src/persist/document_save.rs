@@ -394,6 +394,20 @@ impl DocumentSaves {
         self.baselines.insert(path, hash);
     }
 
+    /// Whether `hash` is a state of `path` this document knew: its baseline,
+    /// or what an earlier write of this process put there.
+    pub fn knows(&self, path: &Path, hash: super::ContentHash) -> bool {
+        let Some(baseline) = self.baseline(path) else {
+            return false;
+        };
+        let slot = relock(&self.ledger.newest_written)
+            .get(&ledger_key(path))
+            .cloned();
+        let own = slot
+            .map(|slot| known_hashes(baseline, relock(&slot).iter().filter(|n| n.path == path)));
+        own.unwrap_or_else(|| vec![baseline]).contains(&hash)
+    }
+
     /// Whether `path` still holds what its document was loaded from or last
     /// saved as, or what an earlier write of this process put there. A
     /// blocking read, for the one caller that cannot go through a job.
@@ -440,8 +454,8 @@ impl DocumentSaves {
         self.real_paths.remove(old);
     }
 
-    /// Stop comparing saves of `path` with disk (its document closed, was
-    /// renamed, or the user chose to overwrite).
+    /// Stop comparing saves of `path` with disk: a Save As left the old path,
+    /// or the file could not be read back after a save.
     pub fn forget_baseline(&mut self, path: &Path) {
         self.baselines.remove(path);
     }

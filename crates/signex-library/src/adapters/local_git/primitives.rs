@@ -196,6 +196,7 @@ impl LocalGitAdapter {
         // file destroys all primitives in the container, so we cannot
         // afford the in-place truncate that `fs::write` does on
         // existing destinations.
+        crate::adapter::ensure_inside_library(&self.root_dir, abs_path)?;
         signex_types::atomic_io::atomic_write_existing_dir(abs_path, bytes)?;
         let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
         // The file is saved: a failed commit is an outcome, not an error.
@@ -397,6 +398,7 @@ impl LocalGitAdapter {
         // Built before the write: nothing after it may fail or panic.
         let message = message();
         // HI-6: atomic write — never half-write the manifest.
+        crate::adapter::ensure_inside_library(&self.root_dir, &self.file_path)?;
         signex_types::atomic_io::atomic_write_existing_dir(&self.file_path, text.as_bytes())?;
         self.warn_plain_token_once(&candidate.manifest.mode);
         // Disk now holds the edit, so memory takes it too. Memory and disk
@@ -596,6 +598,7 @@ impl LocalGitAdapter {
         // HI-6: atomic write — the symbol container is a TOML+TSV
         // envelope holding every symbol; an in-place truncate by
         // `fs::write` would destroy them all on a crash mid-save.
+        crate::adapter::ensure_inside_library(&self.root_dir, &path)?;
         signex_types::atomic_io::atomic_write_existing_dir(&path, text.as_bytes())?;
         self.symbol_index.record(&file, &path);
 

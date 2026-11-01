@@ -947,6 +947,35 @@ fn create_missing_library_subdir(abs_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Refuse a write that a symlink inside a library would send outside it:
+/// the destination (or, for a file not made yet, its folder) must resolve to a
+/// place under the canonical library `root`. Document saves follow links, and
+/// the `starts_with` checks on paths are lexical, so this is the check that
+/// sees through a link.
+pub(crate) fn ensure_inside_library(root: &Path, path: &Path) -> Result<(), LibraryError> {
+    let root = std::fs::canonicalize(root)?;
+    let is_link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+    let probe = if is_link || path.exists() {
+        path
+    } else {
+        path.parent().unwrap_or(path)
+    };
+    match std::fs::canonicalize(probe) {
+        Ok(resolved) if resolved.starts_with(&root) => Ok(()),
+        Ok(resolved) => Err(LibraryError::Backend(format!(
+            "{} resolves to {}, outside the library folder, so nothing was written",
+            path.display(),
+            resolved.display()
+        ))),
+        // A folder that is gone is refused by the write itself.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && !is_link => Ok(()),
+        Err(e) => Err(LibraryError::Backend(format!(
+            "{} cannot be resolved inside the library folder: {e}",
+            path.display()
+        ))),
+    }
+}
+
 /// The read and write of [`LibraryAdapter::rewrite_file_locked`], with no
 /// lock. Used directly for a primitive file that belongs to no mounted
 /// library. The write is atomic, and it refuses a missing folder rather than
@@ -955,6 +984,19 @@ pub fn rewrite_file(
     abs_path: &Path,
     rewrite: &mut crate::adapter::FileRewrite<'_>,
 ) -> Result<bool, LibraryError> {
+    rewrite_file_within(None, abs_path, rewrite)
+}
+
+/// [`rewrite_file`] for a file of the library at `root`: a link that leads
+/// outside the library is refused before anything is read or written.
+pub(crate) fn rewrite_file_within(
+    root: Option<&Path>,
+    abs_path: &Path,
+    rewrite: &mut crate::adapter::FileRewrite<'_>,
+) -> Result<bool, LibraryError> {
+    if let Some(root) = root {
+        ensure_inside_library(root, abs_path)?;
+    }
     let current = match std::fs::read(abs_path) {
         Ok(bytes) => Some(bytes),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -965,6 +1007,9 @@ pub fn rewrite_file(
     };
     if current.is_none() {
         create_missing_library_subdir(abs_path)?;
+    }
+    if let Some(root) = root {
+        ensure_inside_library(root, abs_path)?;
     }
     signex_types::atomic_io::atomic_write_existing_dir(abs_path, &bytes)?;
     Ok(true)
@@ -985,5 +1030,38 @@ mod tests {
         let q = LibraryQuery::default();
         assert!(q.text.is_none());
         assert!(q.facets.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_the_library_that_leads_outside_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lib");
+        std::fs::create_dir_all(&root).unwrap();
+        let outside = dir.path().join("outside.txt");
+        std::fs::write(&outside, b"precious").unwrap();
+        let link = root.join("sym.snxsym");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+
+        let result = rewrite_file_within(Some(&root), &link, &mut |_| Ok(Some(b"x".to_vec())));
+
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&outside).unwrap(), b"precious");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_the_library_to_a_file_inside_is_written_through() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lib");
+        std::fs::create_dir_all(&root).unwrap();
+        let real = root.join("real.snxsym");
+        std::fs::write(&real, b"old").unwrap();
+        let link = root.join("sym.snxsym");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        rewrite_file_within(Some(&root), &link, &mut |_| Ok(Some(b"new".to_vec()))).unwrap();
+
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
     }
 }

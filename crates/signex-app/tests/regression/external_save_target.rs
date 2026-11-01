@@ -7,7 +7,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use signex_app::app::{CaseProbeOutcome, FileMsg, Message, OverlayMsg, Signex, TabKind};
+use signex_app::app::{
+    CaseProbeOutcome, ExcludeDirtyChoice, FileMsg, Message, OverlayMsg, RemoveChoice,
+    RemoveDialogState, RemoveMsg, Signex, TabKind,
+};
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
 use signex_app::menu_bar::MenuMessage;
@@ -482,4 +485,105 @@ fn saving_an_open_parent_after_a_child_rename_writes_both_without_a_card() {
     assert!(text.contains("renamed.snxsch"), "the new child reference");
     assert!(text.contains("A3"), "the parent's unsaved edit");
     assert!(!f.app.document_state.is_document_dirty(&root));
+}
+
+#[test]
+fn a_changed_parent_is_not_adopted_as_the_baseline_by_a_rename() {
+    let mut f = crate::rename_preserves_references::fixture();
+    let root = f.root.clone();
+    open(&mut f.app, &root);
+    edit(&mut f.app, &root, "A3");
+    // Another program rewrites the parent before the child is renamed.
+    let theirs = fs::read_to_string(&root).unwrap().replace("A4", "A0");
+    assert!(theirs.contains("child.snxsch"), "still names the child");
+    fs::write(&root, &theirs).unwrap();
+
+    crate::rename_preserves_references::submit_rename(&mut f.app, &f.child, "renamed.snxsch");
+    let patched = fs::read_to_string(&root).unwrap();
+    assert!(patched.contains("renamed.snxsch") && patched.contains("A0"));
+    save(&mut f.app);
+
+    assert_eq!(
+        fs::read_to_string(&root).unwrap(),
+        patched,
+        "the save must not overwrite what the other program wrote"
+    );
+    assert!(conflict_card_is_up(&f.app), "the user is asked");
+    assert!(f.app.document_state.is_document_dirty(&root));
+}
+
+// ---- the blocking Exclude-from-Project save ---------------------------
+
+/// A project listing `X.snxsch`, opened for real, edited, and an Exclude from
+/// Project asked for; the prompt waits for a choice.
+fn exclude_prompt(name: &str) -> (Signex, TempDir, PathBuf) {
+    let (dir, path) = fixture(name, "A4");
+    let (mut app, _boot) = Signex::new();
+    add_project(&mut app, dir.path());
+    app.document_state.projects[0]
+        .data
+        .sheets
+        .push(signex_types::project::SheetEntry {
+            name: name.to_string(),
+            filename: name.to_string(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        });
+    open(&mut app, &path);
+    edit(&mut app, &path, "A3");
+    (app, dir, path)
+}
+
+fn ask_exclude_and_save(app: &mut Signex, path: &Path) {
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: path.to_path_buf(),
+        tree_path: vec![0, 0],
+        project_id: app.document_state.projects.first().map(|p| p.id),
+        display_name: path.file_name().unwrap().to_string_lossy().into_owned(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+    });
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
+    let _ = app.update(Message::Remove(RemoveMsg::ExcludeDirty(
+        ExcludeDirtyChoice::Save,
+    )));
+}
+
+#[test]
+fn the_blocking_save_refuses_a_sheet_changed_by_another_program() {
+    let (mut app, _dir, path) = exclude_prompt("BlockChanged1826.snxsch");
+    let theirs = sheet_text("A0");
+    fs::write(&path, &theirs).unwrap();
+
+    ask_exclude_and_save(&mut app, &path);
+
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        theirs,
+        "not overwritten"
+    );
+    assert!(app.document_state.is_document_dirty(&path), "stays dirty");
+    assert!(messages_mention("BlockChanged1826.snxsch"));
+}
+
+#[test]
+fn the_blocking_save_accepts_an_earlier_write_of_this_process() {
+    let (mut app, _dir, path) = exclude_prompt("BlockOwn1826.snxsch");
+    let opened = signex_app::persist::ContentHash::of(sheet_text("A4").as_bytes());
+    save(&mut app);
+    // The completion that moves the baseline has not been handled yet: only
+    // the ledger knows the file now holds this process's own write.
+    app.document_state
+        .document_saves
+        .set_baseline(path.clone(), opened);
+    edit(&mut app, &path, "A2");
+
+    ask_exclude_and_save(&mut app, &path);
+
+    assert!(fs::read_to_string(&path).unwrap().contains("A2"), "written");
+    assert!(!app.document_state.is_document_dirty(&path));
 }

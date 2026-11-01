@@ -149,7 +149,14 @@ impl Signex {
     pub(crate) fn refresh_baseline_from_disk(&mut self, path: &Path) {
         match std::fs::read(path) {
             Ok(bytes) => self.record_disk_baseline(path, ContentHash::of(&bytes)),
-            Err(_) => self.document_state.document_saves.forget_baseline(path),
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[save] {} could not be read back after saving ({e}); its next save is \
+                     not compared with the file",
+                    file_label(path)
+                ));
+                self.document_state.document_saves.forget_baseline(path);
+            }
         }
     }
 
@@ -162,14 +169,24 @@ impl Signex {
     ) {
         use crate::app::parent_reference_disk::ParentDisk;
         for (parent, outcome) in disk {
-            if let ParentDisk::Written(bytes) = outcome
-                && self
-                    .document_state
-                    .document_saves
-                    .baseline(parent)
-                    .is_some()
-            {
+            let ParentDisk::Written(bytes, read) = outcome else {
+                continue;
+            };
+            let saves = &self.document_state.document_saves;
+            if saves.baseline(parent).is_none() {
+                continue;
+            }
+            // The rewrite patched whatever was on disk. If that was not the file
+            // the document knew, another program changed it first: keep the old
+            // baseline, so the next save shows the card instead of overwriting.
+            if saves.knows(parent, *read) {
                 self.record_disk_baseline(parent, ContentHash::of(bytes));
+            } else {
+                crate::diagnostics::log_warning(format!(
+                    "[save] {} was changed on disk by another program before its sheet \
+                     reference was updated; saving it will ask first",
+                    file_label(parent)
+                ));
             }
         }
     }
