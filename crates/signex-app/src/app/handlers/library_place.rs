@@ -239,10 +239,8 @@ impl Signex {
 
     pub(crate) fn report_place_failure(&mut self, detail: &str) {
         crate::diagnostics::log_warning(format!("Place from library failed: {detail}"));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice {
-            title: "Place Failed".to_owned(),
-            detail: detail.to_owned(),
-        });
+        self.document_state.error_notice =
+            Some(crate::app::state::ErrorNotice::new("Place Failed", detail));
     }
 }
 

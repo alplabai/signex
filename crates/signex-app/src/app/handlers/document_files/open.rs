@@ -313,6 +313,16 @@ impl Signex {
             self.document_state.active_project = Some(id);
             return Ok((id, iced::Task::none()));
         }
+        // The same project reached through a symlinked folder or file is one
+        // project (#1827). A few `stat`s, beside the synchronous parse below.
+        if let Some(id) = self.loaded_project_aliasing(project_path) {
+            crate::diagnostics::log_info(format!(
+                "[open] {} is the same project as one already open; showing that one",
+                super::save::file_label(project_path)
+            ));
+            self.document_state.active_project = Some(id);
+            return Ok((id, iced::Task::none()));
+        }
         // A write of this file is still running (its project may have been
         // closed since): parsing now would load the old bytes as clean.
         if self.document_state.document_saves.is_saving(project_path) {
@@ -550,11 +560,16 @@ impl Signex {
                         .await
                         .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
                 },
-                move |result| {
+                move |read| {
+                    let (result, disk) = match read {
+                        Ok((sheet, disk)) => (Ok(Box::new(sheet)), Some(disk)),
+                        Err(error) => (Err(error), None),
+                    };
                     Message::File(FileMsg::SchematicOpenFinished {
                         path,
                         title,
-                        result: result.map(Box::new),
+                        result,
+                        disk,
                     })
                 },
             ),
@@ -638,13 +653,20 @@ impl Signex {
 /// `Result<_, String>`.
 fn read_and_parse_schematic(
     path: &std::path::Path,
-) -> Result<signex_types::schematic::SchematicSheet, String> {
+) -> Result<
+    (
+        signex_types::schematic::SchematicSheet,
+        crate::persist::DiskRead,
+    ),
+    String,
+> {
     std::fs::read_to_string(path)
         .with_context(|| format!("read schematic {}", path.display()))
         .and_then(|text| {
+            let disk = crate::persist::DiskRead::of(path, &text);
             signex_types::format::SnxSchematic::parse(&text)
                 .with_context(|| format!("parse schematic {}", path.display()))
-                .map(|schematic| schematic.sheet)
+                .map(|schematic| (schematic.sheet, disk))
         })
         .map_err(|err| format!("{err:#}"))
 }

@@ -451,6 +451,7 @@ fn open_from_disk(app: &mut Signex, doc: &Path) {
         path: doc.to_path_buf(),
         title: "autosave".to_string(),
         result: Ok(Box::new(sheet)),
+        disk: None,
     }));
     complete(app, task);
 }
@@ -662,6 +663,7 @@ fn a_tick_between_open_and_the_recovery_check_never_replaces_the_earlier_copy() 
         path: f.doc.clone(),
         title: "autosave".to_string(),
         result: Ok(Box::new(sheet)),
+        disk: None,
     }));
     edit_and_tick(&mut next, &f.doc);
     assert!(

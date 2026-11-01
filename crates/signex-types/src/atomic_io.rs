@@ -31,9 +31,18 @@
 //! locked on purpose (#1825). The contract is exactly [`std::fs::Permissions::readonly`]
 //! on the file at `path`: on Unix no write bit set for anyone (`chmod 444`),
 //! on Windows the read-only attribute. A file that merely is not writable by
-//! the current user (owned by someone else, ACLs), or a symlink whose target
-//! is read-only, is NOT covered. Callers recognise the refusal with
+//! the current user (owned by someone else, ACLs) is NOT covered. Callers recognise the refusal with
 //! [`is_read_only_file_refusal`].
+//!
+//! [`atomic_write_existing_dir`] is the document-save variant (#1827, #1828). It
+//! refuses a missing parent folder instead of creating it, and writes through a
+//! symlink at `path`: the temp sibling lives in the target's folder and replaces
+//! the target, so the link survives and the read-only check above applies to the
+//! target. Only a link to a regular file is followed; a dangling link or a link
+//! to anything else is refused. Plain [`atomic_write`] never follows a link (its
+//! rename replaces the link), because its callers (caches, sidecars, prefs) must
+//! not be steered outside their folder by a planted link. See
+//! `docs/architecture/external-change.md`.
 //!
 //! The two `fsync`s are what make the power-loss guarantee real:
 //! without fsyncing the temp file before the rename, many filesystems
@@ -131,18 +140,95 @@ fn refuse_read_only_target(path: &Path) -> io::Result<()> {
     }
 }
 
+/// The folder a document save targets does not exist (moved or deleted
+/// outside the app). Carried as the inner error of an [`io::Error`] of kind
+/// [`io::ErrorKind::NotFound`]; detect it with [`is_missing_parent_refusal`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingParentDir {
+    /// The folder that is gone.
+    pub dir: PathBuf,
+}
+
+impl std::fmt::Display for MissingParentDir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Short on purpose: the Messages panel keeps ~157 bytes and callers
+        // append the file path, which must survive the cut. The folder is in
+        // that path, so it is not repeated here.
+        write!(f, "folder is gone (moved?), nothing written")
+    }
+}
+
+impl std::error::Error for MissingParentDir {}
+
+/// Whether `error` is the [`MissingParentDir`] refusal of [`atomic_write_existing_dir`].
+pub fn is_missing_parent_refusal(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|inner| inner.is::<MissingParentDir>())
+}
+
+/// The regular file a document save through the symlink at `path` replaces,
+/// or `path` itself when it is not a link (#1827).
+fn resolve_document_target(path: &Path) -> io::Result<PathBuf> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            let refused = |why: String| io::Error::new(io::ErrorKind::InvalidInput, why);
+            let target = std::fs::canonicalize(path).map_err(|e| {
+                refused(format!(
+                    "{} is a symlink whose target cannot be resolved: {e}",
+                    path.display()
+                ))
+            })?;
+            if std::fs::metadata(&target).is_ok_and(|m| m.is_file()) {
+                Ok(target)
+            } else {
+                Err(refused(format!(
+                    "{} is a symlink to something that is not a regular file",
+                    path.display()
+                )))
+            }
+        }
+        _ => Ok(path.to_path_buf()),
+    }
+}
+
 /// Atomically write `bytes` to `path`. Creates parent directories
-/// (if any) as a side effect — matches `std::fs::write` ergonomics.
+/// (if any) as a side effect — matches `std::fs::write` ergonomics. For a
+/// document save into an existing folder use [`atomic_write_existing_dir`].
 ///
 /// Fails with a [`ReadOnlyTarget`] error, leaving the file untouched, when
-/// `path` is an existing read-only file.
+/// `path` is an existing read-only file. A symlink at `path` is replaced, not
+/// followed.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    refuse_read_only_target(path)?;
+    write_resolved(path, bytes, true)
+}
+
+/// [`atomic_write`] for a document that lives in a folder the project already
+/// has: a missing parent folder is refused with [`MissingParentDir`] instead
+/// of being re-created, so a save after the folder moved cannot scatter the
+/// document into a half-project at the old location (#1828). A symlink to a
+/// regular file is written through and survives (#1827).
+pub fn atomic_write_existing_dir(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let target = resolve_document_target(path)?;
+    write_resolved(&target, bytes, false)
+}
+
+fn write_resolved(path: &Path, bytes: &[u8], create_parents: bool) -> io::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
-        std::fs::create_dir_all(parent)?;
+        if create_parents {
+            std::fs::create_dir_all(parent)?;
+        } else if !parent.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                MissingParentDir {
+                    dir: parent.to_path_buf(),
+                },
+            ));
+        }
     }
+    refuse_read_only_target(path)?;
     let tmp = tmp_path_for(path)?;
 
     // Write the temp file and fsync it before the rename, so its bytes
@@ -339,5 +425,128 @@ mod tests {
             !has_stray_tmp(dir.path()),
             "the temp sibling must be cleaned up after a failed rename",
         );
+    }
+
+    #[test]
+    fn existing_dir_write_refuses_a_missing_parent_and_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("moved");
+        let err = atomic_write_existing_dir(&gone.join("a.txt"), b"x").unwrap_err();
+        assert!(is_missing_parent_refusal(&err), "{err}");
+        assert!(!gone.exists(), "the folder must not be re-created");
+    }
+
+    #[test]
+    fn existing_dir_write_writes_into_an_existing_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.txt");
+        atomic_write_existing_dir(&path, b"x").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"x");
+    }
+
+    #[test]
+    fn plain_write_still_creates_missing_parents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new/sub/a.txt");
+        atomic_write(&path, b"x").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"x");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_is_written_through_and_survives() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real.txt");
+        let link = dir.path().join("link.txt");
+        std::fs::write(&real, b"old").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        atomic_write_existing_dir(&link, b"new").unwrap();
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
+        assert!(!has_stray_tmp(dir.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_into_another_folder_keeps_the_temp_beside_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let real = b.join("real.txt");
+        std::fs::write(&real, b"old").unwrap();
+        std::os::unix::fs::symlink(&real, a.join("link.txt")).unwrap();
+        atomic_write_existing_dir(&a.join("link.txt"), b"new").unwrap();
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
+        assert!(!has_stray_tmp(&a) && !has_stray_tmp(&b));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_to_a_read_only_target_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real.txt");
+        let link = dir.path().join("link.txt");
+        std::fs::write(&real, b"old").unwrap();
+        let mut perms = std::fs::metadata(&real).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&real, perms).unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let err = atomic_write_existing_dir(&link, b"new").unwrap_err();
+        assert!(is_read_only_file_refusal(&err), "{err}");
+        assert_eq!(std::fs::read(&real).unwrap(), b"old");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_symlink_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let link = dir.path().join("link.txt");
+        std::os::unix::fs::symlink(dir.path().join("absent.txt"), &link).unwrap();
+        assert!(atomic_write_existing_dir(&link, b"new").is_err());
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn plain_write_replaces_a_symlink_and_never_writes_through_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside.txt");
+        let link = dir.path().join("cache.txt");
+        std::fs::write(&outside, b"precious").unwrap();
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        atomic_write(&link, b"new").unwrap();
+        assert_eq!(std::fs::read(&outside).unwrap(), b"precious");
+        let meta = std::fs::symlink_metadata(&link).unwrap();
+        assert!(!meta.file_type().is_symlink());
+        assert_eq!(std::fs::read(&link).unwrap(), b"new");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_document_save_through_a_link_to_a_directory_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let link = dir.path().join("link.txt");
+        std::os::unix::fs::symlink(dir.path(), &link).unwrap();
+        assert!(atomic_write_existing_dir(&link, b"new").is_err());
+    }
+
+    #[test]
+    fn existing_dir_write_treats_a_file_parent_as_a_missing_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let err = atomic_write_existing_dir(&blocker.join("a.txt"), b"x").unwrap_err();
+        assert!(is_missing_parent_refusal(&err), "{err}");
     }
 }

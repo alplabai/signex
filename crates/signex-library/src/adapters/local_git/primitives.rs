@@ -154,12 +154,29 @@ impl LocalGitAdapter {
     /// Refuse before touching disk if the commit cannot be made, create the
     /// primitive directory, and return the (repo-relative, absolute) path.
     /// Symbols go through `save_symbol_in_container` instead.
+    /// Refuse a write into a library whose folder is gone (moved or deleted
+    /// outside the app) instead of re-creating it (#1828).
+    fn require_root_dir(&self) -> Result<(), LibraryError> {
+        if self.root_dir.is_dir() {
+            return Ok(());
+        }
+        // The caller appends no path here, so name the library folder.
+        let refusal = signex_types::atomic_io::MissingParentDir {
+            dir: self.root_dir.clone(),
+        };
+        Err(LibraryError::Backend(format!(
+            "{}: {refusal}",
+            self.root_dir.display()
+        )))
+    }
+
     fn prepare_primitive_write(
         &self,
         kind: PrimitiveKind,
         uuid: Uuid,
     ) -> Result<(String, PathBuf), LibraryError> {
         self.ensure_commit_identity()?;
+        self.require_root_dir()?;
         fs::create_dir_all(self.primitive_dir(kind))?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
         let abs_path = self.root_dir.join(&rel_path);
@@ -180,7 +197,8 @@ impl LocalGitAdapter {
         // file destroys all primitives in the container, so we cannot
         // afford the in-place truncate that `fs::write` does on
         // existing destinations.
-        signex_types::atomic_io::atomic_write(abs_path, bytes)?;
+        crate::adapter::ensure_inside_library(&self.root_dir, abs_path)?;
+        signex_types::atomic_io::atomic_write_existing_dir(abs_path, bytes)?;
         let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
         // The file is saved: a failed commit is an outcome, not an error.
         Ok(self.commit_path(rel_path, message, &fallback))
@@ -381,7 +399,8 @@ impl LocalGitAdapter {
         // Built before the write: nothing after it may fail or panic.
         let message = message();
         // HI-6: atomic write — never half-write the manifest.
-        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
+        crate::adapter::ensure_inside_library(&self.root_dir, &self.file_path)?;
+        signex_types::atomic_io::atomic_write_existing_dir(&self.file_path, text.as_bytes())?;
         self.warn_plain_token_once(&candidate.manifest.mode);
         // Disk now holds the edit, so memory takes it too. Memory and disk
         // stay equal whatever happens next: a failed commit leaves both on
@@ -548,6 +567,7 @@ impl LocalGitAdapter {
         // `write_lock`). The cascade that follows takes the lock itself.
         let _write_lock = self.lock_for_write()?;
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
+        self.require_root_dir()?;
         fs::create_dir_all(&dir)?;
 
         // The path is made library-relative before the write: nothing after
@@ -579,7 +599,8 @@ impl LocalGitAdapter {
         // HI-6: atomic write — the symbol container is a TOML+TSV
         // envelope holding every symbol; an in-place truncate by
         // `fs::write` would destroy them all on a crash mid-save.
-        signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+        crate::adapter::ensure_inside_library(&self.root_dir, &path)?;
+        signex_types::atomic_io::atomic_write_existing_dir(&path, text.as_bytes())?;
         self.symbol_index.record(&file, &path);
 
         let fallback = format!("save symbol {} into {rel_path}", sym.uuid);

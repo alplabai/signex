@@ -494,10 +494,14 @@ impl Signex {
         // A write still running for this sheet could land after the one
         // below and put older content on disk; let it finish first.
         self.document_state.document_saves.barrier().wait();
+        if self.document_state.engines.contains_key(path) {
+            self.refuse_if_disk_drifted(path)?;
+        }
         if let Some(engine) = self.document_state.engines.get_mut(path) {
             engine
                 .save_with_net_colors(&self.ui_state.wire_color_overrides)
                 .with_context(|| format!("save schematic {}", path.display()))?;
+            self.refresh_baseline_from_disk(path);
             // This save never reaches the async completion that removes
             // the recovery copy, so a write still running is stale here;
             // callers chain `autosave_sweep` to remove the copy on disk.

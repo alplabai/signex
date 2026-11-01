@@ -415,6 +415,7 @@ impl Signex {
             let problem = match outcome {
                 Ok(SaveOutcome::Written) => None,
                 Ok(SaveOutcome::Superseded) => Some("a newer write to it landed first".to_string()),
+                Ok(SaveOutcome::DiskChanged(_)) => Some("it changed on disk meanwhile".to_string()),
                 Err(why) => Some(why),
             };
             if let Some(why) = problem {

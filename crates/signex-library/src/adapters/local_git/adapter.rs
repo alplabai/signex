@@ -657,7 +657,7 @@ impl LibraryAdapter for LocalGitAdapter {
             )));
         }
         let _write_lock = self.lock_for_write()?;
-        let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
+        let written = crate::adapter::rewrite_file_within(Some(&self.root_dir), abs_path, rewrite)?;
         // The file is written: its commit, failed or not, is reported by
         // the adapter (see `uncommitted`) and never undoes the write.
         if written {
