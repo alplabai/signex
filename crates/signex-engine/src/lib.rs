@@ -155,14 +155,14 @@ pub struct Engine {
     #[cfg(test)]
     pre_image_clones: usize,
     /// Re-drawn from a process-wide counter whenever an entry point changes
-    /// `document` or fails part-way (and at construction), so an off-thread save can
-    /// tell whether the document moved on while it ran, even if the engine
-    /// was replaced by a fresh one meanwhile.
+    /// `document` or fails part-way (and at construction), so an off-thread
+    /// save can tell whether the document moved on while it ran, even if the
+    /// engine was replaced by a fresh one meanwhile.
     revision: u64,
     /// The value `revision` held before the most recent edit that changed
-    /// the document (a batch counts as one). A render cache stamped with this value was
-    /// in step with the document just before that edit, so it may copy only
-    /// the collections the edit's patch reports.
+    /// the document (a batch counts as one). A render cache stamped with this
+    /// value was in step with the document just before that edit, so it may
+    /// copy only the collections the edit's patch reports.
     base_revision: u64,
     /// Re-drawn only by an edit that can change which wires, junctions and
     /// pins make up a net or what a net is called (see
@@ -347,8 +347,8 @@ impl Engine {
         self.revision
     }
 
-    /// The revision the document had before the most recent changing edit
-    /// point ran; `0` before any edit.
+    /// The revision the document had before the most recent edit that
+    /// changed it; `0` before any edit.
     pub fn base_revision(&self) -> u64 {
         self.base_revision
     }
