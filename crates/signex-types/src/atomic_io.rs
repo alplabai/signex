@@ -151,11 +151,11 @@ pub struct MissingParentDir {
 
 impl std::fmt::Display for MissingParentDir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "the folder {} does not exist (moved or deleted outside Signex?), so nothing was written",
-            self.dir.display()
-        )
+        // Short on purpose: the Messages panel keeps ~157 bytes and callers
+        // append the file path, which must survive the cut. The folder is in
+        // that path, so it is not repeated here.
+        let _ = &self.dir;
+        write!(f, "folder is gone (moved?), nothing written")
     }
 }
 
@@ -215,7 +215,6 @@ pub fn atomic_write_existing_dir(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 fn write_resolved(path: &Path, bytes: &[u8], create_parents: bool) -> io::Result<()> {
-    refuse_read_only_target(path)?;
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -230,6 +229,7 @@ fn write_resolved(path: &Path, bytes: &[u8], create_parents: bool) -> io::Result
             ));
         }
     }
+    refuse_read_only_target(path)?;
     let tmp = tmp_path_for(path)?;
 
     // Write the temp file and fsync it before the rename, so its bytes
@@ -540,5 +540,14 @@ mod tests {
         let link = dir.path().join("link.txt");
         std::os::unix::fs::symlink(dir.path(), &link).unwrap();
         assert!(atomic_write_existing_dir(&link, b"new").is_err());
+    }
+
+    #[test]
+    fn existing_dir_write_treats_a_file_parent_as_a_missing_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let err = atomic_write_existing_dir(&blocker.join("a.txt"), b"x").unwrap_err();
+        assert!(is_missing_parent_refusal(&err), "{err}");
     }
 }

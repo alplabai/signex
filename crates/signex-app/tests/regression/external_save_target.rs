@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{
     CaseProbeOutcome, ExcludeDirtyChoice, FileMsg, Message, OverlayMsg, RemoveChoice,
-    RemoveDialogState, RemoveMsg, Signex, TabKind,
+    RemoveDialogState, RemoveMsg, Signex,
 };
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
@@ -162,7 +162,7 @@ fn opening_a_symlink_to_an_open_sheet_shows_the_open_document() {
         .document_state
         .tabs
         .iter()
-        .filter(|tab| matches!(tab.kind, TabKind::Schematic))
+        .filter(|tab| matches!(tab.kind, signex_app::app::TabKind::Schematic))
         .count();
     assert_eq!(sheets, 1, "one file is one document");
     assert_eq!(app.document_state.engines.len(), 1, "and one engine");

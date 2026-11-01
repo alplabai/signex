@@ -997,9 +997,15 @@ pub(crate) fn rewrite_file_within(
     if let Some(root) = root {
         ensure_inside_library(root, abs_path)?;
     }
+    // A parent that is a file reads as "not a directory" on Unix and "not
+    // found" on Windows; both mean the folder is not there, so both go on to
+    // the write, which refuses.
+    let parent_is_not_a_folder = abs_path
+        .parent()
+        .is_some_and(|p| !p.as_os_str().is_empty() && p.exists() && !p.is_dir());
     let current = match std::fs::read(abs_path) {
         Ok(bytes) => Some(bytes),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound || parent_is_not_a_folder => None,
         Err(e) => return Err(e.into()),
     };
     let Some(bytes) = rewrite(current.as_deref())? else {
@@ -1063,5 +1069,18 @@ mod tests {
         rewrite_file_within(Some(&root), &link, &mut |_| Ok(Some(b"new".to_vec()))).unwrap();
 
         assert_eq!(std::fs::read(&real).unwrap(), b"new");
+    }
+
+    #[test]
+    fn a_parent_that_is_a_file_is_refused_the_same_way_everywhere() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let target = blocker.join("Lib.snxsym");
+
+        let err = rewrite_file(&target, &mut |_| Ok(Some(b"x".to_vec()))).unwrap_err();
+
+        assert!(err.to_string().contains("folder is gone"), "{err}");
+        assert!(blocker.is_file());
     }
 }
