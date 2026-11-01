@@ -46,13 +46,43 @@ pub(crate) fn is_test_redirect_active() -> bool {
 /// write the developer's real config directory. Originally
 /// `fonts::prefs_path`-only (#437), hoisted to cover all four resolvers
 /// in #440.
+///
+/// The redirect root is cleared the first time this process resolves it,
+/// so a folder left behind by an earlier process that had the same PID
+/// cannot leak stale files into this run (#1820). Later calls in the same
+/// process return the same root untouched, so tests in one process still
+/// share it.
 pub fn config_root() -> Option<PathBuf> {
     if is_test_redirect_active() {
-        return Some(
-            std::env::temp_dir().join(format!("signex-test-prefs-{}", std::process::id())),
-        );
+        return Some(test_redirect_root().clone());
     }
     dirs::config_dir().map(|dir| config_root_for_dir(&dir))
+}
+
+/// The per-process test redirect root, emptied once per process on first
+/// use (#1820).
+fn test_redirect_root() -> &'static PathBuf {
+    static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = std::env::temp_dir().join(format!("signex-test-prefs-{}", std::process::id()));
+        clear_stale_root(&root);
+        root
+    })
+}
+
+/// Remove whatever an earlier process left at `root` — a folder of config
+/// files, or even a plain file. Panics if it cannot: a test run on top of
+/// stale prefs fails later and far less clearly.
+fn clear_stale_root(root: &std::path::Path) {
+    let removed = match std::fs::symlink_metadata(root) {
+        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(root),
+        Ok(_) => std::fs::remove_file(root),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    };
+    if let Err(err) = removed {
+        panic!("clear stale test config root {}: {err}", root.display());
+    }
 }
 
 /// Join the `signex` subdirectory onto an arbitrary base directory.
