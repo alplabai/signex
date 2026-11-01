@@ -193,3 +193,134 @@ fn save_as_outside_the_project_folder_leaves_the_project_alone() {
         ["top.snxsch", "child.snxsch"]
     );
 }
+
+fn project_id(fx: &Fx) -> crate::app::state::ProjectId {
+    fx.app.document_state.projects[0].id
+}
+
+fn completion(
+    fx: &Fx,
+    to: &Path,
+    result: Result<crate::app::project_entry_disk::EntryPatch, String>,
+) -> crate::app::contracts::SaveAsProjectPatched {
+    crate::app::contracts::SaveAsProjectPatched {
+        project_id: project_id(fx),
+        from: fx.top.clone(),
+        to: to.to_path_buf(),
+        result,
+    }
+}
+
+#[test]
+fn a_patch_that_did_not_reach_disk_keeps_the_change_in_memory_for_a_save() {
+    use crate::app::project_entry_disk::EntryPatch;
+    let results = [
+        Ok(EntryPatch::NotListed),
+        Ok(EntryPatch::NoProjectFile),
+        Ok(EntryPatch::Unreadable("damaged".to_string())),
+        Err("disk full".to_string()),
+    ];
+    for result in results {
+        let dir = tempfile::tempdir().unwrap();
+        let mut fx = fixture(dir.path());
+        let project_bytes = std::fs::read(&fx.project).unwrap();
+        let to = dir.path().join("new.snxsch");
+        let failed = result.is_err();
+
+        let done = completion(&fx, &to, result.clone());
+        fx.app.handle_save_as_project_patched(done);
+
+        assert_eq!(
+            listed(&fx.app.document_state.projects[0].data),
+            ["new.snxsch", "child.snxsch"],
+            "{result:?}"
+        );
+        assert!(fx.app.document_state.is_document_dirty(&fx.project));
+        assert_eq!(std::fs::read(&fx.project).unwrap(), project_bytes);
+        assert_eq!(fx.app.document_state.error_notice.is_some(), failed);
+    }
+}
+
+#[test]
+fn save_as_while_a_path_operation_holds_the_project_file_keeps_the_change_in_memory() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    let project_bytes = std::fs::read(&fx.project).unwrap();
+    let fold = fx.app.document_state.projects[0].case_fold;
+    fx.app
+        .document_state
+        .pending_path_ops
+        .begin_with_dependents(
+            crate::app::path_ops::PathOpKind::AddSheet,
+            vec![dir.path().join("other.snxsch")],
+            vec![fx.project.clone()],
+            fold,
+        );
+
+    save_as(&mut fx.app, &fx.top.clone(), dir.path().join("new.snxsch"));
+
+    assert_eq!(std::fs::read(&fx.project).unwrap(), project_bytes);
+    assert_eq!(
+        listed(&fx.app.document_state.projects[0].data),
+        ["new.snxsch", "child.snxsch"]
+    );
+    assert!(fx.app.document_state.is_document_dirty(&fx.project));
+}
+
+#[test]
+fn the_project_file_is_released_when_the_job_lands() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+
+    save_as(&mut fx.app, &fx.top.clone(), dir.path().join("new.snxsch"));
+
+    assert!(fx.app.document_state.pending_path_ops.is_empty());
+    let project = fx.project.clone();
+    fx.app.document_state.projects[0].data.description = Some("later".to_string());
+    fx.app.document_state.mark_document_dirty(&project);
+    let id = project_id(&fx);
+    let save = fx
+        .app
+        .begin_project_save(id)
+        .expect("a project save starts");
+    settle_task(&mut fx.app, save);
+    assert_eq!(reopened(&fx.project).description.as_deref(), Some("later"));
+}
+
+#[test]
+fn a_case_variant_of_the_project_folder_is_still_inside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    fx.app.document_state.projects[0].case_fold =
+        crate::app::state::scope::CaseFold::from_probe(true);
+    let shouted = PathBuf::from(dir.path().to_string_lossy().to_uppercase()).join("new.snxsch");
+
+    let task = fx
+        .app
+        .follow_save_as_in_project(Some(project_id(&fx)), &fx.top.clone(), &shouted);
+    settle_task(&mut fx.app, task);
+
+    assert_eq!(
+        listed(&reopened(&fx.project)),
+        ["new.snxsch", "child.snxsch"]
+    );
+}
+
+#[test]
+fn a_target_the_project_already_lists_is_not_re_pointed() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    let project_bytes = std::fs::read(&fx.project).unwrap();
+
+    let task =
+        fx.app
+            .follow_save_as_in_project(Some(project_id(&fx)), &fx.top.clone(), &fx.child.clone());
+    settle_task(&mut fx.app, task);
+
+    assert_eq!(std::fs::read(&fx.project).unwrap(), project_bytes);
+    assert_eq!(
+        listed(&fx.app.document_state.projects[0].data),
+        ["top.snxsch", "child.snxsch"]
+    );
+    assert!(!fx.app.document_state.is_document_dirty(&fx.project));
+}
