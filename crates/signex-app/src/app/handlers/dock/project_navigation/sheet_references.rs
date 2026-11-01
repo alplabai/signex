@@ -175,6 +175,7 @@ impl Signex {
         disk: &ParentDiskOutcomes,
         context: &str,
     ) -> RewriteOutcome {
+        self.record_written_parent_baselines(disk);
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
             let on_disk = disk

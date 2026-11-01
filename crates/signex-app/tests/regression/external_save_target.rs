@@ -461,3 +461,25 @@ fn a_sheet_with_no_baseline_still_cannot_recreate_a_moved_folder() {
     assert!(app.document_state.is_document_dirty(&path));
     assert!(messages_mention("NoBaseline1828.snxsch"));
 }
+
+// ---- #1857 interplay ---------------------------------------------------
+
+#[test]
+fn saving_an_open_parent_after_a_child_rename_writes_both_without_a_card() {
+    let mut f = crate::rename_preserves_references::fixture();
+    let root = f.root.clone();
+    open(&mut f.app, &root);
+    edit(&mut f.app, &root, "A3");
+
+    crate::rename_preserves_references::submit_rename(&mut f.app, &f.child, "renamed.snxsch");
+    save(&mut f.app);
+
+    assert!(
+        !conflict_card_is_up(&f.app),
+        "the rename's rewrite is not drift"
+    );
+    let text = fs::read_to_string(&root).unwrap();
+    assert!(text.contains("renamed.snxsch"), "the new child reference");
+    assert!(text.contains("A3"), "the parent's unsaved edit");
+    assert!(!f.app.document_state.is_document_dirty(&root));
+}

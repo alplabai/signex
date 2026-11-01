@@ -153,6 +153,27 @@ impl Signex {
         }
     }
 
+    /// A parent sheet was re-pointed on disk outside the save ledger (#1849).
+    /// The open document keeps its unsaved edits, so its next save must compare
+    /// with the patched bytes now on disk, not with what it was opened from.
+    pub(crate) fn record_written_parent_baselines(
+        &mut self,
+        disk: &crate::app::parent_reference_disk::ParentDiskOutcomes,
+    ) {
+        use crate::app::parent_reference_disk::ParentDisk;
+        for (parent, outcome) in disk {
+            if let ParentDisk::Written(bytes) = outcome
+                && self
+                    .document_state
+                    .document_saves
+                    .baseline(parent)
+                    .is_some()
+            {
+                self.record_disk_baseline(parent, ContentHash::of(bytes));
+            }
+        }
+    }
+
     /// A save refused to write because the file drifted. Nothing was written,
     /// so the sheet stays modified; the user is asked once per card.
     pub(crate) fn handle_save_found_disk_drift(&mut self, path: PathBuf, drift: DiskDrift) {

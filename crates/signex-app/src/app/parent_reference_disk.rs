@@ -109,7 +109,7 @@ fn patch_parent(parent: &Path, planned: &[&ReferenceRewrite], renamed: &Renamed<
         Ok(text) => text.into_bytes(),
         Err(e) => return ParentDisk::Skipped(format!("could not be encoded: {e}")),
     };
-    match signex_types::atomic_io::atomic_write(parent, &bytes) {
+    match signex_types::atomic_io::atomic_write_existing_dir(parent, &bytes) {
         Ok(()) => ParentDisk::Written(std::sync::Arc::new(bytes)),
         Err(e) => ParentDisk::Skipped(format!("could not be written: {e}")),
     }

@@ -430,6 +430,16 @@ impl DocumentSaves {
             .map(|(held, _)| held.clone())
     }
 
+    /// A document's file was renamed: its content, hence its baseline, is the
+    /// same. The real path is not carried; the renamed document is simply not
+    /// matched against symlink aliases until it is read again.
+    pub fn rekey_disk_records(&mut self, old: &Path, new: &Path) {
+        if let Some(hash) = self.baselines.remove(old) {
+            self.baselines.insert(new.to_path_buf(), hash);
+        }
+        self.real_paths.remove(old);
+    }
+
     /// Stop comparing saves of `path` with disk (its document closed, was
     /// renamed, or the user chose to overwrite).
     pub fn forget_baseline(&mut self, path: &Path) {
