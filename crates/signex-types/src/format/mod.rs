@@ -376,6 +376,20 @@ impl SnxSchematic {
         write_tsv_section(&mut out, "sheets.junctions", &junction_rows)?;
         write_tsv_section(&mut out, "sheets.labels", &label_rows)?;
 
+        // Foreign `[sheets.*]` content a newer build wrote (#1829).
+        if !self.sheet.unknown.sheets.is_empty() {
+            #[derive(Serialize)]
+            struct SheetsUnknown<'a> {
+                sheets: &'a UnknownFields,
+            }
+            let wrapper = SheetsUnknown {
+                sheets: &self.sheet.unknown.sheets,
+            };
+            finite_toml::ensure_finite(&wrapper)?;
+            out.push('\n');
+            out.push_str(&toml::to_string_pretty(&wrapper)?);
+        }
+
         // Extras: auxiliary TOML tables for fields the bulk row
         // doesn't carry. Wrap the whole extras tree in a single
         // serializable struct so toml::to_string_pretty emits the
@@ -407,26 +421,33 @@ impl SnxSchematic {
             Some(sheet_extras)
         };
 
-        if !symbols_extras.is_empty() || !junctions_extras.is_empty() || sheet_extras_opt.is_some()
+        let extras_root = &self.sheet.unknown.extras_root;
+        if !symbols_extras.is_empty()
+            || !junctions_extras.is_empty()
+            || sheet_extras_opt.is_some()
+            || !extras_root.is_empty()
         {
             #[derive(Serialize)]
-            struct ExtrasWrapper {
-                extras: ExtrasInner,
+            struct ExtrasWrapper<'a> {
+                extras: ExtrasInner<'a>,
             }
             #[derive(Serialize)]
-            struct ExtrasInner {
+            struct ExtrasInner<'a> {
                 #[serde(skip_serializing_if = "BTreeMap::is_empty")]
                 symbols: BTreeMap<String, SymbolExtras>,
                 #[serde(skip_serializing_if = "BTreeMap::is_empty")]
                 junctions: BTreeMap<String, JunctionExtras>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 sheet: Option<SheetExtras>,
+                #[serde(flatten)]
+                unknown: &'a UnknownFields,
             }
             let wrapper = ExtrasWrapper {
                 extras: ExtrasInner {
                     symbols: symbols_extras,
                     junctions: junctions_extras,
                     sheet: sheet_extras_opt,
+                    unknown: extras_root,
                 },
             };
             finite_toml::ensure_finite(&wrapper)?;
@@ -544,6 +565,8 @@ impl SnxSchematic {
                 manifest: raw.unknown,
                 extras: sheet_extras.unknown,
                 frame: sheet_extras.frame.unknown,
+                sheets: raw.sheets.unknown,
+                extras_root: extras.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)
                     .then(|| raw.format.clone()),
             },
@@ -590,6 +613,9 @@ struct SchSheetsRaw {
     junctions: Option<TsvBody>,
     #[serde(default)]
     labels: Option<TsvBody>,
+    /// Foreign keys and tables under `[sheets]` (#1829).
+    #[serde(flatten)]
+    unknown: UnknownFields,
 }
 
 #[derive(Debug, Clone, Deserialize)]
