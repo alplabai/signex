@@ -152,7 +152,8 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    width (the most common width among its stroked graphics), buses 0.45 mm,
    the no-connect X and No-ERC diamond 0.2 mm, global / hierarchical label
    markers and child sheet frames 0.15 mm. A stored width of `0` and
-   anything thinner draw at 0.15 mm. These widths do not change with zoom.
+   anything thinner draw at 0.15 mm on screen. These widths do not change
+   with zoom.
 2. **Screen width is `mm * scale`**, so the ratio between any two kinds is the
    same at every zoom. Before #1858 each kind had its own curve (a per-kind
    px width times zoom, clamped), and pins ignored their library width, so
@@ -168,8 +169,9 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    The CPU canvas does not receive the window's scale factor yet, so both
    still run with one device pixel per logical pixel
    (`UNSCALED_DEVICE_PX_PER_LOGICAL_PX`) and the GPU path matches it.
-6. **Output** (PDF, SVG, print) uses the mm widths only, with no floor and no
-   snap.
+6. **Output** (PDF, SVG, print) uses mm widths only, with no pixel floor and
+   no snap. Output keeps each item's stored width (a width of `0` gets the
+   exporter's default); the 0.15 mm minimum of rule 1 is the screen rule.
 
 The mm values for markers, labels and sheet frames were picked so the
 drawing looks the same as before at 400 % zoom after the snap. Selection
