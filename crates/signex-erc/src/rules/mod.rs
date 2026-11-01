@@ -510,11 +510,19 @@ pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         // anchor mid-span, others at an endpoint only; D5.4).
         let on_wire = on_any_wire(&label.position, &wires);
         let on_bus = bus::label_touches_bus(ctx, label);
-        let on_pin = ctx
+        // Sheet-symbol pins count too: `build_netlist` anchors them at the
+        // same point key as a label (issue #1876).
+        let symbol_pins = ctx
             .symbols
             .iter()
-            .flat_map(|s| s.pins.iter())
-            .any(|pin| pt_key(&pin.world_pos) == pt_key(&label.position));
+            .flat_map(|s| s.pins.iter().map(|p| p.world_pos));
+        let sheet_pins = ctx
+            .child_sheets
+            .iter()
+            .flat_map(|c| c.pins.iter().map(|p| p.position));
+        let on_pin = symbol_pins
+            .chain(sheet_pins)
+            .any(|at| pt_key(&at) == pt_key(&label.position));
         if on_wire || on_bus || on_pin {
             continue;
         }
