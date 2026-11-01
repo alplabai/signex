@@ -631,7 +631,7 @@ pub enum ProjectMsg {
     AddNewSchematicWritten {
         project_id: crate::app::state::ProjectId,
         path: std::path::PathBuf,
-        result: Result<(), String>,
+        result: Result<crate::app::project_entry_disk::EntryPatch, String>,
     },
     /// The Create Sheet dialog's path field was edited.
     CreateChildSheetPathChanged(String),
