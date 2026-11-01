@@ -691,8 +691,13 @@ pub enum PrimitivePickerMsg {
     CopyConfirmed,
     /// "Copy" was answered no: nothing changes.
     CopyDeclined,
-    /// The copy finished on its worker: the reference to bind, or why not.
-    CopyFinished(Result<PrimitiveRef, String>),
+    /// The copy finished on its worker: the reference to bind, or why not,
+    /// with the pick it was made for. The bind happens only if that same
+    /// pick is still open.
+    CopyFinished {
+        pick: crate::library::state::CopyTarget,
+        result: Result<PrimitiveRef, String>,
+    },
 }
 
 /// Settings → Library → Distributor APIs panel messages.

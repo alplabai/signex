@@ -428,6 +428,22 @@ pub struct PrimitivePickerState {
     pub copying: bool,
 }
 
+/// The pick a copy of a loose symbol was made for (#1841).
+#[derive(Debug, Clone)]
+pub struct CopyTarget {
+    pub kind: PrimitiveKind,
+    pub target: PrimitivePickerTarget,
+}
+
+impl CopyTarget {
+    /// Whether `picker` is still the pick this copy was made for.
+    pub fn is_open_in(&self, picker: &PrimitivePickerState) -> bool {
+        picker.kind == self.kind
+            && std::mem::discriminant(&picker.target) == std::mem::discriminant(&self.target)
+            && picker.target.address() == self.target.address()
+    }
+}
+
 /// Where the picker should write the picked `PrimitiveRef`.
 #[derive(Debug, Clone)]
 pub enum PrimitivePickerTarget {
@@ -448,6 +464,16 @@ pub enum PrimitivePickerTarget {
 }
 
 impl PrimitivePickerTarget {
+    /// The row the pick is for.
+    pub fn address(&self) -> &EditorAddress {
+        match self {
+            Self::PreviewRow(a)
+            | Self::EditRowModal(a)
+            | Self::BrowserRow(a)
+            | Self::PreviewAlternate(a) => a,
+        }
+    }
+
     /// Directory of the library whose row this pick writes.
     pub fn library_path(&self) -> Option<&std::path::Path> {
         match self {

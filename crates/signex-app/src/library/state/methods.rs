@@ -157,8 +157,9 @@ impl LibraryState {
 
     /// The one primitive the file `file` of the open library `library_id`
     /// holds, by the listing the library gave (#1841): a symbol file is
-    /// named by its author and may hold several symbols. `Err` is the
-    /// line the picker shows.
+    /// named by its author and may hold several symbols. A file the listing
+    /// does not know yet but that is named `<uuid>.<ext>` is that uuid.
+    /// `Err` is the line the picker shows.
     pub fn primitive_uuid_in_file(
         &self,
         library_id: uuid::Uuid,
@@ -169,7 +170,17 @@ impl LibraryState {
             .iter()
             .find(|lib| lib.library_id == library_id)
             .ok_or_else(|| "Library failed to mount.".to_string())?;
-        let wanted = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+        // The picked file is made comparable once: a listed path is the
+        // library folder plus a relative part, so that part is compared.
+        let root = lib.root_dir();
+        let wanted = root.and_then(|root| {
+            let canon_root = root.canonicalize().ok()?;
+            let canon_file = file.canonicalize().ok()?;
+            canon_file
+                .strip_prefix(canon_root)
+                .ok()
+                .map(Path::to_path_buf)
+        });
         let held: Vec<&signex_library::PrimitiveSummary> = [
             &lib.cached_symbols,
             &lib.cached_footprints,
@@ -178,18 +189,27 @@ impl LibraryState {
         .into_iter()
         .flatten()
         .filter(|s| {
-            s.file
-                .as_deref()
-                .is_some_and(|f| f == file || f.canonicalize().is_ok_and(|f| f == wanted))
+            s.file.as_deref().is_some_and(|f| {
+                f == file
+                    || wanted.as_deref().is_some_and(|wanted| {
+                        root.and_then(|root| f.strip_prefix(root).ok()) == Some(wanted)
+                    })
+            })
         })
         .collect();
         match held.as_slice() {
             [one] => Ok(one.uuid),
-            [] => Err(format!(
-                "`{}` holds no primitive this library lists; pick a file in \
-                 `<lib>.snxlib/symbols/`, `footprints/` or `sims/`.",
-                file.display()
-            )),
+            [] => file
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .and_then(|stem| stem.parse::<uuid::Uuid>().ok())
+                .ok_or_else(|| {
+                    format!(
+                        "`{}` holds no primitive this library lists; pick a file in \
+                         `<lib>.snxlib/symbols/`, `footprints/` or `sims/`.",
+                        file.display()
+                    )
+                }),
             many => Err(format!(
                 "`{}` holds {} primitives; choose one from the list.",
                 file.display(),

@@ -182,3 +182,89 @@ fn a_row_someone_else_changed_after_the_cascade_is_still_refused() {
     assert!(f.app.library.editors[&f.address].dirty, "the edit is kept");
     assert!(f.app.document_state.error_notice.is_some());
 }
+
+/// A second symbol, in a file of its own, bound to the row as an alternate:
+/// saving both moves the row twice.
+fn add_alternate_symbol_tab(f: &mut Fixture) -> PathBuf {
+    let symbol = Symbol::empty("GATEDRV8-ALT");
+    let path = f
+        .snxlib
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("ALT.snxsym");
+    std::fs::write(
+        &path,
+        SymbolFile::from_symbol(symbol.clone())
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    let adapter = f.app.library.set.get(f.library_id).unwrap();
+    let mut row = adapter.read_row(TABLE, f.address.row_id).unwrap();
+    row.alternate_symbols
+        .push(signex_library::AlternateSymbol::new(
+            PrimitiveRef::new(f.library_id, symbol.uuid),
+            "",
+            "alt",
+        ));
+    adapter
+        .update_row(TABLE, row.clone(), "bind alternate")
+        .unwrap();
+    // The open preview was read before the alternate was bound.
+    let stored = adapter.read_row(TABLE, f.address.row_id).unwrap();
+    let preview = f.app.library.editors.get_mut(&f.address).unwrap();
+    preview.row.alternate_symbols = stored.alternate_symbols.clone();
+    preview.row.server_revision = stored.server_revision;
+    let file = SymbolFile::from_bytes(&std::fs::read(&path).unwrap()).unwrap();
+    let mut editor = SymbolDocument::new(path.clone(), file);
+    editor.primitive_mut().name = "GATEDRV8-ALT-B".into();
+    editor.mark_dirty();
+    f.app
+        .document_state
+        .symbol_editors
+        .insert(path.clone(), editor);
+    f.app.document_state.mark_document_dirty(&path);
+    f.app.document_state.tabs.push(TabInfo {
+        title: "ALT".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::SymbolEditor(path.clone()),
+    });
+    path
+}
+
+#[test]
+fn save_all_of_two_symbols_of_one_row_saves_the_row_too() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let alt = add_alternate_symbol_tab(&mut f);
+    let plan = SaveAllPlan {
+        context: "Save All".into(),
+        paths: vec![f.symbol_path.clone(), alt.clone()],
+        rows: vec![f.address.clone()],
+        next: SaveAllNext::Nothing,
+        probes: Default::default(),
+        undecided: Vec::new(),
+    };
+
+    let task = f.app.begin_save_all_planned(plan);
+    settle(&mut f.app, task);
+
+    assert!(
+        f.app.document_state.error_notice.is_none(),
+        "nothing refused"
+    );
+    let row = stored(&f);
+    assert_eq!(row.description, "Mine");
+    let version_of = |path: &Path| {
+        SymbolFile::from_bytes(&std::fs::read(path).unwrap())
+            .unwrap()
+            .symbols[0]
+            .version
+            .clone()
+    };
+    assert_eq!(row.symbol_version, version_of(&f.symbol_path));
+    assert_eq!(row.alternate_symbols[0].symbol_version, version_of(&alt));
+}

@@ -34,12 +34,12 @@
 
 use super::container_save::ContainerWrite;
 use crate::app::Signex;
-use signex_library::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::{
     CascadeKind, CascadeReport, FootprintFile, LibraryError, PrimitiveSave, RowId, SymbolFile,
     WorkflowMode,
 };
+use signex_library::{ComponentRow, LibraryAdapter};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -333,7 +333,7 @@ pub(super) fn cascade_after_container_save(
                     version: p.version.clone(),
                 })
                 .collect();
-            let before = own.map(|_| revisions_of(adapter));
+            let before = own.map(|_| rows_before(adapter));
             let result = signex_library::cascade_after_saves(adapter, &saves, mode);
             if let Ok(report) = &result {
                 outcome.bumped = report.auto_bumped.clone();
@@ -357,39 +357,71 @@ pub(super) fn cascade_after_container_save(
     outcome
 }
 
-/// Each row's table and revision, so a cascade's move of a row can be
-/// told from another writer's. Empty when the backend cannot list rows (the
-/// cascade then cannot run either).
-fn revisions_of(adapter: &dyn LibraryAdapter) -> HashMap<RowId, (String, Option<u64>)> {
-    adapter
-        .iter_rows()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(table, row)| (RowId::from_uuid(row.row_id), (table, row.server_revision)))
-        .collect()
+/// Every row with its table as it stands before a cascade (#1840), so what
+/// the cascade changed can be told from what another writer changed. A
+/// listing that fails is reported; no step is then recorded and an open edit
+/// of a moved row is refused as stale.
+fn rows_before(adapter: &dyn LibraryAdapter) -> HashMap<RowId, (String, ComponentRow)> {
+    match adapter.iter_rows() {
+        Ok(rows) => rows
+            .into_iter()
+            .map(|(table, row)| (RowId::from_uuid(row.row_id), (table, row)))
+            .collect(),
+        Err(e) => {
+            crate::diagnostics::log_warning(format!(
+                "The rows could not be listed before a symbol or footprint save ({e}); \
+                 an open edit of a row it moves may be refused as stale, so reload it."
+            ));
+            HashMap::new()
+        }
+    }
 }
 
-/// Tell the write ledger which rows this cascade moved and between which
-/// revisions (#1840): an open Component Preview of such a row is then
-/// rebased onto it instead of being refused as changed by someone else.
+/// Tell the write ledger which rows this cascade moved (#1840): an open
+/// Component Preview of such a row is then rebased onto it instead of being
+/// refused as changed by someone else. A step is recorded only when the row
+/// after the cascade differs from the row before it in nothing but what a
+/// cascade changes, so a change by another writer, whenever it landed
+/// around the cascade, keeps the row refused.
 fn record_cascade_steps(
     own: &crate::library::writes::OwnRevisions,
     adapter: &dyn LibraryAdapter,
-    before: &HashMap<RowId, (String, Option<u64>)>,
+    before: &HashMap<RowId, (String, ComponentRow)>,
     moved: &[RowId],
 ) {
     for id in moved {
-        let Some((table, from)) = before.get(id) else {
+        let Some((table, old)) = before.get(id) else {
             continue;
         };
-        match adapter.read_row(table, *id) {
-            Ok(row) => own.record_cascade(*id, *from, row.server_revision),
-            Err(e) => crate::diagnostics::log_warning(format!(
-                "Row {id} was moved by a symbol or footprint save but could not be read \
-                 back ({e}); an open edit of it may be refused as stale, so reload it."
-            )),
+        let after = match adapter.read_row(table, *id) {
+            Ok(row) => row,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "Row {id} was moved by a symbol or footprint save but could not be read \
+                     back ({e}); an open edit of it may be refused as stale, so reload it."
+                ));
+                continue;
+            }
+        };
+        if only_cascade_fields_differ(old, &after) {
+            own.record_cascade(*id, old.server_revision, after.server_revision);
+        } else {
+            crate::diagnostics::log_warning(format!(
+                "Row {id} was also changed by something other than this save while it was \
+                 moved; an open edit of it will be refused until you reload the row."
+            ));
         }
     }
+}
+
+/// Whether `after` is `before` with only a cascade's changes (pins, row
+/// version, revision, time and hash).
+fn only_cascade_fields_differ(before: &ComponentRow, after: &ComponentRow) -> bool {
+    let mut expected = before.clone();
+    crate::library::preview_rebase::rebase_onto_cascade(&mut expected, after);
+    expected.updated = after.updated;
+    expected.content_hash = after.content_hash;
+    expected == *after
 }
 
 /// Whether running the cascade again could move a row it left behind.
@@ -539,6 +571,9 @@ fn failed_rows_line(report: &CascadeReport) -> String {
     }
     line
 }
+
+#[cfg(test)]
+mod ledger_tests;
 
 #[cfg(test)]
 mod tests {

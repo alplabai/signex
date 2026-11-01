@@ -65,6 +65,13 @@ impl OwnRevisions {
     /// A primitive-save cascade of this app moved `row` from revision
     /// `from` to `to` (#1840).
     pub fn record_cascade(&self, row: signex_library::RowId, from: Option<u64>, to: Option<u64>) {
+        // A second cascade that starts where the first one ended continues
+        // it: the copy an editor read before both is still only cascaded.
+        let from = self
+            .steps()
+            .get(&row)
+            .filter(|step| step.to == from)
+            .map_or(from, |step| step.from);
         self.record(row, to);
         self.steps().insert(row, CascadeStep { from, to });
     }

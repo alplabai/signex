@@ -247,3 +247,43 @@ fn a_failed_copy_reaches_the_picker_and_binds_nothing() {
     );
     assert!(!state.copying);
 }
+
+#[test]
+fn a_copy_finishing_after_the_picker_was_replaced_binds_nothing_there() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let before = bound_symbol(&f);
+    open_picker(&mut f);
+    let chosen = f.app.library.primitive_picker.as_ref().unwrap().loose[0].clone();
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(chosen));
+    // The copy starts; the user cancels and opens a footprint picker for the
+    // same row before it finishes.
+    let running = f
+        .app
+        .update(Message::Library(LibraryMessage::PrimitivePicker(
+            PrimitivePickerMsg::CopyConfirmed,
+        )));
+    picker(&mut f.app, PrimitivePickerMsg::Cancel);
+    let task = f
+        .app
+        .update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+            kind: PrimitiveKind::Footprint,
+            target: PrimitivePickerTarget::BrowserRow(f.address.clone()),
+        }));
+    settle(&mut f.app, task);
+
+    settle(&mut f.app, running);
+
+    assert_eq!(bound_symbol(&f), before, "nothing was bound");
+    let open = f.app.library.primitive_picker.as_ref().expect("still open");
+    assert_eq!(open.kind, PrimitiveKind::Footprint);
+    assert!(
+        f.address
+            .library_path
+            .parent()
+            .unwrap()
+            .join("symbols")
+            .exists(),
+        "the copy itself landed in the library"
+    );
+}

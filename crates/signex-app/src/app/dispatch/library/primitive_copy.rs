@@ -93,6 +93,10 @@ impl Signex {
         let Some(picker) = self.library.primitive_picker.as_ref() else {
             return Task::none();
         };
+        let pick = crate::library::state::CopyTarget {
+            kind: picker.kind,
+            target: picker.target.clone(),
+        };
         let (Some(symbol), Some(library_path)) = (
             picker.copy_confirm.clone(),
             picker
@@ -133,38 +137,59 @@ impl Signex {
                 .await
                 .unwrap_or_else(|e| Err(format!("the copy task failed: {e}")))
             },
-            |result| {
+            move |result| {
                 Message::Library(LibraryMessage::PrimitivePicker(
-                    PrimitivePickerMsg::CopyFinished(result),
+                    PrimitivePickerMsg::CopyFinished { pick, result },
                 ))
             },
         )
     }
 
-    /// The worker is done: refresh the library's caches, then bind the
-    /// copy exactly as a pick of it from the list would.
+    /// The worker is done: refresh the library the copy went into, then
+    /// bind the copy exactly as a pick of it from the list would, provided
+    /// the pick it was made for is still the open one. A picker cancelled or
+    /// reopened for another row meanwhile gets nothing bound.
     pub(super) fn handle_copy_finished(
         &mut self,
+        pick: crate::library::state::CopyTarget,
         result: Result<signex_library::PrimitiveRef, String>,
     ) -> Task<Message> {
-        match result {
-            Err(why) => self.copy_failed(why),
-            Ok(reference) => {
-                let root = self
-                    .library
-                    .primitive_picker
-                    .as_ref()
-                    .and_then(|p| p.target.library_path().map(std::path::Path::to_path_buf));
-                let dir = root
-                    .and_then(|r| self.library.library_at(&r).and_then(|l| l.root_dir()))
-                    .map(std::path::Path::to_path_buf);
-                let refresh =
-                    dir.map_or_else(Task::none, |dir| self.refresh_primitive_cache_for(&dir));
-                refresh.chain(Task::done(Message::Library(
-                    LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(reference)),
-                )))
+        let still_open = self
+            .library
+            .primitive_picker
+            .as_ref()
+            .is_some_and(|picker| pick.is_open_in(picker));
+        let reference = match result {
+            Ok(reference) => reference,
+            Err(why) if still_open => return self.copy_failed(why),
+            Err(why) => {
+                crate::diagnostics::log_warning(&why);
+                return Task::none();
             }
+        };
+        let library = pick.target.library_path().and_then(|path| {
+            self.library.library_at(path).map(|lib| {
+                (
+                    lib.display_name.clone(),
+                    lib.root_dir().map(std::path::Path::to_path_buf),
+                )
+            })
+        });
+        let (name, dir) = library.unzip();
+        let refresh = dir
+            .flatten()
+            .map_or_else(Task::none, |dir| self.refresh_primitive_cache_for(&dir));
+        if !still_open {
+            crate::diagnostics::log_warning(format!(
+                "The symbol was copied into library {}, but the picker it was for is closed, \
+                 so it was not bound. Pick it from the library to bind it.",
+                name.unwrap_or_default()
+            ));
+            return refresh;
         }
+        refresh.chain(Task::done(Message::Library(
+            LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(reference)),
+        )))
     }
 
     fn copy_failed(&mut self, why: String) -> Task<Message> {
