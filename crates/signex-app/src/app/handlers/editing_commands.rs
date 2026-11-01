@@ -237,6 +237,10 @@ impl Signex {
 
         if undone {
             self.interaction_state.active_canvas_mut().selected.clear();
+            // A multi-click buffer anchors at the end of the segment the
+            // undo just removed; drawing on from it would leave an orphan
+            // (#1831). The tool stays armed, the next click starts afresh.
+            self.clear_drawing_buffers();
         }
     }
 
