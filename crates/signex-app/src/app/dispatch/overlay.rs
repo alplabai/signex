@@ -63,6 +63,8 @@ impl Signex {
                 self.document_state.error_notice = None;
                 Task::none()
             }
+            OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
+            OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
             OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
                 dismiss_first_run_tour_task()

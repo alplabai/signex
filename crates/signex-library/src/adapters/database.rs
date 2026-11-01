@@ -426,6 +426,7 @@ impl DatabaseAdapter {
                 name: row.name,
                 kind,
                 used_by_count: 0,
+                file: None,
             })
             .collect())
     }

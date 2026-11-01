@@ -77,12 +77,50 @@ pub fn resolve_placement_of(
         prefix: signex_types::designator::placement_prefix(&symbol.designator),
         class: row.class.as_str().to_owned(),
         prefix_override: row.designator_prefix_override().map(str::to_owned),
+        footprint: footprint_name(&adapter, &row, open_libraries),
         datasheet: match &row.datasheet {
             signex_library::DatasheetRef::Url { url } => url.trim().to_string(),
             signex_library::DatasheetRef::HashPinned { .. } => String::new(),
         },
         fields: part_fields(&row),
     })
+}
+
+/// The name of the footprint the row binds, for the placed symbol's
+/// footprint field that ERC, the netlist and the BOM read (#1842); empty
+/// when the row binds none. A footprint that cannot be read is reported and
+/// leaves the field empty, so the placement still goes ahead.
+fn footprint_name(
+    own: &signex_library::adapters::local_git::LocalGitAdapter,
+    row: &signex_library::ComponentRow,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> String {
+    use signex_library::LibraryAdapter as _;
+    use signex_library::adapters::local_git::LocalGitAdapter;
+
+    let Some(reference) = row.footprint_ref else {
+        return String::new();
+    };
+    let read = if reference.library_id == own.library_id() {
+        own.get_footprint(reference.uuid).map_err(|e| e.to_string())
+    } else {
+        open_libraries
+            .iter()
+            .find(|(id, _)| *id == reference.library_id)
+            .ok_or_else(|| format!("its library {} is not open", reference.library_id))
+            .and_then(|(_, path)| LocalGitAdapter::open(path).map_err(|e| e.to_string()))
+            .and_then(|a| a.get_footprint(reference.uuid).map_err(|e| e.to_string()))
+    };
+    match read {
+        Ok(footprint) => footprint.name,
+        Err(why) => {
+            crate::diagnostics::log_warning(format!(
+                "The footprint of {} could not be read ({why}); the placed part has no footprint.",
+                row.internal_pn
+            ));
+            String::new()
+        }
+    }
 }
 
 /// The identity fields a placed part carries for `row`: its manufacturer

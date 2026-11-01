@@ -144,10 +144,11 @@ impl Engine {
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
-        self.bump_revision();
+        // An empty stack changes nothing, so it moves no revision.
         let Some(entry) = self.history.pop_back() else {
             return Ok(None);
         };
+        self.bump_revision();
 
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);
@@ -185,10 +186,11 @@ impl Engine {
 
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
         self.field_edit_run = None;
-        self.bump_revision();
+        // An empty stack changes nothing, so it moves no revision.
         let Some(entry) = self.redo_stack.pop() else {
             return Ok(None);
         };
+        self.bump_revision();
 
         let patch_pair = entry.patch_pair;
         self.note_history_step(patch_pair);

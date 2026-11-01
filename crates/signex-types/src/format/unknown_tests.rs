@@ -127,6 +127,68 @@ future_symbol_key = 42
     assert!(again.symbols[1].unknown.is_empty());
 }
 
+/// A plain file with an unknown table under `[extras]` and one under
+/// `[sheets]`, each with a nested sub-table (#1829).
+fn with_unknown_tables() -> String {
+    format!(
+        "{}
+[sheets]
+future_sheets_key = 5
+
+[sheets.widgets]
+key = \"w\"
+[sheets.widgets.deep]
+n = 3
+
+[extras.mystery]
+key = \"m\"
+[extras.mystery.deep]
+n = 4
+",
+        save(&plain_sheet())
+    )
+}
+
+#[test]
+fn unknown_extras_and_sheets_tables_survive_save() {
+    let sheet = load(&with_unknown_tables());
+    assert!(sheet.unknown.extras_root.contains_key("mystery"));
+    assert!(sheet.unknown.sheets.contains_key("widgets"));
+    let out = save(&sheet);
+    assert!(out.contains("[extras.mystery]"), "{out}");
+    assert!(out.contains("[sheets.widgets]"), "{out}");
+    assert_eq!(load(&out).unknown, sheet.unknown);
+}
+
+#[test]
+fn unknown_tables_survive_adding_a_text_note() {
+    let mut sheet = load(&with_unknown_tables());
+    sheet.text_notes.push(crate::schematic::TextNote {
+        uuid: Uuid::from_u128(0xaa),
+        text: "note".into(),
+        position: crate::schematic::Point::new(3.0, 4.0),
+        rotation: 0.0,
+        font_size: 1.27,
+        font_family: None,
+        justify_h: crate::schematic::HAlign::Left,
+        justify_v: crate::schematic::VAlign::Bottom,
+        locked: false,
+    });
+    let again = load(&save(&sheet));
+    assert_eq!(again.text_notes.len(), 1);
+    assert_eq!(again.unknown, sheet.unknown);
+    assert!(!again.unknown.extras_root.is_empty());
+    assert!(!again.unknown.sheets.is_empty());
+}
+
+#[test]
+fn unknown_tables_save_is_byte_stable() {
+    let first = save(&load(&with_unknown_tables()));
+    assert!(first.contains("[sheets.widgets.deep]"), "{first}");
+    assert!(first.contains("[extras.mystery.deep]"), "{first}");
+    assert_eq!(save(&load(&first)), first);
+}
+
 #[test]
 fn file_without_unknowns_has_empty_bags_and_unchanged_json() {
     let sheet = load(&save(&plain_sheet()));

@@ -75,7 +75,9 @@ pub struct AtomicFileSink;
 
 impl DocumentSink for AtomicFileSink {
     fn write(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
-        signex_types::atomic_io::atomic_write(path, bytes)
+        // A document lives in a folder the project already has; a missing one
+        // means it moved, and re-creating it would scatter the sheets (#1828).
+        signex_types::atomic_io::atomic_write_existing_dir(path, bytes)
     }
 }
 
@@ -87,6 +89,9 @@ pub enum SaveOutcome {
     /// A newer snapshot of the same path was already written; this one was
     /// skipped, so its bytes are NOT on disk.
     Superseded,
+    /// The file no longer holds what the document was loaded from or last
+    /// saved as, so nothing was written (#1826). The caller asks the user.
+    DiskChanged(super::DiskDrift),
 }
 
 /// A snapshot shared between the write job, its completion message and the
@@ -130,6 +135,20 @@ pub struct DocumentSaveDone {
 struct Newest {
     sequence: u64,
     path: PathBuf,
+    /// What that write put on disk, so a later job's disk check accepts it.
+    /// `None` once a read of the file made that write's bytes stale.
+    hash: Option<super::ContentHash>,
+}
+
+/// The fingerprints a save of one file accepts: the baseline, and what this
+/// process's own earlier writes to the file put there.
+fn known_hashes<'a>(
+    baseline: super::ContentHash,
+    own_writes: impl Iterator<Item = &'a Newest>,
+) -> Vec<super::ContentHash> {
+    std::iter::once(baseline)
+        .chain(own_writes.filter_map(|newest| newest.hash))
+        .collect()
 }
 
 #[derive(Default)]
@@ -191,10 +210,20 @@ pub struct DocumentSaveJob {
     bytes: SharedBytes,
     sequence: u64,
     ledger: Arc<Ledger>,
+    /// What the file held when the document was loaded or last saved. `None`
+    /// writes without comparing (Save As, an explicit overwrite).
+    expected: Option<super::ContentHash>,
     _in_flight: InFlight,
 }
 
 impl DocumentSaveJob {
+    /// Refuse to write (see [`SaveOutcome::DiskChanged`]) unless the file
+    /// still holds `expected` or an earlier write of this process.
+    pub fn expecting(mut self, expected: Option<super::ContentHash>) -> Self {
+        self.expected = expected;
+        self
+    }
+
     /// The snapshot this job writes, shared so the completion message can
     /// carry it back without a copy.
     pub fn bytes(&self) -> SharedBytes {
@@ -240,9 +269,26 @@ impl DocumentSaveJob {
         if newest_match.is_some_and(|newest| self.sequence <= newest) {
             return Ok(SaveOutcome::Superseded);
         }
+        if let Some(expected) = self.expected {
+            // A sibling write of this process that already landed is not drift.
+            let known = known_hashes(
+                expected,
+                files
+                    .iter()
+                    .zip(&matches)
+                    .filter(|(_, relation)| **relation == SameFile::Same)
+                    .map(|(newest, _)| newest),
+            );
+            let drift = super::drift_from(&self.path, &known)
+                .map_err(|error| format!("read {} before saving: {error}", self.path.display()))?;
+            if let Some(drift) = drift {
+                return Ok(SaveOutcome::DiskChanged(drift));
+            }
+        }
         self.sink
             .write(&self.path, &self.bytes)
             .map_err(|error| format!("write {}: {error}", self.path.display()))?;
+        let hash = super::ContentHash::of(&self.bytes);
         // Only a confirmed match is this file's record; an Unknown one may
         // belong to another file and must keep its sequence.
         match matches
@@ -252,10 +298,12 @@ impl DocumentSaveJob {
             Some(index) => {
                 files[index].sequence = self.sequence;
                 files[index].path = self.path.clone();
+                files[index].hash = Some(hash);
             }
             None => files.push(Newest {
                 sequence: self.sequence,
                 path: self.path.clone(),
+                hash: Some(hash),
             }),
         }
         Ok(SaveOutcome::Written)
@@ -295,6 +343,13 @@ pub struct DocumentSaves {
     superseded: HashMap<String, Vec<PathBuf>>,
     /// Last generation handed out by [`Self::mint_generation`].
     generation: u64,
+    /// What each open document's file held when it was loaded or last saved
+    /// (#1826). Absent for a document no read recorded; its saves are not
+    /// compared.
+    baselines: HashMap<PathBuf, super::ContentHash>,
+    /// The file each document resolved to when it was read, symlinks
+    /// followed (#1827): two paths with one answer are one document.
+    real_paths: HashMap<PathBuf, PathBuf>,
 }
 
 impl DocumentSaves {
@@ -309,7 +364,100 @@ impl DocumentSaves {
             follow_ups: HashMap::new(),
             superseded: HashMap::new(),
             generation: 0,
+            baselines: HashMap::new(),
+            real_paths: HashMap::new(),
         }
+    }
+
+    /// What `path` held on disk when its document was loaded or last saved.
+    pub fn baseline(&self, path: &Path) -> Option<super::ContentHash> {
+        self.baselines.get(path).copied()
+    }
+
+    /// A write of this process landed: `hash` is what the file holds now.
+    pub fn set_baseline(&mut self, path: PathBuf, hash: super::ContentHash) {
+        self.baselines.insert(path, hash);
+    }
+
+    /// A read of the file (open, reload, restore) took `hash`. Earlier writes
+    /// of this process no longer describe the file, so a save stops accepting
+    /// their bytes: a file put back to one of them by another program is drift.
+    pub fn set_baseline_from_read(&mut self, path: PathBuf, hash: super::ContentHash) {
+        let slot = relock(&self.ledger.newest_written)
+            .get(&ledger_key(&path))
+            .cloned();
+        if let Some(slot) = slot {
+            for newest in relock(&slot).iter_mut().filter(|n| n.path == path) {
+                newest.hash = None;
+            }
+        }
+        self.baselines.insert(path, hash);
+    }
+
+    /// Whether `hash` is a state of `path` this document knew: its baseline,
+    /// or what an earlier write of this process put there.
+    pub fn knows(&self, path: &Path, hash: super::ContentHash) -> bool {
+        let Some(baseline) = self.baseline(path) else {
+            return false;
+        };
+        let slot = relock(&self.ledger.newest_written)
+            .get(&ledger_key(path))
+            .cloned();
+        let own = slot
+            .map(|slot| known_hashes(baseline, relock(&slot).iter().filter(|n| n.path == path)));
+        own.unwrap_or_else(|| vec![baseline]).contains(&hash)
+    }
+
+    /// Whether `path` still holds what its document was loaded from or last
+    /// saved as, or what an earlier write of this process put there. A
+    /// blocking read, for the one caller that cannot go through a job.
+    pub fn drift_of(&self, path: &Path) -> io::Result<Option<super::DiskDrift>> {
+        let Some(baseline) = self.baseline(path) else {
+            return Ok(None);
+        };
+        let slot = relock(&self.ledger.newest_written)
+            .get(&ledger_key(path))
+            .cloned();
+        let known = match slot {
+            Some(slot) => known_hashes(baseline, relock(&slot).iter().filter(|n| n.path == path)),
+            None => vec![baseline],
+        };
+        super::drift_from(path, &known)
+    }
+
+    pub fn set_real_path(&mut self, path: PathBuf, real: PathBuf) {
+        self.real_paths.insert(path, real);
+    }
+
+    /// Another path, still `is_open`, whose document is the file `real`.
+    pub fn alias_of(
+        &self,
+        path: &Path,
+        real: &Path,
+        is_open: impl Fn(&Path) -> bool,
+    ) -> Option<PathBuf> {
+        self.real_paths
+            .iter()
+            .find(|(held, held_real)| {
+                held.as_path() != path && held_real.as_path() == real && is_open(held)
+            })
+            .map(|(held, _)| held.clone())
+    }
+
+    /// A document's file was renamed: its content, hence its baseline, is the
+    /// same. The real path is not carried; the renamed document is simply not
+    /// matched against symlink aliases until it is read again.
+    pub fn rekey_disk_records(&mut self, old: &Path, new: &Path) {
+        if let Some(hash) = self.baselines.remove(old) {
+            self.baselines.insert(new.to_path_buf(), hash);
+        }
+        self.real_paths.remove(old);
+    }
+
+    /// Stop comparing saves of `path` with disk: a Save As left the old path,
+    /// or the file could not be read back after a save.
+    pub fn forget_baseline(&mut self, path: &Path) {
+        self.baselines.remove(path);
     }
 
     /// Hand out a write of `bytes` to `path`. Later snapshots of one path
@@ -326,6 +474,7 @@ impl DocumentSaves {
             bytes: Arc::new(bytes),
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
+            expected: None,
             _in_flight: in_flight,
         }
     }
@@ -694,5 +843,40 @@ mod tests {
         job.run().unwrap();
         rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
         waiter.join().unwrap();
+    }
+
+    #[test]
+    fn a_job_sees_an_earlier_write_of_this_process_as_no_drift() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.snxsch");
+        std::fs::write(&path, b"disk").unwrap();
+        let baseline = Some(super::super::ContentHash::of(b"disk"));
+        let mut saves = DocumentSaves::default();
+        let first = saves
+            .begin(path.clone(), b"one".to_vec())
+            .expecting(baseline);
+        let second = saves
+            .begin(path.clone(), b"two".to_vec())
+            .expecting(baseline);
+        assert_eq!(first.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(second.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(std::fs::read(&path).unwrap(), b"two");
+    }
+
+    #[test]
+    fn a_job_refuses_a_file_changed_by_another_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.snxsch");
+        std::fs::write(&path, b"theirs").unwrap();
+        let baseline = Some(super::super::ContentHash::of(b"disk"));
+        let mut saves = DocumentSaves::default();
+        let job = saves
+            .begin(path.clone(), b"mine".to_vec())
+            .expecting(baseline);
+        assert_eq!(
+            job.run().unwrap(),
+            SaveOutcome::DiskChanged(super::super::DiskDrift::Changed)
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"theirs");
     }
 }

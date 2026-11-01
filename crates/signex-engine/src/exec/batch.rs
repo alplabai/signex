@@ -76,7 +76,7 @@ impl Engine {
         );
 
         self.refuse_if_read_only(None)?;
-        let base_revision = self.revision;
+        let mark = self.revision_mark();
         self.bump_revision();
         let before = self.document.clone();
 
@@ -87,11 +87,14 @@ impl Engine {
         let coalesced = self.run_batch(commands);
         self.history_suppressed = false;
         // The inner commands each bumped; the batch is one edit.
-        self.base_revision = base_revision;
+        self.base_revision = mark.revision;
 
         let patch_pair = match coalesced {
             Ok(Some(patch_pair)) => patch_pair,
-            Ok(None) => return Ok(CommandResult::unchanged()),
+            Ok(None) => {
+                self.restore_revision(mark);
+                return Ok(CommandResult::unchanged());
+            }
             Err(error) => {
                 // Nothing reached `history` and `redo_stack` was never
                 // cleared, so restoring the pre-image is the whole rollback.

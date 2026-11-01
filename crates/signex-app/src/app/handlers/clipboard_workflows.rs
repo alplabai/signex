@@ -215,10 +215,8 @@ impl Signex {
                 target.display()
             );
             crate::diagnostics::log_warning(format!("Paste failed: {detail}"));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice {
-                title: "Paste Failed".to_owned(),
-                detail,
-            });
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::new("Paste Failed", detail));
             return None;
         }
         let (payload, differing) = copied.payload.adopt_sheet_bodies(sheet);

@@ -65,6 +65,7 @@ fn open_schematic_tab(app: &mut Signex) {
         path: PathBuf::from("palette-context.snxsch"),
         title: "s".into(),
         result: Ok(Box::new(sheet)),
+        disk: None,
     }));
 }
 

@@ -156,6 +156,10 @@ pub struct EditorReloadPlan {
     /// The preview's `edit_epoch` when planned. A reload replaces the edits
     /// that existed then, not newer ones.
     epoch_at_plan: u64,
+    /// A cascade moved the row: a preview with unsaved edits keeps them and
+    /// only takes the cascade's fields and base revision
+    /// (`preview_rebase`, #1840).
+    rebase: bool,
 }
 
 impl EditorReloadPlan {
@@ -183,6 +187,7 @@ impl EditorReloadPlan {
             require_clean: self.require_clean,
             requested: self.requested,
             epoch_at_plan: self.epoch_at_plan,
+            rebase: self.rebase,
             row,
             needs,
             reads,
@@ -199,6 +204,7 @@ pub struct EditorReloadOutcome {
     require_clean: bool,
     requested: bool,
     epoch_at_plan: u64,
+    rebase: bool,
     row: Result<ComponentRow, LibraryError>,
     needs: PreviewNeeds,
     reads: PreviewReads,
@@ -222,6 +228,9 @@ pub enum ReloadApplied {
     Refused,
     /// The row could not be read; it was reported and the copy stands.
     Failed,
+    /// A preview with unsaved edits kept them and took the cascade's fields
+    /// and the stored base revision.
+    Rebased,
     /// The copy was replaced. `resolve_tab` is set when the user moved to
     /// another tab meanwhile, whose primitives still have to be looked up.
     Replaced { resolve_tab: Option<PreviewTab> },
@@ -277,6 +286,22 @@ impl LibraryState {
         require_clean: bool,
         requested: bool,
     ) -> Option<EditorReloadPlan> {
+        self.plan_reload(address, require_clean, requested, false)
+    }
+
+    /// Plan moving a preview with unsaved edits onto the row a cascade just
+    /// rewrote, keeping its edits (#1840).
+    pub fn plan_editor_rebase(&mut self, address: &EditorAddress) -> Option<EditorReloadPlan> {
+        self.plan_reload(address, false, false, true)
+    }
+
+    fn plan_reload(
+        &mut self,
+        address: &EditorAddress,
+        require_clean: bool,
+        requested: bool,
+        rebase: bool,
+    ) -> Option<EditorReloadPlan> {
         let (library_id, root) = self
             .library_at(&address.library_path)
             .map(|lib| (lib.library_id, lib.root.clone()))?;
@@ -306,6 +331,7 @@ impl LibraryState {
             require_clean,
             requested,
             epoch_at_plan,
+            rebase,
         })
     }
 
@@ -323,6 +349,7 @@ impl LibraryState {
             require_clean,
             requested,
             epoch_at_plan,
+            rebase,
             row,
             needs,
             reads,
@@ -347,6 +374,31 @@ impl LibraryState {
         let Some(old) = self.editors.get(&address) else {
             return ReloadApplied::Dropped;
         };
+        if rebase && old.has_unsaved_edits() {
+            if old.saving_row.is_some() || old.binding_primitive {
+                return ReloadApplied::Dropped;
+            }
+            let base = old.row.server_revision;
+            if !self.writes.only_cascaded_since(
+                &address.library_path,
+                address.row_id,
+                base,
+                row.server_revision,
+            ) {
+                crate::diagnostics::log_warning(format!(
+                    "Row {} was also changed by something other than the symbol or footprint \
+                     save, so your unsaved edit was kept as it is; saving it will be refused \
+                     until you reload the row.",
+                    address.row_id
+                ));
+                return ReloadApplied::Dropped;
+            }
+            if let Some(edited) = self.editors.get_mut(&address) {
+                super::preview_rebase::rebase_onto_cascade(&mut edited.row, &row);
+                edited.stale_base = false;
+            }
+            return ReloadApplied::Rebased;
+        }
         let edited_since =
             old.edit_epoch != epoch_at_plan || (require_clean && old.has_unsaved_edits());
         if edited_since {
@@ -388,6 +440,13 @@ impl LibraryState {
             self.apply_editor_reload(plan.read());
         }
     }
+
+    /// [`Self::plan_editor_rebase`], read and applied on the calling thread.
+    pub fn rebase_editor_blocking(&mut self, address: &EditorAddress) {
+        if let Some(plan) = self.plan_editor_rebase(address) {
+            self.apply_editor_reload(plan.read());
+        }
+    }
 }
 
 /// Reload the row of `address` off the UI thread.
@@ -400,6 +459,13 @@ pub fn reload_task(
     let Some(plan) = state.plan_editor_reload(address, require_clean, requested) else {
         return iced::Task::none();
     };
+    reload_plan_task(state, plan)
+}
+
+fn reload_plan_task(
+    state: &mut LibraryState,
+    plan: EditorReloadPlan,
+) -> iced::Task<crate::app::Message> {
     let turn = state.writes.read_turn(&plan.root);
     iced::Task::perform(
         async move {
@@ -413,6 +479,17 @@ pub fn reload_task(
         },
         |readout| crate::app::Message::Library(super::LibraryMessage::EditorReloaded { readout }),
     )
+}
+
+/// Rebase the unsaved-edit preview at `address` off the UI thread.
+pub fn rebase_task(
+    state: &mut LibraryState,
+    address: &EditorAddress,
+) -> iced::Task<crate::app::Message> {
+    let Some(plan) = state.plan_editor_rebase(address) else {
+        return iced::Task::none();
+    };
+    reload_plan_task(state, plan)
 }
 
 /// Look up what `tab` of the preview at `address` shows, off the UI thread.

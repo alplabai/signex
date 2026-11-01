@@ -110,6 +110,7 @@ fn opening_the_same_schematic_twice_before_it_completes_spawns_only_one_task() {
         path: sch_path.clone(),
         title: "Dup".to_string(),
         result: Ok(Box::new(empty_schematic_sheet())),
+        disk: None,
     }));
 
     assert_eq!(
@@ -139,6 +140,7 @@ fn schematic_open_finished_ok_opens_the_tab_like_the_old_sync_path_did() {
         path: path.clone(),
         title: "board".to_string(),
         result: Ok(Box::new(sheet)),
+        disk: None,
     }));
 
     let tab = app
@@ -168,6 +170,7 @@ fn schematic_open_finished_err_opens_no_tab_and_does_not_panic() {
         path: path.clone(),
         title: "broken".to_string(),
         result: Err("parse broken.snxsch: TSV block malformed".to_string()),
+        disk: None,
     }));
 
     assert!(
@@ -190,11 +193,13 @@ fn reopening_an_already_open_schematic_tab_activates_it_instead_of_duplicating()
         path: first_path.clone(),
         title: "first".to_string(),
         result: Ok(Box::new(empty_schematic_sheet())),
+        disk: None,
     }));
     let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
         path: second_path.clone(),
         title: "second".to_string(),
         result: Ok(Box::new(empty_schematic_sheet())),
+        disk: None,
     }));
     assert_eq!(app.document_state.tabs.len(), 2);
     assert_eq!(app.document_state.active_tab, 1);

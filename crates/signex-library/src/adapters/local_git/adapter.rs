@@ -526,13 +526,14 @@ impl LibraryAdapter for LocalGitAdapter {
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let mut out: Vec<PrimitiveSummary> = Vec::new();
-        for (_, file) in self.scan_symbol_files()? {
+        for (path, file) in self.scan_symbol_files()? {
             for sym in &file.symbols {
                 out.push(PrimitiveSummary {
                     uuid: sym.uuid,
                     name: sym.name.clone(),
                     kind: PrimitiveKind::Symbol,
                     used_by_count: 0,
+                    file: Some(path.clone()),
                 });
             }
         }
@@ -657,7 +658,7 @@ impl LibraryAdapter for LocalGitAdapter {
             )));
         }
         let _write_lock = self.lock_for_write()?;
-        let written = crate::adapter::rewrite_file(abs_path, rewrite)?;
+        let written = crate::adapter::rewrite_file_within(Some(&self.root_dir), abs_path, rewrite)?;
         // The file is written: its commit, failed or not, is reported by
         // the adapter (see `uncommitted`) and never undoes the write.
         if written {

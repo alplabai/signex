@@ -105,6 +105,11 @@ pub struct PrimitiveSummary {
     pub kind: PrimitiveKind,
     #[serde(default)]
     pub used_by_count: usize,
+    /// The file that holds it, for a backend that stores primitives in
+    /// files. Symbol files are named by their library's author, not by
+    /// uuid, so the path cannot be derived from the uuid (#1841).
+    #[serde(skip)]
+    pub file: Option<std::path::PathBuf>,
 }
 
 /// One entry in the per-primitive git history feed.
@@ -925,22 +930,99 @@ pub type RowEditOutcome = (RowId, Result<bool, LibraryError>);
 /// or `None` to leave it as it is.
 pub type FileRewrite<'a> = dyn FnMut(Option<&[u8]>) -> Result<Option<Vec<u8>>, LibraryError> + 'a;
 
+/// A first primitive file of a library goes into a folder (`symbols/`,
+/// `footprints/`) the library has not made yet: create that one folder, when it
+/// sits directly in a library root (a folder holding a `.snxlib`). A folder
+/// further out that is gone means the library or project moved, and stays
+/// missing so the write is refused (#1828).
+fn create_missing_library_subdir(abs_path: &Path) -> std::io::Result<()> {
+    let Some(dir) = abs_path.parent().filter(|dir| !dir.exists()) else {
+        return Ok(());
+    };
+    let in_library_root = dir.parent().is_some_and(|root| {
+        std::fs::read_dir(root).is_ok_and(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .any(|e| e.path().extension().is_some_and(|ext| ext == "snxlib"))
+        })
+    });
+    if in_library_root {
+        std::fs::create_dir(dir)?;
+    }
+    Ok(())
+}
+
+/// Refuse a write that a symlink inside a library would send outside it:
+/// the destination (or, for a file not made yet, its folder) must resolve to a
+/// place under the canonical library `root`. Document saves follow links, and
+/// the `starts_with` checks on paths are lexical, so this is the check that
+/// sees through a link.
+pub(crate) fn ensure_inside_library(root: &Path, path: &Path) -> Result<(), LibraryError> {
+    let root = std::fs::canonicalize(root)?;
+    let is_link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+    let probe = if is_link || path.exists() {
+        path
+    } else {
+        path.parent().unwrap_or(path)
+    };
+    match std::fs::canonicalize(probe) {
+        Ok(resolved) if resolved.starts_with(&root) => Ok(()),
+        Ok(resolved) => Err(LibraryError::Backend(format!(
+            "{} resolves to {}, outside the library folder, so nothing was written",
+            path.display(),
+            resolved.display()
+        ))),
+        // A folder that is gone is refused by the write itself.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && !is_link => Ok(()),
+        Err(e) => Err(LibraryError::Backend(format!(
+            "{} cannot be resolved inside the library folder: {e}",
+            path.display()
+        ))),
+    }
+}
+
 /// The read and write of [`LibraryAdapter::rewrite_file_locked`], with no
 /// lock. Used directly for a primitive file that belongs to no mounted
-/// library. The write is atomic.
+/// library. The write is atomic, and it refuses a missing folder rather than
+/// creating it (#1828); a caller that means to create the folder does so first.
 pub fn rewrite_file(
     abs_path: &Path,
     rewrite: &mut crate::adapter::FileRewrite<'_>,
 ) -> Result<bool, LibraryError> {
+    rewrite_file_within(None, abs_path, rewrite)
+}
+
+/// [`rewrite_file`] for a file of the library at `root`: a link that leads
+/// outside the library is refused before anything is read or written.
+pub(crate) fn rewrite_file_within(
+    root: Option<&Path>,
+    abs_path: &Path,
+    rewrite: &mut crate::adapter::FileRewrite<'_>,
+) -> Result<bool, LibraryError> {
+    if let Some(root) = root {
+        ensure_inside_library(root, abs_path)?;
+    }
+    // A parent that is a file reads as "not a directory" on Unix and "not
+    // found" on Windows; both mean the folder is not there, so both go on to
+    // the write, which refuses.
+    let parent_is_not_a_folder = abs_path
+        .parent()
+        .is_some_and(|p| !p.as_os_str().is_empty() && p.exists() && !p.is_dir());
     let current = match std::fs::read(abs_path) {
         Ok(bytes) => Some(bytes),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound || parent_is_not_a_folder => None,
         Err(e) => return Err(e.into()),
     };
     let Some(bytes) = rewrite(current.as_deref())? else {
         return Ok(false);
     };
-    signex_types::atomic_io::atomic_write(abs_path, &bytes)?;
+    if current.is_none() {
+        create_missing_library_subdir(abs_path)?;
+    }
+    if let Some(root) = root {
+        ensure_inside_library(root, abs_path)?;
+    }
+    signex_types::atomic_io::atomic_write_existing_dir(abs_path, &bytes)?;
     Ok(true)
 }
 
@@ -959,5 +1041,51 @@ mod tests {
         let q = LibraryQuery::default();
         assert!(q.text.is_none());
         assert!(q.facets.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_the_library_that_leads_outside_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lib");
+        std::fs::create_dir_all(&root).unwrap();
+        let outside = dir.path().join("outside.txt");
+        std::fs::write(&outside, b"precious").unwrap();
+        let link = root.join("sym.snxsym");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+
+        let result = rewrite_file_within(Some(&root), &link, &mut |_| Ok(Some(b"x".to_vec())));
+
+        assert!(result.is_err());
+        assert_eq!(std::fs::read(&outside).unwrap(), b"precious");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_the_library_to_a_file_inside_is_written_through() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("lib");
+        std::fs::create_dir_all(&root).unwrap();
+        let real = root.join("real.snxsym");
+        std::fs::write(&real, b"old").unwrap();
+        let link = root.join("sym.snxsym");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        rewrite_file_within(Some(&root), &link, &mut |_| Ok(Some(b"new".to_vec()))).unwrap();
+
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
+    }
+
+    #[test]
+    fn a_parent_that_is_a_file_is_refused_the_same_way_everywhere() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        let target = blocker.join("Lib.snxsym");
+
+        let err = rewrite_file(&target, &mut |_| Ok(Some(b"x".to_vec()))).unwrap_err();
+
+        assert!(err.to_string().contains("folder is gone"), "{err}");
+        assert!(blocker.is_file());
     }
 }

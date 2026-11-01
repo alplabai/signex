@@ -93,6 +93,7 @@ mod tests {
             name: name.into(),
             kind: PrimitiveKind::Symbol,
             used_by_count: 0,
+            file: None,
         }
     }
 

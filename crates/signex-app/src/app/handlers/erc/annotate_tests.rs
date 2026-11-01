@@ -292,6 +292,67 @@ fn undocked_slot_stale_after_annotate_heals_on_the_next_narrow_edit() {
     );
 }
 
+/// An annotate that numbers nothing keeps the active sheet's revision, so a
+/// slot that missed an earlier edit must be redrawn whole, not patched with
+/// symbols as if the run were that edit (#1755).
+#[test]
+fn an_annotate_that_numbers_nothing_redraws_a_stale_slot_whole() {
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
+    let root_path = dir.join("a_root.snxsch");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(root_path.as_path())
+    );
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: root_path.clone(),
+            title: "root".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    let engine = &app.document_state.engines[&root_path];
+    slot.set_render_cache(Some(
+        crate::schematic_runtime::SchematicRenderCache::from_sheet_at(
+            engine.document(),
+            engine.revision(),
+        ),
+    ));
+    app.interaction_state.canvases.insert(window, slot);
+
+    // An edit the undocked slot never hears about.
+    let wire_id = Uuid::now_v7();
+    let wire = signex_types::schematic::Wire {
+        uuid: wire_id,
+        start: Point::new(0.0, 0.0),
+        end: Point::new(5.0, 0.0),
+        ..Default::default()
+    };
+    let engine = app.document_state.engines.get_mut(&root_path).unwrap();
+    engine
+        .execute(signex_engine::Command::PlaceWireSegment { wire })
+        .expect("wire");
+    let revision = engine.revision();
+
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(
+        app.document_state.engines[&root_path].revision(),
+        revision,
+        "nothing to number"
+    );
+
+    let shown = app.interaction_state.canvases[&window]
+        .active_snapshot()
+        .expect("snapshot")
+        .wires
+        .iter()
+        .any(|w| w.uuid == wire_id);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(shown, "the undocked slot must show the wire");
+}
+
 /// #1164: both bulk passes write unopened sheets straight to disk. A recovery
 /// copy an earlier run left may hold unsaved edits to a sheet nobody has
 /// opened yet, so it must survive the rewrite and be offered at open; only a
@@ -431,6 +492,7 @@ fn a_read_landing_on_a_dirty_parked_engine_keeps_its_edits() {
         Ok(Box::new(LoadedDocument::Schematic {
             title: "z_child".into(),
             sheet: Box::new(stale),
+            disk: crate::persist::DiskRead::of_bytes(b""),
         })),
     );
 

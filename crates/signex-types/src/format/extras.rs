@@ -28,6 +28,9 @@ pub(in crate::format) struct SchExtrasRaw {
     pub(in crate::format) junctions: BTreeMap<String, JunctionExtras>,
     #[serde(default)]
     pub(in crate::format) sheet: Option<SheetExtras>,
+    /// Foreign keys and tables under `[extras]` (#1829).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 /// Per-junction auxiliary fields that don't fit into [`SchJunctionRow`] —

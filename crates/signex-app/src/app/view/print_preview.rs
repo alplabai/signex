@@ -27,7 +27,9 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let err_red = iced::Color::from_rgb(0.85, 0.25, 0.25);
 
-        let ok_btn = button(text("OK").size(TS.label).color(iced::Color::WHITE))
+        let choices = notice_choice_buttons(notice, err_red);
+        let ok_label = if choices.is_empty() { "OK" } else { "Cancel" };
+        let ok_btn = button(text(ok_label).size(TS.label).color(iced::Color::WHITE))
             .padding([6, 20])
             .on_press(Message::Overlay(OverlayMsg::DismissErrorNotice))
             .style(
@@ -55,7 +57,10 @@ impl Signex {
             ))
             .max_height(200),
             iced::widget::Space::new().height(12),
-            row![iced::widget::Space::new().width(Length::Fill), ok_btn,],
+            row![iced::widget::Space::new().width(Length::Fill)]
+                .extend(choices)
+                .push(ok_btn)
+                .spacing(8),
         ]
         .padding(20);
 
@@ -400,5 +405,42 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         dialog.into()
+    }
+}
+
+/// The extra buttons a notice offers before its dismiss button (#1826).
+fn notice_choice_buttons<'a>(
+    notice: &crate::app::state::ErrorNotice,
+    accent: iced::Color,
+) -> Vec<Element<'a, Message>> {
+    use crate::app::state::NoticeAction;
+    use crate::persist::DiskDrift;
+    use iced::widget::{button, text};
+    let Some(NoticeAction::DiskChanged { drift, .. }) = &notice.action else {
+        return Vec::new();
+    };
+    let choice = |label: &'static str, message: OverlayMsg| -> Element<'a, Message> {
+        button(text(label).size(TS.label).color(iced::Color::WHITE))
+            .padding([6, 20])
+            .on_press(Message::Overlay(message))
+            .style(
+                move |_: &iced::Theme, _status| iced::widget::button::Style {
+                    background: Some(accent.into()),
+                    text_color: iced::Color::WHITE,
+                    border: iced::Border {
+                        radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                },
+            )
+            .into()
+    };
+    match drift {
+        DiskDrift::Changed => vec![
+            choice("Reload from disk", OverlayMsg::DiskConflictReloadChosen),
+            choice("Overwrite", OverlayMsg::DiskConflictOverwriteChosen),
+        ],
+        DiskDrift::Missing => vec![choice("Re-create", OverlayMsg::DiskConflictOverwriteChosen)],
     }
 }

@@ -323,13 +323,17 @@ impl Signex {
         if any_active_changed {
             self.mark_active_document_dirty();
         }
-        // Force a render + panel refresh as if a command had fired.
+        // Force a render + panel refresh as if a command had fired. An
+        // unchanged active sheet kept its revision, so SYMBOLS would describe
+        // whatever edit last moved it, not this run: redraw it whole.
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.sync_canvas_from_visible_schematic(
-            crate::schematic_runtime::RenderInvalidation::SYMBOLS,
-        );
+        self.sync_canvas_from_visible_schematic(if any_active_changed {
+            crate::schematic_runtime::RenderInvalidation::SYMBOLS
+        } else {
+            crate::schematic_runtime::RenderInvalidation::FULL
+        });
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
             self.refresh_panel_ctx();
@@ -390,12 +394,12 @@ impl Signex {
             "{label}: a sheet could not be converted, so the whole run was undone and nothing \
              was changed. Any redo history the touched sheets had before the run is gone."
         ));
+        // The active sheet may have been rolled back or never touched; only
+        // a whole redraw is right for both.
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.sync_canvas_from_visible_schematic(
-            crate::schematic_runtime::RenderInvalidation::SYMBOLS,
-        );
+        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
         self.update_selection_info();
         self.refresh_panel_ctx();
         Task::none()

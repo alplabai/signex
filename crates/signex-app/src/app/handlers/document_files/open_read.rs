@@ -127,8 +127,12 @@ impl Signex {
         document: LoadedDocument,
     ) -> Task<Message> {
         match document {
-            LoadedDocument::Schematic { title, sheet } => {
+            LoadedDocument::Schematic { title, sheet, disk } => {
+                if self.focus_alias_if_open(&path, &disk) {
+                    return Task::none();
+                }
                 self.open_schematic_tab(path.clone(), title, *sheet);
+                self.record_disk_read(&path, disk);
                 // A recovery copy from an earlier run is reconciled with the
                 // file before any prompt can offer it.
                 return self.autosave_check_recovery(&path);

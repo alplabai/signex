@@ -44,6 +44,9 @@ struct WriteContext<'a> {
     path: &'a std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
     options: SaveOptions,
+    /// The ledger of this app's writes to the owning library, when the
+    /// write holds a place in its order.
+    own: Option<&'a crate::library::writes::OwnRevisions>,
 }
 
 impl PrimitiveWrite {
@@ -60,6 +63,7 @@ impl PrimitiveWrite {
                 mode: self.mode,
                 bump_versions: library.bumps_versions(self.mode),
             },
+            own: self.turn.as_ref().map(|turn| turn.own_revisions()),
         };
         let written = match self.snapshot {
             Snapshot::Symbol {
@@ -115,6 +119,7 @@ fn write_symbol(
         context.options.mode,
         SavedKind::Symbol,
         &cascade::saved_symbols(&file, &with_owed(&save.merge.changed, owed)),
+        context.own,
     );
     Ok(PrimitiveWritten {
         file: WrittenContainer::Symbol(file),
@@ -160,6 +165,7 @@ fn write_footprint(
         context.options.mode,
         SavedKind::Footprint,
         &cascade::saved_footprints(&file, &with_owed(&save.merge.changed, owed)),
+        context.own,
     );
     Ok(PrimitiveWritten {
         file: WrittenContainer::Footprint(file),

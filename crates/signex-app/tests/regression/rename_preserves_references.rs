@@ -44,17 +44,17 @@ fn write_sheet(path: &Path, s: SchematicSheet) {
     fs::write(path, text).expect("write sheet");
 }
 
-struct Fixture {
-    app: Signex,
+pub(crate) struct Fixture {
+    pub(crate) app: Signex,
     _tmp: TempDir,
-    root: PathBuf,
-    child: PathBuf,
+    pub(crate) root: PathBuf,
+    pub(crate) child: PathBuf,
     prj: PathBuf,
 }
 
 /// `root.snxsch` (references `child.snxsch`) + `child.snxsch`, both listed in
 /// a loaded project at tree index 0.
-fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     let tmp = TempDir::new().expect("tempdir");
     let dir = tmp.path().to_path_buf();
     let root = dir.join("root.snxsch");
@@ -111,7 +111,7 @@ fn fixture() -> Fixture {
     }
 }
 
-fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
+pub(crate) fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
     app.ui_state.rename_dialog = Some(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),

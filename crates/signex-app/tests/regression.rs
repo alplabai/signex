@@ -119,6 +119,9 @@ mod dock_layout_persist;
 
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
+// #1826 / #1827 / #1828 — a save writes the file the document is.
+#[path = "regression/external_save_target.rs"]
+mod external_save_target;
 
 #[path = "regression/quit_prompt_after_save.rs"]
 mod quit_prompt_after_save;
@@ -313,8 +316,12 @@ mod symbol_undo_steps;
 mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
+#[path = "regression/library_named_symbol_file.rs"]
+mod library_named_symbol_file;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
+#[path = "regression/library_place_footprint.rs"]
+mod library_place_footprint;
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
