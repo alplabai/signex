@@ -151,7 +151,7 @@ fn a_project_reordered_before_add_new_completes_still_gets_its_own_sheet() {
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
         project_id: target,
         path: new_sheet.clone(),
-        result: Ok(()),
+        result: Ok(crate::app::project_entry_disk::EntryPatch::NoProjectFile),
     }));
     drop(d2);
 
@@ -180,7 +180,8 @@ fn a_failed_blank_schematic_write_reaches_the_messages_panel() {
     let existing = d1.path().join("Here.snxsch");
     std::fs::write(&existing, b"keep").expect("existing file");
 
-    let result = add_io::write_blank_schematic(&existing);
+    let result = add_io::write_blank_schematic(&existing)
+        .map(|()| crate::app::project_entry_disk::EntryPatch::NoProjectFile);
     assert_eq!(std::fs::read(&existing).expect("read"), b"keep");
     let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicWritten {
         project_id: target,
@@ -346,4 +347,59 @@ fn an_outside_snxlib_is_registered_in_place_and_nothing_is_copied() {
     );
     assert_eq!(data.resolve_library_path(&data.libraries[0]), lib);
     assert!(app.library.library_at(&lib).is_some());
+}
+
+/// #1821 — the job reads, patches and rewrites the saved `.snxprj`, so every
+/// other writer of that file is refused until it lands, and the unsaved edit
+/// held in memory survives to the later save.
+#[test]
+fn writers_of_the_project_file_are_refused_while_add_new_rewrites_it() {
+    use super::project_rename_tests::{fixture, rename_error, run_task};
+    use crate::app::{RenameDialogState, RenameMsg};
+
+    let root = tempfile::tempdir().expect("tempdir");
+    let mut fx = fixture(root.path(), "Foo", false);
+    let id = fx.app.document_state.projects[0].id;
+    let prj = fx.folder.join("Foo.snxprj");
+    let extra = fx.folder.join("Extra.snxsch");
+    fx.app.document_state.projects[0].data.description = Some("keep".to_string());
+    fx.app.document_state.mark_document_dirty(&prj);
+
+    let task = fx
+        .app
+        .handle_add_new_schematic_picked(id, Some(extra.clone()));
+
+    // Ctrl+S / Save All / Close Project.
+    assert!(fx.app.begin_project_save(id).is_err(), "save is refused");
+    // A second Add New.
+    let other = fx.folder.join("Other.snxsch");
+    let second = fx
+        .app
+        .handle_add_new_schematic_picked(id, Some(other.clone()));
+    assert!(iced_runtime::task::into_stream(second).is_none());
+    // A sheet rename.
+    fx.app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: fx.sheet.clone(),
+        tree_path: vec![0],
+        buffer: "Renamed.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    let _rename = fx.app.update(Message::Rename(RenameMsg::Submit));
+    assert!(rename_error(&fx).contains("still rewriting"));
+    assert!(fx.sheet.exists(), "the refused rename moved nothing");
+
+    run_task(&mut fx.app, task);
+    assert!(fx.app.document_state.pending_path_ops.is_empty());
+    assert!(extra.exists() && !other.exists());
+
+    // The save that was refused now runs and keeps both the unsaved edit and
+    // the new row.
+    let save = fx.app.begin_project_save(id).expect("save starts");
+    run_task(&mut fx.app, save);
+    let saved = signex_types::project::parse_project(&prj).expect("project parses");
+    assert_eq!(saved.description.as_deref(), Some("keep"));
+    assert!(saved.sheets.iter().any(|s| s.filename == "Extra.snxsch"));
+    assert!(saved.sheets.iter().any(|s| s.filename == "main.snxsch"));
 }

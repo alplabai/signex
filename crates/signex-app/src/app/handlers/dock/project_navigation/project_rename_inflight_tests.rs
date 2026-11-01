@@ -79,7 +79,10 @@ fn add_new_schematic_is_tracked_and_refused_during_a_move() {
     );
     let rename = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, rename);
-    assert!(rename_error(&fx).contains("being written"));
+    // The job rewrites the project file, so the project rename is refused
+    // on that account (#1821); the write guard of the new sheet's folder
+    // still holds until the job lands.
+    assert!(rename_error(&fx).contains("still rewriting"));
     run_task(&mut fx.app, task);
     assert!(fx.app.document_state.project_writes.is_empty());
     assert!(new_sheet.is_file());

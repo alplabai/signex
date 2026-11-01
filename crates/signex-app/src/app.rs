@@ -28,6 +28,7 @@ mod load_gateway;
 mod mutation_gateway;
 pub mod path_op_jobs;
 pub mod path_ops;
+pub mod project_entry_disk;
 mod project_tab;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub(crate) mod designator_scan;

@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::app::project_entry_disk::EntryPatch;
 use crate::app::state::library_entry::is_inside_project;
 use crate::app::state::scope::CaseFold;
 
@@ -120,6 +121,35 @@ pub(crate) fn write_blank_schematic(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("serialise blank sheet: {e}"))?;
     create_noclobber(path, |f| std::io::Write::write_all(f, text.as_bytes()))
         .map_err(|e| format!("write blank sheet to {}: {e}", path.display()))
+}
+
+/// Create a blank schematic at `path` and list it in the saved `.snxprj` at
+/// `project_file` as `entry`, so the file and its project entry commit
+/// together (#1821). Only that row is added to the saved project; unsaved
+/// edits the app holds are not written. When the project cannot be updated the
+/// new sheet is removed again (it was created by this call, which refuses to
+/// overwrite), so no orphan sheet is left behind.
+pub(crate) fn create_sheet_with_entry(
+    path: &Path,
+    project_file: &Path,
+    entry: &str,
+    fold: crate::app::state::scope::CaseFold,
+) -> Result<EntryPatch, String> {
+    write_blank_schematic(path)?;
+    crate::app::project_entry_disk::add_sheet_entry(project_file, entry, fold).map_err(|e| {
+        // The Messages panel clips a record, so the reason goes first and
+        // only the file name follows.
+        match std::fs::remove_file(path) {
+            Ok(()) => {
+                format!("the project file could not be written, so {entry} was not kept ({e})")
+            }
+            Err(rm) => format!(
+                "the project file could not be written and {} could not be removed ({rm}); \
+                 delete it by hand ({e})",
+                path.display()
+            ),
+        }
+    })
 }
 
 pub(crate) use crate::app::contracts::ChildSheetWriteError;

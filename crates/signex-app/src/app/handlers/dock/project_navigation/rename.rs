@@ -269,13 +269,40 @@ impl Signex {
         let from = state.target_path.clone();
         let crate::app::path_ops::FileRenameKind::Document(plan) = &kind;
         let parents_to_read = self.unopened_rewrite_parents(plan);
-        // The unopened parents the worker reads are registered too, so
-        // opening one meanwhile is refused instead of being replaced by the
-        // rewritten copy (or replacing it).
+        // The worker also re-points the owning project's saved `.snxprj`
+        // entry (#1821), a read-modify-write like the library rename's: a
+        // project save in flight would land afterwards and put the old name
+        // back, so refuse before anything moves.
+        let project_file = owner.and_then(|id| {
+            self.document_state
+                .project_by_id(id)
+                .map(|p| p.path.clone())
+        });
+        if let Some(project_file) = &project_file {
+            if let Err(refusal) = self
+                .refuse_start_while_path_op(project_file, "renamed")
+                .map_err(|e| e.to_string())
+            {
+                self.set_rename_error(&refusal);
+                return iced::Task::none();
+            }
+            if self.document_state.document_saves.is_saving(project_file) {
+                self.refuse_rename_while_project_saving();
+                return iced::Task::none();
+            }
+        }
+        // The unopened parents the worker reads, and the project file it
+        // rewrites, are registered too, so opening or saving one meanwhile is
+        // refused instead of being replaced by (or replacing) the rewrite.
+        let dependents = parents_to_read
+            .iter()
+            .chain(project_file.as_ref())
+            .cloned()
+            .collect();
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::Rename,
             vec![from.clone(), new_path.clone()],
-            parents_to_read.clone(),
+            dependents,
             fold,
         );
         // A background read of the old file (project Replace) is out of date.
@@ -285,6 +312,11 @@ impl Signex {
             to: new_path.clone(),
             saves: self.document_state.document_saves.barrier(),
             parents_to_read,
+            project: project_file.map(|project_file| crate::app::path_op_jobs::ProjectEntryPatch {
+                project_file,
+                new_name: new_name.clone(),
+                fold,
+            }),
         };
         let request = FileRenameRequest {
             id,

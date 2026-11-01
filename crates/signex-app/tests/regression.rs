@@ -46,6 +46,8 @@ mod settle_support;
 
 #[path = "regression/pending_path_ops.rs"]
 mod pending_path_ops;
+#[path = "regression/sheet_entry_commits_project.rs"]
+mod sheet_entry_commits_project;
 
 #[path = "regression/replace_across_path_ops.rs"]
 mod replace_across_path_ops;

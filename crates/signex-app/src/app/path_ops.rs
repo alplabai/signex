@@ -24,6 +24,9 @@ pub enum PathOpKind {
     /// Annotate or Reset Duplicate Designators reading or rewriting the
     /// project's sheets.
     ProjectRewrite,
+    /// Add New Schematic writing a blank sheet and listing it in the saved
+    /// project file.
+    AddSheet,
 }
 
 impl PathOpKind {
@@ -32,6 +35,7 @@ impl PathOpKind {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
             Self::ProjectRewrite => "project-wide rewrite",
+            Self::AddSheet => "new-sheet add",
         }
     }
 }
@@ -106,6 +110,17 @@ impl PendingPathOps {
             .flat_map(|op| op.paths.iter().map(move |p| (p, op.fold)))
             .find(|(p, fold)| path_is_under(p, dir, *fold))
             .map(|(p, _)| p.clone())
+    }
+
+    /// Finish the [`PathOpKind::AddSheet`] operation that creates `sheet`.
+    /// Returns whether one was registered.
+    pub fn finish_add_sheet(&mut self, sheet: &Path) -> bool {
+        let before = self.ops.len();
+        self.ops.retain(|op| {
+            !(op.kind == PathOpKind::AddSheet
+                && op.paths.first().map(PathBuf::as_path) == Some(sheet))
+        });
+        self.ops.len() != before
     }
 
     /// Drop a registration when its operation is completely finished.
@@ -350,6 +365,13 @@ pub enum RenameIoError {
     TargetExists,
     /// The OS error text of `fs::rename`, or of the worker that ran it.
     Os(String),
+    /// The file moved but the saved `.snxprj` could not be updated to follow,
+    /// so the worker moved the file back (#1821). `moved_back` is that
+    /// attempt's result: when it failed the file is still at the new name.
+    ProjectNotPatched {
+        reason: String,
+        moved_back: Result<(), String>,
+    },
 }
 
 /// Parent sheets read for the reference rewrite, keyed by their path.
@@ -358,7 +380,8 @@ pub type ParentSheets = HashMap<PathBuf, Result<Box<SchematicSheet>, String>>;
 #[derive(Debug, Clone)]
 pub struct FileRenameDone {
     pub request: FileRenameRequest,
-    pub result: Result<(), RenameIoError>,
+    /// What the move did to the saved `.snxprj` entry (#1821).
+    pub result: Result<crate::app::project_entry_disk::EntryPatch, RenameIoError>,
     pub parents: ParentSheets,
 }
 

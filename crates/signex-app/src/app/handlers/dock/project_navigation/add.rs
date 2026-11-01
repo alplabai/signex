@@ -4,6 +4,7 @@
 //! carries the project by id and looks it up again when it lands.
 
 use super::*;
+use crate::app::project_entry_disk::EntryPatch;
 use crate::app::state::ProjectId;
 
 impl Signex {
@@ -43,8 +44,9 @@ impl Signex {
 
     /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
     /// directory; result returns through [`ProjectMsg::AddNewSchematicPicked`].
-    /// The handler writes a blank `.snxsch`, registers the entry on
-    /// the project, and marks the .snxprj dirty.
+    /// The handler writes a blank `.snxsch` and lists it in the saved
+    /// `.snxprj` in one worker job (#1821); the project is dirtied only when
+    /// the saved project could not take the entry.
     pub(crate) fn add_new_schematic(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(project_id) = self.project_id_for_tree_path(&tree_path) else {
             return iced::Task::none();
@@ -201,14 +203,51 @@ impl Signex {
         ) {
             return iced::Task::none();
         }
+        let Some(project_path) = self
+            .document_state
+            .project_by_id(project_id)
+            .map(|p| p.path.clone())
+        else {
+            return iced::Task::none();
+        };
+        let Ok(entry) = Self::project_entry_name(&project_dir, &path, fold) else {
+            Self::log_outside_project_refusal(&path);
+            return iced::Task::none();
+        };
+        // The worker re-reads and rewrites the saved `.snxprj` to list the
+        // new sheet (#1821): a project save in flight would land afterwards
+        // and drop the entry, so refuse before anything is created.
+        if self.document_state.document_saves.is_saving(&project_path) {
+            self.refuse_add_while_project_saving();
+            return iced::Task::none();
+        }
+        if let Err(error) = self.refuse_start_while_path_op(&project_path, "changed") {
+            crate::diagnostics::log_warning(format!("Add New Schematic refused: {error}"));
+            return iced::Task::none();
+        }
+        // The job reads, patches and rewrites the saved `.snxprj`, so the
+        // project file is registered for its whole run: a project save, a
+        // sheet or library rename or a second Add New started meanwhile is
+        // refused instead of racing the read-modify-write. Released by the
+        // completion, whatever its result.
+        self.document_state.pending_path_ops.begin_with_dependents(
+            crate::app::path_ops::PathOpKind::AddSheet,
+            vec![path.clone()],
+            vec![project_path.clone()],
+            fold,
+        );
         self.begin_project_write(&path);
-        // The blank sheet is written off the update thread; the project is
-        // looked up again by id when the write lands.
+        // The blank sheet and its project entry are committed together off
+        // the update thread; the project is looked up again by id when the
+        // job lands.
         iced::Task::perform(
             {
                 let path = path.clone();
                 async move {
-                    add_io::on_blocking_pool(move || add_io::write_blank_schematic(&path)).await
+                    add_io::on_blocking_pool(move || {
+                        add_io::create_sheet_with_entry(&path, &project_path, &entry, fold)
+                    })
+                    .await
                 }
             },
             move |result| {
@@ -221,28 +260,87 @@ impl Signex {
         )
     }
 
-    /// Completion of the blank-schematic write: register it on the project
-    /// the dialog was opened for, or report the failure.
+    fn refuse_add_while_project_saving(&self) {
+        crate::diagnostics::log_warning(
+            "Add New Schematic refused: the project file is still being saved; try again in a \
+             moment.",
+        );
+    }
+
+    /// Completion of the sheet job: register the sheet on the project the
+    /// dialog was opened for, or report the failure. A sheet the saved
+    /// project already lists (`Patched`) leaves the project's dirty state as
+    /// it was, so other unsaved project edits are neither written nor lost.
     pub(crate) fn handle_add_new_schematic_written(
         &mut self,
         project_id: ProjectId,
         path: std::path::PathBuf,
-        result: Result<(), String>,
+        result: Result<EntryPatch, String>,
     ) {
         self.end_project_write(&path);
-        if let Err(e) = result {
-            crate::diagnostics::log_error("Add New Schematic", &anyhow::anyhow!("{e}"));
-            return;
-        }
+        self.document_state.pending_path_ops.finish_add_sheet(&path);
+        let patch = match result {
+            Ok(patch) => patch,
+            Err(e) => {
+                crate::diagnostics::log_error("Add New Schematic", &anyhow::anyhow!("{e}"));
+                return;
+            }
+        };
         let Some((_, project_path)) =
             self.project_dir_and_path(project_id, "Add New", std::slice::from_ref(&path))
         else {
             return;
         };
-        if self.register_project_file(project_id, &path) {
+        let name = path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        if let EntryPatch::Patched(bytes) = patch {
+            self.register_project_file(project_id, &path);
+            crate::diagnostics::log_info(format!(
+                "Added {name}; the saved project file now lists it."
+            ));
+            self.commit_bytes_to_project_git(
+                &project_path,
+                &format!("Add sheet {name}"),
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            );
+        } else if self.register_project_file(project_id, &path) {
+            let why = match &patch {
+                EntryPatch::NoProjectFile => "the project has not been saved yet",
+                EntryPatch::Unreadable(_) => "the saved project file could not be read",
+                // The saved project already lists it: nothing is left to save.
+                _ => {
+                    self.refresh_panel_ctx();
+                    return;
+                }
+            };
             self.document_state.mark_document_dirty(&project_path);
+            crate::diagnostics::log_warning(format!(
+                "Save the project to list the new sheet {name}; {why}."
+            ));
         }
         self.refresh_panel_ctx();
+    }
+
+    /// The entry string a file inside the project is listed under: its path
+    /// below the project with forward slashes on every platform. `Err` is the
+    /// refusal to log (outside the project, or not valid UTF-8).
+    fn project_entry_name(
+        project_dir: &std::path::Path,
+        file_path: &std::path::Path,
+        fold: crate::app::CaseFold,
+    ) -> Result<String, fn(&std::path::Path)> {
+        use crate::app::state::library_entry::library_entry_location;
+        let (rel, kind) = library_entry_location(project_dir, file_path, fold);
+        match kind {
+            signex_types::project::LibraryEntryKind::ProjectLocal => rel
+                .components()
+                .map(|c| c.as_os_str().to_str())
+                .collect::<Option<Vec<&str>>>()
+                .map(|parts| parts.join("/"))
+                .ok_or(Self::log_non_utf8_refusal),
+            _ => Err(Self::log_outside_project_refusal),
+        }
     }
 
     pub(crate) fn handle_add_existing_file_picked(
@@ -456,19 +554,7 @@ impl Signex {
         // directory. A file at the project root, or one copied in (it lands
         // at the root), stays a bare name. A sheet or PCB outside the project
         // has no such entry and is refused; `Err` names the refusal to log.
-        let filename: Result<String, fn(&std::path::Path)> = {
-            use crate::app::state::library_entry::library_entry_location;
-            let (rel, kind) = library_entry_location(loaded.dir(), file_path, loaded.case_fold);
-            match kind {
-                signex_types::project::LibraryEntryKind::ProjectLocal => rel
-                    .components()
-                    .map(|c| c.as_os_str().to_str())
-                    .collect::<Option<Vec<&str>>>()
-                    .map(|parts| parts.join("/"))
-                    .ok_or(Self::log_non_utf8_refusal),
-                _ => Err(Self::log_outside_project_refusal),
-            }
-        };
+        let filename = Self::project_entry_name(loaded.dir(), file_path, loaded.case_fold);
         let fold = loaded.case_fold;
         let project_dir = loaded.dir().to_path_buf();
         let is_listed = |entry: &str| {
@@ -581,30 +667,5 @@ fn unique_name_in(dir: &std::path::Path, base: &str, ext: &str) -> String {
 /// the project has none. `true` when something was added.
 pub(crate) fn register_sheet_entry(loaded: &mut crate::app::LoadedProject, filename: &str) -> bool {
     let fold = crate::app::state::project_case::fold_of(Some(&*loaded));
-    let key =
-        |name: &str| crate::app::state::scope::path_key_with(std::path::Path::new(name), fold);
-    let wanted = key(filename);
-    if loaded
-        .data
-        .sheets
-        .iter()
-        .any(|s| key(&s.filename) == wanted)
-    {
-        return false;
-    }
-    let name = std::path::Path::new(filename)
-        .file_stem()
-        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
-    loaded.data.sheets.push(signex_types::project::SheetEntry {
-        name,
-        filename: filename.to_owned(),
-        symbols_count: 0,
-        wires_count: 0,
-        labels_count: 0,
-        unknown: Default::default(),
-    });
-    if loaded.data.schematic_root.is_none() {
-        loaded.data.schematic_root = Some(filename.to_owned());
-    }
-    true
+    crate::app::project_entry_disk::register_entry(&mut loaded.data, filename, fold)
 }
