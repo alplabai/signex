@@ -276,7 +276,7 @@ fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
 }
 
 #[test]
-fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
+fn a_cascade_refreshes_a_clean_preview_and_rebases_a_dirty_one() {
     let (mut app, address) = app_with_row(1, 1);
     let library_id = app
         .library
@@ -294,13 +294,20 @@ fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
         .unwrap();
     let inside = address.library_path.parent().unwrap().join("x.snxsym");
 
-    // Dirty: untouched, and its own save is refused as stale.
+    // Dirty: keeps its edit, takes the pin and revision, and saves.
+    app.library
+        .editors
+        .get_mut(&address)
+        .unwrap()
+        .row
+        .description = "Mine".into();
     let task = app.refresh_editors_after_cascade(&inside, &[address.row_id]);
     crate::app::path_ops::settle_task(&mut app, task);
-    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+    assert_eq!(editor(&app, &address).row.description, "Mine");
+    assert_eq!(editor(&app, &address).row.server_revision, Some(2));
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_state.error_notice.is_none());
 
     // Clean: follows the cascade.
     app.library.editors.get_mut(&address).unwrap().dirty = false;
@@ -308,7 +315,11 @@ fn a_cascade_refreshes_a_clean_preview_and_spares_a_dirty_one() {
     crate::app::path_ops::settle_task(&mut app, task);
     let preview = editor(&app, &address);
     assert_eq!(preview.row.symbol_version, "9.9.9");
-    assert_eq!(preview.row.server_revision, Some(2));
+    assert_eq!(
+        preview.row.server_revision,
+        Some(3),
+        "after the rebased save"
+    );
 }
 
 #[test]
@@ -433,17 +444,31 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
         .unwrap();
     let inside = address.library_path.parent().unwrap().join("x.snxsym");
 
-    // A dirty preview keeps its draft, and its own save is refused as
-    // stale: the refusal reaches the user.
+    // A dirty preview keeps its draft and is rebased onto the cascade's
+    // pins and revision, so its own save goes through (#1840).
+    app.library
+        .editors
+        .get_mut(&address)
+        .unwrap()
+        .row
+        .description = "Mine".into();
     let task = app.handle_primitive_saved(primitive_saved_with_cascade(
         inside.clone(),
         vec![address.row_id],
     ));
     crate::app::path_ops::settle_task(&mut app, task);
-    assert_eq!(editor(&app, &address).row.server_revision, Some(1));
+    let preview = editor(&app, &address);
+    assert_eq!(preview.row.description, "Mine", "the edit is kept");
+    assert!(preview.dirty);
+    assert_eq!(preview.row.server_revision, Some(2));
+    assert_eq!(preview.row.symbol_version, "9.9.9");
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
-    assert!(app.document_state.error_notice.is_some(), "stale refused");
+    assert!(app.document_state.error_notice.is_none(), "not refused");
+    let stored = app.library.set.get(library_id).unwrap();
+    let stored = stored.read_row(TABLE, address.row_id).expect("stored row");
+    assert_eq!(stored.description, "Mine");
+    assert_eq!(stored.symbol_version, "9.9.9");
 
     // A clean one follows the cascade the worker ran.
     app.library.editors.get_mut(&address).unwrap().dirty = false;
@@ -452,7 +477,11 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
     crate::app::path_ops::settle_task(&mut app, task);
     let preview = editor(&app, &address);
     assert_eq!(preview.row.symbol_version, "9.9.9");
-    assert_eq!(preview.row.server_revision, Some(2));
+    assert_eq!(
+        preview.row.server_revision,
+        Some(3),
+        "after the rebased save"
+    );
 }
 
 #[test]

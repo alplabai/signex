@@ -142,16 +142,19 @@ impl SaveLibrary {
 }
 
 impl Signex {
-    /// Bring the clean Component Previews of the rows a cascade moved up to
-    /// date: their content changed under them. Dirty ones keep their draft
-    /// and are refused as stale on save.
+    /// Bring the Component Previews of the rows a cascade moved up to date:
+    /// clean ones reload; dirty ones keep their draft and are rebased onto
+    /// the cascade's pins and revision (#1840).
     pub(in crate::app::dispatch::library) fn refresh_editors_after_cascade(
         &mut self,
         path: &std::path::Path,
         rows: &[RowId],
     ) -> iced::Task<crate::app::Message> {
         match self.cascade_root(path, rows) {
-            Some(root) => self.refresh_clean_editors(&root, rows),
+            Some(root) => iced::Task::batch([
+                self.refresh_clean_editors(&root, rows),
+                self.rebase_dirty_editors(&root, rows),
+            ]),
             None => iced::Task::none(),
         }
     }
@@ -165,6 +168,7 @@ impl Signex {
     ) {
         if let Some(root) = self.cascade_root(path, rows) {
             self.refresh_clean_editors_blocking(&root, rows);
+            self.rebase_dirty_editors_blocking(&root, rows);
         }
     }
 

@@ -452,6 +452,50 @@ impl Signex {
         }
     }
 
+    /// After a primitive save's cascade moved `rows`: every Component
+    /// Preview of them with unsaved edits keeps those edits and takes the
+    /// cascade's pins and the stored base revision, so its own save is not
+    /// refused for a change this session made (#1840). Read off the UI
+    /// thread.
+    pub(crate) fn rebase_dirty_editors(
+        &mut self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Task<Message> {
+        let dirty = self.dirty_editors_of(library_path, rows);
+        Task::batch(
+            dirty.iter().map(|address| {
+                crate::library::preview_reads::rebase_task(&mut self.library, address)
+            }),
+        )
+    }
+
+    /// [`Self::rebase_dirty_editors`] on this thread, for the blocking save.
+    pub(crate) fn rebase_dirty_editors_blocking(
+        &mut self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        for address in self.dirty_editors_of(library_path, rows) {
+            self.library.rebase_editor_blocking(&address);
+        }
+    }
+
+    fn dirty_editors_of(
+        &self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Vec<EditorAddress> {
+        self.library
+            .editors
+            .iter()
+            .filter(|(a, s)| {
+                a.library_path == library_path && rows.contains(&a.row_id) && s.has_unsaved_edits()
+            })
+            .map(|(a, _)| a.clone())
+            .collect()
+    }
+
     fn clean_editors_of(
         &self,
         library_path: &std::path::Path,

@@ -118,7 +118,9 @@ impl Signex {
             ReloadApplied::Replaced {
                 resolve_tab: Some(tab),
             } => crate::library::preview_reads::tab_resolve_task(&mut self.library, &address, tab),
-            ReloadApplied::Replaced { resolve_tab: None } | ReloadApplied::Dropped => Task::none(),
+            ReloadApplied::Replaced { resolve_tab: None }
+            | ReloadApplied::Rebased
+            | ReloadApplied::Dropped => Task::none(),
         }
     }
 
