@@ -227,9 +227,29 @@ impl Signex {
         path: PathBuf,
     ) -> Result<iced::Task<Message>> {
         self.refuse_save_while_restoring(from_path)?;
+        // A name typed without an extension gets `.snxsch`, like the
+        // symbol / footprint Save As; if that file exists the user was never
+        // asked about overwriting it, so nothing is written.
+        let picked = path;
+        let path = super::with_primitive_extension(picked.clone(), "snxsch");
+        if path != picked {
+            if path.exists() {
+                crate::diagnostics::log_warning(format!(
+                    "[save-as] {} already exists and was not overwritten; \
+                     pick the full file name including the extension to replace it",
+                    path.display()
+                ));
+                return Ok(iced::Task::none());
+            }
+            crate::diagnostics::log_info(format!(
+                "[save-as] No file extension given; saving as {}",
+                path.display()
+            ));
+        }
         // The target may be a document whose restore is still running (even
         // one cancelled): the restore would overwrite what this writes.
         self.refuse_save_while_restoring(&path)?;
+        self.refuse_save_as_target(&path, "snxsch")?;
         match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) if matches!(tab.kind, TabKind::Schematic) && tab.path == from_path => {}
             _ => anyhow::bail!(
@@ -305,6 +325,7 @@ impl Signex {
         // cancelled one) would let the restore overwrite this save; say so
         // before the generic "already open" refusal can.
         self.refuse_save_while_restoring(to_path)?;
+        self.refuse_save_as_target(to_path, super::primitive_extension(from_path))?;
         if to_path != picked_path {
             if to_path.exists() {
                 crate::diagnostics::log_warning(format!(

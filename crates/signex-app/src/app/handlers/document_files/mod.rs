@@ -35,6 +35,9 @@ mod restore_library_tests;
 #[cfg(test)]
 mod restore_pending_commit_tests;
 mod save;
+mod save_as_target;
+#[cfg(test)]
+mod save_as_target_tests;
 #[cfg(test)]
 mod undocked_primitive_save_tests;
 pub(crate) use save::log_foreign_column_offenders;
@@ -66,8 +69,9 @@ fn primitive_save_as_message(from_path: PathBuf, to_path: PathBuf) -> Message {
 
 /// Extension of the primitive kind the source path belongs to.
 pub(crate) fn primitive_extension(from_path: &std::path::Path) -> &'static str {
+    // Case-folded, as the open path does: `X.SNXFPT` is a footprint.
     match from_path.extension().and_then(|s| s.to_str()) {
-        Some("snxfpt") => "snxfpt",
+        Some(ext) if ext.eq_ignore_ascii_case("snxfpt") => "snxfpt",
         _ => "snxsym",
     }
 }
