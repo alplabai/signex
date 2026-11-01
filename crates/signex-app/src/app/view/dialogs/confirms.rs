@@ -11,6 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use crate::app::path_ops::PlacingSymbol;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -122,7 +123,7 @@ impl Signex {
         // has nothing to exclude (#1618).
         let blockers = self.remove_blockers(st);
         // A `.snxlib` is a directory package: it is never a placed sheet.
-        let is_dir = st.target_path.extension().and_then(|e| e.to_str()) == Some("snxlib");
+        let is_dir = crate::app::file_extension::has_extension(&st.target_path, "snxlib");
         let mut remove_options = column![].spacing(SP.m);
         if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
             remove_options = remove_options.push(option_card(
@@ -165,22 +166,30 @@ impl Signex {
                 .color(text_muted),
             );
         }
+        // Delete is only offered when no other sheet places the file
+        // (`blocks_delete`), so every listed symbol sits on the row's own parent.
         if !blockers.blocks_delete(is_dir)
             && !st.is_outside_project
-            && let Some(parent) = &blockers.own_parent
+            && blockers.own_parent.is_some()
         {
             prompt = prompt.push(
-                text(format!("{} will show it as missing.", parent.display()))
-                    .size(TS.caption)
-                    .color(text_muted),
+                text(format!(
+                    "Deleting it leaves {} sheet symbol(s) pointing at a missing file: {}. \
+                     ERC and netlist export will report them until they are removed.",
+                    blockers.symbols.len(),
+                    PlacingSymbol::describe_all(&blockers.symbols)
+                ))
+                .size(TS.caption)
+                .color(text_muted),
             );
         }
         if blockers.placed && !blockers.unlisted {
             prompt = prompt.push(
-                text(
+                text(format!(
                     "Excluding it does not take it out of the design: a sheet symbol still \
-                     places it.",
-                )
+                         places it ({}).",
+                    PlacingSymbol::describe_all(&blockers.symbols)
+                ))
                 .size(TS.caption)
                 .color(text_muted),
             );
