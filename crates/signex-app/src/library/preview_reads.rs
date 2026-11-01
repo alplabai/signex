@@ -378,6 +378,21 @@ impl LibraryState {
             if old.saving_row.is_some() || old.binding_primitive {
                 return ReloadApplied::Dropped;
             }
+            let base = old.row.server_revision;
+            if !self.writes.only_cascaded_since(
+                &address.library_path,
+                address.row_id,
+                base,
+                row.server_revision,
+            ) {
+                crate::diagnostics::log_warning(format!(
+                    "Row {} was also changed by something other than the symbol or footprint \
+                     save, so your unsaved edit was kept as it is; saving it will be refused \
+                     until you reload the row.",
+                    address.row_id
+                ));
+                return ReloadApplied::Dropped;
+            }
             if let Some(edited) = self.editors.get_mut(&address) {
                 super::preview_rebase::rebase_onto_cascade(&mut edited.row, &row);
                 edited.stale_base = false;

@@ -245,7 +245,7 @@ impl Signex {
         let edit = RowEdit {
             table,
             row_id: address.row_id,
-            start: RowStart::Full(Box::new(row)),
+            start: RowStart::FullOverCascade(Box::new(row)),
             patch: None,
             assets: needed,
             message: "edit row (signex-app)",
@@ -392,8 +392,9 @@ impl Signex {
         state.reload_confirming = false;
         if edited_since_save {
             // The saved copy is stored; what was typed since is not.
-            // Only the new base revision is taken over.
-            state.row.server_revision = revision;
+            // Only the new base revision is taken over, and the pins and
+            // version a cascade moved the saved copy to (#1840).
+            crate::library::preview_rebase::rebase_onto_cascade(&mut state.row, &row);
         } else {
             state.row = row;
             state.dirty = false;

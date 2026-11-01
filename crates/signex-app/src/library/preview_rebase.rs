@@ -2,7 +2,7 @@
 //! just rewrote (#1840).
 //!
 //! The cascade (`signex_library::cascade_after_saves`) changes only the
-//! primitive pins, the row version and the update time. A preview with
+//! primitive pins and the row version. A preview with
 //! unsaved edits keeps everything else it holds and takes those fields and
 //! the stored base revision, so its own save is not refused as "changed by
 //! someone else" for a change this session made. A pin whose primitive the
@@ -42,7 +42,6 @@ pub fn rebase_onto_cascade(draft: &mut ComponentRow, stored: &ComponentRow) {
         }
     }
     draft.version.clone_from(&stored.version);
-    draft.updated = stored.updated;
     draft.server_revision = stored.server_revision;
 }
 

@@ -275,6 +275,14 @@ fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
     );
 }
 
+/// What the primitive save's worker tells the write ledger about the row
+/// it just moved from revision 1 to 2.
+fn record_cascade(app: &mut Signex, address: &EditorAddress) {
+    let turn = app.library.writes.turn(&address.library_path);
+    turn.own_revisions()
+        .record_cascade(address.row_id, Some(1), Some(2));
+}
+
 #[test]
 fn a_cascade_refreshes_a_clean_preview_and_rebases_a_dirty_one() {
     let (mut app, address) = app_with_row(1, 1);
@@ -292,6 +300,7 @@ fn a_cascade_refreshes_a_clean_preview_and_rebases_a_dirty_one() {
         .unwrap()
         .update_row(TABLE, bumped, "cascade")
         .unwrap();
+    record_cascade(&mut app, &address);
     let inside = address.library_path.parent().unwrap().join("x.snxsym");
 
     // Dirty: keeps its edit, takes the pin and revision, and saves.
@@ -442,6 +451,7 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
         .unwrap()
         .update_row(TABLE, bumped, "cascade")
         .unwrap();
+    record_cascade(&mut app, &address);
     let inside = address.library_path.parent().unwrap().join("x.snxsym");
 
     // A dirty preview keeps its draft and is rebased onto the cascade's

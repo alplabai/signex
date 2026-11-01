@@ -47,7 +47,7 @@ pub(crate) mod prefix_picker;
 pub mod preview_reads;
 #[cfg(test)]
 mod preview_reads_tests;
-mod preview_rebase;
+pub(crate) mod preview_rebase;
 pub mod preview_refresh;
 #[cfg(test)]
 mod preview_refresh_tests;

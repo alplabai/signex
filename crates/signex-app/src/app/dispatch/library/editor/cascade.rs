@@ -280,6 +280,7 @@ pub(super) fn cascade_after_container_save(
     write: ContainerWrite,
     kind: SavedKind,
     saved: &[SavedPrimitive],
+    own: Option<&crate::library::writes::OwnRevisions>,
 ) -> CascadeOutcome {
     let mut outcome = CascadeOutcome::default();
     if write != ContainerWrite::Merge || saved.is_empty() {
@@ -332,9 +333,13 @@ pub(super) fn cascade_after_container_save(
                     version: p.version.clone(),
                 })
                 .collect();
+            let before = own.map(|_| revisions_of(adapter));
             let result = signex_library::cascade_after_saves(adapter, &saves, mode);
             if let Ok(report) = &result {
                 outcome.bumped = report.auto_bumped.clone();
+                if let (Some(own), Some(before)) = (own, before) {
+                    record_cascade_steps(own, adapter, &before, &report.auto_bumped);
+                }
             }
             if retry_can_help(&result) {
                 owes_all(&mut outcome);
@@ -350,6 +355,41 @@ pub(super) fn cascade_after_container_save(
         }
     }
     outcome
+}
+
+/// Each row's table and revision, so a cascade's move of a row can be
+/// told from another writer's. Empty when the backend cannot list rows (the
+/// cascade then cannot run either).
+fn revisions_of(adapter: &dyn LibraryAdapter) -> HashMap<RowId, (String, Option<u64>)> {
+    adapter
+        .iter_rows()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(table, row)| (RowId::from_uuid(row.row_id), (table, row.server_revision)))
+        .collect()
+}
+
+/// Tell the write ledger which rows this cascade moved and between which
+/// revisions (#1840): an open Component Preview of such a row is then
+/// rebased onto it instead of being refused as changed by someone else.
+fn record_cascade_steps(
+    own: &crate::library::writes::OwnRevisions,
+    adapter: &dyn LibraryAdapter,
+    before: &HashMap<RowId, (String, Option<u64>)>,
+    moved: &[RowId],
+) {
+    for id in moved {
+        let Some((table, from)) = before.get(id) else {
+            continue;
+        };
+        match adapter.read_row(table, *id) {
+            Ok(row) => own.record_cascade(*id, *from, row.server_revision),
+            Err(e) => crate::diagnostics::log_warning(format!(
+                "Row {id} was moved by a symbol or footprint save but could not be read \
+                 back ({e}); an open edit of it may be refused as stale, so reload it."
+            )),
+        }
+    }
 }
 
 /// Whether running the cascade again could move a row it left behind.
