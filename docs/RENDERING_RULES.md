@@ -141,6 +141,40 @@ during the clean-room rewrite.
 
 ---
 
+## Stroke law — one zoom-to-stroke rule (#1858)
+
+Source: `crates/signex-types/src/schematic/stroke.rs`, applied by the CPU
+replay (`renderer_scene_canvas::SceneDrawOptions::stroke_px`), the GPU
+surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
+
+1. **Every stroke is a world width in mm.** Wires use their own or their net
+   class width, symbol bodies their library width, pins the symbol's library
+   width (the most common width among its stroked graphics), buses 0.45 mm,
+   the no-connect X and No-ERC diamond 0.2 mm, global / hierarchical label
+   markers and child sheet frames 0.15 mm. A stored width of `0` and
+   anything thinner draw at 0.15 mm. These widths do not change with zoom.
+2. **Screen width is `mm * scale`**, so the ratio between any two kinds is the
+   same at every zoom. Before #1858 each kind had its own curve (a per-kind
+   px width times zoom, clamped), and pins ignored their library width, so
+   the wire : pin : body weights changed from one zoom step to the next.
+3. **One floor.** A stroke thinner than 0.6 device pixels draws at 0.6 device
+   pixels, the same for every kind and on both the CPU and GPU paths.
+4. **Then the whole-pixel snap** (#1674, `scene_line_snap.rs`) rounds
+   axis-aligned hairlines under 4 device pixels to whole device pixels.
+5. **Display scale.** The floor and the snap are defined in device pixels.
+   The CPU canvas does not receive the window's scale factor yet, so both
+   still run with one device pixel per logical pixel
+   (`UNSCALED_DEVICE_PX_PER_LOGICAL_PX`) and the GPU path matches it.
+6. **Output** (PDF, SVG, print) uses the mm widths only, with no floor and no
+   snap.
+
+The mm values for markers, labels and sheet frames were picked so the
+drawing looks the same as before at 400 % zoom after the snap. Selection
+outlines, handles and axes are screen-constant chrome, not strokes of the
+drawing, and stay a fixed pixel width.
+
+---
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

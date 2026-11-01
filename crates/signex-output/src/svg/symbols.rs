@@ -102,7 +102,7 @@ pub(super) fn push_symbol_lib_graphics(
                 fill_rgb: (0.15, 0.15, 0.15),
                 text: normalize_standard_text(&text),
             }),
-            SymbolPrimitive::Pin { tip, body } => out.push(SvgElement::Path {
+            SymbolPrimitive::Pin { tip, body, .. } => out.push(SvgElement::Path {
                 commands: vec![
                     SvgPathCommand::MoveTo(px(&tip)),
                     SvgPathCommand::LineTo(px(&body)),

@@ -20,7 +20,6 @@ pub fn draw_label_preview(
             label,
             stroke_color,
             to_rgba(fill_color),
-            transform,
             document_family,
         ));
         let ((x, y), rotation, h_align) = flag_text(label, document_family);

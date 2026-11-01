@@ -56,10 +56,10 @@ pub fn draw_selection_overlay(
                     signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_RADIUS_PX,
                     transform.scale,
                 ) as f32,
-                stroke_width_mm: stroke_world_mm(
-                    signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_STROKE_PX,
+                stroke_width_mm: screen_px_to_world_mm(
+                    signex_types::schematic::SCHEMATIC_SELECTION_MARKER_OUTLINE_PX,
                     transform.scale,
-                ),
+                ) as f32,
                 color: to_rgba(stroke),
             });
         } else {
@@ -72,10 +72,10 @@ pub fn draw_selection_overlay(
                 ],
                 fill_color: to_rgba(fill),
                 stroke_color: Some(to_rgba(stroke)),
-                stroke_width_mm: stroke_world_mm(
-                    signex_types::schematic::SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX,
+                stroke_width_mm: screen_px_to_world_mm(
+                    signex_types::schematic::SCHEMATIC_SELECTION_RECT_OUTLINE_PX,
                     transform.scale,
-                ),
+                ) as f32,
             });
         }
     }
