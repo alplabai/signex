@@ -50,6 +50,8 @@ mod bus_entry_tests;
 #[cfg(test)]
 mod drawing_placement_tests;
 #[cfg(test)]
+mod extras_unknown_tests;
+#[cfg(test)]
 mod font_family_tests;
 #[cfg(test)]
 mod library_link_tests;
@@ -822,19 +824,26 @@ impl SnxPcb {
                 unknown: self.board.unknown.extras.clone(),
             })
         };
-        if !footprints.is_empty() || !pads.is_empty() || board_extras.is_some() {
+        let extras_root = &self.board.unknown.extras_root;
+        if !footprints.is_empty()
+            || !pads.is_empty()
+            || board_extras.is_some()
+            || !extras_root.is_empty()
+        {
             #[derive(Serialize)]
-            struct ExtrasWrapper {
-                extras: ExtrasInner,
+            struct ExtrasWrapper<'a> {
+                extras: ExtrasInner<'a>,
             }
             #[derive(Serialize)]
-            struct ExtrasInner {
+            struct ExtrasInner<'a> {
                 #[serde(skip_serializing_if = "BTreeMap::is_empty")]
                 footprints: BTreeMap<String, FootprintExtras>,
                 #[serde(skip_serializing_if = "BTreeMap::is_empty")]
                 pads: BTreeMap<String, PadExtras>,
                 #[serde(skip_serializing_if = "Option::is_none")]
                 board: Option<BoardExtras>,
+                #[serde(flatten)]
+                unknown: &'a UnknownFields,
             }
             out.push('\n');
             let wrapper = ExtrasWrapper {
@@ -842,6 +851,7 @@ impl SnxPcb {
                     footprints,
                     pads,
                     board: board_extras,
+                    unknown: extras_root,
                 },
             };
             finite_toml::ensure_finite(&wrapper)?;
@@ -957,6 +967,7 @@ impl SnxPcb {
                 stackup: stackup_unknown,
                 nets: nets_unknown,
                 extras: board_extras.unknown,
+                extras_root: extras.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
                     .then(|| raw.format.clone()),
             },

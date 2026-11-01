@@ -40,17 +40,26 @@ pub(in crate::format) struct SchExtrasRaw {
 /// trips unchanged and every dot it names loads as user-placed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(in crate::format) struct JunctionExtras {
-    #[serde(default)]
+    /// Skipped when `false` so a table holding only foreign keys re-saves
+    /// as it was read.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(in crate::format) minted: bool,
+    /// Keys this build does not recognise (`[extras.junctions.<uuid>]`,
+    /// #1874).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 impl JunctionExtras {
     pub(in crate::format) fn is_default(&self) -> bool {
-        !self.minted
+        !self.minted && self.unknown.is_empty()
     }
 
     pub(in crate::format) fn from_junction(j: &Junction) -> Self {
-        JunctionExtras { minted: j.minted }
+        JunctionExtras {
+            minted: j.minted,
+            unknown: j.unknown.clone(),
+        }
     }
 }
 
@@ -470,6 +479,9 @@ pub(in crate::format) struct PcbExtrasRaw {
     pub(in crate::format) pads: BTreeMap<String, PadExtras>,
     #[serde(default)]
     pub(in crate::format) board: Option<BoardExtras>,
+    /// Foreign keys and tables under `[extras]` (#1873).
+    #[serde(flatten)]
+    pub(in crate::format) unknown: UnknownFields,
 }
 
 pub(in crate::format) struct PcbExtras {

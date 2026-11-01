@@ -360,6 +360,7 @@ fn junction_is_honoured(point: signex_types::schematic::Point, index: &WireIndex
 
 fn junction_at(point: signex_types::schematic::Point) -> signex_types::schematic::Junction {
     signex_types::schematic::Junction {
+        unknown: Default::default(),
         unknown_columns: Default::default(),
         uuid: uuid::Uuid::now_v7(),
         position: point,
