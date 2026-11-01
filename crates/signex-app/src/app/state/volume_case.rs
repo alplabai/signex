@@ -139,12 +139,20 @@ fn probe_with(fs: &impl CaseFs, dir: &Path) -> bool {
 fn probe_tri_with(fs: &impl CaseFs, dir: &Path) -> Result<Option<bool>, String> {
     let mut current = dir.to_path_buf();
     loop {
+        // An entry that cannot be stat'ed (deleted since the listing: a shared
+        // temp folder churns) says nothing about case, so the next entry is
+        // asked; the answer must not flip with another process's cleanup.
+        let mut undecided = None;
         for name in fs.entry_names(&current) {
             if let Some(flipped) = flip_ascii_case(&name) {
-                return fs
-                    .is_same_entry(&current.join(&name), &current.join(flipped))
-                    .map(Some);
+                match fs.is_same_entry(&current.join(&name), &current.join(flipped)) {
+                    Ok(same) => return Ok(Some(same)),
+                    Err(reason) => undecided = undecided.or(Some(reason)),
+                }
             }
+        }
+        if let Some(reason) = undecided {
+            return Err(reason);
         }
         match fs.parent_on_same_volume(&current) {
             Some(parent) => current = parent,
@@ -215,6 +223,8 @@ mod tests {
         parent_on_same_volume: bool,
         /// Every stat of an entry here fails, as on an unreadable share.
         stat_fails: bool,
+        /// This one entry has vanished since the listing; its stat fails.
+        vanished: Option<&'static str>,
     }
 
     impl FakeFs {
@@ -232,8 +242,14 @@ mod tests {
                     entries: entries.to_vec(),
                     parent_on_same_volume,
                     stat_fails: false,
+                    vanished: None,
                 },
             );
+            self
+        }
+
+        fn with_vanished_entry(mut self, path: &str, entry: &'static str) -> Self {
+            self.dirs.get_mut(Path::new(path)).unwrap().vanished = Some(entry);
             self
         }
 
@@ -259,6 +275,9 @@ mod tests {
             let (a, b) = (a.file_name().unwrap(), b.file_name().unwrap());
             if dir.stat_fails {
                 return Err("stat failed: Permission denied (os error 13)".to_string());
+            }
+            if dir.vanished.is_some_and(|gone| OsStr::new(gone) == a) {
+                return Err("stat failed: entry vanished".to_string());
             }
             let a_exists = dir.entries.iter().any(|e| OsStr::new(e) == a);
             Ok(a_exists && (a == b || (!dir.sensitive && a.eq_ignore_ascii_case(b))))
@@ -373,6 +392,22 @@ mod tests {
         assert!(reason.contains("Permission denied"), "{reason}");
         // The bool wrapper stays on the data-loss-safe side.
         assert!(probe_with(&fs, Path::new("/share")));
+    }
+
+    #[test]
+    fn an_entry_that_vanished_since_the_listing_does_not_change_the_answer() {
+        // Another process deleted `Gone.tmp` between the listing and the
+        // stat (#1851): the next entry answers, exactly as without the churn.
+        let churned = FakeFs::default()
+            .dir("/tmp", false, &["Gone.tmp", "Stays.tmp"], false)
+            .with_vanished_entry("/tmp", "Gone.tmp");
+        let calm = FakeFs::default().dir("/tmp", false, &["Stays.tmp"], false);
+
+        assert_eq!(
+            probe_tri_with(&churned, Path::new("/tmp")),
+            probe_tri_with(&calm, Path::new("/tmp"))
+        );
+        assert_eq!(probe_tri_with(&churned, Path::new("/tmp")), Ok(Some(true)));
     }
 
     #[test]
