@@ -400,8 +400,7 @@ fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplacement {
         row_id: Some(resolved.row_id),
         library_version: resolved.library_version.clone(),
         value: resolved.value.clone(),
-        // As a fresh placement leaves it; the row owns the footprint.
-        footprint: String::new(),
+        footprint: resolved.footprint.clone(),
         datasheet: resolved.datasheet.clone(),
         fields: resolved.fields.clone(),
     }

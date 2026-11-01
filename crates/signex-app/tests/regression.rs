@@ -317,6 +317,8 @@ mod library_alternate_symbols;
 mod library_named_symbol_file;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
+#[path = "regression/library_place_footprint.rs"]
+mod library_place_footprint;
 #[path = "regression/library_place_symbol.rs"]
 mod library_place_symbol;
 #[path = "regression/library_place_ui.rs"]
