@@ -28,6 +28,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::browser::{OVERSCAN_ROWS, visible_range};
+use super::loose_symbols::LooseSymbol;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
 use super::modal_chrome::{close_x, secondary_btn};
 use super::state::{LibraryState, PrimitivePickerState};
@@ -44,13 +45,22 @@ const ROW_H: f32 = 24.0;
 
 /// One entry of the flattened list: a library header or a primitive.
 enum ListItem {
-    Header { text: String },
+    Header {
+        text: String,
+    },
     Row(String, uuid::Uuid, PrimitiveRef),
+    /// A symbol of a file in no library: choosing it asks for a copy.
+    Loose(LooseSymbol),
 }
 
 /// Flatten the filtered per-library cache into header + row entries. Cheap
 /// (no widgets), so it can run on every view.
-fn list_items(state: &LibraryState, kind: PrimitiveKind, needle: &str) -> Vec<ListItem> {
+fn list_items(
+    state: &LibraryState,
+    kind: PrimitiveKind,
+    needle: &str,
+    loose: &[LooseSymbol],
+) -> Vec<ListItem> {
     let mut items = Vec::new();
     for lib in &state.open_libraries {
         // Read the per-library cache instead of calling `adapter.list_*`
@@ -90,7 +100,43 @@ fn list_items(state: &LibraryState, kind: PrimitiveKind, needle: &str) -> Vec<Li
             };
         }
     }
+    push_loose(&mut items, loose, needle);
     items
+}
+
+/// The symbols of files in no library, one group per file (#1841).
+fn push_loose(items: &mut Vec<ListItem>, loose: &[LooseSymbol], needle: &str) {
+    let mut files: Vec<&std::path::Path> = Vec::new();
+    for symbol in loose {
+        if !files.contains(&symbol.file.as_path()) {
+            files.push(symbol.file.as_path());
+        }
+    }
+    for file in files {
+        let start = items.len();
+        items.push(ListItem::Header {
+            text: String::new(),
+        });
+        items.extend(
+            loose
+                .iter()
+                .filter(|s| s.file == file && (needle.is_empty() || contains_ci(&s.name, needle)))
+                .cloned()
+                .map(ListItem::Loose),
+        );
+        let count = items.len() - start - 1;
+        if count == 0 {
+            items.truncate(start);
+            continue;
+        }
+        let name = file.file_name().map_or_else(
+            || file.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        items[start] = ListItem::Header {
+            text: format!("Not in a library: {name}  ({count})"),
+        };
+    }
 }
 
 /// Entries to build for `count` list entries at `scroll_y`. The viewport is
@@ -102,7 +148,7 @@ fn list_window(scroll_y: f32, count: usize) -> std::ops::Range<usize> {
 fn row_button<'a>(
     name: &str,
     uuid: uuid::Uuid,
-    primitive_ref: PrimitiveRef,
+    on_press: LibraryMessage,
     kind: PrimitiveKind,
     text_c: iced::Color,
     muted: iced::Color,
@@ -135,9 +181,7 @@ fn row_button<'a>(
     .padding(0)
     .width(Length::Fill)
     .height(ROW_H)
-    .on_press(LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(
-        primitive_ref,
-    )))
+    .on_press(on_press)
     .style(move |_: &Theme, status: iced::widget::button::Status| {
         let bg = match status {
             iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover)),
@@ -191,10 +235,10 @@ pub fn view<'a>(
 
     let needle = picker.filter.trim().to_lowercase();
 
-    let items = list_items(state, picker.kind, &needle);
+    let items = list_items(state, picker.kind, &needle, &picker.loose);
     let total_visible = items
         .iter()
-        .filter(|i| matches!(i, ListItem::Row(..)))
+        .filter(|i| matches!(i, ListItem::Row(..) | ListItem::Loose(..)))
         .count();
     let window = list_window(picker.scroll_y, items.len());
 
@@ -215,7 +259,16 @@ pub fn view<'a>(
             ListItem::Row(summary_name, uuid, primitive_ref) => row_button(
                 summary_name,
                 *uuid,
-                *primitive_ref,
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(*primitive_ref)),
+                picker.kind,
+                text_c,
+                muted,
+                hover,
+            ),
+            ListItem::Loose(symbol) => row_button(
+                &symbol.name,
+                symbol.uuid,
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::PickLoose(symbol.clone())),
                 picker.kind,
                 text_c,
                 muted,
@@ -257,6 +310,7 @@ pub fn view<'a>(
     .padding([6, 0])
     .height(Length::Fill);
 
+    let confirm_row = copy_confirm_row(state, picker, tokens);
     let error_row: Element<'_, LibraryMessage> = if let Some(err) = picker.error.as_ref() {
         container(
             text(err.clone())
@@ -288,10 +342,17 @@ pub fn view<'a>(
     .padding([10, 14])
     .style(crate::styles::modal_footer_strip(tokens));
 
-    let body_pad =
-        container(column![container(search).padding([6.0, SP.l]), body, error_row].spacing(0))
-            .width(Length::Fill)
-            .height(Length::Fill);
+    let body_pad = container(
+        column![
+            container(search).padding([6.0, SP.l]),
+            body,
+            confirm_row,
+            error_row
+        ]
+        .spacing(0),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill);
 
     container(
         column![header, body_pad, footer]
@@ -300,6 +361,57 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
+    .into()
+}
+
+/// "Copy <symbol> into library <lib>?" with its two answers, while one is
+/// pending (#1841).
+fn copy_confirm_row<'a>(
+    state: &'a LibraryState,
+    picker: &'a PrimitivePickerState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let Some(symbol) = picker.copy_confirm.as_ref() else {
+        return Space::new().height(0).into();
+    };
+    let library = picker
+        .target
+        .library_path()
+        .and_then(|path| state.library_at(path))
+        .map_or("this library", |lib| lib.display_name.as_str());
+    let question = format!(
+        "Copy {} into library {library}? The original file stays as it is.",
+        symbol.name
+    );
+    let answers: Element<'_, LibraryMessage> = if picker.copying {
+        text("Copying…").size(TS.body).into()
+    } else {
+        row![
+            secondary_btn(
+                "Copy",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyConfirmed),
+                tokens,
+            ),
+            secondary_btn(
+                "Don't copy",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
+                tokens,
+            ),
+        ]
+        .spacing(SP.s)
+        .into()
+    };
+    container(
+        row![
+            text(question)
+                .size(TS.body)
+                .color(theme_ext::text_primary(tokens)),
+            Space::new().width(Length::Fill),
+            answers,
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([SP.s, 14.0])
     .into()
 }
 

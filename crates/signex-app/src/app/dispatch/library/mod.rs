@@ -56,6 +56,9 @@ mod new_row;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
+mod primitive_copy;
+#[cfg(test)]
+mod primitive_copy_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;

@@ -33,8 +33,11 @@ impl Signex {
             filter: String::new(),
             error: None,
             scroll_y: 0.0,
+            loose: Vec::new(),
+            copy_confirm: None,
+            copying: false,
         });
-        Task::none()
+        self.list_loose_symbols_task(kind)
     }
 
     /// Apply a primitive picker sub-message. Most variants close the
@@ -92,6 +95,13 @@ impl Signex {
             PrimitivePickerMsg::BrowseResult(Some(path)) => {
                 self.handle_primitive_picker_browse_result(path)
             }
+            PrimitivePickerMsg::LooseListed { read, from_browse } => {
+                self.handle_loose_listed(&read, from_browse)
+            }
+            PrimitivePickerMsg::PickLoose(symbol) => self.handle_loose_chosen(symbol),
+            PrimitivePickerMsg::CopyConfirmed => self.handle_copy_confirmed(),
+            PrimitivePickerMsg::CopyDeclined => self.handle_copy_declined(),
+            PrimitivePickerMsg::CopyFinished(result) => self.handle_copy_finished(result),
         }
     }
 
@@ -383,6 +393,15 @@ impl Signex {
             })
             .map(|p| p.to_path_buf());
         let Some(snxlib_dir) = snxlib_dir else {
+            let is_symbol = self
+                .library
+                .primitive_picker
+                .as_ref()
+                .is_some_and(|p| p.kind == PrimitiveKind::Symbol);
+            if is_symbol {
+                // A symbol file outside every library: offer a copy (#1841).
+                return self.read_browsed_loose_symbol(file);
+            }
             if let Some(picker) = self.library.primitive_picker.as_mut() {
                 picker.error = Some(
                     "Picked file is not inside a `.snxlib` library. v0.9 only supports primitives bound through libraries."

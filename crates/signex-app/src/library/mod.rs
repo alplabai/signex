@@ -35,6 +35,7 @@ mod edit_row_params;
 pub mod editor;
 pub mod external_poll;
 pub mod held_back;
+pub mod loose_symbols;
 pub mod messages;
 pub(crate) mod modal_chrome;
 pub mod mount;

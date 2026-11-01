@@ -150,6 +150,9 @@ fn open(app: &mut Signex, modal: ModalId) {
                 filter: String::new(),
                 error: None,
                 scroll_y: 0.0,
+                loose: Vec::new(),
+                copy_confirm: None,
+                copying: false,
             })
         }
         ModalId::LibraryDocumentOptions => {

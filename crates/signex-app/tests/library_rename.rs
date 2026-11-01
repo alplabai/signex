@@ -888,6 +888,9 @@ fn the_primitive_picker_target_follows_the_rename() {
         filter: String::new(),
         error: None,
         scroll_y: 0.0,
+        loose: Vec::new(),
+        copy_confirm: None,
+        copying: false,
     });
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
