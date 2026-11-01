@@ -89,6 +89,7 @@ impl Default for LibraryState {
             pricing_refresh: None,
             writes: Default::default(),
             closing: Default::default(),
+            unmounted: Vec::new(),
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
