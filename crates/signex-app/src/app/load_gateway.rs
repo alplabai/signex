@@ -450,6 +450,12 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true);
+        // Read from disk: the opened document is the saved state, so undoing
+        // every edit made since returns to a clean sheet. (A recovery copy
+        // is installed by a different path and stays dirty-safe.)
+        if let Some(engine) = self.document_state.active_engine_mut() {
+            engine.mark_saved();
+        }
         self.note_sheet_focused();
         // Every schematic open funnels through here; `finish_update` starts
         // the (once per project) per-placement designator note off-thread.

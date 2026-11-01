@@ -270,9 +270,13 @@ impl Signex {
         if engine.revision() != revision {
             // The bytes that landed are a snapshot the document has moved
             // past: no undo or redo step reproduces the file now.
+            // An undo during the write may have cleared the mark against the
+            // old save point: the file holds the snapshot, the document
+            // does not, so it is dirty again.
             if let Some(engine) = self.document_state.engines.get_mut(path) {
                 engine.forget_save_point();
             }
+            self.document_state.sync_history_dirty(path);
             return;
         }
         // The engine's document is what is on disk, even if a colour change

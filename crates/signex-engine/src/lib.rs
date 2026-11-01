@@ -135,8 +135,11 @@ pub struct Engine {
     /// `undo_position` keeps counting up past `MAX_HISTORY_ENTRIES`.
     history_evicted: usize,
     /// The `undo_position` the document held when it last matched its file
-    /// (set on load and by [`Engine::mark_saved`]); `None` once no step of
-    /// the history can reproduce the file again. See [`Engine::is_at_save_point`].
+    /// (set by [`Engine::open`] and [`Engine::mark_saved`]); `None` when it is
+    /// unknown or no step of the history can reproduce the file, which
+    /// reads as dirty. An engine built from content that is not known to be
+    /// on disk (`new`, a recovery copy) starts there. See
+    /// [`Engine::is_at_save_point`].
     saved_point: Option<usize>,
     /// Set for the duration of an `execute_batch` loop so the commands in
     /// the batch do not each land their own history entry — the batch
@@ -245,7 +248,7 @@ impl Engine {
             history: std::collections::VecDeque::new(),
             redo_stack: Vec::new(),
             history_evicted: 0,
-            saved_point: Some(0),
+            saved_point: None,
             history_suppressed: false,
             field_edit_run: None,
             #[cfg(test)]

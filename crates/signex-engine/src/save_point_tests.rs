@@ -24,15 +24,25 @@ fn edit(engine: &mut Engine, i: usize) {
     );
 }
 
+/// An engine whose content is known to equal its file.
+fn saved_engine() -> Engine {
+    let mut engine = Engine::new(test_sheet()).unwrap();
+    engine.mark_saved();
+    engine
+}
+
 #[test]
-fn a_fresh_engine_is_at_its_save_point() {
-    let engine = Engine::new(test_sheet()).unwrap();
-    assert!(engine.is_at_save_point());
+fn an_engine_not_known_to_match_a_file_is_not_at_a_save_point() {
+    let mut engine = Engine::new(test_sheet()).unwrap();
+    assert!(!engine.is_at_save_point(), "unknown reads as dirty");
+    edit(&mut engine, 1);
+    engine.undo().unwrap();
+    assert!(!engine.is_at_save_point());
 }
 
 #[test]
 fn undoing_the_only_edit_returns_to_the_save_point_and_redo_leaves_it() {
-    let mut engine = Engine::new(test_sheet()).unwrap();
+    let mut engine = saved_engine();
     edit(&mut engine, 1);
     assert!(!engine.is_at_save_point());
     engine.undo().unwrap();
@@ -43,7 +53,7 @@ fn undoing_the_only_edit_returns_to_the_save_point_and_redo_leaves_it() {
 
 #[test]
 fn a_save_then_an_edit_then_undo_is_at_the_new_save_point() {
-    let mut engine = Engine::new(test_sheet()).unwrap();
+    let mut engine = saved_engine();
     edit(&mut engine, 1);
     engine.mark_saved();
     assert!(engine.is_at_save_point());
@@ -57,7 +67,7 @@ fn a_save_then_an_edit_then_undo_is_at_the_new_save_point() {
 
 #[test]
 fn an_edit_below_the_save_point_makes_it_unreachable() {
-    let mut engine = Engine::new(test_sheet()).unwrap();
+    let mut engine = saved_engine();
     edit(&mut engine, 1);
     engine.mark_saved();
     engine.undo().unwrap();
@@ -104,7 +114,7 @@ fn a_cell_run_that_amends_the_saved_entry_is_dirty() {
 
 #[test]
 fn forgetting_the_save_point_leaves_nothing_clean() {
-    let mut engine = Engine::new(test_sheet()).unwrap();
+    let mut engine = saved_engine();
     edit(&mut engine, 1);
     engine.mark_saved();
     engine.undo().unwrap();

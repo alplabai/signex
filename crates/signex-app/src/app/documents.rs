@@ -154,9 +154,11 @@ impl SchematicTabSession {
             self.dirty = false;
             self.engine.mark_saved();
         } else {
-            // The new file holds a snapshot the document has moved past, so
-            // no undo or redo step reproduces it.
+            // The new file holds a snapshot the document has moved past (an
+            // undo back to an older state counts), so no undo or redo step
+            // reproduces it and the document is not saved.
             self.engine.forget_save_point();
+            self.dirty = true;
         }
     }
 

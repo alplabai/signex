@@ -46,9 +46,14 @@ Only `DocumentState` writes the set; the editor flag is private to
 ## Undo and the save point (#1822)
 
 A schematic sheet's engine owns a save point: the history position
-(`Engine::undo_position`) it held when it last matched its file. A load
-starts at position 0; a landed save calls `Engine::mark_saved` (through
-`mark_document_clean`, and `finish_save_as`). After every history step
+(`Engine::undo_position`) it held when its content last equalled its file.
+It is **unknown by default** (`Engine::new` reads as dirty), so an engine
+built from content that is not known to be on disk (an autosave recovery
+copy, an in-memory rewrite) can never look clean. It is set only where the
+content is known to equal the file: `Engine::open`, `open_schematic_tab`
+(a sheet read from disk), a History restore, and a landed save whose
+revision still matches (`Engine::mark_saved`, called from
+`mark_document_clean` and `finish_save_as`). After every history step
 (edit, undo, redo; `sync_history_dirty`) the sheet is dirty unless
 `Engine::is_at_save_point()` holds, so undoing the only edit since the save
 is clean again and Redo is dirty again.
@@ -62,8 +67,10 @@ when no history step can reproduce the file any more:
   saved at;
 - an unrecorded edit (`execute_unrecorded`, `set_document`) or a discarded
   group step;
-- a save whose snapshot the document had already moved past (`mark_saved`
-  and `finish_save_as` see a different revision).
+- a save whose snapshot the document had already moved past (an edit, or
+  an Undo back to an older state, while the write ran): `mark_saved` and
+  `finish_save_as` see a different revision, forget the point and leave the
+  sheet dirty, even if the Undo had cleared it meanwhile.
 
 `DirtyDocuments` also remembers which marked paths were marked from outside
 the history (`mark_document_dirty` and its display-only twin: a project
