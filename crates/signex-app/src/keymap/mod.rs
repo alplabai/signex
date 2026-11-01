@@ -38,6 +38,8 @@ pub use profile::{
 #[cfg(test)]
 mod binding_tests;
 #[cfg(test)]
+mod catalog_golden_tests;
+#[cfg(test)]
 mod editor_tests;
 #[cfg(test)]
 mod menu_command_tests;
