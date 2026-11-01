@@ -283,3 +283,19 @@ fn two_output_sheet_pins_on_one_net_are_reported() {
     assert_eq!(hits.len(), 1, "{found:?}");
     assert_eq!(hits[0].severity, signex_erc::Severity::Warning);
 }
+
+#[test]
+fn a_label_on_a_sheet_pin_connects_it() {
+    let found = run_erc(
+        root_with_wired_pin(|root| {
+            root.wires.clear();
+            root.labels.clear();
+            root.labels
+                .push(label("SIG", pt(20.0, 2.54), LabelType::Net, ""));
+        }),
+        child_with_ports(&["IN"]),
+        Active::Root,
+    );
+
+    assert!(by_id(&found, UNCONNECTED).is_empty(), "{found:?}");
+}

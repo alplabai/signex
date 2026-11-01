@@ -12,21 +12,19 @@ use crate::context::{ErcChildSheet, ErcContext, ErcSheetPin};
 use crate::diagnostic::Diagnostic;
 use crate::{RuleKind, sel};
 
-/// A pin is connected when a wire (end or interior), a bus end or a No-Connect
-/// marker sits on it: the anchoring `build_netlist` gives a sheet pin.
+/// A pin is connected when the shared connectivity gate says something lands
+/// on it (`ErcSheetPin::connected`: a wire end, junction, label or No-Connect,
+/// as the netlist anchors them), when a wire passes through it, or when a bus
+/// ends on it. A bus is matched at its ends only, like the label rules
+/// (ADR-0002 D5.4): a bus-typed pin sitting mid-bus is reported, since the
+/// netlist does not anchor buses by interior.
 pub(crate) fn sheet_pin_unconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let wires = SegmentIndex::new(&wire_pairs(ctx));
-    let no_connect = |pin: &ErcSheetPin| {
-        let key = signex_net::pt_key(&pin.position);
-        ctx.no_connects
-            .iter()
-            .any(|nc| signex_net::pt_key(&nc.position) == key)
-    };
     for sheet in &ctx.child_sheets {
         for pin in &sheet.pins {
-            if on_any_wire(&pin.position, &wires)
+            if pin.connected
+                || on_any_wire(&pin.position, &wires)
                 || on_any_bus_endpoint(&pin.position, ctx)
-                || no_connect(pin)
             {
                 continue;
             }

@@ -86,6 +86,7 @@ fn sheet_pin(name: &str) -> ErcSheetPin {
         name: name.into(),
         position: pt(1.0, 1.0),
         direction: String::new(),
+        connected: false,
     }
 }
 

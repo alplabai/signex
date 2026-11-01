@@ -764,6 +764,7 @@ fn child_sheet(filename: &str) -> ErcChildSheet {
             name: "IN".into(),
             position: pt(1.0, 1.0),
             direction: String::new(),
+            connected: false,
         }],
     }
 }

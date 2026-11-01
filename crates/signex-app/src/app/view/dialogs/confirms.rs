@@ -166,6 +166,13 @@ impl Signex {
                 .color(text_muted),
             );
         }
+        // Delete is only offered when no other sheet places the file
+        // (`blocks_delete`), so every listed symbol sits on the row's own parent.
+        debug_assert!(
+            blockers.blocks_delete(is_dir)
+                || blockers.symbols.is_empty()
+                || blockers.own_parent.is_some()
+        );
         if !blockers.blocks_delete(is_dir)
             && !st.is_outside_project
             && blockers.own_parent.is_some()

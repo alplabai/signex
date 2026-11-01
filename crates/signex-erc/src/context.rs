@@ -242,6 +242,11 @@ pub struct ErcSheetPin {
     pub position: Point,
     /// `SheetPin::direction` as stored (`input`, `output`, `bidirectional`, ...).
     pub direction: String,
+    /// Something electrical lands on the pin: the shared
+    /// `signex_net::ConnectedPoints` gate (wire end, junction, label,
+    /// no-connect), as for [`ErcPin::connected`]. A wire passing through the
+    /// pin is not in the gate; the rule checks that itself.
+    pub connected: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -435,7 +440,7 @@ impl ErcContext {
             })
             .collect();
 
-        let child_sheets: Vec<ErcChildSheet> = snapshot
+        let mut child_sheets: Vec<ErcChildSheet> = snapshot
             .child_sheets
             .iter()
             .map(|cs| ErcChildSheet {
@@ -451,6 +456,7 @@ impl ErcContext {
                         name: p.name.clone(),
                         position: p.position,
                         direction: p.direction.clone(),
+                        connected: false,
                     })
                     .collect(),
             })
@@ -516,6 +522,10 @@ impl ErcContext {
         gate.add_anchors(no_connects.iter().map(|nc| nc.position));
         for pin in symbols.iter_mut().flat_map(|s| s.pins.iter_mut()) {
             pin.connected = gate.contains(&pin.world_pos);
+        }
+
+        for pin in child_sheets.iter_mut().flat_map(|c| c.pins.iter_mut()) {
+            pin.connected = gate.contains(&pin.position);
         }
 
         // --- Step 3: derive logical nets ----------------------------------

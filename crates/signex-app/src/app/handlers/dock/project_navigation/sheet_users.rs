@@ -147,10 +147,14 @@ impl Signex {
         self.collect_open_users(&target, skip_project, &mut users);
         users.parents.sort();
         users.parents.dedup();
+        // The hierarchy walk and the open-document scan can both list one
+        // symbol, spelling its parent differently; the symbol's uuid plus the
+        // case-folded parent key is its identity.
         users.symbols.sort();
-        users
-            .symbols
-            .dedup_by(|a, b| a.parent == b.parent && a.id == b.id);
+        let fold = CaseFold::host_default();
+        users.symbols.dedup_by(|a, b| {
+            a.id == b.id && path_key_with(&a.parent, fold) == path_key_with(&b.parent, fold)
+        });
         users
     }
 
