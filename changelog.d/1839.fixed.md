@@ -1,0 +1,1 @@
+- **Save As refuses project files and wrong extensions (#1823)** — Save As of a schematic, symbol or footprint no longer accepts a loaded project's `.snxprj` or a file with another extension as its target, so a project can no longer be overwritten by a document; a name typed without an extension gets the document's own.
