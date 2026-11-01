@@ -35,6 +35,7 @@ mod edit_row_params;
 pub mod editor;
 pub mod external_poll;
 pub mod held_back;
+pub mod loose_symbols;
 pub mod messages;
 pub(crate) mod modal_chrome;
 pub mod mount;
@@ -47,6 +48,7 @@ pub(crate) mod prefix_picker;
 pub mod preview_reads;
 #[cfg(test)]
 mod preview_reads_tests;
+pub(crate) mod preview_rebase;
 pub mod preview_refresh;
 #[cfg(test)]
 mod preview_refresh_tests;

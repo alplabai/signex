@@ -171,6 +171,12 @@ pub enum RowStart {
     /// The row as the user's copy has it, with the change applied: written
     /// as it is when nothing of this app's own wrote the row meanwhile.
     Full(Box<ComponentRow>),
+    /// [`Self::Full`] for a Component Preview's Save: when the only write
+    /// since the copy was read is a primitive-save cascade of this app, the
+    /// copy keeps its edits and takes the cascade's pins and revision
+    /// instead of being refused as stale (#1840). Any other change to the
+    /// row is still refused by the adapter (#1072).
+    FullOverCascade(Box<ComponentRow>),
     /// The stored row, with `patch` applied and the base revision the
     /// user's copy was read at.
     FromStored { base_revision: Option<u64> },
@@ -215,6 +221,24 @@ pub fn row_edit_task(
             Ok(())
         };
         let to_write = match start {
+            RowStart::FullOverCascade(row) => {
+                let mut to_write = *row;
+                if let Ok(stored) = adapter.read_row(&table, row_id)
+                    && own.only_cascaded_since(
+                        row_id,
+                        to_write.server_revision,
+                        stored.server_revision,
+                    )
+                {
+                    crate::library::preview_rebase::rebase_onto_cascade(&mut to_write, &stored);
+                    hash(&mut to_write)?;
+                    crate::diagnostics::log_info(format!(
+                        "Row {row_id} was moved by a symbol or footprint save of this session; \
+                         your edit was saved on top of it."
+                    ));
+                }
+                to_write
+            }
             RowStart::Full(row) => {
                 let mut to_write = *row;
                 if let Some(patch) = patch

@@ -245,7 +245,7 @@ impl Signex {
         let edit = RowEdit {
             table,
             row_id: address.row_id,
-            start: RowStart::Full(Box::new(row)),
+            start: RowStart::FullOverCascade(Box::new(row)),
             patch: None,
             assets: needed,
             message: "edit row (signex-app)",
@@ -392,8 +392,9 @@ impl Signex {
         state.reload_confirming = false;
         if edited_since_save {
             // The saved copy is stored; what was typed since is not.
-            // Only the new base revision is taken over.
-            state.row.server_revision = revision;
+            // Only the new base revision is taken over, and the pins and
+            // version a cascade moved the saved copy to (#1840).
+            crate::library::preview_rebase::rebase_onto_cascade(&mut state.row, &row);
         } else {
             state.row = row;
             state.dirty = false;
@@ -450,6 +451,50 @@ impl Signex {
         for address in self.clean_editors_of(library_path, rows) {
             self.library.reload_editor_blocking(&address, true);
         }
+    }
+
+    /// After a primitive save's cascade moved `rows`: every Component
+    /// Preview of them with unsaved edits keeps those edits and takes the
+    /// cascade's pins and the stored base revision, so its own save is not
+    /// refused for a change this session made (#1840). Read off the UI
+    /// thread.
+    pub(crate) fn rebase_dirty_editors(
+        &mut self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Task<Message> {
+        let dirty = self.dirty_editors_of(library_path, rows);
+        Task::batch(
+            dirty.iter().map(|address| {
+                crate::library::preview_reads::rebase_task(&mut self.library, address)
+            }),
+        )
+    }
+
+    /// [`Self::rebase_dirty_editors`] on this thread, for the blocking save.
+    pub(crate) fn rebase_dirty_editors_blocking(
+        &mut self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) {
+        for address in self.dirty_editors_of(library_path, rows) {
+            self.library.rebase_editor_blocking(&address);
+        }
+    }
+
+    fn dirty_editors_of(
+        &self,
+        library_path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Vec<EditorAddress> {
+        self.library
+            .editors
+            .iter()
+            .filter(|(a, s)| {
+                a.library_path == library_path && rows.contains(&a.row_id) && s.has_unsaved_edits()
+            })
+            .map(|(a, _)| a.clone())
+            .collect()
     }
 
     fn clean_editors_of(

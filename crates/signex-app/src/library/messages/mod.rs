@@ -678,6 +678,26 @@ pub enum PrimitivePickerMsg {
     BrowseResult(Option<PathBuf>),
     /// Dismiss the picker without picking.
     Cancel,
+    /// Symbols read from `.snxsym` files outside every library (#1841).
+    /// `from_browse` is set for a file the user picked: when it holds one
+    /// symbol, the copy question is asked at once.
+    LooseListed {
+        read: std::sync::Arc<crate::library::loose_symbols::LooseRead>,
+        from_browse: bool,
+    },
+    /// A loose symbol was chosen: ask whether to copy it into the library.
+    PickLoose(crate::library::loose_symbols::LooseSymbol),
+    /// "Copy" was answered yes.
+    CopyConfirmed,
+    /// "Copy" was answered no: nothing changes.
+    CopyDeclined,
+    /// The copy finished on its worker: the reference to bind, or why not,
+    /// with the pick it was made for. The bind happens only if that same
+    /// pick is still open.
+    CopyFinished {
+        pick: crate::library::state::CopyTarget,
+        result: Result<PrimitiveRef, String>,
+    },
 }
 
 /// Settings → Library → Distributor APIs panel messages.

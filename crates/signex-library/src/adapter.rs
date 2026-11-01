@@ -105,6 +105,11 @@ pub struct PrimitiveSummary {
     pub kind: PrimitiveKind,
     #[serde(default)]
     pub used_by_count: usize,
+    /// The file that holds it, for a backend that stores primitives in
+    /// files. Symbol files are named by their library's author, not by
+    /// uuid, so the path cannot be derived from the uuid (#1841).
+    #[serde(skip)]
+    pub file: Option<std::path::PathBuf>,
 }
 
 /// One entry in the per-primitive git history feed.

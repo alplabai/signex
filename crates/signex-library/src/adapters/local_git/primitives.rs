@@ -710,6 +710,7 @@ impl LocalGitAdapter {
                 name,
                 kind,
                 used_by_count: 0,
+                file: Some(path.to_path_buf()),
             });
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));

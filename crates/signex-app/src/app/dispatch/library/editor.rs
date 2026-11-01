@@ -446,7 +446,7 @@ impl Signex {
     /// A failing listing must not blank the caches (#599): the refresh
     /// keeps each previous cache on error and reports the failure to the
     /// Messages panel at `warn` (`LibraryState::apply_snapshot`).
-    fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) -> Task<Message> {
+    pub(super) fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) -> Task<Message> {
         let Some(root) = self.library_root_containing(path) else {
             return Task::none();
         };

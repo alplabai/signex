@@ -275,6 +275,7 @@ fn placed_symbol(
         library_id: Some(resolved.library_id),
         row_id: Some(resolved.row_id),
         library_version: resolved.library_version.clone(),
+        footprint: resolved.footprint.clone(),
         ..Default::default()
     }
 }

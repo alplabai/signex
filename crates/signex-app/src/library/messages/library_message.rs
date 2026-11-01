@@ -593,11 +593,12 @@ pub struct ResolvedPlacement {
     /// The row's raw `designator_prefix` parameter, not yet validated: it
     /// beats the standard's table entry for `class` (#1315).
     pub prefix_override: Option<String>,
+    /// The bound footprint's name (empty when none): a placement stamps it
+    /// on the symbol, where ERC, the netlist and the BOM read it (#1842).
+    pub footprint: String,
     /// The part's primary datasheet link and identity fields (Manufacturer,
     /// MPN and the row's parameters). A placement does not stamp them;
-    /// Change Component replaces the old part's with them. The footprint is
-    /// not among them: the row owns it through `row_id`, and a placed
-    /// symbol's footprint text stays empty as on a fresh placement.
+    /// Change Component replaces the old part's with them.
     pub datasheet: String,
     pub fields: Vec<(String, String)>,
 }

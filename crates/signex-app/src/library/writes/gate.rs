@@ -25,11 +25,28 @@ use std::time::{Duration, Instant};
 /// since for any other reason (another process, another user) is not in
 /// step with this ledger and is still refused by the adapter.
 #[derive(Default)]
-pub struct OwnRevisions(Mutex<HashMap<signex_library::RowId, Option<u64>>>);
+pub struct OwnRevisions {
+    revisions: Mutex<HashMap<signex_library::RowId, Option<u64>>>,
+    cascades: Mutex<HashMap<signex_library::RowId, CascadeStep>>,
+}
+
+/// One row's move by a primitive-save cascade of this app: the revision it
+/// stood at before and the one the cascade gave it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CascadeStep {
+    from: Option<u64>,
+    to: Option<u64>,
+}
 
 impl OwnRevisions {
     fn map(&self) -> MutexGuard<'_, HashMap<signex_library::RowId, Option<u64>>> {
-        self.0
+        self.revisions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn steps(&self) -> MutexGuard<'_, HashMap<signex_library::RowId, CascadeStep>> {
+        self.cascades
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -42,11 +59,42 @@ impl OwnRevisions {
     /// This app just wrote `row`, which now stands at `revision`.
     pub fn record(&self, row: signex_library::RowId, revision: Option<u64>) {
         self.map().insert(row, revision);
+        self.steps().remove(&row);
+    }
+
+    /// A primitive-save cascade of this app moved `row` from revision
+    /// `from` to `to` (#1840).
+    pub fn record_cascade(&self, row: signex_library::RowId, from: Option<u64>, to: Option<u64>) {
+        // A second cascade that starts where the first one ended continues
+        // it: the copy an editor read before both is still only cascaded.
+        let from = self
+            .steps()
+            .get(&row)
+            .filter(|step| step.to == from)
+            .map_or(from, |step| step.from);
+        self.record(row, to);
+        self.steps().insert(row, CascadeStep { from, to });
+    }
+
+    /// Whether the only write to `row` since a copy at revision `base` was
+    /// read is a cascade of this app, and the row still stands where that
+    /// cascade left it (`stored`). A row any other writer touched fails
+    /// this, so the adapter's stale refusal still guards it.
+    pub fn only_cascaded_since(
+        &self,
+        row: signex_library::RowId,
+        base: Option<u64>,
+        stored: Option<u64>,
+    ) -> bool {
+        self.steps()
+            .get(&row)
+            .is_some_and(|step| step.from == base && step.to == stored)
     }
 
     /// `row` was deleted.
     pub fn forget(&self, row: signex_library::RowId) {
         self.map().remove(&row);
+        self.steps().remove(&row);
     }
 }
 
@@ -232,6 +280,19 @@ impl LibraryWrites {
         let mut gates = lock_gates(&self.gates);
         let gate = gates.entry(root.to_path_buf()).or_default();
         Turn::take(gate, true)
+    }
+
+    /// See [`OwnRevisions::only_cascaded_since`]; `false` for a library
+    /// this app has not written.
+    pub fn only_cascaded_since(
+        &self,
+        root: &Path,
+        row: signex_library::RowId,
+        base: Option<u64>,
+        stored: Option<u64>,
+    ) -> bool {
+        self.gate(root)
+            .is_some_and(|gate| gate.own.only_cascaded_since(row, base, stored))
     }
 
     fn gate(&self, root: &Path) -> Option<Arc<WriteGate>> {

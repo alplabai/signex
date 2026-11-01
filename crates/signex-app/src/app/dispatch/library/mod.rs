@@ -56,6 +56,9 @@ mod new_row;
 mod pricing;
 #[cfg(test)]
 mod pricing_tests;
+mod primitive_copy;
+#[cfg(test)]
+mod primitive_copy_tests;
 mod primitive_picker;
 mod read_only;
 mod recovery;
@@ -68,6 +71,8 @@ mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
+#[cfg(test)]
+mod save_all_cascade_tests;
 mod settings;
 #[cfg(test)]
 mod settings_tests;
