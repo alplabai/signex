@@ -499,3 +499,5 @@ mod net_color_persist_tests;
 mod net_color_undo_order_tests;
 #[cfg(test)]
 mod rect_edit_tests;
+#[cfg(test)]
+mod undo_save_point_tests;

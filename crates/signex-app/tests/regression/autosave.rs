@@ -492,6 +492,31 @@ fn restore_loads_the_copy_as_unsaved_edits_and_never_writes_the_file() {
     assert!(!sidecar_of(&f).exists());
 }
 
+/// #1822 review: the restored engine has no save point (its content is not on
+/// disk), so neither an autosave sweep nor an Undo can show it clean.
+#[test]
+fn a_restored_copy_stays_dirty_through_autosave_ticks_and_undo() {
+    let (f, mut next, _) = next_run_opens_with_a_newer_copy();
+    answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
+    assert!(next.document_state.is_document_dirty(&f.doc));
+
+    for _ in 0..2 {
+        let task = next.update(Message::Autosave(AutosaveMsg::Ticked));
+        complete(&mut next, task);
+        assert!(
+            next.document_state.is_document_dirty(&f.doc),
+            "a tick must not clean the restored edits"
+        );
+        assert!(sidecar_of(&f).exists(), "the copy stays until a save");
+    }
+    let task = next.update(Message::Edit(signex_app::app::EditMsg::Undo));
+    complete(&mut next, task);
+    let task = next.update(Message::Edit(signex_app::app::EditMsg::Redo));
+    complete(&mut next, task);
+    assert!(next.document_state.is_document_dirty(&f.doc));
+    assert!(next.document_state.has_dirty_documents());
+}
+
 #[test]
 fn discard_deletes_the_copy_and_leaves_the_document_clean() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();

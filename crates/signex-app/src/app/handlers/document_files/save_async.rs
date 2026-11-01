@@ -189,6 +189,9 @@ impl Signex {
                 .document_saves
                 .record_failure(path, reason.clone());
             self.report_save_failure(context, &anyhow::anyhow!(reason));
+            // The file is unchanged, so an Undo back to the save point that
+            // the write was holding dirty may now read clean.
+            self.document_state.sync_history_dirty(&outcome_path);
             return Task::none();
         }
         self.document_state.document_saves.clear_failure(&path);
@@ -268,7 +271,21 @@ impl Signex {
         // A different revision means the engine was replaced (History
         // restore) or edited; "Save X" would mislabel what is committed.
         if engine.revision() != revision {
+            // The bytes that landed are a snapshot the document has moved
+            // past: no undo or redo step reproduces the file now.
+            // An undo during the write may have cleared the mark against the
+            // old save point: the file holds the snapshot, the document
+            // does not, so it is dirty again.
+            if let Some(engine) = self.document_state.engines.get_mut(path) {
+                engine.forget_save_point();
+            }
+            self.document_state.sync_history_dirty(path);
             return;
+        }
+        // The engine's document is what is on disk, even if a colour change
+        // keeps the sheet dirty below.
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine.mark_saved();
         }
         // A colour changed while the write ran: the file lacks it, so the
         // sheet stays dirty and the next save writes it.
