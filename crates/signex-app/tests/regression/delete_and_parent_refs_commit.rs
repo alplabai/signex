@@ -383,7 +383,15 @@ fn rename_re_points_a_saved_reference_the_open_parent_no_longer_holds() {
     let mut f = fixture();
     open_root(&mut f, sheet("A4", &[]));
     let root = f.dir.join("Root.snxsch");
-    f.app.document_state.mark_document_dirty(&root);
+    // The engine matches its file except for the deleted symbol, and sits at
+    // its save point: only the external mark can keep it dirty.
+    f.app
+        .document_state
+        .engines
+        .get_mut(&root)
+        .unwrap()
+        .mark_saved();
+    f.app.document_state.mark_document_clean(&root);
 
     rename(&mut f, "Child.snxsch", "Kid.snxsch");
 
@@ -393,9 +401,35 @@ fn rename_re_points_a_saved_reference_the_open_parent_no_longer_holds() {
             .document()
             .child_sheets
             .is_empty(),
-        "the unsaved deletion is still held in memory"
+        "the open engine still holds its own state"
     );
+    // Undoing back to the save point must not read clean: memory and disk differ.
+    f.app.document_state.sync_history_dirty(&root);
     assert!(f.app.document_state.is_document_dirty(&root));
+}
+
+/// An open of the parent that started before the rename read the old bytes and
+/// would install them as a clean engine: the parent follows in memory instead
+/// and the stale open is reported.
+#[test]
+fn a_parent_whose_open_is_in_flight_is_not_patched_behind_it() {
+    let mut f = fixture();
+    let root = f.dir.join("Root.snxsch");
+    let before = std::fs::read(&root).expect("read root");
+    f.app.document_state.pending_opens.insert(root.clone());
+
+    rename(&mut f, "Child.snxsch", "Kid.snxsch");
+
+    assert_eq!(
+        std::fs::read(&root).unwrap(),
+        before,
+        "the saved parent is not rewritten under an open that already read it"
+    );
+    assert!(
+        f.app.document_state.error_notice.is_some(),
+        "the user is told"
+    );
+    assert!(!f.app.document_state.engines.contains_key(&root));
 }
 
 /// The owning project closes while the rename worker runs. An engine another

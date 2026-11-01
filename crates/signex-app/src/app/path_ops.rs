@@ -226,7 +226,7 @@ fn refusal(conflict: &PathOpConflict, path: &Path, outcome: &str) -> String {
     let subject = leaf(path);
     if conflict.dependent {
         format!(
-            "{subject} cannot be {outcome} while the {} of {moved} is still rewriting it. \
+            "{subject} cannot be {outcome} while the {} of {moved} updates the project's files. \
              Try again once it finishes.",
             conflict.kind.noun()
         )

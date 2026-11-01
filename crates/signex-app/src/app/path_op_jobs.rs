@@ -256,20 +256,30 @@ impl DeleteJob {
             return (DeleteIo::Deleted, entry);
         };
         let why = e.to_string();
-        if let (EntryPatch::Patched(_), Some((file, _)), Some(original)) =
-            (&entry, &self.project, original)
-            && let Err(back) = signex_types::atomic_io::atomic_write(file, &original)
-        {
-            return (
+        let EntryPatch::Patched(_) = &entry else {
+            return (DeleteIo::Failed(why), EntryPatch::NotListed);
+        };
+        let Some((file, _)) = &self.project else {
+            return (DeleteIo::Failed(why), EntryPatch::NotListed);
+        };
+        // The entry is gone from the saved project: put the original bytes
+        // back, and when that is impossible say the project is stale.
+        let restored = match &original {
+            Some(original) => signex_types::atomic_io::atomic_write(file, original)
+                .map_err(|back| back.to_string()),
+            None => Err("the original could not be read".to_string()),
+        };
+        match restored {
+            Ok(()) => (DeleteIo::Failed(why), EntryPatch::NotListed),
+            Err(back) => (
                 DeleteIo::FailedProjectStale(format!(
                     "{why}; the project file {} no longer lists it and could not be restored \
                      ({back}). Save the project to list it again",
                     file.display()
                 )),
                 EntryPatch::NotListed,
-            );
+            ),
         }
-        (DeleteIo::Failed(why), EntryPatch::NotListed)
     }
 
     fn drop_entry(&self) -> Result<EntryPatch, signex_types::project::ProjectError> {

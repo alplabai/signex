@@ -27,10 +27,14 @@ pub enum ParentDisk {
     Written(SharedBytes),
     /// The saved parent has no reference to change; nothing was written.
     NothingToChange,
-    /// The saved parent could not be changed (unreadable, written by a newer
-    /// Signex, or the write failed); it is left untouched and the reason is
-    /// kept. The reference then waits for a save of the in-memory parent.
+    /// The saved parent has a reference to change but could not be changed
+    /// (written by a newer Signex, or the write failed); it is left untouched
+    /// and the reason is kept. The reference then waits for a save of the
+    /// in-memory parent.
     Skipped(String),
+    /// The saved parent could not be read or parsed, so whether it references
+    /// the file is unknown; it is left untouched.
+    Unchecked(String),
 }
 
 impl ParentDisk {
@@ -73,11 +77,11 @@ pub(crate) fn patch_parents(
 fn patch_parent(parent: &Path, planned: &[&ReferenceRewrite], renamed: &Renamed<'_>) -> ParentDisk {
     let text = match std::fs::read_to_string(parent) {
         Ok(text) => text,
-        Err(e) => return ParentDisk::Skipped(format!("could not be read: {e}")),
+        Err(e) => return ParentDisk::Unchecked(format!("could not be read: {e}")),
     };
     let mut parsed = match signex_types::format::SnxSchematic::parse(&text) {
         Ok(parsed) => parsed,
-        Err(e) => return ParentDisk::Skipped(format!("could not be parsed: {e}")),
+        Err(e) => return ParentDisk::Unchecked(format!("could not be parsed: {e}")),
     };
     let parent_dir = parent.parent().unwrap_or_else(|| Path::new(""));
     let old_key = path_key_with(renamed.old, renamed.fold);
