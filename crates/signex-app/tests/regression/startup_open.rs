@@ -100,6 +100,25 @@ fn missing_project_argument_raises_the_open_failed_notice() {
     assert!(app.document_state.projects.is_empty());
 }
 
+/// #1832 — `PUSHPULL.SNXSCH` is a schematic: the extension matches in any
+/// letter case, so the open starts instead of failing as unsupported.
+#[test]
+fn an_upper_case_sheet_extension_opens_as_a_schematic() {
+    let tmp = TempDir::new().expect("tempdir");
+    let sheet = tmp.path().join("PUSHPULL.SNXSCH");
+    fs::write(&sheet, b"").expect("write sheet");
+
+    let (mut app, _t) = Signex::new();
+    dispatch_startup(&mut app, &[sheet.as_path()], tmp.path());
+
+    let notice = app.document_state.error_notice.as_ref();
+    assert!(
+        notice.is_none_or(|n| !n.detail.contains("unsupported file type")),
+        "{:?}",
+        notice.map(|n| &n.detail)
+    );
+}
+
 #[test]
 fn failed_async_schematic_read_raises_the_open_failed_notice() {
     let (mut app, _t) = Signex::new();

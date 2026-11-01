@@ -478,8 +478,9 @@ impl Signex {
 }
 
 /// Routed by extension, not by an open tab, so a PCB whose tab closed
-/// mid-write still logs and commits.
+/// mid-write still logs and commits. Any letter case, as open accepts it, so
+/// a board opened as `Board.SNXPCB` completes as a board (#1832).
 pub(super) fn is_pcb_path(path: &std::path::Path) -> bool {
-    path.extension()
-        .is_some_and(|ext| ext == "snxpcb" || ext == "standard_pcb")
+    use crate::app::file_extension::has_extension;
+    has_extension(path, "snxpcb") || has_extension(path, "standard_pcb")
 }

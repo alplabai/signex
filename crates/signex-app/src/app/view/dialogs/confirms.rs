@@ -123,7 +123,7 @@ impl Signex {
         // has nothing to exclude (#1618).
         let blockers = self.remove_blockers(st);
         // A `.snxlib` is a directory package: it is never a placed sheet.
-        let is_dir = st.target_path.extension().and_then(|e| e.to_str()) == Some("snxlib");
+        let is_dir = crate::app::file_extension::has_extension(&st.target_path, "snxlib");
         let mut remove_options = column![].spacing(SP.m);
         if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
             remove_options = remove_options.push(option_card(
