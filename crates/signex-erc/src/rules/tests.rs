@@ -1165,3 +1165,37 @@ fn a_wire_end_beside_a_sheet_pin_still_dangles() {
     dangling_wire(&c, &mut out);
     assert_eq!(out.len(), 1, "the free end is still dangling: {out:?}");
 }
+
+#[test]
+fn orphan_label_accepts_a_label_on_a_sheet_pin() {
+    // Issue #1876: `child_sheet` puts its IN pin at (1, 1). `build_netlist`
+    // anchors a sheet pin and a label at the same point into one net, so a
+    // Net or Power label sitting on the pin with no wire is not orphaned.
+    let mut c = ctx(
+        Vec::new(),
+        Vec::new(),
+        vec![
+            net_label("IN", pt(1.0, 1.0)),
+            power_label("+3V3", pt(1.0, 1.0)),
+        ],
+        Vec::new(),
+    );
+    c.child_sheets.push(child_sheet("child.snxsch"));
+    let mut out = Vec::new();
+    orphan_label(&c, &mut out);
+    assert!(out.is_empty(), "labels sit on a sheet pin: {out:?}");
+}
+
+#[test]
+fn orphan_label_still_flags_a_label_beside_a_sheet_pin() {
+    let mut c = ctx(
+        Vec::new(),
+        Vec::new(),
+        vec![net_label("IN", pt(3.54, 1.0))],
+        Vec::new(),
+    );
+    c.child_sheets.push(child_sheet("child.snxsch"));
+    let mut out = Vec::new();
+    orphan_label(&c, &mut out);
+    assert_eq!(out.len(), 1, "a label off the pin is orphaned: {out:?}");
+}
