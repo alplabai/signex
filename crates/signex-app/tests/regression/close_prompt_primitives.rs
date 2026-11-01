@@ -191,3 +191,30 @@ fn a_library_listed_by_two_open_projects_keeps_its_drafts() {
     );
     assert!(app.document_state.is_document_dirty(&draft));
 }
+
+/// A project nested inside another project's folder keeps its own drafts:
+/// closing the outer project must not list (or save, or discard) them, even
+/// when the outer project's library is the deepest library folder above them.
+#[test]
+fn an_outer_project_does_not_claim_a_draft_in_a_nested_projects_folder() {
+    let tmp = TempDir::new().unwrap();
+    let mut app = app_with_open_project(tmp.path());
+    let sub = tmp.path().join("sub");
+    push_project(&mut app, &sub, "b");
+    relist_library(
+        &mut app,
+        1,
+        LibraryEntryKind::ProjectLocal,
+        PathBuf::from("libs/b.snxlib"),
+    );
+    let draft = sub.join("symbols").join("s.snxsym");
+    open_dirty_symbol(&mut app, &draft);
+
+    crate::close_support::close_first_project(&mut app);
+
+    assert!(
+        app.ui_state.project_close_confirm.is_none(),
+        "B's folder is not A's to save or discard"
+    );
+    assert!(app.document_state.is_document_dirty(&draft));
+}

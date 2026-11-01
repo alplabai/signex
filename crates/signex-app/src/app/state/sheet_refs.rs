@@ -676,9 +676,10 @@ impl DocumentState {
     /// Does the symbol / footprint draft at `path` belong to `projects[closing]`
     /// alone? Its owning library ([`scope::owning_library`] over `libraries`)
     /// must be a project-local library of the closing project, listed by no
-    /// other open project and not inside another open project's directory. A
-    /// shared or global library outlives the project, so its drafts are not
-    /// the project's to save or discard.
+    /// other open project and not inside another open project's directory,
+    /// and the draft itself must not sit in a project nested in the closing
+    /// one's folder. A shared or global library outlives the project, so its
+    /// drafts are not the project's to save or discard.
     fn primitive_is_closing_projects(
         &self,
         closing: usize,
@@ -707,9 +708,16 @@ impl DocumentState {
                 .filter(move |(i, _)| *i != closing)
                 .map(|(_, p)| p)
         };
+        // A draft inside a project nested in the closing one's folder is that
+        // project's, even when the closing project's library is its owner.
+        let in_nested_project = |p: &LoadedProject| {
+            scope::path_is_under(path, p.dir(), p.case_fold)
+                && !scope::path_is_under(project.dir(), p.dir(), p.case_fold)
+        };
         lists(project, true)
             && !others().any(|p| lists(p, false))
             && !others().any(|p| scope::path_is_under(owner, p.dir(), p.case_fold))
+            && !others().any(in_nested_project)
     }
 
     /// File-identity keys of the library files `projects[idx]` mounts.
