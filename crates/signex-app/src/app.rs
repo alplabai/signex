@@ -26,6 +26,7 @@ mod helpers;
 pub(crate) mod hierarchy_fixture;
 mod load_gateway;
 mod mutation_gateway;
+pub mod parent_reference_disk;
 pub mod path_op_jobs;
 pub mod path_ops;
 pub mod project_entry_disk;

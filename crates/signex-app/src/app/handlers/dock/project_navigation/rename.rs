@@ -294,11 +294,12 @@ impl Signex {
         // The unopened parents the worker reads, and the project file it
         // rewrites, are registered too, so opening or saving one meanwhile is
         // refused instead of being replaced by (or replacing) the rewrite.
-        let dependents = parents_to_read
-            .iter()
-            .chain(project_file.as_ref())
-            .cloned()
-            .collect();
+        // Parents are rewritten on disk too (#1849), open or not, and a saved
+        // reference may exist only on disk, so every candidate page is
+        // guarded and scanned.
+        let parent_candidates = self.disk_parent_candidates(owner, plan, &from);
+        let mut dependents = parent_candidates.clone();
+        dependents.extend(project_file.iter().cloned());
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::Rename,
             vec![from.clone(), new_path.clone()],
@@ -312,6 +313,9 @@ impl Signex {
             to: new_path.clone(),
             saves: self.document_state.document_saves.barrier(),
             parents_to_read,
+            rewrites: plan.rewrites.clone(),
+            parent_candidates,
+            fold,
             project: project_file.map(|project_file| crate::app::path_op_jobs::ProjectEntryPatch {
                 project_file,
                 new_name: new_name.clone(),
@@ -329,12 +333,18 @@ impl Signex {
         iced::Task::perform(
             crate::app::path_op_jobs::run_blocking(move || job.run()),
             move |joined| {
-                let (result, parents) =
-                    joined.unwrap_or_else(|e| (Err(RenameIoError::Os(e)), Default::default()));
+                let (result, parents, parent_disk) = joined.unwrap_or_else(|e| {
+                    (
+                        Err(RenameIoError::Os(e)),
+                        Default::default(),
+                        Default::default(),
+                    )
+                });
                 Message::Rename(RenameMsg::FileRenamed(Box::new(FileRenameDone {
                     request,
                     result,
                     parents,
+                    parent_disk,
                 })))
             },
         )

@@ -226,7 +226,7 @@ fn refusal(conflict: &PathOpConflict, path: &Path, outcome: &str) -> String {
     let subject = leaf(path);
     if conflict.dependent {
         format!(
-            "{subject} cannot be {outcome} while the {} of {moved} is still rewriting it. \
+            "{subject} cannot be {outcome} while the {} of {moved} updates the project's files. \
              Try again once it finishes.",
             conflict.kind.noun()
         )
@@ -397,6 +397,8 @@ pub struct FileRenameDone {
     /// What the move did to the saved `.snxprj` entry (#1821).
     pub result: Result<crate::app::project_entry_disk::EntryPatch, RenameIoError>,
     pub parents: ParentSheets,
+    /// What the move did to the saved parent sheets' references (#1849).
+    pub parent_disk: crate::app::parent_reference_disk::ParentDiskOutcomes,
 }
 
 // ---- rename library ---------------------------------------------------------
@@ -469,6 +471,10 @@ pub enum DeleteIo {
     Deleted,
     /// `remove_file` / `remove_dir_all` failed with this OS text.
     Failed(String),
+    /// As `Failed`, and the saved project no longer lists the file either: its
+    /// entry was removed first and could not be put back (#1849). The in-memory
+    /// project still lists it, so a project save writes the entry back.
+    FailedProjectStale(String),
     /// Whether the target exists could not be determined.
     CheckFailed(String),
 }
@@ -477,6 +483,8 @@ pub enum DeleteIo {
 pub struct DeleteDone {
     pub request: DeleteRequest,
     pub io: DeleteIo,
+    /// What the delete did to the saved `.snxprj` entry (#1849).
+    pub entry: crate::app::project_entry_disk::EntryPatch,
 }
 
 /// Drive a message and every task it produces to completion without an iced

@@ -387,7 +387,7 @@ fn writers_of_the_project_file_are_refused_while_add_new_rewrites_it() {
         is_project_rename: false,
     });
     let _rename = fx.app.update(Message::Rename(RenameMsg::Submit));
-    assert!(rename_error(&fx).contains("still rewriting"));
+    assert!(rename_error(&fx).contains("updates the project's files"));
     assert!(fx.sheet.exists(), "the refused rename moved nothing");
 
     run_task(&mut fx.app, task);

@@ -123,6 +123,17 @@ fn submit_rename(app: &mut Signex, target: &Path, buffer: &str) {
     crate::settle_support::settle(app, Message::Rename(RenameMsg::Submit));
 }
 
+fn disk_child_refs(parent: &Path) -> Vec<String> {
+    let text = fs::read_to_string(parent).expect("read parent");
+    signex_types::format::SnxSchematic::parse(&text)
+        .expect("parse parent")
+        .sheet
+        .child_sheets
+        .iter()
+        .map(|c| c.filename.clone())
+        .collect()
+}
+
 fn child_refs(app: &Signex, parent: &Path) -> Vec<String> {
     app.document_state
         .engines
@@ -145,15 +156,20 @@ fn renaming_a_child_sheet_updates_the_unopened_parents_reference() {
     assert!(f.app.ui_state.rename_dialog.is_none(), "rename succeeded");
     assert!(!f.child.exists());
     assert!(f.child.with_file_name("renamed.snxsch").exists());
-    assert_eq!(child_refs(&f.app, &f.root), vec!["renamed.snxsch"]);
-    assert!(
-        f.app.document_state.is_document_dirty(&f.root),
-        "the parent must be marked dirty for the user to save"
-    );
     assert_eq!(
+        disk_child_refs(&f.root),
+        vec!["renamed.snxsch"],
+        "the saved parent follows the rename, so Discard All cannot strand it (#1849)"
+    );
+    assert!(
+        !f.app.document_state.engines.contains_key(&f.root),
+        "an unopened parent is patched on disk, not loaded"
+    );
+    assert!(!f.app.document_state.is_document_dirty(&f.root));
+    assert_ne!(
         fs::read(&f.root).expect("read root"),
         root_before,
-        "the parent is NOT silently written"
+        "the parent's reference was written"
     );
     assert!(
         !f.app.document_state.is_document_dirty(&f.prj),
@@ -183,13 +199,11 @@ fn renaming_a_child_sheet_updates_an_open_parents_reference() {
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
 
     assert_eq!(child_refs(&f.app, &f.root), vec!["renamed.snxsch"]);
+    assert_eq!(disk_child_refs(&f.root), vec!["renamed.snxsch"]);
     assert!(
-        f.app
-            .document_state
-            .is_document_dirty(&f.app.document_state.tabs[0].path),
-        "open tab shows dirty"
+        !f.app.document_state.is_document_dirty(&f.root),
+        "memory equals the re-pointed file, so the open tab is clean"
     );
-    assert!(f.app.document_state.is_document_dirty(&f.root));
 }
 
 #[test]
@@ -271,6 +285,19 @@ fn a_project_library_rename_repoints_the_entry_in_memory_and_in_the_saved_projec
     );
 }
 
+/// Open the parent tab-less with an unrelated unsaved edit (a different paper
+/// size), so it is a dirty engine the rename must follow without writing it.
+fn open_dirty_parent(f: &mut Fixture) {
+    let text = fs::read_to_string(&f.root).expect("read root");
+    let mut sheet = signex_types::format::SnxSchematic::parse(&text)
+        .expect("parse root")
+        .sheet;
+    sheet.paper_size = "A3".to_string();
+    let engine = signex_engine::Engine::new_with_path(sheet, Some(f.root.clone())).expect("engine");
+    f.app.document_state.engines.insert(f.root.clone(), engine);
+    f.app.document_state.mark_document_dirty(&f.root);
+}
+
 #[test]
 fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
     use signex_app::app::{ProjectCloseChoice, ProjectMsg, WindowMsg};
@@ -282,10 +309,7 @@ fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
         serde_json::to_vec(&f.app.document_state.projects[0].data).expect("serialise prj"),
     )
     .expect("write prj");
-    assert!(
-        !f.app.document_state.engines.contains_key(&f.root),
-        "precondition: the parent sheet is not open"
-    );
+    open_dirty_parent(&mut f);
 
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
 
@@ -316,6 +340,10 @@ fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
         .map(|c| c.filename.as_str())
         .collect();
     assert_eq!(refs, vec!["renamed.snxsch"], "parent on disk is re-pointed");
+    assert_eq!(
+        root.paper_size, "A3",
+        "Save All wrote the parent's own edit"
+    );
 
     let prj = signex_types::project::parse_project(&f.prj).expect("parse saved prj");
     assert!(prj.sheets.iter().any(|s| s.filename == "renamed.snxsch"));
@@ -403,6 +431,7 @@ fn closing_the_project_after_a_rename_keeps_the_prompt_and_strands_no_engine() {
     use signex_app::app::{ProjectCloseChoice, ProjectMsg};
 
     let mut f = fixture();
+    open_dirty_parent(&mut f);
     submit_rename(&mut f.app, &f.child, "renamed.snxsch");
     assert!(
         f.app.document_state.engines.contains_key(&f.root) && f.app.document_state.tabs.is_empty(),
@@ -459,7 +488,7 @@ fn extension_check_is_case_sensitive_and_ignores_dots_in_the_stem() {
         "dotted stem is fine"
     );
     assert!(f.child.with_file_name("a.b.snxsch").exists());
-    assert_eq!(child_refs(&f.app, &f.root), vec!["a.b.snxsch"]);
+    assert_eq!(disk_child_refs(&f.root), vec!["a.b.snxsch"]);
 }
 
 /// The worker reads the unopened parent for the rewrite; opening it from the
@@ -492,11 +521,11 @@ fn opening_an_unopened_rewrite_parent_during_the_rename_is_refused() {
     assert!(
         signex_app::diagnostics::recent_entries().iter().any(|e| e
             .message
-            .contains("root.snxsch cannot be opened while the rename of child.snxsch is still rewriting it")),
+            .contains("root.snxsch cannot be opened while the rename of child.snxsch updates the project's files")),
         "the refusal names its cause"
     );
 
     crate::settle_support::settle_task(&mut f.app, rename);
-    assert_eq!(child_refs(&f.app, &f.root), ["renamed.snxsch"]);
-    assert!(f.app.document_state.is_document_dirty(&f.root));
+    assert_eq!(disk_child_refs(&f.root), ["renamed.snxsch"]);
+    assert!(!f.app.document_state.is_document_dirty(&f.root));
 }

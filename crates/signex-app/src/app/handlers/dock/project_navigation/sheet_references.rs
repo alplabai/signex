@@ -3,12 +3,15 @@
 //! Renaming a child sheet's file leaves every parent's `ChildSheet.filename`
 //! pointing at a path that no longer exists. The fix goes through the engine
 //! (`Command::RenameChildSheetFile`) so it is undoable and dirty-tracked; the
-//! parents are only marked dirty, never written — the user's explicit save
-//! (or Save All on close) persists them.
+//! saved parents are re-pointed on disk by the same job that moved the file
+//! (`parent_reference_disk`, #1849); an open parent follows in memory, and is
+//! dirtied only when it already held other unsaved edits or the disk write was
+//! skipped.
 
 use std::path::{Path, PathBuf};
 
 use super::*;
+use crate::app::parent_reference_disk::{ParentDisk, ParentDiskOutcomes};
 use crate::app::project_sheets::{assemble_project_sheets, project_root_sheet_path};
 use crate::app::state::library_entry::with_new_leaf;
 use crate::app::state::scope::path_key_with;
@@ -84,7 +87,7 @@ impl Signex {
     /// Every parent reference, across the owning project's sheets, that
     /// resolves to `old_path`. Must run BEFORE the file is renamed on disk so
     /// the hierarchy walk still reaches the sheet's own subtree.
-    pub(super) fn plan_reference_rewrites(
+    pub(crate) fn plan_reference_rewrites(
         &self,
         project_idx: usize,
         old_path: &Path,
@@ -158,8 +161,9 @@ impl Signex {
         &mut self,
         plan: &ReferencePlan,
         parents: ParentSheets,
+        disk: &ParentDiskOutcomes,
     ) -> RewriteOutcome {
-        self.apply_reference_rewrites_for(plan, parents, "rename")
+        self.apply_reference_rewrites_for(plan, parents, disk, "rename")
     }
 
     /// [`Self::apply_reference_rewrites`] logging failures under `context`
@@ -168,14 +172,32 @@ impl Signex {
         &mut self,
         plan: &ReferencePlan,
         mut parents: ParentSheets,
+        disk: &ParentDiskOutcomes,
         context: &str,
     ) -> RewriteOutcome {
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
-            if let Err(why) = self.apply_one_rewrite(rewrite, &mut parents) {
+            let on_disk = disk
+                .get(&rewrite.parent)
+                .is_some_and(ParentDisk::is_written);
+            if let Some(ParentDisk::Skipped(why) | ParentDisk::Unchecked(why)) =
+                disk.get(&rewrite.parent)
+            {
+                crate::diagnostics::log_warning(format!(
+                    "{context}: {} {why}, so its saved reference was not updated; save it to keep the change.",
+                    rewrite.parent.display()
+                ));
+            }
+            if let Err(why) = self.apply_one_rewrite(rewrite, &mut parents, on_disk) {
+                // The disk holds the new reference but memory does not: the
+                // two differ, so the parent has something to save.
+                if on_disk && self.document_state.engines.contains_key(&rewrite.parent) {
+                    self.document_state.mark_document_dirty(&rewrite.parent);
+                }
                 failures.push(format!("{} — {why}", rewrite.parent.display()));
             }
         }
+        self.settle_unplanned_parents(plan, disk, context);
         // The modal card is dismissible; the Messages panel keeps every
         // dangling or unverified reference visible after it is gone.
         for line in failures.iter().chain(&plan.unchecked) {
@@ -187,6 +209,129 @@ impl Signex {
         RewriteOutcome {
             failed: failures,
             unchecked: plan.unchecked.clone(),
+        }
+    }
+
+    /// Is an open of `path` still reading it? Compared case-folded whatever the
+    /// volume does: a spelling that differs only in case can only make this
+    /// refuse more, never miss an open the volume would treat as the same file.
+    pub(crate) fn open_in_flight(&self, path: &Path) -> bool {
+        let key = path_key_with(path, crate::app::state::scope::CaseFold::from_probe(true));
+        self.document_state.pending_opens.paths().any(|open| {
+            path_key_with(open, crate::app::state::scope::CaseFold::from_probe(true)) == key
+        })
+    }
+
+    /// Parents the disk job scanned that the plan did not name (a reference
+    /// that exists only in the saved file). One that was rewritten differs from
+    /// an open engine that still holds the old state, so it gets the external
+    /// dirty mark (undo back to the save point must not read clean); one that
+    /// could not be rewritten is reported.
+    fn settle_unplanned_parents(
+        &mut self,
+        plan: &ReferencePlan,
+        disk: &ParentDiskOutcomes,
+        context: &str,
+    ) {
+        let mut outcomes: Vec<_> = disk.iter().collect();
+        outcomes.sort_by_key(|(parent, _)| *parent);
+        for (parent, outcome) in outcomes {
+            if plan.rewrites.iter().any(|r| &r.parent == parent) {
+                continue;
+            }
+            let open = self.document_state.engines.contains_key(parent);
+            match outcome {
+                ParentDisk::Written(_) if open => {
+                    self.document_state.mark_document_dirty(parent);
+                    crate::diagnostics::log_warning(format!(
+                        "{context}: {} names the renamed sheet only in its saved file; the \
+                         saved copy now names the new file, so undoing the unsaved change in \
+                         the open sheet would bring the old name back.",
+                        parent.display()
+                    ));
+                }
+                ParentDisk::Skipped(why) => crate::diagnostics::log_warning(format!(
+                    "{context}: {} {why}, so its saved reference was not updated.",
+                    parent.display()
+                )),
+                ParentDisk::Unchecked(why) if open => crate::diagnostics::log_warning(format!(
+                    "{context}: {} {why}, so whether it references the sheet is unknown.",
+                    parent.display()
+                )),
+                _ => {}
+            }
+        }
+    }
+
+    /// The saved parents the disk job scans for references to `from`: those the
+    /// plan rewrites plus every page of the owning project, since a symbol
+    /// deleted in memory but not yet saved still names the file on disk. A
+    /// parent another move or delete holds, or whose open is in flight, is left
+    /// out; its reference follows in memory (dirty) instead.
+    pub(crate) fn disk_parent_candidates(
+        &self,
+        owner: Option<crate::app::state::ProjectId>,
+        plan: &ReferencePlan,
+        from: &Path,
+    ) -> Vec<PathBuf> {
+        let is_sheet = |path: &Path| path.extension().is_some_and(|e| e == "snxsch");
+        // Only a renamed sheet can be placed by a sheet symbol.
+        if !is_sheet(from) {
+            return Vec::new();
+        }
+        let mut candidates: Vec<PathBuf> = plan
+            .rewrites
+            .iter()
+            .map(|rewrite| rewrite.parent.clone())
+            .collect();
+        if let Some(project) = owner.and_then(|id| self.document_state.project_by_id(id)) {
+            let fold = project.case_fold;
+            candidates.extend(
+                project
+                    .data
+                    .sheets
+                    .iter()
+                    .map(|s| project.dir().join(&s.filename))
+                    .filter(|page| is_sheet(page))
+                    .filter(|page| path_key_with(page, fold) != path_key_with(from, fold)),
+            );
+        }
+        candidates.sort();
+        candidates.dedup();
+        // A parent another move or delete holds, or one whose open is still in
+        // flight (it read the old bytes), follows in memory instead.
+        candidates.retain(|parent| {
+            self.document_state
+                .pending_path_ops
+                .blocking_start(parent)
+                .is_none()
+                && !self.open_in_flight(parent)
+        });
+        candidates
+    }
+
+    /// Commit every parent the disk job rewrote to the project's git history,
+    /// as the project file's own patch is.
+    pub(crate) fn commit_written_parents(&mut self, disk: &ParentDiskOutcomes, message: &str) {
+        let mut written: Vec<_> = disk
+            .iter()
+            .filter_map(|(path, outcome)| match outcome {
+                ParentDisk::Written(bytes) => Some((path.clone(), bytes.clone())),
+                _ => None,
+            })
+            .collect();
+        if written.is_empty() {
+            return;
+        }
+        // A background read of these sheets is out of date.
+        self.document_state.note_document_written_behind_engines();
+        written.sort();
+        for (path, bytes) in written {
+            self.commit_bytes_to_project_git(
+                &path,
+                message,
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            );
         }
     }
 
@@ -234,7 +379,55 @@ impl Signex {
                 ));
             false
         });
-        let outcome = self.apply_reference_rewrites_for(&plan, ParentSheets::new(), "save-as");
+        let outcome = self.apply_reference_rewrites_for(
+            &plan,
+            ParentSheets::new(),
+            &ParentDiskOutcomes::new(),
+            "save-as",
+        );
+        left.not_rewritten.extend(outcome.failed);
+        left.not_rewritten.sort();
+        left.not_rewritten.dedup();
+        left
+    }
+
+    /// After a Save As the saved project lists the new file: follow the plan
+    /// the worker applied to the saved parents. Open parents follow in memory
+    /// (dirty only for other unsaved edits); a parent that is neither open nor
+    /// rewritten on disk is returned for the caller to report.
+    pub(crate) fn follow_save_as_parents(
+        &mut self,
+        plan: &ReferencePlan,
+        disk: &ParentDiskOutcomes,
+    ) -> SaveAsParentsLeft {
+        let mut left = SaveAsParentsLeft {
+            unchecked: plan.unchecked.clone(),
+            ..Default::default()
+        };
+        let mut followed = ReferencePlan::default();
+        for rewrite in &plan.rewrites {
+            let written = disk
+                .get(&rewrite.parent)
+                .is_some_and(ParentDisk::is_written);
+            if written || self.document_state.engines.contains_key(&rewrite.parent) {
+                followed.rewrites.push(rewrite.clone());
+            } else {
+                left.not_rewritten
+                    .push(rewrite.parent.file_name().map_or_else(
+                        || rewrite.parent.display().to_string(),
+                        |n| n.to_string_lossy().into_owned(),
+                    ));
+            }
+        }
+        // A planned parent left behind is reported once, through `left`.
+        let mut disk = disk.clone();
+        for rewrite in &plan.rewrites {
+            if !followed.rewrites.contains(rewrite) {
+                disk.remove(&rewrite.parent);
+            }
+        }
+        let outcome =
+            self.apply_reference_rewrites_for(&followed, ParentSheets::new(), &disk, "save-as");
         left.not_rewritten.extend(outcome.failed);
         left.not_rewritten.sort();
         left.not_rewritten.dedup();
@@ -245,15 +438,23 @@ impl Signex {
         &mut self,
         rewrite: &ReferenceRewrite,
         parents: &mut ParentSheets,
+        on_disk: bool,
     ) -> Result<(), String> {
         let parent = &rewrite.parent;
         let loaded_here = !self.document_state.engines.contains_key(parent);
+        // An open of this parent that started before the rename is still in
+        // flight: it read the old bytes and would install them as a clean
+        // engine, whatever the disk now holds.
+        if loaded_here && self.open_in_flight(parent) {
+            return Err("is still opening, so its reference was not updated".to_string());
+        }
+        // The saved parent already names the new file and no engine holds it:
+        // there is nothing in memory to follow.
+        if loaded_here && on_disk {
+            return Ok(());
+        }
+        let was_dirty = self.document_state.is_document_dirty(parent);
         if loaded_here {
-            // An open of this parent that started before the rename is still
-            // in flight and would replace the rewritten engine.
-            if self.document_state.pending_opens.contains(parent) {
-                return Err("is still opening, so its reference was not updated".to_string());
-            }
             // Read by the rename worker; a parent that was not in the plan's
             // read list (an engine closed meanwhile) is reported, not read here.
             let sheet = parents
@@ -282,7 +483,14 @@ impl Signex {
         }
         let result = result?;
         if result.changed {
-            self.document_state.mark_document_dirty(parent);
+            // The disk already holds the re-pointed reference, so a parent
+            // with no other unsaved edits is exactly what is saved; one with
+            // other edits stays dirty and Discard All reverts only those.
+            if on_disk && !was_dirty {
+                self.document_state.mark_document_clean(parent);
+            } else {
+                self.document_state.mark_document_dirty(parent);
+            }
             if self.document_state.active_path.as_ref() == Some(parent) {
                 self.sync_canvas_from_visible_schematic(
                     crate::schematic_runtime::RenderInvalidation::CHILD_SHEETS,
@@ -360,6 +568,7 @@ mod tests {
                 to: "Other.snxsch".to_string(),
             },
             &mut parents,
+            false,
         );
 
         assert!(outcome.is_ok());
@@ -435,8 +644,41 @@ mod tests {
                 read_only_parents: Vec::new(),
             },
             Default::default(),
+            &Default::default(),
         );
         assert_eq!(outcome.failed.len(), 1, "{outcome:?}");
         assert!(!app.document_state.is_document_dirty(&parent));
+    }
+
+    /// A parent the disk already names the new file for, whose in-memory
+    /// rewrite is refused, differs from memory: it is dirty.
+    #[test]
+    fn a_failed_in_memory_rewrite_of_a_written_parent_marks_it_dirty() {
+        use crate::app::handlers::menu::export::tests as fx;
+        let parent = std::path::PathBuf::from("/w/ro-parent2/Parent.snxsch");
+        let mut sheet = fx::sheet_with_net("R_TOP", "TOP_NET", &["child.snxsch"]);
+        sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
+        let (mut app, _boot) = Signex::new();
+        fx::open_with(&mut app.document_state, &parent, sheet);
+        app.document_state.mark_document_clean(&parent);
+        let disk = std::collections::HashMap::from([(
+            parent.clone(),
+            crate::app::parent_reference_disk::ParentDisk::Written(std::sync::Arc::new(vec![])),
+        )]);
+        let outcome = app.apply_reference_rewrites(
+            &super::ReferencePlan {
+                rewrites: vec![ReferenceRewrite {
+                    parent: parent.clone(),
+                    from: "child.snxsch".to_string(),
+                    to: "renamed.snxsch".to_string(),
+                }],
+                unchecked: Vec::new(),
+                read_only_parents: Vec::new(),
+            },
+            Default::default(),
+            &disk,
+        );
+        assert_eq!(outcome.failed.len(), 1, "{outcome:?}");
+        assert!(app.document_state.is_document_dirty(&parent));
     }
 }

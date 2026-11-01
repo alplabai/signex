@@ -88,8 +88,19 @@ fn save_as_of_the_root_sheet_inside_the_project_re_points_the_project() {
     );
 }
 
+fn child_files(path: &Path) -> Vec<String> {
+    let text = std::fs::read_to_string(path).expect("read sheet");
+    SnxSchematic::parse(&text)
+        .expect("parse sheet")
+        .sheet
+        .child_sheets
+        .iter()
+        .map(|c| c.filename.clone())
+        .collect()
+}
+
 #[test]
-fn save_as_of_a_child_sheet_re_points_the_open_parent_reference() {
+fn save_as_of_a_child_sheet_re_points_the_open_parent_on_disk_and_in_memory() {
     let dir = tempfile::tempdir().unwrap();
     let mut fx = fixture(dir.path());
     fx.app.open_or_focus_sheet_path(fx.child.clone());
@@ -98,10 +109,81 @@ fn save_as_of_a_child_sheet_re_points_the_open_parent_reference() {
     save_as(&mut fx.app, &fx.child.clone(), to.clone());
 
     assert_eq!(listed(&reopened(&fx.project)), ["top.snxsch", "kid.snxsch"]);
+    assert_eq!(
+        child_files(&fx.top),
+        ["kid.snxsch"],
+        "Discard All must not leave the parent on the old file (#1849)"
+    );
     let parent = fx.app.document_state.engines[&fx.top].document();
     assert_eq!(parent.child_sheets[0].filename, "kid.snxsch");
-    assert!(fx.app.document_state.is_document_dirty(&fx.top));
+    assert!(
+        !fx.app.document_state.is_document_dirty(&fx.top),
+        "memory equals disk, so the parent has nothing to save"
+    );
     assert!(fx.child.exists(), "old file stays on disk");
+}
+
+#[test]
+fn save_as_of_a_child_sheet_re_points_an_unopened_parent_on_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    // `top` is the active tab; close it so no engine holds the parent.
+    fx.app.document_state.engines.remove(&fx.top);
+    fx.app.document_state.tabs.clear();
+    fx.app.open_or_focus_sheet_path(fx.child.clone());
+    let to = dir.path().join("kid.snxsch");
+
+    save_as(&mut fx.app, &fx.child.clone(), to.clone());
+
+    assert_eq!(child_files(&fx.top), ["kid.snxsch"]);
+    assert!(!fx.app.document_state.engines.contains_key(&fx.top));
+}
+
+#[test]
+fn save_as_does_not_write_a_parents_other_unsaved_edits() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    let top = fx.top.clone();
+    edit(&mut fx.app, &top);
+    fx.app.open_or_focus_sheet_path(fx.child.clone());
+    let to = dir.path().join("kid.snxsch");
+
+    save_as(&mut fx.app, &fx.child.clone(), to.clone());
+
+    assert_eq!(child_files(&fx.top), ["kid.snxsch"]);
+    let on_disk = std::fs::read_to_string(&fx.top).unwrap();
+    assert!(
+        !on_disk.contains("EDITED"),
+        "the unsaved label is not written"
+    );
+    let held = fx.app.document_state.engines[&fx.top].document();
+    assert_eq!(held.child_sheets[0].filename, "kid.snxsch");
+    assert!(held.labels.iter().any(|l| l.text == "EDITED"));
+    assert!(fx.app.document_state.is_document_dirty(&fx.top));
+}
+
+#[test]
+fn save_as_with_an_unwritable_project_leaves_the_parent_on_the_old_file_on_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fx = fixture(dir.path());
+    fx.app.open_or_focus_sheet_path(fx.child.clone());
+    let to = dir.path().join("kid.snxsch");
+
+    let done = completion(&fx, &to, Err("disk full".to_string()));
+    let done = crate::app::contracts::SaveAsProjectPatched {
+        from: fx.child.clone(),
+        ..done
+    };
+    fx.app.handle_save_as_project_patched(done);
+
+    assert_eq!(
+        child_files(&fx.top),
+        ["child.snxsch"],
+        "disk pair unchanged"
+    );
+    let held = fx.app.document_state.engines[&fx.top].document();
+    assert_eq!(held.child_sheets[0].filename, "kid.snxsch");
+    assert!(fx.app.document_state.is_document_dirty(&fx.top));
 }
 
 /// Mark the project as holding an unsaved edit that is not a sheet entry.
@@ -208,6 +290,8 @@ fn completion(
         from: fx.top.clone(),
         to: to.to_path_buf(),
         result,
+        plan: Default::default(),
+        parent_disk: Default::default(),
     }
 }
 
