@@ -526,13 +526,14 @@ impl LibraryAdapter for LocalGitAdapter {
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
         let mut out: Vec<PrimitiveSummary> = Vec::new();
-        for (_, file) in self.scan_symbol_files()? {
+        for (path, file) in self.scan_symbol_files()? {
             for sym in &file.symbols {
                 out.push(PrimitiveSummary {
                     uuid: sym.uuid,
                     name: sym.name.clone(),
                     kind: PrimitiveKind::Symbol,
                     used_by_count: 0,
+                    file: Some(path.clone()),
                 });
             }
         }

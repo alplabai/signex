@@ -313,6 +313,8 @@ mod symbol_undo_steps;
 mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
+#[path = "regression/library_named_symbol_file.rs"]
+mod library_named_symbol_file;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
 #[path = "regression/library_place_symbol.rs"]

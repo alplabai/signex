@@ -372,7 +372,7 @@ impl Signex {
     /// `.snxlib`, then synthesize a Pick.
     fn handle_primitive_picker_browse_result(&mut self, file: std::path::PathBuf) -> Task<Message> {
         // Locate the containing `.snxlib`. Path layout is
-        // `<some>/<lib>.snxlib/<symbols|footprints|sims>/<uuid>.<ext>`.
+        // `<some>/<lib>.snxlib/<symbols|footprints|sims>/<name>.<ext>`.
         let snxlib_dir = file
             .ancestors()
             .find(|p| {
@@ -414,17 +414,11 @@ impl Signex {
                 return Task::none();
             }
         };
-        let stem = file
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default();
-        let uuid = match uuid::Uuid::parse_str(stem) {
-            Ok(u) => u,
-            Err(_) => {
+        let uuid = match self.library.primitive_uuid_in_file(library_id, &file) {
+            Ok(uuid) => uuid,
+            Err(why) => {
                 if let Some(picker) = self.library.primitive_picker.as_mut() {
-                    picker.error = Some(format!(
-                        "Filename `{stem}` is not a UUID — pick a primitive file in `<lib>.snxlib/symbols/`."
-                    ));
+                    picker.error = Some(why);
                 }
                 return Task::none();
             }

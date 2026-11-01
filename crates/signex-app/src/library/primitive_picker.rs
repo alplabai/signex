@@ -233,7 +233,9 @@ pub fn view<'a>(
                 text(if state.open_libraries.is_empty() {
                     "No libraries open. Use Browse filesystem… to pick a primitive directly."
                 } else {
-                    "No primitives match. Open more libraries or use Browse filesystem…"
+                    "No primitives match. Only primitives saved inside an open `.snxlib` \
+                     are listed: save the symbol into `<lib>.snxlib/symbols/`, or use \
+                     Browse filesystem…"
                 })
                 .size(TS.body)
                 .color(muted),

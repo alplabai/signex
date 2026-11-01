@@ -178,6 +178,7 @@ pub(crate) fn cached_summary(name: &str) -> PrimitiveSummary {
         name: name.to_string(),
         kind: signex_library::PrimitiveKind::Symbol,
         used_by_count: 0,
+        file: None,
     }
 }
 
