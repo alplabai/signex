@@ -182,7 +182,7 @@ impl PendingPathOps {
                     && op
                         .paths
                         .iter()
-                        .any(|p| p.extension().is_some_and(|e| e == "snxlib")))
+                        .any(|p| crate::app::file_extension::has_extension(p, "snxlib")))
         })
     }
 

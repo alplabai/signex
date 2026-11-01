@@ -12,6 +12,7 @@ use crate::app::parent_reference_disk::{ParentDiskOutcomes, Renamed, patch_paren
 use crate::app::path_ops::ReferenceRewrite;
 use crate::app::path_ops::{DeleteIo, LibraryRenameIo, ParentSheets, RenameIoError};
 use crate::app::project_entry_disk::{EntryPatch, remove_entry, retarget_sheet_entry};
+use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::persist::SaveBarrier;
 
 /// Runs a blocking job on tokio's blocking pool. A worker that panicked or was
@@ -134,17 +135,45 @@ fn move_file(from: &Path, to: &Path) -> Result<(), RenameIoError> {
 }
 
 /// Do `from` and `to` differ only in letter case and name the same file on
-/// disk? File identity is required, not just the folded name, so a distinct
-/// file whose name folds the same (a case-sensitive volume) or a hard link is
-/// still a collision. An identity that cannot be read counts as different.
+/// disk under one stored name? File identity is required, not just the folded
+/// name, so a distinct file whose name folds the same (a case-sensitive
+/// volume) is still a collision. Identity alone also holds for two hard links
+/// to one file, so the folder must not list `to`'s spelling as an entry of
+/// its own: a case-insensitive volume lists only the stored spelling, while a
+/// hard link is listed under its own name. An identity or listing that cannot
+/// be read counts as different.
 fn is_case_only_rename_of_same_file(from: &Path, to: &Path) -> bool {
     let (Some(from_name), Some(to_name)) = (from.file_name(), to.file_name()) else {
         return false;
     };
+    let fold = CaseFold::from_probe(true);
+    let folded = |name: &std::ffi::OsStr| path_key_with(Path::new(name), fold);
     from.parent() == to.parent()
         && from_name != to_name
-        && from_name.to_string_lossy().to_lowercase() == to_name.to_string_lossy().to_lowercase()
+        && folded(from_name) == folded(to_name)
         && same_file::is_same_file(from, to).unwrap_or(false)
+        && !folder_lists_name(to)
+}
+
+/// Whether `path`'s folder holds an entry spelled exactly as `path`'s file
+/// name. A folder that cannot be listed answers yes, so the caller refuses.
+fn folder_lists_name(path: &Path) -> bool {
+    let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+        return true;
+    };
+    let folder = if folder.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        folder
+    };
+    let Ok(mut entries) = std::fs::read_dir(folder) else {
+        return true;
+    };
+    // An entry that cannot be read might be `name`, so it counts as a match.
+    entries.any(|entry| match entry {
+        Ok(entry) => entry.file_name() == name,
+        Err(_) => true,
+    })
 }
 
 /// Move `from` to a fresh name beside it, then onto `to`, so a filesystem that

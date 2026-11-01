@@ -377,6 +377,45 @@ fn a_case_only_rename_to_all_capitals_keeps_the_native_extension() {
     assert_case_only_rename_lands("POWER.snxsch");
 }
 
+/// #1881 — on a case-sensitive volume a hard link `power.snxsch` beside
+/// `Power.snxsch` is the same file on disk but a name of its own. A rename
+/// onto it is a collision: nothing moves and no temporary link is left.
+#[cfg(unix)]
+#[test]
+fn a_case_only_rename_onto_a_hard_link_is_refused_and_moves_nothing() {
+    let mut f = fixture(true);
+    let link = f.tmp.path().join("power.snxsch");
+    if let Err(e) = std::fs::hard_link(&f.old, &link) {
+        // A case-insensitive volume (macOS) has no room for the second name.
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists, "{e}");
+        return;
+    }
+    let task = start_rename(&mut f.app, &f.old.clone(), "power.snxsch");
+    complete(&mut f.app, task);
+
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert_eq!(
+        error.as_deref(),
+        Some("A file with that name already exists.")
+    );
+    assert_eq!(
+        names_in(f.tmp.path()),
+        vec!["Power.snxsch".to_string(), "power.snxsch".to_string()],
+        "nothing moved and no temporary link left"
+    );
+    assert_eq!(std::fs::read(&f.old).unwrap(), b"x");
+    assert_eq!(f.app.document_state.tabs[0].path, f.old);
+    assert_eq!(
+        f.app.document_state.projects[0].data.sheets[0].filename,
+        "Power.snxsch"
+    );
+}
+
 #[test]
 fn a_rename_the_os_refuses_leaves_everything_unchanged_and_says_why() {
     let mut f = fixture(true);

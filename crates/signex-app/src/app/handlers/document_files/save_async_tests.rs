@@ -417,6 +417,26 @@ fn standard_pcb_files_count_as_pcb_paths() {
     assert!(super::save_async::is_pcb_path(Path::new("x.standard_pcb")));
 }
 
+/// #1881 — open accepts `Board.SNXPCB` as a board, so its save must complete
+/// as one: clean afterwards, and the project commit queued.
+#[test]
+fn a_board_with_an_upper_case_extension_saves_clean_and_commits() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    signex_library::git_identity::test_identity::install();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    app.document_state.projects[0].data.enable_git = true;
+    let path = dir.path().join("Board.SNXPCB");
+    app.open_pcb_tab(path.clone(), "Board".into(), empty_board());
+    mark_dirty(&mut app, &path);
+    press_save(&mut app);
+    assert_eq!(
+        std::fs::read(&path).expect("board written"),
+        encoded(&empty_board_with(&app))
+    );
+    assert!(!app.document_state.is_document_dirty(&path));
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+}
+
 #[test]
 fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     let dir = tempfile::tempdir().expect("tempdir");
