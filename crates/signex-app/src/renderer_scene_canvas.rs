@@ -14,7 +14,9 @@ use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
 #[derive(Debug, Clone, Copy)]
 pub struct SceneDrawOptions {
     pub scale_px_per_mm: f32,
-    pub min_stroke_px: f32,
+    /// Device pixels per logical pixel; the stroke floor and the hairline
+    /// snap work in device pixels (#1858).
+    pub device_px_per_logical_px: f32,
     /// Readability limits in logical pixels — a per-surface view decision, so
     /// each replay supplies its own. The mm→em ratio is *not* here: it is one
     /// rule (`signex_types::font::mm_per_em`) because it encodes
@@ -135,8 +137,14 @@ pub fn min_stroke_px(width_px: f32) -> f32 {
 }
 
 impl SceneDrawOptions {
-    fn stroke_px(self, width_mm: f32) -> f32 {
-        (width_mm * self.scale_px_per_mm).max(self.min_stroke_px)
+    /// Pre-snap width in logical pixels a `width_mm` stroke replays at: the
+    /// one stroke law, `signex_types::schematic::stroke_px`.
+    pub fn stroke_px(self, width_mm: f32) -> f32 {
+        signex_types::schematic::stroke_px(
+            width_mm,
+            self.scale_px_per_mm,
+            self.device_px_per_logical_px,
+        )
     }
 
     fn radius_px(self, radius_mm: f32) -> f32 {
@@ -261,7 +269,12 @@ where
 {
     let p0 = world_to_screen(line.p0);
     let p1 = world_to_screen(line.p1);
-    crate::scene_line_snap::snap_hairline(p0, p1, options.stroke_px(line.width))
+    crate::scene_line_snap::snap_hairline(
+        p0,
+        p1,
+        options.stroke_px(line.width),
+        options.device_px_per_logical_px,
+    )
 }
 
 fn draw_circle_bucket<F>(
@@ -949,7 +962,7 @@ mod line_geometry_tests {
     fn options() -> SceneDrawOptions {
         SceneDrawOptions {
             scale_px_per_mm: 12.8,
-            min_stroke_px: 0.6,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             text_min_px: 1.0,
             text_max_px: 100.0,
         }
