@@ -23,8 +23,13 @@ pub const SCHEMATIC_LABEL_MARKER_STROKE_MM: f64 = 0.15;
 /// Child sheet frame outline width (mm).
 pub const SCHEMATIC_SHEET_FRAME_STROKE_MM: f64 = 0.15;
 
-/// Thinnest a schematic stroke draws on screen, in device pixels.
-pub const SCHEMATIC_MIN_STROKE_DEVICE_PX: f32 = 0.6;
+/// Thinnest a schematic stroke draws on screen, in device pixels. One whole
+/// pixel: the CPU canvas has no anti-aliasing, so a thinner unsnapped outline
+/// (a symbol body, a diagonal) can miss every pixel centre and vanish.
+pub const SCHEMATIC_MIN_STROKE_DEVICE_PX: f32 = 1.0;
+
+// Under one device pixel a 0.254 mm body at 100 % lost whole rectangle edges.
+const _: () = assert!(SCHEMATIC_MIN_STROKE_DEVICE_PX >= 1.0);
 
 /// Device pixels per logical pixel for surfaces the window's display scale
 /// does not reach yet: the floor and snap then work in logical pixels.

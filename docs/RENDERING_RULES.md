@@ -157,8 +157,11 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    same at every zoom. Before #1858 each kind had its own curve (a per-kind
    px width times zoom, clamped), and pins ignored their library width, so
    the wire : pin : body weights changed from one zoom step to the next.
-3. **One floor.** A stroke thinner than 0.6 device pixels draws at 0.6 device
-   pixels, the same for every kind and on both the CPU and GPU paths.
+3. **One floor.** A stroke thinner than one device pixel draws at one device
+   pixel, the same for every kind and on both the CPU and GPU paths. It is a
+   whole pixel because the CPU canvas has no anti-aliasing: body outlines,
+   circles and diagonals are not snapped, and at 0.76 px (a 0.254 mm body at
+   100 %) whole edges of a rectangle missed every pixel centre and vanished.
 4. **Then the whole-pixel snap** (#1674, `scene_line_snap.rs`) rounds
    axis-aligned hairlines under 4 device pixels to whole device pixels.
 5. **Display scale.** The floor and the snap are defined in device pixels.
