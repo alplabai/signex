@@ -16,11 +16,11 @@ const SHOWN: usize = 20;
 pub(crate) fn log_sheet_repairs(path: &Path, repairs: &[SheetLoadRepair]) -> bool {
     let file = path.file_name().unwrap_or_default().to_string_lossy();
     for repair in repairs.iter().take(SHOWN) {
-        crate::diagnostics::log_warning(format!("{file} repaired on open: {}", repair.describe()));
+        crate::diagnostics::log_warning(format!("{file} repaired on load: {}", repair.describe()));
     }
     if repairs.len() > SHOWN {
         crate::diagnostics::log_warning(format!(
-            "{file} repaired on open: and {} more repairs",
+            "{file} repaired on load: and {} more repairs",
             repairs.len() - SHOWN
         ));
     }
@@ -48,7 +48,7 @@ mod tests {
                 object: RepairedObject {
                     kind: "wire",
                     name: String::new(),
-                    row: 2,
+                    position: 2,
                 },
                 uuid: uuid::Uuid::from_u128(7),
             });
@@ -84,6 +84,62 @@ mod tests {
     #[test]
     fn a_repaired_read_only_reload_is_not_asked_to_save() {
         assert!(!dirty_after_reload(true));
+    }
+
+    #[test]
+    fn a_closed_sheet_read_for_a_bulk_pass_reports_its_repairs() {
+        // Annotate, Reset, Replace, re-prefix and reference fixes read closed
+        // sheets through `load_sheet` and may write them back (#1830).
+        let _ = crate::diagnostics::init_logging();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("ClosedBulk1830.snxsch");
+        let wire = |end_x: f64| signex_types::schematic::Wire {
+            uuid: uuid::Uuid::from_u128(7),
+            end: signex_types::schematic::Point::new(end_x, 0.0),
+            ..Default::default()
+        };
+        let sheet = SchematicSheet {
+            uuid: uuid::Uuid::now_v7(),
+            paper_size: "A4".into(),
+            wires: vec![wire(1.0), wire(2.0)],
+            ..Default::default()
+        };
+        let text = signex_types::format::SnxSchematic::new(sheet)
+            .write_string()
+            .expect("serialise");
+        std::fs::write(&path, text).expect("write");
+        let app = app_workspace("/w/proj", &[]);
+        let loaded = crate::app::project_sheets::load_sheet(&app.document_state, &path)
+            .expect("reads")
+            .expect("present");
+        assert_eq!(loaded.wires.len(), 2);
+        assert!(loaded.unknown.load_repairs.is_empty(), "taken at the read");
+        let told = crate::diagnostics::recent_entries().iter().any(|e| {
+            e.message
+                .starts_with("ClosedBulk1830.snxsch repaired on load: wire #2")
+        });
+        assert!(told, "Messages must name the repair");
+    }
+
+    #[test]
+    fn a_repaired_sheet_stays_modified_after_an_edit_and_undo() {
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from("/w/proj/edit_undo.snxsch");
+        app.open_schematic_tab(path.clone(), "edit_undo".into(), repaired_sheet(false));
+        assert!(app.document_state.is_document_dirty(&path));
+        let edited = app.apply_engine_command(
+            signex_engine::Command::SetPaperSize {
+                paper_size: "A3".to_string(),
+            },
+            true,
+            true,
+        );
+        assert!(edited, "fixture: the edit must change the document");
+        app.handle_undo_requested();
+        assert!(
+            app.document_state.is_document_dirty(&path),
+            "undo returns to the repaired sheet, which the file does not hold"
+        );
     }
 
     #[test]

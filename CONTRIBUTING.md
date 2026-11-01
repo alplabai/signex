@@ -451,7 +451,11 @@ that feature back on, so the lint is the real guard.)
 - **Ids sort by creation.** That keeps index order and the row diffs of
   `.snxsch` / `.snxlib` files steadier than random ids did.
 - **Existing ids are never rewritten.** v4 ids in older files stay valid;
-  nothing reads the version nibble except `created_at`.
+  nothing reads the version nibble except `created_at`. The one exception is
+  the load repair for a sheet that repeats an object id (`format/uuid_repair.rs`):
+  the later object gets a deterministic version-8 id derived from the sheet id,
+  kind, position and old id, so every read of one file agrees until it is saved.
+  `created_at` returns `None` for such an id.
 - **Shorten an id from its tail.** Ids made in the same minute share their
   leading hex digits, so a display label uses
   `signex_types::object_id::short_id` (the last 8 digits), never the prefix.

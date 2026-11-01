@@ -106,10 +106,17 @@ pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T
     if let Some(path) = first_non_finite_toml_path(&value) {
         return Err(TomlFiniteError::NonFinite { path });
     }
-    // Deserialise from the text, not `Value::try_into`: the `Value` deserializer
-    // hands a datetime to serde as a plain string, which a flattened unknown-fields
-    // bag would keep as a string (#1875). This also gives errors line/column spans.
-    toml::from_str::<T>(text).map_err(TomlFiniteError::Toml)
+    // Deserialise from the text first: the `Value` deserializer hands a
+    // datetime to serde as a plain string, which a flattened unknown-fields
+    // bag would keep as a string (#1875). The text path keeps it typed, but
+    // then a known `String` field holding a bare datetime (`date = 2026-10-01`)
+    // is a schema error; that file opens through the `Value` path, as before.
+    match toml::from_str::<T>(text) {
+        Ok(parsed) => Ok(parsed),
+        Err(from_text) => value
+            .try_into()
+            .map_err(|_| TomlFiniteError::Toml(from_text)),
+    }
 }
 
 /// Key path (`extras.board.outline[0].x`) of the first NaN or infinite
@@ -275,5 +282,26 @@ v = nan
             ),
             "ok-1_x.v"
         );
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Holder {
+        #[serde(default)]
+        date: String,
+        #[serde(flatten)]
+        rest: std::collections::BTreeMap<String, toml::Value>,
+    }
+
+    #[test]
+    fn a_datetime_in_a_known_string_field_still_parses() {
+        let holder: Holder = parse_toml_finite("date = 2026-10-01\n").unwrap();
+        assert_eq!(holder.date, "2026-10-01");
+        assert!(holder.rest.is_empty());
+    }
+
+    #[test]
+    fn a_datetime_in_a_flattened_bag_stays_a_datetime() {
+        let holder: Holder = parse_toml_finite("when = 1979-05-27T07:32:00Z\n").unwrap();
+        assert!(holder.rest["when"].is_datetime());
     }
 }

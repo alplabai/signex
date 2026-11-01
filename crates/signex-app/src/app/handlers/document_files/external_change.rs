@@ -316,14 +316,15 @@ impl Signex {
             return Task::none();
         }
         let ReloadedFile { document, hash } = *reloaded;
-        // A repair made while parsing is not in the file: the sheet stays modified.
-        let repaired = matches!(
-            &document,
-            RestoreJobDocument::Schematic(sheet)
-                if !sheet.unknown.load_repairs.is_empty() && !sheet.is_read_only()
-        );
-        let task = self.apply_reloaded_with(idx, Ok(document), None, false);
+        let (task, repaired) = match document {
+            RestoreJobDocument::Schematic(sheet) => (
+                Task::none(),
+                self.install_reloaded_schematic(idx, &path, *sheet, None, false),
+            ),
+            other => (self.apply_reloaded_with(idx, Ok(other), None, false), false),
+        };
         self.document_state.mark_document_clean(&path);
+        // A repair made while parsing is not in the file: the sheet stays modified.
         if repaired {
             self.document_state.mark_document_dirty(&path);
         }
@@ -353,7 +354,7 @@ mod repair_tests {
                 object: signex_types::format::RepairedObject {
                     kind: "wire",
                     name: String::new(),
-                    row: 2,
+                    position: 2,
                 },
                 uuid: uuid::Uuid::from_u128(7),
             });

@@ -123,7 +123,7 @@ fn an_identical_duplicate_wire_row_is_dropped_with_a_message() {
     assert_eq!(loaded.wires[0].uuid, id(7));
     assert_eq!(loaded.unknown.load_repairs.len(), 1);
     let message = &sentences(&loaded)[0];
-    assert!(message.starts_with("wire (row 2)"), "{message}");
+    assert!(message.starts_with("wire #2"), "{message}");
     assert!(message.contains(&id(7).to_string()), "{message}");
     assert!(message.contains("dropped"), "{message}");
 }
@@ -442,4 +442,51 @@ fn thousands_of_identical_duplicates_collapse_quickly() {
     let loaded = load(&save(&sheet));
     assert_eq!(loaded.wires.len(), 1);
     assert_eq!(loaded.unknown.load_repairs.len(), 19_999);
+}
+
+#[test]
+fn a_bare_datetime_in_a_title_block_field_still_opens() {
+    let mut sheet = empty_sheet();
+    sheet.title_block.insert("title".into(), "T".into());
+    let text = save(&sheet).replace(
+        "[extras.sheet.title_block]",
+        "[extras.sheet.title_block]\ndate = 2026-10-01",
+    );
+    assert!(text.contains("date = 2026-10-01"), "{text}");
+    let loaded = load(&text);
+    assert_eq!(loaded.title_block["date"], "2026-10-01");
+}
+
+#[test]
+fn a_re_minted_wire_keeps_its_net_colour_and_a_drawing_its_placement() {
+    let color = crate::theme::Color {
+        r: 1,
+        g: 2,
+        b: 3,
+        a: 255,
+    };
+    let mut sheet = empty_sheet();
+    sheet.wires = vec![wire(7, 5.0), wire(7, 9.0)];
+    sheet.net_colors.insert(id(7), color);
+    let line = |end: f64| SchDrawing::Line {
+        uuid: id(8),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(end, 0.0),
+        width: 0.0,
+        stroke_color: None,
+        locked: false,
+    };
+    sheet.drawings = vec![line(1.0), line(2.0)];
+    sheet
+        .drawing_placements
+        .insert(id(8), crate::schematic::DrawingPlacement::Above);
+    let loaded = load(&save(&sheet));
+    let (new_wire, new_drawing) = (loaded.wires[1].uuid, loaded.drawings[1].uuid());
+    assert_ne!(new_wire, id(7));
+    assert_eq!(loaded.net_colors.get(&new_wire), Some(&color));
+    assert_eq!(loaded.net_colors.get(&id(7)), Some(&color));
+    assert_eq!(
+        loaded.drawing_placement(new_drawing),
+        crate::schematic::DrawingPlacement::Above
+    );
 }

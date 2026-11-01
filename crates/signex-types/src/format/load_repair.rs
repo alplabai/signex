@@ -13,12 +13,12 @@ use uuid::Uuid;
 pub(in crate::format) const SHEET_SYMBOL: &str = "sheet symbol";
 
 /// The object a repair names: its kind, its label or reference when it has
-/// one, and the 1-based row it was read from.
+/// one, and its 1-based position among objects of that kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RepairedObject {
     pub kind: &'static str,
     pub name: String,
-    pub row: usize,
+    pub position: usize,
 }
 
 /// One change made while parsing a sheet.
@@ -47,9 +47,9 @@ pub enum SheetLoadRepair {
 impl RepairedObject {
     fn label(&self) -> String {
         if self.name.is_empty() {
-            format!("{} (row {})", self.kind, self.row)
+            format!("{} #{}", self.kind, self.position)
         } else {
-            format!("{} {} (row {})", self.kind, self.name, self.row)
+            format!("{} {} #{}", self.kind, self.name, self.position)
         }
     }
 }

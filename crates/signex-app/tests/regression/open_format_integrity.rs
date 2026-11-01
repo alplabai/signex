@@ -152,7 +152,7 @@ fn a_file_repaired_on_open_is_dirty_and_says_so_in_messages() {
         .any(|entry| {
             entry
                 .message
-                .contains("RepairedSheet1830.snxsch repaired on open: wire (row 2)")
+                .contains("RepairedSheet1830.snxsch repaired on load: wire #2")
         });
     assert!(told, "Messages must name the repair");
     let engine = app.document_state.engines.get(&path).expect("engine");

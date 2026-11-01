@@ -60,7 +60,7 @@ impl Repairs {
             let object = RepairedObject {
                 kind,
                 name: name(&item),
-                row: index + 1,
+                position: index + 1,
             };
             if holders.get(&id).is_some_and(|&held| kept[held] == item) {
                 self.made
@@ -220,12 +220,40 @@ pub(in crate::format) fn repair_duplicate_uuids(
     for symbol in &mut sheet.symbols {
         repair_pin_uuids(symbol, &mut r);
     }
+    move_side_map_entries(sheet, &r.made);
     r.made
+}
+
+/// Maps keyed by object uuid (`net_colors` for wires and junctions,
+/// `drawing_placements` for drawings): a re-minted object takes a copy of its
+/// old id's entry, so it keeps the colour or placement it was read with.
+fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]) {
+    for repair in repairs {
+        let SheetLoadRepair::UuidReminted {
+            object, old, new, ..
+        } = repair
+        else {
+            continue;
+        };
+        match object.kind {
+            "wire" | "junction" => {
+                if let Some(color) = sheet.net_colors.get(old).copied() {
+                    sheet.net_colors.insert(*new, color);
+                }
+            }
+            "drawing" => {
+                if let Some(placement) = sheet.drawing_placements.get(old).copied() {
+                    sheet.drawing_placements.insert(*new, placement);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// A symbol's per-pin ids (`pin_uuids`, by pin number): two pins of one
 /// symbol must not share one. The pin cannot be dropped, so the later pin
-/// (in pin-number order) is always re-minted.
+/// (in lexicographic pin-number order) is always re-minted.
 fn repair_pin_uuids(symbol: &mut crate::schematic::Symbol, r: &mut Repairs) {
     let mut numbers: Vec<String> = symbol.pin_uuids.keys().cloned().collect();
     numbers.sort();
