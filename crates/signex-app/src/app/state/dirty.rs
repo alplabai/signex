@@ -28,6 +28,11 @@ use super::DocumentState;
 #[derive(Debug, Default)]
 pub(crate) struct DirtyDocuments {
     paths: HashSet<PathBuf>,
+    /// The subset of `paths` marked by something other than the engine's
+    /// undo history (a project edit, a net colour, an annotate pass, a
+    /// restore). Undoing back to the engine's save point cannot clear these:
+    /// only a save does.
+    external: HashSet<PathBuf>,
 }
 
 impl DocumentState {
@@ -83,9 +88,32 @@ impl DocumentState {
             editor.mark_dirty();
         } else {
             self.dirty_docs.paths.insert(path.to_path_buf());
+            self.dirty_docs.external.insert(path.to_path_buf());
             if affects_erc {
                 self.note_sheet_edit();
             }
+        }
+    }
+
+    /// The engine's history moved (an edit, an undo, a redo) on the sheet at
+    /// `path`: it is dirty unless the history sits at its save point and
+    /// nothing outside the history marked it. Undoing the only edit since the
+    /// last save is clean again; redoing it is dirty again.
+    pub fn sync_history_dirty(&mut self, path: &Path) {
+        let Some(engine) = self.engines.get(path) else {
+            return;
+        };
+        // A write that has not landed holds the sheet dirty: an Undo back to
+        // the old save point during it would otherwise read clean while the
+        // file is about to receive the newer snapshot. The completion
+        // settles the mark (clean on a matching revision, re-synced else).
+        let clean = engine.is_at_save_point()
+            && !self.dirty_docs.external.contains(path)
+            && !self.document_saves.is_saving(path);
+        if clean {
+            self.dirty_docs.paths.remove(path);
+        } else {
+            self.dirty_docs.paths.insert(path.to_path_buf());
         }
     }
 
@@ -115,6 +143,12 @@ impl DocumentState {
     /// were discarded: clear every place that knew it dirty.
     pub fn mark_document_clean(&mut self, path: &Path) {
         self.dirty_docs.paths.remove(path);
+        self.dirty_docs.external.remove(path);
+        // The engine's document is what is (now) on disk: its history
+        // position is the point undo and redo return to as clean.
+        if let Some(engine) = self.engines.get_mut(path) {
+            engine.mark_saved();
+        }
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.set_dirty(false);
         }
@@ -143,6 +177,9 @@ impl DocumentState {
         let was_dirty = self.dirty_docs.paths.remove(from);
         if was_dirty {
             self.dirty_docs.paths.insert(to.to_path_buf());
+        }
+        if self.dirty_docs.external.remove(from) {
+            self.dirty_docs.external.insert(to.to_path_buf());
         }
         was_dirty
     }

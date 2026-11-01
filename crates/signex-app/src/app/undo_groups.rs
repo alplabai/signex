@@ -288,7 +288,7 @@ impl Signex {
                         self.document_state.engines.remove(path);
                         dropped_now.push(path.clone());
                     } else {
-                        self.document_state.mark_document_dirty(path);
+                        self.document_state.sync_history_dirty(path);
                     }
                 }
                 Ok(None) => {}

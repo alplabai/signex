@@ -119,6 +119,10 @@ impl Engine {
         self.history_suppressed = true;
         let result = self.execute(cmd);
         self.history_suppressed = false;
+        // No history step can reproduce the file now: the edit has no entry.
+        if result.as_ref().is_ok_and(|r| r.changed) {
+            self.saved_point = None;
+        }
         result
     }
 

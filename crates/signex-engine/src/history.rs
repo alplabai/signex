@@ -60,7 +60,13 @@ impl Engine {
             && self.field_edit_run.as_ref().is_some_and(|run| {
                 run.symbol_id == symbol_id && run.key == key && run.position == self.undo_position()
             });
-        if !continues {
+        if continues {
+            // The run rewrites the entry the history already ends in, so a
+            // save taken at this position no longer matches the document.
+            if self.saved_point == Some(self.undo_position()) {
+                self.saved_point = None;
+            }
+        } else {
             self.record_history(before, patch_pair);
             self.field_edit_run = Some(FieldEditRun {
                 symbol_id,
@@ -74,6 +80,26 @@ impl Engine {
     /// starts a new undo step. Enter, closing the Parameter Manager.
     pub fn end_field_edit_run(&mut self) {
         self.field_edit_run = None;
+    }
+
+    /// The document now matches the file just written: remember this point
+    /// of the history, so undoing or redoing back to it is clean again.
+    pub fn mark_saved(&mut self) {
+        self.saved_point = Some(self.undo_position());
+    }
+
+    /// The file holds something no step of this history reproduces (a save
+    /// whose snapshot the document has moved past): nothing is clean until
+    /// the next [`Engine::mark_saved`].
+    pub fn forget_save_point(&mut self) {
+        self.saved_point = None;
+    }
+
+    /// Does the document equal the last saved or loaded state, judged by
+    /// the history alone? Undo and redo move this both ways; an edit made
+    /// below the save point makes it unreachable until the next save.
+    pub fn is_at_save_point(&self) -> bool {
+        self.saved_point == Some(self.undo_position())
     }
 
     pub fn can_undo(&self) -> bool {
@@ -148,8 +174,12 @@ impl Engine {
         if self.next_undo_group() != Some(group) {
             return Ok(None);
         }
+        let position = self.undo_position();
         let patch_pair = self.undo()?;
         self.redo_stack.pop();
+        if self.saved_point == Some(position) {
+            self.saved_point = None;
+        }
         Ok(patch_pair)
     }
 
@@ -198,6 +228,14 @@ impl Engine {
         // Share every collection the step left unchanged with the entry
         // before it, so a long history holds one copy of each.
         let snapshot = SheetSnapshot::capture(snapshot, self.history.back().map(|e| &e.snapshot));
+        // The new entry drops the redo branch; a save point inside it can
+        // never be reached again.
+        if self
+            .saved_point
+            .is_some_and(|saved| saved > self.undo_position())
+        {
+            self.saved_point = None;
+        }
         if self.history.len() >= MAX_HISTORY_ENTRIES {
             self.history.pop_front();
             self.history_evicted += 1;
