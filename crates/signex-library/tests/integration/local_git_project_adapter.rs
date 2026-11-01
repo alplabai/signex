@@ -222,6 +222,59 @@ fn restore_at_round_trips_a_prior_version() {
     assert_eq!(read_file(&root, "sheet.snxsch"), "version-A content");
 }
 
+#[cfg(unix)]
+#[test]
+fn restore_at_writes_through_a_symlinked_sheet_and_keeps_the_link() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("proj");
+    fs::create_dir(&root).unwrap();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "sheet.snxsch", "version-A content");
+    let oid_a = adapter
+        .commit_path(Path::new("sheet.snxsch"), "A")
+        .unwrap()
+        .expect("commit A");
+    write_file(&root, "sheet.snxsch", "version-B content");
+    // The sheet in the project is a link to a file kept elsewhere.
+    let real = tmp.path().join("elsewhere.snxsch");
+    fs::rename(root.join("sheet.snxsch"), &real).unwrap();
+    std::os::unix::fs::symlink(&real, root.join("sheet.snxsch")).unwrap();
+
+    adapter
+        .restore_at(Path::new("sheet.snxsch"), oid_a)
+        .unwrap();
+
+    assert!(
+        fs::symlink_metadata(root.join("sheet.snxsch"))
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the link must survive a restore"
+    );
+    assert_eq!(fs::read_to_string(&real).unwrap(), "version-A content");
+}
+
+#[test]
+fn restore_at_refuses_to_recreate_a_folder_that_is_gone() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+    write_file(&root, "Sheets/a.snxsch", "version-A content");
+    let oid_a = adapter
+        .commit_path(Path::new("Sheets/a.snxsch"), "A")
+        .unwrap()
+        .expect("commit A");
+    fs::remove_dir_all(root.join("Sheets")).unwrap();
+
+    let result = adapter.restore_at(Path::new("Sheets/a.snxsch"), oid_a);
+
+    assert!(result.is_err(), "the restore must be refused");
+    assert!(
+        !root.join("Sheets").exists(),
+        "the folder must not be re-created"
+    );
+}
+
 #[test]
 fn commit_path_with_bytes_records_those_bytes_even_when_the_file_changed_after() {
     let tmp = TempDir::new().unwrap();

@@ -25,3 +25,20 @@ fn a_footprint_save_does_not_recreate_a_library_folder_that_is_gone() {
     assert!(result.is_err(), "the save must be refused");
     assert!(!root.exists(), "the library folder must not be re-created");
 }
+
+#[test]
+fn the_refusal_text_names_the_library_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, _lib_id, adapter) = init(&dir);
+    let root = file.parent().unwrap().to_path_buf();
+    std::fs::rename(&root, dir.path().join("moved_away")).unwrap();
+
+    let error = adapter
+        .save_footprint(Footprint::empty("F"), "add")
+        .expect_err("the save must be refused");
+
+    assert!(
+        error.to_string().contains(&root.display().to_string()),
+        "the refusal must name the library folder, got: {error}"
+    );
+}

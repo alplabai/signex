@@ -327,9 +327,13 @@ impl LocalGitProjectAdapter {
                     Ok(Some(content.to_vec()))
                 })?;
             }
-            None => signex_types::atomic_io::atomic_write(&abs, content).map_err(|e| {
-                LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
-            })?,
+            // A file restored in a folder that is gone is refused, not re-created
+            // (#1828); a symlinked document is written through (#1827).
+            None => {
+                signex_types::atomic_io::atomic_write_existing_dir(&abs, content).map_err(|e| {
+                    LibraryError::Backend(format!("atomic write {}: {e}", abs.display()))
+                })?
+            }
         }
         Ok(content.to_vec())
     }
