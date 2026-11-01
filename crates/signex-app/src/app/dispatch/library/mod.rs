@@ -51,6 +51,8 @@ mod external_edits;
 #[cfg(test)]
 mod grid_window_tests;
 mod lifecycle;
+#[cfg(test)]
+mod missing_mount_tests;
 mod new_component;
 mod new_row;
 mod pricing;
