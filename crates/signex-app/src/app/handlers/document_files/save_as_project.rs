@@ -34,7 +34,7 @@ use iced::Task;
 use super::super::super::*;
 use super::save::file_label;
 use crate::app::contracts::SaveAsProjectPatched;
-use crate::app::parent_reference_disk::patch_parents;
+use crate::app::parent_reference_disk::{Renamed, patch_parents};
 use crate::app::project_entry_disk::{EntryPatch, repoint_entries, retarget_sheet_entry};
 use crate::app::state::ProjectId;
 use crate::app::state::library_entry::{entry_resolves_to, library_entry_location};
@@ -151,20 +151,8 @@ impl Signex {
         // The saved parents that reference the sheet are rewritten by the
         // same job (#1849), so they are guarded too; one a move or delete is
         // still working on is left to the in-memory fallback.
-        let mut disk_plan = plan.clone();
-        disk_plan.rewrites.retain(|rewrite| {
-            self.document_state
-                .pending_path_ops
-                .blocking_start(&rewrite.parent)
-                .is_none()
-        });
-        let mut dependents: Vec<std::path::PathBuf> = disk_plan
-            .rewrites
-            .iter()
-            .map(|rewrite| rewrite.parent.clone())
-            .collect();
-        dependents.sort();
-        dependents.dedup();
+        let candidates = self.disk_parent_candidates(Some(project_id), &plan, from);
+        let mut dependents = candidates.clone();
         dependents.push(project_file.clone());
         self.document_state.pending_path_ops.begin_with_dependents(
             crate::app::path_ops::PathOpKind::SaveAsSheet,
@@ -180,7 +168,8 @@ impl Signex {
         Task::perform(
             {
                 let from = from_path.clone();
-                let rewrites = disk_plan.rewrites;
+                let rewrites = plan.rewrites.clone();
+                let new_name = new_name.clone();
                 async move {
                     crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool(
                         move || {
@@ -193,7 +182,12 @@ impl Signex {
                             // Parents follow only a project that now lists the
                             // new file: the pair stays consistent on disk.
                             let disk = if matches!(patched, Ok(EntryPatch::Patched(_))) {
-                                patch_parents(&rewrites)
+                                let renamed = Renamed {
+                                    old: &from,
+                                    new_name: &new_name,
+                                    fold,
+                                };
+                                patch_parents(&candidates, &rewrites, &renamed)
                             } else {
                                 Default::default()
                             };
@@ -241,6 +235,10 @@ impl Signex {
         match result {
             Ok(EntryPatch::Patched(bytes)) => {
                 self.repoint_in_memory(project_id, &from, &to, false);
+                self.commit_written_parents(
+                    &parent_disk,
+                    &format!("Re-point sheet reference to {name}"),
+                );
                 self.follow_save_as_parents_and_report(&from, &plan, &parent_disk);
                 crate::diagnostics::log_info(format!(
                     "[save-as] The saved project file now lists {name}"

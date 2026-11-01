@@ -134,7 +134,6 @@ fn disk_child_refs(parent: &Path) -> Vec<String> {
         .collect()
 }
 
-#[allow(dead_code)]
 fn child_refs(app: &Signex, parent: &Path) -> Vec<String> {
     app.document_state
         .engines

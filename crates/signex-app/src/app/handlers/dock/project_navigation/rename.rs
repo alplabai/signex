@@ -294,15 +294,11 @@ impl Signex {
         // The unopened parents the worker reads, and the project file it
         // rewrites, are registered too, so opening or saving one meanwhile is
         // refused instead of being replaced by (or replacing) the rewrite.
-        // Open parents are written on disk too (#1849), so every parent the
-        // plan rewrites is guarded, not only the unopened ones.
-        let mut dependents: Vec<std::path::PathBuf> = plan
-            .rewrites
-            .iter()
-            .map(|rewrite| rewrite.parent.clone())
-            .collect();
-        dependents.sort();
-        dependents.dedup();
+        // Parents are rewritten on disk too (#1849), open or not, and a saved
+        // reference may exist only on disk, so every candidate page is
+        // guarded and scanned.
+        let parent_candidates = self.disk_parent_candidates(owner, plan, &from);
+        let mut dependents = parent_candidates.clone();
         dependents.extend(project_file.iter().cloned());
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::Rename,
@@ -318,6 +314,8 @@ impl Signex {
             saves: self.document_state.document_saves.barrier(),
             parents_to_read,
             rewrites: plan.rewrites.clone(),
+            parent_candidates,
+            fold,
             project: project_file.map(|project_file| crate::app::path_op_jobs::ProjectEntryPatch {
                 project_file,
                 new_name: new_name.clone(),

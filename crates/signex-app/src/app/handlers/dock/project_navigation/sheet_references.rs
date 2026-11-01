@@ -177,7 +177,9 @@ impl Signex {
     ) -> RewriteOutcome {
         let mut failures = Vec::new();
         for rewrite in &plan.rewrites {
-            let on_disk = disk.get(&rewrite.parent) == Some(&ParentDisk::Written);
+            let on_disk = disk
+                .get(&rewrite.parent)
+                .is_some_and(ParentDisk::is_written);
             if let Some(ParentDisk::Skipped(why)) = disk.get(&rewrite.parent) {
                 crate::diagnostics::log_warning(format!(
                     "{context}: {} {why}, so its saved reference was not updated; save it to keep the change.",
@@ -185,6 +187,11 @@ impl Signex {
                 ));
             }
             if let Err(why) = self.apply_one_rewrite(rewrite, &mut parents, on_disk) {
+                // The disk holds the new reference but memory does not: the
+                // two differ, so the parent has something to save.
+                if on_disk && self.document_state.engines.contains_key(&rewrite.parent) {
+                    self.document_state.mark_document_dirty(&rewrite.parent);
+                }
                 failures.push(format!("{} — {why}", rewrite.parent.display()));
             }
         }
@@ -199,6 +206,69 @@ impl Signex {
         RewriteOutcome {
             failed: failures,
             unchecked: plan.unchecked.clone(),
+        }
+    }
+
+    /// The saved parents the disk job scans for references to `from`: those the
+    /// plan rewrites plus every page of the owning project, since a symbol
+    /// deleted in memory but not yet saved still names the file on disk. A
+    /// parent another move or delete is working on is left out; its reference
+    /// follows in memory (dirty) instead.
+    pub(crate) fn disk_parent_candidates(
+        &self,
+        owner: Option<crate::app::state::ProjectId>,
+        plan: &ReferencePlan,
+        from: &Path,
+    ) -> Vec<PathBuf> {
+        let mut candidates: Vec<PathBuf> = plan
+            .rewrites
+            .iter()
+            .map(|rewrite| rewrite.parent.clone())
+            .collect();
+        if let Some(project) = owner.and_then(|id| self.document_state.project_by_id(id)) {
+            let fold = project.case_fold;
+            candidates.extend(
+                project
+                    .data
+                    .sheets
+                    .iter()
+                    .map(|s| project.dir().join(&s.filename))
+                    .filter(|page| path_key_with(page, fold) != path_key_with(from, fold)),
+            );
+        }
+        candidates.sort();
+        candidates.dedup();
+        candidates.retain(|parent| {
+            self.document_state
+                .pending_path_ops
+                .blocking_start(parent)
+                .is_none()
+        });
+        candidates
+    }
+
+    /// Commit every parent the disk job rewrote to the project's git history,
+    /// as the project file's own patch is.
+    pub(crate) fn commit_written_parents(&mut self, disk: &ParentDiskOutcomes, message: &str) {
+        let mut written: Vec<_> = disk
+            .iter()
+            .filter_map(|(path, outcome)| match outcome {
+                ParentDisk::Written(bytes) => Some((path.clone(), bytes.clone())),
+                _ => None,
+            })
+            .collect();
+        if written.is_empty() {
+            return;
+        }
+        // A background read of these sheets is out of date.
+        self.document_state.note_document_written_behind_engines();
+        written.sort();
+        for (path, bytes) in written {
+            self.commit_bytes_to_project_git(
+                &path,
+                message,
+                crate::app::state::CommitBytes { bytes, sequence: 0 },
+            );
         }
     }
 
@@ -273,7 +343,9 @@ impl Signex {
         };
         let mut followed = ReferencePlan::default();
         for rewrite in &plan.rewrites {
-            let written = disk.get(&rewrite.parent) == Some(&ParentDisk::Written);
+            let written = disk
+                .get(&rewrite.parent)
+                .is_some_and(ParentDisk::is_written);
             if written || self.document_state.engines.contains_key(&rewrite.parent) {
                 followed.rewrites.push(rewrite.clone());
             } else {

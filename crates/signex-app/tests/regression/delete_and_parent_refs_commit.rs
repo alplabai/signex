@@ -372,3 +372,87 @@ fn a_read_only_parent_refuses_the_rename_and_nothing_is_written() {
     assert!(f.dir.join("Child.snxsch").exists(), "nothing moved");
     assert_eq!(std::fs::read(&root).unwrap(), before);
 }
+
+// ---- review follow-ups ------------------------------------------------------
+
+/// A reference the open parent no longer holds in memory (its symbol was
+/// deleted, unsaved) still names the file in the saved parent: it is
+/// re-pointed on disk too, so Discard All cannot strand it.
+#[test]
+fn rename_re_points_a_saved_reference_the_open_parent_no_longer_holds() {
+    let mut f = fixture();
+    open_root(&mut f, sheet("A4", &[]));
+    let root = f.dir.join("Root.snxsch");
+    f.app.document_state.mark_document_dirty(&root);
+
+    rename(&mut f, "Child.snxsch", "Kid.snxsch");
+
+    assert_eq!(child_files(&root), ["Kid.snxsch"]);
+    assert!(
+        f.app.document_state.engines[&root]
+            .document()
+            .child_sheets
+            .is_empty(),
+        "the unsaved deletion is still held in memory"
+    );
+    assert!(f.app.document_state.is_document_dirty(&root));
+}
+
+/// The owning project closes while the rename worker runs. An engine another
+/// project still holds must follow the saved parent, or a later save of it
+/// would write the old name back.
+#[test]
+fn a_project_closed_during_the_rename_leaves_open_parents_matching_disk() {
+    use crate::settle_support::settle_task;
+    let mut f = fixture();
+    open_root(&mut f, sheet("A4", &["Child.snxsch"]));
+    let root = f.dir.join("Root.snxsch");
+    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+        project_id: None,
+        target_path: f.dir.join("Child.snxsch"),
+        tree_path: vec![0],
+        buffer: "Kid.snxsch".to_string(),
+        error: None,
+        is_project_rename: false,
+    });
+    let task = f.app.update(Message::Rename(RenameMsg::Submit));
+    f.app.document_state.projects.clear();
+    settle_task(&mut f.app, task);
+
+    assert_eq!(child_files(&root), ["Kid.snxsch"]);
+    let held = &f.app.document_state.engines[&root].document().child_sheets[0].filename;
+    assert_eq!(held, "Kid.snxsch", "memory equals disk");
+    assert!(!f.app.document_state.is_document_dirty(&root));
+}
+
+/// The file cannot be deleted after the project entry was removed: the entry
+/// is put back, so the saved project is byte for byte what it was.
+#[cfg(unix)]
+#[test]
+fn a_failed_delete_restores_the_saved_project_entry() {
+    use std::os::unix::fs::PermissionsExt;
+    let mut f = fixture();
+    let sub = f.dir.join("sub");
+    std::fs::create_dir(&sub).expect("mkdir");
+    write_sheet(&sub.join("Deep.snxsch"), sheet("A4", &[]));
+    f.app.document_state.projects[0]
+        .data
+        .sheets
+        .push(entry("sub/Deep.snxsch"));
+    write_project(&f.prj, &f.app.document_state.projects[0].data).expect("write project");
+    let before = std::fs::read(&f.prj).expect("read project");
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o555)).expect("chmod");
+    let writable_anyway = std::fs::File::create(sub.join("probe")).is_ok();
+
+    delete(&mut f, "sub/Deep.snxsch");
+
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o755)).expect("chmod back");
+    if writable_anyway {
+        return; // running as a user the permission bits do not bind
+    }
+    assert!(sub.join("Deep.snxsch").exists(), "the file is kept");
+    assert_eq!(std::fs::read(&f.prj).unwrap(), before, "entry restored");
+    assert!(names(&f.app.document_state.projects[0].data).contains(&"sub/Deep.snxsch".to_string()));
+    assert!(!f.app.document_state.is_document_dirty(&f.prj));
+    assert!(f.app.document_state.error_notice.is_some());
+}

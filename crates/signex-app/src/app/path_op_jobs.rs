@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use signex_types::project::{LibraryRetarget, retarget_library_entry};
 
-use crate::app::parent_reference_disk::{ParentDiskOutcomes, patch_parents};
+use crate::app::parent_reference_disk::{ParentDiskOutcomes, Renamed, patch_parents};
 use crate::app::path_ops::ReferenceRewrite;
 use crate::app::path_ops::{DeleteIo, LibraryRenameIo, ParentSheets, RenameIoError};
 use crate::app::project_entry_disk::{EntryPatch, remove_entry, retarget_sheet_entry};
@@ -38,6 +38,10 @@ pub struct RenameJob {
     /// Every parent reference to the file: re-pointed on disk once the move
     /// and the project entry have landed (#1849).
     pub rewrites: Vec<ReferenceRewrite>,
+    /// The saved parents to scan for references to the file, which may be
+    /// more than `rewrites` names (#1849).
+    pub parent_candidates: Vec<PathBuf>,
+    pub fold: crate::app::state::scope::CaseFold,
 }
 
 /// A finished rename job: the move and project patch, the parents read for the
@@ -67,7 +71,13 @@ impl RenameJob {
         // the parents' saved references must follow it too, whatever the
         // project said. A failed move or a moved-back file changes none.
         let parent_disk = if result.is_ok() {
-            patch_parents(&self.rewrites)
+            let new_name = self.to.file_name().unwrap_or_default().to_string_lossy();
+            let renamed = Renamed {
+                old: &self.from,
+                new_name: &new_name,
+                fold: self.fold,
+            };
+            patch_parents(&self.parent_candidates, &self.rewrites, &renamed)
         } else {
             ParentDiskOutcomes::new()
         };
@@ -245,16 +255,19 @@ impl DeleteJob {
         let Err(e) = removed else {
             return (DeleteIo::Deleted, entry);
         };
-        let mut why = e.to_string();
+        let why = e.to_string();
         if let (EntryPatch::Patched(_), Some((file, _)), Some(original)) =
             (&entry, &self.project, original)
             && let Err(back) = signex_types::atomic_io::atomic_write(file, &original)
         {
-            why.push_str(&format!(
-                "; the project file {} no longer lists it and could not be restored ({back}). \
-                 Add the file back to the project",
-                file.display()
-            ));
+            return (
+                DeleteIo::FailedProjectStale(format!(
+                    "{why}; the project file {} no longer lists it and could not be restored \
+                     ({back}). Save the project to list it again",
+                    file.display()
+                )),
+                EntryPatch::NotListed,
+            );
         }
         (DeleteIo::Failed(why), EntryPatch::NotListed)
     }

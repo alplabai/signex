@@ -243,6 +243,7 @@ impl Signex {
         self.document_state.pending_path_ops.finish(request.id);
         let target = request.target.as_path();
         let mut tasks = Vec::new();
+        let stale_project = matches!(io, DeleteIo::FailedProjectStale(_));
         match io {
             // A tab may still hold the target (#736), and one opened by a
             // route that does not consult the pending set must not outlive
@@ -261,7 +262,19 @@ impl Signex {
                         request.display_name
                     )));
             }
-            DeleteIo::Failed(e) => {
+            DeleteIo::Failed(e) | DeleteIo::FailedProjectStale(e) => {
+                if stale_project {
+                    // The saved project lost the entry: only a save of the
+                    // in-memory project (which still lists it) repairs that.
+                    let project_file = self
+                        .repointed_dialog(&request.dialog)
+                        .and_then(|d| d.tree_path.first().copied())
+                        .and_then(|idx| self.document_state.projects.get(idx))
+                        .map(|p| p.path.clone());
+                    if let Some(project_file) = project_file {
+                        self.document_state.mark_document_dirty(&project_file);
+                    }
+                }
                 crate::diagnostics::log_error(
                     "Failed to delete project file",
                     &anyhow::anyhow!("{}: {e}", target.display()),

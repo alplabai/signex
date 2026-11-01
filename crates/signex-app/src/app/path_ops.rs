@@ -471,6 +471,10 @@ pub enum DeleteIo {
     Deleted,
     /// `remove_file` / `remove_dir_all` failed with this OS text.
     Failed(String),
+    /// As `Failed`, and the saved project no longer lists the file either: its
+    /// entry was removed first and could not be put back (#1849). The in-memory
+    /// project still lists it, so a project save writes the entry back.
+    FailedProjectStale(String),
     /// Whether the target exists could not be determined.
     CheckFailed(String),
 }
