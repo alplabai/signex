@@ -123,6 +123,7 @@ fn every_field_is_accounted_for() {
         position: _,
         diameter: _,
         minted: _,
+        unknown: _,
         unknown_columns: _,
     } = Junction::default();
 }

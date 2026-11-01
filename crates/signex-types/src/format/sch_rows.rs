@@ -476,6 +476,7 @@ pub(in crate::format) fn row_to_junction(row: SchJunctionRow, extra: JunctionExt
         },
         diameter: row.diameter,
         minted: extra.minted,
+        unknown: extra.unknown,
         unknown_columns: row.unknown_columns,
     }
 }

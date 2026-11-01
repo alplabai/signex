@@ -234,6 +234,7 @@ pub(super) fn fixture() -> SchematicSheet {
         position: Point::new(28.0, 5.0),
         diameter: 0.06,
         minted: false,
+        unknown: Default::default(),
         unknown_columns: Default::default(),
     });
     sheet.labels.push(label("NETA", 5.0, 21.0, 0.0));

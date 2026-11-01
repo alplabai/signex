@@ -1,7 +1,7 @@
 //! Placed schematic-sheet elements and the sheet container.
 
 use super::*;
-use crate::format::{SheetUnknown, UnknownColumns};
+use crate::format::{SheetUnknown, UnknownColumns, UnknownFields};
 
 // ---------------------------------------------------------------------------
 
@@ -39,6 +39,10 @@ pub struct Junction {
     /// if it no longer sits on a wire (issue #422).
     #[serde(default)]
     pub minted: bool,
+    /// Keys in this junction's `[extras.junctions.<uuid>]` table that this
+    /// build does not recognise, kept so a save re-emits them (#1874).
+    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
+    pub unknown: UnknownFields,
     /// TSV columns this build does not recognise, kept per row so a
     /// save re-emits them (see [`UnknownColumns`]).
     #[serde(default, skip_serializing_if = "UnknownColumns::is_empty")]
@@ -523,6 +527,7 @@ impl Default for Junction {
             position: Point::default(),
             diameter: 0.0,
             minted: false,
+            unknown: UnknownFields::default(),
             unknown_columns: UnknownColumns::default(),
         }
     }

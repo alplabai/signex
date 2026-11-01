@@ -141,6 +141,7 @@ fn random_sheet(seed: u64, wire_count: usize) -> (Vec<Wire>, Vec<Junction>) {
     for _ in 0..wire_count {
         let p = pt(&mut rng);
         junctions.push(Junction {
+            unknown: Default::default(),
             unknown_columns: Default::default(),
             uuid: uuid::Uuid::now_v7(),
             position: p,

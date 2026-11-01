@@ -383,6 +383,7 @@ impl Signex {
                         position: signex_types::schematic::Point::new(wx, wy),
                         diameter: 0.0,
                         minted: false,
+                        unknown: Default::default(),
                         unknown_columns: Default::default(),
                     };
                     self.apply_engine_command(
