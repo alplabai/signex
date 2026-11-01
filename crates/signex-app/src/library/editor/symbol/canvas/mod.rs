@@ -59,7 +59,7 @@ use press::PressTarget;
 // globs. `pub(in …canvas)` matches their `pub(super)` definitions in
 // `geometry.rs` — visible across the canvas subtree, nowhere wider.
 pub(in crate::library::editor::symbol::canvas) use geometry::{
-    circle_vertices, screen_px_to_world_mm, selection_anchor, stroke_px_at_zoom, stroke_world_mm,
+    circle_vertices, screen_px_to_world_mm, selection_anchor, stroke_px, symbol_stroke_mm,
     text_size_px_from_mm, to_rgba, unwrap_angle, world_for, world_unsnapped,
 };
 
@@ -346,13 +346,12 @@ const ORIGIN_MARKER_MM: f32 = 1.27;
 /// is what let this canvas and its own hit-test disagree.
 const SYMBOL_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
     signex_gfx::primitive::text::TextSizePolicy::new(2.0, 96.0);
-const SYMBOL_AXIS_STROKE_PX_AT_100: f32 = 1.0;
-const SYMBOL_GRAPHIC_STROKE_PX_AT_100: f32 = 1.5;
-const SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
-const SYMBOL_RECT_STROKE_PX_AT_100: f32 = 2.0;
-const SYMBOL_RECT_SELECTED_STROKE_PX_AT_100: f32 = 2.5;
-const SYMBOL_HANDLE_STROKE_PX_AT_100: f32 = 1.0;
-const SYMBOL_PIN_SELECTION_HALO_STROKE_PX_AT_100: f32 = 1.0;
+// Screen-constant chrome widths (px); symbol strokes follow the stroke law.
+const SYMBOL_AXIS_LINE_PX: f32 = 1.0;
+const SYMBOL_HANDLE_LINE_PX: f32 = 1.0;
+const SYMBOL_PIN_HALO_LINE_PX: f32 = 1.0;
+/// A selected stroke draws this much wider (the old 5 px : 3 px pin ratio).
+const SELECTED_STROKE_FACTOR: f32 = 5.0 / 3.0;
 
 /// Returns `true` when `item` (a single-element selection) belongs to the
 /// multi-element `group` selection. Used to decide whether a click on an
@@ -542,13 +541,21 @@ impl<'a> SymbolCanvas<'a> {
             frame,
             &scene,
             |point| iced::Point::new(ox + point[0] * scale, oy - point[1] * scale),
-            crate::renderer_scene_canvas::SceneDrawOptions {
-                scale_px_per_mm: scale,
-                min_stroke_px: signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
-                text_min_px: SYMBOL_TEXT_SIZE.min_px,
-                text_max_px: SYMBOL_TEXT_SIZE.max_px,
-            },
+            symbol_draw_options(scale),
         );
+    }
+
+    /// The library width the pins stroke at: the symbol's most common body
+    /// width, as on a placed symbol (`signex_types::schematic::symbol_stroke_mm`).
+    fn pin_stroke_mm(&self) -> f64 {
+        signex_types::schematic::symbol_stroke_mm(
+            self.symbol
+                .graphics
+                .iter()
+                .filter(|g| state::graphic_on_part(g, self.view))
+                .filter(|g| !matches!(g.kind, SymbolGraphicKind::Text { .. }))
+                .map(|g| g.stroke_width),
+        )
     }
 
     fn build_symbol_renderer_snapshot(
@@ -574,16 +581,7 @@ impl<'a> SymbolCanvas<'a> {
             } else {
                 self.body_color
             };
-            let stroke_w = if is_selected {
-                SYMBOL_GRAPHIC_SELECTED_STROKE_PX_AT_100
-            } else {
-                SYMBOL_GRAPHIC_STROKE_PX_AT_100
-            };
-            let rect_w = if is_selected {
-                SYMBOL_RECT_SELECTED_STROKE_PX_AT_100
-            } else {
-                SYMBOL_RECT_STROKE_PX_AT_100
-            };
+            let stroke_mm = symbol_stroke_mm(g.stroke_width, is_selected, scale);
 
             match &g.kind {
                 SymbolGraphicKind::Rectangle { from, to } => {
@@ -611,7 +609,7 @@ impl<'a> SymbolCanvas<'a> {
                         vertices: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
                         fill_color: fill,
                         stroke_color: Some(to_rgba(stroke_color)),
-                        stroke_width_mm: stroke_world_mm(rect_w, scale),
+                        stroke_width_mm: stroke_mm,
                     });
                 }
                 SymbolGraphicKind::Line { from, to } => {
@@ -619,7 +617,7 @@ impl<'a> SymbolCanvas<'a> {
                         id: i as u64,
                         p0: [from[0] as f32, from[1] as f32],
                         p1: [to[0] as f32, to[1] as f32],
-                        width_mm: stroke_world_mm(stroke_w, scale),
+                        width_mm: stroke_mm,
                         explicit_color: Some(to_rgba(stroke_color)),
                     });
                 }
@@ -634,7 +632,7 @@ impl<'a> SymbolCanvas<'a> {
                         vertices: circle_vertices(*center, *radius as f32, 40),
                         fill_color: fill,
                         stroke_color: Some(to_rgba(stroke_color)),
-                        stroke_width_mm: stroke_world_mm(stroke_w, scale),
+                        stroke_width_mm: stroke_mm,
                     });
                 }
                 SymbolGraphicKind::Arc {
@@ -648,7 +646,7 @@ impl<'a> SymbolCanvas<'a> {
                         radius_mm: *radius as f32,
                         start_angle_rad: (*start_deg as f32).to_radians(),
                         end_angle_rad: (*end_deg as f32).to_radians(),
-                        width_mm: stroke_world_mm(stroke_w, scale),
+                        width_mm: stroke_mm,
                         color: to_rgba(stroke_color),
                     });
                 }
@@ -688,12 +686,13 @@ impl<'a> SymbolCanvas<'a> {
                             .collect(),
                         fill_color: fill,
                         stroke_color: Some(to_rgba(stroke_color)),
-                        stroke_width_mm: stroke_world_mm(stroke_w, scale),
+                        stroke_width_mm: stroke_mm,
                     });
                 }
             }
         }
 
+        let pin_stroke_mm = self.pin_stroke_mm();
         for (i, pin) in self.symbol.pins.iter().enumerate() {
             if !self.pin_visible_on_active_part(pin) {
                 continue;
@@ -719,14 +718,7 @@ impl<'a> SymbolCanvas<'a> {
                 id: 100_000 + i as u64,
                 p0: tip_f32,
                 p1: body_f32,
-                width_mm: stroke_world_mm(
-                    if selected {
-                        signex_types::schematic::PIN_STROKE_SELECTED_PX
-                    } else {
-                        signex_types::schematic::PIN_STROKE_PX
-                    },
-                    scale,
-                ),
+                width_mm: symbol_stroke_mm(pin_stroke_mm, selected, scale),
                 explicit_color: Some(to_rgba(stroke_color)),
             });
 
@@ -745,10 +737,7 @@ impl<'a> SymbolCanvas<'a> {
                     ),
                     fill_color: [0.0, 0.0, 0.0, 0.0],
                     stroke_color: Some(to_rgba(self.selected_color)),
-                    stroke_width_mm: stroke_world_mm(
-                        SYMBOL_PIN_SELECTION_HALO_STROKE_PX_AT_100,
-                        scale,
-                    ),
+                    stroke_width_mm: screen_px_to_world_mm(SYMBOL_PIN_HALO_LINE_PX, scale),
                 });
             }
 
@@ -811,7 +800,19 @@ impl<'a> SymbolCanvas<'a> {
     }
 }
 
+/// The replay options of the Symbol Editor at `scale` px/mm.
+fn symbol_draw_options(scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    crate::renderer_scene_canvas::SceneDrawOptions {
+        scale_px_per_mm: scale,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        text_min_px: SYMBOL_TEXT_SIZE.min_px,
+        text_max_px: SYMBOL_TEXT_SIZE.max_px,
+    }
+}
+
 #[cfg(test)]
 mod rotate_keys_tests;
+#[cfg(test)]
+mod stroke_law_tests;
 #[cfg(test)]
 mod tests;

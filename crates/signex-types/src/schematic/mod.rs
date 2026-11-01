@@ -27,33 +27,8 @@ pub const PIN_LENGTH_MM: f64 = GRID_MM;
 /// Default offset from pin body-end to pin name text anchor.
 pub const PIN_NAME_OFFSET_MM: f64 = 0.508;
 
-/// Default screen-space stroke width for schematic pin lines (px).
-/// Shared across symbol/schematic canvas paths to avoid drift.
-pub const PIN_STROKE_PX: f32 = 3.0;
-
-/// Stroke width for selected schematic pin lines (px).
-pub const PIN_STROKE_SELECTED_PX: f32 = 5.0;
-
 /// Camera scale value that maps to 100% zoom in schematic canvases.
 pub const SCHEMATIC_ZOOM_100_SCALE: f32 = 3.0;
-
-/// Shared minimum stroke width for world-space schematic primitives (mm).
-pub const SCHEMATIC_RENDER_MIN_STROKE_MM: f64 = 0.15;
-
-/// Shared minimum visible stroke width after world->screen scaling (px).
-pub const SCHEMATIC_RENDER_MIN_STROKE_PX: f32 = 0.6;
-
-/// Maximum multiplier applied to 100% stroke widths at high zoom.
-///
-/// This keeps stroke growth monotonic with zoom while avoiding blocky,
-/// over-thick lines at very high zoom levels.
-pub const SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER: f32 = 2.0;
-
-/// Bus stroke width in world-space mm.
-pub const SCHEMATIC_RENDER_BUS_STROKE_MM: f64 = 0.45;
-
-/// Power-port preview body outline stroke at 100% zoom (px).
-pub const SCHEMATIC_RENDER_POWER_PORT_STROKE_PX: f32 = 1.2;
 
 /// Selection overlay threshold under which we render a dot marker (px).
 pub const SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX: f32 = 2.0;
@@ -61,11 +36,11 @@ pub const SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX: f32 = 2.0;
 /// Selection overlay dot marker radius (px).
 pub const SCHEMATIC_RENDER_SELECTION_MARKER_RADIUS_PX: f32 = 5.5;
 
-/// Selection overlay marker stroke at 100% zoom (px).
-pub const SCHEMATIC_RENDER_SELECTION_MARKER_STROKE_PX: f32 = 1.4;
+/// Selection overlay dot marker outline, screen-constant chrome (px).
+pub const SCHEMATIC_SELECTION_MARKER_OUTLINE_PX: f32 = 1.4;
 
-/// Selection overlay rectangle stroke at 100% zoom (px).
-pub const SCHEMATIC_RENDER_SELECTION_RECT_STROKE_PX: f32 = 1.2;
+/// Selection overlay rectangle outline, screen-constant chrome (px).
+pub const SCHEMATIC_SELECTION_RECT_OUTLINE_PX: f32 = 1.2;
 
 /// Wire hit-test absolute minimum tolerance (mm).
 pub const SCHEMATIC_HIT_WIRE_TOLERANCE_MM: f64 = 0.25;
@@ -82,15 +57,6 @@ pub const SCHEMATIC_RENDER_NO_CONNECT_HALF_LEN_MM: f64 = 0.7;
 /// No-connect marker minimum half arm length after scaling (px).
 pub const SCHEMATIC_RENDER_NO_CONNECT_MIN_HALF_LEN_PX: f32 = 3.0;
 
-/// No-connect marker stroke width at 100% zoom (px).
-pub const SCHEMATIC_RENDER_NO_CONNECT_STROKE_PX: f32 = 1.2;
-
-/// Symbol body rectangle stroke width at 100% zoom (px).
-pub const SCHEMATIC_RENDER_SYMBOL_BODY_STROKE_PX: f32 = 1.1;
-
-/// Child sheet rectangle stroke width at 100% zoom (px).
-pub const SCHEMATIC_RENDER_CHILD_SHEET_STROKE_PX: f32 = 1.0;
-
 /// Child sheet pin marker radius (px).
 pub const SCHEMATIC_RENDER_CHILD_SHEET_PIN_RADIUS_PX: f32 = 3.0;
 
@@ -99,9 +65,6 @@ pub const SCHEMATIC_RENDER_DRAWING_MIN_CIRCLE_RADIUS_PX: f32 = 0.7;
 
 /// Drawing arc primitive minimum visible radius (px).
 pub const SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX: f32 = 0.8;
-
-/// Label glyph (global/hierarchical marker) outline stroke width at 100% zoom (px).
-pub const SCHEMATIC_RENDER_LABEL_GLYPH_STROKE_PX: f32 = 1.0;
 
 // ---------------------------------------------------------------------------
 // Point — schematic mm-space coordinate (f64). Copy-friendly.
@@ -822,7 +785,9 @@ pub use sheet::*;
 mod sheet_frame;
 pub use sheet_frame::{MAX_ZONES, SheetFrameSettings};
 mod sheet_size;
+mod stroke;
 pub use sheet_size::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM, SheetOrientation, SheetSize};
+pub use stroke::*;
 mod hotspot;
 pub use hotspot::{
     SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot, snap_to_hotspot,
