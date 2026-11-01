@@ -51,6 +51,10 @@ fn an_empty_undo_while_the_write_runs_still_lands_the_save() {
     assert_eq!(engine.undo().expect("undo"), None);
     land(&mut app, &path, revision);
     assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+    assert!(
+        !app.document_state.engines.contains_key(&path),
+        "a clean parked engine is dropped once its save lands"
+    );
 }
 
 #[test]

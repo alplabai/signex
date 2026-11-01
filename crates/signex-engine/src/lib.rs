@@ -154,13 +154,13 @@ pub struct Engine {
     /// one-snapshot-per-batch guarantee).
     #[cfg(test)]
     pre_image_clones: usize,
-    /// Re-drawn from a process-wide counter by every entry point that can
-    /// change `document` (and at construction), so an off-thread save can
+    /// Re-drawn from a process-wide counter whenever an entry point changes
+    /// `document` or fails part-way (and at construction), so an off-thread save can
     /// tell whether the document moved on while it ran, even if the engine
     /// was replaced by a fresh one meanwhile.
     revision: u64,
-    /// The value `revision` held before the most recent edit entry point
-    /// (a batch counts as one). A render cache stamped with this value was
+    /// The value `revision` held before the most recent edit that changed
+    /// the document (a batch counts as one). A render cache stamped with this value was
     /// in step with the document just before that edit, so it may copy only
     /// the collections the edit's patch reports.
     base_revision: u64,
@@ -347,7 +347,7 @@ impl Engine {
         self.revision
     }
 
-    /// The revision the document had before the most recent edit entry
+    /// The revision the document had before the most recent changing edit
     /// point ran; `0` before any edit.
     pub fn base_revision(&self) -> u64 {
         self.base_revision
@@ -1211,6 +1211,41 @@ mod tests {
         assert!(engine.execute(paper("A2")).expect("set").changed);
         assert_ne!(engine.revision(), revision);
         assert_eq!(engine.base_revision(), revision);
+    }
+
+    #[test]
+    fn an_annotate_that_changes_nothing_keeps_every_revision() {
+        use crate::command::AnnotateMode;
+        use signex_types::schematic::AnnotateOrder;
+        let mut sheet = test_sheet();
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            uuid: uuid::Uuid::now_v7(),
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            ..Default::default()
+        });
+        let mut engine = Engine::new(sheet).expect("engine");
+        let before = (
+            engine.revision(),
+            engine.base_revision(),
+            engine.connectivity_revision(),
+        );
+        let numbered = engine
+            .annotate_with_seed(
+                AnnotateMode::Incremental,
+                &mut Default::default(),
+                AnnotateOrder::UpThenAcross,
+            )
+            .expect("annotate");
+        assert!(!numbered, "R1 is already numbered");
+        assert_eq!(
+            (
+                engine.revision(),
+                engine.base_revision(),
+                engine.connectivity_revision()
+            ),
+            before
+        );
     }
 
     #[test]
