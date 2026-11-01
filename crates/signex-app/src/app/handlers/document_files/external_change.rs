@@ -153,10 +153,10 @@ impl Signex {
         };
         let name = file_label(path);
         let what = drift.describe();
-        crate::diagnostics::log_warning(format!("[save] {name} {what}; not saved, still modified"));
+        crate::diagnostics::log_warning(format!("[save] {name} {what}; {}", drift.outcome()));
         anyhow::bail!(
-            "{name} {what}, so it was not overwritten. Save it from its tab to choose \
-             Overwrite or Reload"
+            "{name} {what}, so it was not overwritten. {}",
+            drift.next_step()
         )
     }
 
@@ -183,8 +183,8 @@ impl Signex {
                 self.record_disk_baseline(parent, ContentHash::of(bytes));
             } else {
                 crate::diagnostics::log_warning(format!(
-                    "[save] {} was changed on disk by another program before its sheet \
-                     reference was updated; saving it will ask first",
+                    "[save] {} was changed on disk by another program (or is being saved) \
+                     before its sheet reference was updated; saving it will ask first",
                     file_label(parent)
                 ));
             }
@@ -196,7 +196,7 @@ impl Signex {
     pub(crate) fn handle_save_found_disk_drift(&mut self, path: PathBuf, drift: DiskDrift) {
         let what = drift.describe();
         let name = file_label(&path);
-        crate::diagnostics::log_warning(format!("[save] {name} {what}; not saved, still modified"));
+        crate::diagnostics::log_warning(format!("[save] {name} {what}; {}", drift.outcome()));
         self.document_state
             .document_saves
             .record_failure(path.clone(), format!("{name} {what}"));
@@ -222,13 +222,17 @@ impl Signex {
         let Some(path) = self.take_disk_conflict() else {
             return Task::none();
         };
-        crate::diagnostics::log_info(format!(
-            "[save] Overwriting {} as the user chose",
-            file_label(&path)
-        ));
+        let name = file_label(&path);
+        crate::diagnostics::log_info(format!("[save] Overwriting {name} as the user chose"));
         let begun = if super::save_async::is_pcb_path(&path) {
-            self.begin_pcb_save_unchecked(path)
-                .map(|task| task.unwrap_or_else(Task::none))
+            self.begin_pcb_save_unchecked(path).map(|task| {
+                task.unwrap_or_else(|| {
+                    crate::diagnostics::log_info(format!(
+                        "[save] {name} has no unsaved changes; nothing was written"
+                    ));
+                    Task::none()
+                })
+            })
         } else {
             self.begin_schematic_save_unchecked(path)
         };
@@ -312,7 +316,7 @@ impl Signex {
             return Task::none();
         }
         let ReloadedFile { document, hash } = *reloaded;
-        let task = self.apply_reloaded(idx, Ok(document), None);
+        let task = self.apply_reloaded_with(idx, Ok(document), None, false);
         self.document_state.mark_document_clean(&path);
         self.document_state.document_saves.clear_failure(&path);
         self.record_disk_baseline(&path, hash);

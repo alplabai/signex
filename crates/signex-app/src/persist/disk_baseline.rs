@@ -66,9 +66,25 @@ impl DiskDrift {
         match self {
             Self::Changed => "changed on disk since it was opened or last saved",
             Self::Missing => "is missing on disk (deleted or moved)",
-            Self::FolderMissing => {
-                "cannot be saved: its folder is missing on disk (moved or deleted)"
-            }
+            Self::FolderMissing => "cannot be saved: its folder is gone (moved or deleted)",
+        }
+    }
+}
+
+impl DiskDrift {
+    /// What became of the save, for Messages.
+    pub fn outcome(self) -> &'static str {
+        match self {
+            Self::FolderMissing => "nothing written, still modified",
+            _ => "not saved, still modified",
+        }
+    }
+
+    /// What the user can do next, for an error that has no card.
+    pub fn next_step(self) -> &'static str {
+        match self {
+            Self::FolderMissing => "Put the folder back, then save again",
+            _ => "Save it from its tab to choose Overwrite or Reload",
         }
     }
 }

@@ -75,6 +75,13 @@ The baseline after a blocking save is the hash of the bytes the engine wrote
 makes a running job's own-write hash stale does not wait for the job: the
 request is queued in the ledger and the next holder of the file's slot applies
 it (`DocumentSaves::forget_own_write_hashes`).
+`DocumentSaves::knows`, which the update thread calls when a parent sheet is
+re-pointed (#1849), also never waits: while a job holds the file's slot it
+answers no, so a foreign change is never adopted as the baseline and the next
+save asks. `drift_of` still reads the file and runs only after the barrier of
+the blocking Save All leg, when no job is in flight. A Reload applies the
+document without a "Restore" commit; opening a symlink to an open board shows
+that board.
 
 History restore and the `.snxprj` entry patch use the document write
 (`atomic_write_existing_dir`), so a symlink is written through and a missing

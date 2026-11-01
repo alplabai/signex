@@ -108,6 +108,38 @@ fn card_title(app: &Signex) -> Option<String> {
     notice.action.is_some().then(|| notice.title.clone())
 }
 
+/// A project rooted at `dir` with auto-commit on, so a commit would be queued.
+fn add_git_project(app: &mut Signex, dir: &Path) {
+    let id = app.document_state.mint_project_id();
+    app.document_state
+        .projects
+        .push(signex_app::app::LoadedProject {
+            id,
+            path: dir.join("P.snxprj"),
+            data: signex_types::project::ProjectData {
+                description: None,
+                name: "P".into(),
+                dir: dir.to_string_lossy().into_owned(),
+                schematic_root: None,
+                pcb_file: None,
+                sheets: Vec::new(),
+                variant_definitions: Vec::new(),
+                active_variant: None,
+                libraries: Vec::new(),
+                enable_git: true,
+                net_classes: Vec::new(),
+                rules: None,
+                annotation: None,
+                parameters: Default::default(),
+                unknown: Default::default(),
+            },
+            pending_libraries: Default::default(),
+            case_fold: Default::default(),
+            case_probed: false,
+            case_decided: false,
+        });
+}
+
 fn fixture(name: &str, text: &str) -> (TempDir, PathBuf) {
     let dir = TempDir::new().expect("tempdir");
     let path = dir.path().join(name);
@@ -146,6 +178,7 @@ fn overwriting_a_changed_board_writes_the_open_one_and_the_next_save_goes_throug
     fs::write(&path, board_text(3.2)).unwrap();
     edit_board(&mut app, &path, 2.4);
     save(&mut app);
+    assert_eq!(card_title(&app).as_deref(), Some("File Changed on Disk"));
 
     crate::settle_support::settle(
         &mut app,
@@ -161,17 +194,17 @@ fn overwriting_a_changed_board_writes_the_open_one_and_the_next_save_goes_throug
 
 #[test]
 fn reloading_a_changed_board_loads_the_file_and_drops_the_edits() {
-    let (_dir, path) = fixture("BoardReload1863.snxpcb", &board_text(1.6));
+    signex_library::git_identity::test_identity::install();
+    let (dir, path) = fixture("BoardReload1863.snxpcb", &board_text(1.6));
     let (mut app, _boot) = Signex::new();
+    add_git_project(&mut app, dir.path());
     open(&mut app, &path);
     fs::write(&path, board_text(3.2)).unwrap();
     edit_board(&mut app, &path, 2.4);
     save(&mut app);
 
-    crate::settle_support::settle(
-        &mut app,
-        Message::Overlay(OverlayMsg::DiskConflictReloadChosen),
-    );
+    let task = app.update(Message::Overlay(OverlayMsg::DiskConflictReloadChosen));
+    crate::settle_support::settle_task(&mut app, task);
 
     let shown = app
         .document_state
@@ -183,6 +216,29 @@ fn reloading_a_changed_board_loads_the_file_and_drops_the_edits() {
         .map(|b| b.thickness);
     assert_eq!(shown, Some(3.2));
     assert!(!app.document_state.is_document_dirty(&path));
+    assert!(
+        !dir.path().join(".git").exists(),
+        "a disk-conflict Reload restores nothing, so it commits nothing"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_to_an_open_board_shows_the_open_board() {
+    let (dir, real) = fixture("BoardReal1865.snxpcb", &board_text(1.6));
+    let link = dir.path().join("BoardLink1865.snxpcb");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &real);
+    open(&mut app, &link);
+
+    let boards = app
+        .document_state
+        .tabs
+        .iter()
+        .filter(|tab| tab.path == real || tab.path == link)
+        .count();
+    assert_eq!(boards, 1, "one file is one document");
 }
 
 // ---- #1864: reload keeps edits made during its read ------------------------

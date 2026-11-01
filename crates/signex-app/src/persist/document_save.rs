@@ -429,20 +429,28 @@ impl DocumentSaves {
     }
 
     /// Whether `hash` is a state of `path` this document knew: its baseline,
-    /// or what an earlier write of this process put there.
+    /// or what an earlier write of this process put there. Never waits for a
+    /// running write (update-thread callers): while one holds the file's slot
+    /// an own-write hash cannot be vouched for, so the answer is `false`, the
+    /// side that never adopts a foreign change as the baseline.
     pub fn knows(&self, path: &Path, hash: super::ContentHash) -> bool {
         let Some(baseline) = self.baseline(path) else {
             return false;
         };
-        let slot = relock(&self.ledger.newest_written)
-            .get(&ledger_key(path))
-            .cloned();
-        let own = slot.map(|slot| {
-            let mut files = relock(&slot);
-            apply_stale_hashes(&self.ledger, &ledger_key(path), &mut files);
-            known_hashes(baseline, files.iter().filter(|n| n.path == path))
-        });
-        own.unwrap_or_else(|| vec![baseline]).contains(&hash)
+        if baseline == hash {
+            return true;
+        }
+        let key = ledger_key(path);
+        let Some(slot) = relock(&self.ledger.newest_written).get(&key).cloned() else {
+            return false;
+        };
+        let mut files = match slot.try_lock() {
+            Ok(files) => files,
+            Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(TryLockError::WouldBlock) => return false,
+        };
+        apply_stale_hashes(&self.ledger, &key, &mut files);
+        known_hashes(baseline, files.iter().filter(|n| n.path == path)).contains(&hash)
     }
 
     /// Whether `path` still holds what its document was loaded from or last
@@ -980,6 +988,42 @@ mod tests {
         assert_eq!(saves.baseline(&path), Some(read));
         assert!(!saves.knows(&path, super::super::ContentHash::of(b"mine")));
         assert!(saves.knows(&path, read));
+    }
+
+    #[test]
+    fn knows_does_not_wait_for_a_running_write_and_refuses_an_unvouched_hash() {
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let mut saves = DocumentSaves::new(Arc::new(GatedSink {
+            entered: Mutex::new(entered_tx),
+            release: Mutex::new(release_rx),
+        }));
+        let path = PathBuf::from("a.snxsch");
+        let base = super::super::ContentHash::of(b"base");
+        saves.set_baseline(path.clone(), base);
+        let job = saves.begin(path.clone(), b"mine".to_vec());
+        let running = std::thread::spawn(move || job.run());
+        entered_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("the write started");
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let other = super::super::ContentHash::of(b"foreign");
+                done_tx
+                    .send((saves.knows(&path, base), saves.knows(&path, other)))
+                    .unwrap();
+            });
+            let answer = done_rx.recv_timeout(std::time::Duration::from_secs(2));
+            release_tx.send(()).unwrap();
+            assert_eq!(
+                answer,
+                Ok((true, false)),
+                "knows waited or adopted a foreign hash"
+            );
+        });
+        running.join().unwrap().unwrap();
     }
 
     #[test]

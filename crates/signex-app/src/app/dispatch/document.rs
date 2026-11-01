@@ -245,6 +245,11 @@ impl Signex {
                 match result {
                     Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
                     Ok(board) => {
+                        if let Some(disk) = &disk
+                            && self.focus_alias_if_open(&path, disk)
+                        {
+                            return self.finish_update();
+                        }
                         self.open_pcb_tab(path.clone(), title, *board);
                         if let Some(disk) = disk {
                             self.record_disk_read(&path, disk);
