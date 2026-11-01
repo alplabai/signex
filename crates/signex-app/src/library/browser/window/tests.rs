@@ -388,6 +388,7 @@ fn grid_element<'a>(
         crate::library::browser::grid::GridCaches {
             dangling: &lib.dangling,
             prices: &prices,
+            names: crate::library::browser::names::PrimitiveNames::of(lib),
         },
         tokens,
         false,

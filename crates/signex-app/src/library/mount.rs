@@ -261,16 +261,14 @@ impl LibraryState {
         if self.library_at(&prepared.entry.root).is_some() {
             return Ok(());
         }
-        // `LibrarySet::mount` keys file-backed adapters by `.snxlib`
-        // path, so a `Conflict` here means "this same path is already
-        // mounted" — not "this library_id is taken". Two copies of a
-        // library sharing a `library_id` at different paths both mount
-        // fine, by design (`adapters/library_set.rs`, "Resolution
-        // semantics").
-        // The bundled stock library is always read-only, whichever request
-        // (global entry, project library, Add Library) mounts it first.
+        self.refuse_stock_copy(&prepared.entry.root, prepared.entry.library_id)?;
+        // A `Conflict` here means this path, or another library with the
+        // same `library_id`, is already mounted (#1894).
+        // The bundled stock library is read-only, whichever request
+        // (global entry, project library, Add Library) mounts it first;
+        // only the maintainer mode of #1892 mounts it writable.
         let stock = self.is_stock_root(&prepared.entry.root);
-        if stock {
+        if self.is_locked_stock_root(&prepared.entry.root) {
             self.set.mount_read_only(prepared.adapter)?;
         } else {
             self.set.mount(prepared.adapter)?;

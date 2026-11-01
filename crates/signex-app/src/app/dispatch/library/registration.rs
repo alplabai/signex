@@ -256,16 +256,55 @@ impl Signex {
         Task::none()
     }
 
-    pub(super) fn handle_picker_message(&mut self, msg: PickerMsg) -> Task<Message> {
-        if let PickerMsg::PanelSearchChanged(s) = msg {
-            self.library.panel_search = s;
+    /// A component under an expanded Library panel row was clicked: the
+    /// first click highlights it, a second click on it inside the window
+    /// opens its Component Preview (single-click highlights, double-click
+    /// opens, like the project tree).
+    fn handle_panel_component_clicked(
+        &mut self,
+        key: crate::library::state::ComponentsPanelRowKey,
+    ) -> Task<Message> {
+        const DOUBLE_CLICK_WINDOW: std::time::Duration = std::time::Duration::from_millis(500);
+        let now = std::time::Instant::now();
+        let library = &mut self.library;
+        library.panel_selected = Some(key.clone());
+        let is_double = matches!(
+            &library.panel_last_click,
+            Some((prev, t)) if *prev == key && now.duration_since(*t) <= DOUBLE_CLICK_WINDOW
+        );
+        if !is_double {
+            library.panel_last_click = Some((key, now));
             return Task::none();
+        }
+        library.panel_last_click = None;
+        self.handle_open_component_row(key.library_path, key.table, key.row_id)
+    }
+
+    pub(super) fn handle_picker_message(&mut self, msg: PickerMsg) -> Task<Message> {
+        match msg {
+            PickerMsg::PanelSearchChanged(s) => {
+                self.library.panel_search = s;
+                return Task::none();
+            }
+            PickerMsg::PanelLibraryToggled(path) => {
+                let expanded = &mut self.library.panel_expanded;
+                if !expanded.remove(&path) {
+                    expanded.insert(path);
+                }
+                return Task::none();
+            }
+            PickerMsg::PanelComponentClicked(key) => {
+                return self.handle_panel_component_clicked(key);
+            }
+            _ => {}
         }
         let Some(picker) = self.library.picker.as_mut() else {
             return Task::none();
         };
         match msg {
-            PickerMsg::PanelSearchChanged(_) => {}
+            PickerMsg::PanelSearchChanged(_)
+            | PickerMsg::PanelLibraryToggled(_)
+            | PickerMsg::PanelComponentClicked(_) => {}
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
                 self.library.sync_view_caches();

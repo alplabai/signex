@@ -63,6 +63,9 @@ impl Default for LibraryState {
             picker: None,
             settings,
             panel_search: String::new(),
+            panel_expanded: Default::default(),
+            panel_selected: None,
+            panel_last_click: None,
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -80,6 +83,7 @@ impl Default for LibraryState {
             global_libraries: Vec::new(),
             stock_library: None,
             stock_library_root: None,
+            stock_editable: false,
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -325,6 +329,13 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
+    /// Whether `path` is the stock library and it is locked: mounted
+    /// read-only, with opens of its primitives sent to Copy to Library.
+    /// False only in the maintainer mode of #1892 (`stock_editable`).
+    pub(crate) fn is_locked_stock_root(&self, path: &Path) -> bool {
+        !self.stock_editable && self.is_stock_root(path)
+    }
+
     fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             self.cancel_pending_close(&root, "it was opened again");
@@ -337,20 +348,11 @@ impl LibraryState {
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
-        // `LibrarySet::mount` keys file-backed adapters by their
-        // `.snxlib` *path*, so the `Conflict` it can return here means
-        // "this same path is already mounted" — not "this library_id is
-        // already taken". Two copies of a library sharing a `library_id`
-        // at different paths both mount fine, by design (see
-        // `adapters/library_set.rs`, "Resolution semantics").
-        //
-        // So this is NOT a guard against the copy-pasted-`.snxlib`-
-        // without-a-regenerated-manifest-UUID case: `set.get(library_id)`
-        // returns the *first* match, and a cross-library `PrimitiveRef`
-        // can still resolve to whichever copy wins. Detecting and
-        // surfacing that collision is the Components Panel's job at
-        // presentation time.
-        let read_only = read_only || self.is_stock_root(&root);
+        self.refuse_stock_copy(&root, library_id)?;
+        // `LibrarySet::mount` refuses this path if it is already mounted,
+        // or if another mounted library has the same `library_id` (a
+        // copied library folder, #1894); the `Conflict` names both.
+        let read_only = read_only || self.is_locked_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
         } else {

@@ -23,6 +23,183 @@ impl Signex {
         Task::none()
     }
 
+    /// Select `key` and start reading its details off-thread. Selecting the
+    /// row already shown keeps what is there.
+    fn select_components_panel_row(
+        &mut self,
+        key: crate::library::state::ComponentsPanelRowKey,
+    ) -> Task<Message> {
+        let panel = &mut self.library.components_panel;
+        panel.selected = Some(key.clone());
+        // Selecting the row already shown reads it again (a save or a
+        // failed read leaves the pane out of date), unless that read is
+        // still running.
+        if panel.details.key.as_ref() == Some(&key) && panel.details.in_flight() {
+            return Task::none();
+        }
+        self.start_components_details_load(key)
+    }
+
+    /// The saved state of the row `key` names, for the staleness check.
+    fn components_row_stamp(
+        &self,
+        key: &crate::library::state::ComponentsPanelRowKey,
+    ) -> Option<crate::panels::components_panel::details::RowStamp> {
+        let row = self
+            .library
+            .library_at(&key.library_path)?
+            .tables
+            .get(&key.table)?
+            .iter()
+            .find(|r| r.row_id == key.row_id.0)?;
+        Some((row.updated, row.content_hash))
+    }
+
+    /// Read the details of `key` off-thread; the result lands keyed by it.
+    fn start_components_details_load(
+        &mut self,
+        key: crate::library::state::ComponentsPanelRowKey,
+    ) -> Task<Message> {
+        let stamp = self.components_row_stamp(&key);
+        self.library
+            .components_panel
+            .details
+            .begin(key.clone(), stamp);
+        let libraries: Vec<(uuid::Uuid, std::path::PathBuf)> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|l| (l.library_id, l.root.clone()))
+            .collect();
+        let read_key = key.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    crate::panels::components_panel::details::load::load_details(
+                        &read_key, &libraries,
+                    )
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("details worker failed: {e}")))
+            },
+            move |result| {
+                Message::Library(LibraryMessage::ComponentsPanelDetailsLoaded {
+                    key: key.clone(),
+                    result: result.map(Box::new),
+                })
+            },
+        )
+    }
+
+    /// Reload the details when the row they show was saved since they were
+    /// read. Runs after every library message, so a save, a refresh or an
+    /// external edit all reach the pane.
+    pub(super) fn refresh_components_details_if_stale(&mut self) -> Task<Message> {
+        let details = &self.library.components_panel.details;
+        let Some(key) = details.key.clone() else {
+            return Task::none();
+        };
+        if details.in_flight() || details.stamp == self.components_row_stamp(&key) {
+            return Task::none();
+        }
+        self.start_components_details_load(key)
+    }
+
+    /// The pointer went down on a row: select it and arm a drag. A click
+    /// only selects; nothing is placed or opened from the row itself.
+    pub(super) fn handle_components_panel_row_pressed(
+        &mut self,
+        key: crate::library::state::ComponentsPanelRowKey,
+    ) -> Task<Message> {
+        let panel = &mut self.library.components_panel;
+        panel.row_menu = None;
+        panel.drag = Some(crate::library::state::ComponentsRowDrag {
+            key: key.clone(),
+            start: self.interaction_state.last_mouse_pos,
+            started: false,
+        });
+        self.select_components_panel_row(key)
+    }
+
+    /// Right-click on a row: select it and open its menu at the pointer.
+    pub(super) fn handle_components_panel_row_right_clicked(
+        &mut self,
+        key: crate::library::state::ComponentsPanelRowKey,
+    ) -> Task<Message> {
+        let (x, y) = self.interaction_state.last_mouse_pos;
+        self.close_all_context_menus();
+        let panel = &mut self.library.components_panel;
+        panel.drag = None;
+        panel.row_menu = Some(crate::library::state::ComponentsRowMenu {
+            key: key.clone(),
+            x,
+            y,
+        });
+        self.select_components_panel_row(key)
+    }
+
+    /// A row menu item was picked: close the menu, then run the action.
+    pub(super) fn handle_components_panel_row_menu_picked(
+        &mut self,
+        action: crate::library::state::ComponentsRowAction,
+    ) -> Task<Message> {
+        use crate::library::state::ComponentsRowAction;
+        let Some(menu) = self.library.components_panel.row_menu.take() else {
+            return Task::none();
+        };
+        let k = menu.key;
+        match action {
+            ComponentsRowAction::Place => {
+                self.handle_components_panel_place(k.library_path, k.table, k.row_id)
+            }
+            ComponentsRowAction::Open => {
+                Task::done(Message::Library(LibraryMessage::OpenComponentRow {
+                    library_path: k.library_path,
+                    table: k.table,
+                    row_id: k.row_id,
+                }))
+            }
+        }
+    }
+
+    /// The pointer moved while a row is pressed: past the threshold the
+    /// press becomes a drag.
+    pub(crate) fn components_row_drag_moved(&mut self, x: f32, y: f32) {
+        let Some(drag) = self.library.components_panel.drag.as_mut() else {
+            return;
+        };
+        let (dx, dy) = (x - drag.start.0, y - drag.start.1);
+        if dx.hypot(dy) > crate::panels::components_panel::DRAG_THRESHOLD {
+            drag.started = true;
+        }
+    }
+
+    /// The button went up. A row dragged past the threshold and released
+    /// over the schematic canvas starts the cursor-attached placement at the
+    /// pointer; released anywhere else, or never dragged, it places nothing.
+    pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
+        let Some(drag) = self.library.components_panel.drag.take() else {
+            return Task::none();
+        };
+        let (x, y) = self.interaction_state.last_mouse_pos;
+        if !drag.started || !self.canvas_bounds().contains(iced::Point::new(x, y)) {
+            return Task::none();
+        }
+        // Release point in world mm, through the live camera and the canvas
+        // rectangle; the snap happens when the part arrives.
+        let bounds = self.canvas_bounds();
+        let (ox, oy, scale) = self.interaction_state.active_canvas().live_camera();
+        let world = (
+            f64::from((x - bounds.x - ox) / scale),
+            f64::from((y - bounds.y - oy) / scale),
+        );
+        let k = drag.key;
+        let task = self.handle_place_library_component(k.library_path, k.table, k.row_id);
+        let epoch = self.interaction_state.placement_epoch;
+        self.library.components_panel.pending_drop = Some((epoch, world));
+        task
+    }
+
     /// "+ Add Library…" — opens the `*.snxlib` directory picker,
     /// tagging the result with the section it was opened against.
     pub(super) fn handle_components_panel_add_library(
@@ -163,6 +340,7 @@ impl Signex {
         row_id: RowId,
     ) -> Task<Message> {
         // Same flow as the picker: the part attaches to the cursor.
+        self.library.components_panel.row_menu = None;
         Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
             library_path,
             table,

@@ -10,6 +10,7 @@ impl Signex {
             DragTarget::LeftPanel => self.ui_state.left_width,
             DragTarget::RightPanel => self.ui_state.right_width,
             DragTarget::BottomPanel => self.ui_state.bottom_height,
+            DragTarget::ComponentsSplit => self.library.components_panel.list_height,
         };
     }
 
@@ -19,6 +20,7 @@ impl Signex {
     /// When false a cursor move only needs to refresh `last_mouse_pos`.
     pub fn is_layout_drag_active(&self) -> bool {
         self.interaction_state.dragging.is_some()
+            || self.library.components_panel.drag.is_some()
             || self.ui_state.modal_dragging.is_some()
             || self.ui_state.tab_dragging.is_some()
             || self.document_state.dock.tab_drag.is_some()
@@ -77,7 +79,7 @@ impl Signex {
         if let Some(target) = self.interaction_state.dragging {
             let pos = match target {
                 DragTarget::LeftPanel | DragTarget::RightPanel => x,
-                DragTarget::BottomPanel => y,
+                DragTarget::BottomPanel | DragTarget::ComponentsSplit => y,
             };
             if self.interaction_state.drag_start_pos.is_none() {
                 self.interaction_state.drag_start_pos = Some(pos);
@@ -97,6 +99,12 @@ impl Signex {
                         self.ui_state.bottom_height,
                         (self.interaction_state.drag_start_size - delta).clamp(60.0, 400.0),
                     ),
+                    DragTarget::ComponentsSplit => (
+                        self.library.components_panel.list_height,
+                        crate::panels::components_panel::split::clamp_list_height(
+                            self.interaction_state.drag_start_size + delta,
+                        ),
+                    ),
                 };
                 let new_val = new_val.round();
                 if (current - new_val).abs() >= 1.0 {
@@ -104,6 +112,9 @@ impl Signex {
                         DragTarget::LeftPanel => self.ui_state.left_width = new_val,
                         DragTarget::RightPanel => self.ui_state.right_width = new_val,
                         DragTarget::BottomPanel => self.ui_state.bottom_height = new_val,
+                        DragTarget::ComponentsSplit => {
+                            self.library.components_panel.list_height = new_val
+                        }
                     }
                 }
             }
@@ -137,6 +148,8 @@ impl Signex {
                 fp.y = y - 15.0;
             }
         }
+        self.refresh_dock_drop_preview();
+        self.components_row_drag_moved(x, y);
     }
 
     /// Returns the tab index to undock when the user is dragging a
@@ -242,9 +255,6 @@ impl Signex {
         self.document_state.dock.tab_drag = None;
         self.interaction_state.tab_drag_origin = None;
         self.ui_state.tab_dragging = None;
-        let (mx, my) = self.interaction_state.last_mouse_pos;
-        let (ww, wh) = self.ui_state.window_size;
-        let dock_zone = 120.0;
         let has_dragging = self
             .document_state
             .dock
@@ -252,7 +262,7 @@ impl Signex {
             .iter()
             .any(|fp| fp.dragging);
         crate::diagnostics::log_debug(format!(
-            "[dock-end] mouse=({mx:.0},{my:.0}) win=({ww:.0},{wh:.0}) floating={} dragging={has_dragging}",
+            "[dock-end] floating={} dragging={has_dragging}",
             self.document_state.dock.floating.len()
         ));
         if let Some(drag_idx) = self
@@ -262,15 +272,8 @@ impl Signex {
             .iter()
             .position(|fp| fp.dragging)
         {
-            let target = if mx < dock_zone {
-                Some(PanelPosition::Left)
-            } else if mx > ww - dock_zone {
-                Some(PanelPosition::Right)
-            } else if my > wh - dock_zone {
-                Some(PanelPosition::Bottom)
-            } else {
-                None
-            };
+            // The same decision the preview showed.
+            let target = self.dock_drop_target(drag_idx);
             crate::diagnostics::log_debug(format!("[dock-end] target={target:?}"));
             if let Some(pos) = target {
                 self.document_state
@@ -284,5 +287,6 @@ impl Signex {
                 fp.dragging = false;
             }
         }
+        self.document_state.dock.drop_preview = None;
     }
 }

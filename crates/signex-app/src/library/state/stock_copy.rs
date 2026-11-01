@@ -5,13 +5,39 @@ use std::path::{Path, PathBuf};
 use super::LibraryState;
 use crate::library::stock_copy::StockPrimitiveKind;
 
+/// The pinned `library_id` of the bundled stock library (#323).
+pub const STOCK_LIBRARY_ID: uuid::Uuid = uuid::uuid!("019df45d-af5e-7a00-8c3b-dd3bf89b40ae");
+
 impl LibraryState {
-    /// The kind of `path` when it is a primitive file inside the stock
-    /// library, which mounts read-only; `None` for any other path.
+    /// Refuse a library at `root` that is a copy of the bundled stock
+    /// library (it carries the stock id but is not the stock file), so the
+    /// bundled one always wins, whichever mount finishes first (#1894).
+    pub(crate) fn refuse_stock_copy(
+        &self,
+        root: &Path,
+        library_id: uuid::Uuid,
+    ) -> Result<(), signex_library::LibraryError> {
+        if library_id != STOCK_LIBRARY_ID
+            || self.stock_library_root.is_none()
+            || self.is_stock_root(root)
+        {
+            return Ok(());
+        }
+        Err(signex_library::LibraryError::Conflict(format!(
+            "{} is a copy of the bundled stock library (same library id), so it was not opened. \
+             To change the stock library itself, run Signex from a source checkout with \
+             SIGNEX_EDIT_STOCK=1 (see docs/STOCK_LIBRARY.md)",
+            root.display()
+        )))
+    }
+
+    /// The kind of `path` when it is a primitive file inside the locked
+    /// stock library; `None` for any other path, and for every path while
+    /// a maintainer edits the stock library itself (#1892).
     pub(crate) fn stock_primitive_kind(&self, path: &Path) -> Option<StockPrimitiveKind> {
         let kind = StockPrimitiveKind::of_path(path)?;
         self.containing_library(path)
-            .is_some_and(|lib| self.is_stock_root(&lib.root))
+            .is_some_and(|lib| self.is_locked_stock_root(&lib.root))
             .then_some(kind)
     }
 

@@ -53,8 +53,8 @@ impl std::fmt::Display for DatasheetMode {
     }
 }
 
-/// Render the Datasheet tab: one card per document in
-/// `state.row.documents()`, the primary first, then "Add document".
+/// Render the Datasheet tab: a short explanation, one card per document
+/// in `state.row.documents()` (the primary first), then "Add document".
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
@@ -64,7 +64,30 @@ pub fn view<'a>(
     let docs = state.row.documents();
     let count = docs.len();
 
+    let intro = text(
+        "The first document is the primary: it is the one the schematic opens. \
+         A pinned PDF is stored beside the library file, named by its hash, when \
+         you save the row, and a git-backed library commits it with the row. A \
+         library without a local folder (a server library) cannot store PDFs: \
+         use a URL there.",
+    )
+    .size(TS.caption)
+    .color(muted)
+    .width(Length::Fill);
+
     let mut list = column![].spacing(SP.m).width(Length::Fill);
+    if count == 0 {
+        list = list.push(
+            container(
+                text("No datasheet on this component yet.")
+                    .size(TS.body)
+                    .color(muted),
+            )
+            .padding(SP.l)
+            .width(Length::Fill)
+            .style(crate::styles::modal_card(tokens)),
+        );
+    }
     for (index, doc) in docs.into_iter().enumerate() {
         let error = state.datasheet_errors.get(&index).map(String::as_str);
         list = list.push(view_document(
@@ -77,30 +100,12 @@ pub fn view<'a>(
         ));
     }
 
-    let add = small_button("Add document", tokens).on_press(event(&address, DatasheetMsg::Add));
+    let add = small_button("+ Add document", tokens).on_press(event(&address, DatasheetMsg::Add));
 
-    column![
-        list,
-        Space::new().height(6),
-        row![
-            text(
-                "The first document is the primary: it is the one the schematic opens. \
-                 A pinned PDF is stored beside the library file, named by its hash, when \
-                 you save the row, and a git-backed library commits it with the row. A \
-                 library without a local folder (a server library) cannot store PDFs: \
-                 use a URL there."
-            )
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::Fill),
-            Space::new().width(8),
-            add,
-        ]
-        .align_y(iced::Alignment::Center),
-    ]
-    .spacing(0)
-    .width(Length::Fill)
-    .into()
+    column![intro, list, add]
+        .spacing(SP.m)
+        .width(Length::Fill)
+        .into()
 }
 
 fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
@@ -116,14 +121,62 @@ fn small_button<'a>(
     label: &'a str,
     tokens: &'a ThemeTokens,
 ) -> iced::widget::Button<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    button(text(label).size(TS.caption).color(text_c))
+    button(text(label).size(TS.caption))
         .padding([SP.xs, SP.m])
         .style(crate::styles::outline_button(tokens))
 }
 
-/// One document card: its role and label, the mode picker, the value
-/// control, and the reorder / remove buttons.
+/// The left column of a card's form rows: a muted, fixed-share label so
+/// the fields of every row line up.
+fn field_row<'a>(
+    label: &'a str,
+    field: impl Into<Element<'a, LibraryMessage>>,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    row![
+        container(
+            text(label)
+                .size(TS.body)
+                .color(theme_ext::text_secondary(tokens))
+        )
+        .width(Length::FillPortion(1)),
+        container(field).width(Length::FillPortion(6)),
+    ]
+    .spacing(SP.m)
+    .align_y(iced::Alignment::Center)
+    .into()
+}
+
+/// The role badge in a card header: the primary gets the accent fill.
+fn role_badge<'a>(is_primary: bool, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+    let (label, fill, fg) = if is_primary {
+        (
+            "Primary",
+            crate::styles::tokens::accent_fill(tokens),
+            crate::styles::tokens::on_accent(tokens),
+        )
+    } else {
+        (
+            "Document",
+            crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Hover),
+            theme_ext::text_secondary(tokens),
+        )
+    };
+    container(text(label).size(TS.caption).color(fg))
+        .padding([SP.xs / 2.0, SP.s])
+        .style(move |_: &Theme| container::Style {
+            background: Some(fill.into()),
+            border: Border {
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// One document card: a header with its role and reorder / remove
+/// actions, then the label, source type and value as aligned rows.
 fn view_document<'a>(
     index: usize,
     count: usize,
@@ -132,14 +185,13 @@ fn view_document<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
     let mode = DatasheetMode::from_ref(Some(&doc.source));
 
     let mode_address = address.clone();
     let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
         event(&mode_address, DatasheetMsg::SetMode(index, m))
     })
-    .text_size(11)
+    .text_size(TS.body)
     .padding([SP.s, SP.m]);
 
     let label_address = address.clone();
@@ -147,7 +199,7 @@ fn view_document<'a>(
         .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .width(Length::Fixed(160.0));
+        .width(Length::Fill);
 
     let mut actions = row![].spacing(SP.s).align_y(iced::Alignment::Center);
     if index > 0 {
@@ -177,47 +229,40 @@ fn view_document<'a>(
     );
 
     let header = row![
-        text(if index == 0 { "Primary" } else { "Document" })
-            .size(TS.caption)
-            .color(muted),
-        Space::new().width(8),
-        label_input,
+        role_badge(index == 0, tokens),
         Space::new().width(Length::Fill),
-        mode_picker,
+        actions,
     ]
     .align_y(iced::Alignment::Center);
 
-    let value_row: Element<'a, LibraryMessage> = match mode {
-        DatasheetMode::Url => view_url_input(index, &doc.source, address.clone()),
-        DatasheetMode::PinnedPdf => view_pinned_input(index, &doc.source, tokens, address.clone()),
+    let (value_label, value_row): (&str, Element<'a, LibraryMessage>) = match mode {
+        DatasheetMode::Url => ("URL", view_url_input(index, &doc.source, address.clone())),
+        DatasheetMode::PinnedPdf => (
+            "File",
+            view_pinned_input(index, &doc.source, tokens, address.clone()),
+        ),
     };
 
-    let error_row: Element<'a, LibraryMessage> = match error {
-        Some(reason) => column![
+    let mut body = column![
+        header,
+        field_row("Label", label_input, tokens),
+        field_row("Source", mode_picker, tokens),
+        field_row(value_label, value_row, tokens),
+    ]
+    .spacing(SP.m);
+    if let Some(reason) = error {
+        body = body.push(
             text(reason)
                 .size(TS.body)
                 .color(theme_ext::error_color(tokens)),
-            Space::new().height(4),
-        ]
-        .into(),
-        None => Space::new().height(0).into(),
-    };
+        );
+    }
 
-    container(
-        column![
-            header,
-            Space::new().height(4),
-            value_row,
-            Space::new().height(4),
-            error_row,
-            row![Space::new().width(Length::Fill), actions],
-        ]
-        .spacing(0),
-    )
-    .padding(SP.m)
-    .style(crate::styles::modal_card(tokens))
-    .width(Length::Fill)
-    .into()
+    container(body)
+        .padding(SP.l)
+        .style(crate::styles::modal_card(tokens))
+        .width(Length::Fill)
+        .into()
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -236,7 +281,7 @@ fn view_url_input<'a>(
     text_input("https://example.com/datasheet.pdf", &url_value)
         .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
         .padding([SP.s, SP.m])
-        .size(TS.label)
+        .size(TS.body)
         .into()
 }
 
@@ -249,23 +294,9 @@ fn view_pinned_input<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
 
-    let upload_btn = button(
-        container(text("Upload PDF…").size(TS.body).color(iced::Color::WHITE))
-            .padding([SP.s, 14.0]),
-    )
-    .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
-    .style(move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgb(
-            0.00, 0.47, 0.84,
-        ))),
-        text_color: iced::Color::WHITE,
-        border: Border {
-            width: 0.0,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..iced::widget::button::Style::default()
-    });
+    let upload_btn = button(container(text("Upload PDF…").size(TS.body)).padding([SP.s, SP.l]))
+        .on_press(event(&address, DatasheetMsg::UploadDialog(index)))
+        .style(crate::styles::accent_button(tokens));
 
     let summary: Element<'a, LibraryMessage> = match source {
         DatasheetRef::HashPinned { hash, filename } if !hash.is_empty() => {
@@ -282,21 +313,17 @@ fn view_pinned_input<'a>(
             .align_y(iced::Alignment::Center)
             .into()
         }
-        _ => text("No PDF attached yet — click \"Upload PDF…\".")
+        _ => text("No PDF attached yet.")
             .size(TS.body)
             .color(muted)
             .into(),
     };
 
-    row![
-        container(summary).width(Length::Fill),
-        Space::new().width(8),
-        upload_btn
-    ]
-    .align_y(iced::Alignment::Center)
-    .into()
+    row![container(summary).width(Length::Fill), upload_btn]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center)
+        .into()
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

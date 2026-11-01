@@ -24,21 +24,6 @@ mod primitive_save_tests;
 mod primitive_write;
 
 impl Signex {
-    /// Open a standalone primitive editor tab for the file at `path`.
-    /// Fired by the Component Preview tab's right-click context menu on
-    /// the Symbol / Footprint render panes. Standalone tab opens in WS-7.
-    pub(super) fn handle_open_primitive_editor(
-        &mut self,
-        path: std::path::PathBuf,
-    ) -> Task<Message> {
-        tracing::info!(
-            target: "signex::library",
-            path = %path.display(),
-            "OpenPrimitiveEditor — standalone document tab opens in WS-7"
-        );
-        Task::none()
-    }
-
     /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.
     /// The file is read on a worker (#859); its completion builds the
     /// matching editor state and pushes a `TabKind::SymbolEditor(path)` /

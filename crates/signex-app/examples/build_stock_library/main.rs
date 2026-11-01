@@ -1,11 +1,14 @@
-//! Build the reference parametric footprints and the passive/discrete
-//! symbols that ship in `assets/stock-library/`, wrapped by
-//! `Stock.snxlib`.
+//! Seed the reference parametric footprints and the passive/discrete
+//! symbols of `assets/stock-library/`, wrapped by `Stock.snxlib`.
 //!
-//! Run via:
+//! Since #1892 the committed files, not this generator, are the source of
+//! truth: maintainers edit them in Signex (`SIGNEX_EDIT_STOCK=1`, see
+//! `panels/components_panel/stock.rs`). The pinned ids in [`ids`] and
+//! [`rows`] stay the contract the stock tests check. Reseeding discards
+//! those edits, so it needs `--force`:
 //!
 //! ```text
-//! cargo run --example build_stock_library -p signex-app
+//! cargo run --example build_stock_library -p signex-app -- --force
 //! ```
 //!
 //! Each footprint authors a single `BoardTopPlane`, parameterises the
@@ -159,6 +162,18 @@ pub fn write_library(root: &Path) -> Result<Vec<RenderedStockFile>, Box<dyn Erro
 )]
 fn main() -> Result<(), Box<dyn Error>> {
     let root = Path::new("assets/stock-library");
+    // The committed files are the source of truth (#1892): they are edited
+    // in Signex with `SIGNEX_EDIT_STOCK=1`. This generator only seeded them,
+    // and a rerun would overwrite those edits, so it asks for `--force`.
+    let forced = std::env::args().any(|a| a == "--force");
+    if root.join(manifest::SNXLIB_FILE_NAME).exists() && !forced {
+        eprintln!(
+            "{} already exists and is edited in Signex (SIGNEX_EDIT_STOCK=1).\n\
+             Rerunning the seed generator discards those edits. Pass --force to do it anyway.",
+            root.join(manifest::SNXLIB_FILE_NAME).display()
+        );
+        std::process::exit(2);
+    }
     let rendered = write_library(root)?;
     for file in &rendered {
         println!(

@@ -221,6 +221,9 @@ impl LibraryState {
     /// that is blocking by design (`save_primitive_tab_blocking`); an
     /// `update` handler uses [`preview_refresh_task`].
     pub fn refresh_loaded_previews(&mut self, saved: &Path) {
+        // The caller has just reloaded the primitive listings; caches built
+        // from them (the browser's name search and sort) are now stale.
+        self.touch_data();
         if let Some(plan) = self.plan_preview_refresh(saved) {
             self.apply_preview_readout(plan.read());
         }

@@ -107,12 +107,32 @@ impl Signex {
         library_path: PathBuf,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Task<Message> {
+        let drop = self
+            .library
+            .components_panel
+            .pending_drop
+            .take()
+            .filter(|(epoch, _)| *epoch == arm_epoch);
         if let Err(detail) = self.arm_resolved(&target_sheet, arm_epoch, &library_path, result) {
             self.report_place_failure(&detail);
             return Task::none();
         }
+        // A row dropped on the canvas commits at the drop point in this one
+        // gesture, then the placement tool ends.
+        let placed = match drop {
+            Some((_, (x, y)))
+                if arm_epoch == self.interaction_state.placement_epoch
+                    && self.interaction_state.placement.is_some() =>
+            {
+                let (x, y) = self.snap_to_grid(x, y);
+                let task = self.handle_placement_click(x, y);
+                self.cancel_placement_session();
+                task
+            }
+            _ => Task::none(),
+        };
         // Closed sheets' numbers arrive off-thread; the ghost refreshes then.
-        self.start_designator_scan(&target_sheet)
+        Task::batch([placed, self.start_designator_scan(&target_sheet)])
     }
 
     fn arm_resolved(

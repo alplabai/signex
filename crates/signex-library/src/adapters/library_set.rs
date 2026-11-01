@@ -3,13 +3,12 @@
 //! cross-library [`PrimitiveRef`] resolution.
 //!
 //! Per `v0.9-snxlib-as-file-plan.md` §2 Stage B, the primary mount
-//! key is the `.snxlib` *file path* (not the library_id). The
-//! Components Panel (§5) presents the same library_id across
-//! Project / Installed / Global lists — a library_id can therefore
-//! legitimately appear under multiple file paths in a single
-//! `LibrarySet`, so the duplicate-id check that used to gate
-//! mounting has moved out to the panel layer (where dedup happens
-//! at presentation time).
+//! key is the `.snxlib` *file path* (not the library_id). That plan let
+//! one library_id appear under several paths and left dedup to the
+//! Components Panel, which never did it; lookups by id then picked
+//! either copy (#1894). [`LibrarySet::mount`] now refuses a second mount
+//! of a library_id, so the same library listed under Project and Global
+//! must be the same file.
 //!
 //! ## Resolution semantics
 //!
@@ -33,10 +32,9 @@
 //! Only [`LibraryError::NotFound`] is evidence of absence; every other
 //! variant is a failure to look.
 //!
-//! - When two adapters share a `library_id` (the "user copy-pasted a
-//!   library" case), [`LibrarySet::resolve_symbol`] / `_footprint` /
-//!   `_sim` pick the first match. UI dedup at the Components Panel
-//!   level is the right place to warn the user about the collision.
+//! - Two adapters never share a `library_id`: [`LibrarySet::mount`]
+//!   refuses the second (the "user copy-pasted a library" case, #1894),
+//!   so every lookup by id has exactly one answer.
 //! - Adapters without an on-disk path (e.g. `DatabaseAdapter`) fall
 //!   back to keying by `library_id`; the duplicate-id error still
 //!   guards those.
@@ -90,12 +88,12 @@ impl LibrarySet {
 
     /// Mount a library.
     ///
-    /// Returns `Conflict` when the same mount key is already in use:
-    /// duplicate `.snxlib` file path for file-backed adapters, or
-    /// duplicate `library_id` for path-less adapters. Two file-backed
-    /// adapters with the same `library_id` at *different* paths are
-    /// allowed — the Components Panel dedups by id at presentation
-    /// time.
+    /// Returns `Conflict` when the same mount key is already in use
+    /// (duplicate `.snxlib` path, or duplicate `library_id` for a
+    /// path-less adapter), and when another mount already carries this
+    /// adapter's `library_id` (#1894). Every reference and lookup is by
+    /// `library_id`, so two mounts sharing one (a copied library folder)
+    /// would make reads and writes land in whichever the set finds first.
     ///
     /// Use [`Self::remount`] to replace an existing mount in one step.
     pub fn mount(&mut self, lib: Box<dyn LibraryAdapter>) -> Result<(), LibraryError> {
@@ -108,6 +106,21 @@ impl LibrarySet {
                      a path-less adapter (DB or in-memory) suggests a misconfig"
                 ),
             }));
+        }
+        let id = lib.library_id();
+        if let Some(existing) = self.find_key_for_id(id) {
+            let existing = match existing {
+                MountKey::Path(p) => p.display().to_string(),
+                MountKey::Id(_) => "a server library".to_string(),
+            };
+            let new = match &key {
+                MountKey::Path(p) => p.display().to_string(),
+                MountKey::Id(_) => "this library".to_string(),
+            };
+            return Err(LibraryError::Conflict(format!(
+                "{new} has the same library id ({id}) as {existing}, which is already open; \
+                 it is probably a copy. Close the other one first, or give the copy its own id"
+            )));
         }
         self.libs.insert(key, Arc::from(lib));
         Ok(())
@@ -697,22 +710,48 @@ mod tests {
         assert_eq!(set.len(), 1);
     }
 
-    /// Two file-backed adapters sharing an id but at different paths
-    /// are allowed under the new model — the Components Panel dedups
-    /// at display time.
+    /// #1894: two file-backed adapters sharing an id at different paths
+    /// (a copied library folder) are refused, naming both paths; the
+    /// first stays mounted and every id lookup keeps resolving to it.
     #[test]
-    fn mount_allows_duplicate_library_id_at_different_paths() {
+    fn mount_refuses_a_second_library_with_the_same_id() {
         let lib_id = Uuid::now_v7();
         let mut set = LibrarySet::new();
         set.mount(Box::new(
             FakeAdapter::new(lib_id).with_path("/tmp/copy_a/lib.snxlib"),
         ))
         .unwrap();
-        set.mount(Box::new(
+        let dup = set.mount(Box::new(
             FakeAdapter::new(lib_id).with_path("/tmp/copy_b/lib.snxlib"),
+        ));
+        let Err(LibraryError::Conflict(message)) = dup else {
+            panic!("a second mount of the same library id must be refused");
+        };
+        assert!(
+            message.contains("copy_a") && message.contains("copy_b"),
+            "{message}"
+        );
+        assert_eq!(set.len(), 1);
+        assert_eq!(
+            set.find_key_for_id(lib_id),
+            Some(MountKey::Path(PathBuf::from("/tmp/copy_a/lib.snxlib")))
+        );
+    }
+
+    /// The read-only mount path goes through the same check.
+    #[test]
+    fn a_read_only_mount_with_a_mounted_id_is_refused_too() {
+        let lib_id = Uuid::now_v7();
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(
+            FakeAdapter::new(lib_id).with_path("/tmp/stock/Stock.snxlib"),
         ))
-        .expect("duplicate library_id at a different path is allowed");
-        assert_eq!(set.len(), 2);
+        .unwrap();
+        let dup = set.mount_read_only(Box::new(
+            FakeAdapter::new(lib_id).with_path("/tmp/copy/Stock.snxlib"),
+        ));
+        assert!(matches!(dup, Err(LibraryError::Conflict(_))));
+        assert_eq!(set.len(), 1);
     }
 
     /// Two file-backed adapters at the *same* path collide — that's
@@ -731,17 +770,17 @@ mod tests {
         assert_eq!(set.len(), 1);
     }
 
-    /// `unmount_by_path` removes a specific file-backed mount when
-    /// callers can't disambiguate by `library_id` alone.
+    /// `unmount_by_path` removes exactly the file-backed mount at that
+    /// path, and frees its `library_id` so a copy can then be mounted.
     #[test]
     fn unmount_by_path_removes_specific_mount() {
-        let lib_id = Uuid::now_v7();
+        let (id_a, id_b) = (Uuid::now_v7(), Uuid::now_v7());
         let path_a = PathBuf::from("/tmp/a/lib.snxlib");
         let path_b = PathBuf::from("/tmp/b/lib.snxlib");
         let mut set = LibrarySet::new();
-        set.mount(Box::new(FakeAdapter::new(lib_id).with_path(path_a.clone())))
+        set.mount(Box::new(FakeAdapter::new(id_a).with_path(path_a.clone())))
             .unwrap();
-        set.mount(Box::new(FakeAdapter::new(lib_id).with_path(path_b.clone())))
+        set.mount(Box::new(FakeAdapter::new(id_b).with_path(path_b.clone())))
             .unwrap();
         assert_eq!(set.len(), 2);
 
@@ -750,8 +789,12 @@ mod tests {
         assert_eq!(set.len(), 1);
         assert!(!set.contains_path(&path_a));
         assert!(set.contains_path(&path_b));
-        // Library_id still resolves through the surviving mount.
-        assert!(set.contains(lib_id));
+        assert!(!set.contains(id_a));
+        // With `a` gone, a copy carrying its id mounts.
+        set.mount(Box::new(
+            FakeAdapter::new(id_a).with_path("/tmp/a_copy/lib.snxlib"),
+        ))
+        .expect("the id is free again");
     }
 
     /// `library_paths` lists file-backed mounts only; path-less

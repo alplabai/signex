@@ -38,6 +38,15 @@ struct StockRow {
     footprint: Option<StockKind>,
 }
 
+/// The pinned id of every shipped stock row. Designs reference rows by id,
+/// so the committed library must keep each of these (#1892).
+pub fn pinned_row_ids() -> Vec<Uuid> {
+    STOCK_ROWS
+        .iter()
+        .map(|r| Uuid::parse_str(r.row_id).expect("pinned row id is a uuid"))
+        .collect()
+}
+
 /// Rows in panel order. The `Chip-0805` footprint is the generic symmetric
 /// two-pad 0805 land shared by R, C, L, Ferrite and Fuse; the diodes and
 /// the LED (pin 1 = cathode) pair with `Chip-0805-Polarised`, whose pad 1
