@@ -426,40 +426,7 @@ impl Signex {
             },
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Ok(RestoreJobDocument::Schematic(sheet)) => {
-                crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
-                if idx == self.document_state.active_tab {
-                    self.discard_state_of_replaced_engine();
-                    self.apply_loaded_schematic(Some(*sheet), true, false, false);
-                    // Undocked windows on this sheet were redrawn by that;
-                    // their selections point into the old engine too.
-                    self.refresh_slots_from_engine(
-                        &path,
-                        false,
-                        crate::schematic_runtime::RenderInvalidation::FULL,
-                        true,
-                    );
-                } else {
-                    self.install_schematic_at(&path, *sheet);
-                }
-                // The restored bytes are on disk and are what the engine holds.
-                if let Some(engine) = self.document_state.engines.get_mut(&path) {
-                    engine.mark_saved();
-                }
-                // A restored sheet from a newer Signex is read-only and can
-                // never be saved: leaving it dirty would make quit ask to
-                // save an unsaveable file (#1402). It matches disk, so
-                // commit the restored bytes as they are, as the PCB does.
-                let read_only = self
-                    .document_state
-                    .engines
-                    .get(&path)
-                    .is_some_and(|engine| engine.document().is_read_only());
-                if read_only {
-                    self.set_reloaded_dirty(&path, false);
-                    if commit {
-                        self.commit_restore(&path, restored_bytes);
-                    }
-                }
+                self.install_reloaded_schematic(idx, &path, *sheet, restored_bytes, commit);
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
@@ -616,6 +583,61 @@ impl Signex {
             self.apply_loaded_empty_document(false);
         }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Install a sheet read back from disk (Reload, History restore) into the
+    /// tab at `idx`, report what loading repaired, and decide the dirty mark.
+    /// Returns whether a repair left the sheet differing from its file, so a
+    /// caller that cleans the document afterwards can keep it modified.
+    pub(crate) fn install_reloaded_schematic(
+        &mut self,
+        idx: usize,
+        path: &std::path::Path,
+        mut sheet: signex_types::schematic::SchematicSheet,
+        restored_bytes: Option<crate::persist::SharedBytes>,
+        commit: bool,
+    ) -> bool {
+        crate::app::load_gateway::report_unrecognized_sheet_size(path, &sheet.paper_size);
+        let repaired =
+            crate::app::sheet_repairs::log_sheet_repairs(path, &sheet.take_load_repairs())
+                && !sheet.is_read_only();
+        if idx == self.document_state.active_tab {
+            self.discard_state_of_replaced_engine();
+            self.apply_loaded_schematic(Some(sheet), true, false, false);
+            // Undocked windows on this sheet were redrawn by that;
+            // their selections point into the old engine too.
+            self.refresh_slots_from_engine(
+                path,
+                false,
+                crate::schematic_runtime::RenderInvalidation::FULL,
+                true,
+            );
+        } else {
+            self.install_schematic_at(path, sheet);
+        }
+        // The restored bytes are on disk and are what the engine holds.
+        if let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine.mark_saved();
+        }
+        // A restored sheet from a newer Signex is read-only and can
+        // never be saved: leaving it dirty would make quit ask to
+        // save an unsaveable file (#1402). It matches disk, so
+        // commit the restored bytes as they are, as the PCB does.
+        let read_only = self
+            .document_state
+            .engines
+            .get(path)
+            .is_some_and(|engine| engine.document().is_read_only());
+        if read_only {
+            self.set_reloaded_dirty(path, false);
+            if commit {
+                self.commit_restore(path, restored_bytes);
+            }
+        } else if repaired {
+            // The file still holds what was repaired: not what the engine holds.
+            self.set_reloaded_dirty(path, true);
+        }
+        repaired
     }
 
     /// Records whether a document just reloaded from disk is dirty. Every

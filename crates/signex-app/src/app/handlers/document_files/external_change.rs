@@ -316,12 +316,64 @@ impl Signex {
             return Task::none();
         }
         let ReloadedFile { document, hash } = *reloaded;
-        let task = self.apply_reloaded_with(idx, Ok(document), None, false);
+        let (task, repaired) = match document {
+            RestoreJobDocument::Schematic(sheet) => (
+                Task::none(),
+                self.install_reloaded_schematic(idx, &path, *sheet, None, false),
+            ),
+            other => (self.apply_reloaded_with(idx, Ok(other), None, false), false),
+        };
         self.document_state.mark_document_clean(&path);
+        // A repair made while parsing is not in the file: the sheet stays modified.
+        if repaired {
+            self.document_state.mark_document_dirty(&path);
+        }
         self.document_state.document_saves.clear_failure(&path);
         self.record_disk_baseline(&path, hash);
         crate::diagnostics::log_info(format!("[reload] Reloaded {name} from disk"));
         self.refresh_panel_ctx();
         Task::batch([task, self.autosave_after_disk_write(&path)])
+    }
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    use crate::app::handlers::menu::export::tests::app_workspace;
+
+    fn repaired_sheet() -> signex_types::schematic::SchematicSheet {
+        let mut sheet = signex_types::schematic::SchematicSheet {
+            uuid: uuid::Uuid::now_v7(),
+            paper_size: "A4".into(),
+            ..Default::default()
+        };
+        sheet
+            .unknown
+            .load_repairs
+            .push(signex_types::format::SheetLoadRepair::CopyDropped {
+                object: signex_types::format::RepairedObject {
+                    kind: "wire",
+                    name: String::new(),
+                    position: 2,
+                },
+                uuid: uuid::Uuid::from_u128(7),
+            });
+        sheet
+    }
+
+    #[test]
+    fn a_repaired_disk_conflict_reload_stays_modified() {
+        let _ = crate::diagnostics::init_logging();
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from("/w/proj/disk_reload_repair.snxsch");
+        app.open_schematic_tab(path.clone(), "disk_reload_repair".into(), repaired_sheet());
+        app.document_state.mark_document_clean(&path);
+        let stamp = app.edit_stamp(&path);
+        let reloaded = ReloadedFile {
+            document: RestoreJobDocument::Schematic(Box::new(repaired_sheet())),
+            hash: crate::persist::ContentHash::of(b""),
+        };
+        let _ = app.handle_disk_reload_finished(path.clone(), stamp, Ok(Box::new(reloaded)));
+        assert!(app.document_state.is_document_dirty(&path));
     }
 }

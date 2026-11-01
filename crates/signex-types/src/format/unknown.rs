@@ -89,6 +89,11 @@ pub struct SheetUnknown {
     /// writer would drop content this build has no field for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub newer_minor_source: Option<String>,
+    /// What loading changed to make the file usable (a repeated uuid
+    /// re-minted or dropped, #1830). Never written. The document that opens
+    /// the sheet takes it once ([`SchematicSheet::take_load_repairs`]).
+    #[serde(skip)]
+    pub load_repairs: Vec<super::SheetLoadRepair>,
 }
 
 impl SheetUnknown {

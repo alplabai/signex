@@ -341,6 +341,17 @@ impl SchDrawing {
         }
     }
 
+    /// Give the drawing a new id, whichever shape it is.
+    pub fn set_uuid(&mut self, id: Uuid) {
+        match self {
+            Self::Line { uuid, .. }
+            | Self::Rect { uuid, .. }
+            | Self::Circle { uuid, .. }
+            | Self::Arc { uuid, .. }
+            | Self::Polyline { uuid, .. } => *uuid = id,
+        }
+    }
+
     /// Whether the drawing is locked (#1573), whichever shape it is.
     pub fn is_locked(&self) -> bool {
         match self {
@@ -632,6 +643,13 @@ impl SchematicSheet {
     /// save and bulk pass asks.
     pub fn is_read_only(&self) -> bool {
         self.unknown.newer_minor_source.is_some()
+    }
+
+    /// Take what loading repaired in this sheet (see
+    /// [`SheetLoadRepair`](crate::format::SheetLoadRepair)), leaving none behind: the
+    /// opener reports it once, and undo snapshots and later reads never carry it.
+    pub fn take_load_repairs(&mut self) -> Vec<crate::format::SheetLoadRepair> {
+        std::mem::take(&mut self.unknown.load_repairs)
     }
 
     /// The typed paper size and orientation stored in `paper_size`.

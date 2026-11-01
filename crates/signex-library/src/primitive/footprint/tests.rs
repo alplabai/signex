@@ -952,3 +952,16 @@ fn footprint_file_toml_round_trip_with_every_sketch_marker() {
         .unwrap();
     assert!(tagged.courtyard.is_some());
 }
+
+#[test]
+fn a_bare_toml_datetime_in_a_known_string_field_still_opens() {
+    // `display_name = 2026-10-01` is a datetime to TOML but a string here (#1875).
+    let original = FootprintFile::from_footprint(Footprint::empty("SOIC-8"));
+    let text = original
+        .to_toml_string()
+        .expect("serialise")
+        .replace("display_name = \"SOIC-8\"", "display_name = 2026-10-01");
+    assert!(text.contains("display_name = 2026-10-01"));
+    let back = FootprintFile::from_toml_str(&text).expect("opens");
+    assert_eq!(back.display_name, "2026-10-01");
+}

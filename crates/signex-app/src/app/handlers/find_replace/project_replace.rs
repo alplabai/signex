@@ -415,7 +415,9 @@ impl Signex {
             ));
             return false;
         };
-        match Engine::new_with_path(sheet.clone(), Some(path.to_path_buf())) {
+        let mut sheet = sheet.clone();
+        crate::app::sheet_repairs::take_and_log(path, &mut sheet);
+        match Engine::new_with_path(sheet, Some(path.to_path_buf())) {
             Ok(engine) => {
                 self.document_state
                     .insert_engine(path.to_path_buf(), engine);

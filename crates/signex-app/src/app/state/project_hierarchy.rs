@@ -40,9 +40,23 @@ pub struct HierarchyRequest {
     pub jobs: Vec<HierarchyJob>,
 }
 
-/// Walk each requested project. Blocking: call it off the UI thread.
-pub fn walk_hierarchies(request: &HierarchyRequest) -> HashMap<ProjectId, SheetHierarchy> {
-    request
+/// A closed sheet the walk read that repeats object ids (#1830): what the
+/// open tab would repair. `key` identifies the repairs, which are derived
+/// from the content, so the same file is told to the user once.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RepairedSheet {
+    pub path: PathBuf,
+    pub count: usize,
+    pub key: u64,
+}
+
+/// Walk each requested project; also lists the repaired sheets it read.
+/// Blocking: call it off the UI thread.
+pub fn walk_hierarchies(
+    request: &HierarchyRequest,
+) -> (HashMap<ProjectId, SheetHierarchy>, Vec<RepairedSheet>) {
+    let mut repaired: Vec<RepairedSheet> = Vec::new();
+    let hierarchies = request
         .jobs
         .iter()
         .map(|job| {
@@ -58,6 +72,14 @@ pub fn walk_hierarchies(request: &HierarchyRequest) -> HashMap<ProjectId, SheetH
                 })
                 .collect();
             let set = assemble_project_sheets_from(&open, &job.pages, &job.root, job.fold);
+            repaired.extend(set.sheets.iter().filter_map(|(path, sheet)| {
+                let repairs = &sheet.unknown.load_repairs;
+                (!repairs.is_empty()).then(|| RepairedSheet {
+                    path: path.clone(),
+                    count: repairs.len(),
+                    key: repairs_key(repairs),
+                })
+            }));
             let hierarchy = build_sheet_hierarchy(
                 &set.sheets,
                 &set.unreadable,
@@ -67,7 +89,20 @@ pub fn walk_hierarchies(request: &HierarchyRequest) -> HashMap<ProjectId, SheetH
             );
             (job.id, hierarchy)
         })
-        .collect()
+        .collect();
+    repaired.sort_by(|a, b| a.path.cmp(&b.path));
+    repaired.dedup_by(|a, b| a.path == b.path);
+    (hierarchies, repaired)
+}
+
+/// A hash of what the repairs say, so a changed file is told again.
+fn repairs_key(repairs: &[signex_types::format::SheetLoadRepair]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for repair in repairs {
+        repair.describe().hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 /// A sheet symbol with only the fields the hierarchy reads.

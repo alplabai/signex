@@ -46,6 +46,14 @@ pub fn mm_as_stored_nm(mm: f64) -> Option<i64> {
     mm_to_nm(mm, "length").ok()
 }
 
+/// Whether `nm` converts to mm and back without hitting the [`mm_to_nm`]
+/// refusal, i.e. whether a document holding it can be saved. Range only: a
+/// value beyond 2^53 nm (9007 km) may come back a few nm off, which no
+/// drawing can tell from the original.
+pub(in crate::format) fn nm_survives_round_trip(nm: i64) -> bool {
+    mm_to_nm(nm_to_mm(nm), "length").is_ok()
+}
+
 pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {
     (nm as f64) * MM_PER_NM
 }

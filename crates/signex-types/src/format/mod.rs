@@ -34,6 +34,7 @@ use crate::schematic::SchematicSheet;
 
 mod extras;
 mod finite_toml;
+mod load_repair;
 mod pcb_footprints;
 mod pcb_rows;
 mod sch_rows;
@@ -41,6 +42,7 @@ mod tsv;
 mod units;
 mod unknown;
 mod unknown_columns;
+mod uuid_repair;
 mod version;
 
 #[cfg(test)]
@@ -53,6 +55,8 @@ mod drawing_placement_tests;
 mod extras_unknown_tests;
 #[cfg(test)]
 mod font_family_tests;
+#[cfg(test)]
+mod integrity_tests;
 #[cfg(test)]
 mod library_link_tests;
 #[cfg(test)]
@@ -72,10 +76,13 @@ mod unknown_columns_tests;
 #[cfg(test)]
 mod unknown_tests;
 #[cfg(test)]
+mod unknown_value_type_tests;
+#[cfg(test)]
 mod version_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
+pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};
@@ -228,6 +235,16 @@ pub enum FormatError {
         block: String,
         row: usize,
         field: String,
+    },
+    #[error(
+        "block {block:?}: row {row} field {field:?} is {nm} nm, beyond the range the file \
+         can save; fix the value to open this file"
+    )]
+    CoordinateOutOfRange {
+        block: String,
+        row: usize,
+        field: String,
+        nm: i64,
     },
     /// A serde-written TOML table (manifest, stackup, zones, extras) holds
     /// NaN or infinity. `path` starts with the table: `manifest.thickness`.
@@ -517,7 +534,7 @@ impl SnxSchematic {
             .iter()
             .map(String::as_str)
             .collect();
-        let sheet = SchematicSheet {
+        let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
             generator: raw.generator,
@@ -571,8 +588,10 @@ impl SnxSchematic {
                 extras_root: extras.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)
                     .then(|| raw.format.clone()),
+                load_repairs: Vec::new(),
             },
         };
+        sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
 
         Ok(SnxSchematic {
             format: raw.format,

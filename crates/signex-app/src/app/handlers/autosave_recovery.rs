@@ -281,7 +281,8 @@ impl Signex {
             return Task::none();
         }
         match restored {
-            RestoredDocument::Schematic(sheet) => {
+            RestoredDocument::Schematic(mut sheet) => {
+                crate::app::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs());
                 self.apply_loaded_schematic(Some(*sheet), true, false, true);
                 self.mark_active_document_dirty();
             }

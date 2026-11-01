@@ -433,10 +433,13 @@ impl Signex {
         &mut self,
         path: PathBuf,
         title: String,
-        sheet: SchematicSheet,
+        mut sheet: SchematicSheet,
     ) {
         warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
         report_unrecognized_sheet_size(&path, &sheet.paper_size);
+        // A read-only sheet cannot be saved, so a repair to it stays a report.
+        let repaired = super::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
+            && !sheet.is_read_only();
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
@@ -455,6 +458,10 @@ impl Signex {
         // is installed by a different path and stays dirty-safe.)
         if let Some(engine) = self.document_state.engines.get_mut(&scan_path) {
             engine.mark_saved();
+        }
+        if repaired {
+            // The file on disk still holds what was repaired (#1830).
+            self.document_state.mark_document_dirty(&scan_path);
         }
         self.note_sheet_focused();
         // Every schematic open funnels through here; `finish_update` starts
