@@ -455,11 +455,7 @@ impl Signex {
             return true;
         }
 
-        let is_schematic = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| matches!(e, "snxsch"))
-            .unwrap_or(false);
+        let is_schematic = crate::app::file_extension::has_extension(path, "snxsch");
         if !is_schematic {
             crate::diagnostics::log_warning(format!(
                 "Not a schematic sheet, cannot open: {}",

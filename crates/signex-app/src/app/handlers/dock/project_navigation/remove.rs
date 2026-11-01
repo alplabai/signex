@@ -215,8 +215,10 @@ impl Signex {
             shared_libraries,
             saves: self.document_state.document_saves.barrier(),
         };
+        let placing = self.sheet_users(&state.target_path, None).symbols;
         let request = DeleteRequest {
             id,
+            placing,
             target: state.target_path.clone(),
             display_name: state.display_name.clone(),
             fold,
@@ -249,6 +251,15 @@ impl Signex {
             // route that does not consult the pending set must not outlive
             // the file.
             DeleteIo::Orphan | DeleteIo::Deleted => {
+                if matches!(io, DeleteIo::Deleted) && !request.placing.is_empty() {
+                    crate::diagnostics::log_warning(format!(
+                        "Deleted {}: {} sheet symbol(s) still point at it and now show a missing \
+                         sheet ({}). Remove or re-point them; ERC and netlist export report them.",
+                        request.display_name,
+                        request.placing.len(),
+                        crate::app::path_ops::PlacingSymbol::describe_all(&request.placing)
+                    ));
+                }
                 tasks = self.close_tabs_of_removed(target, true, request.fold);
                 self.drop_deleted_documents(target, request.fold);
                 self.settle_removed_entry(&request, entry);
