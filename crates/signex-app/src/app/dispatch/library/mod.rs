@@ -116,6 +116,8 @@ impl Signex {
         let task = self.route_library_message(msg);
         if per_event {
             self.sync_diagnostics_panel_ctx();
+            // A part-number keystroke in the preview retitles its tab.
+            self.sync_component_tab_titles();
             return task;
         }
         Task::batch([task, self.finish_update()])

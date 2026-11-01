@@ -34,6 +34,30 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
+    /// Close the Library Browser and Component Preview tabs of every
+    /// library unmounted since the last update, whichever path closed it
+    /// (at once or once its writes were done). Their drafts were already
+    /// saved or discarded through the close prompt. A library mounted again
+    /// meanwhile keeps its tabs.
+    pub(crate) fn close_tabs_of_unmounted_libraries(&mut self) -> Task<Message> {
+        let unmounted = std::mem::take(&mut self.library.unmounted);
+        let mut tasks = Vec::new();
+        for root in unmounted {
+            if self.library.library_at(&root).is_some() {
+                continue;
+            }
+            while let Some(idx) = self
+                .document_state
+                .tabs
+                .iter()
+                .position(|tab| tab_belongs_to_library(&tab.kind, &root))
+            {
+                tasks.push(self.close_tab_now(idx));
+            }
+        }
+        Task::batch(tasks)
+    }
+
     /// The unsaved-editor check runs again when the close comes due: an
     /// editor opened or edited while the close waited is never dropped
     /// silently. A dirty one cancels the close and raises the same prompt
@@ -56,5 +80,15 @@ impl Signex {
         if self.library.close_library_confirm.is_none() {
             self.raise_close_library_prompt(root.to_path_buf(), dirty);
         }
+    }
+}
+
+/// Whether a tab of `kind` shows the library at `root`: its browser, or a
+/// Component Preview of one of its rows.
+fn tab_belongs_to_library(kind: &crate::app::TabKind, root: &Path) -> bool {
+    match kind {
+        crate::app::TabKind::LibraryBrowser(path) => path == root,
+        crate::app::TabKind::ComponentEditor(preview) => preview.library_path == root,
+        _ => false,
     }
 }
