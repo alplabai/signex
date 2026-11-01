@@ -120,12 +120,59 @@ fn read_sheet(path: &Path) -> Result<signex_types::schematic::SchematicSheet, St
 }
 
 /// `fs::rename` replaces an existing file on Unix, so the destination is
-/// checked first, as the synchronous code did.
+/// checked first, as the synchronous code did. On a case-insensitive volume a
+/// case-only rename finds itself at the destination; that is the same file,
+/// not a collision, so it moves through a temporary name (#1832).
 fn move_file(from: &Path, to: &Path) -> Result<(), RenameIoError> {
     if to.exists() {
-        return Err(RenameIoError::TargetExists);
+        if !is_case_only_rename_of_same_file(from, to) {
+            return Err(RenameIoError::TargetExists);
+        }
+        return move_via_temp_name(from, to);
     }
     std::fs::rename(from, to).map_err(|e| RenameIoError::Os(e.to_string()))
+}
+
+/// Do `from` and `to` differ only in letter case and name the same file on
+/// disk? File identity is required, not just the folded name, so a distinct
+/// file whose name folds the same (a case-sensitive volume) or a hard link is
+/// still a collision. An identity that cannot be read counts as different.
+fn is_case_only_rename_of_same_file(from: &Path, to: &Path) -> bool {
+    let (Some(from_name), Some(to_name)) = (from.file_name(), to.file_name()) else {
+        return false;
+    };
+    from.parent() == to.parent()
+        && from_name != to_name
+        && from_name.to_string_lossy().to_lowercase() == to_name.to_string_lossy().to_lowercase()
+        && same_file::is_same_file(from, to).unwrap_or(false)
+}
+
+/// Move `from` to a fresh name beside it, then onto `to`, so a filesystem that
+/// treats the two names as one still records the new spelling. A second step
+/// that fails puts the file back under `from`.
+fn move_via_temp_name(from: &Path, to: &Path) -> Result<(), RenameIoError> {
+    let os = |e: std::io::Error| RenameIoError::Os(e.to_string());
+    let temp = unused_sibling_name(from).ok_or_else(|| {
+        RenameIoError::Os("no free temporary name for a case-only rename".to_string())
+    })?;
+    std::fs::rename(from, &temp).map_err(os)?;
+    if let Err(e) = std::fs::rename(&temp, to) {
+        let back = std::fs::rename(&temp, from).map_or_else(
+            |b| format!("; it is left at {} ({b})", temp.display()),
+            |()| String::new(),
+        );
+        return Err(RenameIoError::Os(format!("{e}{back}")));
+    }
+    Ok(())
+}
+
+/// A name beside `path` that nothing occupies, for the middle step of a
+/// case-only rename.
+fn unused_sibling_name(path: &Path) -> Option<PathBuf> {
+    let name = path.file_name()?.to_string_lossy();
+    (0..100u32)
+        .map(|n| path.with_file_name(format!(".{name}.rename-{}-{n}", std::process::id())))
+        .find(|candidate| matches!(candidate.try_exists(), Ok(false)))
 }
 
 /// Moves a `.snxlib` and re-points its saved `.snxprj` entry, undoing the

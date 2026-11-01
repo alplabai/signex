@@ -275,7 +275,10 @@ impl Signex {
         plan: &ReferencePlan,
         from: &Path,
     ) -> Vec<PathBuf> {
-        let is_sheet = |path: &Path| path.extension().is_some_and(|e| e == "snxsch");
+        let is_sheet = |path: &Path| {
+            path.extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("snxsch"))
+        };
         // Only a renamed sheet can be placed by a sheet symbol.
         if !is_sheet(from) {
             return Vec::new();
