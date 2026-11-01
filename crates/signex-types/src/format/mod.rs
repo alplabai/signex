@@ -34,6 +34,7 @@ use crate::schematic::SchematicSheet;
 
 mod extras;
 mod finite_toml;
+mod load_repair;
 mod pcb_footprints;
 mod pcb_rows;
 mod sch_rows;
@@ -81,6 +82,7 @@ mod version_tests;
 
 // Public API re-exports — preserve the `format::…` import paths that
 // signex-app / signex-engine / signex-output rely on.
+pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use tsv::{parse_tsv_block, write_tsv_block};

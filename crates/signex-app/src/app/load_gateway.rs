@@ -433,11 +433,13 @@ impl Signex {
         &mut self,
         path: PathBuf,
         title: String,
-        sheet: SchematicSheet,
+        mut sheet: SchematicSheet,
     ) {
         warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
         report_unrecognized_sheet_size(&path, &sheet.paper_size);
-        let repairs = report_load_repairs(&path, &sheet.unknown.load_repairs);
+        // A read-only sheet cannot be saved, so a repair to it stays a report.
+        let repaired = super::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
+            && !sheet.is_read_only();
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
@@ -457,7 +459,7 @@ impl Signex {
         if let Some(engine) = self.document_state.engines.get_mut(&scan_path) {
             engine.mark_saved();
         }
-        if repairs {
+        if repaired {
             // The file on disk still holds what was repaired (#1830).
             self.document_state.mark_document_dirty(&scan_path);
         }
@@ -817,16 +819,6 @@ pub(crate) fn report_unrecognized_sheet_size(path: &std::path::Path, paper_size:
             path.display()
         ));
     }
-}
-
-/// Tell Messages what loading `path` had to change (a repeated uuid, #1830);
-/// true when it changed anything, so the caller can mark the sheet modified.
-fn report_load_repairs(path: &std::path::Path, repairs: &[String]) -> bool {
-    for repair in repairs {
-        let file = path.file_name().unwrap_or_default().to_string_lossy();
-        crate::diagnostics::log_warning(format!("{file} repaired on open: {repair}"));
-    }
-    !repairs.is_empty()
 }
 
 /// A document written by a newer Signex loads for viewing only: saving it

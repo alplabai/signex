@@ -158,3 +158,38 @@ fn a_file_repaired_on_open_is_dirty_and_says_so_in_messages() {
     let engine = app.document_state.engines.get(&path).expect("engine");
     assert_eq!(engine.document().wires.len(), 2);
 }
+
+#[test]
+fn a_flood_of_repairs_is_capped_in_messages() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut sheet = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        version: 1,
+        paper_size: "A4".into(),
+        ..Default::default()
+    };
+    sheet.wires = (0..60)
+        .map(|n| signex_types::schematic::Wire {
+            uuid: uuid::Uuid::from_u128(7),
+            end: signex_types::schematic::Point::new(f64::from(n), 0.0),
+            ..Default::default()
+        })
+        .collect();
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("Flood1830.snxsch");
+    let text = signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("serialise");
+    std::fs::write(&path, text).expect("write");
+    let (mut app, _boot) = Signex::new();
+    for message in run(app.update(Message::File(FileMsg::Opened(Some(path))))) {
+        let _ = app.update(message);
+    }
+    let lines: Vec<String> = signex_app::diagnostics::recent_entries()
+        .into_iter()
+        .map(|e| e.message)
+        .filter(|m| m.starts_with("Flood1830.snxsch repaired"))
+        .collect();
+    assert_eq!(lines.len(), 21, "20 repairs and one summary: {lines:?}");
+    assert!(lines[20].contains("and 39 more repairs"), "{}", lines[20]);
+}

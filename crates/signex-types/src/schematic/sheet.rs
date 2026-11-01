@@ -645,6 +645,13 @@ impl SchematicSheet {
         self.unknown.newer_minor_source.is_some()
     }
 
+    /// Take what loading repaired in this sheet (see
+    /// [`SheetLoadRepair`](crate::format::SheetLoadRepair)), leaving none behind: the
+    /// opener reports it once, and undo snapshots and later reads never carry it.
+    pub fn take_load_repairs(&mut self) -> Vec<crate::format::SheetLoadRepair> {
+        std::mem::take(&mut self.unknown.load_repairs)
+    }
+
     /// The typed paper size and orientation stored in `paper_size`.
     pub fn sheet_size(&self) -> (super::SheetSize, super::SheetOrientation) {
         super::SheetSize::parse(&self.paper_size)

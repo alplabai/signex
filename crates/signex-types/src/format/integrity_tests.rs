@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use super::tests::{empty_board, empty_sheet, sample_symbol};
 use super::*;
 use crate::schematic::{
-    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LabelType, NoConnect, Point,
+    Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LabelType, NoConnect, Point, SchDrawing,
     SchematicSheet, SheetPin, TextNote, VAlign, Wire,
 };
 
@@ -16,6 +16,16 @@ fn load(text: &str) -> SchematicSheet {
 
 fn save(sheet: &SchematicSheet) -> String {
     SnxSchematic::new(sheet.clone()).write_string().unwrap()
+}
+
+/// The repairs as the sentences Messages shows.
+fn sentences(sheet: &SchematicSheet) -> Vec<String> {
+    sheet
+        .unknown
+        .load_repairs
+        .iter()
+        .map(SheetLoadRepair::describe)
+        .collect()
 }
 
 fn id(n: u128) -> Uuid {
@@ -112,7 +122,7 @@ fn an_identical_duplicate_wire_row_is_dropped_with_a_message() {
     assert_eq!(loaded.wires.len(), 1);
     assert_eq!(loaded.wires[0].uuid, id(7));
     assert_eq!(loaded.unknown.load_repairs.len(), 1);
-    let message = &loaded.unknown.load_repairs[0];
+    let message = &sentences(&loaded)[0];
     assert!(message.starts_with("wire (row 2)"), "{message}");
     assert!(message.contains(&id(7).to_string()), "{message}");
     assert!(message.contains("dropped"), "{message}");
@@ -130,10 +140,10 @@ fn a_wire_with_a_taken_uuid_and_other_geometry_gets_a_fresh_uuid() {
         loaded.wires[1].end.x, 9.0,
         "the repaired wire keeps its geometry"
     );
-    assert_eq!(loaded.wires[1].uuid.get_version_num(), 7);
+    assert_eq!(loaded.wires[1].uuid.get_version_num(), 8);
     assert_unique(&loaded);
     assert_eq!(loaded.unknown.load_repairs.len(), 1);
-    assert!(loaded.unknown.load_repairs[0].contains("new uuid"));
+    assert!(sentences(&loaded)[0].contains("new uuid"));
 }
 
 #[test]
@@ -147,7 +157,7 @@ fn duplicate_component_rows_are_repaired_and_keep_their_extras() {
     assert_unique(&loaded);
     assert_eq!(loaded.symbols[0].uuid, id(1));
     assert_eq!(loaded.symbols[1].reference, "U2");
-    let message = &loaded.unknown.load_repairs[0];
+    let message = &sentences(&loaded)[0];
     assert!(message.contains("symbol U2"), "{message}");
 }
 
@@ -157,7 +167,7 @@ fn an_exact_duplicate_component_row_is_dropped() {
     sheet.symbols = vec![symbol(1, "U1"), symbol(1, "U1")];
     let loaded = load(&save(&sheet));
     assert_eq!(loaded.symbols.len(), 1);
-    assert!(loaded.unknown.load_repairs[0].contains("dropped"));
+    assert!(sentences(&loaded)[0].contains("dropped"));
 }
 
 #[test]
@@ -174,13 +184,7 @@ fn a_uuid_shared_by_two_kinds_is_repaired_on_the_later_kind() {
     assert_eq!(loaded.wires[0].uuid, id(5));
     assert_unique(&loaded);
     assert_eq!(loaded.unknown.load_repairs.len(), 2);
-    assert!(
-        loaded
-            .unknown
-            .load_repairs
-            .iter()
-            .any(|m| m.contains("label VCC"))
-    );
+    assert!(sentences(&loaded).iter().any(|m| m.contains("label VCC")));
 }
 
 #[test]
@@ -242,15 +246,35 @@ fn every_uuid_kind_is_repaired() {
         uuid: id(9),
         position: origin,
     }];
+    sheet.drawings = vec![
+        SchDrawing::Line {
+            uuid: id(9),
+            start: origin,
+            end: Point::new(1.0, 1.0),
+            width: 0.0,
+            stroke_color: None,
+            locked: false,
+        },
+        SchDrawing::Rect {
+            uuid: id(9),
+            start: origin,
+            end: Point::new(2.0, 2.0),
+            width: 0.0,
+            fill: Default::default(),
+            stroke_color: None,
+            locked: false,
+        },
+    ];
     let loaded = load(&save(&sheet));
     assert_unique(&loaded);
-    // All but the first holder (the symbol) were re-minted: ten more objects.
+    // All but the first holder (the symbol) were re-minted: twelve objects.
     assert_eq!(
         loaded.unknown.load_repairs.len(),
-        10,
+        12,
         "{:?}",
-        loaded.unknown.load_repairs
+        sentences(&loaded)
     );
+    assert_eq!(loaded.drawings.len(), 2);
     assert_eq!(loaded.symbols[0].uuid, id(9));
 }
 
@@ -264,7 +288,21 @@ fn sample_note() -> TextNote {
 }
 
 #[test]
-fn a_repeated_pin_uuid_is_repaired() {
+fn two_pins_of_one_symbol_sharing_an_id_are_repaired() {
+    let mut sheet = empty_sheet();
+    let mut a = symbol(1, "U1");
+    a.pin_uuids.insert("1".into(), id(50));
+    a.pin_uuids.insert("2".into(), id(50));
+    sheet.symbols = vec![a];
+    let loaded = load(&save(&sheet));
+    assert_eq!(loaded.symbols[0].pin_uuids["1"], id(50));
+    assert_ne!(loaded.symbols[0].pin_uuids["2"], id(50));
+    assert!(sentences(&loaded)[0].starts_with("pin 2 of symbol U1"));
+}
+
+#[test]
+fn pin_ids_copied_to_another_symbol_are_not_a_repeat() {
+    // Pasting or placing a copy of a symbol repeats its pin ids on the copy.
     let mut sheet = empty_sheet();
     let mut a = symbol(1, "U1");
     a.pin_uuids.insert("1".into(), id(50));
@@ -272,9 +310,64 @@ fn a_repeated_pin_uuid_is_repaired() {
     b.pin_uuids.insert("1".into(), id(50));
     sheet.symbols = vec![a, b];
     let loaded = load(&save(&sheet));
-    assert_unique(&loaded);
-    assert_eq!(loaded.symbols[0].pin_uuids["1"], id(50));
-    assert!(loaded.unknown.load_repairs[0].contains("pin 1 of symbol U2"));
+    assert!(loaded.unknown.load_repairs.is_empty());
+    assert_eq!(loaded.symbols[1].pin_uuids["1"], id(50));
+}
+
+#[test]
+fn an_object_using_the_sheet_uuid_is_repaired() {
+    let mut sheet = empty_sheet();
+    sheet.uuid = id(99);
+    sheet.wires = vec![wire(99, 5.0)];
+    let loaded = load(&save(&sheet));
+    assert_eq!(loaded.uuid, id(99));
+    assert_ne!(loaded.wires[0].uuid, id(99));
+}
+
+#[test]
+fn every_parse_of_a_file_picks_the_same_new_ids() {
+    let mut sheet = empty_sheet();
+    sheet.wires = vec![wire(7, 5.0), wire(7, 9.0), wire(7, 12.0)];
+    let text = save(&sheet);
+    let (first, second) = (load(&text), load(&text));
+    assert_eq!(all_ids(&first), all_ids(&second));
+    assert_eq!(first.unknown.load_repairs, second.unknown.load_repairs);
+    assert_unique(&first);
+}
+
+#[test]
+fn taking_the_repairs_leaves_none_behind() {
+    let mut sheet = empty_sheet();
+    sheet.wires = vec![wire(7, 5.0), wire(7, 9.0)];
+    let mut loaded = load(&save(&sheet));
+    assert_eq!(loaded.take_load_repairs().len(), 1);
+    assert!(loaded.take_load_repairs().is_empty());
+}
+
+#[test]
+fn a_repaired_sheet_symbol_says_its_designators_need_annotating() {
+    let mut sheet = empty_sheet();
+    let child = |name: &str| ChildSheet {
+        uuid: id(8),
+        name: name.into(),
+        filename: format!("{name}.snxsch"),
+        position: Point::new(0.0, 0.0),
+        size: (10.0, 10.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: vec![],
+        instances: vec![],
+    };
+    sheet.child_sheets = vec![child("a"), child("b")];
+    let loaded = load(&save(&sheet));
+    assert!(
+        sentences(&loaded)[0].contains("re-annotate"),
+        "{:?}",
+        sentences(&loaded)
+    );
 }
 
 #[test]
@@ -340,4 +433,13 @@ fn a_pcb_coordinate_at_the_i64_end_is_refused() {
         matches!(err, FormatError::CoordinateOutOfRange { .. }),
         "{err}"
     );
+}
+
+#[test]
+fn thousands_of_identical_duplicates_collapse_quickly() {
+    let mut sheet = empty_sheet();
+    sheet.wires = (0..20_000).map(|_| wire(7, 5.0)).collect();
+    let loaded = load(&save(&sheet));
+    assert_eq!(loaded.wires.len(), 1);
+    assert_eq!(loaded.unknown.load_repairs.len(), 19_999);
 }

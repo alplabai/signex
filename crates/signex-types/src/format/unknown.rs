@@ -90,10 +90,10 @@ pub struct SheetUnknown {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub newer_minor_source: Option<String>,
     /// What loading changed to make the file usable (a repeated uuid
-    /// re-minted or dropped, #1830), one sentence each. Never written: it
-    /// is how the open path learns to warn and to mark the sheet modified.
+    /// re-minted or dropped, #1830). Never written. The document that opens
+    /// the sheet takes it once ([`SchematicSheet::take_load_repairs`]).
     #[serde(skip)]
-    pub load_repairs: Vec<String>,
+    pub load_repairs: Vec<super::SheetLoadRepair>,
 }
 
 impl SheetUnknown {

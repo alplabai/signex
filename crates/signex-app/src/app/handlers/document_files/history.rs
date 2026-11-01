@@ -425,8 +425,11 @@ impl Signex {
                 _ => self.fail_primitive_reload(&path, &why, unreadable),
             },
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
-            Ok(RestoreJobDocument::Schematic(sheet)) => {
+            Ok(RestoreJobDocument::Schematic(mut sheet)) => {
                 crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
+                let repaired =
+                    crate::app::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
+                        && !sheet.is_read_only();
                 if idx == self.document_state.active_tab {
                     self.discard_state_of_replaced_engine();
                     self.apply_loaded_schematic(Some(*sheet), true, false, false);
@@ -459,6 +462,9 @@ impl Signex {
                     if commit {
                         self.commit_restore(&path, restored_bytes);
                     }
+                } else if repaired {
+                    // The file still holds what was repaired: not what the engine holds.
+                    self.set_reloaded_dirty(&path, true);
                 }
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
