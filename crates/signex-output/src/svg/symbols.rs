@@ -12,8 +12,8 @@ use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
-    FillType, LibSymbol, Pin, Point, Symbol, SymbolPrimitive, SymbolTransform, instance_pins,
-    lower_placed_symbol,
+    FillType, LibSymbol, Pin, Point, Symbol, SymbolPrimitive, SymbolTransform, effective_stroke_mm,
+    instance_pins, lower_placed_symbol,
 };
 use std::collections::HashMap;
 
@@ -31,7 +31,7 @@ pub(super) fn push_symbol_lib_graphics(
     let style = |width: f64, fill: FillType| SvgStyle {
         stroke_rgb: Some(palette.symbol_stroke),
         fill_rgb: fill_to_rgb(fill, palette.symbol_stroke, palette.symbol_fill),
-        stroke_width: (width.max(0.15) * xform.mm_to_unit) as f32,
+        stroke_width: (effective_stroke_mm(width) * xform.mm_to_unit) as f32,
     };
     for primitive in lower_placed_symbol(lib, sym) {
         match primitive {
@@ -102,7 +102,7 @@ pub(super) fn push_symbol_lib_graphics(
                 fill_rgb: (0.15, 0.15, 0.15),
                 text: normalize_standard_text(&text),
             }),
-            SymbolPrimitive::Pin { tip, body, .. } => out.push(SvgElement::Path {
+            SymbolPrimitive::Pin { tip, body, width } => out.push(SvgElement::Path {
                 commands: vec![
                     SvgPathCommand::MoveTo(px(&tip)),
                     SvgPathCommand::LineTo(px(&body)),
@@ -110,7 +110,7 @@ pub(super) fn push_symbol_lib_graphics(
                 style: SvgStyle {
                     stroke_rgb: Some(palette.pin),
                     fill_rgb: None,
-                    stroke_width: (0.15 * xform.mm_to_unit) as f32,
+                    stroke_width: (effective_stroke_mm(width) * xform.mm_to_unit) as f32,
                 },
             }),
         }
