@@ -37,6 +37,17 @@ impl Signex {
         Task::none()
     }
 
+    /// True when `path` is a library entry of an open project.
+    fn is_open_project_library(&self, path: &std::path::Path) -> bool {
+        self.document_state.projects.iter().any(|project| {
+            project
+                .data
+                .libraries
+                .iter()
+                .any(|e| project.data.resolve_library_path(e) == path)
+        })
+    }
+
     /// A `.snxlib` mount prepared off the UI thread has landed — issue
     /// #99 part 2c.
     ///
@@ -55,21 +66,12 @@ impl Signex {
     ///    panicking because a dropped mount is a stale cache, not a
     ///    corrupt one.
     ///
-    /// A prepare error is logged; a missing `.snxlib` opens the Library
-    /// Missing dialog, any other failure a card for a user-asked mount.
-    /// The `rfd` directory-pick path (`handle_open_library_at`) is still
-    /// synchronous and routes its errors the same way.
-    /// True when `path` is a library entry of an open project.
-    fn is_open_project_library(&self, path: &std::path::Path) -> bool {
-        self.document_state.projects.iter().any(|project| {
-            project
-                .data
-                .libraries
-                .iter()
-                .any(|e| project.data.resolve_library_path(e) == path)
-        })
-    }
-
+    /// A `Silent` mount opens the Library Missing dialog only when the
+    /// `.snxlib` is gone and the path is a library of an open project;
+    /// every other `Silent` failure is logged (#532). An `OpenBrowserTab`
+    /// mount routes every recoverable error to its dialog and raises a
+    /// card for the rest. The synchronous `rfd` directory-pick path
+    /// (`handle_open_library_at`) always routes and otherwise raises a card.
     pub(super) fn handle_mount_finished(
         &mut self,
         path: std::path::PathBuf,

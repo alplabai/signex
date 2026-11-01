@@ -457,10 +457,6 @@ impl LocalGitAdapter {
         })
     }
 
-    /// Reject paths whose extension isn't `.snxlib`. We refuse rather
-    /// than silently rewriting; the file picker should be filtering,
-    /// but defensively block anyway so a misnamed path doesn't end up
-    /// committed to history.
     /// Fail with [`LibraryError::LibraryFileMissing`] only when the filesystem
     /// says the `.snxlib` does not exist. An uninspectable path (permission
     /// denied on a parent, IO error) is `Io`, never "missing".
@@ -474,6 +470,10 @@ impl LocalGitAdapter {
         }
     }
 
+    /// Reject paths whose extension isn't `.snxlib`. We refuse rather
+    /// than silently rewriting; the file picker should be filtering,
+    /// but defensively block anyway so a misnamed path doesn't end up
+    /// committed to history.
     fn validate_file_path(p: &Path) -> Result<(), LibraryError> {
         let ext_ok = p
             .extension()
