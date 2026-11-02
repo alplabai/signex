@@ -614,6 +614,10 @@ impl Signex {
             PanelMsg::SchLibrarySelectSymbol(idx) => self.sch_library_select_symbol(*idx),
             PanelMsg::SchLibraryAddSymbol => self.sch_library_add_symbol(),
             PanelMsg::SchLibraryDeleteSymbol(idx) => self.sch_library_delete_symbol(*idx),
+            PanelMsg::SchLibraryDeleteConfirmed(idx) => {
+                self.sch_library_confirm_delete_symbol(*idx)
+            }
+            PanelMsg::SchLibraryDeleteCancelled => self.sch_library_cancel_delete_symbol(),
             PanelMsg::SymEditorSetPinNumber { pin_idx, value } => {
                 self.sym_editor_set_pin_number(*pin_idx, value.clone())
             }

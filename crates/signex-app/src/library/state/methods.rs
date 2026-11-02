@@ -54,6 +54,7 @@ impl Default for LibraryState {
         Self {
             datasheet_opener: crate::library::placed_part::opener::open,
             drift: Default::default(),
+            pending_symbol_delete: None,
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
@@ -746,11 +747,19 @@ impl OpenLibrary {
         // Stamp before reading: a write racing the read then costs one
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
-        let names = adapter.list_tables()?;
+        let names = match adapter.list_tables() {
+            Ok(names) => names,
+            Err(e) => {
+                self.dangling.tables_not_listed = true;
+                return Err(e);
+            }
+        };
+        self.dangling.tables_not_listed = false;
         let super::table_scan::TableScan {
             tables,
             summaries,
             pricing,
+            unreadable,
         } = super::table_scan::scan_tables(
             adapter,
             names,
@@ -773,6 +782,7 @@ impl OpenLibrary {
             },
         );
         self.tables = tables;
+        self.dangling.unreadable_tables = unreadable;
         self.pricing = pricing;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();

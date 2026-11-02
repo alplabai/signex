@@ -1191,7 +1191,7 @@ fn with_saved_cached_child() -> (Signex, tempfile::TempDir, PathBuf, PathBuf) {
 }
 
 #[test]
-fn a_replace_on_a_non_active_sheet_only_leaves_the_erc_results_stale() {
+fn a_replace_on_a_non_active_sheet_marks_the_erc_results_stale() {
     let (mut app, _dir, top, child) = with_saved_cached_child();
     app.ui_state.erc_violations_by_path.insert(
         top,

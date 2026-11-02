@@ -58,7 +58,9 @@ by this build and is not classified again. Each unmarked entry that
 matches a bake output (same kind, stroke width and fill,
 geometry equal at the file's nanometre resolution, `mm_as_stored_nm`) is
 marked; each output is used at most once, and an entry that matches
-nothing stays hand-drawn. The markers are written in memory only: the
+nothing stays hand-drawn. So a legacy hand entry equal to a bake output at
+that resolution, with no old baked entry consuming the output, is claimed as
+baked and a later re-bake replaces it. The markers are written in memory only: the
 document is not dirtied and a save treats the footprint as unchanged until
 the user edits it; the save's merge compares footprints without the
 markers (`Footprint::same_ignoring_silk_markers`), so they are never

@@ -40,6 +40,13 @@ pub(super) fn push_symbol_choice_row<'a>(
     ))
 }
 
+/// How the sheet's embedded copy compares with the library (#912, #1845).
+#[derive(Clone, Copy)]
+pub(super) struct LibraryStatus {
+    pub(super) drifted: bool,
+    pub(super) missing: bool,
+}
+
 /// Append the readable `Library` row and, when the sheet's embedded copy
 /// differs from the library, the "out of date" row with its Update button.
 /// Update replaces the sheet's shared copy, so it affects every instance of
@@ -48,7 +55,7 @@ pub(super) fn push_library_rows<'a>(
     mut c: Column<'a, PanelMsg>,
     id: uuid::Uuid,
     library_name: &str,
-    drifted: bool,
+    status: LibraryStatus,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
@@ -61,6 +68,14 @@ pub(super) fn push_library_rows<'a>(
             input_bg,
             input_bdr,
         ));
+    }
+    let LibraryStatus { drifted, missing } = status;
+    if missing {
+        c = c.push(
+            iced::widget::text("Library: symbol missing (sheet keeps its embedded copy)")
+                .size(TS.body)
+                .color(muted),
+        );
     }
     if drifted {
         let update = iced::widget::button(iced::widget::text("Update from library").size(TS.body))

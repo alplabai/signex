@@ -438,7 +438,10 @@ impl Signex {
     /// Mount each freshly registered `.snxlib` off the update thread, as the
     /// project-open fan-out does, so it reaches the Components panel without
     /// a reopen (#1213). A failure lands in the Messages panel.
-    fn mount_added_libraries(&mut self, paths: Vec<std::path::PathBuf>) -> iced::Task<Message> {
+    pub(crate) fn mount_added_libraries(
+        &mut self,
+        paths: Vec<std::path::PathBuf>,
+    ) -> iced::Task<Message> {
         use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
         let mut cold = Vec::new();
         let mut tasks = Vec::new();

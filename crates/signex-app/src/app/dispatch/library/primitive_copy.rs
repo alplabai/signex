@@ -21,6 +21,10 @@ impl Signex {
         if kind != PrimitiveKind::Symbol {
             return Task::none();
         }
+        // A file under a mounted library's directory is left out even when it
+        // is outside that library's `symbols/` folder: this is the same rule
+        // `containing_library` applies everywhere, and `push_loose` hides
+        // the same files once the library is open.
         let files: Vec<PathBuf> = self
             .document_state
             .projects
@@ -51,6 +55,20 @@ impl Signex {
         for problem in &read.problems {
             crate::diagnostics::log_warning(problem);
         }
+        // A browsed file of an open library binds that library's symbol, as
+        // the directory-form route does; it is never offered as a copy.
+        if from_browse
+            && let [only] = read.symbols.as_slice()
+            && let Some(lib) = only
+                .library
+                .as_deref()
+                .and_then(|path| self.library.library_at(path))
+        {
+            let reference = signex_library::PrimitiveRef::new(lib.library_id, only.uuid);
+            return Task::done(Message::Library(LibraryMessage::PrimitivePicker(
+                PrimitivePickerMsg::Pick(reference),
+            )));
+        }
         let Some(picker) = self.library.primitive_picker.as_mut() else {
             return Task::none();
         };
@@ -77,14 +95,76 @@ impl Signex {
     pub(super) fn handle_loose_chosen(&mut self, symbol: LooseSymbol) -> Task<Message> {
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = Some(symbol);
+            picker.opening_library = None;
             picker.error = None;
         }
         Task::none()
     }
 
+    /// "Open library" was answered yes: mount the `.snxlib` the symbol
+    /// belongs to through the usual mount request. The question stays up as
+    /// "Opening library…" until the mount lands ([`Self::picker_mount_settled`]);
+    /// the library's symbols then list under it and the user picks from there.
+    pub(super) fn handle_open_library_confirmed(&mut self) -> Task<Message> {
+        let Some(picker) = self.library.primitive_picker.as_ref() else {
+            return Task::none();
+        };
+        let Some(library) = picker.copy_confirm.as_ref().and_then(|s| s.library.clone()) else {
+            return Task::none();
+        };
+        if picker.opening_library.is_some() {
+            return Task::none();
+        }
+        let mounted = self.library.library_at(&library).is_some();
+        let Some(picker) = self.library.primitive_picker.as_mut() else {
+            return Task::none();
+        };
+        picker.error = None;
+        if mounted {
+            picker.copy_confirm = None;
+        } else {
+            picker.opening_library = Some(library.clone());
+        }
+        self.mount_added_libraries(vec![library])
+    }
+
+    /// A mount finished: if it is the library the picker is opening, end the
+    /// "Opening…" state. A failure goes to the picker's error line; a success
+    /// is noted in the Messages panel, since the library is open for this
+    /// session only and is not in the project's library list.
+    pub(crate) fn picker_mount_settled(&mut self, path: &std::path::Path, failure: Option<String>) {
+        let Some(picker) = self.library.primitive_picker.as_mut() else {
+            return;
+        };
+        if picker.opening_library.as_deref() != Some(path) {
+            return;
+        }
+        picker.opening_library = None;
+        // Only the question about this library; a newer pick keeps its own.
+        if picker
+            .copy_confirm
+            .as_ref()
+            .is_some_and(|s| s.library.as_deref() == Some(path))
+        {
+            picker.copy_confirm = None;
+        }
+        let name = path
+            .file_stem()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        match failure {
+            Some(why) => picker.error = Some(format!("Could not open library {name}: {why}")),
+            None => crate::diagnostics::log_info(format!(
+                "Library {name} is open for this session. It is not in the project's library \
+                 list; add it to the project to keep it."
+            )),
+        }
+    }
+
     pub(super) fn handle_copy_declined(&mut self) -> Task<Message> {
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = None;
+            // Also "Cancel" of an open in progress: the mount lands unannounced.
+            picker.opening_library = None;
         }
         Task::none()
     }
@@ -98,8 +178,9 @@ impl Signex {
             kind: picker.kind,
             target: picker.target.clone(),
         };
+        // A symbol that belongs to a library is opened, never copied.
         let (Some(symbol), Some(library_path)) = (
-            picker.copy_confirm.clone(),
+            picker.copy_confirm.clone().filter(|s| s.library.is_none()),
             picker
                 .target
                 .library_path()

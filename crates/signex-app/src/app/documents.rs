@@ -849,6 +849,9 @@ impl FootprintDocument {
         self.state.selected_pad = snap.selected_pad;
         self.state.selected_sketch = snap.selected_sketch;
         self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
+        // Bakes shift hand-entry indices and the snapshot keeps no silk
+        // selection, so a stale index would point at another entry.
+        self.state.clear_silk_selection();
         self.canvas_cache.clear();
         self.mark_dirty();
         // The sketch was just replaced: a drag solve still in flight ran on
