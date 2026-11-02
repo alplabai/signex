@@ -136,18 +136,16 @@ impl Signex {
     /// so the user can keep dropping objects with the edited properties.
     /// v0.13 — Also fires when a footprint editor's placement is paused
     /// so TAB during pad/via/string placement surfaces the same overlay.
-    pub(in crate::app::view) fn placement_paused_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn placement_paused_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let footprint_paused = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .and_then(|tab| tab.kind.as_footprint_editor())
-            .and_then(|path| self.document_state.footprint_editors.get(path))
-            .map(|ed| ed.state.placement_paused)
-            .unwrap_or(false);
-        if !(interaction.canvas.placement_paused || footprint_paused) {
+            .footprint_editor_in_window(window_id)
+            .is_some_and(|(_, ed)| ed.state.placement_paused);
+        if !(interaction.canvas_for_window(window_id).placement_paused || footprint_paused) {
             return None;
         }
         let tokens = &document.panel_ctx.tokens;
@@ -202,19 +200,45 @@ impl Signex {
         )
     }
 
-    /// Schematic Active Bar overlay — only painted on the main window,
-    /// so the main canvas's selection set is the right gate.
+    /// The footprint editor `window_id` shows, with its path.
+    fn footprint_editor_in_window(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<(&std::path::Path, &crate::app::FootprintDocument)> {
+        let docs = &self.document_state;
+        let path = docs
+            .tab_shown_in_window(window_id, &self.ui_state)?
+            .kind
+            .as_footprint_editor()?;
+        Some((path, docs.footprint_editors.get(path)?))
+    }
+
+    /// The symbol editor `window_id` shows, with its path.
+    fn symbol_editor_in_window(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<(&std::path::Path, &crate::app::SymbolDocument)> {
+        let docs = &self.document_state;
+        let path = docs
+            .tab_shown_in_window(window_id, &self.ui_state)?
+            .kind
+            .as_symbol_editor()?;
+        Some((path, docs.symbol_editors.get(path)?))
+    }
+
+    /// Schematic Active Bar overlay for the schematic `window_id` shows;
+    /// its selection set is that window's canvas.
     pub(in crate::app::view) fn schematic_active_bar_overlay(
         &self,
+        window_id: iced::window::Id,
     ) -> Option<Element<'_, Message>> {
-        if !self.has_active_schematic() {
-            return None;
-        }
+        self.document_state
+            .engine_for_window(window_id, &self.ui_state)?;
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let y_offset: f32 = canvas_region::CHROME_TOP;
-        let bar_has_selection = !interaction.canvas.selected.is_empty();
+        let bar_has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let bar_has_net_colors = !ui.net_colors.is_empty();
         let bar = crate::active_bar::view_bar(
             interaction.current_tool,
@@ -241,16 +265,13 @@ impl Signex {
     /// mounted at the SAME app-view layer as the schematic's, so both
     /// share identical `Space::height(y_offset + 4.0)` math and land on
     /// a pixel-identical screen y.
-    pub(in crate::app::view) fn footprint_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_active_bar_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
-            return Vec::new();
-        };
-        let Some(path) = active_tab.kind.as_footprint_editor() else {
-            return Vec::new();
-        };
-        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+        let Some((_, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
@@ -295,15 +316,12 @@ impl Signex {
     /// canvas. Sits above the active-bar dropdown so a long-press menu
     /// is occluded by — never under — its own dismiss layer. Pushes the
     /// dismiss layer then the clamped menu card.
-    pub(in crate::app::view) fn footprint_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
-        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
-            return Vec::new();
-        };
-        let Some(path) = active_tab.kind.as_footprint_editor() else {
-            return Vec::new();
-        };
-        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+        let Some((path, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
@@ -357,15 +375,12 @@ impl Signex {
     /// v0.14 — typed-delta "Move Selection By X, Y…" modal for the
     /// footprint editor. A blocking dialog once open; pushes its dismiss
     /// backdrop then the centered card.
-    pub(in crate::app::view) fn footprint_move_by_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_move_by_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
-        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
-            return Vec::new();
-        };
-        let Some(path) = active_tab.kind.as_footprint_editor() else {
-            return Vec::new();
-        };
-        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+        let Some((path, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
@@ -397,15 +412,12 @@ impl Signex {
     /// same overlay layer as the Move-By modal (a blocking dialog once
     /// open): a dismiss backdrop that routes to `AlignCancel`, then the
     /// centered card.
-    pub(in crate::app::view) fn footprint_align_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_align_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
-        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
-            return Vec::new();
-        };
-        let Some(path) = active_tab.kind.as_footprint_editor() else {
-            return Vec::new();
-        };
-        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+        let Some((path, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
@@ -438,15 +450,10 @@ impl Signex {
     /// bars.
     pub(in crate::app::view) fn symbol_editor_active_bar_overlay(
         &self,
+        window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
-        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
-            return Vec::new();
-        };
-        let Some(path) = active_tab.kind.as_symbol_editor() else {
-            return Vec::new();
-        };
-        let Some(editor) = self.document_state.symbol_editors.get(path) else {
+        let Some((_, editor)) = self.symbol_editor_in_window(window_id) else {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
@@ -479,15 +486,12 @@ impl Signex {
     /// Right-click context menu overlay for the symbol canvas. Mirrors
     /// [`Self::footprint_context_menu_overlay`] 1:1 in structure — see
     /// that method for the coordinate / clamping rationale.
-    pub(in crate::app::view) fn symbol_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn symbol_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
-        let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
-            return Vec::new();
-        };
-        let Some(path) = active_tab.kind.as_symbol_editor() else {
-            return Vec::new();
-        };
-        let Some(editor) = self.document_state.symbol_editors.get(path) else {
+        let Some((path, editor)) = self.symbol_editor_in_window(window_id) else {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
@@ -575,18 +579,19 @@ impl Signex {
     /// top of the label being edited. Converts the object's world
     /// position through the live camera into a window-absolute screen
     /// position each frame.
-    pub(in crate::app::view) fn text_edit_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn text_edit_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
-        if !self.has_active_schematic() {
-            return None;
-        }
+        document.engine_for_window(window_id, &self.ui_state)?;
         let edit_state = interaction.editing_text.as_ref()?;
         let text = edit_state.text.clone();
         let placeholder = crate::app::handlers::canvas::editor_placeholder(edit_state.kind);
         // Object world position -> window position through the live camera
         // and the canvas rectangle, so the editor opens on the label.
-        let camera = interaction.canvas.live_camera();
+        let camera = interaction.canvas_for_window(window_id).live_camera();
         let (abs_x, abs_y) = canvas_region::world_to_window(
             (edit_state.world_x, edit_state.world_y),
             camera,

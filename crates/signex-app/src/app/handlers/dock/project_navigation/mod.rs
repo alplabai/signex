@@ -178,7 +178,7 @@ impl Signex {
         key: Option<signex_widgets::tree_view::TreeKey>,
     ) {
         let (x, y) = self.interaction_state.last_mouse_pos;
-        self.interaction_state.context_menu = None;
+        self.close_all_context_menus();
         self.interaction_state.project_tree_context_menu =
             Some(crate::app::ProjectTreeContextMenuState { x, y, key });
     }

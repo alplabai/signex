@@ -41,6 +41,7 @@ mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
 mod window_scales;
+mod window_tab;
 
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
@@ -390,7 +391,7 @@ pub struct DocumentState {
     /// Per-tab state for open `.snxsym` document tabs. Keyed by the
     /// file path stored on `TabInfo.path` for matching
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
-    /// `LibraryMessage::OpenPrimitiveEditor`; drop in
+    /// `Signex::open_primitive`; drop in
     /// `close_tab_at_index` alongside the engine cleanup.
     pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolDocument>,
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same

@@ -4,6 +4,8 @@
 //! `impl Signex` builders here are called from `view/mod.rs` and its
 //! sibling `overlays` module.
 
+mod components_row;
+mod dock_tab;
 mod items;
 mod menus;
 mod project_tree;

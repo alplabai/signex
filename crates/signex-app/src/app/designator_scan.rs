@@ -169,15 +169,28 @@ impl Signex {
         self.apply_designator_scan(generation, &Ok(Arc::new(scan(inputs))));
     }
 
-    /// A scan arrived: kept unless a newer request superseded it.
+    /// Whether the cache holds the closed sheets' numbers for `sheet`'s
+    /// project as it is now. A sheet with no project needs no scan.
+    pub(crate) fn designators_current(&self, sheet: &Path) -> bool {
+        let Some(id) = self.document_state.document_project(sheet).map(|p| p.id) else {
+            return true;
+        };
+        let stamp = self.designator_scan_stamp(id, sheet);
+        let cache = &self.document_state.designator_cache;
+        cache.project == Some(id) && cache.stamp == Some(stamp)
+    }
+
+    /// A scan arrived: kept unless a newer request superseded it. Returns
+    /// whether it was the latest request (a failed scan counts: the drop
+    /// waiting on it then places with the open sheets' numbers).
     pub(crate) fn apply_designator_scan(
         &mut self,
         generation: u64,
         result: &Result<Arc<DesignatorScan>, String>,
-    ) {
+    ) -> bool {
         let cache = &mut self.document_state.designator_cache;
         if generation != cache.generation {
-            return;
+            return false;
         }
         cache.building = None;
         match result {
@@ -189,6 +202,7 @@ impl Signex {
             }
             Err(why) => crate::diagnostics::log_warning(why),
         }
+        true
     }
 
     /// Every designator in use on `sheet`'s project, for numbering a new

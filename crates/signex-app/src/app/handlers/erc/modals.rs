@@ -177,6 +177,9 @@ impl Signex {
         let kind = fp.kind;
         let size = iced::Size::new(fp.width.max(420.0), fp.height.max(360.0));
         self.document_state.dock.floating.remove(idx);
+        // The drag that detached it ends here and no DragEnd follows, so
+        // its drop preview goes with it.
+        self.document_state.dock.drop_preview = None;
 
         let (id, open_task) = iced::window::open(iced::window::Settings {
             size,

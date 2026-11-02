@@ -23,6 +23,7 @@ pub(crate) mod params;
 pub mod pour;
 pub mod profile;
 pub mod silk;
+pub mod silk_ownership;
 pub mod traced_loops;
 pub mod vscore;
 
@@ -36,5 +37,9 @@ pub use pad::bake_pads;
 pub use pour::bake_pours;
 pub use profile::{ARC_SAMPLES, TraceError, TraceResult, trace_closed_profile};
 pub use silk::bake_silk;
+pub use silk_ownership::{
+    LegacySilk, SilkRemap, SilkRemaps, has_baked_silk, merge_silk_layer,
+    needs_legacy_silk_recovery, recover_legacy_silk, settle_baked_silk,
+};
 pub use traced_loops::TracedLoops;
 pub use vscore::bake_v_scores;

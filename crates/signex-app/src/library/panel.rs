@@ -1,9 +1,10 @@
-//! Library left-dock panel — flat library list.
+//! Library left-dock panel — the open libraries, each expandable.
 //!
 //! The per-library row grid lives in the main-window Library Browser
-//! tab (see [`crate::library::browser`]); this panel is a flat list of
-//! open libraries, each with a single `[Open]` button that opens the
-//! browser tab for that library.
+//! tab (see [`crate::library::browser`]). Here each open library is a
+//! row whose ▸ expands it to list its components (#1895): one click
+//! highlights a component, a double click opens it. `[Open]` opens the
+//! library's browser tab.
 //!
 //! Shape:
 //!
@@ -72,33 +73,13 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
             if !needle.is_empty() && !lib.display_name.to_lowercase().contains(&needle) {
                 continue;
             }
-            let display_label = format!(
-                "▸  {}.snxlib  ({} rows)",
-                lib.display_name,
-                lib.total_rows()
-            );
-            let library_path = lib.root.clone();
-            let open_msg = LibraryMessage::OpenLibraryBrowser(library_path);
-            let label = row![
-                text(display_label)
-                    .size(LIB_PANEL_TEXT_SIZE)
-                    .color(text_c)
-                    .width(Length::Fill),
-                button(
-                    text("Open")
-                        .size(LIB_PANEL_TEXT_SIZE)
-                        .color(crate::styles::tokens::on_accent(tokens)),
-                )
-                .padding([SP.xs, 10.0])
-                .on_press(open_msg)
-                .style(crate::styles::accent_button(tokens)),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center);
-            col = col.push(container(label).padding([SP.xs, 6.0]));
+            let expanded = state.panel_expanded.contains(&lib.root);
+            col = col.push(container(library_row(lib, expanded, tokens)).padding([SP.xs, SP.s]));
+            if expanded {
+                col = col.push(component_rows(lib, state, tokens));
+            }
         }
     }
-
     let footer = container(
         row![
             button(
@@ -133,4 +114,97 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+/// One library row: the ▸ / ▾ toggle, the name and row count, and Open.
+fn library_row<'a>(
+    lib: &'a super::state::OpenLibrary,
+    expanded: bool,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let toggle = button(
+        row![
+            text(if expanded { "▾" } else { "▸" })
+                .size(LIB_PANEL_TEXT_SIZE)
+                .color(text_c),
+            text(format!(
+                "{}.snxlib  ({} rows)",
+                lib.display_name,
+                lib.total_rows()
+            ))
+            .size(LIB_PANEL_TEXT_SIZE)
+            .color(text_c),
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([SP.xs, SP.xs])
+    .width(Length::Fill)
+    .on_press(LibraryMessage::Picker(PickerMsg::PanelLibraryToggled(
+        lib.root.clone(),
+    )))
+    .style(crate::styles::subtle_button(tokens));
+    let open = button(
+        text("Open")
+            .size(LIB_PANEL_TEXT_SIZE)
+            .color(crate::styles::tokens::on_accent(tokens)),
+    )
+    .padding([SP.xs, SP.m])
+    .on_press(LibraryMessage::OpenLibraryBrowser(lib.root.clone()))
+    .style(crate::styles::accent_button(tokens));
+    row![toggle, open]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .into()
+}
+
+/// The components of an expanded library, one indented row each, tables
+/// by name and rows in stored order.
+fn component_rows<'a>(
+    lib: &'a super::state::OpenLibrary,
+    state: &'a LibraryState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let muted = theme_ext::text_secondary(tokens);
+    let mut tables: Vec<&String> = lib.tables.keys().collect();
+    tables.sort();
+    let mut list: Column<'a, LibraryMessage> = column![].spacing(0).width(Length::Fill);
+    let mut any = false;
+    for table in tables {
+        // Stored order, as the Library Browser shows it: no per-frame sort.
+        for r in &lib.tables[table] {
+            any = true;
+            let key = super::state::ComponentsPanelRowKey {
+                library_path: lib.root.clone(),
+                table: table.clone(),
+                row_id: signex_library::RowId::from_uuid(r.row_id),
+            };
+            let selected = state.panel_selected.as_ref() == Some(&key);
+            list = list.push(
+                button(
+                    text(r.internal_pn.as_str().to_owned())
+                        .size(LIB_PANEL_TEXT_SIZE)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                )
+                .padding([SP.xs / 2.0, SP.xl * 2.0])
+                .width(Length::Fill)
+                .on_press(LibraryMessage::Picker(PickerMsg::PanelComponentClicked(
+                    key,
+                )))
+                .style(crate::styles::hover_row(tokens, selected)),
+            );
+        }
+    }
+    if !any {
+        list = list.push(
+            container(
+                text("No components in this library.")
+                    .size(LIB_PANEL_TEXT_SIZE)
+                    .color(muted),
+            )
+            .padding([SP.xs, SP.xl * 2.0]),
+        );
+    }
+    list.into()
 }

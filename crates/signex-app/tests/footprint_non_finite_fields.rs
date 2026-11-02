@@ -28,6 +28,7 @@ fn fixture() -> (Signex, PathBuf) {
         },
         stroke_width: 0.1,
         filled: false,
+        sketch_entity: None,
     });
     let path = PathBuf::from("non_finite.snxfpt");
     let mut editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));

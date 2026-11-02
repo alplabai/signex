@@ -206,6 +206,7 @@ fn make_footprint(index: usize) -> Footprint {
             },
             stroke_width: 0.12,
             filled: false,
+            sketch_entity: None,
         },
         FpGraphic {
             kind: FpGraphicKind::Line {
@@ -214,6 +215,7 @@ fn make_footprint(index: usize) -> Footprint {
             },
             stroke_width: 0.12,
             filled: false,
+            sketch_entity: None,
         },
         FpGraphic {
             kind: FpGraphicKind::Circle {
@@ -222,6 +224,7 @@ fn make_footprint(index: usize) -> Footprint {
             },
             stroke_width: 0.12,
             filled: true,
+            sketch_entity: None,
         },
     ];
 
@@ -242,6 +245,7 @@ fn make_footprint(index: usize) -> Footprint {
             },
             stroke_width: 0.1,
             filled: false,
+            sketch_entity: None,
         }],
         fab_b: Vec::new(),
         body_3d: Body3D {

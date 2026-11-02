@@ -25,9 +25,9 @@ use signex_library::{
 };
 use uuid::Uuid;
 
-const TABLE: &str = "ICs";
+pub(crate) const TABLE: &str = "ICs";
 
-fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
+pub(crate) fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
     stock_like_library_named(dir, "Signex Stock")
 }
 
@@ -35,6 +35,12 @@ fn stock_like_library(dir: &Path) -> (PathBuf, RowId) {
 /// log lines in the process-wide diagnostics ring and so need a name no
 /// concurrently running test also refuses writes against.
 fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
+    let (snxlib, rows) = library_with_rows(dir, name, 1);
+    (snxlib, rows[0])
+}
+
+/// The fixture library with `count` rows, in insertion order.
+pub(crate) fn library_with_rows(dir: &Path, name: &str, count: usize) -> (PathBuf, Vec<RowId>) {
     let snxlib = dir.join("stock.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -89,9 +95,15 @@ fn stock_like_library_named(dir: &Path, name: &str) -> (PathBuf, RowId) {
         updated: now,
         content_hash: [0u8; 32],
     };
-    let row_id = RowId::from_uuid(row.row_id);
-    adapter.insert_row(TABLE, row, "seed").expect("insert row");
-    (snxlib, row_id)
+    let mut ids = Vec::new();
+    for n in 0..count {
+        let mut next = row.clone();
+        next.row_id = Uuid::now_v7();
+        next.internal_pn = InternalPn::new(format!("SNX-IC-{n:05}"));
+        ids.push(RowId::from_uuid(next.row_id));
+        adapter.insert_row(TABLE, next, "seed").expect("insert row");
+    }
+    (snxlib, ids)
 }
 
 fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
@@ -113,7 +125,7 @@ fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     out
 }
 
-fn app_with_browser(snxlib: &Path, read_only: bool) -> Signex {
+pub(crate) fn app_with_browser(snxlib: &Path, read_only: bool) -> Signex {
     let (mut app, _boot) = Signex::new();
     if read_only {
         app.library

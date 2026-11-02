@@ -1,8 +1,7 @@
-//! Library Browser — header toolbar (add / search / lifecycle filter).
+//! Library Browser — header toolbar (search / lifecycle filter).
 //!
-//! The tab-bar strip above the grid: the `+ Component` button, the
-//! lifecycle-filter pick-list and the search box. Extracted verbatim
-//! from the former single-file `browser` module.
+//! The tab-bar strip above the grid: the lifecycle-filter pick-list and the
+//! search box.
 
 use super::*;
 
@@ -14,38 +13,9 @@ pub(super) fn view_header<'a>(
     _lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
-    read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     // Hoisted owned path — see comment in `view_table_sidebar`.
     let lib_pb: std::path::PathBuf = library_path.to_path_buf();
-
-    // The "+" button — opens the New Component modal pre-selected to
-    // this library + active table.
-    let library_for_plus = lib_pb.clone();
-    let table_for_plus = browser.active_table.clone();
-    let plus_btn = button(text("+ Component").size(BROWSER_TEXT_SIZE).color(text_c))
-        .padding([SP.s, 10.0])
-        .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
-            library_path: library_for_plus,
-            table: table_for_plus,
-        }))
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: if read_only {
-                iced::Color::from_rgb(0.55, 0.55, 0.58)
-            } else {
-                iced::Color::WHITE
-            },
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                color: iced::Color::TRANSPARENT,
-            },
-            ..iced::widget::button::Style::default()
-        });
 
     let library_for_search = lib_pb.clone();
     let search = text_input("Search…", &browser.search)
@@ -76,7 +46,6 @@ pub(super) fn view_header<'a>(
 
     container(
         row![
-            plus_btn,
             Space::new().width(Length::Fill),
             lifecycle_picker,
             Space::new().width(8),

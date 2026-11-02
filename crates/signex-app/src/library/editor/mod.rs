@@ -80,14 +80,13 @@ fn view_header<'a>(
         state.row.class.as_str(),
         state.row.state,
     );
-    let row_id_label = format!("row: {}", state.row.row_id);
+    // The row id is an internal key; the internal PN in the title is the
+    // name a user knows the part by.
     container(
         row![
             text("Component Preview — ").size(TS.title).color(muted),
             text(title).size(TS.title).color(text_c),
             Space::new().width(Length::Fill),
-            text(row_id_label).size(TS.body).color(muted),
-            Space::new().width(8),
             close_btn(address, tokens),
         ]
         .align_y(iced::Alignment::Center),
@@ -102,36 +101,57 @@ fn view_tabs<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let mut row_widget = row![].spacing(0).align_y(iced::Alignment::Center);
-    for tab in PreviewTab::ORDER {
+    // The shared `TabPill`, so these tabs read like the document and dock
+    // tabs: bordered pills, the active one filled with an accent line.
+    let tab_fill = crate::styles::ti(tokens.hover);
+    let border = crate::styles::ti(tokens.border);
+    let accent = crate::styles::ti(tokens.accent);
+    let last = PreviewTab::ORDER.len().saturating_sub(1);
+    let mut row_widget = row![].spacing(0).align_y(iced::Alignment::End);
+    for (i, tab) in PreviewTab::ORDER.iter().enumerate() {
         let is_active = *tab == active;
-        let bg_color = if is_active {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+        let (fill, text_c) = if is_active {
+            (tab_fill, theme_ext::text_primary(tokens))
         } else {
-            iced::Color::TRANSPARENT
+            (
+                iced::Color {
+                    a: tab_fill.a * 0.35,
+                    ..tab_fill
+                },
+                theme_ext::text_secondary(tokens),
+            )
         };
-        let label = container(text(tab.label()).size(TS.body).color(text_c)).padding([3, 10]);
-        let address_for_msg = address.clone();
-        let tab_for_msg = *tab;
-        let inner_btn = button(label)
-            .padding(0)
-            .on_press_with(move || LibraryMessage::EditorEvent {
-                library_path: address_for_msg.library_path.clone(),
-                table: address_for_msg.table.clone(),
-                row_id: address_for_msg.row_id,
-                msg: EditorMsg::SelectTab(tab_for_msg),
-            })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg_color)),
-                text_color: text_c,
-                border: Border::default(),
-                ..iced::widget::button::Style::default()
-            });
-        row_widget = row_widget.push(inner_btn);
+        let label = container(
+            text(tab.label())
+                .size(TS.body)
+                .color(text_c)
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .padding([SP.s, 10.0]);
+        let style = signex_widgets::tab_pill::TabPillStyle {
+            fill,
+            border,
+            accent,
+            is_active,
+            is_last: i == last,
+            accent_position: signex_widgets::tab_pill::AccentPosition::Bottom,
+        };
+        let pill = signex_widgets::tab_pill::TabPill::new(label, style);
+        let tab_msg = LibraryMessage::EditorEvent {
+            library_path: address.library_path.clone(),
+            table: address.table.clone(),
+            row_id: address.row_id,
+            msg: EditorMsg::SelectTab(*tab),
+        };
+        row_widget = row_widget.push(iced::widget::mouse_area(pill).on_press(tab_msg));
     }
     container(row_widget)
-        .padding([SP.xs, SP.s])
+        .padding(iced::Padding {
+            top: SP.xs,
+            right: SP.s,
+            bottom: 0.0,
+            left: SP.s,
+        })
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
         .into()
@@ -176,9 +196,7 @@ fn view_footer<'a>(
     address: EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
 
     if read_only {
         return container(
@@ -192,49 +210,28 @@ fn view_footer<'a>(
         .into();
     }
 
+    // Themed like every other dialog's actions: accent for the primary,
+    // outlined for the rest (`styles::buttons`), so they follow the theme.
     let primary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(TS.body).color(iced::Color::WHITE)).padding([SP.s, 14.0]))
+        button(container(text(label).size(TS.body)).padding([SP.s, 14.0]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: addr.library_path.clone(),
                 table: addr.table.clone(),
                 row_id: addr.row_id,
                 msg,
             })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgb(
-                    0.00, 0.47, 0.84,
-                ))),
-                text_color: iced::Color::WHITE,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .style(crate::styles::accent_button(tokens))
     };
     let secondary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(TS.body).color(text_c)).padding([SP.s, 14.0]))
+        button(container(text(label).size(TS.body)).padding([SP.s, 14.0]))
             .on_press(LibraryMessage::EditorEvent {
                 library_path: addr.library_path.clone(),
                 table: addr.table.clone(),
                 row_id: addr.row_id,
                 msg,
             })
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            })
+            .style(crate::styles::outline_button(tokens))
     };
-
     let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
         text("• unsaved").size(TS.body).color(muted).into()
     } else {
