@@ -151,8 +151,13 @@ before.
 
 **Guards.** The run is registered in `pending_path_ops` (`ProjectRewrite`) from
 `begin` until its last write completes: the declared pages and root while the
-sheets are read, the unopened sheets while they are written. A rename, delete,
-open or save of them is refused meanwhile. One run at a time: a second request
+sheets are read (`ProjectRead`), the unopened sheets while they are written
+(`ProjectRewrite`). A rename, delete or open of them is refused meanwhile, and
+so is a save of the written ones. Saving an open sheet during the read is
+allowed: the save moves `documents_epoch` and the run is dropped (#1753). The
+Annotate dialog disables Run, Reset and Re-prefix while a run is going. A
+Reset & Renumber that would skip a sheet (read-only, or owned by a save,
+restore or read) refuses the whole run; Incremental still skips it. One run at a time: a second request
 is refused with a notice rather than queued, because a queued run would number
 the project as it was when the first started.
 

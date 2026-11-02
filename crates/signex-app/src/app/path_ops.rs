@@ -24,6 +24,10 @@ pub enum PathOpKind {
     /// Annotate or Reset Duplicate Designators reading or rewriting the
     /// project's sheets.
     ProjectRewrite,
+    /// Annotate or Reset Duplicate Designators reading the project's sheets.
+    /// Saving an open sheet is allowed meanwhile: the save moves
+    /// `documents_epoch` and the run cancels itself (#1753).
+    ProjectRead,
     /// Add New Schematic writing a blank sheet and listing it in the saved
     /// project file.
     AddSheet,
@@ -36,7 +40,7 @@ impl PathOpKind {
         match self {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
-            Self::ProjectRewrite => "project-wide rewrite",
+            Self::ProjectRewrite | Self::ProjectRead => "project-wide rewrite",
             Self::AddSheet => "new-sheet add",
             Self::SaveAsSheet => "Save As",
         }
@@ -148,6 +152,14 @@ impl PendingPathOps {
     /// The pending operation `path` lives at or under, if any: a write to it
     /// would recreate a moved path or land in a deleted one.
     pub fn blocking_write(&self, path: &Path) -> Option<PathOpConflict> {
+        self.find(|op, root| {
+            op.kind != PathOpKind::ProjectRead && path_is_under(path, root, op.fold)
+        })
+    }
+
+    /// As [`Self::blocking_write`], for a caller that must also wait out a
+    /// project read: another project-wide pass over the same sheets.
+    pub fn blocking_project_wide(&self, path: &Path) -> Option<PathOpConflict> {
         self.find(|op, root| path_is_under(path, root, op.fold))
     }
 
@@ -167,9 +179,12 @@ impl PendingPathOps {
 
     /// Is an Annotate or Reset Duplicate Designators run holding sheets?
     pub fn rewrite_running(&self) -> bool {
-        self.ops
-            .iter()
-            .any(|op| op.kind == PathOpKind::ProjectRewrite)
+        self.ops.iter().any(|op| {
+            matches!(
+                op.kind,
+                PathOpKind::ProjectRewrite | PathOpKind::ProjectRead
+            )
+        })
     }
 
     /// Is a library rename or delete running? Library edits write through
@@ -295,11 +310,16 @@ impl crate::app::Signex {
         sheets: impl IntoIterator<Item = &'a Path>,
         outcome: &str,
     ) -> anyhow::Result<()> {
+        let ops = &self.document_state.pending_path_ops;
+        let held = |path: &Path| match ops.blocking_project_wide(path) {
+            Some(conflict) => anyhow::bail!(refusal(&conflict, path, outcome)),
+            None => Ok(()),
+        };
         for path in sheets {
-            self.refuse_while_path_op(path, outcome)?;
+            held(path)?;
         }
         for path in crate::app::project_sheets::declared_pages(&self.document_state) {
-            self.refuse_while_path_op(&path, outcome)?;
+            held(&path)?;
         }
         let Some(dir) = self
             .document_state

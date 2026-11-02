@@ -130,7 +130,7 @@ enum Refused {
 
 impl AnnotateRuns {
     /// Is a run reading, numbering or writing right now?
-    pub(super) fn is_running(&self) -> bool {
+    pub(crate) fn is_running(&self) -> bool {
         self.job.is_some()
     }
 
@@ -166,7 +166,7 @@ impl Signex {
         {
             return Task::none();
         }
-        let guard = self.guard_run_paths(&known, plan.fold());
+        let guard = self.guard_run_paths(PathOpKind::ProjectRead, &known, plan.fold());
         let stage = Stage::Reading(ReadStage {
             epoch: self.document_state.documents_epoch,
             child_sheets: self.child_sheet_signature(),
@@ -193,12 +193,19 @@ impl Signex {
         )
     }
 
-    /// Register `sheets` (the last one is the root) so a rename, delete, open
-    /// or save of any of them is refused while the run holds them.
-    fn guard_run_paths(&mut self, sheets: &[PathBuf], fold: CaseFold) -> PathOpId {
+    /// Register `sheets` (the last one is the root) so a rename, delete or
+    /// open of any of them is refused while the run holds them. While the
+    /// sheets are written (`ProjectRewrite`) a save is refused too; while they
+    /// are read (`ProjectRead`) it is allowed and cancels the run instead.
+    fn guard_run_paths(
+        &mut self,
+        kind: PathOpKind,
+        sheets: &[PathBuf],
+        fold: CaseFold,
+    ) -> PathOpId {
         let (primary, rest) = sheets.split_last().expect("a run always has a root sheet");
         self.document_state.pending_path_ops.begin_with_dependents(
-            PathOpKind::ProjectRewrite,
+            kind,
             vec![primary.clone()],
             rest.to_vec(),
             fold,
@@ -343,7 +350,7 @@ impl Signex {
         self.document_state.note_document_written_behind_engines();
         let paths: Vec<PathBuf> = writes.iter().map(|w| w.path.clone()).collect();
         let fold = self.run_fold();
-        let guard = self.guard_run_paths(&paths, fold);
+        let guard = self.guard_run_paths(PathOpKind::ProjectRewrite, &paths, fold);
         let hold = self.document_state.autosave.hold_for_save();
         let jobs: Vec<(PathBuf, DocumentSaveJob)> = writes
             .into_iter()
