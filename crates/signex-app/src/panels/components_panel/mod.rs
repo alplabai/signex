@@ -162,9 +162,13 @@ pub fn view<'a>(
             .height(state.components_panel.list_height)
             .width(Length::Fill),
         divider,
-        container(details::view(&state.components_panel, tokens))
-            .height(Length::Fill)
-            .width(Length::Fill),
+        container(details::view(
+            &state.components_panel,
+            tokens,
+            &ctx.canvas_colors
+        ))
+        .height(Length::Fill)
+        .width(Length::Fill),
     ]
     .spacing(0)
     .width(Length::Fill)

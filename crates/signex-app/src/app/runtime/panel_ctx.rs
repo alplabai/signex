@@ -587,6 +587,7 @@ impl Signex {
             symbol_lists_key,
             tokens: panel_tokens,
             theme_id: panel_theme_id,
+            canvas_colors: self.canvas_colors_for(panel_theme_id),
             unit: self.ui_state.unit,
             grid_visible: self.ui_state.grid_visible,
             snap_enabled: self.ui_state.snap_enabled,

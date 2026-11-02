@@ -480,6 +480,7 @@ impl Signex {
                     symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
+                    canvas_colors: signex_types::theme::canvas_colors(ThemeId::Signex),
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,

@@ -5,6 +5,7 @@
 
 pub(crate) mod footprint_canvas;
 pub mod load;
+mod symbol_canvas;
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
@@ -113,6 +114,7 @@ impl DetailsState {
 pub fn view<'a>(
     panel: &'a ComponentsPanelState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &signex_types::theme::CanvasColors,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let primary = theme_ext::text_primary(tokens);
@@ -169,7 +171,7 @@ pub fn view<'a>(
     col = col.push(section_title("Symbol", primary));
     col = col.push(match &d.symbol {
         Some(symbol) => preview_box(
-            signex_widgets::symbol_preview::symbol_preview(symbol.clone(), PREVIEW_HEIGHT)
+            symbol_canvas::symbol_preview(symbol, *canvas_colors, PREVIEW_HEIGHT)
                 // The preview canvas publishes nothing.
                 .map(|()| LibraryMessage::ComponentsPanelRowMenuDismissed),
             tokens,
