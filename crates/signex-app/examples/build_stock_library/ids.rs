@@ -21,7 +21,7 @@ pub enum StockKind {
     Chip0805,
     /// The same land with a cathode mark; pad 1 is the cathode.
     Chip0805Polarised,
-    /// The other IPC-7351B chip sizes, plain then polarised; see `chip`.
+    /// The other chip sizes, IPC-7351 Density Level B (manufacturer tables), plain then polarised; see `chip`.
     Chip0201,
     Chip0402,
     Chip0603,

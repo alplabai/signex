@@ -36,7 +36,10 @@ stay refused on the stock library in this mode.
 
 Designs reference stock parts by `library_id` + primitive / row uuid, so
 `crates/signex-app/tests/integration/stock_library_determinism.rs` and
-`stock_library_rows.rs` check the committed files, not the generator:
+`stock_library_rows.rs` check the committed files, not the generator
+(`committed_footprints_equal_the_generator_output` covers only the 14 chip
+footprints, `Chip-*` plain and `-Polarised`; the rest can be edited in the
+app with `SIGNEX_EDIT_STOCK=1`):
 
 - the library id stays `019df45d-af5e-7a00-8c3b-dd3bf89b40ae`;
 - every pinned footprint, symbol and row id is still present (adding parts
@@ -69,7 +72,7 @@ so the footprint picker offers them without a pin-map override: pads 1 and
 2 match the symbol pins.
 
 IPC-7351 itself gives fillet goals, not fixed per-size lands, so the
-reference is a manufacturer's IPC-7351 Density Level B table. Sources:
+reference is "IPC-7351 Density Level B (manufacturer tables)". Sources:
 
 - 0201 to 1210: KEMET, "Surface Mount Multilayer Ceramic Chip Capacitors
   (SMD MLCCs) - C0G Dielectric, 10-250 VDC (Commercial Grade)", C1003_C0G,
@@ -78,10 +81,16 @@ reference is a manufacturer's IPC-7351 Density Level B table. Sources:
 - 2512: Vishay D/CRCW e3 thick-film chip resistors, Doc 20035,
   "Recommended Solder Pad Dimensions", reflow (no IPC-labelled nominal 2512
   land was found).
-- Courtyard excess: IPC-7351 (Feb 2005) Tables 3-5 and 3-6, nominal (0.15
-  mm for 0201 and 0402, 0.25 mm from 0603 up).
+- Courtyard: KEMET V1 x V2 (rounded up to 0.1 mm) for 0201 to 1210; 2512
+  follows the same rule (pad extent plus 0.25 per side, rounded up to 0.1).
+- 3D body height: the thickest KEMET Table 2A code of the size (0201 to
+  1210), Vishay D/CRCW H for 2512.
 
 The per-size numbers are in
 `crates/signex-app/examples/build_stock_library/chip.rs`. `Chip-0805`
-follows the same table (1.15 x 1.45 mm pads, 1.80 mm centres) since #1938;
-the two 0805 footprints and the nine rows that use them moved from version 0.0.1 to 0.0.2, so placed parts show up in Library Updates and get the new pads when the update is applied.
+follows the same table (1.15 x 1.45 mm pads, 1.80 mm centres) since #1938.
+No footprint or row version was bumped for it: new placements and
+footprint loads by name get the new 0805 land, but a part already placed
+keeps its footprint and an existing PCB keeps its copper, and Library
+Updates shows no entry. (Stock is Personal mode, so a version bump would
+be applied silently on open and dirty every design using a stock part.)

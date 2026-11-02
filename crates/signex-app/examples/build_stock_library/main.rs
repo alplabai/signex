@@ -19,7 +19,8 @@
 //! carries its pads and silkscreen for consumers that never open the editor.
 //!
 //! Apache-clean: industry-standard footprint dimensions (JEDEC
-//! SOIC-8 / QFN-16 / IPC-7351B chip lands) only. No third-party EDA-tool
+//! SOIC-8 / QFN-16 / chip lands at IPC-7351 Density Level B (manufacturer
+//! tables)) only. No third-party EDA-tool
 //! source / file-format docs / wikis consulted.
 
 pub mod chip;
@@ -67,13 +68,28 @@ fn build(ids: &StockIds) -> Footprint {
         StockKind::Qfn16 => build_qfn16(ids),
         StockKind::MountingHole3p2 => build_mounting_hole_3p2(ids),
         StockKind::Fiducial1mm => build_fiducial_1mm(ids),
-        chip => {
-            let (size, polarised) = chip::lookup(chip).expect("every other kind is a chip land");
-            chip::build(ids, size, polarised)
-        }
+        StockKind::Chip0805
+        | StockKind::Chip0805Polarised
+        | StockKind::Chip0201
+        | StockKind::Chip0402
+        | StockKind::Chip0603
+        | StockKind::Chip1206
+        | StockKind::Chip1210
+        | StockKind::Chip2512
+        | StockKind::Chip0201Polarised
+        | StockKind::Chip0402Polarised
+        | StockKind::Chip0603Polarised
+        | StockKind::Chip1206Polarised
+        | StockKind::Chip1210Polarised
+        | StockKind::Chip2512Polarised => build_chip(ids.kind, ids),
     };
     bake_sketch(&mut fp);
     fp
+}
+
+fn build_chip(kind: StockKind, ids: &StockIds) -> Footprint {
+    let (size, polarised) = chip::lookup(kind).expect("the caller passes a chip kind");
+    chip::build(ids, size, polarised)
 }
 
 /// The same bake the footprint editor runs on a solved sketch.

@@ -191,8 +191,8 @@ fn committed_polarised_footprint_carries_baked_pads_and_the_cathode_bar() {
     let FpGraphicKind::Line { from, to } = &bar.kind else {
         panic!("the cathode mark is a line");
     };
-    // 0.2 mm outboard of the 0805 copper edge (0.90 + 0.575 mm).
-    assert!((from[0] + 1.675).abs() < 1e-6 && (to[0] + 1.675).abs() < 1e-6);
+    // 0.22 mm outboard of the 0805 copper edge (0.90 + 0.575 mm).
+    assert!((from[0] + 1.695).abs() < 1e-6 && (to[0] + 1.695).abs() < 1e-6);
 }
 
 /// Pin K (pin 1) reaches pad 1 through the default 1:1 map (no overrides),

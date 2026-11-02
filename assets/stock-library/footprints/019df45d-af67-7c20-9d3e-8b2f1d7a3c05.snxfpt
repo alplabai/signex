@@ -18,7 +18,7 @@ number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill
 '''
 silk_b = []
 fab_b = []
-version = "0.0.2"
+version = "0.0.1"
 released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
@@ -27,20 +27,20 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -1.875,
-    -0.975,
+    -1.9,
+    -1.0,
 ],
     [
-    1.875,
-    -0.975,
+    1.9,
+    -1.0,
 ],
     [
-    1.875,
-    0.975,
+    1.9,
+    1.0,
 ],
     [
-    -1.875,
-    0.975,
+    -1.9,
+    1.0,
 ],
 ]
 
@@ -52,11 +52,11 @@ sketch_entity = "7fff648f-930d-4e7e-a1e8-ddcc9023e196"
 [footprints.silk_f.kind]
 kind = "line"
 from = [
-    -1.675,
+    -1.695,
     -0.7,
 ]
 to = [
-    -1.675,
+    -1.695,
     0.7,
 ]
 
@@ -92,7 +92,7 @@ to = [
 
 [footprints.body_3d]
 shape = "Extrude"
-height_mm = 1.0
+height_mm = 1.399999976158142
 offset_z_mm = 0.0
 top_color = [
     0.20000000298023224,
@@ -173,7 +173,7 @@ plane = "8a342c96-d25f-4908-b59a-7f6af7468ca1"
 construction = false
 centerline = false
 kind = "Point"
-x = -1.675
+x = -1.695
 y = -0.7
 
 [[footprints.sketch.entities]]
@@ -182,7 +182,7 @@ plane = "8a342c96-d25f-4908-b59a-7f6af7468ca1"
 construction = false
 centerline = false
 kind = "Point"
-x = -1.675
+x = -1.695
 y = 0.7
 
 [[footprints.sketch.entities]]

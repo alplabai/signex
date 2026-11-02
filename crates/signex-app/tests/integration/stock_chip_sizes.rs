@@ -21,6 +21,21 @@ const LANDS: &[(&str, f64, f64, f64, f64, f64)] = &[
     ("2512", 1.45, 3.50, 6.20, 7.65, 4.75),
 ];
 
+/// `(size, body length, body width, courtyard length, courtyard width,
+/// polarised courtyard length, max height)` in mm. Courtyards are the KEMET
+/// C1003 Table 3 Level B V1 x V2 (2512: pad extent + 0.25 per side, rounded
+/// up to 0.1); the polarised one holds the cathode bar + 0.2, rounded up to
+/// 0.1. Heights are the thickest KEMET Table 2A code (2512: Vishay H max).
+const OUTLINES: &[(&str, f64, f64, f64, f64, f64, f64)] = &[
+    ("0201", 0.6, 0.3, 1.5, 0.8, 2.0, 0.33),
+    ("0402", 1.0, 0.5, 1.9, 1.0, 2.4, 0.60),
+    ("0603", 1.6, 0.8, 3.1, 1.5, 3.4, 0.92),
+    ("0805", 2.0, 1.25, 3.5, 2.0, 3.8, 1.40),
+    ("1206", 3.2, 1.6, 4.7, 2.3, 5.0, 1.80),
+    ("1210", 3.2, 2.5, 4.7, 3.2, 5.0, 2.30),
+    ("2512", 6.4, 3.2, 8.2, 4.0, 8.5, 0.70),
+];
+
 fn open_stock() -> LocalGitAdapter {
     let file =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/stock-library/Stock.snxlib");
@@ -175,36 +190,59 @@ fn polarised_bar_clears_the_copper_and_its_mask_opening() {
         };
         let inner_edge = from[0].abs() - bar.stroke_width / 2.0;
         assert!(
-            inner_edge >= copper_edge + mask + 0.04 - 1e-9,
+            inner_edge >= copper_edge + mask + 0.1 - 1e-9,
             "{name}: bar inner edge {inner_edge} vs copper {copper_edge} + mask {mask}"
         );
     }
 }
 
 #[test]
-fn only_the_revised_0805_land_moved_its_version_on() {
+fn chip_outlines_courtyards_and_heights_are_the_tabled_ones() {
     let adapter = open_stock();
-    for (size, ..) in LANDS {
-        for suffix in ["", "-Polarised"] {
-            let want = if *size == "0805" { "0.0.2" } else { "0.0.1" };
-            let fp = footprint_named(&adapter, &format!("Chip-{size}{suffix}"));
-            assert_eq!(fp.version, want, "Chip-{size}{suffix}");
+    for (size, bl, bw, cl, cw, pcl, height) in OUTLINES {
+        for (suffix, court_len) in [("", cl), ("-Polarised", pcl)] {
+            let name = format!("Chip-{size}{suffix}");
+            let fp = footprint_named(&adapter, &name);
+            let xs = || fp.courtyard.points.iter().map(|p| p[0].abs());
+            let ys = || fp.courtyard.points.iter().map(|p| p[1].abs());
+            assert!(
+                xs().all(|x| close(x, court_len / 2.0)) && ys().all(|y| close(y, cw / 2.0)),
+                "{name}: courtyard {:?}",
+                fp.courtyard.points
+            );
+            let FpGraphicKind::Rectangle { from, to } = &fp.fab_f[0].kind else {
+                panic!("{name}: the fab body is a rectangle");
+            };
+            assert!(
+                close(to[0] - from[0], *bl) && close(to[1] - from[1], *bw),
+                "{name}: fab body {from:?} {to:?}"
+            );
+            assert!(
+                (fp.body_3d.height_mm - *height as f32).abs() < 1e-6,
+                "{name}: height {}",
+                fp.body_3d.height_mm
+            );
         }
     }
-    let mut on_0805 = 0;
+}
+
+/// #1938 — Stock is Personal mode and applies a newer row version silently
+/// on open, so the chip lands must not move any version: existing designs
+/// open clean and unchanged.
+#[test]
+fn no_stock_footprint_or_row_version_was_bumped() {
+    let adapter = open_stock();
+    for summary in adapter.list_footprints().expect("list footprints") {
+        let fp = adapter.get_footprint(summary.uuid).expect("footprint");
+        assert_eq!(fp.version, "0.0.1", "{}", fp.name);
+    }
     for (_, row) in adapter.iter_rows().expect("rows") {
         let pn = row.internal_pn.as_str().to_string();
-        let Some(default) = &row.footprint_ref else {
-            assert_eq!(row.version, "0.0.1", "{pn}");
-            continue;
-        };
-        let fp = adapter.get_footprint(default.uuid).expect("default");
-        // The row pins the footprint version it was made against and its own
-        // version moved with it, so placed parts show up as updatable.
-        assert_eq!(row.footprint_version, fp.version, "{pn}");
-        let on_revised = fp.name.starts_with("Chip-0805");
-        assert_eq!(row.version, fp.version, "{pn}");
-        on_0805 += usize::from(on_revised);
+        assert_eq!(row.version, "0.0.1", "{pn}");
+        if let Some(default) = &row.footprint_ref {
+            assert_eq!(row.footprint_version, "0.0.1", "{pn}");
+            let fp = adapter.get_footprint(default.uuid).expect("default");
+            assert_eq!(row.footprint_version, fp.version, "{pn}");
+        }
     }
-    assert_eq!(on_0805, 9);
 }

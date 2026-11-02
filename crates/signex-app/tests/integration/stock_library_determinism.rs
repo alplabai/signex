@@ -314,13 +314,20 @@ fn connector_pin_count_matches_name() {
     assert!(seen >= 11, "the eleven shipped connectors are present");
 }
 
-/// The committed footprints are what the generator renders: pads, silk,
-/// courtyard and fab outline all match, so a hand edit or a generator
-/// change that skipped the regenerate fails here.
+/// The 14 committed chip footprints (`Chip-*`, plain and `-Polarised`) are
+/// what the generator renders: pads, silk, courtyard, fab outline and body
+/// height all match, so a generator change that skipped the regenerate
+/// fails here. Limited to the chip lands: the rest of the stock library may
+/// be edited in the app (`SIGNEX_EDIT_STOCK=1`, #1892).
 #[test]
 fn committed_footprints_equal_the_generator_output() {
     let rendered = stock_gen::render_all().expect("render");
-    for file in &rendered {
+    let chips: Vec<_> = rendered
+        .iter()
+        .filter(|f| f.footprint_name.starts_with("Chip-"))
+        .collect();
+    assert_eq!(chips.len(), 14, "seven sizes, plain and polarised");
+    for file in chips {
         let committed = read_lf(&stock_dir().join(&file.file_name));
         assert_eq!(
             committed,

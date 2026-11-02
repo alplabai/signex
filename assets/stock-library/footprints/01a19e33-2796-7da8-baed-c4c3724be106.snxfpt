@@ -28,20 +28,20 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -0.71,
-    -0.36,
+    -0.75,
+    -0.4,
 ],
     [
-    0.71,
-    -0.36,
+    0.75,
+    -0.4,
 ],
     [
-    0.71,
-    0.36,
+    0.75,
+    0.4,
 ],
     [
-    -0.71,
-    0.36,
+    -0.75,
+    0.4,
 ],
 ]
 
@@ -62,7 +62,7 @@ to = [
 
 [footprints.body_3d]
 shape = "Extrude"
-height_mm = 1.0
+height_mm = 0.33000001311302185
 offset_z_mm = 0.0
 top_color = [
     0.20000000298023224,

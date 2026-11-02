@@ -27,20 +27,20 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -1.11,
-    -0.46,
+    -1.2,
+    -0.5,
 ],
     [
-    1.11,
-    -0.46,
+    1.2,
+    -0.5,
 ],
     [
-    1.11,
-    0.46,
+    1.2,
+    0.5,
 ],
     [
-    -1.11,
-    0.46,
+    -1.2,
+    0.5,
 ],
 ]
 
@@ -52,11 +52,11 @@ sketch_entity = "52b6e0e0-1b9a-4670-8490-2202f6976209"
 [footprints.silk_f.kind]
 kind = "line"
 from = [
-    -0.91,
+    -0.98,
     -0.325,
 ]
 to = [
-    -0.91,
+    -0.98,
     0.325,
 ]
 
@@ -92,7 +92,7 @@ to = [
 
 [footprints.body_3d]
 shape = "Extrude"
-height_mm = 1.0
+height_mm = 0.6000000238418579
 offset_z_mm = 0.0
 top_color = [
     0.20000000298023224,
@@ -173,7 +173,7 @@ plane = "aef479f2-3b07-446a-af52-d9c9847ea0e8"
 construction = false
 centerline = false
 kind = "Point"
-x = -0.91
+x = -0.98
 y = -0.325
 
 [[footprints.sketch.entities]]
@@ -182,7 +182,7 @@ plane = "aef479f2-3b07-446a-af52-d9c9847ea0e8"
 construction = false
 centerline = false
 kind = "Point"
-x = -0.91
+x = -0.98
 y = 0.325
 
 [[footprints.sketch.entities]]

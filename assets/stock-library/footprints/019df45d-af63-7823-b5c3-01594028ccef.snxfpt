@@ -19,7 +19,7 @@ number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill
 silk_f = []
 silk_b = []
 fab_b = []
-version = "0.0.2"
+version = "0.0.1"
 released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"
@@ -28,20 +28,20 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -1.725,
-    -0.975,
+    -1.75,
+    -1.0,
 ],
     [
-    1.725,
-    -0.975,
+    1.75,
+    -1.0,
 ],
     [
-    1.725,
-    0.975,
+    1.75,
+    1.0,
 ],
     [
-    -1.725,
-    0.975,
+    -1.75,
+    1.0,
 ],
 ]
 
@@ -62,7 +62,7 @@ to = [
 
 [footprints.body_3d]
 shape = "Extrude"
-height_mm = 1.0
+height_mm = 1.399999976158142
 offset_z_mm = 0.0
 top_color = [
     0.20000000298023224,
