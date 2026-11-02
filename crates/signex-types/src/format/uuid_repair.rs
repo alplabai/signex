@@ -48,6 +48,12 @@ impl IdSpace {
         }
     }
 
+    /// Take `id` for an object that cannot be repaired (a footprint: its
+    /// pads are keyed by it), so no later object may use it.
+    pub(in crate::format) fn reserve(&mut self, id: Uuid, kind: &'static str) {
+        self.taken.insert(id, kind);
+    }
+
     pub(in crate::format) fn into_repairs(self) -> Vec<SheetLoadRepair> {
         self.made
     }

@@ -321,6 +321,15 @@ impl Signex {
                 Task::none(),
                 self.install_reloaded_schematic(idx, &path, *sheet, None, false),
             ),
+            RestoreJobDocument::Pcb(board) => {
+                // The restore arm takes and reports the repairs; whether the
+                // board stays modified is decided here as for a sheet.
+                let repaired = !board.unknown.load_repairs.is_empty()
+                    && board.unknown.newer_minor_source.is_none();
+                let task =
+                    self.apply_reloaded_with(idx, Ok(RestoreJobDocument::Pcb(board)), None, false);
+                (task, repaired)
+            }
             other => (self.apply_reloaded_with(idx, Ok(other), None, false), false),
         };
         self.document_state.mark_document_clean(&path);

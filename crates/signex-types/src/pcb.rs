@@ -142,7 +142,7 @@ pub struct NetDef {
 // Drill definition
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DrillDef {
     pub diameter: f64,
     #[serde(default)]
@@ -153,7 +153,7 @@ pub struct DrillDef {
 // Pad net reference
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PadNet {
     pub number: u32,
     pub name: String,
@@ -163,7 +163,7 @@ pub struct PadNet {
 // Pad
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pad {
     pub uuid: Uuid,
     #[serde(default)]
@@ -259,7 +259,7 @@ pub struct Footprint {
 // Traces / routing
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Segment {
     pub uuid: Uuid,
     pub start: Point,
@@ -276,7 +276,7 @@ pub struct Segment {
     pub unknown_columns: UnknownColumns,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Via {
     pub uuid: Uuid,
     pub position: Point,
@@ -304,7 +304,7 @@ fn default_via_type() -> ViaType {
 // Zone
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Zone {
     pub uuid: Uuid,
     #[serde(default)]
@@ -380,7 +380,7 @@ pub struct BoardGraphic {
     pub points: Vec<Point>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BoardText {
     pub uuid: Uuid,
     #[serde(default)]
@@ -432,4 +432,13 @@ pub struct PcbBoard {
     /// every file written by this build.
     #[serde(default, skip_serializing_if = "BoardUnknown::is_empty")]
     pub unknown: BoardUnknown,
+}
+
+impl PcbBoard {
+    /// Take what loading repaired in this board (see
+    /// [`SheetLoadRepair`](crate::format::SheetLoadRepair)), leaving none
+    /// behind: the opener reports it once, and later reads never carry it.
+    pub fn take_load_repairs(&mut self) -> Vec<crate::format::SheetLoadRepair> {
+        std::mem::take(&mut self.unknown.load_repairs)
+    }
 }
