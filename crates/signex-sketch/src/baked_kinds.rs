@@ -67,18 +67,23 @@ impl BakedKind {
 }
 
 impl SketchData {
-    /// Whether an entity is tagged for `kind`.
+    /// Whether an entity is tagged for `kind`. Silk counts only entities a
+    /// bake reads (`Entity::bake_skipped` is false), as `bake_silk` does.
     pub fn tags_kind(&self, kind: BakedKind) -> bool {
         self.entities.iter().any(|e| match kind {
             BakedKind::Pads => e.pad.is_some(),
-            BakedKind::SilkF => e
-                .silk
-                .as_ref()
-                .is_some_and(|a| a.layer == SignexLayer::TopSilk),
-            BakedKind::SilkB => e
-                .silk
-                .as_ref()
-                .is_some_and(|a| a.layer == SignexLayer::BottomSilk),
+            BakedKind::SilkF => {
+                !e.bake_skipped()
+                    && e.silk
+                        .as_ref()
+                        .is_some_and(|a| a.layer == SignexLayer::TopSilk)
+            }
+            BakedKind::SilkB => {
+                !e.bake_skipped()
+                    && e.silk
+                        .as_ref()
+                        .is_some_and(|a| a.layer == SignexLayer::BottomSilk)
+            }
             BakedKind::Courtyard => e.courtyard.is_some(),
             BakedKind::MaskOpenings => e.mask_opening.is_some(),
             BakedKind::MaskExcludes => e.mask_exclude.is_some(),

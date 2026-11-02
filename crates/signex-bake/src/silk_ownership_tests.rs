@@ -310,3 +310,19 @@ fn legacy_recovery_marks_bottom_silk_and_leaves_top_hand_silk_alone() {
     assert!(!fp.silk_b[0].is_baked() && fp.silk_b[1].is_baked());
     assert!(!fp.silk_f[0].is_baked());
 }
+
+#[test]
+fn construction_only_silk_tag_needs_no_recovery() {
+    let (mut fp, _, _) = silk_line_footprint();
+    for e in fp.sketch.as_mut().unwrap().entities.iter_mut() {
+        if e.silk.is_some() {
+            e.construction = true;
+        }
+    }
+    fp.silk_f.push(text("REF"));
+    assert!(!needs_legacy_silk_recovery(&fp));
+    assert_eq!(
+        recover_legacy_silk(&mut fp, &Solver::default()),
+        LegacySilk::NotNeeded
+    );
+}
