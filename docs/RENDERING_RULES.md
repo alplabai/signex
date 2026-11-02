@@ -160,16 +160,27 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    the wire : pin : body weights changed from one zoom step to the next.
 3. **One floor.** A stroke thinner than one device pixel draws at one device
    pixel, the same for every kind and on both the CPU and GPU paths. It is a
-   whole pixel because the CPU canvas has no anti-aliasing: at 0.76 px (a 0.254 mm body at
-   100 %) whole edges of a rectangle missed every pixel centre and vanished.
+   whole pixel because the CPU canvas has no anti-aliasing: at 0.76 px (a
+   0.254 mm body at 100 %) whole edges of a rectangle missed every pixel
+   centre and vanished.
 4. **Then the whole-pixel snap** (#1674, #1888, `scene_line_snap.rs`) rounds
-   strokes under 4 device pixels to whole device pixels: axis-aligned lines
-   (width and position), rectangle and rectilinear polygon outlines (width and
-   every edge position), and circle and arc rings (width only). Slanted
-   lines and outlines keep their exact geometry. The placed-wire and
-   bus-entry previews, the ghost bus entry and the sheet frame use the same
-   snap, so equal mm widths draw at equal pixel widths. The Symbol Editor
-   replays through the same `draw_scene` path and gets it too.
+   strokes under 4 device pixels to whole device pixels:
+   - axis-aligned lines: width and position;
+   - rectangle and rectilinear polygon outlines: width and every edge
+     position, each edge snapped once. An outline that would collapse under
+     one device pixel across keeps its exact vertices and snaps only its
+     width;
+   - circle and arc rings: width only (the centre and radius stay exact);
+   - slanted lines and slanted outlines keep their exact vertices and exact
+     width. The 45 degree bus entry and its ghost are such lines, so they
+     draw at the exact stroke law, the same as the placed entry.
+
+   The placed-wire preview, the ghost bus entry and the sheet frame go
+   through the same snap, so equal mm widths draw at equal pixel widths. The
+   Symbol Editor replays through `draw_scene_with_world_to_screen` (the PCB
+   path is separate and unsnapped) and gets it too. A snapped outline is
+   stroked from snapped vertices while its fill stays on the exact ones, so
+   the stroke can sit up to half a device pixel off the fill edge.
    The paper border in `canvas/draw/background.rs` is chrome, not a
    schematic stroke: a fixed `with_width(1.0)` logical px, outside the floor
    rule and the snap.

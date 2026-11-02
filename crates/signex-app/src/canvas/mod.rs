@@ -349,7 +349,7 @@ impl CanvasSlot {
     }
 
     /// Mutable borrow for the `update` path — pan, zoom and fit write here.
-    pub(in crate::canvas) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
+    pub(crate) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
         self.camera.borrow_mut()
     }
 

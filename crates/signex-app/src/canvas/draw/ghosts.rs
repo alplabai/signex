@@ -149,12 +149,28 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
-        use signex_types::schematic::{Point as SchPoint, snap_to_bus};
-        let Some(size) = self.ghost_bus_entry else {
+        let Some((from, to, width)) = self.ghost_bus_entry_line(bounds, cursor_pos) else {
             return;
         };
+        frame.stroke(
+            &canvas::Path::line(from, to),
+            canvas::Stroke::default()
+                .with_color(Color::from_rgba(0.3, 0.8, 1.0, 0.7))
+                .with_width(width),
+        );
+    }
+
+    /// Screen end points and width the ghost bus entry draws at, or `None`
+    /// when there is no ghost to show.
+    pub(crate) fn ghost_bus_entry_line(
+        &self,
+        bounds: Rectangle,
+        cursor_pos: iced::Point,
+    ) -> Option<(iced::Point, iced::Point, f32)> {
+        use signex_types::schematic::{Point as SchPoint, snap_to_bus};
+        let size = self.ghost_bus_entry?;
         if self.placement_paused {
-            return;
+            return None;
         }
         let cam = self.camera();
         let world = cam.screen_to_world(cursor_pos, bounds);
@@ -174,17 +190,11 @@ impl SchematicCanvas<'_> {
             .unwrap_or(at);
         let to_screen =
             |p: SchPoint| cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
-        let (from, to, width) = self.placed_bus_entry_line(
+        Some(self.placed_bus_entry_line(
             to_screen(start),
             to_screen(SchPoint::new(start.x + size.0, start.y + size.1)),
             cam.scale,
-        );
-        frame.stroke(
-            &canvas::Path::line(from, to),
-            canvas::Stroke::default()
-                .with_color(Color::from_rgba(0.3, 0.8, 1.0, 0.7))
-                .with_width(width),
-        );
+        ))
     }
 
     /// Ghost label / port preview following the cursor.

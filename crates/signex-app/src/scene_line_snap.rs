@@ -43,10 +43,13 @@ pub(crate) fn snap_stroke_width(width: f32, device_px_per_logical_px: f32) -> f3
     snapped_width(width * dpr) / dpr
 }
 
-/// A closed outline snapped like [`snap_hairline`]: the width always, and the
-/// vertices too when every edge is axis-aligned (a rectangle, a rectilinear
-/// polygon), so each edge lands on whole device pixel rows like a wire.
-/// Any other outline keeps its exact vertices. Logical pixels in and out.
+/// A closed outline snapped like [`snap_hairline`]. A rectilinear outline (a
+/// rectangle, a rectilinear polygon) snaps its width and every edge to whole
+/// device pixel rows, like a wire. An outline with a slanted edge keeps its
+/// exact vertices and width, like a diagonal line does. An outline that would
+/// collapse to a line or a point when snapped (under about one device pixel
+/// across) keeps its exact vertices and snaps only the width. Logical pixels
+/// in and out.
 #[must_use]
 pub(crate) fn snap_outline(
     ring: &[Point],
@@ -55,21 +58,66 @@ pub(crate) fn snap_outline(
 ) -> (Vec<Point>, f32) {
     let dpr = normalised_dpr(device_px_per_logical_px);
     let width_device = width * dpr;
+    if width_device >= SNAP_BELOW_PX || !width_device.is_finite() || !is_rectilinear(ring) {
+        return (ring.to_vec(), width);
+    }
     let snapped = snapped_width(width_device);
-    if !is_rectilinear(ring) || width_device >= SNAP_BELOW_PX || !width_device.is_finite() {
+    let device: Vec<Point> = ring.iter().map(|p| to_device(*p, dpr)).collect();
+    let points = snap_rectilinear_ring(&device, snapped);
+    if collapses(&device, &points) {
         return (ring.to_vec(), snapped / dpr);
     }
-    let points = ring
-        .iter()
-        .map(|p| {
-            let q = to_device(*p, dpr);
-            to_logical(
-                Point::new(snap_centre(q.x, snapped), snap_centre(q.y, snapped)),
-                dpr,
-            )
+    (
+        points.into_iter().map(|p| to_logical(p, dpr)).collect(),
+        snapped / dpr,
+    )
+}
+
+/// Snap each edge's shared coordinate once (a horizontal edge's `y`, a
+/// vertical edge's `x`) and give both its end vertices that value, so two
+/// near-equal coordinates cannot land on different pixel rows. A vertex
+/// between two collinear edges snaps its own coordinate.
+fn snap_rectilinear_ring(ring: &[Point], width: f32) -> Vec<Point> {
+    let n = ring.len();
+    let horizontal = |i: usize| (ring[i].y - ring[(i + 1) % n].y).abs() < AXIS_EPS;
+    // Edge `i` joins vertex `i` to vertex `i + 1`.
+    let edge_coord = |i: usize| {
+        let (a, b) = (ring[i], ring[(i + 1) % n]);
+        if horizontal(i) {
+            snap_centre((a.y + b.y) / 2.0, width)
+        } else {
+            snap_centre((a.x + b.x) / 2.0, width)
+        }
+    };
+    (0..n)
+        .map(|i| {
+            let (prev, next) = ((i + n - 1) % n, i);
+            let x = [prev, next]
+                .into_iter()
+                .find(|e| !horizontal(*e))
+                .map_or_else(|| snap_centre(ring[i].x, width), edge_coord);
+            let y = [prev, next]
+                .into_iter()
+                .find(|e| horizontal(*e))
+                .map_or_else(|| snap_centre(ring[i].y, width), edge_coord);
+            Point::new(x, y)
         })
-        .collect();
-    (points, snapped / dpr)
+        .collect()
+}
+
+/// True when snapping squeezed an axis the exact ring had an extent on down
+/// to under one device pixel.
+fn collapses(exact: &[Point], snapped: &[Point]) -> bool {
+    let extent = |points: &[Point], axis: fn(&Point) -> f32| {
+        let (lo, hi) = points
+            .iter()
+            .map(axis)
+            .fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+        hi - lo
+    };
+    let axes: [fn(&Point) -> f32; 2] = [|p| p.x, |p| p.y];
+    axes.into_iter()
+        .any(|axis| extent(exact, axis) > AXIS_EPS && extent(snapped, axis) < 1.0)
 }
 
 fn normalised_dpr(dpr: f32) -> f32 {
@@ -266,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn a_slanted_outline_keeps_its_vertices_and_snaps_the_width() {
+    fn a_slanted_outline_keeps_its_vertices_and_width() {
         let triangle = [
             Point::new(0.0, 0.0),
             Point::new(9.3, 0.0),
@@ -274,7 +322,43 @@ mod tests {
         ];
         let (points, width) = snap_outline(&triangle, 3.6, 1.0);
         assert_eq!(points, triangle);
-        assert_eq!(width, 4.0);
+        assert_eq!(
+            width, 3.6,
+            "a slanted edge keeps its width, like a diagonal line"
+        );
         assert_eq!(snap_outline(&triangle, 6.4, 1.0).1, 6.4);
+    }
+
+    fn extent(points: &[Point], axis: fn(&Point) -> f32) -> f32 {
+        let values = points.iter().map(axis);
+        values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)
+    }
+
+    #[test]
+    fn a_tiny_rectangle_outline_keeps_an_extent() {
+        // A 0.6 px square at 1x: snapped corner by corner it would be a point.
+        let tiny = [
+            Point::new(10.1, 20.1),
+            Point::new(10.7, 20.1),
+            Point::new(10.7, 20.7),
+            Point::new(10.1, 20.7),
+        ];
+        let (points, width) = snap_outline(&tiny, 1.0, 1.0);
+        assert_eq!(width, 1.0);
+        assert!(extent(&points, |p| p.x) > 0.5, "{points:?}");
+        assert!(extent(&points, |p| p.y) > 0.5, "{points:?}");
+    }
+
+    #[test]
+    fn near_equal_edge_coordinates_snap_to_one_row() {
+        // The top edge's ends sit either side of a pixel-row boundary.
+        let ring = [
+            Point::new(10.0, 20.9996),
+            Point::new(50.0, 21.0004),
+            Point::new(50.0, 40.0),
+            Point::new(10.0, 40.0),
+        ];
+        let (points, _) = snap_outline(&ring, 1.0, 1.0);
+        assert_eq!(points[0].y, points[1].y, "{points:?}");
     }
 }

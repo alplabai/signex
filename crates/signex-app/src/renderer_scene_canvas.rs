@@ -295,8 +295,13 @@ fn draw_circle_bucket<F>(
     F: Fn([f32; 2]) -> Point + Copy,
 {
     for circle in circles {
-        let center = world_to_screen(circle.center);
-        let radius = options.radius_px(circle.radius);
+        let (center, radius, ring_px) = ring_geometry(
+            circle.center,
+            circle.radius,
+            circle.stroke_width,
+            world_to_screen,
+            options,
+        );
         let path = canvas::Path::circle(center, radius);
         let color = color_from_rgba(circle.color);
 
@@ -306,11 +311,30 @@ fn draw_circle_bucket<F>(
             frame.stroke(
                 &path,
                 canvas::Stroke::default()
-                    .with_width(options.ring_stroke_px(circle.stroke_width))
+                    .with_width(ring_px)
                     .with_color(color),
             );
         }
     }
+}
+
+/// Screen centre, radius and stroke width of a circle or arc ring: the width
+/// is snapped to whole device pixels like a wire's (#1888).
+fn ring_geometry<F>(
+    center: [f32; 2],
+    radius_mm: f32,
+    width_mm: f32,
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) -> (Point, f32, f32)
+where
+    F: Fn([f32; 2]) -> Point,
+{
+    (
+        world_to_screen(center),
+        options.radius_px(radius_mm),
+        options.ring_stroke_px(width_mm),
+    )
 }
 
 fn draw_arc_bucket<F>(
@@ -330,8 +354,8 @@ fn draw_arc_bucket<F>(
             continue;
         }
 
-        let center = world_to_screen(arc.center);
-        let radius = options.radius_px(arc.radius);
+        let (center, radius, ring_px) =
+            ring_geometry(arc.center, arc.radius, arc.width, world_to_screen, options);
         // `canvas::path::Arc` operates in screen space and lyon's
         // `builder.arc` draws `end - start` as a raw signed sweep with no
         // wraparound (iced_graphics 0.14's `Builder::ellipse`), so both the
@@ -348,7 +372,7 @@ fn draw_arc_bucket<F>(
                 frame.stroke(
                     &canvas::Path::circle(center, radius),
                     canvas::Stroke::default()
-                        .with_width(options.ring_stroke_px(arc.width))
+                        .with_width(ring_px)
                         .with_color(color_from_rgba(arc.color)),
                 );
                 continue;
@@ -366,7 +390,7 @@ fn draw_arc_bucket<F>(
         frame.stroke(
             &path,
             canvas::Stroke::default()
-                .with_width(options.ring_stroke_px(arc.width))
+                .with_width(ring_px)
                 .with_color(color_from_rgba(arc.color)),
         );
     }
@@ -1085,11 +1109,8 @@ mod line_geometry_tests {
                 let polygon = rect_polygon(0.15);
                 let (_, outline) = polygon_stroke_geometry(&polygon, to_screen, options);
                 assert_eq!(outline, wire, "outline at {scale} px/mm, {dpr}x");
-                assert_eq!(
-                    options.ring_stroke_px(0.15),
-                    wire,
-                    "ring at {scale} px/mm, {dpr}x"
-                );
+                let (_, _, ring) = ring_geometry([3.0, 3.0], 2.0, 0.15, to_screen, options);
+                assert_eq!(ring, wire, "ring at {scale} px/mm, {dpr}x");
             }
         }
     }
