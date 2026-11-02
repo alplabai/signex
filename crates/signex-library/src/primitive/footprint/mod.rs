@@ -22,6 +22,7 @@ mod mount_style;
 mod pad;
 mod pad_columns;
 mod serde_tsv;
+mod silk_marker;
 #[cfg(test)]
 mod tests;
 
@@ -113,6 +114,28 @@ pub struct FpGraphic {
     /// `Polygon` / `Rectangle` / `Circle` / `Arc` (closed shapes).
     #[serde(default)]
     pub filled: bool,
+    /// The sketch entity a bake made this entry from; `None` = drawn by
+    /// hand. A re-bake replaces only marked entries. See
+    /// `docs/FOOTPRINT_SKETCH.md`, "Bake ownership".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch_entity: Option<signex_sketch::id::SketchEntityId>,
+}
+
+impl FpGraphic {
+    /// A hand-drawn graphic: no sketch entity owns it.
+    pub fn drawn(kind: FpGraphicKind, stroke_width: f64, filled: bool) -> Self {
+        Self {
+            kind,
+            stroke_width,
+            filled,
+            sketch_entity: None,
+        }
+    }
+
+    /// Whether a sketch bake made this entry (it carries a marker).
+    pub fn is_baked(&self) -> bool {
+        self.sketch_entity.is_some()
+    }
 }
 
 /// 3D body shape — drives the procedural render (no STEP required).

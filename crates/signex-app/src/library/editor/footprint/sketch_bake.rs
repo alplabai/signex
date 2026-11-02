@@ -92,7 +92,8 @@ pub(super) fn bake_solution_with(
 
         // Every other baked field: see `sketch_bake_fields`.
         let fields = bake_fields(sketch, &out, resolved, &mut state.solve_warnings)?;
-        fields.apply(footprint, &mut state.solve_warnings);
+        let remaps = fields.apply(footprint, &mut state.solve_warnings);
+        state.remap_silk_selection(&remaps);
         let Some(sketch) = footprint.sketch.as_ref() else {
             return Ok(());
         };
@@ -158,10 +159,11 @@ pub(super) fn bake_solution_with(
             super::pad_to_sketch::mirror_solve_to_round_rect_geometry(state, sketch, resolved);
             super::pad_to_sketch::mirror_solve_to_oval_geometry(state, sketch, resolved);
         }
-    } else if !sketch.baked_kinds.is_empty() {
+    } else if !sketch.baked_kinds.is_empty() || signex_bake::has_baked_silk(footprint) {
         // Every entity was deleted after the sketch baked: what it owned
         // goes with them. (A sketch that never baked owns nothing.)
-        BakedFields::clear_owned(footprint, &mut state.solve_warnings);
+        let remaps = BakedFields::clear_owned(footprint, &mut state.solve_warnings);
+        state.remap_silk_selection(&remaps);
         for warning in
             take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {
