@@ -52,15 +52,22 @@ impl Signex {
             .collect()
     }
 
-    /// True when `path` is a library entry of an open project.
-    fn is_open_project_library(&self, path: &std::path::Path) -> bool {
-        self.document_state.projects.iter().any(|project| {
-            project
-                .data
-                .libraries
-                .iter()
-                .any(|e| project.data.resolve_library_path(e) == path)
-        })
+    /// The open project that lists `path` as a library, if any.
+    fn owning_project_of_library(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<crate::app::state::ProjectId> {
+        self.document_state
+            .projects
+            .iter()
+            .find(|project| {
+                project
+                    .data
+                    .libraries
+                    .iter()
+                    .any(|e| project.data.resolve_library_path(e) == path)
+            })
+            .map(|project| project.id)
     }
 
     /// A `.snxlib` mount prepared off the UI thread has landed — issue
@@ -126,13 +133,24 @@ impl Signex {
                 // file is gone: that gets Library Missing (#1846). Global and
                 // stock libraries, and git trouble, never pop a dialog at
                 // startup (#532). A mount the user asked for routes fully.
-                let routable = match intent {
-                    crate::library::mount::MountIntent::OpenBrowserTab => true,
+                let silent_missing_owner = match intent {
+                    crate::library::mount::MountIntent::OpenBrowserTab => None,
                     crate::library::mount::MountIntent::Silent => {
-                        matches!(err, signex_library::LibraryError::LibraryFileMissing { .. })
-                            && this.is_open_project_library(path)
+                        if matches!(err, signex_library::LibraryError::LibraryFileMissing { .. })
+                            && !this.library.is_read_only_target(path)
+                        {
+                            this.owning_project_of_library(path)
+                        } else {
+                            None
+                        }
                     }
                 };
+                // Several missing libraries queue their dialogs (#1897).
+                if let Some(owner) = silent_missing_owner {
+                    this.library.raise_missing_library(path, owner);
+                    return;
+                }
+                let routable = matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab);
                 if routable && route_open_error(&mut this.library, path, err) {
                     return;
                 }

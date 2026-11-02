@@ -311,6 +311,7 @@ impl Signex {
         self.document_state.note_documents_changed();
         self.cancel_replace_job("the project was closed");
         self.document_state.projects.retain(|p| p.id != target_id);
+        self.library.forget_missing_libraries_of(target_id);
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
         self.forget_net_class_picks_of(target_id);

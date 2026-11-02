@@ -105,32 +105,37 @@ pub(super) fn handle_recovery_library_missing(
 ) -> Task<Message> {
     match choice {
         LibraryMissingChoice::Cancel => {
-            app.library.recovery = None;
+            app.library.finish_recovery();
             Task::none()
         }
-        LibraryMissingChoice::Locate => Task::perform(
-            async {
-                rfd::AsyncFileDialog::new()
-                    .set_title("Locate Library (*.snxlib)")
-                    .add_filter("Signex Library", &["snxlib"])
-                    .pick_file()
-                    .await
-                    .map(|f| f.path().to_path_buf())
-            },
-            |path| Message::Library(LibraryMessage::RecoveryLibraryMissingLocateResult(path)),
-        ),
+        LibraryMissingChoice::Locate => {
+            if let Some(RecoveryDialog::LibraryMissing { path }) = app.library.recovery.as_ref() {
+                let path = path.clone();
+                app.library.missing.start_locating(path);
+            }
+            Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Locate Library (*.snxlib)")
+                        .add_filter("Signex Library", &["snxlib"])
+                        .pick_file()
+                        .await
+                        .map(|f| f.path().to_path_buf())
+                },
+                |path| Message::Library(LibraryMessage::RecoveryLibraryMissingLocateResult(path)),
+            )
+        }
         LibraryMissingChoice::RemoveFromProject => {
             let missing = match app.library.recovery.as_ref() {
                 Some(RecoveryDialog::LibraryMissing { path }) => path.clone(),
                 _ => {
-                    app.library.recovery = None;
+                    app.library.finish_recovery();
                     return Task::none();
                 }
             };
+            let mut changed = Vec::new();
             for project in app.document_state.projects.iter_mut() {
-                // Compute resolved paths up-front so the closure can
-                // borrow only the indices vector, not project.data
-                // (which retain's closure also tries to read).
+                let before = project.data.libraries.len();
                 let resolved: Vec<std::path::PathBuf> = project
                     .data
                     .libraries
@@ -143,8 +148,15 @@ pub(super) fn handle_recovery_library_missing(
                     idx += 1;
                     keep
                 });
+                if project.data.libraries.len() != before {
+                    changed.push(project.path.clone());
+                }
             }
-            app.library.recovery = None;
+            // The change is unsaved until the user saves the project.
+            for path in &changed {
+                app.document_state.mark_document_dirty(path);
+            }
+            app.library.finish_recovery();
             Task::none()
         }
     }
@@ -157,13 +169,65 @@ pub(super) fn handle_recovery_library_missing_locate_result(
     app: &mut Signex,
     picked: Option<std::path::PathBuf>,
 ) -> Task<Message> {
-    app.library.recovery = None;
+    let located = app.library.missing.take_locating();
+    let dialog_path = match app.library.recovery.as_ref() {
+        Some(RecoveryDialog::LibraryMissing { path }) => Some(path.clone()),
+        _ => None,
+    };
+    // Only the dialog the pick was started from is closed, and only its
+    // project entries are repointed; a dialog already moved on stays.
+    let still_open = located.is_some() && located == dialog_path;
+    if still_open {
+        if let (Some(old), Some(new)) = (located.as_deref(), picked.as_deref()) {
+            relocate_project_entries(app, old, new);
+        }
+        app.library.finish_recovery();
+    } else if dialog_path.is_some() && located.is_none() {
+        app.library.finish_recovery();
+    }
     if let Some(new_path) = picked {
         return Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(
             new_path,
         ))));
     }
     Task::none()
+}
+
+/// Point every project entry that listed `old` at `new`, and mark those
+/// projects dirty. Unsaved until the user saves the project.
+fn relocate_project_entries(app: &mut Signex, old: &std::path::Path, new: &std::path::Path) {
+    use crate::app::state::library_entry::library_entry_location;
+    use signex_types::project::LibraryEntryKind;
+    let mut changed = Vec::new();
+    for project in app.document_state.projects.iter_mut() {
+        let dir = std::path::PathBuf::from(&project.data.dir);
+        let fold = project.case_fold;
+        let (path, kind) = library_entry_location(&dir, new, fold);
+        let hits: Vec<usize> = project
+            .data
+            .libraries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| project.data.resolve_library_path(e) == old)
+            .map(|(i, _)| i)
+            .collect();
+        for &i in &hits {
+            let entry = &mut project.data.libraries[i];
+            // A Global entry stays Global when the new place is outside
+            // the project.
+            entry.kind = match (entry.kind, kind) {
+                (LibraryEntryKind::Global, LibraryEntryKind::Shared) => LibraryEntryKind::Global,
+                (_, kind) => kind,
+            };
+            entry.path = path.clone();
+        }
+        if !hits.is_empty() {
+            changed.push(project.path.clone());
+        }
+    }
+    for path in &changed {
+        app.document_state.mark_document_dirty(path);
+    }
 }
 
 /// The git re-init a *Git missing* dialog started has finished: reopen the
@@ -175,7 +239,7 @@ pub(super) fn handle_git_reinit_finished(
 ) -> Task<Message> {
     match result {
         Ok(()) => {
-            app.library.recovery = None;
+            app.library.finish_recovery();
             Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(path))))
         }
         Err(reason) => {
@@ -208,21 +272,21 @@ pub(super) fn handle_recovery_git_missing(
 ) -> Task<Message> {
     match choice {
         GitMissingChoice::Cancel | GitMissingChoice::Skip => {
-            app.library.recovery = None;
+            app.library.finish_recovery();
             Task::none()
         }
         GitMissingChoice::ReInit => {
             let path = match app.library.recovery.as_ref() {
                 Some(RecoveryDialog::GitMissing { path, .. }) => path.clone(),
                 _ => {
-                    app.library.recovery = None;
+                    app.library.finish_recovery();
                     return Task::none();
                 }
             };
             if app.library.is_read_only_target(&path) {
                 // Defence in depth: the dialog is never opened for a
                 // read-only library, but never write to one regardless.
-                app.library.recovery = None;
+                app.library.finish_recovery();
                 app.document_state.error_notice =
                     Some(read_only_repair_notice(&path, "cannot be re-initialised"));
                 return Task::none();
@@ -260,7 +324,7 @@ pub(super) fn handle_recovery_git_missing(
         GitMissingChoice::RestoreFromRemote => {
             // v0.9 leaves this disabled — the manifest doesn't carry a
             // remote yet. Treat as Cancel.
-            app.library.recovery = None;
+            app.library.finish_recovery();
             Task::none()
         }
     }
@@ -277,6 +341,6 @@ pub(super) fn handle_recovery_broken_binding(
     app: &mut Signex,
     _choice: BrokenBindingChoice,
 ) -> Task<Message> {
-    app.library.recovery = None;
+    app.library.finish_recovery();
     Task::none()
 }

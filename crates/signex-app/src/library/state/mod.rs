@@ -558,6 +558,8 @@ pub struct LibraryState {
     /// Library recovery dialog — Stage 10 of v0.9-snxlib-as-file.
     /// `None` while closed; one of three modal flows when set.
     pub recovery: Option<super::recovery::RecoveryDialog>,
+    /// Library Missing dialogs queued behind `recovery` (#1897).
+    pub missing: missing_queue::MissingLibraries,
     /// "Library Options" modal state — `None` while closed. Opens
     /// after the user picks a `.snxlib` save target in the New Library
     /// Save-As dialog (Stage 11 of `v0.9-snxlib-as-file-plan.md`). The
@@ -906,6 +908,7 @@ pub struct LibraryCreateOptionsState {
 mod closing;
 mod id_precedence;
 mod methods;
+mod missing_queue;
 mod new_library_defaults;
 mod panel_rows;
 #[cfg(test)]

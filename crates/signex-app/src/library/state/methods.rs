@@ -75,6 +75,7 @@ impl Default for LibraryState {
             primitive_picker: None,
             document_options: None,
             recovery: None,
+            missing: Default::default(),
             create_options: None,
             library_updates: None,
             queued_library_updates: Vec::new(),
