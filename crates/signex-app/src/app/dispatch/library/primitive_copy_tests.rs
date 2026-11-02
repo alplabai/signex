@@ -592,3 +592,43 @@ fn picking_another_symbol_while_opening_drops_the_opening_state_and_keeps_the_ne
     let open = f.app.library.primitive_picker.as_ref().unwrap();
     assert_eq!(open.copy_confirm.as_ref(), Some(&loose));
 }
+
+#[test]
+fn browsing_a_file_of_an_open_library_is_not_called_unopened() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    open_picker(&mut f);
+    // `cells-lib/cells.snxlib` is mounted by the fixture.
+    let held = tmp
+        .path()
+        .join("cells-lib")
+        .join("symbols")
+        .join("Held.snxsym");
+    std::fs::create_dir_all(held.parent().unwrap()).unwrap();
+    std::fs::write(
+        &held,
+        SymbolFile::from_symbol(Symbol::empty("HELD"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    let held_uuid = SymbolFile::from_bytes(&std::fs::read(&held).unwrap())
+        .unwrap()
+        .symbols[0]
+        .uuid;
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(held)));
+    // The pick bound the file's symbol to the row and closed the picker; no
+    // "not open" question was raised, and no copy was made.
+    assert!(
+        f.app.library.primitive_picker.is_none(),
+        "{:?}",
+        f.app
+            .library
+            .primitive_picker
+            .as_ref()
+            .map(|p| &p.copy_confirm)
+    );
+    let bound = bound_symbol(&f);
+    assert_eq!(bound.library_id, f.library_id);
+    assert_eq!(bound.uuid, held_uuid);
+}

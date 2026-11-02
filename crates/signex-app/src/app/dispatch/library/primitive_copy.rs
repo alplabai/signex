@@ -55,6 +55,20 @@ impl Signex {
         for problem in &read.problems {
             crate::diagnostics::log_warning(problem);
         }
+        // A browsed file of an open library binds that library's symbol, as
+        // the directory-form route does; it is never offered as a copy.
+        if from_browse
+            && let [only] = read.symbols.as_slice()
+            && let Some(lib) = only
+                .library
+                .as_deref()
+                .and_then(|path| self.library.library_at(path))
+        {
+            let reference = signex_library::PrimitiveRef::new(lib.library_id, only.uuid);
+            return Task::done(Message::Library(LibraryMessage::PrimitivePicker(
+                PrimitivePickerMsg::Pick(reference),
+            )));
+        }
         let Some(picker) = self.library.primitive_picker.as_mut() else {
             return Task::none();
         };
@@ -164,8 +178,9 @@ impl Signex {
             kind: picker.kind,
             target: picker.target.clone(),
         };
+        // A symbol that belongs to a library is opened, never copied.
         let (Some(symbol), Some(library_path)) = (
-            picker.copy_confirm.clone(),
+            picker.copy_confirm.clone().filter(|s| s.library.is_none()),
             picker
                 .target
                 .library_path()

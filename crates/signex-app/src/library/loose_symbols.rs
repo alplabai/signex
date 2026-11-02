@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::app::file_extension::has_extension;
 use signex_library::{LibraryAdapter, PrimitiveRef, SymbolFile};
 use uuid::Uuid;
 
@@ -49,12 +50,6 @@ pub fn read_loose_symbols(files: &[PathBuf]) -> LooseRead {
     read
 }
 
-fn is_snxlib(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("snxlib"))
-}
-
 /// The `.snxlib` whose primitive directory holds `file`. A library keeps its
 /// symbols directly in `<dir of the .snxlib>/symbols/` (what the adapter
 /// scans), so `file` belongs to the one `*.snxlib` in the directory above its
@@ -63,14 +58,18 @@ fn is_snxlib(path: &Path) -> bool {
 /// Reads a directory, so call it off the UI thread.
 pub fn enclosing_snxlib(file: &Path) -> Option<PathBuf> {
     let symbols = file.parent()?;
-    if symbols.file_name()? != "symbols" {
+    if !symbols
+        .file_name()?
+        .to_str()?
+        .eq_ignore_ascii_case("symbols")
+    {
         return None;
     }
     let mut found = std::fs::read_dir(symbols.parent()?)
         .ok()?
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| is_snxlib(path) && path.is_file());
+        .filter(|path| has_extension(path, "snxlib") && path.is_file());
     let only = found.next()?;
     found.next().is_none().then_some(only)
 }
@@ -151,6 +150,15 @@ mod tests {
         let deep = tmp.path().join("symbols").join("sub").join("Foo.snxsym");
         touch(&deep);
         assert_eq!(enclosing_snxlib(&deep), None);
+    }
+
+    #[test]
+    fn the_symbols_folder_and_snxlib_names_match_ignoring_case() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch(&tmp.path().join("X.SNXLIB"));
+        let file = tmp.path().join("Symbols").join("Foo.snxsym");
+        touch(&file);
+        assert_eq!(enclosing_snxlib(&file), Some(tmp.path().join("X.SNXLIB")));
     }
 
     #[test]
