@@ -213,6 +213,18 @@ pub struct GhostState {
     /// The held references already reported for this drag, so the Messages
     /// panel hears each set once, not on every cursor step.
     reported_held: Vec<String>,
+    /// What the lock holds back from a plain-shift drag (keep-wires off, or a
+    /// selection too large for the engine pass), found once per drag (#1918).
+    plain: Option<PlainHold>,
+}
+
+/// The selection a plain shift moves once the lock's holds are taken out.
+#[derive(Debug)]
+struct PlainHold {
+    revision: u64,
+    selection: Vec<SelectedItem>,
+    kept: Vec<SelectedItem>,
+    held: Vec<String>,
 }
 
 fn key_of(revision: u64, selection: &[SelectedItem], dx: f64, dy: f64) -> GhostKey {
@@ -300,6 +312,7 @@ impl GhostState {
                 fresh
             }
         };
+        self.plain = None;
         let key = key_of(revision, selection, dx, dy);
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
         let (moved, held) = session.moved_with(&moves, true, wire_colors);
@@ -316,7 +329,65 @@ impl GhostState {
 
     /// The references the lock holds back from the ghost's move.
     pub(super) fn held(&self) -> &[String] {
-        self.ghost.as_ref().map_or(&[], |ghost| &ghost.held)
+        match (&self.ghost, &self.plain) {
+            (Some(ghost), _) => &ghost.held,
+            (None, Some(plain)) => &plain.held,
+            (None, None) => &[],
+        }
+    }
+
+    /// Work out, once per revision and selection, which of `selection` the
+    /// lock holds back from a plain shift. No engine pass runs per cursor
+    /// step: the lock check is one throwaway engine per drag (#1918).
+    pub(super) fn hold_locked(
+        &mut self,
+        snap: &SchematicRenderSnapshot,
+        revision: u64,
+        selection: &[SelectedItem],
+        keep_wires: bool,
+    ) {
+        self.ghost = None;
+        let fits = self
+            .plain
+            .as_ref()
+            .is_some_and(|p| p.revision == revision && p.selection == selection);
+        if fits {
+            return;
+        }
+        let (kept, held) = match signex_engine::Engine::new(snap.clone()) {
+            Ok(engine) => {
+                let moves = selection.iter().map(|item| (*item, 0.0, 0.0)).collect();
+                let (command, held) =
+                    engine.without_locked(signex_engine::Command::MoveEach { moves, keep_wires });
+                let kept = match command {
+                    Some(signex_engine::Command::MoveEach { moves, .. }) => {
+                        moves.into_iter().map(|(item, _, _)| item).collect()
+                    }
+                    _ => Vec::new(),
+                };
+                (kept, held)
+            }
+            Err(_) => (selection.to_vec(), Vec::new()),
+        };
+        self.plain = Some(PlainHold {
+            revision,
+            selection: selection.to_vec(),
+            kept,
+            held,
+        });
+    }
+
+    /// The part of `selection` a plain shift moves: all of it unless the lock
+    /// holds some back (see [`Self::hold_locked`]).
+    pub(super) fn plain_selection<'a>(
+        &'a self,
+        revision: u64,
+        selection: &'a [SelectedItem],
+    ) -> &'a [SelectedItem] {
+        match &self.plain {
+            Some(p) if p.revision == revision && p.selection == selection => &p.kept,
+            _ => selection,
+        }
     }
 
     /// The held references not yet reported this drag, once: the commit
@@ -334,6 +405,7 @@ impl GhostState {
     pub(super) fn clear(&mut self) {
         self.session = None;
         self.ghost = None;
+        self.plain = None;
         self.reported_held.clear();
     }
 }
