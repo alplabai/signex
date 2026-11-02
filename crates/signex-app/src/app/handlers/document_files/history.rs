@@ -399,37 +399,47 @@ impl Signex {
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
     ) -> Task<Message> {
-        self.apply_reloaded_with(idx, outcome, restored_bytes, true)
+        self.apply_reloaded_reporting(idx, outcome, restored_bytes, true)
+            .0
     }
 
-    /// [`Self::apply_reloaded`]; `commit` false installs the document without
-    /// a "Restore" commit (a disk-conflict Reload restores nothing).
-    pub(crate) fn apply_reloaded_with(
+    /// [`Self::apply_reloaded`] plus whether the reloaded document was
+    /// installed (`commit` false installs without a "Restore" commit: a
+    /// disk-conflict Reload restores nothing): false when a failure card replaced it or a schematic's new
+    /// engine could not start and the older one was kept.
+    pub(crate) fn apply_reloaded_reporting(
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
         commit: bool,
-    ) -> Task<Message> {
+    ) -> (Task<Message>, bool) {
         let Some(tab) = self.document_state.tabs.get(idx) else {
-            return Task::none();
+            return (Task::none(), false);
         };
+        let mut document_installed = true;
         let path = tab.path.clone();
         let kind = tab.kind.clone();
         match outcome {
-            Err(RestoreFailure::NotReloaded { why, unreadable }) => match kind {
-                crate::app::TabKind::Schematic => {
-                    self.fail_schematic_reload(&path, idx, &why, unreadable)
+            Err(RestoreFailure::NotReloaded { why, unreadable }) => {
+                match kind {
+                    crate::app::TabKind::Schematic => {
+                        self.fail_schematic_reload(&path, idx, &why, unreadable)
+                    }
+                    crate::app::TabKind::Pcb => self.fail_pcb_reload(&path, idx, &why, unreadable),
+                    _ => self.fail_primitive_reload(&path, &why, unreadable),
                 }
-                crate::app::TabKind::Pcb => self.fail_pcb_reload(&path, idx, &why, unreadable),
-                _ => self.fail_primitive_reload(&path, &why, unreadable),
-            },
-            Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
+                return (Task::none(), false);
+            }
+            Err(RestoreFailure::NotRestored(message)) => {
+                self.report_restore_failure(message);
+                return (Task::none(), false);
+            }
             Ok(RestoreJobDocument::Schematic(sheet)) => {
                 crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
-                if idx == self.document_state.active_tab {
+                let installed = if idx == self.document_state.active_tab {
                     self.discard_state_of_replaced_engine();
-                    self.apply_loaded_schematic(Some(*sheet), true, false, false);
+                    let installed = self.apply_loaded_schematic(Some(*sheet), true, false, false);
                     // Undocked windows on this sheet were redrawn by that;
                     // their selections point into the old engine too.
                     self.refresh_slots_from_engine(
@@ -438,28 +448,12 @@ impl Signex {
                         crate::schematic_runtime::RenderInvalidation::FULL,
                         true,
                     );
+                    installed
                 } else {
-                    self.install_schematic_at(&path, *sheet);
-                }
-                // The restored bytes are on disk and are what the engine holds.
-                if let Some(engine) = self.document_state.engines.get_mut(&path) {
-                    engine.mark_saved();
-                }
-                // A restored sheet from a newer Signex is read-only and can
-                // never be saved: leaving it dirty would make quit ask to
-                // save an unsaveable file (#1402). It matches disk, so
-                // commit the restored bytes as they are, as the PCB does.
-                let read_only = self
-                    .document_state
-                    .engines
-                    .get(&path)
-                    .is_some_and(|engine| engine.document().is_read_only());
-                if read_only {
-                    self.set_reloaded_dirty(&path, false);
-                    if commit {
-                        self.commit_restore(&path, restored_bytes);
-                    }
-                }
+                    self.install_schematic_at(&path, *sheet)
+                };
+                self.settle_restored_schematic(&path, installed, commit, restored_bytes);
+                document_installed = installed;
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
@@ -510,9 +504,9 @@ impl Signex {
                     self.commit_restore(&path, restored_bytes);
                 }
             }
-            Ok(RestoreJobDocument::Library) => return self.reload_library_tab(&kind),
+            Ok(RestoreJobDocument::Library) => return (self.reload_library_tab(&kind), true),
         }
-        Task::none()
+        (Task::none(), document_installed)
     }
 
     /// Reload-after-restore for `.snxlib` tabs. The restore rewrote the
@@ -543,6 +537,36 @@ impl Signex {
         );
         self.refresh_panel_ctx();
         refresh
+    }
+
+    /// A restored sheet was just installed (`installed`) or the install
+    /// failed and an older engine still sits at `path`: mark only a fresh
+    /// engine saved, and treat a read-only one as matching disk.
+    pub(crate) fn settle_restored_schematic(
+        &mut self,
+        path: &std::path::Path,
+        installed: bool,
+        commit: bool,
+        restored_bytes: Option<crate::persist::SharedBytes>,
+    ) {
+        // The restored bytes are on disk and are what the engine holds.
+        self.mark_installed_engine_saved(path, installed);
+        // A restored sheet from a newer Signex is read-only and can never be
+        // saved: leaving it dirty would make quit ask to save an unsaveable
+        // file (#1402). It matches disk, so commit the restored bytes as
+        // they are, as the PCB does. Only the engine just installed says so.
+        let read_only = installed
+            && self
+                .document_state
+                .engines
+                .get(path)
+                .is_some_and(|engine| engine.document().is_read_only());
+        if read_only {
+            self.set_reloaded_dirty(path, false);
+            if commit {
+                self.commit_restore(path, restored_bytes);
+            }
+        }
     }
 
     /// Queue the project git commit for the restore, so a clean tab does not

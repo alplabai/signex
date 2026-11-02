@@ -121,3 +121,77 @@ fn clean_where_clears_every_match_across_set_and_drafts() {
         [Path::new("/p/other.snxsch").to_path_buf()].into()
     );
 }
+
+/// A saved engine with one symbol, and the symbol's id.
+fn saved_engine() -> (signex_engine::Engine, uuid::Uuid) {
+    let id = uuid::Uuid::now_v7();
+    let sheet = signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        paper_size: "A4".to_string(),
+        symbols: vec![signex_types::schematic::Symbol {
+            uuid: id,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+    engine.mark_saved();
+    (engine, id)
+}
+
+fn move_symbol(engine: &mut signex_engine::Engine, id: uuid::Uuid) {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let result = engine
+        .execute(signex_engine::Command::MoveSelection {
+            items: vec![SelectedItem::new(id, SelectedKind::Symbol)],
+            dx: 10.0,
+            dy: 0.0,
+            keep_wires: false,
+        })
+        .expect("move");
+    assert!(result.changed);
+}
+
+#[test]
+fn a_recorded_edit_on_a_parked_sheet_is_clean_again_after_undo() {
+    let path = Path::new("/p/parked.snxsch");
+    let mut d = state();
+    let (engine, id) = saved_engine();
+    d.insert_engine(path.to_path_buf(), engine);
+    move_symbol(d.engines.get_mut(path).unwrap(), id);
+    d.mark_history_edit_dirty(path);
+    assert!(d.is_document_dirty(path));
+    d.engines.get_mut(path).unwrap().undo().expect("undo");
+    d.sync_history_dirty(path);
+    assert!(!d.is_document_dirty(path), "back at the save point");
+}
+
+#[test]
+fn a_recorded_edit_without_an_engine_still_reads_dirty() {
+    let path = Path::new("/p/gone.snxsch");
+    let mut d = state();
+    d.mark_history_edit_dirty(path);
+    assert!(d.is_document_dirty(path));
+}
+
+#[test]
+fn clearing_a_discard_leaves_the_engines_save_point_alone() {
+    let path = Path::new("/p/discard.snxsch");
+    let mut d = state();
+    let (engine, id) = saved_engine();
+    d.insert_engine(path.to_path_buf(), engine);
+    move_symbol(d.engines.get_mut(path).unwrap(), id);
+    d.mark_document_dirty(path);
+    d.clear_document_dirty(path);
+    assert!(!d.is_document_dirty(path));
+    assert!(
+        !d.engines[path].is_at_save_point(),
+        "the edited engine was not marked as matching the file"
+    );
+    d.sync_history_dirty(path);
+    assert!(d.is_document_dirty(path), "a history step re-reads dirty");
+    d.mark_document_clean(path);
+    assert!(d.engines[path].is_at_save_point(), "a save does mark it");
+}

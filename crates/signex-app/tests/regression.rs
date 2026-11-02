@@ -184,6 +184,9 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+// #1718 — hand-placed silk survives a sketch re-bake and a save.
+#[path = "regression/footprint_hand_silk_rebake.rs"]
+mod footprint_hand_silk_rebake;
 #[path = "regression/footprint_legacy_pad_stack.rs"]
 mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
@@ -352,6 +355,8 @@ mod library_stock_copy;
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+#[path = "regression/library_symbol_missing.rs"]
+mod library_symbol_missing;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.

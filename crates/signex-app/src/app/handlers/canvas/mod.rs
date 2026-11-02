@@ -27,6 +27,8 @@ mod sync_sheet_pins;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod undocked_editor_tests;
+#[cfg(test)]
 mod wire_merge_tests;
 #[cfg(test)]
 mod wire_undo_tests;

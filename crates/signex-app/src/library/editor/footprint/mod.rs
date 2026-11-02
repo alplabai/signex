@@ -15,11 +15,14 @@ pub mod canvas;
 pub mod context_menu;
 pub mod filter_presets;
 pub mod layers;
+pub(crate) mod legacy_silk;
 pub mod move_by_modal;
 pub mod pad_stack_check;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
+#[cfg(test)]
+mod silk_ownership_tests;
 mod sketch_bake;
 mod sketch_bake_fields;
 #[cfg(test)]

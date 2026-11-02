@@ -34,6 +34,7 @@ fn footprint_json_roundtrip_with_body3d() {
             },
             stroke_width: 0.12,
             filled: false,
+            sketch_entity: None,
         }],
         silk_b: Vec::new(),
         fab_f: Vec::new(),
@@ -533,6 +534,7 @@ fn to_toml_string_refuses_a_non_finite_graphic() {
             },
             stroke_width: bad,
             filled: false,
+            sketch_entity: None,
         });
         assert_non_finite_names(
             FootprintFile::from_footprint(fp).to_toml_string(),

@@ -70,9 +70,24 @@ impl SchematicCanvas<'_> {
         width_mm: f64,
         scale: f32,
     ) -> (iced::Point, iced::Point, f32) {
-        let dpi = self.prefs.device_px_per_logical_px;
-        let width = signex_types::schematic::stroke_px(width_mm as f32, scale, dpi);
-        crate::scene_line_snap::snap_hairline(from, to, width, dpi)
+        let width = signex_types::schematic::stroke_px(
+            width_mm as f32,
+            scale,
+            self.prefs.device_px_per_logical_px,
+        );
+        self.snap_screen_line(from, to, width)
+    }
+
+    /// A screen line of `width` logical px snapped to this window's device
+    /// pixels: the one snap the frame, the placed-wire preview and the ghosts
+    /// share with the scene replay (#1888).
+    pub(crate) fn snap_screen_line(
+        &self,
+        from: iced::Point,
+        to: iced::Point,
+        width: f32,
+    ) -> (iced::Point, iced::Point, f32) {
+        crate::scene_line_snap::snap_hairline(from, to, width, self.prefs.device_px_per_logical_px)
     }
 
     /// Draw the lowered sheet frame (#1079): the same primitives the PDF draws,

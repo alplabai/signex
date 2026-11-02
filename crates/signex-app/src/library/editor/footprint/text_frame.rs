@@ -18,5 +18,6 @@ pub fn add_text_frame(fp: &mut Footprint, x_mm: f64, y_mm: f64, w_mm: f64, h_mm:
         },
         stroke_width: 0.0,
         filled: false,
+        sketch_entity: None,
     });
 }

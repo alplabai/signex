@@ -438,7 +438,7 @@ impl Signex {
             if matches!(kind, PassKind::ResetDuplicates)
                 && !self.document_state.engines.contains_key(&path)
             {
-                self.document_state.mark_document_clean(&path);
+                self.document_state.clear_document_dirty(&path);
             }
             // Rewritten outside the document save path: the hook drops a
             // recovery copy of the old content and moves `documents_epoch`.

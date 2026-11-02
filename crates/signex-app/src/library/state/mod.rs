@@ -426,6 +426,8 @@ pub struct PrimitivePickerState {
     pub copy_confirm: Option<super::loose_symbols::LooseSymbol>,
     /// A copy is running on a worker.
     pub copying: bool,
+    /// The unmounted `.snxlib` the picker asked to open and is waiting on.
+    pub opening_library: Option<std::path::PathBuf>,
 }
 
 /// The pick a copy of a loose symbol was made for (#1841).
@@ -494,6 +496,8 @@ pub struct LibraryState {
     pub datasheet_opener: crate::library::placed_part::OpenDatasheet,
     /// Embedded-vs-library symbol drift per open sheet (#912).
     pub drift: super::drift::DriftState,
+    /// A symbol Delete waiting for the user's answer (#1845).
+    pub pending_symbol_delete: Option<super::symbol_delete::PendingSymbolDelete>,
     /// Latest switch request per placed symbol (#1230).
     pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in

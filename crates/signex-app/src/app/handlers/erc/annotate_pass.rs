@@ -337,7 +337,7 @@ impl Signex {
     /// A re-prefix sheet failed: undo every sheet already changed (the pass's
     /// own entry is on top of each history) and forget the sheets it parked,
     /// so the project is exactly as it was and no part is left half converted.
-    fn roll_back_reprefix(
+    pub(super) fn roll_back_reprefix(
         &mut self,
         group: Option<signex_engine::UndoGroupId>,
         touched: &[std::path::PathBuf],
@@ -345,28 +345,54 @@ impl Signex {
         newly_dirty: &[std::path::PathBuf],
         label: &str,
     ) -> Task<Message> {
+        let mut not_rolled_back = std::collections::HashSet::new();
         for path in touched {
             if parked.contains(path) {
                 self.document_state.remove_engine(path);
             } else if let Some(engine) = self.document_state.engines.get_mut(path)
                 && let Some(group) = group
+            {
                 // Discarded, not undone: an undo would leave the half run on
                 // the redo stack for Ctrl+Y to bring back.
-                && let Err(error) = engine.discard_undo_group_top(group)
-            {
-                crate::diagnostics::log_error(
-                    &format!("{label}: could not undo '{}'", path.display()),
-                    &anyhow::Error::new(error),
-                );
+                match engine.discard_undo_group_top(group) {
+                    Ok(Some(_)) => {}
+                    // The run is still in the sheet: it must stay dirty.
+                    Ok(None) => {
+                        not_rolled_back.insert(path.clone());
+                    }
+                    Err(error) => {
+                        not_rolled_back.insert(path.clone());
+                        crate::diagnostics::log_error(
+                            &format!("{label}: could not undo '{}'", path.display()),
+                            &anyhow::Error::new(error),
+                        );
+                    }
+                }
             }
         }
         for path in newly_dirty {
-            self.document_state.mark_document_clean(path);
+            if !not_rolled_back.contains(path) {
+                self.document_state.clear_document_dirty(path);
+            }
         }
-        crate::diagnostics::log_warning(format!(
-            "{label}: a sheet could not be converted, so the whole run was undone and nothing \
-             was changed. Any redo history the touched sheets had before the run is gone."
-        ));
+        if not_rolled_back.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{label}: a sheet could not be converted, so the whole run was undone and \
+                 nothing was changed. Any redo history the touched sheets had before the run \
+                 is gone."
+            ));
+        } else {
+            let mut names: Vec<String> = not_rolled_back
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            names.sort();
+            crate::diagnostics::log_warning(format!(
+                "{label}: a sheet could not be converted and the run could not be undone on: \
+                 {}. Those sheets keep the run's changes and stay unsaved; undo them by hand.",
+                names.join(", ")
+            ));
+        }
         // The active sheet may have been rolled back or never touched; only
         // a whole redraw is right for both.
         self.interaction_state
