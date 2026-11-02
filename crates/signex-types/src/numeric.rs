@@ -142,6 +142,9 @@ pub fn parse_toml_finite<T: serde::de::DeserializeOwned>(text: &str) -> Result<T
 }
 
 /// Upper bound on datetime-in-`String` retries; each one is a full parse.
+// ponytail: past this ceiling the `Value` fallback stringifies bag datetimes
+// again (#1875 symptom); requote every datetime span in one pass if files
+// ever carry that many.
 const MAX_DATETIME_REQUOTES: usize = 64;
 
 /// Key path (`extras.board.outline[0].x`) of the first NaN or infinite
@@ -340,5 +343,35 @@ when = 1979-05-27T07:32:00Z
         .unwrap();
         assert_eq!(holder.date, "2026-10-01");
         assert!(holder.rest["when"].is_datetime());
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Nested {
+        #[serde(default)]
+        meta: Meta,
+        #[serde(default)]
+        tags: Vec<String>,
+        #[serde(flatten)]
+        rest: std::collections::BTreeMap<String, toml::Value>,
+    }
+    #[derive(Default, serde::Deserialize)]
+    struct Meta {
+        #[serde(default)]
+        date: String,
+    }
+
+    #[test]
+    fn nested_and_array_known_string_datetimes_keep_the_bag_typed() {
+        let n: Nested = parse_toml_finite(
+            "tags = [2026-10-01, 2026-10-02]
+when = 1979-05-27T07:32:00Z
+[meta]
+date = 2026-10-03
+",
+        )
+        .unwrap();
+        assert_eq!(n.meta.date, "2026-10-03");
+        assert_eq!(n.tags, ["2026-10-01", "2026-10-02"]);
+        assert!(n.rest["when"].is_datetime());
     }
 }
