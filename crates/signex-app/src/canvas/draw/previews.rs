@@ -287,6 +287,17 @@ impl SchematicCanvas<'_> {
         )
     }
 
+    /// A placed-wire preview segment between screen points: the placed
+    /// width and the whole-pixel snap, as the scene replay gives a wire.
+    pub(crate) fn placed_wire_line(
+        &self,
+        from: iced::Point,
+        to: iced::Point,
+        scale: f32,
+    ) -> (iced::Point, iced::Point, f32) {
+        self.snap_screen_line(from, to, self.placed_wire_stroke_px(scale))
+    }
+
     /// Wire-in-progress rubber-band, constrained by the active draw mode.
     pub(in crate::canvas) fn draw_wire_preview(
         &self,
@@ -295,112 +306,125 @@ impl SchematicCanvas<'_> {
         cursor_pos: iced::Point,
         hotspot: Option<signex_types::schematic::Point>,
     ) {
-        let cam = self.camera();
-        // Wire-in-progress rubber-band preview
-        if self.drawing_mode && !self.wire_preview.is_empty() {
-            let wire_color = self.prefs.canvas_colors.wire;
-            let wire_color_iced = crate::render_config::to_iced(&wire_color);
-            let placed_width = self.placed_wire_stroke_px(cam.scale);
-            let preview_stroke = canvas::Stroke::default()
-                .with_color(wire_color_iced)
-                .with_width(placed_width);
-
-            // Draw placed segments
-            for pair in self.wire_preview.windows(2) {
-                let p1 = cam
-                    .world_to_screen(iced::Point::new(pair[0].x as f32, pair[0].y as f32), bounds);
-                let p2 = cam
-                    .world_to_screen(iced::Point::new(pair[1].x as f32, pair[1].y as f32), bounds);
-                let seg = canvas::Path::line(p1, p2);
-                frame.stroke(&seg, preview_stroke);
-            }
-
-            // Rubber-band from last point to cursor (constrained by draw mode)
-            if let Some(last) = self.wire_preview.last() {
-                let cursor_world = cam.screen_to_world(cursor_pos, bounds);
-                // Snap cursor to grid so the rubber-band preview matches what will be placed
-                let (snap_x, snap_y) = if let Some(h) = hotspot {
-                    (h.x, h.y)
-                } else if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
-                    let g = self.prefs.snap_grid_mm;
-                    (
-                        (cursor_world.x as f64 / g).round() * g,
-                        (cursor_world.y as f64 / g).round() * g,
-                    )
-                } else {
-                    (cursor_world.x as f64, cursor_world.y as f64)
-                };
-                let start = signex_types::schematic::Point::new(last.x, last.y);
-                let end = signex_types::schematic::Point::new(snap_x, snap_y);
-                let rubber_stroke = canvas::Stroke::default()
-                    .with_color(Color {
-                        a: 0.7,
-                        ..wire_color_iced
-                    })
-                    .with_width(placed_width);
-
-                // Compute constrained segments based on draw mode
-                let segments = match self.prefs.draw_mode {
-                    crate::app::DrawMode::FreeAngle => {
-                        vec![(start, end)]
-                    }
-                    crate::app::DrawMode::Ortho90 => {
-                        let dx = end.x - start.x;
-                        let dy = end.y - start.y;
-                        if dx.abs() < 0.01 || dy.abs() < 0.01 {
-                            vec![(start, end)]
-                        } else {
-                            let corner = signex_types::schematic::Point::new(end.x, start.y);
-                            vec![(start, corner), (corner, end)]
-                        }
-                    }
-                    crate::app::DrawMode::Angle45 => {
-                        let dx = end.x - start.x;
-                        let dy = end.y - start.y;
-                        let adx = dx.abs();
-                        let ady = dy.abs();
-                        if adx < 0.01 || ady < 0.01 {
-                            vec![(start, end)]
-                        } else if (adx - ady).abs() < adx * 0.4 {
-                            let d = adx.min(ady);
-                            let sx = if dx > 0.0 { 1.0 } else { -1.0 };
-                            let sy = if dy > 0.0 { 1.0 } else { -1.0 };
-                            let diag_end = signex_types::schematic::Point::new(
-                                start.x + d * sx,
-                                start.y + d * sy,
-                            );
-                            if adx > ady {
-                                vec![
-                                    (start, diag_end),
-                                    (
-                                        diag_end,
-                                        signex_types::schematic::Point::new(end.x, diag_end.y),
-                                    ),
-                                ]
-                            } else {
-                                vec![
-                                    (start, diag_end),
-                                    (
-                                        diag_end,
-                                        signex_types::schematic::Point::new(diag_end.x, end.y),
-                                    ),
-                                ]
-                            }
-                        } else {
-                            let corner = signex_types::schematic::Point::new(end.x, start.y);
-                            vec![(start, corner), (corner, end)]
-                        }
-                    }
-                };
-
-                for (p1, p2) in &segments {
-                    let s1 =
-                        cam.world_to_screen(iced::Point::new(p1.x as f32, p1.y as f32), bounds);
-                    let s2 =
-                        cam.world_to_screen(iced::Point::new(p2.x as f32, p2.y as f32), bounds);
-                    frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke);
-                }
-            }
+        let Some(strokes) = self.wire_preview_strokes(bounds, cursor_pos, hotspot) else {
+            return;
+        };
+        let wire_color = crate::render_config::to_iced(&self.prefs.canvas_colors.wire);
+        let placed = canvas::Stroke::default().with_color(wire_color);
+        let rubber = canvas::Stroke::default().with_color(Color {
+            a: 0.7,
+            ..wire_color
+        });
+        for (p1, p2, width) in strokes.placed {
+            frame.stroke(&canvas::Path::line(p1, p2), placed.with_width(width));
+        }
+        for (p1, p2, width) in strokes.rubber {
+            frame.stroke(&canvas::Path::line(p1, p2), rubber.with_width(width));
         }
     }
+
+    /// Screen segments and widths of the wire-in-progress preview, snapped
+    /// like a placed wire (#1888); `None` when no wire is being drawn.
+    pub(crate) fn wire_preview_strokes(
+        &self,
+        bounds: Rectangle,
+        cursor_pos: iced::Point,
+        hotspot: Option<signex_types::schematic::Point>,
+    ) -> Option<WirePreviewStrokes> {
+        if !self.drawing_mode || self.wire_preview.is_empty() {
+            return None;
+        }
+        let cam = self.camera();
+        let to_screen = |p: &signex_types::schematic::Point| {
+            cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds)
+        };
+        let mut strokes = WirePreviewStrokes::default();
+        for pair in self.wire_preview.windows(2) {
+            let line = self.placed_wire_line(to_screen(&pair[0]), to_screen(&pair[1]), cam.scale);
+            strokes.placed.push(line);
+        }
+        // Rubber-band from last point to cursor (constrained by draw mode)
+        if let Some(last) = self.wire_preview.last() {
+            let cursor_world = cam.screen_to_world(cursor_pos, bounds);
+            // Snap cursor to grid so the rubber-band preview matches what will be placed
+            let (snap_x, snap_y) = if let Some(h) = hotspot {
+                (h.x, h.y)
+            } else if self.prefs.snap_enabled && self.prefs.snap_grid_mm > 0.0 {
+                let g = self.prefs.snap_grid_mm;
+                (
+                    (cursor_world.x as f64 / g).round() * g,
+                    (cursor_world.y as f64 / g).round() * g,
+                )
+            } else {
+                (cursor_world.x as f64, cursor_world.y as f64)
+            };
+            let start = signex_types::schematic::Point::new(last.x, last.y);
+            let end = signex_types::schematic::Point::new(snap_x, snap_y);
+
+            let segments = match self.prefs.draw_mode {
+                crate::app::DrawMode::FreeAngle => {
+                    vec![(start, end)]
+                }
+                crate::app::DrawMode::Ortho90 => {
+                    let dx = end.x - start.x;
+                    let dy = end.y - start.y;
+                    if dx.abs() < 0.01 || dy.abs() < 0.01 {
+                        vec![(start, end)]
+                    } else {
+                        let corner = signex_types::schematic::Point::new(end.x, start.y);
+                        vec![(start, corner), (corner, end)]
+                    }
+                }
+                crate::app::DrawMode::Angle45 => {
+                    let dx = end.x - start.x;
+                    let dy = end.y - start.y;
+                    let adx = dx.abs();
+                    let ady = dy.abs();
+                    if adx < 0.01 || ady < 0.01 {
+                        vec![(start, end)]
+                    } else if (adx - ady).abs() < adx * 0.4 {
+                        let d = adx.min(ady);
+                        let sx = if dx > 0.0 { 1.0 } else { -1.0 };
+                        let sy = if dy > 0.0 { 1.0 } else { -1.0 };
+                        let diag_end =
+                            signex_types::schematic::Point::new(start.x + d * sx, start.y + d * sy);
+                        if adx > ady {
+                            vec![
+                                (start, diag_end),
+                                (
+                                    diag_end,
+                                    signex_types::schematic::Point::new(end.x, diag_end.y),
+                                ),
+                            ]
+                        } else {
+                            vec![
+                                (start, diag_end),
+                                (
+                                    diag_end,
+                                    signex_types::schematic::Point::new(diag_end.x, end.y),
+                                ),
+                            ]
+                        }
+                    } else {
+                        let corner = signex_types::schematic::Point::new(end.x, start.y);
+                        vec![(start, corner), (corner, end)]
+                    }
+                }
+            };
+
+            for (p1, p2) in &segments {
+                let line = self.placed_wire_line(to_screen(p1), to_screen(p2), cam.scale);
+                strokes.rubber.push(line);
+            }
+        }
+        Some(strokes)
+    }
+}
+
+/// Screen-space segments of the wire preview: `(from, to, width)`, in
+/// logical pixels.
+#[derive(Default)]
+pub(crate) struct WirePreviewStrokes {
+    pub placed: Vec<(iced::Point, iced::Point, f32)>,
+    pub rubber: Vec<(iced::Point, iced::Point, f32)>,
 }
