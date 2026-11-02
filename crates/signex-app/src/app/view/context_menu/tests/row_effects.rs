@@ -667,9 +667,18 @@ fn tree_save_row_writes_the_active_schematic() {
 
     let rows = tree_root_rows(&mut app, idx, true);
     assert!(row_is_live(&rows, "save_document"));
+    app.interaction_state.project_tree_context_menu =
+        Some(crate::app::ProjectTreeContextMenuState {
+            x: 0.0,
+            y: 0.0,
+            key: None,
+        });
     settle(&mut app, live_row(&rows, "save_document"));
 
     assert!(path.exists(), "the schematic was not written");
+    // Today Save leaves the tree menu on screen: nothing on its route
+    // dismisses it.
+    assert!(app.interaction_state.project_tree_context_menu.is_some());
 }
 
 /// The row is live when the clicked project is dirty, but Save acts on the
