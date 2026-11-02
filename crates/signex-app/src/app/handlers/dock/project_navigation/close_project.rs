@@ -312,7 +312,18 @@ impl Signex {
         self.document_state.note_documents_changed();
         self.cancel_replace_job("the project was closed");
         self.document_state.projects.retain(|p| p.id != target_id);
-        self.library.forget_missing_libraries_of(target_id);
+        let projects = &self.document_state.projects;
+        self.library.forget_missing_libraries_of(target_id, |path| {
+            projects
+                .iter()
+                .find(|p| {
+                    p.data
+                        .libraries
+                        .iter()
+                        .any(|e| p.data.resolve_library_path(e) == path)
+                })
+                .map(|p| p.id)
+        });
         self.document_state.net_class_history.remove(&target_id);
         self.document_state.project_tabs.remove(&target_id);
         self.forget_net_class_picks_of(target_id);

@@ -28,6 +28,11 @@ impl MissingLibraries {
         self.locating = Some(path);
     }
 
+    /// Whether a Locate file pick is in flight.
+    pub fn is_locating(&self) -> bool {
+        self.locating.is_some()
+    }
+
     /// The library the finished Locate pick was for.
     pub fn take_locating(&mut self) -> Option<PathBuf> {
         self.locating.take()
@@ -77,13 +82,34 @@ impl LibraryState {
         }
     }
 
-    /// A project closed: drop its queued dialogs and the open one.
-    pub fn forget_missing_libraries_of(&mut self, project: ProjectId) {
-        self.missing.waiting.retain(|(_, owner)| *owner != project);
-        let open_is_its = self.missing.open_owner == Some(project)
-            && matches!(self.recovery, Some(RecoveryDialog::LibraryMissing { .. }));
-        if open_is_its {
-            self.finish_recovery();
+    /// A project closed: its queued dialogs and the open one pass to
+    /// `next_owner`, another open project that still lists the library,
+    /// and are dropped when there is none.
+    pub fn forget_missing_libraries_of(
+        &mut self,
+        project: ProjectId,
+        next_owner: impl Fn(&Path) -> Option<ProjectId>,
+    ) {
+        let waiting = std::mem::take(&mut self.missing.waiting);
+        self.missing.waiting = waiting
+            .into_iter()
+            .filter_map(|(path, owner)| {
+                if owner != project {
+                    return Some((path, owner));
+                }
+                next_owner(&path).map(|next| (path, next))
+            })
+            .collect();
+        if self.missing.open_owner != Some(project) {
+            return;
+        }
+        let open_path = match &self.recovery {
+            Some(RecoveryDialog::LibraryMissing { path }) => path.clone(),
+            _ => return,
+        };
+        match next_owner(&open_path) {
+            Some(next) => self.missing.open_owner = Some(next),
+            None => self.finish_recovery(),
         }
     }
 }

@@ -109,6 +109,11 @@ pub(super) fn handle_recovery_library_missing(
             Task::none()
         }
         LibraryMissingChoice::Locate => {
+            // One pick at a time: a second click while the picker is open
+            // would land a result for a dialog that has moved on.
+            if app.library.missing.is_locating() {
+                return Task::none();
+            }
             if let Some(RecoveryDialog::LibraryMissing { path }) = app.library.recovery.as_ref() {
                 let path = path.clone();
                 app.library.missing.start_locating(path);
@@ -163,8 +168,10 @@ pub(super) fn handle_recovery_library_missing(
 }
 
 /// Result of the "Locate Library" file pick fired from the
-/// *Library missing* recovery dialog. Clears the recovery state and,
-/// when the user picked a replacement, re-opens the library there.
+/// *Library missing* recovery dialog. Opens the picked library and, only
+/// once it has mounted, repoints the project entries that listed the
+/// missing path. A pick that comes back after its dialog moved on only
+/// opens the library.
 pub(super) fn handle_recovery_library_missing_locate_result(
     app: &mut Signex,
     picked: Option<std::path::PathBuf>,
@@ -174,23 +181,28 @@ pub(super) fn handle_recovery_library_missing_locate_result(
         Some(RecoveryDialog::LibraryMissing { path }) => Some(path.clone()),
         _ => None,
     };
-    // Only the dialog the pick was started from is closed, and only its
-    // project entries are repointed; a dialog already moved on stays.
     let still_open = located.is_some() && located == dialog_path;
+    let Some(new_path) = picked else {
+        // Picker cancelled: the dialog stays for another choice.
+        return Task::none();
+    };
     if still_open {
-        if let (Some(old), Some(new)) = (located.as_deref(), picked.as_deref()) {
-            relocate_project_entries(app, old, new);
+        // Closed without moving on yet: a failed open may raise its own
+        // recovery dialog, which must not be replaced by the next queued one.
+        app.library.recovery = None;
+    }
+    let task = app.handle_open_library_at(new_path.clone());
+    if still_open {
+        if let Some(old) = located.as_deref()
+            && app.library.library_at(&new_path).is_some()
+        {
+            relocate_project_entries(app, old, &new_path);
         }
-        app.library.finish_recovery();
-    } else if dialog_path.is_some() && located.is_none() {
-        app.library.finish_recovery();
+        if app.library.recovery.is_none() {
+            app.library.finish_recovery();
+        }
     }
-    if let Some(new_path) = picked {
-        return Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(
-            new_path,
-        ))));
-    }
-    Task::none()
+    task
 }
 
 /// Point every project entry that listed `old` at `new`, and mark those
@@ -211,6 +223,26 @@ fn relocate_project_entries(app: &mut Signex, old: &std::path::Path, new: &std::
             .filter(|(_, e)| project.data.resolve_library_path(e) == old)
             .map(|(i, _)| i)
             .collect();
+        if hits.is_empty() {
+            continue;
+        }
+        changed.push(project.path.clone());
+        let lists_new = project
+            .data
+            .libraries
+            .iter()
+            .any(|e| project.data.resolve_library_path(e) == new);
+        if lists_new {
+            // Already listed at the new place: drop the stale entries
+            // instead of making a second entry for the same library.
+            let mut idx = 0usize;
+            project.data.libraries.retain(|_| {
+                let keep = !hits.contains(&idx);
+                idx += 1;
+                keep
+            });
+            continue;
+        }
         for &i in &hits {
             let entry = &mut project.data.libraries[i];
             // A Global entry stays Global when the new place is outside
@@ -220,9 +252,6 @@ fn relocate_project_entries(app: &mut Signex, old: &std::path::Path, new: &std::
                 (_, kind) => kind,
             };
             entry.path = path.clone();
-        }
-        if !hits.is_empty() {
-            changed.push(project.path.clone());
         }
     }
     for path in &changed {

@@ -236,7 +236,22 @@ fn two_missing_libraries_raise_two_dialogs_in_turn() {
 fn closing_the_project_prunes_its_queued_dialogs_and_the_open_one() {
     let (mut app, _task) = Signex::new();
     let (_, _, id) = two_missing(&mut app);
-    app.library.forget_missing_libraries_of(id);
+    app.library.forget_missing_libraries_of(id, |_| None);
+    assert!(app.library.recovery.is_none());
+    assert_eq!(app.library.missing.waiting_len(), 0);
+}
+
+#[test]
+fn a_closed_projects_dialogs_pass_to_another_project_that_lists_them() {
+    let (mut app, _task) = Signex::new();
+    let (a, b, first) = two_missing(&mut app);
+    let second = add_project(&mut app, &[&a, &b]);
+    app.library
+        .forget_missing_libraries_of(first, |_| Some(second));
+    assert_eq!(open_path(&app), Some(a), "the open dialog stays");
+    assert_eq!(app.library.missing.waiting_len(), 1, "the queued one too");
+    // Closing the new owner then drops them.
+    app.library.forget_missing_libraries_of(second, |_| None);
     assert!(app.library.recovery.is_none());
     assert_eq!(app.library.missing.waiting_len(), 0);
 }
@@ -267,14 +282,16 @@ fn remove_from_project_marks_the_project_dirty_and_shows_the_next_dialog() {
 fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
     use crate::library::recovery::LibraryMissingChoice::Locate;
     let (mut app, _task) = Signex::new();
-    let (a, _, _) = two_missing(&mut app);
+    let (a, b, _) = two_missing(&mut app);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
         Locate,
     )));
     let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
     let _ = app.update(Message::Library(
         LibraryMessage::RecoveryLibraryMissingLocateResult(Some(moved.clone())),
     ));
+    assert!(app.library.library_at(&moved).is_some(), "the pick mounted");
     let project = &app.document_state.projects[0];
     assert_eq!(
         project
@@ -284,5 +301,52 @@ fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
     );
     let project_path = project.path.clone();
     assert!(app.document_state.is_document_dirty(&project_path));
-    assert_ne!(open_path(&app), Some(a));
+    assert_eq!(open_path(&app), Some(b));
+}
+
+#[test]
+fn a_pick_that_does_not_open_leaves_the_project_entry_alone() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, _, _) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let bogus = a.with_file_name("not-there.snxlib");
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(bogus)),
+    ));
+    let project = &app.document_state.projects[0];
+    assert_eq!(
+        project
+            .data
+            .resolve_library_path(&project.data.libraries[0]),
+        a
+    );
+    let project_path = project.path.clone();
+    assert!(!app.document_state.is_document_dirty(&project_path));
+}
+
+#[test]
+fn a_second_locate_while_picking_is_ignored() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, b, _) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(moved)),
+    ));
+    assert_eq!(open_path(&app), Some(b.clone()));
+    // A stray second result never closes the dialog that moved on.
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(None),
+    ));
+    assert_eq!(open_path(&app), Some(b));
 }
