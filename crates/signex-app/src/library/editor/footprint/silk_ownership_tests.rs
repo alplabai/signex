@@ -304,3 +304,45 @@ fn a_refused_delete_of_baked_silk_keeps_the_redo_step() {
     assert_eq!(editor.redo.len(), redo, "Redo is still available");
     assert!(editor.redo());
 }
+
+#[test]
+fn a_construction_only_silk_tag_does_not_classify_a_file_this_build_saved() {
+    let stem = "construction-1915";
+    let text = legacy_with_hand_silk(|fp| {
+        // Only hand silk and a construction entity that tags silk: the bake
+        // skips it, so nothing is owed a classification.
+        fp.silk_f.drain(..1);
+        for e in &mut fp.sketch.as_mut().unwrap().entities {
+            if e.silk.is_some() {
+                e.construction = true;
+            }
+        }
+        make_unsolvable(fp);
+    });
+    let warned_before = crate::diagnostics::logged_count(stem);
+
+    let editor = reopen(&text, stem);
+
+    assert_eq!(crate::diagnostics::logged_count(stem), warned_before);
+    assert_eq!(editor.primitive().silk_f, vec![hand_text(), hand_line()]);
+}
+
+#[test]
+fn undo_across_a_bake_does_not_leave_the_silk_selection_on_another_entry() {
+    let mut editor = reopen(&legacy_with_hand_silk(|_| {}), "undo-select-1915");
+    // silk_f = [baked bar, hand text, hand line]; a bake drops the bar.
+    let unassign = FootprintEditorMsg::SketchSetRole {
+        id: SketchEntityId("7fff648f-930d-4e7e-a1e8-ddcc9023e196".parse().unwrap()),
+        role: crate::library::messages::RoleTag::Unassigned,
+    };
+    apply_footprint_primitive_edit(&mut editor, unassign);
+    assert_eq!(editor.primitive().silk_f, vec![hand_text(), hand_line()]);
+    apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::SelectSilkF(Some(1)));
+
+    assert!(editor.undo());
+    apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::DeleteSilkF);
+
+    let silk = &editor.primitive().silk_f;
+    assert_eq!(silk.len(), 3, "Delete removed nothing: {silk:?}");
+    assert!(silk.contains(&hand_text()));
+}
