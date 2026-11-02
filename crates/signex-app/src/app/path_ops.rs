@@ -501,9 +501,14 @@ pub enum DeleteIo {
     /// The target is outside the project or a shared library; not deleted.
     Refused,
     Deleted,
-    /// A library was deleted; these files were not library artifacts (or could
-    /// not be removed) and are still on disk.
-    DeletedLeaving(Vec<PathBuf>),
+    /// A library manifest was deleted. `cleaned` is the folder whose known
+    /// library folders were cleared (`None`: the folder is shared or the
+    /// project's, so they were kept); `left` are the files that were not
+    /// library artifacts (or could not be removed) and are still on disk.
+    DeletedLibrary {
+        cleaned: Option<PathBuf>,
+        left: Vec<PathBuf>,
+    },
     /// `remove_file` / `remove_dir_all` failed with this OS text.
     Failed(String),
     /// As `Failed`, and the saved project no longer lists the file either: its

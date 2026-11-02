@@ -49,6 +49,7 @@ mod project_rename_recovery_tests;
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
+mod remove_library_scope;
 #[cfg(test)]
 mod remove_library_tests;
 mod remove_library_usage;

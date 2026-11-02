@@ -270,6 +270,17 @@ impl LibraryRollbackJob {
     }
 }
 
+/// What `DeleteJob` took off disk.
+enum Removed {
+    /// A file, or a `.snxlib` directory package, whole.
+    Plain,
+    /// A library manifest file and, when `cleaned`, its known folders.
+    Library {
+        cleaned: Option<PathBuf>,
+        left: Vec<PathBuf>,
+    },
+}
+
 /// Deletes a file or `.snxlib` directory, but only when it is provably inside
 /// the owning project's folder and not a shared library (#139).
 pub struct DeleteJob {
@@ -324,8 +335,10 @@ impl DeleteJob {
             }
         };
         let e = match self.remove_target() {
-            Ok(left) if left.is_empty() => return (DeleteIo::Deleted, entry),
-            Ok(left) => return (DeleteIo::DeletedLeaving(left), entry),
+            Ok(Removed::Plain) => return (DeleteIo::Deleted, entry),
+            Ok(Removed::Library { cleaned, left }) => {
+                return (DeleteIo::DeletedLibrary { cleaned, left }, entry);
+            }
             Err(e) => e,
         };
         let mut why = e;
@@ -360,8 +373,8 @@ impl DeleteJob {
 
     /// Remove the target from disk. A `.snxlib` directory package is itself
     /// the library and goes whole; a `.snxlib` file goes by its known
-    /// artifacts only (see `library_delete`). Returns what was left behind.
-    fn remove_target(&self) -> Result<Vec<PathBuf>, String> {
+    /// artifacts only (see `library_delete`).
+    fn remove_target(&self) -> Result<Removed, String> {
         if is_library_manifest(&self.target) && self.target.is_file() {
             return self.delete_library();
         }
@@ -370,19 +383,24 @@ impl DeleteJob {
         } else {
             std::fs::remove_file(&self.target)
         };
-        removed.map(|()| Vec::new()).map_err(|e| e.to_string())
+        removed.map(|()| Removed::Plain).map_err(|e| e.to_string())
     }
 
     /// A manifest directly in the project folder, or in a folder another
-    /// library shares, gets no folder clean-up.
-    fn delete_library(&self) -> Result<Vec<PathBuf>, String> {
+    /// library or a project document shares, gets no folder clean-up.
+    fn delete_library(&self) -> Result<Removed, String> {
         let library_dir = self.target.parent().filter(|dir| {
             self.project_root
                 .as_deref()
                 .is_some_and(|root| is_inside_project_root(dir, root))
                 && !crate::app::library_delete::holds_other_library(dir, &self.target)
+                && !crate::app::library_delete::holds_project_files(dir)
         });
-        crate::app::library_delete::delete_library(&self.target, library_dir)
+        let left = crate::app::library_delete::delete_library(&self.target, library_dir)?;
+        Ok(Removed::Library {
+            cleaned: library_dir.map(Path::to_path_buf),
+            left,
+        })
     }
 
     fn drop_entry(&self) -> Result<EntryPatch, signex_types::project::ProjectError> {

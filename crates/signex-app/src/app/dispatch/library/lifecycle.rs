@@ -25,7 +25,24 @@ impl Signex {
     /// Result of the `rfd` directory pick — mount the library at `path`,
     /// routing any open error into the recovery flow.
     pub(super) fn handle_open_library_at(&mut self, path: std::path::PathBuf) -> Task<Message> {
-        if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
+        self.open_library_at_as(path, false)
+    }
+
+    /// [`Self::handle_open_library_at`]; `as_project` ranks `path` as a
+    /// project library even though no project lists it yet (Locate Library
+    /// repoints the entries only after the mount).
+    pub(super) fn open_library_at_as(
+        &mut self,
+        path: std::path::PathBuf,
+        as_project: bool,
+    ) -> Task<Message> {
+        let mut project_paths = self.open_project_library_paths();
+        if as_project {
+            project_paths.push(path.clone());
+        }
+        if let Err(e) =
+            commands::open_library_among(&mut self.library, path.clone(), &project_paths)
+        {
             tracing::warn!(target: "signex::library", error = %e, path = %path.display(), "open_library failed");
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
@@ -38,7 +55,7 @@ impl Signex {
     }
 
     /// Every library path the open projects list.
-    fn open_project_library_paths(&self) -> Vec<std::path::PathBuf> {
+    pub(super) fn open_project_library_paths(&self) -> Vec<std::path::PathBuf> {
         self.document_state
             .projects
             .iter()

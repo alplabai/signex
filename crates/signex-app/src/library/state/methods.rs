@@ -279,7 +279,17 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, false)
+        self.open_library_marked(root, false, &[])
+    }
+
+    /// [`Self::open_library`] knowing which paths the open projects list,
+    /// so a shared `library_id` is settled by source (#1908).
+    pub fn open_library_among(
+        &mut self,
+        root: PathBuf,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false, project_paths)
     }
 
     /// Mount the library at `root` read-only — the stock library that
@@ -287,7 +297,7 @@ impl LibraryState {
     /// with `LibraryError::ReadOnly` whatever the install directory's
     /// permissions are. Idempotent like [`Self::open_library`].
     pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, true)
+        self.open_library_marked(root, true, &[])
     }
 
     /// True when the library mounted at `root` is read-only.
@@ -355,7 +365,12 @@ impl LibraryState {
         !self.stock_editable && self.is_stock_root(path)
     }
 
-    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
+    fn open_library_marked(
+        &mut self,
+        root: PathBuf,
+        read_only: bool,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             self.cancel_pending_close(&root, "it was opened again");
             return Ok(());
@@ -368,7 +383,7 @@ impl LibraryState {
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
         self.refuse_stock_copy(&root, library_id)?;
-        self.resolve_id_clash(&root, library_id, &[])?;
+        self.resolve_id_clash(&root, library_id, project_paths)?;
         // `LibrarySet::mount` refuses this path if it is already mounted.
         let read_only = read_only || self.is_locked_stock_root(&root);
         if read_only {

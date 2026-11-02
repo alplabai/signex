@@ -9,17 +9,29 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Known sub-folders (relative to the library folder) and the extensions
-/// of the files that may be removed from them.
-const KNOWN_FOLDERS: &[(&str, &[&str])] = &[
-    ("symbols", &["snxsym"]),
-    ("footprints", &["snxfpt"]),
-    ("sims", &["snxsim"]),
-    ("assets/datasheets", &["pdf"]),
-    ("models", &["step", "stp", "wrl", "iges"]),
-    ("3dmodels", &["step", "stp", "wrl", "iges"]),
-    ("classes", &["snxcls", "toml"]),
-];
+/// Extensions of the files that may be removed from a library sub-folder.
+fn folder_extensions(folder: &str) -> &'static [&'static str] {
+    match folder {
+        "symbols" => &["snxsym"],
+        "footprints" => &["snxfpt"],
+        "sims" => &["snxsim"],
+        "3dmodels" => &["step", "stp", "wrl", "iges"],
+        "classes" => &["snxcls", "toml"],
+        _ => &[],
+    }
+}
+
+/// Known sub-folders (relative to the library folder) and the extensions of
+/// the files that may be removed from them: the library crate's own folder
+/// list plus the datasheet assets. A project's own `models` is not here.
+pub(crate) fn known_folders() -> Vec<(&'static str, &'static [&'static str])> {
+    let mut folders: Vec<_> = signex_library::adapters::local_git::LIBRARY_SUBFOLDERS
+        .iter()
+        .map(|f| (*f, folder_extensions(f)))
+        .collect();
+    folders.push(("assets/datasheets", &["pdf"]));
+    folders
+}
 
 /// Parent folders emptied last, innermost first.
 const KNOWN_PARENTS: &[&str] = &["assets"];
@@ -57,6 +69,19 @@ fn lock_sidecars(manifest: &Path) -> Vec<PathBuf> {
     vec![lock, PathBuf::from(queue)]
 }
 
+/// Does `dir` hold a project or design document (`.snxprj`, `.snxsch`,
+/// `.snxpcb`)? Its sub-folders are the project's, never a library's to clean.
+pub(crate) fn holds_project_files(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            let path = e.path();
+            ["snxprj", "snxsch", "snxpcb"]
+                .iter()
+                .any(|ext| crate::app::file_extension::has_extension(&path, ext))
+        })
+    })
+}
+
 /// Does `dir` hold a library manifest other than `manifest`? Such a folder's
 /// sub-folders are shared, so none of them is this library's to clean up.
 pub(crate) fn holds_other_library(dir: &Path, manifest: &Path) -> bool {
@@ -72,7 +97,7 @@ fn untouched_known_folders(dir: Option<&Path>) -> Vec<PathBuf> {
     let Some(dir) = dir else {
         return Vec::new();
     };
-    KNOWN_FOLDERS
+    known_folders()
         .iter()
         .map(|(folder, _)| dir.join(folder))
         .filter(|p| p.is_dir())
@@ -88,7 +113,7 @@ fn is_real_dir(path: &Path) -> bool {
 /// empty. Best effort: a failure leaves the entry and lists it.
 pub(crate) fn remove_known_artifacts(dir: &Path) -> Vec<PathBuf> {
     let mut leftovers = Vec::new();
-    for (folder, extensions) in KNOWN_FOLDERS {
+    for (folder, extensions) in known_folders() {
         let path = dir.join(folder);
         let top = dir.join(folder.split('/').next().unwrap_or(folder));
         if !is_real_dir(&top) || !is_real_dir(&path) {
@@ -175,6 +200,30 @@ mod tests {
         assert_eq!(fs::read(dir.join("symbols/notes.txt")).unwrap(), b"mine");
         assert_eq!(fs::read(dir.join("README.md")).unwrap(), b"mine");
         assert!(left.contains(&dir.join("README.md")));
+    }
+
+    #[test]
+    fn project_models_beside_the_library_survive() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().join("hw");
+        fs::create_dir_all(dir.join("models")).unwrap();
+        fs::create_dir_all(dir.join("3dmodels")).unwrap();
+        fs::write(dir.join("lib.snxlib"), b"m").unwrap();
+        fs::write(dir.join("models/x.step"), b"pcb").unwrap();
+        fs::write(dir.join("3dmodels/y.step"), b"lib").unwrap();
+
+        delete_library(&dir.join("lib.snxlib"), Some(&dir)).unwrap();
+
+        assert!(dir.join("models/x.step").exists());
+        assert!(!dir.join("3dmodels").exists());
+    }
+
+    #[test]
+    fn a_project_file_is_detected_case_insensitively() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        assert!(!holds_project_files(tmp.path()));
+        fs::write(tmp.path().join("P.SNXPRJ"), b"p").unwrap();
+        assert!(holds_project_files(tmp.path()));
     }
 
     #[test]

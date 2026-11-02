@@ -236,7 +236,10 @@ fn a_library_delete_drops_the_saved_entry_and_reports_leftovers() {
 
     let (io, entry) = job.run();
 
-    assert!(matches!(io, DeleteIo::DeletedLeaving(_)), "{io:?}");
+    assert!(
+        matches!(&io, DeleteIo::DeletedLibrary { left, .. } if !left.is_empty()),
+        "{io:?}"
+    );
     assert!(matches!(
         entry,
         crate::app::project_entry_disk::EntryPatch::Patched(_)
@@ -244,4 +247,119 @@ fn a_library_delete_drops_the_saved_entry_and_reports_leftovers() {
     assert!(!f.manifest.exists());
     let saved = signex_types::project::parse_project(&project_file).unwrap();
     assert!(saved.libraries.is_empty());
+}
+
+/// A clean footprint editor tab on `path`.
+fn footprint_tab(f: &mut Fixture, path: &std::path::Path) {
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    f.app.document_state.footprint_editors.insert(
+        path.to_path_buf(),
+        crate::app::FootprintDocument::new(path.to_path_buf(), file),
+    );
+    f.app.document_state.tabs.push(crate::app::TabInfo {
+        title: "fp".into(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::FootprintEditor(path.to_path_buf()),
+    });
+}
+
+#[test]
+fn delete_closes_the_tabs_of_the_primitives_it_removed() {
+    let mut f = fixture();
+    let removed = f.dir.join("symbols/a.snxsym");
+    let kept = f.dir.join("my-notes.txt");
+    footprint_tab(&mut f, &removed);
+    footprint_tab(&mut f, &kept);
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(
+        !f.app
+            .document_state
+            .footprint_editors
+            .contains_key(&removed)
+    );
+    assert!(f.app.document_state.footprint_editors.contains_key(&kept));
+    let tabs: Vec<_> = f.app.document_state.tabs.iter().map(|t| &t.path).collect();
+    assert_eq!(tabs, [&kept]);
+}
+
+#[test]
+fn delete_is_refused_while_a_primitive_draft_is_unsaved() {
+    let mut f = fixture();
+    let draft = f.dir.join("symbols/a.snxsym");
+    footprint_tab(&mut f, &draft);
+    f.app.document_state.mark_document_dirty(&draft);
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(f.manifest.exists());
+    assert!(draft.exists());
+    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_state.is_document_dirty(&draft));
+}
+
+#[test]
+fn delete_is_refused_while_a_library_write_is_queued() {
+    let mut f = fixture();
+    let _turn = f.app.library.writes.turn(&f.manifest);
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(f.manifest.exists());
+    assert!(f.app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn delete_is_refused_while_the_library_is_still_mounting() {
+    let mut f = fixture();
+    f.app.library.pending_mounts.insert(
+        f.manifest.clone(),
+        crate::library::mount::MountIntent::Silent,
+    );
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(f.manifest.exists());
+    assert!(f.app.document_state.error_notice.is_some());
+}
+
+#[test]
+fn delete_unmounts_even_when_another_project_lists_it() {
+    let mut f = fixture();
+    list_in_second_project(&mut f);
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(!f.manifest.exists());
+    assert!(f.app.library.library_at(&f.manifest).is_none());
+}
+
+#[test]
+fn a_project_model_folder_beside_the_library_survives_delete() {
+    let mut f = fixture();
+    fs::create_dir_all(f.dir.join("models")).unwrap();
+    fs::write(f.dir.join("models/board.step"), b"pcb model").unwrap();
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(!f.manifest.exists());
+    assert_eq!(
+        fs::read(f.dir.join("models/board.step")).unwrap(),
+        b"pcb model"
+    );
+}
+
+#[test]
+fn a_folder_with_a_project_file_keeps_its_primitives() {
+    let mut f = fixture();
+    fs::write(f.dir.join("Board.SNXPRJ"), b"{}").unwrap();
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(!f.manifest.exists());
+    assert!(f.dir.join("symbols/a.snxsym").exists());
 }

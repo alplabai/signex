@@ -191,7 +191,13 @@ pub(super) fn handle_recovery_library_missing_locate_result(
         // recovery dialog, which must not be replaced by the next queued one.
         app.library.recovery = None;
     }
-    let task = app.handle_open_library_at(new_path.clone());
+    // The picked library takes the missing one's place in its projects, so
+    // it ranks as theirs while it mounts.
+    let replaces_project_entry = still_open
+        && located
+            .as_deref()
+            .is_some_and(|old| app.open_project_library_paths().iter().any(|p| p == old));
+    let task = app.open_library_at_as(new_path.clone(), replaces_project_entry);
     if still_open {
         if let Some(old) = located.as_deref()
             && app.library.library_at(&new_path).is_some()

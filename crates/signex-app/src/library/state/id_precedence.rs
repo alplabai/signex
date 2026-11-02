@@ -91,10 +91,12 @@ impl LibraryState {
         if !self.dirty_editors_for_library(&other).is_empty() {
             return keep_other(self, " and has unsaved edits");
         }
-        self.close_library(&other);
-        if self.library_at(&other).is_some() {
+        // A close under a running write only defers; refuse `root` and leave
+        // `other` mounted, or neither would be (#1908).
+        if self.writes.pending(&other) > 0 {
             return keep_other(self, " and is still being written");
         }
+        self.close_library(&other);
         self.push_id_clash_notice(IdClashNotice {
             kept: root.to_path_buf(),
             set_aside: other,

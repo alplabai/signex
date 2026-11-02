@@ -250,11 +250,14 @@ impl Signex {
             // A tab may still hold the target (#736), and one opened by a
             // route that does not consult the pending set must not outlive
             // the file.
-            DeleteIo::Orphan | DeleteIo::Deleted | DeleteIo::DeletedLeaving(_) => {
-                if let DeleteIo::DeletedLeaving(left) = &io {
+            DeleteIo::Orphan | DeleteIo::Deleted | DeleteIo::DeletedLibrary { .. } => {
+                if let DeleteIo::DeletedLibrary { left, .. } = &io
+                    && !left.is_empty()
+                {
                     report_library_leftovers(&request.display_name, left);
                 }
-                let removed_file = matches!(io, DeleteIo::Deleted | DeleteIo::DeletedLeaving(_));
+                let removed_file =
+                    matches!(io, DeleteIo::Deleted | DeleteIo::DeletedLibrary { .. });
                 if removed_file && !request.placing.is_empty() {
                     crate::diagnostics::log_warning(format!(
                         "Deleted {}: {} sheet symbol(s) still point at it and now show a missing \
@@ -266,6 +269,15 @@ impl Signex {
                 }
                 tasks = self.close_tabs_of_removed(target, true, request.fold);
                 self.drop_deleted_documents(target, request.fold);
+                // The clean-up also removed primitives from the library's
+                // known folders: their tabs and drafts go with them.
+                if let DeleteIo::DeletedLibrary {
+                    cleaned: Some(dir),
+                    left,
+                } = &io
+                {
+                    tasks.extend(self.forget_deleted_library_folders(dir, left, request.fold));
+                }
                 tasks.push(self.unmount_removed_library(&request.dialog, true));
                 self.settle_removed_entry(&request, entry);
             }
@@ -329,12 +341,20 @@ impl Signex {
                 path_key_with(p, fold) == path_key_with(target, fold)
             }
         };
+        self.close_tabs_where(matches_target)
+    }
+
+    /// Close every tab whose file `matches`.
+    pub(super) fn close_tabs_where(
+        &mut self,
+        matches: impl Fn(&std::path::Path) -> bool,
+    ) -> Vec<iced::Task<Message>> {
         let mut tasks = Vec::new();
         while let Some(idx) = self
             .document_state
             .tabs
             .iter()
-            .position(|t| matches_target(&t.path))
+            .position(|t| matches(&t.path))
         {
             tasks.push(self.close_tab_now(idx));
         }
@@ -345,9 +365,18 @@ impl Signex {
     /// the user just deleted. A parked dirty engine or draft would
     /// otherwise survive as a dirty mark and be written back by Save All.
     pub(crate) fn drop_deleted_documents(&mut self, deleted: &std::path::Path, fold: CaseFold) {
+        self.drop_documents_where(deleted, |p| path_is_under(p, deleted, fold));
+    }
+
+    /// [`Self::drop_deleted_documents`] for every document `gone` matches;
+    /// `deleted` names the removal in the log.
+    pub(super) fn drop_documents_where(
+        &mut self,
+        deleted: &std::path::Path,
+        gone: impl Fn(&std::path::Path) -> bool,
+    ) {
         // The file is gone: a replace that read it earlier must not bring it back.
         self.document_state.note_document_written_behind_engines();
-        let gone = |p: &std::path::Path| path_is_under(p, deleted, fold);
         let dead: Vec<_> = self
             .document_state
             .engines
@@ -367,9 +396,8 @@ impl Signex {
         doc.engines.retain(|p, _| !gone(p));
         doc.symbol_editors.retain(|p, _| !gone(p));
         doc.footprint_editors.retain(|p, _| !gone(p));
-        doc.mark_documents_clean_where(gone);
-        doc.document_saves
-            .forget_where(|p| path_is_under(p, deleted, fold));
+        doc.mark_documents_clean_where(&gone);
+        doc.document_saves.forget_where(&gone);
         if discarded > 0 {
             crate::diagnostics::log_warning(format!(
                 "Deleted {}: discarded {discarded} unsaved document(s)",
@@ -508,6 +536,18 @@ impl Signex {
             return iced::Task::none();
         }
 
+        // A mount still preparing, or a draft in the library's folders, is
+        // lost or recreated by the delete.
+        if is_delete
+            && let Some(refusal) =
+                self.library_delete_refusal(&state.target_path, self.dialog_fold(&state))
+        {
+            crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
+            self.document_state.error_notice =
+                Some(crate::app::state::ErrorNotice::delete(refusal));
+            return iced::Task::none();
+        }
+
         // A project folder being renamed would move the file from under the
         // delete worker.
         if is_delete
@@ -540,10 +580,10 @@ impl Signex {
     }
 
     /// Unmount the library a Remove took out of the project, so its symbols
-    /// and editors stop being served. Left mounted while another open project
-    /// still lists it. A delete drops the editors outright (the files are
-    /// gone); an exclude goes through the Close Library path, which asks
-    /// first when an editor holds unsaved edits.
+    /// and editors stop being served. A delete drops the editors outright and
+    /// unmounts whatever else lists it (the files are gone); an exclude is left
+    /// mounted while another open project still lists it, and goes through the
+    /// Close Library path, which asks first when an editor holds unsaved edits.
     fn unmount_removed_library(
         &mut self,
         dialog: &crate::app::RemoveDialogState,
@@ -554,6 +594,11 @@ impl Signex {
         if !is_library || self.library.library_at(target).is_none() {
             return iced::Task::none();
         }
+        // The files are gone: another project listing it cannot keep it served.
+        if deleted {
+            self.library.close_library(target);
+            return iced::Task::none();
+        }
         let Some(state) = self.repointed_dialog(dialog) else {
             return iced::Task::none();
         };
@@ -562,10 +607,6 @@ impl Signex {
         };
         let fold = self.shared_use_fold(&state);
         if self.library_listed_by_other_project(owner, target, fold) {
-            return iced::Task::none();
-        }
-        if deleted {
-            self.library.close_library(target);
             return iced::Task::none();
         }
         self.handle_close_library(target.clone())

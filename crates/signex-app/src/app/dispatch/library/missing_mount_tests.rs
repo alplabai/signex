@@ -304,6 +304,31 @@ fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
     assert_eq!(open_path(&app), Some(b));
 }
 
+/// The picked library replaces the missing one in the project, so it ranks
+/// as a project library against an installed copy sharing its id (#1908).
+#[test]
+fn a_located_library_outranks_an_installed_copy_of_itself() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, _, _) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let copy = a.with_file_name("copy.snxlib");
+    std::fs::copy(&moved, &copy).unwrap();
+    app.library.installed_libraries.push(copy.clone());
+    app.library.open_library(copy.clone()).expect("copy mounts");
+
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(moved.clone())),
+    ));
+
+    assert!(app.library.library_at(&moved).is_some(), "the pick mounted");
+    assert!(app.library.library_at(&copy).is_none(), "the copy gave way");
+}
+
 #[test]
 fn a_pick_that_does_not_open_leaves_the_project_entry_alone() {
     use crate::library::recovery::LibraryMissingChoice::Locate;

@@ -380,6 +380,25 @@ fn a_replacement_never_drops_a_library_with_unsaved_edits() {
     assert!(app.library.library_at(&strong).is_none());
 }
 
+/// A close under a running write only defers, so the stronger newcomer is
+/// refused and the weaker library stays mounted (neither unmounted).
+#[test]
+fn a_replacement_waits_out_a_write_on_the_weaker_library() {
+    let tmp = TempDir::new().unwrap();
+    let (mut app, strong, weak, project_paths) =
+        two_sources(&tmp, Source::Project, Source::Installed);
+    land(&mut app, &weak, &project_paths).expect("weak mounts first");
+    let turn = app.library.writes.turn(&weak);
+
+    let refused = land(&mut app, &strong, &project_paths).expect_err("refused");
+
+    assert!(refused.contains("still being written"), "{refused}");
+    assert!(app.library.library_at(&weak).is_some());
+    assert!(app.library.library_at(&strong).is_none());
+    assert!(!app.library.is_closing(&weak), "no deferred close is left");
+    drop(turn);
+}
+
 /// #1908: renaming a library on disk moves the panels' row keys with it.
 #[test]
 fn relocating_a_library_rekeys_the_panel_state() {
