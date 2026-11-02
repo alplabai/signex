@@ -13,6 +13,8 @@ use signex_types::theme::{ThemeId, theme_tokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::TreeIcon;
 
+mod row_effects;
+
 const TID: ThemeId = ThemeId::CatppuccinMocha;
 
 fn labels(entries: &[DropdownEntry<Message>]) -> Vec<String> {
