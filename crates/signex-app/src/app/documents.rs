@@ -609,8 +609,14 @@ impl FootprintDocument {
 
     fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
-        let baseline = file.clone();
+        let mut baseline = file.clone();
         let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
+        crate::library::editor::footprint::legacy_silk::recover_legacy_silk(
+            &path,
+            &mut file,
+            &mut baseline,
+            log_repairs,
+        );
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );

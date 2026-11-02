@@ -680,7 +680,7 @@ impl Signex {
             .forget_where(|p| p == path);
         self.document_state.document_saves.forget_disk_records(path);
         self.document_state.remove_engine(path);
-        self.document_state.mark_document_clean(path);
+        self.document_state.clear_document_dirty(path);
         self.discard_primitive_editor(path)
     }
 

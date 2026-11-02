@@ -1174,3 +1174,52 @@ fn project_replace_leaves_the_erc_results_stale() {
     replace_in_project(&mut app, "net", "X");
     assert!(app.erc_results_stale());
 }
+
+/// `top` is open and `child` is a saved, cached engine whose label is the
+/// only one holding `CHILD`.
+fn with_saved_cached_child() -> (Signex, tempfile::TempDir, PathBuf, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, top, child) = placed_twice_on_disk(&dir);
+    let sheet =
+        signex_types::format::SnxSchematic::parse(&std::fs::read_to_string(&child).unwrap())
+            .unwrap()
+            .sheet;
+    let mut engine = signex_engine::Engine::new_with_path(sheet, Some(child.clone())).unwrap();
+    engine.mark_saved();
+    app.document_state.insert_engine(child.clone(), engine);
+    (app, dir, top, child)
+}
+
+#[test]
+fn a_replace_on_a_non_active_sheet_only_leaves_the_erc_results_stale() {
+    let (mut app, _dir, top, child) = with_saved_cached_child();
+    app.ui_state.erc_violations_by_path.insert(
+        top,
+        vec![signex_erc::Violation::new(
+            signex_erc::RuleId::builtin(signex_erc::RuleKind::UnusedPin),
+            signex_erc::RuleKind::UnusedPin,
+            signex_erc::Severity::Warning,
+            "Unused pin",
+            signex_types::schematic::Point::new(0.0, 0.0),
+        )],
+    );
+    app.ui_state.erc_epoch = app.document_state.sheet_edit_epoch;
+    assert!(!app.erc_results_stale());
+    replace_in_project(&mut app, "child", "Y");
+    assert_eq!(first_label(&app, &child), "Y_NET");
+    assert!(app.erc_results_stale());
+}
+
+#[test]
+fn undoing_a_replace_on_a_cached_sheet_makes_it_clean_again() {
+    let (mut app, _dir, _top, child) = with_saved_cached_child();
+    replace_in_project(&mut app, "child", "Y");
+    assert!(app.document_state.is_document_dirty(&child));
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    undo(&mut app);
+    assert_eq!(first_label(&app, &child), "CHILD_NET");
+    assert!(
+        !app.document_state.is_document_dirty(&child),
+        "back at the save point"
+    );
+}

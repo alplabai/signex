@@ -16,7 +16,7 @@ use super::state::FootprintEditorState;
 
 /// A closed 5 mm square. Returns the footprint, the four edges and the
 /// plane, so a test can tag, open or delete them.
-fn square() -> (Footprint, [SketchEntityId; 4], PlaneId) {
+pub(super) fn square() -> (Footprint, [SketchEntityId; 4], PlaneId) {
     let plane = PlaneId::new();
     let pts: Vec<_> = (0..4).map(|_| SketchEntityId::new()).collect();
     let xy = [(0.0, 0.0), (5.0, 0.0), (5.0, 5.0), (0.0, 5.0)];
@@ -42,7 +42,7 @@ fn square() -> (Footprint, [SketchEntityId; 4], PlaneId) {
     (fp, edges, plane)
 }
 
-fn entity_mut(fp: &mut Footprint, id: SketchEntityId) -> &mut Entity {
+pub(super) fn entity_mut(fp: &mut Footprint, id: SketchEntityId) -> &mut Entity {
     fp.sketch
         .as_mut()
         .unwrap()
@@ -52,7 +52,7 @@ fn entity_mut(fp: &mut Footprint, id: SketchEntityId) -> &mut Entity {
         .unwrap()
 }
 
-fn rebuild(state: &mut FootprintEditorState, fp: &mut Footprint) {
+pub(super) fn rebuild(state: &mut FootprintEditorState, fp: &mut Footprint) {
     apply_sketch_edit(state, fp, SketchEdit::ForceRebuild).unwrap();
 }
 
@@ -149,13 +149,14 @@ fn silk_drawn_by_hand_survives_a_sketch_with_no_silk_entity() {
         },
         stroke_width: 0.15,
         filled: false,
+        sketch_entity: None,
     });
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);
     assert_eq!(fp.silk_f.len(), 1, "hand-drawn silk must be kept");
 }
 
-fn hand_text() -> FpGraphic {
+pub(super) fn hand_text() -> FpGraphic {
     FpGraphic {
         kind: FpGraphicKind::Text {
             position: [0.0, 0.0],
@@ -165,6 +166,7 @@ fn hand_text() -> FpGraphic {
         },
         stroke_width: 0.0,
         filled: false,
+        sketch_entity: None,
     }
 }
 
@@ -212,13 +214,13 @@ fn deleting_the_last_silk_entity_clears_the_baked_outline() {
     let mut state = FootprintEditorState::from_footprint(&fp);
     rebuild(&mut state, &mut fp);
     assert_eq!(fp.silk_f.len(), 1);
-    assert!(fp.sketch.as_ref().unwrap().was_baked(BakedKind::SilkF));
+    // #1718: silk is owned entry by entry (the marker), not by a record.
+    assert_eq!(fp.silk_f[0].sketch_entity, Some(edges[0]));
+    assert!(!fp.sketch.as_ref().unwrap().was_baked(BakedKind::SilkF));
 
     entity_mut(&mut fp, edges[0]).silk = None;
     rebuild(&mut state, &mut fp);
     assert!(fp.silk_f.is_empty(), "deleted outline survived Save");
-    // Ownership ends with the clear: later hand-drawn silk is safe.
-    assert!(!fp.sketch.as_ref().unwrap().was_baked(BakedKind::SilkF));
 }
 
 #[test]
@@ -244,7 +246,7 @@ fn deleting_the_courtyard_entity_clears_and_reports_it() {
 
 /// Select-all + delete: the whole sketch goes in one edit, so no
 /// intermediate bake sees a half-emptied sketch.
-fn delete_all_entities(state: &mut FootprintEditorState, fp: &mut Footprint) {
+pub(super) fn delete_all_entities(state: &mut FootprintEditorState, fp: &mut Footprint) {
     let sketch = fp.sketch.as_mut().unwrap();
     sketch.entities.clear();
     sketch.constraints.clear();

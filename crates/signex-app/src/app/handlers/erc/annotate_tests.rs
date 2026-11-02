@@ -718,3 +718,41 @@ fn reset_duplicates_of_a_closed_sheet_leaves_the_erc_results_stale() {
     );
     assert!(app.erc_results_stale());
 }
+
+#[test]
+fn a_rollback_that_could_not_discard_the_run_does_not_mark_the_sheet_clean() {
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
+    let root = dir.join("a_root.snxsch");
+    // The run's edit sits on the sheet, but the group asked to discard is
+    // not the top entry's, so nothing is rolled back.
+    let id = app.document_state.engines[&root].document().symbols[0].uuid;
+    let changed = app.apply_engine_command(
+        signex_engine::Command::MoveSelection {
+            items: vec![signex_types::schematic::SelectedItem::new(
+                id,
+                signex_types::schematic::SelectedKind::Symbol,
+            )],
+            dx: 5.0,
+            dy: 0.0,
+            keep_wires: false,
+        },
+        true,
+        true,
+    );
+    assert!(changed);
+    assert!(app.document_state.is_document_dirty(&root));
+    let wrong_group = signex_engine::UndoGroupId::new(u64::MAX);
+    let touched = [root.clone()];
+    let _ = app.roll_back_reprefix(
+        Some(wrong_group),
+        &touched,
+        &std::collections::HashSet::new(),
+        &touched,
+        "test",
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        app.document_state.is_document_dirty(&root),
+        "the run is still in the sheet"
+    );
+}

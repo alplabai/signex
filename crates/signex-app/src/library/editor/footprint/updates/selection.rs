@@ -101,7 +101,15 @@ fn select_silk_f(editor: &mut crate::app::FootprintDocument, sel: Option<usize>)
 // No-op when nothing is selected. Updates `editor.dirty`
 // and clears the selection state.
 fn delete_silk_f(editor: &mut crate::app::FootprintDocument) {
+    use crate::library::editor::footprint::state::silk_selection::{
+        is_sketch_owned_silk, report_sketch_owned_silk,
+    };
     if let Some(idx) = editor.state.selected_silk_f {
+        // #1718: a baked entry comes back with the next bake.
+        if is_sketch_owned_silk(editor.primitive(), idx) {
+            report_sketch_owned_silk(idx);
+            return;
+        }
         let primitive = editor.primitive_mut();
         if idx < primitive.silk_f.len() {
             primitive.silk_f.remove(idx);
