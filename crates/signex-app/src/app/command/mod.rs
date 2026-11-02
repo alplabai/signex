@@ -2,10 +2,12 @@
 //! (`bridge.rs`), the dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]), and the enablement gate
 //! ([`enablement::is_enabled`]) the menu bar reads too. The palette and the
-//! keymap run commands through [`Signex::dispatch_command`]. Of the menu items
-//! only Undo and Redo reach it, and only from an undocked window's menu or the
-//! native menu; the main window's menu emits its own `Message` variants
-//! (`handlers/menu/editing.rs`).
+//! keymap run commands through [`Signex::dispatch_command`], and so do the
+//! context menus' command rows (`ContextAction::Command`, #1727), which pass
+//! the click point and project in [`InvocationContext`]. Of the menu bar's
+//! items only Undo and Redo reach it, and only from an undocked window's menu
+//! or the native menu; the main window's menu emits its own `Message`
+//! variants (`handlers/menu/editing.rs`).
 
 pub(crate) mod active_bar;
 mod args;
@@ -13,7 +15,7 @@ pub(crate) mod bridge;
 pub(crate) mod enablement;
 mod window_document;
 
-pub(crate) use args::CommandArgs;
+pub(crate) use args::{CommandArgs, InvocationContext};
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
@@ -74,7 +76,7 @@ impl Signex {
         }
         // Save, Save As, Print and the tab stepper act on the document the
         // window shows (#1794).
-        if let Some(task) = self.window_document_command(command, window) {
+        if let Some(task) = self.window_document_command(command, &args, window) {
             return task;
         }
         if !is_enabled(command, &self.command_context(window))

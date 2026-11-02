@@ -9,16 +9,19 @@
 //! surface-local rows below, so a literal label reintroduced for a command
 //! fails here instead of drifting quietly.
 //!
-//! It also compares each row's `on_press` with `bridge::resolve(id)` (#1727).
-//! `SURFACE_ACTION` exists because context-menu rows still send their own
-//! `ContextAction` / `ActiveBar` messages instead of dispatching their
-//! `AppCommandId` (Command Registry #278 is not yet extended to row actions),
-//! so its pins are a migration record, not a design endorsement.
+//! A command id behaves the same on every surface (#1727), so a live row
+//! that names an id must also run it the way the palette does: it sends
+//! exactly `bridge::resolve(id)`, or `ContextAction::Command` for that id,
+//! which dispatches it through the registry with the click point and project
+//! the row stands on. A live row must be one `is_enabled` allows in the
+//! context it is shown in, or the click would be dropped silently. Any
+//! other row fails here, naming the row.
 
 use super::*;
 
+use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge, is_enabled};
 use crate::keymap::AppCommandId;
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
 use super::submenu::{align_entries, arrange_entries, place_entries};
@@ -95,218 +98,6 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Refresh", "tree-addressed"),
 ];
 
-/// `(command id, the message the row sends as Debug text, reason)` for rows
-/// that deliberately send something other than `bridge::resolve(id)`. Pinning
-/// the sent message means a row that changes again also fails, and an entry
-/// no row produces any more fails as stale.
-const SURFACE_ACTION: &[(&str, &str, &str)] = &[
-    (
-        "align_bottom",
-        "ContextMenu(Action(ActiveBar(AlignBottom)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "align_horizontal_centers",
-        "ContextMenu(Action(ActiveBar(AlignHorizontalCenters)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "align_left",
-        "ContextMenu(Action(ActiveBar(AlignLeft)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "align_right",
-        "ContextMenu(Action(ActiveBar(AlignRight)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "align_to_grid",
-        "ContextMenu(Action(ActiveBar(AlignToGrid)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "align_top",
-        "ContextMenu(Action(ActiveBar(AlignTop)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "align_vertical_centers",
-        "ContextMenu(Action(ActiveBar(AlignVerticalCenters)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "bring_drawings_forward",
-        "ContextMenu(Action(ArrangeDrawings(Forward)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "bring_drawings_to_front",
-        "ContextMenu(Action(ArrangeDrawings(ToFront)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "change_component",
-        "ContextMenu(Action(PlacedPart(ChangeComponent)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "copy",
-        "ContextMenu(Action(Copy))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "cut",
-        "ContextMenu(Action(Cut))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "delete_selection",
-        "ContextMenu(Action(Delete))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "distribute_horizontally",
-        "ContextMenu(Action(ActiveBar(DistributeHorizontally)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "distribute_vertically",
-        "ContextMenu(Action(ActiveBar(DistributeVertically)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "draw_bus",
-        "ContextMenu(Action(ActiveBar(DrawBus)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "draw_wire",
-        "ContextMenu(Action(ActiveBar(DrawWire)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "edit_selected_symbol_in_symbol_editor",
-        "ContextMenu(Action(PlacedPart(EditSymbol)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "find_similar_objects",
-        "ContextMenu(Action(FindSimilar))",
-        "opens at the click point; the palette passes at: None",
-    ),
-    (
-        "mirror_x",
-        "ContextMenu(Action(MirrorX))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "mirror_y",
-        "ContextMenu(Action(MirrorY))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "open_datasheet",
-        "ContextMenu(Action(PlacedPart(OpenDatasheet)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "open_project_options",
-        "ContextMenu(ProjectTreeAction(OpenProjectOptions([\"proj\"])))",
-        "tree-addressed: opens the options of the clicked project key, not the active document's",
-    ),
-    (
-        "paste",
-        "ContextMenu(Action(Paste))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "place_bus_entry",
-        "ContextMenu(Action(ActiveBar(PlaceBusEntry)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_component",
-        "ContextMenu(Action(ActiveBar(PlaceComponent)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_junction",
-        "ContextMenu(Action(ActiveBar(PlaceJunction)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_net_label",
-        "ContextMenu(Action(ActiveBar(PlaceNetLabel)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_no_erc",
-        "ContextMenu(Action(ActiveBar(PlaceNoERC)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_note",
-        "ContextMenu(Action(ActiveBar(PlaceNote)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_off_sheet_connector",
-        "ContextMenu(Action(ActiveBar(PlaceOffSheetConnector)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_port",
-        "ContextMenu(Action(ActiveBar(PlacePort)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_sheet_entry",
-        "ContextMenu(Action(ActiveBar(PlaceSheetEntry)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_sheet_symbol",
-        "ContextMenu(Action(ActiveBar(PlaceSheetSymbol)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_text_frame",
-        "ContextMenu(Action(ActiveBar(PlaceTextFrame)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "place_text_string",
-        "ContextMenu(Action(ActiveBar(PlaceTextString)))",
-        "closes the menu, then runs the Active Bar handler directly",
-    ),
-    (
-        "rotate_counterclockwise",
-        "ContextMenu(Action(RotateSelected))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "save_document",
-        "Menu(Save)",
-        "Menu(Save) forwards to File(Save) (handlers/menu/file_commands.rs)",
-    ),
-    (
-        "send_drawings_backward",
-        "ContextMenu(Action(ArrangeDrawings(Backward)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "send_drawings_to_back",
-        "ContextMenu(Action(ArrangeDrawings(ToBack)))",
-        "closes the menu, then dispatches the same message",
-    ),
-    (
-        "smart_paste",
-        "ContextMenu(Action(SmartPaste))",
-        "closes the menu, then dispatches the same message",
-    ),
-];
-
 fn app_with_keymap(profile: &str) -> Signex {
     let mut app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
     let mut set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-ins parse");
@@ -335,13 +126,24 @@ fn project_tree() -> Vec<TreeNode> {
     )]
 }
 
+/// What one walk over the rows found.
+#[derive(Default)]
+struct Walk {
+    seen: usize,
+    /// Rows with no command id that are not surface-local.
+    unlisted: Vec<String>,
+    /// Live rows that neither send the bridge's message nor dispatch their id.
+    diverging: BTreeSet<String>,
+    /// Live rows whose command `is_enabled` refuses in the row's context.
+    dropped: BTreeSet<String>,
+}
+
 fn check_rows(
     origin: &str,
     rows: &[DropdownEntry<Message>],
     app: &Signex,
-    seen: &mut usize,
-    unlisted: &mut Vec<String>,
-    diverging: &mut BTreeMap<(String, String), String>,
+    ctx: &CommandContext,
+    walk: &mut Walk,
 ) {
     for entry in rows {
         let DropdownEntry::Item(item) = entry else {
@@ -349,7 +151,7 @@ fn check_rows(
         };
         match item.command_id {
             Some(id) => {
-                *seen += 1;
+                walk.seen += 1;
                 let meta = crate::keymap::metadata_for_str(id).unwrap_or_else(|| {
                     panic!("{origin}: row {:?} names unknown id {id}", item.label)
                 });
@@ -366,41 +168,58 @@ fn check_rows(
                 );
                 // A disabled stub has no on_press; only live rows are compared.
                 if let Some(pressed) = &item.on_press {
-                    let command = AppCommandId::new(id).expect("catalog id is well formed");
-                    let expected = crate::app::command::bridge::core_to_message(
-                        &command,
-                        &crate::app::command::CommandArgs::none(),
-                    );
-                    let expected = expected.map_or_else(
-                        || "<bridge has no arm>".to_string(),
-                        |message| format!("{message:?}"),
-                    );
-                    let actual = format!("{pressed:?}");
-                    if actual != expected {
-                        diverging.insert(
-                            (id.to_string(), actual),
-                            format!(
-                                "{id}: bridge::resolve gives {expected} (first seen in {origin})"
-                            ),
-                        );
-                    }
+                    check_live_row(origin, id, pressed, ctx, walk);
                 }
             }
             None if SURFACE_LOCAL.iter().any(|(label, _)| *label == item.label) => {}
-            None => unlisted.push(format!("{origin}: {:?}", item.label)),
+            None => walk.unlisted.push(format!("{origin}: {:?}", item.label)),
         }
     }
 }
 
-/// Also compares each row's `on_press` with `bridge::resolve(id)` (#1727);
-/// rows that still send their own action are pinned in `SURFACE_ACTION`
-/// (a migration record until #278 covers row actions).
+/// A live row of command `id` runs it as the palette does, and the command
+/// is enabled where the row is shown.
+fn check_live_row(
+    origin: &str,
+    id: &str,
+    pressed: &Message,
+    ctx: &CommandContext,
+    walk: &mut Walk,
+) {
+    let command = AppCommandId::new(id).expect("catalog id is well formed");
+    if !is_enabled(&command, ctx) {
+        walk.dropped.insert(format!("{origin}: {id}"));
+    }
+    let dispatches_the_id = match pressed {
+        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+            id: dispatched,
+            project,
+        })) => {
+            let args = CommandArgs::in_context(InvocationContext {
+                origin: None,
+                project: project.clone(),
+            });
+            dispatched.as_str() == id && bridge::core_to_message(&command, &args).is_some()
+        }
+        _ => false,
+    };
+    if dispatches_the_id {
+        return;
+    }
+    let expected = bridge::core_to_message(&command, &CommandArgs::none())
+        .map_or_else(|| "<bridge has no arm>".to_string(), |m| format!("{m:?}"));
+    let actual = format!("{pressed:?}");
+    if actual != expected {
+        walk.diverging.insert(format!(
+            "{origin}: {id} sends {actual}, bridge::resolve gives {expected}"
+        ));
+    }
+}
+
 #[test]
 fn command_rows_read_label_and_shortcut_from_the_catalog() {
     let tokens = theme_tokens(TID);
-    let mut seen = 0;
-    let mut unlisted = Vec::new();
-    let mut diverging = BTreeMap::new();
+    let mut walk = Walk::default();
     for profile in ["altium", "classic"] {
         let app = app_with_keymap(profile);
         let hint = |id: &str| app.keymap_shortcut_label(id);
@@ -415,41 +234,49 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             };
             for project_key in [None, Some(vec!["proj".to_string()])] {
                 let rows = canvas_menu_entries(TID, &tokens, selection, None, project_key, &sc);
+                let ctx = CommandContext {
+                    has_schematic: true,
+                    has_selection: selection.has_selection,
+                    has_drawing_selection: selection.drawing_selected,
+                    ..Default::default()
+                };
                 check_rows(
                     &format!("canvas {profile} {selection:?}"),
                     &rows,
                     &app,
-                    &mut seen,
-                    &mut unlisted,
-                    &mut diverging,
+                    &ctx,
+                    &mut walk,
                 );
             }
         }
+        let flyout_ctx = CommandContext {
+            has_schematic: true,
+            has_selection: true,
+            has_drawing_selection: true,
+            ..Default::default()
+        };
         for selected in [1, 3] {
             check_rows(
                 "align flyout",
                 &align_entries(TID, selected, &hint),
                 &app,
-                &mut seen,
-                &mut unlisted,
-                &mut diverging,
+                &flyout_ctx,
+                &mut walk,
             );
         }
         check_rows(
             "place flyout",
             &place_entries(TID, &hint),
             &app,
-            &mut seen,
-            &mut unlisted,
-            &mut diverging,
+            &flyout_ctx,
+            &mut walk,
         );
         check_rows(
             "arrange flyout",
             &arrange_entries(&hint),
             &app,
-            &mut seen,
-            &mut unlisted,
-            &mut diverging,
+            &flyout_ctx,
+            &mut walk,
         );
 
         for has_schematic in [false, true] {
@@ -471,44 +298,34 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     &format!("project tree {profile} {path:?} schematic={has_schematic}"),
                     &rows,
                     &app,
-                    &mut seen,
-                    &mut unlisted,
-                    &mut diverging,
+                    &app.command_context(None),
+                    &mut walk,
                 );
             }
         }
     }
     assert!(
-        unlisted.is_empty(),
+        walk.unlisted.is_empty(),
         "rows with no command id that are not listed as surface-local; give \
          each its AppCommandId so the catalog owns its label and shortcut \
-         (#271): {unlisted:#?}"
+         (#271): {:#?}",
+        walk.unlisted
     );
-    let unexplained: Vec<_> = diverging
-        .iter()
-        .filter(|((id, actual), _)| {
-            !SURFACE_ACTION
-                .iter()
-                .any(|(listed, pinned, _)| listed == id && pinned == actual)
-        })
-        .map(|((_, actual), detail)| format!("{detail}; the row sends {actual}"))
-        .collect();
     assert!(
-        unexplained.is_empty(),
-        "command rows whose on_press differs from bridge::resolve(id) and are \
-         not pinned in SURFACE_ACTION; make the row send the palette's \
-         message, or pin it there with a reason (#1727): {unexplained:#?}"
+        walk.diverging.is_empty(),
+        "live command rows that neither send bridge::resolve(id) nor dispatch \
+         their id as ContextAction::Command (#1727): {:#?}",
+        walk.diverging
     );
-    let stale: Vec<_> = SURFACE_ACTION
-        .iter()
-        .filter(|(id, pinned, _)| !diverging.contains_key(&(id.to_string(), pinned.to_string())))
-        .map(|(id, pinned, _)| format!("{id} => {pinned}"))
-        .collect();
     assert!(
-        stale.is_empty(),
-        "SURFACE_ACTION entries no walked row produces any more (the row now \
-         matches the bridge, was changed, or the id is gone); fix or delete \
-         them: {stale:#?}"
+        walk.dropped.is_empty(),
+        "live command rows whose command is_enabled refuses where the row is \
+         shown, so a click would do nothing; grey the row (#1727): {:#?}",
+        walk.dropped
     );
-    assert!(seen > 100, "the walk saw only {seen} command rows");
+    assert!(
+        walk.seen > 100,
+        "the walk saw only {} command rows",
+        walk.seen
+    );
 }

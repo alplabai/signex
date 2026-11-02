@@ -10,10 +10,13 @@ pub enum Channel {
 
 #[derive(Debug, Clone)]
 pub enum ContextAction {
-    Copy,
-    Cut,
-    Paste,
-    SmartPaste,
+    /// Run a catalog command exactly as the palette and the keymap do:
+    /// the menu closes, then the id is dispatched with the point the menu
+    /// was opened at, and `project` when the row stands on a project (#1727).
+    Command {
+        id: crate::keymap::AppCommandId,
+        project: Option<String>,
+    },
     OpenChildSheet,
     /// Write the missing child file of the selected sheet symbol, with one
     /// port per entry, then open it.
@@ -21,24 +24,10 @@ pub enum ContextAction {
     /// Reconcile the selected sheet symbol's pins with the child schematic's
     /// hierarchical / global labels (#359). Gated like `OpenChildSheet`.
     SyncSheetPins,
-    Delete,
-    SelectAll,
-    ZoomFit,
-    RotateSelected,
-    MirrorX,
-    MirrorY,
-    /// Run an Active Bar action from a context-menu submenu (Place /
-    /// Align). Closes both menus and dispatches the action through the
-    /// existing Active Bar handler so all the placement / transform
-    /// logic stays in one place.
+    /// Run an Active Bar action from a context-menu submenu row that has no
+    /// command id (the power ports). Closes both menus and dispatches the
+    /// action through the Active Bar handler.
     ActiveBar(crate::active_bar::ActiveBarAction),
-    /// Reorder the selected drawings from the Arrange submenu (#1583).
-    ArrangeDrawings(signex_engine::DrawingArrange),
-    /// Open Datasheet / Edit Symbol / Change Component on the selected
-    /// placed part (#1301, #1262, #1260).
-    PlacedPart(crate::library::PlacedPartAction),
-    /// Find Similar Objects for the object the menu was opened over (#1257).
-    FindSimilar,
 }
 
 /// Which click-to-open submenu is currently expanded inside the right-

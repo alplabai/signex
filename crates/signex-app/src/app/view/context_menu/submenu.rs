@@ -4,15 +4,15 @@
 //! Data-to-view (#269): each submenu is a pure `Vec<DropdownEntry<Message>>`
 //! rendered by the shared `signex_widgets::active_bar_dropdown` widget, so
 //! the flyout shares its row chrome with the parent menus and the active
-//! bars (ADR-0003). Every Place / Align row dispatches an Active Bar action
-//! via `ContextAction::ActiveBar(...)` so placement / transform pipelines
-//! stay shared with the toolbar.
+//! bars (ADR-0003). Every Place / Align / Arrange row that has a command id
+//! dispatches that id through the command registry, like the palette and the
+//! keymap; only the power-port rows, which have none, send
+//! `ContextAction::ActiveBar(...)`.
 
 use super::*;
 
 use super::items::{
-    command_text, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_kb, dd_msg, dd_planned,
-    tag_command,
+    command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned, tag_command,
 };
 use crate::app::command::active_bar::id_for_action;
 use crate::icons as ic;
@@ -46,7 +46,7 @@ fn active_bar_row(
         // A planned tool is shown but cannot be armed (#1249).
         tag_command(dd_planned(Some(icon), &command_text(id), right), id)
     } else if enabled {
-        dd_cmd_action(Some(icon), id, &shortcut, ContextAction::ActiveBar(action))
+        dd_command(Some(icon), id, &shortcut, None)
     } else {
         dd_cmd_disabled(Some(icon), id, &shortcut)
     }
@@ -236,17 +236,14 @@ pub(super) fn align_entries(
 /// Arrange submenu — order the selected drawings (#1583). Offered only while
 /// the selection holds a drawing, so every row is live.
 pub(super) fn arrange_entries(hint: &dyn Fn(&str) -> String) -> Vec<DropdownEntry<Message>> {
-    use signex_engine::DrawingArrange as D;
     [
-        ("bring_drawings_to_front", D::ToFront),
-        ("send_drawings_to_back", D::ToBack),
-        ("bring_drawings_forward", D::Forward),
-        ("send_drawings_backward", D::Backward),
+        "bring_drawings_to_front",
+        "send_drawings_to_back",
+        "bring_drawings_forward",
+        "send_drawings_backward",
     ]
     .into_iter()
-    .map(|(id, arrange)| {
-        dd_cmd_action(None, id, &hint(id), ContextAction::ArrangeDrawings(arrange))
-    })
+    .map(|id| dd_command(None, id, &hint(id), None))
     .collect()
 }
 

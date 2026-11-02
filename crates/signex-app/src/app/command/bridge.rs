@@ -9,6 +9,8 @@
 use crate::keymap::AppCommandId;
 
 use super::CommandArgs;
+#[cfg(test)]
+use super::args::InvocationContext;
 
 use super::super::*;
 
@@ -78,7 +80,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "find_similar_objects" => {
             Message::Selection(selection_request::SelectionRequest::FindSimilar(
-                crate::find_similar::FindSimilarMsg::OpenRequested { at: args.at },
+                crate::find_similar::FindSimilarMsg::OpenRequested {
+                    at: args.context.origin,
+                },
             ))
         }
         "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
@@ -146,7 +150,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
         // Opens the options tab of the project the call names (`args.project`,
         // a project-tree row), else of the active document's project.
-        "open_project_options" => match &args.project {
+        "open_project_options" => match &args.context.project {
             Some(id) => Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 crate::app::ProjectTreeAction::OpenProjectOptions(vec![id.clone()]),
             )),
@@ -979,7 +983,13 @@ mod tests {
             resolve(&AppCommandId::new(id).unwrap(), args).unwrap_or_else(|| panic!("{id}"))
         };
         assert!(matches!(
-            resolve_with("find_similar_objects", &CommandArgs::at(Some((5.0, 20.0)))),
+            resolve_with(
+                "find_similar_objects",
+                &CommandArgs::in_context(InvocationContext {
+                    origin: Some((5.0, 20.0)),
+                    project: None
+                })
+            ),
             Message::Selection(selection_request::SelectionRequest::FindSimilar(
                 crate::find_similar::FindSimilarMsg::OpenRequested {
                     at: Some((5.0, 20.0))
@@ -990,7 +1000,13 @@ mod tests {
             resolve_with("open_project_options", &CommandArgs::none()),
             Message::Menu(MenuMessage::OpenProjectOptions)
         ));
-        match resolve_with("open_project_options", &CommandArgs::project("p1")) {
+        match resolve_with(
+            "open_project_options",
+            &CommandArgs::in_context(InvocationContext {
+                origin: None,
+                project: Some("p1".to_string()),
+            }),
+        ) {
             Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                 crate::app::ProjectTreeAction::OpenProjectOptions(key),
             )) => assert_eq!(key, ["p1"]),

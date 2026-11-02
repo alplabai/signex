@@ -5,7 +5,7 @@
 
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
 use signex_app::app::{ContextAction, ContextMenuMsg, Message, Signex, TabInfo, TabKind, UiMsg};
-use signex_app::keymap::{KeyStroke, KeyToken, Modifiers};
+use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::PathBuf;
 
@@ -75,8 +75,12 @@ fn key(letter: &str) -> Message {
     })
 }
 
-fn context(action: ContextAction) -> Message {
-    Message::ContextMenu(ContextMenuMsg::Action(action))
+/// What a context-menu row of command `id` sends.
+fn context(id: &str) -> Message {
+    Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+        id: AppCommandId::new(id).expect("a catalog id"),
+        project: None,
+    }))
 }
 
 fn active_bar(action: ActiveBarAction) -> Message {
@@ -87,7 +91,7 @@ fn active_bar(action: ActiveBarAction) -> Message {
 fn x_flips_agree_across_key_context_menu_and_active_bar() {
     let by_key = mirror_after(key("x"));
     assert_ne!(by_key, (false, false), "the X key must flip the symbol");
-    assert_eq!(mirror_after(context(ContextAction::MirrorX)), by_key);
+    assert_eq!(mirror_after(context("mirror_x")), by_key);
     assert_eq!(
         mirror_after(active_bar(ActiveBarAction::FlipSelectedX)),
         by_key
@@ -98,7 +102,7 @@ fn x_flips_agree_across_key_context_menu_and_active_bar() {
 fn y_flips_agree_across_key_context_menu_and_active_bar() {
     let by_key = mirror_after(key("y"));
     assert_ne!(by_key, (false, false), "the Y key must flip the symbol");
-    assert_eq!(mirror_after(context(ContextAction::MirrorY)), by_key);
+    assert_eq!(mirror_after(context("mirror_y")), by_key);
     assert_eq!(
         mirror_after(active_bar(ActiveBarAction::FlipSelectedY)),
         by_key

@@ -10,6 +10,7 @@ use crate::settle_support::{settle, settle_task};
 use signex_app::app::contracts::{ContextAction, ContextMenuMsg};
 use signex_app::app::{EditMsg, FileMsg, LoadedProject, Message, Signex, TabKind};
 use signex_app::dock::DockMessage;
+use signex_app::keymap::AppCommandId;
 use signex_app::library::placed_part::DatasheetLocation;
 use signex_app::library::state::PickerMode;
 use signex_app::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
@@ -231,9 +232,10 @@ fn the_context_menu_action_and_the_command_id_reach_the_datasheet_flow() {
 
     settle(
         &mut app,
-        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::PlacedPart(
-            PlacedPartAction::OpenDatasheet,
-        ))),
+        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+            id: AppCommandId::new("open_datasheet").unwrap(),
+            project: None,
+        })),
     );
 
     assert!(logged(&["Add a datasheet to the library row of ZD7"]));
@@ -289,9 +291,10 @@ fn edit_symbol_through_the_context_menu_opens_the_same_tab() {
 
     settle(
         &mut app,
-        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::PlacedPart(
-            PlacedPartAction::EditSymbol,
-        ))),
+        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+            id: AppCommandId::new("edit_selected_symbol_in_symbol_editor").unwrap(),
+            project: None,
+        })),
     );
 
     assert_eq!(symbol_editor_paths(&app), vec![path]);

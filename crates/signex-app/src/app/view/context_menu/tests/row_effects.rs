@@ -236,17 +236,16 @@ fn paste_and_smart_paste_rows_start_a_paste_and_close_the_menu() {
     }
 }
 
-/// Today the row writes an empty string over the system clipboard when
-/// nothing is selected, so an older copy cannot be pasted in its place.
+/// Copy and Cut have nothing to act on without a selection, so the rows are
+/// greyed, as the Edit menu greys them and as the keys do nothing there.
 #[test]
-fn copy_row_with_nothing_selected_still_empties_the_system_clipboard() {
+fn cut_and_copy_rows_are_greyed_with_nothing_selected() {
     let mut app = app_with(sheet_of(vec![symbol(1, "R1", 10.0, 10.0)]));
     select(&mut app, Vec::new());
-    assert!(row_is_live(&canvas_rows(&app), "copy"));
-    let task = press(&mut app, "copy");
-    assert!(task.units() > 0, "no clipboard write was issued");
-    assert!(app.interaction_state.clipboard.is_none());
-    assert_menu_closed(&app, "copy");
+    let rows = canvas_rows(&app);
+    assert!(!row_is_live(&rows, "copy"));
+    assert!(!row_is_live(&rows, "cut"));
+    assert!(row_is_live(&rows, "paste"));
 }
 
 #[test]
@@ -398,10 +397,7 @@ fn placed_part_rows_reach_the_placed_part_flow() {
         let mut app = app_with(sheet_of(vec![symbol(1, reference, 10.0, 10.0)]));
         select_symbols(&mut app);
         let _ = press(&mut app, id);
-        assert!(
-            logged(&needles.iter().copied().collect::<Vec<_>>()),
-            "{id}: nothing logged"
-        );
+        assert!(logged(&needles), "{id}: nothing logged");
         assert_menu_closed(&app, id);
     }
 }
@@ -614,10 +610,7 @@ fn canvas_project_options_row_opens_the_active_projects_tab() {
             .any(|tab| tab.kind.as_project() == Some(id)),
         "no Project tab"
     );
-    // Today this row routes through the tree-action handler, which closes
-    // the project tree's menu and never the canvas one, so the canvas menu
-    // stays on screen after the click.
-    assert!(app.interaction_state.context_menu.is_some());
+    assert_menu_closed(&app, "project options");
 }
 
 /// The project tree's root menu rows for the project at `idx`.
@@ -676,31 +669,48 @@ fn tree_save_row_writes_the_active_schematic() {
     settle(&mut app, live_row(&rows, "save_document"));
 
     assert!(path.exists(), "the schematic was not written");
-    // Today Save leaves the tree menu on screen: nothing on its route
-    // dismisses it.
-    assert!(app.interaction_state.project_tree_context_menu.is_some());
+    assert!(
+        app.interaction_state.project_tree_context_menu.is_none(),
+        "the tree menu stays open after Save"
+    );
 }
 
-/// The row is live when the clicked project is dirty, but Save acts on the
-/// ACTIVE document and project, so the clicked project stays dirty.
+/// Save writes the ACTIVE document and project, so with no schematic and a
+/// clean active project the row has nothing to do, whatever the clicked
+/// project holds: it is greyed, like File ▸ Save and Ctrl+S are.
 #[test]
-fn tree_save_row_on_a_dirty_inactive_project_saves_nothing_of_it() {
+fn tree_save_row_is_greyed_when_save_would_write_nothing() {
     let mut app = one_symbol();
     let active = loaded_project(&mut app, "A.snxprj", false);
     let other = loaded_project(&mut app, "B.snxprj", false);
     app.document_state.active_project = Some(app.document_state.projects[active].id);
     let other_path = app.document_state.projects[other].path.clone();
     app.document_state.mark_document_dirty(&other_path);
-    // No schematic tab is active: the row's only reason to be live is B.
+    // No schematic tab is active: the clicked project is the only dirty one.
     app.document_state.tabs.clear();
     app.document_state.active_path = None;
 
     let rows = tree_root_rows(&mut app, other, false);
-    assert!(row_is_live(&rows, "save_document"));
-    settle(&mut app, live_row(&rows, "save_document"));
 
-    assert!(
-        app.document_state.is_document_dirty(&other_path),
-        "the clicked project was saved"
-    );
+    assert!(!row_is_live(&rows, "save_document"));
+}
+
+#[test]
+fn tree_project_options_row_opens_the_clicked_projects_tab() {
+    let mut app = one_symbol();
+    let active = loaded_project(&mut app, "A.snxprj", false);
+    let other = loaded_project(&mut app, "B.snxprj", false);
+    app.document_state.active_project = Some(app.document_state.projects[active].id);
+    let other_id = app.document_state.projects[other].id;
+
+    let rows = tree_root_rows(&mut app, other, false);
+    let _ = app.update(live_row(&rows, "open_project_options"));
+
+    let opened: Vec<_> = app
+        .document_state
+        .tabs
+        .iter()
+        .filter_map(|tab| tab.kind.as_project())
+        .collect();
+    assert_eq!(opened, [other_id], "the clicked project's tab");
 }

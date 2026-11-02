@@ -14,7 +14,8 @@
 use super::*;
 
 use super::items::{
-    dd_cmd, dd_cmd_action, dd_cmd_disabled, dd_disabled, dd_msg, dd_planned, submenu_launcher,
+    dd_cmd, dd_cmd_action, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned,
+    submenu_launcher,
 };
 use crate::icons as ic;
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -251,11 +252,11 @@ pub(super) fn canvas_menu_entries(
     } = selection;
     let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(24);
 
-    v.push(dd_cmd_action(
+    v.push(dd_command(
         Some(ic::icon_dd_find_similar(tid)),
         "find_similar_objects",
         sc.of("find_similar_objects"),
-        ContextAction::FindSimilar,
+        None,
     ));
     v.push(dd_cmd(
         Some(ic::icon_chrome_search(tid)),
@@ -349,56 +350,56 @@ pub(super) fn canvas_menu_entries(
         None,
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_cmd_action(
-        Some(ic::icon_dd_cut(tid)),
-        "cut",
-        sc.of("cut"),
-        ContextAction::Cut,
-    ));
-    v.push(dd_cmd_action(
-        Some(ic::icon_dd_copy(tid)),
-        "copy",
-        sc.of("copy"),
-        ContextAction::Copy,
-    ));
-    v.push(dd_cmd_action(
+    // Cut and Copy have nothing to act on without a selection: greyed, as
+    // the Edit menu greys them and as the keys do nothing there.
+    for (icon, command_id) in [
+        (ic::icon_dd_cut(tid), "cut"),
+        (ic::icon_dd_copy(tid), "copy"),
+    ] {
+        v.push(if has_selection {
+            dd_command(Some(icon), command_id, sc.of(command_id), None)
+        } else {
+            dd_cmd_disabled(Some(icon), command_id, sc.of(command_id))
+        });
+    }
+    v.push(dd_command(
         Some(ic::icon_dd_paste(tid)),
         "paste",
         sc.of("paste"),
-        ContextAction::Paste,
+        None,
     ));
-    v.push(dd_cmd_action(
+    v.push(dd_command(
         Some(ic::icon_dd_smart_paste(tid)),
         "smart_paste",
         sc.of("smart_paste"),
-        ContextAction::SmartPaste,
+        None,
     ));
     v.push(DropdownEntry::Separator);
 
     if has_selection {
-        v.push(dd_cmd_action(
+        v.push(dd_command(
             Some(ic::icon_dd_rotate(tid)),
             "rotate_counterclockwise",
             sc.of("rotate_counterclockwise"),
-            ContextAction::RotateSelected,
+            None,
         ));
-        v.push(dd_cmd_action(
+        v.push(dd_command(
             Some(ic::icon_dd_flip_x(tid)),
             "mirror_x",
             sc.of("mirror_x"),
-            ContextAction::MirrorX,
+            None,
         ));
-        v.push(dd_cmd_action(
+        v.push(dd_command(
             Some(ic::icon_dd_flip_y(tid)),
             "mirror_y",
             sc.of("mirror_y"),
-            ContextAction::MirrorY,
+            None,
         ));
-        v.push(dd_cmd_action(
+        v.push(dd_command(
             Some(ic::icon_dd_delete(tid)),
             "delete_selection",
             sc.of("delete_selection"),
-            ContextAction::Delete,
+            None,
         ));
         v.push(DropdownEntry::Separator);
     }
@@ -417,13 +418,11 @@ pub(super) fn canvas_menu_entries(
     // way the project tree's own menu addresses it. No project: greyed, no
     // tooltip (the feature exists, there is just nothing to open it for).
     v.push(match project_key {
-        Some(key) => dd_cmd(
+        Some(key) => dd_command(
             Some(ic::icon_dd_project_options(tid)),
             "open_project_options",
             sc.of("open_project_options"),
-            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                crate::app::ProjectTreeAction::OpenProjectOptions(key),
-            )),
+            key.first().cloned(),
         ),
         None => dd_cmd_disabled(
             Some(ic::icon_dd_project_options(tid)),
@@ -439,19 +438,13 @@ pub(super) fn canvas_menu_entries(
     ));
 
     if placed_part_selected {
-        use crate::library::PlacedPartAction as A;
         // The placed-part actions, all catalog commands.
-        for (command_id, action) in [
-            ("open_datasheet", A::OpenDatasheet),
-            ("edit_selected_symbol_in_symbol_editor", A::EditSymbol),
-            ("change_component", A::ChangeComponent),
+        for command_id in [
+            "open_datasheet",
+            "edit_selected_symbol_in_symbol_editor",
+            "change_component",
         ] {
-            v.push(dd_cmd_action(
-                None,
-                command_id,
-                sc.of(command_id),
-                ContextAction::PlacedPart(action),
-            ));
+            v.push(dd_command(None, command_id, sc.of(command_id), None));
         }
     }
     if has_selection {
