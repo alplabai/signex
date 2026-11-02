@@ -160,11 +160,19 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    the wire : pin : body weights changed from one zoom step to the next.
 3. **One floor.** A stroke thinner than one device pixel draws at one device
    pixel, the same for every kind and on both the CPU and GPU paths. It is a
-   whole pixel because the CPU canvas has no anti-aliasing: body outlines,
-   circles and diagonals are not snapped, and at 0.76 px (a 0.254 mm body at
+   whole pixel because the CPU canvas has no anti-aliasing: at 0.76 px (a 0.254 mm body at
    100 %) whole edges of a rectangle missed every pixel centre and vanished.
-4. **Then the whole-pixel snap** (#1674, `scene_line_snap.rs`) rounds
-   axis-aligned hairlines under 4 device pixels to whole device pixels.
+4. **Then the whole-pixel snap** (#1674, #1888, `scene_line_snap.rs`) rounds
+   strokes under 4 device pixels to whole device pixels: axis-aligned lines
+   (width and position), rectangle and rectilinear polygon outlines (width and
+   every edge position), and circle and arc rings (width only). Slanted
+   lines and outlines keep their exact geometry. The placed-wire and
+   bus-entry previews, the ghost bus entry and the sheet frame use the same
+   snap, so equal mm widths draw at equal pixel widths. The Symbol Editor
+   replays through the same `draw_scene` path and gets it too.
+   The paper border in `canvas/draw/background.rs` is chrome, not a
+   schematic stroke: a fixed `with_width(1.0)` logical px, outside the floor
+   rule and the snap.
 5. **Display scale.** The floor and the snap are defined in device pixels.
    Each window's scale (OS factor times the interface scale,
    `UiState::device_px_per_logical_px`) reaches its canvas through

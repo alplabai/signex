@@ -188,6 +188,65 @@ mod tests {
         assert_eq!((y_2x * 2.0).fract(), 0.5, "snapped on the device grid");
     }
 
+    /// The wire preview, the bus-entry ghost and the sheet frame are drawn
+    /// straight to the frame, outside the scene lock: at every zoom and in
+    /// 1x and 2x windows they snap to the same whole device-pixel width the
+    /// placed wire gets (400 % unsnapped was 1.8 px against a placed 2 px)
+    /// (#1888).
+    #[test]
+    fn previews_ghost_and_frame_snap_to_the_placed_wire_width() {
+        let (mut app, main) = app_with_main();
+        let tab = undocked(&mut app);
+        app.interaction_state
+            .canvases
+            .insert(tab, crate::canvas::CanvasSlot::new());
+        scale_changed(&mut app, main, 1.0);
+        scale_changed(&mut app, tab, 2.0);
+        let (from, to) = (iced::Point::new(3.3, 5.3), iced::Point::new(90.1, 5.3));
+        let (up_from, up_to) = (iced::Point::new(7.2, 1.3), iced::Point::new(7.2, 50.8));
+        for window in [main, tab] {
+            let canvas = crate::canvas::SchematicCanvas::new(
+                app.interaction_state.canvas_for_window(window),
+                app.canvas_view_prefs(window),
+            );
+            let dpr = app.ui_state.device_px_per_logical_px(window);
+            for zoom in [0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0] {
+                let scale = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * zoom;
+                let transform = ScreenTransform {
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    scale,
+                    device_px_per_logical_px: dpr,
+                };
+                let placed = schematic_draw_options(&transform)
+                    .stroke_px(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32);
+                let (_, _, placed) = crate::scene_line_snap::snap_hairline(from, to, placed, dpr);
+                for (a, b) in [(from, to), (up_from, up_to)] {
+                    let wire = canvas.placed_wire_line(a, b, scale);
+                    let entry = canvas.placed_bus_entry_line(a, b, scale);
+                    let frame = canvas.sheet_frame_line(
+                        a,
+                        b,
+                        signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM,
+                        scale,
+                    );
+                    for (name, (_, _, width)) in [
+                        ("wire preview", wire),
+                        ("bus entry", entry),
+                        ("frame", frame),
+                    ] {
+                        let context = format!("{name} at {zoom}x, {dpr}x window");
+                        assert_eq!(width, placed, "{context}");
+                        let device = width * dpr;
+                        if device < 4.0 {
+                            assert_eq!(device.fract(), 0.0, "whole device px: {context}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn a_bad_reading_is_ignored() {
         let (mut app, main) = app_with_main();

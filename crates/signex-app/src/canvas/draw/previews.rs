@@ -287,6 +287,17 @@ impl SchematicCanvas<'_> {
         )
     }
 
+    /// A placed-wire preview segment between screen points: the placed
+    /// width and the whole-pixel snap, as the scene replay gives a wire.
+    pub(crate) fn placed_wire_line(
+        &self,
+        from: iced::Point,
+        to: iced::Point,
+        scale: f32,
+    ) -> (iced::Point, iced::Point, f32) {
+        self.snap_screen_line(from, to, self.placed_wire_stroke_px(scale))
+    }
+
     /// Wire-in-progress rubber-band, constrained by the active draw mode.
     pub(in crate::canvas) fn draw_wire_preview(
         &self,
@@ -311,8 +322,11 @@ impl SchematicCanvas<'_> {
                     .world_to_screen(iced::Point::new(pair[0].x as f32, pair[0].y as f32), bounds);
                 let p2 = cam
                     .world_to_screen(iced::Point::new(pair[1].x as f32, pair[1].y as f32), bounds);
-                let seg = canvas::Path::line(p1, p2);
-                frame.stroke(&seg, preview_stroke);
+                let (p1, p2, width) = self.placed_wire_line(p1, p2, cam.scale);
+                frame.stroke(
+                    &canvas::Path::line(p1, p2),
+                    preview_stroke.with_width(width),
+                );
             }
 
             // Rubber-band from last point to cursor (constrained by draw mode)
@@ -398,7 +412,8 @@ impl SchematicCanvas<'_> {
                         cam.world_to_screen(iced::Point::new(p1.x as f32, p1.y as f32), bounds);
                     let s2 =
                         cam.world_to_screen(iced::Point::new(p2.x as f32, p2.y as f32), bounds);
-                    frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke);
+                    let (s1, s2, width) = self.placed_wire_line(s1, s2, cam.scale);
+                    frame.stroke(&canvas::Path::line(s1, s2), rubber_stroke.with_width(width));
                 }
             }
         }

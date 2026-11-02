@@ -129,6 +129,17 @@ impl SchematicCanvas<'_> {
         )
     }
 
+    /// A placed bus entry (or its ghost) between screen points: the placed
+    /// width and the whole-pixel snap.
+    pub(crate) fn placed_bus_entry_line(
+        &self,
+        from: iced::Point,
+        to: iced::Point,
+        scale: f32,
+    ) -> (iced::Point, iced::Point, f32) {
+        self.snap_screen_line(from, to, self.placed_bus_entry_stroke_px(scale))
+    }
+
     /// Ghost bus entry: the bus end follows the cursor, snapping onto the
     /// nearest bus within one grid step exactly as a click would, and the
     /// other end follows the stored orientation.
@@ -163,13 +174,13 @@ impl SchematicCanvas<'_> {
             .unwrap_or(at);
         let to_screen =
             |p: SchPoint| cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
-        let path = canvas::Path::line(
+        let (from, to, width) = self.placed_bus_entry_line(
             to_screen(start),
             to_screen(SchPoint::new(start.x + size.0, start.y + size.1)),
+            cam.scale,
         );
-        let width = self.placed_bus_entry_stroke_px(cam.scale);
         frame.stroke(
-            &path,
+            &canvas::Path::line(from, to),
             canvas::Stroke::default()
                 .with_color(Color::from_rgba(0.3, 0.8, 1.0, 0.7))
                 .with_width(width),

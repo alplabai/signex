@@ -1,4 +1,4 @@
-//! Pixel snapping for axis-aligned hairlines in the CPU scene replay.
+//! Pixel snapping for hairlines and outlines in the CPU scene replay.
 //!
 //! The canvas rasteriser has no anti-aliasing, so a 1.9 px stroke covers one
 //! or two pixel rows depending on where its centre falls, and a horizontal and
@@ -27,18 +27,84 @@ pub(crate) fn snap_hairline(
     width: f32,
     device_px_per_logical_px: f32,
 ) -> (Point, Point, f32) {
-    let dpr = if device_px_per_logical_px.is_finite() && device_px_per_logical_px > 0.0 {
-        device_px_per_logical_px
-    } else {
-        1.0
-    };
+    let dpr = normalised_dpr(device_px_per_logical_px);
     if dpr == 1.0 {
         return snap_device(p0, p1, width);
     }
-    let to_device = |p: Point| Point::new(p.x * dpr, p.y * dpr);
-    let to_logical = |p: Point| Point::new(p.x / dpr, p.y / dpr);
-    let (q0, q1, w) = snap_device(to_device(p0), to_device(p1), width * dpr);
-    (to_logical(q0), to_logical(q1), w / dpr)
+    let (q0, q1, w) = snap_device(to_device(p0, dpr), to_device(p1, dpr), width * dpr);
+    (to_logical(q0, dpr), to_logical(q1, dpr), w / dpr)
+}
+
+/// The width of a ring stroke (circle, arc) snapped to whole device pixels by
+/// the same rule as [`snap_hairline`]. Logical pixels in and out.
+#[must_use]
+pub(crate) fn snap_stroke_width(width: f32, device_px_per_logical_px: f32) -> f32 {
+    let dpr = normalised_dpr(device_px_per_logical_px);
+    snapped_width(width * dpr) / dpr
+}
+
+/// A closed outline snapped like [`snap_hairline`]: the width always, and the
+/// vertices too when every edge is axis-aligned (a rectangle, a rectilinear
+/// polygon), so each edge lands on whole device pixel rows like a wire.
+/// Any other outline keeps its exact vertices. Logical pixels in and out.
+#[must_use]
+pub(crate) fn snap_outline(
+    ring: &[Point],
+    width: f32,
+    device_px_per_logical_px: f32,
+) -> (Vec<Point>, f32) {
+    let dpr = normalised_dpr(device_px_per_logical_px);
+    let width_device = width * dpr;
+    let snapped = snapped_width(width_device);
+    if !is_rectilinear(ring) || width_device >= SNAP_BELOW_PX || !width_device.is_finite() {
+        return (ring.to_vec(), snapped / dpr);
+    }
+    let points = ring
+        .iter()
+        .map(|p| {
+            let q = to_device(*p, dpr);
+            to_logical(
+                Point::new(snap_centre(q.x, snapped), snap_centre(q.y, snapped)),
+                dpr,
+            )
+        })
+        .collect();
+    (points, snapped / dpr)
+}
+
+fn normalised_dpr(dpr: f32) -> f32 {
+    if dpr.is_finite() && dpr > 0.0 {
+        dpr
+    } else {
+        1.0
+    }
+}
+
+fn to_device(p: Point, dpr: f32) -> Point {
+    Point::new(p.x * dpr, p.y * dpr)
+}
+
+fn to_logical(p: Point, dpr: f32) -> Point {
+    Point::new(p.x / dpr, p.y / dpr)
+}
+
+/// Whole-pixel width in device px; wide or non-finite widths stay exact.
+fn snapped_width(width: f32) -> f32 {
+    if width >= SNAP_BELOW_PX || !width.is_finite() {
+        width
+    } else {
+        width.round().max(1.0)
+    }
+}
+
+/// True when the ring has at least 3 vertices and every edge, closing edge
+/// included, is horizontal or vertical.
+fn is_rectilinear(ring: &[Point]) -> bool {
+    ring.len() >= 3
+        && ring
+            .iter()
+            .zip(ring.iter().cycle().skip(1))
+            .all(|(a, b)| (a.x - b.x).abs() < AXIS_EPS || (a.y - b.y).abs() < AXIS_EPS)
 }
 
 /// [`snap_hairline`] on the device-pixel grid.
@@ -46,7 +112,7 @@ fn snap_device(p0: Point, p1: Point, width: f32) -> (Point, Point, f32) {
     if width >= SNAP_BELOW_PX || !width.is_finite() {
         return (p0, p1, width);
     }
-    let snapped_width = width.round().max(1.0);
+    let snapped_width = snapped_width(width);
     if (p0.y - p1.y).abs() < AXIS_EPS {
         let y = snap_centre(p0.y, snapped_width);
         // The ends snap like a centre line, so a vertical leg that meets this
@@ -157,5 +223,58 @@ mod tests {
         assert_eq!(snap_hairline(a, b, 1.9, 1.0), (a, b, 1.9));
         let (c, d) = (Point::new(0.0, 5.3), Point::new(9.0, 5.3));
         assert_eq!(snap_hairline(c, d, 6.4, 1.0), (c, d, 6.4));
+    }
+
+    #[test]
+    fn a_ring_and_a_rectangle_outline_snap_to_the_width_a_wire_gets() {
+        let rect = [
+            Point::new(10.3, 20.4),
+            Point::new(50.7, 20.4),
+            Point::new(50.7, 40.1),
+            Point::new(10.3, 40.1),
+        ];
+        for dpr in [1.0, 2.0] {
+            for width in [0.9, 1.5, 2.4, 3.6, 3.9] {
+                let (_, _, wire) =
+                    snap_hairline(Point::new(0.0, 5.3), Point::new(9.0, 5.3), width, dpr);
+                assert_eq!(snap_stroke_width(width, dpr), wire, "ring {width} @{dpr}x");
+                let (_, outline) = snap_outline(&rect, width, dpr);
+                assert_eq!(outline, wire, "outline {width} @{dpr}x");
+            }
+        }
+    }
+
+    #[test]
+    fn a_rectangle_outline_lands_on_whole_pixel_rows() {
+        let rect = [
+            Point::new(10.3, 20.4),
+            Point::new(50.7, 20.4),
+            Point::new(50.7, 40.1),
+            Point::new(10.3, 40.1),
+        ];
+        let (points, width) = snap_outline(&rect, 3.6, 1.0);
+        assert_eq!(width, 4.0);
+        assert!(
+            points
+                .iter()
+                .all(|p| p.x.fract() == 0.0 && p.y.fract() == 0.0)
+        );
+        assert_eq!((points[0].y, points[2].y), (points[1].y, points[3].y));
+        let (points, width) = snap_outline(&rect, 1.4, 2.0);
+        assert_eq!(width, 1.5);
+        assert!(points.iter().all(|p| (p.x * 2.0).fract() == 0.5));
+    }
+
+    #[test]
+    fn a_slanted_outline_keeps_its_vertices_and_snaps_the_width() {
+        let triangle = [
+            Point::new(0.0, 0.0),
+            Point::new(9.3, 0.0),
+            Point::new(4.1, 7.7),
+        ];
+        let (points, width) = snap_outline(&triangle, 3.6, 1.0);
+        assert_eq!(points, triangle);
+        assert_eq!(width, 4.0);
+        assert_eq!(snap_outline(&triangle, 6.4, 1.0).1, 6.4);
     }
 }

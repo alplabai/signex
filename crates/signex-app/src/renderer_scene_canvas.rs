@@ -147,6 +147,15 @@ impl SceneDrawOptions {
         )
     }
 
+    /// [`Self::stroke_px`] snapped to whole device pixels, for circle and arc
+    /// rings: the width a wire of the same mm width gets.
+    fn ring_stroke_px(self, width_mm: f32) -> f32 {
+        crate::scene_line_snap::snap_stroke_width(
+            self.stroke_px(width_mm),
+            self.device_px_per_logical_px,
+        )
+    }
+
     fn radius_px(self, radius_mm: f32) -> f32 {
         (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
     }
@@ -297,7 +306,7 @@ fn draw_circle_bucket<F>(
             frame.stroke(
                 &path,
                 canvas::Stroke::default()
-                    .with_width(options.stroke_px(circle.stroke_width))
+                    .with_width(options.ring_stroke_px(circle.stroke_width))
                     .with_color(color),
             );
         }
@@ -339,7 +348,7 @@ fn draw_arc_bucket<F>(
                 frame.stroke(
                     &canvas::Path::circle(center, radius),
                     canvas::Stroke::default()
-                        .with_width(options.stroke_px(arc.width))
+                        .with_width(options.ring_stroke_px(arc.width))
                         .with_color(color_from_rgba(arc.color)),
                 );
                 continue;
@@ -357,7 +366,7 @@ fn draw_arc_bucket<F>(
         frame.stroke(
             &path,
             canvas::Stroke::default()
-                .with_width(options.stroke_px(arc.width))
+                .with_width(options.ring_stroke_px(arc.width))
                 .with_color(color_from_rgba(arc.color)),
         );
     }
@@ -384,15 +393,53 @@ fn draw_polygon_bucket<F>(
         frame.fill(&path, fill);
 
         if let Some(stroke_color) = polygon.stroke_color {
+            let (stroke_path, width) = polygon_stroke_geometry(polygon, world_to_screen, options);
             frame.stroke(
-                &path,
+                &stroke_path,
                 canvas::Stroke::default()
-                    .with_width(options.stroke_px(polygon.stroke_width))
+                    .with_width(width)
                     .with_color(color_from_rgba(stroke_color))
                     .with_line_join(canvas::LineJoin::Round),
             );
         }
     }
+}
+
+/// Outline path and width of `polygon`: each ring (hole rings too) snapped
+/// like a wire when it is rectilinear, so a rectangle edge gets the pixel
+/// width a wire of the same mm width gets (#1888; see `scene_line_snap`).
+fn polygon_stroke_geometry<F>(
+    polygon: &GpuPolygon,
+    world_to_screen: F,
+    options: SceneDrawOptions,
+) -> (canvas::Path, f32)
+where
+    F: Fn([f32; 2]) -> Point + Copy,
+{
+    let width_px = options.stroke_px(polygon.stroke_width);
+    let rings = std::iter::once(&polygon.vertices)
+        .chain(polygon.holes.iter())
+        .filter(|ring| ring.len() >= 3)
+        .map(|ring| {
+            let screen: Vec<Point> = ring.iter().map(|v| world_to_screen(*v)).collect();
+            crate::scene_line_snap::snap_outline(
+                &screen,
+                width_px,
+                options.device_px_per_logical_px,
+            )
+        })
+        .collect::<Vec<_>>();
+    let width = rings.first().map_or(width_px, |(_, w)| *w);
+    let path = canvas::Path::new(|builder| {
+        for (points, _) in &rings {
+            if let Some((first, rest)) = points.split_first() {
+                builder.move_to(*first);
+                rest.iter().for_each(|p| builder.line_to(*p));
+                builder.close();
+            }
+        }
+    });
+    (path, width)
 }
 
 fn to_text_h_align(align: TextHAlign) -> advanced_text::Alignment {
@@ -1007,5 +1054,43 @@ mod line_geometry_tests {
         let (p0, p1, w) = line_geometry(&line([0.0, 0.0], [5.0, 3.0], 0), to_screen, options());
         assert_eq!((p0, p1), (Point::new(0.0, 0.0), Point::new(64.0, 38.4)));
         assert!((w - 1.92).abs() < 1e-4);
+    }
+
+    fn rect_polygon(width_mm: f32) -> GpuPolygon {
+        GpuPolygon {
+            vertices: vec![[1.0, 2.0], [9.0, 2.0], [9.0, 6.0], [1.0, 6.0]],
+            holes: Vec::new(),
+            fill_color: [0.0; 4],
+            stroke_color: Some([0.0, 0.0, 0.5, 1.0]),
+            stroke_width: width_mm,
+        }
+    }
+
+    /// A symbol body outline and a wire of the same 0.15 mm law draw at the
+    /// same whole-pixel width at 800 % (3.6 px unsnapped, 3 px on the canvas)
+    /// and in a 2x window; rings snap the same way (#1888).
+    #[test]
+    fn outlines_and_rings_get_the_wire_width_at_every_zoom_and_scale() {
+        for dpr in [1.0, 2.0] {
+            for scale in [3.2, 6.4, 12.8, 25.6, 51.2, 102.4] {
+                let options = SceneDrawOptions {
+                    scale_px_per_mm: scale,
+                    device_px_per_logical_px: dpr,
+                    text_min_px: 1.0,
+                    text_max_px: 100.0,
+                };
+                let to_screen = |p: [f32; 2]| Point::new(p[0] * scale + 0.37, p[1] * scale + 0.61);
+                let (_, _, wire) =
+                    line_geometry(&line([1.0, 2.0], [9.0, 2.0], 0), to_screen, options);
+                let polygon = rect_polygon(0.15);
+                let (_, outline) = polygon_stroke_geometry(&polygon, to_screen, options);
+                assert_eq!(outline, wire, "outline at {scale} px/mm, {dpr}x");
+                assert_eq!(
+                    options.ring_stroke_px(0.15),
+                    wire,
+                    "ring at {scale} px/mm, {dpr}x"
+                );
+            }
+        }
     }
 }
