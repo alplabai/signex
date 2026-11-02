@@ -190,6 +190,8 @@ pub(crate) struct RevisionedRowAdapter {
     revision: std::sync::atomic::AtomicU64,
     /// The stored row, as `read_row` and `iter_rows` return it.
     row: std::sync::Mutex<Option<signex_library::ComponentRow>>,
+    /// The symbol `get_symbol` answers, whatever the id; `None` = absent.
+    symbol: std::sync::Arc<std::sync::Mutex<Option<signex_library::Symbol>>>,
 }
 
 impl RevisionedRowAdapter {
@@ -198,7 +200,15 @@ impl RevisionedRowAdapter {
             manifest: FailingListingAdapter::new(library_id).manifest,
             revision: std::sync::atomic::AtomicU64::new(revision),
             row: std::sync::Mutex::new(None),
+            symbol: Default::default(),
         }
+    }
+
+    /// The cell `get_symbol` answers from, to change after mounting.
+    pub(crate) fn symbol_cell(
+        &self,
+    ) -> std::sync::Arc<std::sync::Mutex<Option<signex_library::Symbol>>> {
+        self.symbol.clone()
     }
 
     /// Store `row` at the current revision, as another user's save would.
@@ -228,6 +238,14 @@ impl LibraryAdapter for RevisionedRowAdapter {
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
         Ok(vec!["R".to_string()])
+    }
+
+    fn get_symbol(&self, uuid: Uuid) -> Result<signex_library::Symbol, LibraryError> {
+        self.symbol
+            .lock()
+            .expect("stub symbol")
+            .clone()
+            .ok_or_else(|| LibraryError::NotFound(uuid.to_string()))
     }
 
     fn read_table(&self, _name: &str) -> Result<Vec<signex_library::ComponentRow>, LibraryError> {
