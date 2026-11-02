@@ -1,8 +1,34 @@
-use crate::dock::{DockMessage, PanelPosition};
+use crate::dock::{DockMessage, DockTabMenu, PanelPosition, drop_target};
 
 use super::super::super::*;
 
 impl Signex {
+    /// Drop target of the floating panel at `index` for the current window
+    /// and region sizes. The single decision behind the live preview and
+    /// the release.
+    pub(crate) fn dock_drop_target(&self, index: usize) -> Option<PanelPosition> {
+        let panel = self.document_state.dock.floating.get(index)?;
+        let ui = &self.ui_state;
+        let geometry = self.document_state.dock.drop_geometry(
+            ui.window_size,
+            (ui.left_width, ui.right_width, ui.bottom_height),
+        );
+        drop_target(panel, &geometry)
+    }
+
+    /// Store the region the dragged floating panel would dock into, for the
+    /// view to draw. Call after every move of a dragged panel.
+    pub(crate) fn refresh_dock_drop_preview(&mut self) {
+        let target = self
+            .document_state
+            .dock
+            .floating
+            .iter()
+            .position(|fp| fp.dragging)
+            .and_then(|index| self.dock_drop_target(index));
+        self.document_state.dock.drop_preview = target;
+    }
+
     pub(super) fn handle_dock_floating_layout_message(
         &mut self,
         dock_message: &DockMessage,
@@ -13,66 +39,33 @@ impl Signex {
                     Some(self.interaction_state.last_mouse_pos);
                 false
             }
+            DockMessage::TabContextMenuRequested(position, index) => {
+                self.close_all_context_menus();
+                let (x, y) = self.interaction_state.last_mouse_pos;
+                let kind = self
+                    .document_state
+                    .dock
+                    .panel_kinds(*position)
+                    .get(*index)
+                    .copied();
+                self.document_state.dock.tab_menu = kind.map(|kind| DockTabMenu {
+                    position: *position,
+                    kind,
+                    x,
+                    y,
+                });
+                true
+            }
             DockMessage::FloatingDragEnd(index) => {
                 let index = *index;
-                if let Some(panel) = self.document_state.dock.floating.get(index) {
-                    let (window_width, window_height) = self.ui_state.window_size;
-                    let center_x = panel.x + panel.width / 2.0;
-                    let center_y = panel.y + panel.height / 4.0;
-
-                    // Use real dock region footprints (or collapsed rails) as
-                    // drop targets so users can dock panels more freely.
-                    let left_zone_w = if self.document_state.dock.has_panels(PanelPosition::Left) {
-                        if self.document_state.dock.is_collapsed(PanelPosition::Left) {
-                            40.0
-                        } else {
-                            self.ui_state.left_width.max(80.0)
-                        }
-                    } else {
-                        140.0
-                    };
-
-                    let right_zone_w = if self.document_state.dock.has_panels(PanelPosition::Right)
-                    {
-                        if self.document_state.dock.is_collapsed(PanelPosition::Right) {
-                            40.0
-                        } else {
-                            self.ui_state.right_width.max(80.0)
-                        }
-                    } else {
-                        140.0
-                    };
-
-                    let bottom_zone_h =
-                        if self.document_state.dock.has_panels(PanelPosition::Bottom) {
-                            if self.document_state.dock.is_collapsed(PanelPosition::Bottom) {
-                                32.0
-                            } else {
-                                self.ui_state.bottom_height.max(60.0)
-                            }
-                        } else {
-                            120.0
-                        };
-
-                    let target = if center_x <= left_zone_w {
-                        Some(PanelPosition::Left)
-                    } else if center_x >= window_width - right_zone_w {
-                        Some(PanelPosition::Right)
-                    } else if center_y >= window_height - bottom_zone_h {
-                        Some(PanelPosition::Bottom)
-                    } else {
-                        None
-                    };
-                    crate::diagnostics::log_debug(format!(
-                        "[dock-back] fp=({:.0},{:.0}) center=({center_x:.0},{center_y:.0}) win=({window_width:.0},{window_height:.0}) zones=(L:{left_zone_w:.0},R:{right_zone_w:.0},B:{bottom_zone_h:.0}) target={target:?}",
-                        panel.x, panel.y
-                    ));
-                    if let Some(position) = target {
-                        self.document_state
-                            .dock
-                            .update(DockMessage::DockFloatingTo(index, position));
-                    }
+                let target = self.dock_drop_target(index);
+                crate::diagnostics::log_debug(format!("[dock-back] fp={index} target={target:?}"));
+                if let Some(position) = target {
+                    self.document_state
+                        .dock
+                        .update(DockMessage::DockFloatingTo(index, position));
                 }
+                self.document_state.dock.drop_preview = None;
                 true
             }
             _ => false,

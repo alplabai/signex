@@ -28,6 +28,7 @@ mod empty_state;
 mod grid;
 mod header;
 mod keyed;
+mod names;
 mod price;
 mod sidebar;
 mod size_sensor;
@@ -59,6 +60,9 @@ const MAX_PARAM_COLUMNS: usize = 4;
 /// `Space` of the same width so column labels stay aligned with the
 /// row cells beneath them.
 const LIFECYCLE_DOT_GUTTER: f32 = 16.0;
+/// Width of the trailing per-row delete cell; the header keeps a spacer of
+/// the same width so the columns stay aligned.
+const ROW_DELETE_GUTTER: f32 = BROWSER_TEXT_SIZE * 2.5;
 const LIFECYCLE_DOT_SIZE: f32 = 8.0;
 
 /// Render the Library Browser tab body. Returns an empty-state panel
@@ -120,7 +124,7 @@ pub fn view<'a>(
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
     let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens, read_only);
-    let header = view_header(library_path, lib, browser, tokens, read_only);
+    let header = view_header(library_path, lib, browser, tokens);
 
     // Body — left grid, right preview pane.
     let active_table = active_table(lib, browser);
@@ -170,6 +174,7 @@ pub fn view<'a>(
         grid::GridCaches {
             dangling: &lib.dangling,
             prices: &prices,
+            names: names::PrimitiveNames::of(lib),
         },
         tokens,
         read_only,

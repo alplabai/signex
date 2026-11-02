@@ -117,6 +117,9 @@ mod autosave;
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
 
+#[path = "regression/dock_tab_controls.rs"]
+mod dock_tab_controls;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #1826 / #1827 / #1828 — a save writes the file the document is.
@@ -225,6 +228,9 @@ mod library_uncommitted;
 
 #[path = "regression/library_read_only_mount.rs"]
 mod library_read_only_mount;
+// #1894 / #1895 — Library panel expand; a copied library is refused.
+#[path = "regression/library_panel_and_ids.rs"]
+mod library_panel_and_ids;
 
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
@@ -326,6 +332,10 @@ mod symbol_undo_steps;
 mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
+#[path = "regression/library_browser_row_delete.rs"]
+mod library_browser_row_delete;
+#[path = "regression/library_components_panel_details.rs"]
+mod library_components_panel_details;
 #[path = "regression/library_named_symbol_file.rs"]
 mod library_named_symbol_file;
 #[path = "regression/library_place_designator_standard.rs"]

@@ -241,9 +241,11 @@ impl OpenOverlays {
             | OverlayId::ContextMenu
             | OverlayId::TabContextMenu
             | OverlayId::ProjectTreeContextMenu
+            | OverlayId::ComponentsRowContextMenu
             | OverlayId::GridPicker
             | OverlayId::PanelList
             | OverlayId::DockDragZone
+            | OverlayId::ComponentsRowDragLabel
             | OverlayId::FloatingPanels => None,
 
             // ── Dialogs ─────────────────────────────────────────────
@@ -669,6 +671,7 @@ impl Signex {
     /// otherwise never delivered.
     pub fn is_pointer_drag_active(&self) -> bool {
         self.interaction_state.dragging.is_some()
+            || self.library.components_panel.drag.is_some()
             || self.document_state.dock.tab_drag.is_some()
             || self.ui_state.modal_dragging.is_some()
             || self.ui_state.tab_dragging.is_some()

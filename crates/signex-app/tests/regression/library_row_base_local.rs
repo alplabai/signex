@@ -17,14 +17,14 @@ use signex_library::{
 };
 use uuid::Uuid;
 
-const TABLE: &str = "ICs";
-const PARAM: &str = "Supply Voltage";
+pub(crate) const TABLE: &str = "ICs";
+pub(crate) const PARAM: &str = "Supply Voltage";
 /// A `.snxlib` with one row whose `Supply Voltage` is a typed
 /// measurement. Version control off — `LocalGitAdapter::open` treats a
 /// missing `.git/` as "no version control" and every mutation is a
 /// best-effort commit that no-ops, which keeps the fixture cheap while
 /// still writing real bytes through the real writer.
-fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
+pub(crate) fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf, RowId) {
     let snxlib = dir.join("cells.snxlib");
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
@@ -105,7 +105,10 @@ fn pn_on_disk(snxlib: &std::path::Path, row_id: RowId) -> String {
         .to_string()
 }
 
-fn open_app_with_preview(snxlib: &std::path::Path, row_id: RowId) -> (Signex, EditorAddress) {
+pub(crate) fn open_app_with_preview(
+    snxlib: &std::path::Path,
+    row_id: RowId,
+) -> (Signex, EditorAddress) {
     let (mut app, _boot) = Signex::new();
     app.library
         .open_library(snxlib.to_path_buf())
@@ -141,7 +144,7 @@ fn browser_commits_pn(app: &mut Signex, snxlib: &std::path::Path, row_id: RowId,
     drop(app.land_pending_refresh(snxlib));
 }
 
-fn save_preview(app: &mut Signex, address: &EditorAddress) {
+pub(crate) fn save_preview(app: &mut Signex, address: &EditorAddress) {
     let task = app.update(Message::Library(LibraryMessage::EditorEvent {
         library_path: address.library_path.clone(),
         table: address.table.clone(),

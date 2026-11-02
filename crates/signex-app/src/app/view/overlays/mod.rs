@@ -22,7 +22,7 @@ pub(super) mod read_only_badge;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
-    pub(super) fn canvas_bounds(&self) -> iced::Rectangle {
+    pub(in crate::app) fn canvas_bounds(&self) -> iced::Rectangle {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
         let dock = &self.document_state.dock;
         let extent = |pos, size| canvas_region::DockExtent {
@@ -514,7 +514,7 @@ impl Signex {
         let ui = &self.ui_state;
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
-            return Vec::new();
+            return self.dock_tab_context_menu_overlay();
         };
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
@@ -535,6 +535,44 @@ impl Signex {
         };
         vec![
             Self::dismiss_layer(Message::ContextMenu(ContextMenuMsg::CloseTab)),
+            column![
+                iced::widget::Space::new().height(y),
+                row![
+                    iced::widget::Space::new().width(x),
+                    menu,
+                    iced::widget::Space::new().width(Length::Fill),
+                ]
+                .width(Length::Fill),
+            ]
+            .into(),
+        ]
+    }
+
+    /// Dock panel tab right-click menu: dismiss layer, then the menu clamped
+    /// into the window.
+    fn dock_tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        use iced::widget::{column, row};
+
+        let Some(menu_ctx) = self.document_state.dock.tab_menu else {
+            return Vec::new();
+        };
+        let menu = self.view_dock_tab_context_menu();
+        let menu_w = Self::CONTEXT_MENU_WIDTH;
+        let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
+        let (win_w, win_h) = self.ui_state.window_size;
+        let edge_margin: f32 = 4.0;
+        let x = if menu_ctx.x + menu_w + edge_margin > win_w {
+            (win_w - menu_w - edge_margin).max(0.0)
+        } else {
+            menu_ctx.x
+        };
+        let y = if menu_ctx.y + est_menu_h + edge_margin > win_h {
+            (menu_ctx.y - est_menu_h).max(0.0)
+        } else {
+            menu_ctx.y
+        };
+        vec![
+            Self::dismiss_layer(Message::Dock(crate::dock::DockMessage::TabMenuDismissed)),
             column![
                 iced::widget::Space::new().height(y),
                 row![
@@ -674,56 +712,43 @@ impl Signex {
         ]
     }
 
-    /// Dock drag-target highlight — paints the left / right / bottom dock
-    /// zone the currently-dragged floating panel would snap into.
+    /// Dock drop preview — paints the region the dragged floating panel
+    /// docks into if released now (`DockArea::drop_preview`).
     pub(super) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container, row};
 
         let ui = &self.ui_state;
         let document = &self.document_state;
-        let fp = document.dock.floating.iter().find(|fp| fp.dragging)?;
-        let (ww, wh) = ui.window_size;
-        let zone = 120.0;
-        let cx = fp.x + fp.width / 2.0;
-        let cy = fp.y + fp.height / 4.0;
+        let position = document.dock.drop_preview?;
+        let geometry = document.dock.drop_geometry(
+            ui.window_size,
+            (ui.left_width, ui.right_width, ui.bottom_height),
+        );
+        let depth = geometry.preview_depth(position);
         let zone_style = crate::styles::dock_zone_highlight(&document.panel_ctx.tokens);
-        if cx < zone {
-            Some(
-                container(iced::widget::Space::new())
-                    .width(ui.left_width)
-                    .height(Length::Fill)
-                    .style(zone_style)
-                    .into(),
-            )
-        } else if cx > ww - zone {
-            Some(
-                row![
-                    iced::widget::Space::new().width(Length::Fill),
-                    container(iced::widget::Space::new())
-                        .width(ui.right_width)
-                        .height(Length::Fill)
-                        .style(zone_style),
-                ]
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-            )
-        } else if cy > wh - zone {
-            Some(
-                column![
-                    iced::widget::Space::new().height(Length::Fill),
-                    container(iced::widget::Space::new())
-                        .width(Length::Fill)
-                        .height(ui.bottom_height)
-                        .style(zone_style),
-                ]
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into(),
-            )
-        } else {
-            None
-        }
+        let zone = |width: Length, height: Length| {
+            container(iced::widget::Space::new())
+                .width(width)
+                .height(height)
+                .style(zone_style)
+        };
+        Some(match position {
+            crate::dock::PanelPosition::Left => zone(depth.into(), Length::Fill).into(),
+            crate::dock::PanelPosition::Right => row![
+                iced::widget::Space::new().width(Length::Fill),
+                zone(depth.into(), Length::Fill),
+            ]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+            crate::dock::PanelPosition::Bottom => column![
+                iced::widget::Space::new().height(Length::Fill),
+                zone(Length::Fill, depth.into()),
+            ]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        })
     }
 
     /// Floating panels — one `Translate`-positioned widget per floating

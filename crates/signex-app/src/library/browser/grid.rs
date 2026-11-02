@@ -22,6 +22,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 pub(super) struct GridCaches<'a> {
     pub(super) dangling: &'a DanglingSweep,
     pub(super) prices: &'a super::price::PriceView<'a>,
+    pub(super) names: super::names::PrimitiveNames<'a>,
 }
 
 #[allow(
@@ -38,7 +39,11 @@ pub(super) fn view_grid<'a>(
     tokens: &'a ThemeTokens,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
-    let GridCaches { dangling, prices } = caches;
+    let GridCaches {
+        dangling,
+        prices,
+        names,
+    } = caches;
     let muted = theme_ext::text_secondary(tokens);
     let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
@@ -88,6 +93,7 @@ pub(super) fn view_grid<'a>(
             });
             r = r.push(container(header_btn).width(Length::Fixed(c.width)));
         }
+        r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)));
         container(r)
             .padding([SP.xs, SP.s])
             .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
@@ -168,7 +174,7 @@ pub(super) fn view_grid<'a>(
             let mut data_row = row![lifecycle_cell].spacing(0);
             for c in columns {
                 let column_key = c.kind.sort_key();
-                let row_value = c.kind.cell_value(r);
+                let row_value = c.kind.cell_value_named(r, &names);
 
                 // Rev column: read-only, prefixes a 🔒 glyph when
                 // released. Stage 14 of v0.9-snxlib-as-file. Edit
@@ -377,6 +383,8 @@ pub(super) fn view_grid<'a>(
                 );
             }
 
+            data_row = data_row.push(row_delete_cell(&lib_pb, table, row_id, tokens, read_only));
+
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
             let row_container = container(data_row)
@@ -445,6 +453,46 @@ pub(super) fn view_grid<'a>(
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
         .into()
+}
+
+/// Trailing per-row delete button; asks the "Delete Selected" confirm for this row.
+fn row_delete_cell<'a>(
+    library_path: &std::path::Path,
+    table: &str,
+    row_id: RowId,
+    tokens: &'a ThemeTokens,
+    read_only: bool,
+) -> Element<'a, LibraryMessage> {
+    let cell = |content: Element<'a, LibraryMessage>| {
+        container(content)
+            .width(Length::Fixed(ROW_DELETE_GUTTER))
+            .height(Length::Fill)
+            .center_x(Length::Fixed(ROW_DELETE_GUTTER))
+            .center_y(Length::Fill)
+            .into()
+    };
+    if read_only {
+        return cell(Space::new().into());
+    }
+    let muted = theme_ext::text_secondary(tokens);
+    let danger = theme_ext::error_color(tokens);
+    let btn = button(text("×").size(BROWSER_TEXT_SIZE))
+        .padding([0.0, SP.s])
+        .on_press(LibraryMessage::BrowserDeleteRowRequest {
+            library_path: library_path.to_path_buf(),
+            table: table.to_string(),
+            row_id,
+        })
+        .style(move |_: &Theme, status| iced::widget::button::Style {
+            background: None,
+            text_color: if matches!(status, iced::widget::button::Status::Hovered) {
+                danger
+            } else {
+                muted
+            },
+            ..iced::widget::button::Style::default()
+        });
+    cell(btn.into())
 }
 
 /// Warning-coloured cell button for an unbound symbol / footprint that

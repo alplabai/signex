@@ -10,6 +10,7 @@
 use chrono::{DateTime, Utc};
 
 use super::columns::{ColumnKind, GridColumn, derive_columns, row_matches_filter};
+use super::names::PrimitiveNames;
 use super::price::PriceView;
 use super::sort::{CellSortKey, sort_by_cell_key};
 use super::*;
@@ -109,6 +110,7 @@ impl BrowserViewCache {
         let table = active_table(lib, browser);
         let rows: &[ComponentRow] = lib.tables.get(table).map(Vec::as_slice).unwrap_or(&[]);
 
+        let names = PrimitiveNames::of(lib);
         let needle = browser.search.trim().to_lowercase();
         let lifecycle_filter = browser.lifecycle_filter;
         let class_filter = browser.class_filter.as_deref();
@@ -117,7 +119,7 @@ impl BrowserViewCache {
                 let r = &rows[i];
                 lifecycle_filter.allows(r.state)
                     && class_filter.is_none_or(|cls| r.class.as_str() == cls)
-                    && (needle.is_empty() || row_matches_filter(r, &needle))
+                    && (needle.is_empty() || row_matches_filter(r, &needle, &names))
             })
             .collect();
 
@@ -139,7 +141,7 @@ impl BrowserViewCache {
                 &mut visible,
                 |&i| match column.kind {
                     ColumnKind::Price => CellSortKey::from_cell(&prices.sort_value(&rows[i])),
-                    _ => column.kind.sort_key_for(&rows[i]),
+                    _ => column.kind.sort_key_for(&rows[i], &names),
                 },
                 sort.descending,
             );
