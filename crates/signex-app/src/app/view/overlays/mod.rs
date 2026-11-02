@@ -19,6 +19,8 @@ mod bars;
 mod modals;
 mod net_hover;
 pub(super) mod read_only_badge;
+#[cfg(test)]
+mod window_gate_tests;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.

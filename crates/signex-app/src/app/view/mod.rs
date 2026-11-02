@@ -520,12 +520,12 @@ impl Signex {
             };
         }
 
-        // Standalone primitive editor tabs. `.snxsym` / `.snxfpt`
-        // open as main-window document tabs alongside `.snxsch` /
-        // `.snxpcb`. Lookup is path-keyed via
-        // `DocumentState.symbol_editors` / `footprint_editors`.
-        if is_main
-            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+        // Standalone primitive editor and Library Browser tabs, in the main
+        // window or in the undocked window of that tab (#1818). Lookup is
+        // path-keyed via `DocumentState.symbol_editors` / `footprint_editors`.
+        if let Some(active_tab) = self
+            .document_state
+            .tab_shown_in_window(window_id, &self.ui_state)
         {
             if let Some(path) = active_tab.kind.as_symbol_editor()
                 && let Some(editor) = self.document_state.symbol_editors.get(path)
