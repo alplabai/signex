@@ -65,6 +65,7 @@ pub mod settings;
 pub mod shared_resolver;
 pub mod state;
 pub mod stock_copy;
+pub mod symbol_delete;
 #[cfg(test)]
 pub(crate) mod test_adapters;
 pub(crate) mod unit_picker;
