@@ -3,9 +3,10 @@
 //! a wire on a locked symbol's pin. The ghost is `MovePreview::moved_with`,
 //! the call the canvas makes; the drop goes through `Signex::update`.
 
-use signex_app::app::{Message, Signex, TabInfo, TabKind};
+use signex_app::app::{Message, MoveSelectionMsg, Signex, TabInfo, TabKind, UiMsg};
 use signex_app::canvas::CanvasEvent;
 use signex_app::diagnostics;
+use signex_app::keymap::{KeyStroke, KeyToken, Modifiers};
 use signex_types::schematic::{
     LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, SelectedItem,
     SelectedKind, Symbol, Wire,
@@ -213,4 +214,129 @@ fn a_symbol_on_a_locked_wire_stays_put_on_the_drop_as_the_ghost_shows() {
 
     assert_eq!(after.symbols[0].position, start.symbols[0].position);
     assert_eq!(after.wires, start.wires);
+}
+
+/// A rig whose only selection is the wire on the locked pin, with the
+/// keymap the rotate and mirror keys need.
+fn all_held_rig(reference: &str) -> Rig {
+    let mut rig = rig(reference, true, false);
+    rig.app.ui_state.first_run_tour_open = false;
+    rig.app
+        .ui_state
+        .keymap_profiles
+        .set_active_profile("altium")
+        .expect("altium profile");
+    rig.app.ui_state.active_keymap = rig.app.ui_state.keymap_profiles.compile_active().into();
+    rig.app.interaction_state.active_canvas_mut().selected = vec![rig.wire];
+    rig
+}
+
+fn assert_nothing_happened(app: &Signex, before: &SchematicSheet, undo: usize, what: &str) {
+    let engine = app.document_state.active_engine().expect("engine");
+    assert_eq!(
+        engine.document().wires,
+        before.wires,
+        "{what}: the wire moved"
+    );
+    assert_eq!(
+        engine.undo_position(),
+        undo,
+        "{what}: an undo step was made"
+    );
+    let path = app.document_state.active_path.clone().expect("path");
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "{what}: the sheet was marked dirty"
+    );
+}
+
+fn key(token: KeyToken) -> UiMsg {
+    UiMsg::KeymapStroke {
+        window: None,
+        stroke: KeyStroke {
+            modifiers: Modifiers::default(),
+            key: token,
+        },
+    }
+}
+
+#[test]
+fn rotate_and_mirror_keys_skip_a_wire_on_a_locked_pin_without_an_undo_step() {
+    let mut rig = all_held_rig("RKEYS1716");
+    let before = sheet(&rig.app);
+    let undo = rig
+        .app
+        .document_state
+        .active_engine()
+        .expect("engine")
+        .undo_position();
+    let needle = "Skipped 1 locked object(s): RKEYS1716";
+    let logged_before = logged(needle);
+
+    for token in [
+        KeyToken::Space,
+        KeyToken::Character("x".into()),
+        KeyToken::Character("y".into()),
+    ] {
+        let _ = rig.app.update(Message::Ui(key(token)));
+    }
+
+    assert_nothing_happened(&rig.app, &before, undo, "rotate/mirror keys");
+    assert_eq!(logged(needle), logged_before + 3, "each key names the skip");
+}
+
+#[test]
+fn the_move_dialog_skips_a_wire_on_a_locked_pin_without_an_undo_step() {
+    let mut rig = all_held_rig("RDIALOG1716");
+    let before = sheet(&rig.app);
+    let undo = rig
+        .app
+        .document_state
+        .active_engine()
+        .expect("engine")
+        .undo_position();
+    let needle = "Skipped 1 locked object(s): RDIALOG1716";
+    let logged_before = logged(needle);
+    rig.app.ui_state.move_selection.dx = "10".to_string();
+    rig.app.ui_state.move_selection.dy = "0".to_string();
+
+    let _ = rig
+        .app
+        .update(Message::MoveSelection(MoveSelectionMsg::Apply));
+
+    assert_nothing_happened(&rig.app, &before, undo, "the Move Selection dialog");
+    assert_eq!(logged(needle), logged_before + 1);
+}
+
+#[test]
+fn the_ghost_names_each_kind_of_hold_in_its_own_words() {
+    let rig = rig("RHOLD1716", true, false);
+    let held = |selection: &[SelectedItem]| {
+        let moves: Vec<_> = selection.iter().map(|item| (*item, 0.0, DY)).collect();
+        signex_engine::MovePreview::new(&sheet(&rig.app))
+            .moved_with(&moves, true, &Default::default())
+            .1
+    };
+    assert_eq!(held(&[rig.symbol]), ["RHOLD1716"], "the part's own lock");
+    assert_eq!(
+        held(&[rig.wire]),
+        ["a wire on RHOLD1716's pin (RHOLD1716 is locked)"]
+    );
+
+    let by_wire = self::rig("RHOLD1716W", false, true);
+    let moves = [(by_wire.symbol, 0.0, DY)];
+    let held = signex_engine::MovePreview::new(&sheet(&by_wire.app))
+        .moved_with(&moves, true, &Default::default())
+        .1;
+    assert_eq!(held, ["RHOLD1716W (a wire attached to it is locked)"]);
+
+    let _ = diagnostics::init_logging();
+    diagnostics::log_locked_holds(&held);
+    assert_eq!(
+        logged(
+            "Will not move when dropped: RHOLD1716W (a wire attached to it is locked); \
+             unlock the locked object in Properties to move it"
+        ),
+        1
+    );
 }

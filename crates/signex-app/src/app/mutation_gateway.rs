@@ -266,18 +266,24 @@ impl Signex {
         // wire on a locked pin included. A command that is nothing but locked
         // items still reaches the engine, so the user is told why nothing
         // happened; one that is only held items the engine would not refuse
-        // (a wire on a locked pin) does nothing, and says so.
-        let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
-        let command = match kept.pop() {
-            Some(pruned) => {
-                Self::report_locked_skips(&skipped);
-                pruned
+        // (a wire on a locked pin) does nothing, and says so. Other commands
+        // pass untouched, without a copy.
+        let names_locked = engine.names_locked_item(&command);
+        let command = if names_locked || is_selection_command(&command) {
+            let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
+            match kept.pop() {
+                Some(pruned) => {
+                    Self::report_locked_skips(&skipped);
+                    pruned
+                }
+                None if names_locked => command,
+                None => {
+                    Self::report_locked_skips(&skipped);
+                    return (CommandOutcome::Unchanged, None);
+                }
             }
-            None if engine.names_locked_item(&command) => command,
-            None => {
-                Self::report_locked_skips(&skipped);
-                return (CommandOutcome::Unchanged, None);
-            }
+        } else {
+            command
         };
 
         let executed = if record_history {
@@ -910,4 +916,18 @@ mod tests {
             None
         );
     }
+}
+
+/// Whether `command` acts on a selection, the shape `without_locked` prunes.
+fn is_selection_command(command: &signex_engine::Command) -> bool {
+    use signex_engine::Command;
+    matches!(
+        command,
+        Command::MoveSelection { .. }
+            | Command::RotateSelection { .. }
+            | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
+            | Command::DeleteSelection { .. }
+            | Command::MoveEach { .. }
+    )
 }

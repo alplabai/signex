@@ -234,10 +234,13 @@ impl MovePreview {
         engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
-        let (command, held) = engine.without_locked(Command::MoveEach {
-            moves: moves.to_vec(),
-            keep_wires,
-        });
+        let (command, held) = engine.without_locked_naming(
+            Command::MoveEach {
+                moves: moves.to_vec(),
+                keep_wires,
+            },
+            &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
+        );
         let Some(command) = command else {
             return (self.sheet.clone(), held);
         };
