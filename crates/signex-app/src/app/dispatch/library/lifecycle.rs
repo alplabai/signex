@@ -83,6 +83,7 @@ impl Signex {
                 path = %path.display(),
                 "mount_finished: no longer pending (closed while preparing); discarding"
             );
+            self.picker_mount_settled(&path, Some("cancelled".into()));
             return Task::none();
         };
         let Some(result) = prepared.take() else {
@@ -91,6 +92,7 @@ impl Signex {
                 path = %path.display(),
                 "mount_finished: payload already taken; library not mounted"
             );
+            self.picker_mount_settled(&path, Some("cancelled".into()));
             return Task::none();
         };
         // Raised only for a mount the user asked for by name (#532).
@@ -104,6 +106,7 @@ impl Signex {
             .unwrap_or_else(|| path.display().to_string());
         let report =
             |this: &mut Self, path: &std::path::Path, err: &signex_library::LibraryError| {
+                this.picker_mount_settled(path, Some(err.to_string()));
                 let error = anyhow::anyhow!("could not open library {}: {err}", path.display());
                 // Lead with the library name: the Messages panel cuts long lines.
                 crate::diagnostics::log_error(&format!("Failed to mount library {name}"), &error);
@@ -135,6 +138,7 @@ impl Signex {
                     return self.readmit_stock_copies(&path);
                 }
                 self.library.drift.check_pending = true;
+                self.picker_mount_settled(&path, None);
                 // Sheets opened before this library mounted skipped its
                 // symbols; scan them now (#1449).
                 if newly_mounted {
