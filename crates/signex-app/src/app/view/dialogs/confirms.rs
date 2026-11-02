@@ -131,8 +131,8 @@ impl Signex {
                 if is_dir {
                     "The library file is permanently deleted and the library closed. Its symbol, \
                      footprint, simulation and datasheet files are deleted too when the folder \
-                     is the library's own; in the project folder or a folder shared with \
-                     another library only the library file goes. Other files are left."
+                     is the library's own; in a folder that also holds another library or a \
+                     project or design file, only the library file goes. Other files are left."
                 } else {
                     "File will be removed from project and permanently deleted."
                 },
