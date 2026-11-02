@@ -901,10 +901,19 @@ fn a_drag_held_by_a_lock_says_so_once_per_drag() {
     };
     let mut slot = slot_with(&sheet);
     slot.selected = vec![selected];
-    let notices = || {
+    // Entries newer than `since`, so the 200-entry ring shared with parallel
+    // tests cannot evict what an earlier phase counted.
+    let latest = || {
         crate::diagnostics::recent_entries()
             .iter()
-            .filter(|e| e.message.contains("wire (5.08, 6.35)"))
+            .map(|e| e.id)
+            .max()
+            .unwrap_or(0)
+    };
+    let notices_since = |since: u64| {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.id > since && e.message.contains("wire (5.08, 6.35)"))
             .count()
     };
     let press = |p: &Programs<'_>, state: &mut CanvasState| {
@@ -913,17 +922,19 @@ fn a_drag_held_by_a_lock_says_so_once_per_drag() {
     };
     rig(&slot, |p| {
         let mut state = CanvasState::default();
+        let first = latest();
         press(p, &mut state);
         drag_to(&p.overlay, &mut state, 120.0);
         assert!(state.move_dragging, "the fixture starts a drag");
         drag_to(&p.overlay, &mut state, 140.0);
-        assert_eq!(notices(), 1, "named once while the drag goes on");
+        assert_eq!(notices_since(first), 1, "named once while the drag goes on");
 
         send(&p.overlay, &mut state, release(), at(140.0, 60.0));
         // Two quick presses would read as a double-click, not a new drag.
         state.last_click_time = None;
+        let second = latest();
         press(p, &mut state);
         drag_to(&p.overlay, &mut state, 120.0);
-        assert_eq!(notices(), 2, "a new drag says it again");
+        assert_eq!(notices_since(second), 1, "a new drag says it again");
     });
 }
