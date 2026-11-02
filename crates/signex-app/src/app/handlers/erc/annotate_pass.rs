@@ -90,10 +90,9 @@ impl Signex {
         // Every sheet the counter must cover - cached tabs, unopened sheets
         // and the active engine alike - in the ONE order
         // `ordered_project_sheet_paths` defines. The preview walks the same
-        // order over the same set, so the number it promises for a sheet is
-        // the number this pass assigns it (#435) - except for a sheet file
-        // placed more than once: the preview lists its symbols once, while the
-        // pass numbers them per placement (#1919).
+        // order over the same set, and numbers a sheet file placed more than
+        // once per placement as this pass does, so the number it promises for
+        // a sheet is the number this pass assigns it (#435, #1919).
         let locked = self.ui_state.annotate_locked.clone();
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(

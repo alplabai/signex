@@ -309,6 +309,27 @@ fn a_part_added_later_to_a_child_placed_twice_is_numbered_per_placement() {
 }
 
 #[test]
+fn the_preview_numbers_a_child_placed_twice_as_the_run_applies_it() {
+    let (mut app, dir, [a, b]) = placed_twice(&[("Q1", 1), ("Q2", 1)], sheet(&[], &[("Q?", 1)]));
+    let rows: Vec<_> = app
+        .preview_project_annotations()
+        .into_iter()
+        .filter(|row| row.sheet.starts_with("m_child"))
+        .map(|row| row.proposed)
+        .collect();
+
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    settle_task(&mut app, task);
+    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
+    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    std::fs::remove_dir_all(&dir).ok();
+
+    let applied = [designators_at(&child, a), designators_at(&child, b)].concat();
+    assert_eq!(applied, ["Q3", "Q4"]);
+    assert_eq!(rows, applied, "one preview row per placement");
+}
+
+#[test]
 fn reset_and_renumber_refuses_the_run_when_a_sheet_would_be_skipped() {
     let _ = crate::diagnostics::init_logging();
     let (mut app, dir) = project();

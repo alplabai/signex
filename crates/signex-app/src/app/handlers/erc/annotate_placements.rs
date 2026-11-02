@@ -123,15 +123,26 @@ pub(super) fn project_base_dir(
     documents: &DocumentState,
     set: &ProjectSheetSet,
 ) -> Option<PathBuf> {
-    documents
-        .active_document_project()
-        .map(|project| project.dir().to_path_buf())
-        .or_else(|| {
-            set.root
-                .as_deref()
-                .and_then(Path::parent)
-                .map(PathBuf::from)
-        })
+    project_base_dir_of(
+        documents
+            .active_document_project()
+            .map(|project| project.dir().to_path_buf())
+            .as_deref(),
+        set,
+    )
+}
+
+/// [`project_base_dir`] from an already-read project folder.
+pub(super) fn project_base_dir_of(
+    project_dir: Option<&Path>,
+    set: &ProjectSheetSet,
+) -> Option<PathBuf> {
+    project_dir.map(Path::to_path_buf).or_else(|| {
+        set.root
+            .as_deref()
+            .and_then(Path::parent)
+            .map(PathBuf::from)
+    })
 }
 
 /// What a pass needs before it touches a sheet: the project's parts, the
