@@ -14,6 +14,7 @@ mod distributor_lcsc;
 mod distributor_mouser;
 mod distributor_pricing;
 mod footprint_schema_v3;
+mod footprint_silk_marker;
 mod foundation_round_trip;
 mod lfs_pointers;
 mod local_git_cascade_batch;

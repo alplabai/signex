@@ -11,6 +11,7 @@ fn line(from: [f64; 2], to: [f64; 2]) -> FpGraphic {
         kind: FpGraphicKind::Line { from, to },
         stroke_width: 0.0,
         filled: false,
+        sketch_entity: None,
     }
 }
 
@@ -24,6 +25,7 @@ fn arc(center: [f64; 2], radius: f64, start_deg: f64, end_deg: f64) -> FpGraphic
         },
         stroke_width: 0.0,
         filled: false,
+        sketch_entity: None,
     }
 }
 

@@ -47,6 +47,7 @@ points = [
 [[footprints.silk_f]]
 stroke_width = 0.12
 filled = false
+sketch_entity = "7fff648f-930d-4e7e-a1e8-ddcc9023e196"
 
 [footprints.silk_f.kind]
 kind = "line"
