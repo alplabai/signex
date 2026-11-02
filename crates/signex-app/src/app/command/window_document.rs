@@ -205,6 +205,24 @@ impl Signex {
             .then_some(window)
     }
 
+    /// `window` when it is an undocked window, `None` for the main window or
+    /// an unknown id: the owner an overlay records when it opens (#1910).
+    pub(crate) fn overlay_owner(&self, window: iced::window::Id) -> Option<iced::window::Id> {
+        (self.ui_state.main_window_id != Some(window)
+            && self.ui_state.windows.contains_key(&window))
+        .then_some(window)
+    }
+
+    /// Whether an overlay opened by `owner` (see [`Self::overlay_owner`])
+    /// paints in `window`: only the window it was opened in shows it.
+    pub(crate) fn overlay_belongs_to(
+        &self,
+        owner: Option<iced::window::Id>,
+        window: iced::window::Id,
+    ) -> bool {
+        owner == self.overlay_owner(window)
+    }
+
     /// [`Self::run_in_window`] for a command that reads the active tab and
     /// path (Save, Save As, Print): the one retarget-and-restore rule, with
     /// its unwind guard, then the panels and History show the main window's

@@ -289,6 +289,30 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
     }
 }
 
+/// Tag the Active Bar and context-menu messages of overlay `layers` painted
+/// in the undocked window `owner`, so `update` runs them against the sheet
+/// that window shows (#1910). `None` (the main window) leaves them as is.
+fn scoped_to_window<'a>(
+    layers: impl IntoIterator<Item = Element<'a, Message>>,
+    owner: Option<iced::window::Id>,
+) -> Vec<Element<'a, Message>> {
+    layers
+        .into_iter()
+        .map(|layer| match owner {
+            None => layer,
+            Some(window) => layer.map(move |message| match message {
+                Message::ActiveBar(inner) => Message::ActiveBar(
+                    crate::active_bar::ActiveBarMsg::ScopedToWindow(window, Box::new(inner)),
+                ),
+                Message::ContextMenu(inner) => {
+                    Message::ContextMenu(ContextMenuMsg::ScopedToWindow(window, Box::new(inner)))
+                }
+                other => other,
+            }),
+        })
+        .collect()
+}
+
 pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {
     if has_blocking_modal {
         &PAINT_ORDER[..PRE_BLOCKING]
@@ -321,9 +345,10 @@ impl Signex {
             OverlayId::BomPreview => layers.extend(self.bom_preview_overlay()),
             OverlayId::NetColorCustom => layers.extend(self.net_color_custom_overlay()),
             OverlayId::PlacementPaused => layers.extend(self.placement_paused_overlay(window_id)),
-            OverlayId::SchematicActiveBar => {
-                layers.extend(self.schematic_active_bar_overlay(window_id))
-            }
+            OverlayId::SchematicActiveBar => layers.extend(scoped_to_window(
+                self.schematic_active_bar_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
             OverlayId::FootprintActiveBar => {
                 layers.extend(self.footprint_active_bar_overlay(window_id))
             }
@@ -339,8 +364,14 @@ impl Signex {
                 layers.extend(self.symbol_context_menu_overlay(window_id))
             }
             OverlayId::TextEdit => layers.extend(self.text_edit_overlay(window_id)),
-            OverlayId::ActiveBarMenu => layers.extend(self.active_bar_menu_overlay()),
-            OverlayId::ContextMenu => layers.extend(self.context_menu_overlay()),
+            OverlayId::ActiveBarMenu => layers.extend(scoped_to_window(
+                self.active_bar_menu_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
+            OverlayId::ContextMenu => layers.extend(scoped_to_window(
+                self.context_menu_overlay(window_id),
+                self.overlay_owner(window_id),
+            )),
             OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay()),
             OverlayId::ProjectTreeContextMenu => {
                 layers.extend(self.project_tree_context_menu_overlay())

@@ -88,6 +88,10 @@ pub struct ContextMenuState {
     /// Where on the sheet the menu was opened, in world mm; `None` when the
     /// cursor position was not known to belong to this document.
     pub world: Option<(f64, f64)>,
+    /// The undocked window the menu was opened in; `None` for the main
+    /// window. Only that window paints it and its actions act on that
+    /// window's sheet (#1910).
+    pub window: Option<iced::window::Id>,
 }
 
 /// v0.18.10 — Altium-style grid picker popup state. Anchors the

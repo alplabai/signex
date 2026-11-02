@@ -34,25 +34,33 @@ pub(super) fn part_name(symbol: &Symbol) -> String {
     }
 }
 
+/// The one symbol `canvas` selects on `engine`'s sheet, unless it is a power
+/// port (those carry no library part).
+pub(crate) fn selected_placed_symbol<'a>(
+    engine: &'a signex_engine::Engine,
+    canvas: &crate::canvas::CanvasSlot,
+) -> Option<&'a Symbol> {
+    let [item] = canvas.selected.as_slice() else {
+        return None;
+    };
+    if item.kind != SelectedKind::Symbol {
+        return None;
+    }
+    engine
+        .document()
+        .symbols
+        .iter()
+        .find(|s| s.uuid == item.uuid && !s.is_power)
+}
+
 impl Signex {
     /// The one selected symbol of the active sheet, unless it is a power
     /// port (those carry no library part).
     pub(crate) fn selected_placed_part(&self) -> Option<PlacedPart> {
         let sheet = self.document_state.active_path.clone()?;
         let engine = self.document_state.active_engine()?;
-        let selected = &self.interaction_state.active_canvas().selected;
-        let [item] = selected.as_slice() else {
-            return None;
-        };
-        if item.kind != SelectedKind::Symbol {
-            return None;
-        }
-        let symbol = engine
-            .document()
-            .symbols
-            .iter()
-            .find(|s| s.uuid == item.uuid && !s.is_power)?
-            .clone();
+        let symbol =
+            selected_placed_symbol(engine, self.interaction_state.active_canvas())?.clone();
         Some(PlacedPart {
             target: PlacedPartTarget {
                 sheet,
@@ -61,11 +69,6 @@ impl Signex {
             },
             symbol,
         })
-    }
-
-    /// Whether the placed-part actions apply to the current selection.
-    pub(crate) fn has_placed_part_selected(&self) -> bool {
-        self.selected_placed_part().is_some()
     }
 
     pub(crate) fn dispatch_placed_part_message(&mut self, msg: PlacedPartMsg) -> Task<Message> {

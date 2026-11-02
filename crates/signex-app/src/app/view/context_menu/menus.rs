@@ -165,17 +165,30 @@ impl Signex {
 
     /// Canvas right-click menu. Resolves selection state + shortcut hints
     /// from `self`, then delegates to the pure [`canvas_menu_entries`].
-    pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_context_menu(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let canvas = self.interaction_state.active_canvas();
+        // The selection is the one of the sheet `window_id` shows (#1910).
+        let canvas = self.interaction_state.canvas_for_window(window_id);
         let selection = CanvasSelection {
             has_selection: !canvas.selected.is_empty(),
             child_sheet_selected: canvas
                 .selected
                 .iter()
                 .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
-            drawing_selected: !self.selected_drawing_ids().is_empty(),
-            placed_part_selected: self.has_placed_part_selected(),
+            drawing_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::Drawing),
+            placed_part_selected: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| {
+                    crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
+                        .is_some()
+                }),
         };
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command

@@ -362,14 +362,21 @@ impl Signex {
     /// Active-bar dropdown menu (Place / Align / filter presets etc.).
     /// Absolute-positioned with `Translate` so the column can auto-size
     /// to its widest label. Pushes the dismiss layer then the dropdown.
-    pub(super) fn active_bar_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app) fn active_bar_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let Some(ab_menu) = interaction.active_bar_menu else {
             return Vec::new();
         };
-        let has_selection = !interaction.canvas.selected.is_empty();
+        // Only the window the dropdown was opened in paints it (#1910).
+        if !self.overlay_belongs_to(interaction.active_bar_menu_window, window_id) {
+            return Vec::new();
+        }
+        let has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let has_net_colors = !ui.net_colors.is_empty();
         let dropdown = crate::active_bar::view_dropdown(
             ab_menu,
@@ -403,14 +410,21 @@ impl Signex {
     /// Clamps the menu inside the window; the submenu pops to the right
     /// (or left on overflow) aligned to its launcher row. Pushes dismiss,
     /// menu, then the optional submenu.
-    pub(super) fn context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app) fn context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let interaction = &self.interaction_state;
         let Some(ctx_menu) = interaction.context_menu.as_ref() else {
             return Vec::new();
         };
-        let menu = self.view_context_menu();
+        // Only the window the menu was opened in paints it (#1910).
+        if !self.overlay_belongs_to(ctx_menu.window, window_id) {
+            return Vec::new();
+        }
+        let menu = self.view_context_menu(window_id);
         // Clamp the menu inside the window so a click near the
         // right/bottom edge doesn't push it off-screen. Estimate
         // the menu's footprint conservatively from the maximum
@@ -452,7 +466,10 @@ impl Signex {
         // align its top to the launcher row's y-position so the
         // first submenu item sits next to the row that opened it.
         if let Some(submenu_kind) = interaction.context_submenu {
-            let submenu = self.view_context_submenu(submenu_kind);
+            let submenu = self.view_context_submenu(
+                submenu_kind,
+                interaction.canvas_for_window(window_id).selected.len(),
+            );
             // Wrap in mouse_area so on_enter/on_exit on the panel
             // can extend the close timer when the cursor crosses
             // from the launcher into the submenu and back.
@@ -638,7 +655,10 @@ impl Signex {
         // right edge would overflow), align top to the launcher
         // row's y inside the parent menu.
         if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
-            let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject);
+            let submenu = self.view_context_submenu(
+                ContextSubmenu::AddNewToProject,
+                interaction.canvas.selected.len(),
+            );
             let submenu = iced::widget::mouse_area(submenu)
                 .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
                 .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));

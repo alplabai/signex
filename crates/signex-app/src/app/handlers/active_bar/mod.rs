@@ -7,6 +7,8 @@ mod filter_controls;
 mod placement_presets;
 #[cfg(test)]
 mod planned_action_tests;
+#[cfg(test)]
+mod undocked_schematic_tests;
 
 impl Signex {
     pub(crate) fn handle_active_bar_message(
@@ -16,8 +18,18 @@ impl Signex {
         use crate::active_bar::ActiveBarMsg;
 
         match msg {
+            ActiveBarMsg::ScopedToWindow(window, inner) => {
+                let opens_menu = matches!(*inner, ActiveBarMsg::ToggleMenu(_));
+                let task = self
+                    .run_in_window_document(window, |app| app.handle_active_bar_message(*inner));
+                if opens_menu {
+                    self.interaction_state.active_bar_menu_window = self.overlay_owner(window);
+                }
+                task
+            }
             ActiveBarMsg::ToggleMenu(menu) => {
                 self.interaction_state.active_bar_menu = Some(menu);
+                self.interaction_state.active_bar_menu_window = None;
                 self.interaction_state.context_menu = None;
                 Task::none()
             }

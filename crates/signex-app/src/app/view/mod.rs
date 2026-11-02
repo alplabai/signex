@@ -626,6 +626,10 @@ impl Signex {
                     Message::CanvasEvent(event) => {
                         Message::CanvasEventInWindow { window_id, event }
                     }
+                    // The right-click menu opens for this window's sheet (#1910).
+                    Message::ContextMenu(show @ ContextMenuMsg::Show(..)) => Message::ContextMenu(
+                        ContextMenuMsg::ScopedToWindow(window_id, Box::new(show)),
+                    ),
                     other => other,
                 })
             };
