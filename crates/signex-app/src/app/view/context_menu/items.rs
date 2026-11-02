@@ -100,21 +100,6 @@ pub(super) fn dd_cmd(
     )
 }
 
-/// [`dd_cmd`] dispatching `action` through the context-menu bridge.
-pub(super) fn dd_cmd_action(
-    icon: Option<Handle>,
-    command_id: &'static str,
-    shortcut: &str,
-    action: ContextAction,
-) -> DropdownEntry<Message> {
-    dd_cmd(
-        icon,
-        command_id,
-        shortcut,
-        Message::ContextMenu(ContextMenuMsg::Action(action)),
-    )
-}
-
 /// A row that runs the catalog command `command_id` through the command
 /// registry, like the palette and the keymap do (#1727): clicking it closes
 /// the menu and dispatches the id with the point the menu was opened at, and

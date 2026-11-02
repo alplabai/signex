@@ -14,8 +14,7 @@
 use super::*;
 
 use super::items::{
-    dd_cmd, dd_cmd_action, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned,
-    submenu_launcher,
+    dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, submenu_launcher,
 };
 use crate::icons as ic;
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -258,11 +257,11 @@ pub(super) fn canvas_menu_entries(
         sc.of("find_similar_objects"),
         None,
     ));
-    v.push(dd_cmd(
+    v.push(dd_command(
         Some(ic::icon_chrome_search(tid)),
         "find",
         sc.of("find"),
-        Message::Overlay(OverlayMsg::OpenFind),
+        None,
     ));
     v.push(dd_planned(
         Some(ic::icon_dd_clear_filter(tid)),
@@ -323,24 +322,15 @@ pub(super) fn canvas_menu_entries(
     }
 
     if child_sheet_selected {
-        v.push(dd_cmd_action(
+        v.push(dd_command(
             Some(ic::icon_dd_open_child_sheet(tid)),
             "open_child_sheet",
             sc.of("open_child_sheet"),
-            ContextAction::OpenChildSheet,
-        ));
-        v.push(dd_cmd_action(
             None,
-            "create_sheet_from_sheet_symbol",
-            sc.of("create_sheet_from_sheet_symbol"),
-            ContextAction::CreateChildSheet,
         ));
-        v.push(dd_cmd_action(
-            None,
-            "sync_sheet_pins",
-            sc.of("sync_sheet_pins"),
-            ContextAction::SyncSheetPins,
-        ));
+        for command_id in ["create_sheet_from_sheet_symbol", "sync_sheet_pins"] {
+            v.push(dd_command(None, command_id, sc.of(command_id), None));
+        }
         v.push(DropdownEntry::Separator);
     }
 
@@ -430,11 +420,11 @@ pub(super) fn canvas_menu_entries(
             sc.of("open_project_options"),
         ),
     });
-    v.push(dd_cmd(
+    v.push(dd_command(
         Some(ic::icon_dd_preferences(tid)),
         "open_preferences",
         sc.of("open_preferences"),
-        Message::Preferences(PreferencesMsg::Open),
+        None,
     ));
 
     if placed_part_selected {
@@ -456,11 +446,11 @@ pub(super) fn canvas_menu_entries(
         // Properties → ensure the Properties panel is visible; it already
         // tracks the current selection, so it populates with the
         // right-clicked item's fields once shown.
-        v.push(dd_cmd(
+        v.push(dd_command(
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
             sc.of("edit_selected_object_properties"),
-            Message::Menu(menu_bar::MenuMessage::OpenPropertiesPanel),
+            None,
         ));
     }
 

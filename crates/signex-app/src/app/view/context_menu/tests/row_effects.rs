@@ -213,27 +213,68 @@ fn delete_row_removes_the_selection_as_one_undo_step() {
     assert_menu_closed(&app, "delete");
 }
 
-#[test]
-fn paste_and_smart_paste_rows_start_a_paste_and_close_the_menu() {
-    for id in ["paste", "smart_paste"] {
-        let mut app = one_symbol();
-        let direct = {
-            let mut fresh = one_symbol();
-            let message = match id {
-                "paste" => Message::Edit(EditMsg::Paste),
-                _ => Message::Edit(EditMsg::SmartPaste),
-            };
-            fresh.update(message).units()
+/// Run `task` the way the iced runtime does and feed every message back to
+/// the app, answering each clipboard read with `text`.
+fn settle_answering_clipboard(app: &mut Signex, task: iced::Task<Message>, text: &str) {
+    use futures::StreamExt as _;
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let mut pending = vec![task];
+    while let Some(task) = pending.pop() {
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            continue;
         };
-        let task = press(&mut app, id);
-        assert!(task.units() > 0, "{id}: nothing started");
-        assert_eq!(
-            task.units(),
-            direct,
-            "{id}: not the same start as the command"
-        );
-        assert_menu_closed(&app, id);
+        let mut messages = Vec::new();
+        runtime.block_on(async {
+            while let Some(action) = stream.next().await {
+                match action {
+                    iced_runtime::Action::Output(next) => messages.push(next),
+                    iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Read {
+                        channel,
+                        ..
+                    }) => assert!(channel.send(Some(text.to_owned())).is_ok()),
+                    _ => {}
+                }
+            }
+        });
+        pending.extend(messages.into_iter().map(|m| app.update(m)));
     }
+}
+
+/// An app that copied its symbol through the Copy row; the text is what the
+/// system clipboard then holds.
+fn app_that_copied() -> (Signex, String) {
+    let mut app = one_symbol();
+    let _ = press(&mut app, "copy");
+    let text = app
+        .interaction_state
+        .clipboard_text
+        .clone()
+        .expect("the copy reached the clipboard text");
+    (app, text)
+}
+
+#[test]
+fn paste_row_puts_the_copy_on_the_cursor() {
+    let (mut app, text) = app_that_copied();
+    let task = press(&mut app, "paste");
+    assert_menu_closed(&app, "paste");
+    settle_answering_clipboard(&mut app, task, &text);
+    let session = app.interaction_state.placement.as_ref();
+    assert!(
+        session.is_some_and(|s| s.kind.is_paste()),
+        "no paste on the cursor"
+    );
+    assert_eq!(doc(&app).symbols.len(), 1, "a paste is placed by a click");
+}
+
+#[test]
+fn smart_paste_row_places_the_copy_at_once() {
+    let (mut app, text) = app_that_copied();
+    let task = press(&mut app, "smart_paste");
+    assert_menu_closed(&app, "smart paste");
+    settle_answering_clipboard(&mut app, task, &text);
+    assert_eq!(doc(&app).symbols.len(), 2, "the copy was not placed");
+    assert!(app.interaction_state.placement.is_none());
 }
 
 /// Copy and Cut have nothing to act on without a selection, so the rows are
@@ -713,4 +754,131 @@ fn tree_project_options_row_opens_the_clicked_projects_tab() {
         .filter_map(|tab| tab.kind.as_project())
         .collect();
     assert_eq!(opened, [other_id], "the clicked project's tab");
+}
+
+// ---- rows that already sent the bridge's own message ----
+
+fn sheet_symbol(n: u128, filename: &str) -> signex_types::schematic::ChildSheet {
+    signex_types::schematic::ChildSheet {
+        uuid: Uuid::from_u128(n),
+        name: "Child".to_string(),
+        filename: filename.to_string(),
+        position: Point::new(100.0, 100.0),
+        size: (30.0, 30.0),
+        stroke_width: 0.12,
+        fill: signex_types::schematic::FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    }
+}
+
+/// A parent sheet on disk in a temp dir with one selected sheet symbol that
+/// points at `child.snxsch`, written only when `child` is given.
+fn app_with_sheet_symbol(
+    child: Option<SchematicSheet>,
+) -> (Signex, tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let parent_path = tmp.path().join("parent.snxsch");
+    let child_path = tmp.path().join("child.snxsch");
+    if let Some(child) = child {
+        let text = signex_types::format::SnxSchematic::new(child)
+            .write_string()
+            .expect("serialise");
+        std::fs::write(&child_path, text).expect("write child");
+    }
+    let mut parent = sheet_of(Vec::new());
+    parent.child_sheets = vec![sheet_symbol(5, "child.snxsch")];
+    let text = signex_types::format::SnxSchematic::new(parent.clone())
+        .write_string()
+        .expect("serialise");
+    std::fs::write(&parent_path, text).expect("write parent");
+    let mut app = app_with(parent.clone());
+    let old = app.document_state.active_path.clone().expect("path");
+    app.document_state.engines.remove(&old);
+    let engine =
+        signex_engine::Engine::new_with_path(parent, Some(parent_path.clone())).expect("engine");
+    app.document_state
+        .engines
+        .insert(parent_path.clone(), engine);
+    app.document_state.tabs[0].path = parent_path.clone();
+    app.document_state.active_path = Some(parent_path);
+    select(
+        &mut app,
+        vec![SelectedItem::new(
+            Uuid::from_u128(5),
+            SelectedKind::ChildSheet,
+        )],
+    );
+    (app, tmp, child_path)
+}
+
+#[test]
+fn sync_sheet_pins_row_reconciles_the_symbols_pins() {
+    let mut child = sheet_of(Vec::new());
+    child.labels = vec![signex_types::schematic::Label {
+        unknown_columns: Default::default(),
+        uuid: Uuid::from_u128(9),
+        text: "SDA".to_string(),
+        position: Point::new(10.0, 10.0),
+        rotation: 0.0,
+        label_type: signex_types::schematic::LabelType::Hierarchical,
+        shape: String::new(),
+        font_size: 1.27,
+        justify: signex_types::schematic::HAlign::Left,
+        justify_v: signex_types::schematic::VAlign::Bottom,
+        font_family: None,
+        locked: false,
+    }];
+    let (mut app, _tmp, _child) = app_with_sheet_symbol(Some(child));
+    let _ = press(&mut app, "sync_sheet_pins");
+    let pins: Vec<String> = doc(&app).child_sheets[0]
+        .pins
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
+    assert_eq!(pins, ["SDA"]);
+    assert_menu_closed(&app, "sync sheet pins");
+}
+
+#[test]
+fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
+    for id in ["open_child_sheet", "create_sheet_from_sheet_symbol"] {
+        let (mut app, _tmp, child_path) = app_with_sheet_symbol(Some(sheet_of(Vec::new())));
+        let _ = press(&mut app, id);
+        assert!(
+            app.ui_state.pending_descents.contains_key(&child_path),
+            "{id}: no descent started"
+        );
+        assert_menu_closed(&app, id);
+    }
+}
+
+#[test]
+fn find_row_opens_the_find_dialog() {
+    let mut app = one_symbol();
+    let _ = press(&mut app, "find");
+    assert!(app.ui_state.find_replace.open);
+    assert_menu_closed(&app, "find");
+}
+
+#[test]
+fn preferences_row_opens_preferences() {
+    let mut app = one_symbol();
+    let _ = press(&mut app, "open_preferences");
+    assert!(app.ui_state.preferences_open);
+    assert_menu_closed(&app, "preferences");
+}
+
+#[test]
+fn properties_row_shows_the_properties_panel() {
+    let mut app = one_symbol();
+    let properties = crate::panels::PanelKind::Properties;
+    app.document_state.dock.close_panel(properties);
+    assert!(!app.document_state.dock.is_frontmost(properties));
+    let _ = press(&mut app, "edit_selected_object_properties");
+    assert!(app.document_state.dock.is_frontmost(properties));
+    assert_menu_closed(&app, "properties");
 }

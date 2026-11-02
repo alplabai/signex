@@ -30,11 +30,15 @@ pub(crate) struct InvocationContext {
 }
 
 /// Values a command acts on. No field yet: a command that takes one adds it
-/// here, and no GUI surface may set it, so a context-menu row that carries
-/// the click point in [`InvocationContext::origin`] can never trigger an
-/// operand form of the same command.
+/// here as a `pub(super)` field, so only the `command` module (its bridge and
+/// a future CLI entry) can read or set it. GUI modules cannot construct a
+/// non-empty one, so a context-menu row that carries the click point in
+/// [`InvocationContext::origin`] can never trigger an operand form of the
+/// same command.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) struct Operands {}
+pub(crate) struct Operands {
+    _sealed: (),
+}
 
 #[cfg(test)]
 impl Operands {
@@ -48,7 +52,9 @@ impl Operands {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct CommandArgs {
     pub context: InvocationContext,
-    pub operands: Operands,
+    /// Private to the `command` module: a GUI surface cannot set it, nor
+    /// write a `CommandArgs { .. }` literal.
+    pub(super) operands: Operands,
 }
 
 impl CommandArgs {
@@ -82,7 +88,8 @@ mod tests {
         assert!(CommandArgs::in_context(context).operands.is_empty());
     }
 
-    /// No GUI dispatch site names the operands: the keymap (stroke, chord and
+    /// Tripwire behind the type-level guard above (`operands` is private to
+    /// `command`): no GUI dispatch site names the operands: the keymap (stroke, chord and
     /// the UI keymap message), the palette and the context menu build their
     /// args only with `CommandArgs::none()` or `CommandArgs::in_context(..)`,
     /// so an operand a CLI adds later cannot fire from a click or a key.
