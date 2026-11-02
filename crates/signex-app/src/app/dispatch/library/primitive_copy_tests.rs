@@ -287,3 +287,120 @@ fn a_copy_finishing_after_the_picker_was_replaced_binds_nothing_there() {
         "the copy itself landed in the library"
     );
 }
+
+/// A second, unmounted library `x.snxlib` holding `symbols/Held.snxsym`,
+/// listed in the project like the loose file (#1869).
+fn unmounted_library_symbol(f: &mut Fixture, dir: &Path) -> PathBuf {
+    let snxlib = dir.join("vendor").join("x.snxlib");
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: Uuid::now_v7(),
+        library: LibrarySection {
+            name: "x".into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    };
+    drop(
+        LocalGitAdapter::init(
+            &snxlib,
+            manifest,
+            LibraryInitOptions {
+                enable_git: false,
+                use_lfs: false,
+            },
+        )
+        .expect("init"),
+    );
+    drop(LocalGitAdapter::recover_init(&snxlib).expect("recover_init"));
+    let held = snxlib.parent().unwrap().join("symbols").join("Held.snxsym");
+    std::fs::create_dir_all(held.parent().unwrap()).unwrap();
+    std::fs::write(
+        &held,
+        SymbolFile::from_symbol(Symbol::empty("HELD"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    f.app.document_state.projects[0]
+        .data
+        .libraries
+        .push(LibraryEntry {
+            path: held,
+            kind: LibraryEntryKind::ProjectLocal,
+            library_id: None,
+            unknown: Default::default(),
+        });
+    snxlib
+}
+
+fn headers(f: &Fixture) -> Vec<String> {
+    let picker = f.app.library.primitive_picker.as_ref().unwrap();
+    crate::library::primitive_picker::header_labels(&f.app.library, picker)
+}
+
+#[test]
+fn a_symbol_of_an_unmounted_library_is_labelled_with_it_and_offers_open_not_copy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let snxlib = unmounted_library_symbol(&mut f, tmp.path());
+    open_picker(&mut f);
+
+    let labels = headers(&f);
+    assert!(
+        labels.contains(&"In library x (not open): Held.snxsym  (1)".to_string()),
+        "{labels:?}"
+    );
+    assert!(
+        labels
+            .iter()
+            .any(|l| l.starts_with("Not in a library: SymbolLibrary.snxsym")),
+        "the truly loose file keeps its label: {labels:?}"
+    );
+
+    let held = f
+        .app
+        .library
+        .primitive_picker
+        .as_ref()
+        .unwrap()
+        .loose
+        .iter()
+        .find(|s| s.name == "HELD")
+        .cloned()
+        .unwrap();
+    assert_eq!(held.library.as_deref(), Some(snxlib.as_path()));
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(held));
+    picker(&mut f.app, PrimitivePickerMsg::OpenLibraryConfirmed);
+
+    assert!(f.app.library.library_at(&snxlib).is_some(), "mounted");
+    assert!(
+        !f.address
+            .library_path
+            .parent()
+            .unwrap()
+            .join("symbols")
+            .exists(),
+        "nothing was copied into the row's library"
+    );
+    let labels = headers(&f);
+    assert!(
+        labels.iter().all(|l| !l.contains("not open")),
+        "now listed under the open library: {labels:?}"
+    );
+}
+
+#[test]
+fn a_truly_loose_symbol_has_no_library_and_still_offers_copy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    open_picker(&mut f);
+    let loose = f.app.library.primitive_picker.as_ref().unwrap().loose[0].clone();
+    assert_eq!(loose.library, None);
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(loose));
+    picker(&mut f.app, PrimitivePickerMsg::CopyConfirmed);
+    assert_eq!(bound_symbol(&f).uuid, f.symbol.uuid);
+}

@@ -9,7 +9,7 @@
 use super::*;
 use crate::app::file_extension::has_extension;
 use crate::library::loose_symbols::{
-    LooseRead, LooseSymbol, copy_into_library, read_loose_symbols,
+    LooseRead, LooseSource, LooseSymbol, copy_into_library, read_loose_symbols,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,26 +21,31 @@ impl Signex {
         if kind != PrimitiveKind::Symbol {
             return Task::none();
         }
-        let files: Vec<PathBuf> = self
+        let files: Vec<LooseSource> = self
             .document_state
             .projects
             .iter()
             .flat_map(|project| {
+                let stop = project.path.parent().map(std::path::Path::to_path_buf);
                 project
                     .data
                     .libraries
                     .iter()
                     .map(|entry| project.data.resolve_library_path(entry))
+                    .map(move |file| LooseSource {
+                        file,
+                        stop: stop.clone(),
+                    })
             })
-            .filter(|path| has_extension(path, "snxsym"))
-            .filter(|path| self.library.containing_library(path).is_none())
+            .filter(|source| has_extension(&source.file, "snxsym"))
+            .filter(|source| self.library.containing_library(&source.file).is_none())
             .collect();
         read_loose_task(files, false)
     }
 
     /// A file outside every library, picked with Browse.
     pub(super) fn read_browsed_loose_symbol(&self, file: PathBuf) -> Task<Message> {
-        read_loose_task(vec![file], true)
+        read_loose_task(vec![LooseSource { file, stop: None }], true)
     }
 
     pub(super) fn handle_loose_listed(
@@ -80,6 +85,19 @@ impl Signex {
             picker.error = None;
         }
         Task::none()
+    }
+
+    /// "Open library" was answered yes: mount the `.snxlib` the symbol
+    /// belongs to through the usual mount request. Its symbols then list
+    /// under it, so the user picks from there.
+    pub(super) fn handle_open_library_confirmed(&mut self) -> Task<Message> {
+        let Some(picker) = self.library.primitive_picker.as_mut() else {
+            return Task::none();
+        };
+        let Some(library) = picker.copy_confirm.take().and_then(|s| s.library) else {
+            return Task::none();
+        };
+        self.mount_added_libraries(vec![library])
     }
 
     pub(super) fn handle_copy_declined(&mut self) -> Task<Message> {
@@ -204,7 +222,7 @@ impl Signex {
     }
 }
 
-fn read_loose_task(files: Vec<PathBuf>, from_browse: bool) -> Task<Message> {
+fn read_loose_task(files: Vec<LooseSource>, from_browse: bool) -> Task<Message> {
     if files.is_empty() {
         return Task::none();
     }

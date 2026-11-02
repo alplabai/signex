@@ -689,6 +689,8 @@ pub enum PrimitivePickerMsg {
     PickLoose(crate::library::loose_symbols::LooseSymbol),
     /// "Copy" was answered yes.
     CopyConfirmed,
+    /// "Open library" was answered yes for a symbol of an unmounted `.snxlib`.
+    OpenLibraryConfirmed,
     /// "Copy" was answered no: nothing changes.
     CopyDeclined,
     /// The copy finished on its worker: the reference to bind, or why not,

@@ -100,6 +100,7 @@ impl Signex {
             }
             PrimitivePickerMsg::PickLoose(symbol) => self.handle_loose_chosen(symbol),
             PrimitivePickerMsg::CopyConfirmed => self.handle_copy_confirmed(),
+            PrimitivePickerMsg::OpenLibraryConfirmed => self.handle_open_library_confirmed(),
             PrimitivePickerMsg::CopyDeclined => self.handle_copy_declined(),
             PrimitivePickerMsg::CopyFinished { pick, result } => {
                 self.handle_copy_finished(pick, result)
