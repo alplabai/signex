@@ -89,11 +89,13 @@ when no history step can reproduce the file any more:
 Who sets the save point (#1854):
 
 - `mark_document_clean` is for a landed save: it clears the marks and calls
-  `Engine::mark_saved`. A discard (Discard All, an undo that drops a parked
-  engine, a Save As old key, the unopened-sheet Annotate write, a rolled
-  back re-prefix) calls `clear_document_dirty`, which leaves the engine's
-  save point alone. A re-prefix rollback whose `discard_undo_group_top`
-  fails or finds the run is not on top leaves that sheet dirty.
+  `Engine::mark_saved`. Where the engine at the path is gone or is not known
+  to equal the file, `clear_document_dirty` clears the marks and leaves the
+  save point alone: Discard All, an undo that drops a parked engine, a
+  rolled back re-prefix, and the Save As old key and the unopened-sheet
+  Annotate write (no engine at that key). A re-prefix rollback whose
+  `discard_undo_group_top` fails or finds the run is not on top leaves that
+  sheet dirty and says so in Messages.
 - A sheet read from disk or restored is marked saved only when the engine
   was just installed (`install_active_engine` / `install_schematic_at`
   return whether it was); a failed install cannot mark the older engine.
@@ -103,8 +105,9 @@ Who sets the save point (#1854):
   point clears them. Unrecorded updates still use the outside mark.
 
 Known limit: Undo then Redo while a write is in flight forgets the save
-point. The write's completion sees a different revision and `mark_saved`
-refuses, so the sheet stays dirty until the next save. It errs safe: the
+point. The write's completion sees a different revision and calls
+`forget_save_point()` (`save_async.rs`), so the sheet stays dirty until the
+next save. It errs safe: the
 sheet reads dirty when it could read clean; nothing is lost.
 
 `DirtyDocuments` also remembers which marked paths were marked from outside

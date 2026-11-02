@@ -402,10 +402,24 @@ impl Signex {
                 self.document_state.clear_document_dirty(path);
             }
         }
-        crate::diagnostics::log_warning(format!(
-            "{label}: a sheet could not be converted, so the whole run was undone and nothing \
-             was changed. Any redo history the touched sheets had before the run is gone."
-        ));
+        if not_rolled_back.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{label}: a sheet could not be converted, so the whole run was undone and \
+                 nothing was changed. Any redo history the touched sheets had before the run \
+                 is gone."
+            ));
+        } else {
+            let mut names: Vec<String> = not_rolled_back
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            names.sort();
+            crate::diagnostics::log_warning(format!(
+                "{label}: a sheet could not be converted and the run could not be undone on: \
+                 {}. Those sheets keep the run's changes and stay unsaved; undo them by hand.",
+                names.join(", ")
+            ));
+        }
         // The active sheet may have been rolled back or never touched; only
         // a whole redraw is right for both.
         self.interaction_state

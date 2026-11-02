@@ -936,6 +936,27 @@ mod tests {
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
     }
 
+    /// #1854 — a restore whose install failed keeps a read-only older
+    /// engine dirty instead of reading it as matching the disk.
+    #[test]
+    fn a_failed_restore_install_keeps_the_old_read_only_sheet_dirty() {
+        let path = PathBuf::from("readonly-1854.snxsch");
+        let (mut app, _boot) = Signex::new();
+        let mut sheet = SchematicSheet::default();
+        sheet.unknown.newer_minor_source = Some("1.99".to_string());
+        let engine = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).unwrap();
+        assert!(engine.document().is_read_only());
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.mark_document_dirty(&path);
+
+        app.settle_restored_schematic(&path, false, false, None);
+        assert!(app.document_state.is_document_dirty(&path));
+        assert!(!app.document_state.engines[&path].is_at_save_point());
+
+        app.settle_restored_schematic(&path, true, false, None);
+        assert!(!app.document_state.is_document_dirty(&path));
+    }
+
     /// #1854 — a failed install must not mark the older, edited engine saved.
     #[test]
     fn a_failed_install_does_not_mark_the_old_engine_saved() {

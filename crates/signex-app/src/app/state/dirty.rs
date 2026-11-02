@@ -15,7 +15,9 @@
 //! Tabs, the title bar count, the quit and close gates, Save All and the
 //! project tree all ask [`DocumentState::is_document_dirty`] or one of its
 //! siblings, and every write goes through [`DocumentState::mark_document_dirty`],
-//! [`DocumentState::mark_document_clean`] or [`DocumentState::rekey_document_dirty`].
+//! [`DocumentState::mark_history_edit_dirty`], [`DocumentState::sync_history_dirty`],
+//! [`DocumentState::mark_document_clean`], [`DocumentState::clear_document_dirty`]
+//! or [`DocumentState::rekey_document_dirty`].
 //! The set's contents are private to this module, so the compiler keeps it that way. Rationale and the
 //! failures the old three-way mirror caused: docs/DIRTY_STATE.md.
 
@@ -151,6 +153,11 @@ impl DocumentState {
     /// point. A path with no engine falls back to a plain dirty mark.
     pub fn mark_history_edit_dirty(&mut self, path: &Path) {
         if self.engines.contains_key(path) {
+            // As `mark_dirty_inner` does for a sheet: ERC results taken
+            // earlier no longer describe it.
+            if can_change_erc_results(path) {
+                self.note_sheet_edit();
+            }
             self.sync_history_dirty(path);
         } else {
             self.mark_document_dirty(path);

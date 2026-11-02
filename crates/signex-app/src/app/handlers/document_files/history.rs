@@ -442,23 +442,7 @@ impl Signex {
                 } else {
                     self.install_schematic_at(&path, *sheet)
                 };
-                // The restored bytes are on disk and are what the engine holds.
-                self.mark_installed_engine_saved(&path, installed);
-                // A restored sheet from a newer Signex is read-only and can
-                // never be saved: leaving it dirty would make quit ask to
-                // save an unsaveable file (#1402). It matches disk, so
-                // commit the restored bytes as they are, as the PCB does.
-                let read_only = self
-                    .document_state
-                    .engines
-                    .get(&path)
-                    .is_some_and(|engine| engine.document().is_read_only());
-                if read_only {
-                    self.set_reloaded_dirty(&path, false);
-                    if commit {
-                        self.commit_restore(&path, restored_bytes);
-                    }
-                }
+                self.settle_restored_schematic(&path, installed, commit, restored_bytes);
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
@@ -542,6 +526,36 @@ impl Signex {
         );
         self.refresh_panel_ctx();
         refresh
+    }
+
+    /// A restored sheet was just installed (`installed`) or the install
+    /// failed and an older engine still sits at `path`: mark only a fresh
+    /// engine saved, and treat a read-only one as matching disk.
+    pub(crate) fn settle_restored_schematic(
+        &mut self,
+        path: &std::path::Path,
+        installed: bool,
+        commit: bool,
+        restored_bytes: Option<crate::persist::SharedBytes>,
+    ) {
+        // The restored bytes are on disk and are what the engine holds.
+        self.mark_installed_engine_saved(path, installed);
+        // A restored sheet from a newer Signex is read-only and can never be
+        // saved: leaving it dirty would make quit ask to save an unsaveable
+        // file (#1402). It matches disk, so commit the restored bytes as
+        // they are, as the PCB does. Only the engine just installed says so.
+        let read_only = installed
+            && self
+                .document_state
+                .engines
+                .get(path)
+                .is_some_and(|engine| engine.document().is_read_only());
+        if read_only {
+            self.set_reloaded_dirty(path, false);
+            if commit {
+                self.commit_restore(path, restored_bytes);
+            }
+        }
     }
 
     /// Queue the project git commit for the restore, so a clean tab does not
