@@ -49,18 +49,24 @@ Silk is no longer recorded in `baked_kinds`. The `silk_f` / `silk_b`
 tokens stay reserved; a bake drops one an older build wrote.
 
 **Files from older builds.** A file written before the marker existed has
-no marked silk. When such a footprint opens in the editor and its sketch
-tags a silk layer holding unmarked entries, the editor solves the sketch as
-loaded, before any edit, and bakes its silk once. Each unmarked entry that
+no marked silk. A layer is marked all or nothing: this build marks every
+entry it bakes, and an older build drops every marker when it saves. So
+when a footprint opens in the editor and its sketch tags a silk layer that
+holds entries but no marked one, the editor solves the sketch as loaded,
+before any edit, and bakes its silk once. A layer with a marker was baked
+by this build and is not classified again. Each unmarked entry that
 matches an output not yet claimed (same kind, stroke width and fill,
 geometry equal at the file's nanometre resolution, `mm_as_stored_nm`) is
 marked; each output is used at most once, and an entry that matches
 nothing stays hand-drawn. The markers are written in memory only: the
 document is not dirtied and a save treats the footprint as unchanged until
-the user edits it. If the sketch does not solve, nothing is marked or
-removed and the Messages panel warns that the next sketch edit may
-duplicate that silk. Because an older build drops the field it does not
-know when it saves, this runs on every open, not once per file.
+the user edits it; the save's merge compares footprints without the
+markers (`Footprint::same_ignoring_silk_markers`), so they are never
+reported as replacing another window's change. If the sketch does not
+solve, nothing is marked or removed. Either that, or an entry and a bake
+output both left unmatched in one layer, puts a Messages warning that the
+next sketch edit may duplicate that silk. An older build that saves the
+file again drops the markers, and the next open classifies it again.
 
 ### File format
 

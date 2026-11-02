@@ -53,6 +53,12 @@ impl ContainerMerge {
 /// The primitive types a container holds.
 trait ContainerItem: Clone + PartialEq {
     fn uuid(&self) -> Uuid;
+
+    /// Whether two versions hold the same content for the merge: what the
+    /// file stores, less what the editor adds on open without an edit.
+    fn same_content(&self, other: &Self) -> bool {
+        self == other
+    }
 }
 
 impl ContainerItem for Symbol {
@@ -64,6 +70,20 @@ impl ContainerItem for Symbol {
 impl ContainerItem for Footprint {
     fn uuid(&self) -> Uuid {
         self.uuid
+    }
+
+    /// Silk markers the editor wrote on open (#1718) are not a change.
+    fn same_content(&self, other: &Self) -> bool {
+        self.same_ignoring_silk_markers(other)
+    }
+}
+
+/// [`ContainerItem::same_content`] for two lookups; both missing is equal.
+fn same_item<T: ContainerItem>(a: Option<&T>, b: Option<&T>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a.same_content(b),
+        (None, None) => true,
+        _ => false,
     }
 }
 
@@ -102,7 +122,7 @@ fn merge_items<T: ContainerItem>(
 ) -> Vec<Uuid> {
     let mut overwritten = Vec::new();
     for &uuid in changed {
-        if find(disk, uuid) != find(baseline, uuid) {
+        if !same_item(find(disk, uuid), find(baseline, uuid)) {
             overwritten.push(uuid);
         }
         let position = disk.iter().position(|item| item.uuid() == uuid);
@@ -204,7 +224,7 @@ impl FootprintFile {
             };
             let mut repaired = loaded.clone();
             repaired.load_repairs.clear();
-            *edited != repaired || find(&disk.footprints, uuid) == Some(loaded)
+            *edited != repaired || same_item(find(&disk.footprints, uuid), Some(loaded))
         });
         let renamed = self.display_name != baseline.display_name;
         let overwritten = merge_items(
@@ -378,5 +398,57 @@ mod tests {
             .unwrap();
 
         assert_eq!(merge.changed, [y.uuid]);
+    }
+
+    /// A footprint as an older build saved it (silk unmarked), and as this
+    /// build's editor holds it after classifying that silk on open (#1718).
+    fn unmarked_and_classified() -> (Footprint, Footprint) {
+        use crate::primitive::footprint::{FpGraphic, FpGraphicKind};
+        let mut disk = footprint("X");
+        disk.silk_f.push(FpGraphic::drawn(
+            FpGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [1.0, 0.0],
+            },
+            0.12,
+            false,
+        ));
+        let mut classified = disk.clone();
+        classified.silk_f[0].sketch_entity = Some(signex_sketch::id::SketchEntityId::new());
+        (disk, classified)
+    }
+
+    #[test]
+    fn editing_a_classified_footprint_does_not_report_an_overwrite() {
+        let (on_disk, classified) = unmarked_and_classified();
+        let disk = FootprintFile::from_footprint(on_disk);
+        let mut loaded = disk.clone();
+        loaded.footprints[0] = classified;
+        let mut editor = loaded.clone();
+        editor.footprints[0].description = "edited".into();
+
+        let (merged, merge) = editor.merge_into(&loaded, disk, Utc::now()).unwrap();
+
+        assert!(merge.overwritten.is_empty(), "{merge:?}");
+        assert_eq!(merged.footprints[0], editor.footprints[0]);
+    }
+
+    #[test]
+    fn a_repair_of_a_classified_footprint_is_still_written() {
+        let (mut on_disk, mut classified) = unmarked_and_classified();
+        let repair = crate::primitive::LoadRepair::DanglingRemoved(1);
+        on_disk.load_repairs.push(repair.clone());
+        classified.load_repairs.push(repair);
+        let uuid = on_disk.uuid;
+        let disk = FootprintFile::from_footprint(on_disk);
+        let mut loaded = disk.clone();
+        loaded.footprints[0] = classified;
+        let mut editor = loaded.clone();
+        editor.footprints[0].load_repairs.clear();
+
+        let (_, merge) = editor.merge_into(&loaded, disk, Utc::now()).unwrap();
+
+        assert_eq!(merge.changed, [uuid]);
+        assert!(merge.overwritten.is_empty());
     }
 }

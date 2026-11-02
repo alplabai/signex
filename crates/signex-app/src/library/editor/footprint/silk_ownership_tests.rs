@@ -144,20 +144,7 @@ fn a_pre_1718_file_is_classified_on_open_and_a_move_neither_doubles_nor_drops_si
 #[test]
 fn an_unsolvable_legacy_sketch_marks_nothing_deletes_nothing_and_warns_once() {
     let stem = "unsolvable-1718";
-    let text = legacy_with_hand_silk(|fp| {
-        let sketch = fp.sketch.as_mut().unwrap();
-        let end = SketchEntityId("58ea49eb-0a16-407d-b677-1a20322ad110".parse().unwrap());
-        for mm in [1.0, 2.0] {
-            sketch.constraints.push(Constraint {
-                id: ConstraintId::new(),
-                kind: ConstraintKind::DistancePtPt {
-                    p1: bar_start(),
-                    p2: end,
-                    target: DimTarget::Literal(mm),
-                },
-            });
-        }
-    });
+    let text = legacy_with_hand_silk(make_unsolvable);
     let loaded = FootprintFile::from_toml_str(&text).unwrap().footprints[0]
         .silk_f
         .clone();
@@ -242,4 +229,78 @@ fn a_late_drag_solve_merges_into_the_current_silk() {
     assert_eq!(silk.len(), 2, "{silk:?}");
     assert!(silk[0].is_baked());
     assert_eq!(silk[1], hand_text());
+}
+
+/// Two conflicting distances on the cathode bar: the sketch cannot solve.
+fn make_unsolvable(fp: &mut Footprint) {
+    let sketch = fp.sketch.as_mut().unwrap();
+    let end = SketchEntityId("58ea49eb-0a16-407d-b677-1a20322ad110".parse().unwrap());
+    for mm in [1.0, 2.0] {
+        sketch.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::DistancePtPt {
+                p1: bar_start(),
+                p2: end,
+                target: DimTarget::Literal(mm),
+            },
+        });
+    }
+}
+
+#[test]
+fn a_file_this_build_saved_is_not_classified_again_on_open() {
+    let stem = "this-build-1718";
+    let mut editor = reopen(&legacy_with_hand_silk(|_| {}), "this-build-1718-first");
+    drag_bar(&mut editor);
+    let mut file = editor.file.clone();
+    // Classifying would have to solve it, and say it could not.
+    make_unsolvable(&mut file.footprints[0]);
+    let text = file.to_toml_string().unwrap();
+    let saved = file.footprints[0].silk_f.clone();
+    let warned_before = crate::diagnostics::logged_count(stem);
+
+    let editor = reopen(&text, stem);
+
+    assert_eq!(crate::diagnostics::logged_count(stem), warned_before);
+    assert_eq!(editor.primitive().silk_f, saved);
+}
+
+#[test]
+fn silk_left_unmatched_beside_an_unused_bake_output_is_reported() {
+    let stem = "partial-1718";
+    // An older build saved the bar, then someone moved it in Pads mode:
+    // it no longer matches what the sketch bakes.
+    let text = legacy_with_hand_silk(|fp| {
+        if let FpGraphicKind::Line { from, .. } = &mut fp.silk_f[0].kind {
+            from[0] = -1.6;
+        }
+    });
+    let warned_before = crate::diagnostics::logged_count(stem);
+
+    let editor = reopen(&text, stem);
+
+    assert!(editor.primitive().silk_f.iter().all(|g| !g.is_baked()));
+    assert_eq!(crate::diagnostics::logged_count(stem), warned_before + 1);
+}
+
+#[test]
+fn a_refused_delete_of_baked_silk_keeps_the_redo_step() {
+    let mut editor = reopen(&legacy_with_hand_silk(|_| {}), "redo-1718");
+    let add = FootprintEditorMsg::AddText {
+        x_mm: 4.0,
+        y_mm: 4.0,
+    };
+    apply_footprint_primitive_edit(&mut editor, add);
+    assert!(editor.undo());
+    let (history, redo) = (editor.history.len(), editor.redo.len());
+    assert_eq!(redo, 1);
+
+    apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::SelectSilkF(Some(0)));
+    let before = editor.primitive().silk_f.clone();
+    apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::DeleteSilkF);
+
+    assert_eq!(editor.primitive().silk_f, before, "the baked bar stays");
+    assert_eq!(editor.history.len(), history, "no empty undo step");
+    assert_eq!(editor.redo.len(), redo, "Redo is still available");
+    assert!(editor.redo());
 }

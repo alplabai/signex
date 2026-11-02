@@ -120,7 +120,13 @@ fn legacy_recovery_marks_the_baked_line_and_keeps_hand_entries() {
         line([0.0, 3.0], [5.0, 3.0], 0.12),
     ];
     let outcome = recover_legacy_silk(&mut fp, &Solver::default());
-    assert_eq!(outcome, LegacySilk::Marked(1));
+    assert_eq!(
+        outcome,
+        LegacySilk::Marked {
+            marked: 1,
+            partial: false
+        }
+    );
     let flags: Vec<bool> = fp.silk_f.iter().map(FpGraphic::is_baked).collect();
     assert_eq!(flags, vec![false, true, false]);
 }
@@ -136,7 +142,10 @@ fn legacy_recovery_uses_each_bake_output_once() {
     ];
     assert_eq!(
         recover_legacy_silk(&mut fp, &Solver::default()),
-        LegacySilk::Marked(1)
+        LegacySilk::Marked {
+            marked: 1,
+            partial: false
+        }
     );
     assert_eq!(fp.silk_f.iter().filter(|g| g.is_baked()).count(), 1);
 }
@@ -147,9 +156,14 @@ fn legacy_recovery_needs_the_same_stroke_and_fill() {
     let mut filled = line([0.0, 0.0], [5.0, 0.0], 0.12);
     filled.filled = true;
     fp.silk_f = vec![line([0.0, 0.0], [5.0, 0.0], 0.15), filled];
+    // Nothing matched and the bake's line is left over: the next bake may
+    // duplicate it, which the editor warns about.
     assert_eq!(
         recover_legacy_silk(&mut fp, &Solver::default()),
-        LegacySilk::Marked(0)
+        LegacySilk::Marked {
+            marked: 0,
+            partial: true
+        }
     );
     assert!(fp.silk_f.iter().all(|g| !g.is_baked()));
 }
@@ -177,12 +191,122 @@ fn legacy_recovery_on_an_unsolvable_sketch_marks_and_removes_nothing() {
 }
 
 #[test]
-fn a_marked_layer_needs_no_recovery() {
+fn a_layer_with_a_marked_entry_needs_no_recovery() {
     let (mut fp, _, _) = silk_line_footprint();
-    fp.silk_f = vec![marked(line([0.0, 0.0], [5.0, 0.0], 0.12))];
+    // As this build saves it: the bake's line, marked, and hand text.
+    fp.silk_f = vec![marked(line([0.0, 0.0], [5.0, 0.0], 0.12)), text("REF")];
     assert!(!needs_legacy_silk_recovery(&fp));
     assert_eq!(
         recover_legacy_silk(&mut fp, &Solver::default()),
         LegacySilk::NotNeeded
     );
+}
+
+/// A footprint whose sketch has one silk entity of `kind` on `layer`,
+/// built from the given points.
+fn one_silk_entity(
+    points: &[(f64, f64)],
+    kind: impl FnOnce(&[SketchEntityId]) -> EntityKind,
+    layer: SignexLayer,
+) -> Footprint {
+    let plane = PlaneId::new();
+    let ids: Vec<SketchEntityId> = points.iter().map(|_| SketchEntityId::new()).collect();
+    let mut entities: Vec<Entity> = ids
+        .iter()
+        .zip(points)
+        .map(|(id, &(x, y))| Entity::new(*id, plane, EntityKind::Point { x, y }))
+        .collect();
+    let mut silk = Entity::new(SketchEntityId::new(), plane, kind(&ids));
+    silk.silk = Some(SilkAttr { layer });
+    entities.push(silk);
+    let mut fp = Footprint::empty("one");
+    fp.sketch = Some(SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        entities,
+        ..SketchData::default()
+    });
+    fp
+}
+
+fn arc(start_deg: f64, end_deg: f64) -> FpGraphic {
+    FpGraphic::drawn(
+        FpGraphicKind::Arc {
+            center: [0.0, 0.0],
+            radius: 1.0,
+            start_deg,
+            end_deg,
+        },
+        0.12,
+        false,
+    )
+}
+
+#[test]
+fn legacy_recovery_marks_a_baked_arc() {
+    let mut fp = one_silk_entity(
+        &[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
+        |p| EntityKind::Arc {
+            center: p[0],
+            start: p[1],
+            end: p[2],
+            sweep_ccw: true,
+        },
+        SignexLayer::TopSilk,
+    );
+    // The same quarter arc, and the opposite three-quarter one.
+    fp.silk_f = vec![arc(90.0, 0.0), arc(0.0, 90.0)];
+    assert_eq!(
+        recover_legacy_silk(&mut fp, &Solver::default()),
+        LegacySilk::Marked {
+            marked: 1,
+            partial: false
+        }
+    );
+    let flags: Vec<bool> = fp.silk_f.iter().map(FpGraphic::is_baked).collect();
+    assert_eq!(flags, vec![false, true]);
+}
+
+#[test]
+fn a_zero_sweep_arc_is_not_a_full_circle() {
+    let full = arc(0.0, 360.0);
+    let empty = arc(0.0, 0.0);
+    assert!(!same_graphic(&full, &empty));
+    assert!(!same_graphic(&empty, &full));
+    assert!(same_graphic(&full, &arc(0.0, 360.0)));
+    assert!(same_graphic(&empty, &arc(360.0, 360.0)));
+}
+
+#[test]
+fn legacy_recovery_marks_bottom_silk_and_leaves_top_hand_silk_alone() {
+    let mut fp = one_silk_entity(
+        &[(1.0, 1.0)],
+        |p| EntityKind::Circle {
+            center: p[0],
+            radius: 0.5,
+        },
+        SignexLayer::BottomSilk,
+    );
+    let circle = FpGraphic::drawn(
+        FpGraphicKind::Circle {
+            center: [1.0, 1.0],
+            radius: 0.5,
+        },
+        0.12,
+        false,
+    );
+    fp.silk_b = vec![text("B"), circle.clone()];
+    // Top silk is not tagged by the sketch: never classified.
+    fp.silk_f = vec![circle];
+    assert_eq!(
+        recover_legacy_silk(&mut fp, &Solver::default()),
+        LegacySilk::Marked {
+            marked: 1,
+            partial: false
+        }
+    );
+    assert!(!fp.silk_b[0].is_baked() && fp.silk_b[1].is_baked());
+    assert!(!fp.silk_f[0].is_baked());
 }

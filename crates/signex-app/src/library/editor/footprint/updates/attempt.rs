@@ -17,6 +17,9 @@ pub(super) struct EditAttempt {
     dirty_before: bool,
     /// A sketch drag tick: when it changed nothing it is not an edit.
     is_drag_tick: bool,
+    /// A message that may be refused without changing anything (deleting
+    /// sketch-owned silk, #1718): then it is not an edit either.
+    may_be_refused: bool,
 }
 
 /// Messages that must not settle an owed drag solve: the ticks that owe
@@ -59,6 +62,7 @@ impl EditAttempt {
             rejections_before: editor.state.conflict.rejections(),
             dirty_before: editor.is_dirty(),
             is_drag_tick,
+            may_be_refused: matches!(msg, FootprintEditorMsg::DeleteSilkF),
         }
     }
 
@@ -79,7 +83,8 @@ impl EditAttempt {
             return (false, None);
         };
         let rejected = editor.state.conflict.rejections() != self.rejections_before;
-        if (rejected || self.is_drag_tick) && editor.is_unchanged_since(&snapshot) {
+        let no_op_allowed = rejected || self.is_drag_tick || self.may_be_refused;
+        if no_op_allowed && editor.is_unchanged_since(&snapshot) {
             // Rows a failed cascade still owes keep the editor unsaved.
             editor.set_dirty(self.dirty_before || !editor.cascade_owed.is_empty());
             return (false, None);

@@ -6,7 +6,7 @@
 //! Files written before the marker existed are classified once on open by
 //! [`recover_legacy_silk`]. See `docs/FOOTPRINT_SKETCH.md`, "Bake ownership".
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use signex_library::primitive::footprint::{Footprint, FpGraphic, FpGraphicKind};
 use signex_sketch::baked_kinds::BakedKind;
@@ -78,35 +78,53 @@ pub fn has_baked_silk(fp: &Footprint) -> bool {
 /// What [`recover_legacy_silk`] did.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LegacySilk {
-    /// Nothing to classify: no sketch silk tag with unmarked entries.
+    /// Nothing to classify: no sketch-tagged silk layer holds only
+    /// unmarked entries.
     NotNeeded,
-    /// The sketch solved; this many unmarked entries matched a bake output
-    /// and are now marked. The rest stay hand-drawn.
-    Marked(usize),
+    /// The sketch solved; `marked` unmarked entries matched a bake output
+    /// and are now marked, the rest stay hand-drawn. `partial`: an entry
+    /// and a bake output were both left unmatched in one layer, so the
+    /// next bake may duplicate silk an older build baked.
+    Marked { marked: usize, partial: bool },
     /// The sketch did not solve, so nothing was marked or removed. A later
     /// bake adds its output beside the old entries, which may duplicate them.
     Unsolved(String),
 }
 
-/// Whether `fp` needs [`recover_legacy_silk`]: its sketch tags a silk layer
-/// that holds unmarked entries.
-pub fn needs_legacy_silk_recovery(fp: &Footprint) -> bool {
+/// Whether one silk layer needs classifying: the sketch tags it and the
+/// layer holds entries, none of them marked. A layer is marked all or
+/// nothing: this build marks every entry it bakes, and an older build drops
+/// every marker when it saves. So a layer with a marker was baked here, and
+/// its unmarked entries are hand-drawn.
+fn layer_needs_recovery(fp: &Footprint, kind: BakedKind) -> bool {
     let Some(sketch) = fp.sketch.as_ref() else {
         return false;
     };
-    let unmarked = |layer: &[FpGraphic]| layer.iter().any(|g| !g.is_baked());
-    (sketch.tags_kind(BakedKind::SilkF) && unmarked(&fp.silk_f))
-        || (sketch.tags_kind(BakedKind::SilkB) && unmarked(&fp.silk_b))
+    let layer = match kind {
+        BakedKind::SilkF => &fp.silk_f,
+        BakedKind::SilkB => &fp.silk_b,
+        _ => return false,
+    };
+    sketch.tags_kind(kind) && !layer.is_empty() && !layer.iter().any(FpGraphic::is_baked)
+}
+
+/// Whether `fp` needs [`recover_legacy_silk`] for either silk layer.
+pub fn needs_legacy_silk_recovery(fp: &Footprint) -> bool {
+    layer_needs_recovery(fp, BakedKind::SilkF) || layer_needs_recovery(fp, BakedKind::SilkB)
 }
 
 /// Mark the silk entries an older build baked. Solves the sketch as it is
 /// (it must not have been edited since it was loaded), bakes its silk, and
-/// marks each unmarked entry that matches an unclaimed output of the same
-/// layer: same kind, stroke width and fill, and geometry equal at the
-/// file's nanometre resolution. Each output is used at most once; an entry
-/// that matches nothing is hand-drawn and stays unmarked.
+/// in each layer that needs it marks each entry that matches an unused
+/// output of that layer: same kind, stroke width and fill, and geometry
+/// equal at the file's nanometre resolution. Each output is used at most
+/// once; an entry that matches nothing is hand-drawn and stays unmarked.
 pub fn recover_legacy_silk(fp: &mut Footprint, solver: &Solver) -> LegacySilk {
-    if !needs_legacy_silk_recovery(fp) {
+    let (front, back) = (
+        layer_needs_recovery(fp, BakedKind::SilkF),
+        layer_needs_recovery(fp, BakedKind::SilkB),
+    );
+    if !front && !back {
         return LegacySilk::NotNeeded;
     }
     let Some(sketch) = fp.sketch.as_ref() else {
@@ -124,31 +142,58 @@ pub fn recover_legacy_silk(fp: &mut Footprint, solver: &Solver) -> LegacySilk {
     if let Err(e) = bake_silk(sketch, &solved, &mut silk_f, &mut silk_b, &mut warnings) {
         return LegacySilk::Unsolved(e.to_string());
     }
-    LegacySilk::Marked(
-        mark_matching(&mut fp.silk_f, silk_f) + mark_matching(&mut fp.silk_b, silk_b),
-    )
+    let mut outcome = Matched::default();
+    if front {
+        outcome.add(mark_matching(&mut fp.silk_f, silk_f));
+    }
+    if back {
+        outcome.add(mark_matching(&mut fp.silk_b, silk_b));
+    }
+    LegacySilk::Marked {
+        marked: outcome.marked,
+        partial: outcome.partial,
+    }
 }
 
-/// Mark the unmarked entries of `layer` that match an output of `baked`
-/// not already claimed by a marked entry. Returns how many were marked.
-fn mark_matching(layer: &mut [FpGraphic], baked: Vec<FpGraphic>) -> usize {
-    let claimed: HashSet<SketchEntityId> = layer.iter().filter_map(|g| g.sketch_entity).collect();
+/// What [`mark_matching`] did in one layer, or summed over both.
+#[derive(Default)]
+struct Matched {
+    marked: usize,
+    partial: bool,
+}
+
+impl Matched {
+    fn add(&mut self, other: Matched) {
+        self.marked += other.marked;
+        self.partial |= other.partial;
+    }
+}
+
+/// Mark the unmarked entries of `layer` that match an output of `baked`.
+fn mark_matching(layer: &mut [FpGraphic], baked: Vec<FpGraphic>) -> Matched {
     let mut pool: Vec<Option<FpGraphic>> = baked
         .into_iter()
-        .filter(|g| g.sketch_entity.is_some_and(|id| !claimed.contains(&id)))
+        .filter(|g| g.is_baked())
         .map(Some)
         .collect();
     let mut marked = 0;
+    let mut unmatched_entry = false;
     for entry in layer.iter_mut().filter(|g| !g.is_baked()) {
         let slot = pool
             .iter_mut()
             .find(|slot| slot.as_ref().is_some_and(|out| same_graphic(entry, out)));
-        if let Some(out) = slot.and_then(Option::take) {
-            entry.sketch_entity = out.sketch_entity;
-            marked += 1;
+        match slot.and_then(Option::take) {
+            Some(out) => {
+                entry.sketch_entity = out.sketch_entity;
+                marked += 1;
+            }
+            None => unmatched_entry = true,
         }
     }
-    marked
+    Matched {
+        marked,
+        partial: unmatched_entry && pool.iter().any(Option::is_some),
+    }
 }
 
 /// Equal as stored: the one comparison the file format defines for lengths
@@ -203,8 +248,13 @@ fn same_graphic(a: &FpGraphic, b: &FpGraphic) -> bool {
                 end_deg: be,
             },
         ) => {
+            // Arc length tells a zero sweep from a full circle, which
+            // share their end points.
+            let length =
+                |r: f64, s: f64, e: f64| r * FpGraphicKind::arc_sweep_deg(s, e).to_radians();
             same_point(*center, *bc)
                 && same_mm(*radius, *br)
+                && same_mm(length(*radius, *start_deg, *end_deg), length(*br, *bs, *be))
                 && same_point(
                     on_circle(*center, *radius, *start_deg),
                     on_circle(*bc, *br, *bs),

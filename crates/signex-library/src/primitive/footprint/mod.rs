@@ -22,6 +22,7 @@ mod mount_style;
 mod pad;
 mod pad_columns;
 mod serde_tsv;
+mod silk_marker;
 #[cfg(test)]
 mod tests;
 
