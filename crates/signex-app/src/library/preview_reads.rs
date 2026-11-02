@@ -117,6 +117,7 @@ pub struct TabResolvePlan {
     root: std::path::PathBuf,
     needs: PreviewNeeds,
     resolver: SharedResolver,
+    generation: u64,
 }
 
 impl TabResolvePlan {
@@ -127,6 +128,7 @@ impl TabResolvePlan {
             address: self.address,
             needs: self.needs,
             reads,
+            generation: self.generation,
         }
     }
 }
@@ -136,6 +138,7 @@ pub struct TabResolveOutcome {
     address: EditorAddress,
     needs: PreviewNeeds,
     reads: PreviewReads,
+    generation: u64,
 }
 
 // ── Reloading a row ─────────────────────────────────────────────────────
@@ -250,7 +253,7 @@ impl LibraryState {
     /// Plan the first-visit lookups of `tab`; `None` when the preview holds
     /// everything the tab shows (or is not open).
     pub fn plan_tab_resolve(
-        &self,
+        &mut self,
         address: &EditorAddress,
         tab: PreviewTab,
     ) -> Option<TabResolvePlan> {
@@ -259,17 +262,26 @@ impl LibraryState {
         if needs.is_empty() {
             return None;
         }
+        self.refresh_generation_counter += 1;
+        let generation = self.refresh_generation_counter;
+        self.tab_resolve_generations
+            .insert(address.clone(), generation);
         Some(TabResolvePlan {
             address: address.clone(),
             root: address.library_path.clone(),
             needs,
             resolver: self.shared_resolver(),
+            generation,
         })
     }
 
     /// Apply a tab lookup to the preview it was made for, if that preview
-    /// is still open and still binds the same primitives.
+    /// is still open, still binds the same primitives, and no newer lookup
+    /// of it was planned meanwhile.
     pub fn apply_tab_resolve(&mut self, outcome: TabResolveOutcome) {
+        if self.tab_resolve_generations.get(&outcome.address) != Some(&outcome.generation) {
+            return;
+        }
         if let Some(state) = self.editors.get_mut(&outcome.address) {
             outcome.reads.apply_to(&outcome.needs, state);
         }

@@ -684,3 +684,15 @@ fn a_dirty_preview_on_tab_draws_the_rewritten_symbol(tab: crate::library::state:
     assert_eq!(preview.row.description, "Mine");
     assert_eq!(preview.row.symbol_version, "9.9.9");
 }
+
+#[test]
+fn the_confirm_bar_goes_as_soon_as_the_reload_is_confirmed() {
+    let (mut app, address) = app_with_row(1, 1);
+    commit_cell(&mut app, &address, "R-115b");
+    let task = app.handle_editor_event(address.clone(), EditorMsg::ReloadRequested);
+    run_write(&mut app, task);
+    assert!(editor(&app, &address).reload_confirming);
+    // The task that reads the row has not run yet.
+    let _task = app.handle_editor_event(address.clone(), EditorMsg::ReloadConfirmed);
+    assert!(!editor(&app, &address).reload_confirming);
+}
