@@ -631,7 +631,7 @@ impl<'a> SchematicCanvas<'a> {
                 self.prefs.wire_color_overrides,
             );
             if let Some(held) = state.ghost.take_unreported_held() {
-                crate::app::Signex::report_locked_skips(&held);
+                crate::diagnostics::log_locked_holds(&held);
             }
         }
     }

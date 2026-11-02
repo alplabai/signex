@@ -51,7 +51,10 @@ impl SchematicCanvas<'_> {
                 self.update_left_pressed(state, bounds, cursor)
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                self.update_left_released(state)
+                let action = self.update_left_released(state);
+                // A released drag ends the ghost and its once-per-drag notice.
+                self.refresh_drag_ghost(state);
+                action
             }
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 self.update_modifiers_changed(state, mods)
@@ -59,7 +62,11 @@ impl SchematicCanvas<'_> {
             Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
-            }) => self.update_escape_pressed(state),
+            }) => {
+                let action = self.update_escape_pressed(state);
+                self.refresh_drag_ghost(state);
+                action
+            }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 self.update_right_pressed(state, bounds, cursor)
             }

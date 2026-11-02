@@ -101,14 +101,7 @@ impl Signex {
 
     /// Tell the user which locked symbols an edit passed over.
     pub(crate) fn report_locked_skips(skipped: &[String]) {
-        if skipped.is_empty() {
-            return;
-        }
-        crate::diagnostics::log_warning(format!(
-            "Skipped {} locked object(s): {}; unlock in Properties to change them",
-            skipped.len(),
-            skipped.join(", ")
-        ));
+        crate::diagnostics::log_locked_skips(skipped);
     }
 
     pub(crate) fn apply_engine_commands(
