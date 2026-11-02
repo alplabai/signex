@@ -192,6 +192,14 @@ impl Signex {
                 )
             })
             .collect();
+        // A sheet that could not be read is skipped too, and its designators
+        // are missing from the counter's view of the project.
+        skipped.extend(
+            project_set
+                .unreadable
+                .iter()
+                .map(|(path, why)| format!("{} (it could not be read: {why})", sheet_name(path))),
+        );
         for path in ordered_paths {
             if self.document_state.engines.contains_key(path)
                 || !project_set.sheets.contains_key(path)

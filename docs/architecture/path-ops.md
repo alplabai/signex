@@ -154,7 +154,7 @@ before.
 sheets are read (`ProjectRead`), the unopened sheets while they are written
 (`ProjectRewrite`). A rename, delete or open of them is refused meanwhile, and
 so is a save of the written ones. Saving an open sheet during the read is
-allowed: the save moves `documents_epoch` and the run is dropped (#1753). The
+allowed (a History restore or Replace write is not): the save moves `documents_epoch` and the run is dropped (#1753). The
 Annotate dialog disables Run, Reset and Re-prefix while a run is going. A
 Reset & Renumber that would skip a sheet (read-only, or owned by a save,
 restore or read) refuses the whole run; Incremental still skips it. One run at a time: a second request

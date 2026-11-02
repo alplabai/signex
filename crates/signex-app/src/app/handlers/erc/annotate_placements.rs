@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use signex_engine::AnnotatePlacement;
 use signex_types::schematic::{InstancePath, Symbol};
 
+use crate::app::Signex;
 use crate::app::project_sheets::{self as ps, ProjectSheetSet};
+use crate::app::state::DocumentState;
 
 /// Every sheet file the project reaches more than once, with the placement
 /// (root first) of each occurrence. Files placed once are absent.
@@ -112,5 +114,84 @@ impl<'a> WalkDocs<'a> {
 
     pub(super) fn slices(&self) -> Vec<&[Symbol]> {
         self.docs.iter().map(AsRef::as_ref).collect()
+    }
+}
+
+/// The directory sheet keys are made relative to: the active project's folder,
+/// else the root sheet's.
+pub(super) fn project_base_dir(
+    documents: &DocumentState,
+    set: &ProjectSheetSet,
+) -> Option<PathBuf> {
+    documents
+        .active_document_project()
+        .map(|project| project.dir().to_path_buf())
+        .or_else(|| {
+            set.root
+                .as_deref()
+                .and_then(Path::parent)
+                .map(PathBuf::from)
+        })
+}
+
+/// What a pass needs before it touches a sheet: the project's parts, the
+/// counter seeded from the designators that stay, and per path of the walk its
+/// first unit and placements.
+pub(super) type Walked = (
+    signex_types::schematic::ProjectParts,
+    HashMap<String, u32>,
+    Vec<usize>,
+    Vec<Vec<AnnotatePlacement>>,
+);
+
+impl Signex {
+    /// Group the project's units into parts and seed the shared counter.
+    ///
+    /// Parts are grouped across the WHOLE project before any sheet is touched:
+    /// a part whose units sit on different sheets must stay one part through a
+    /// reset (#691). A live engine is the document, so it wins over the
+    /// assembler's copy. A file placed more than once is one unit per
+    /// placement (#1835). `resets` says the run clears every unlocked
+    /// designator, so those do not hold a number back.
+    pub(super) fn walk_project(
+        &self,
+        project_set: &ProjectSheetSet,
+        ordered_paths: &[PathBuf],
+        locked: &std::collections::HashSet<uuid::Uuid>,
+        resets: bool,
+    ) -> Walked {
+        let base_dir = project_base_dir(&self.document_state, project_set);
+        let multi = multi_placed_files(project_set, base_dir.as_deref());
+        let walk = WalkDocs::new(
+            ordered_paths,
+            |path| {
+                self.document_state
+                    .engines
+                    .get(path)
+                    .map(|engine| engine.document().symbols.as_slice())
+                    .or_else(|| {
+                        project_set
+                            .sheets
+                            .get(path)
+                            .map(|sheet| sheet.symbols.as_slice())
+                    })
+                    .unwrap_or(&[])
+            },
+            &multi,
+        );
+        let seed = signex_types::designator::seed_counters(
+            walk.docs
+                .iter()
+                .flat_map(|doc| doc.iter())
+                .filter(|sym| !sym.is_power && !sym.reference.starts_with('#'))
+                .filter(|sym| !resets || locked.contains(&sym.uuid))
+                .map(|sym| sym.reference.as_str()),
+        );
+        let parts = signex_types::schematic::ProjectParts::new(
+            &walk.slices(),
+            locked,
+            self.ui_state.annotate_order,
+        );
+        (parts, seed, walk.first_unit, walk.placements)
     }
 }

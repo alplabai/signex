@@ -213,12 +213,16 @@ fn a_parked_engine_is_numbered_in_memory_marked_dirty_and_not_written() {
 
 /// `b_root` (open, active) places `m_child` twice; `m_child` is unopened.
 fn project_with_a_child_placed_twice() -> (Signex, PathBuf, [Uuid; 2]) {
+    placed_twice(&[("Q?", 1)], sheet(&[], &[("Q5", 1), ("Q6", 1)]))
+}
+
+fn placed_twice(root_refs: &[(&str, u32)], child: SchematicSheet) -> (Signex, PathBuf, [Uuid; 2]) {
     let dir = std::env::temp_dir().join(format!("signex-annotate-twice-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("tempdir");
-    write(&dir, "m_child.snxsch", sheet(&[], &[("Q5", 1), ("Q6", 1)]));
+    write(&dir, "m_child.snxsch", child);
     let mut app = app_workspace(&dir.to_string_lossy(), &["b_root.snxsch"]);
     let ids = [Uuid::from_u128(1), Uuid::from_u128(2)];
-    let mut root = sheet(&["m_child.snxsch", "m_child.snxsch"], &[("Q?", 1)]);
+    let mut root = sheet(&["m_child.snxsch", "m_child.snxsch"], root_refs);
     for (child, id) in root.child_sheets.iter_mut().zip(ids) {
         child.uuid = id;
     }
@@ -355,5 +359,61 @@ fn incremental_annotate_still_skips_a_sheet_it_cannot_write() {
         refs[1],
         ["R?", "R?", "U?", "U?", "R1"],
         "the others are numbered"
+    );
+}
+
+#[test]
+fn reset_duplicates_resets_a_child_placed_twice_per_placement() {
+    let mut child = sheet(&[], &[("Q1", 1)]);
+    let (a, b) = (
+        signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(1)]),
+        signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(2)]),
+    );
+    child.symbols[0].set_instance_designator(&a, "Q1".to_string());
+    child.symbols[0].set_instance_designator(&b, "Q3".to_string());
+    let (mut app, dir, _) = placed_twice(&[("Q1", 1)], child);
+    let task = app.handle_reset_duplicate_designators();
+    settle_task(&mut app, task);
+    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
+    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    let root = refs_of(app.document_state.engines[&dir.join("b_root.snxsch")].document());
+    std::fs::remove_dir_all(&dir).ok();
+    let symbol = &child.symbols[0];
+    assert_eq!(root, ["Q?"]);
+    assert_eq!(
+        symbol.designator_in(&a),
+        "Q?",
+        "the duplicate placement was reset"
+    );
+    assert_eq!(
+        symbol.designator_in(&b),
+        "Q3",
+        "the other placement keeps its own"
+    );
+}
+
+#[test]
+fn reset_and_renumber_refuses_the_run_when_a_sheet_cannot_be_read() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project();
+    std::fs::write(dir.join("c_child.snxsch"), "not a schematic").expect("corrupt");
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    settle_task(&mut app, task);
+    let root = refs_of(app.document_state.engines[&dir.join("b_root.snxsch")].document());
+    let notice = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .map(|n| n.detail.clone())
+        .unwrap_or_default();
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(
+        root,
+        ["R?", "R?", "U?", "U?", "R1"],
+        "nothing was renumbered"
+    );
+    assert!(
+        notice.contains("c_child.snxsch") && notice.contains("could not be read"),
+        "{notice}"
     );
 }

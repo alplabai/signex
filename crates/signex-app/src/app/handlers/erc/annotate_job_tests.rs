@@ -257,7 +257,10 @@ fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run
     let root = root_path(&dir);
     let read = app.handle_annotate(ResetAndRenumber);
     let message = completion(read);
-    let allowed = app.refuse_while_path_op(&root, "saved").is_ok();
+    let allowed = app.refuse_save_while_path_op(&root).is_ok();
+    // Only a document save is let through: a History restore or a Replace
+    // write of the sheet is still refused while the read holds it.
+    let restore_refused = app.refuse_while_path_op(&root, "restored").is_err();
     // The save's completion moves the epoch.
     app.document_state.note_documents_changed();
 
@@ -270,6 +273,10 @@ fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run
     );
     std::fs::remove_dir_all(&dir).ok();
     assert!(allowed, "a save is no longer refused during the read");
+    assert!(
+        restore_refused,
+        "a restore is still refused during the read"
+    );
     assert_eq!(refs, ["R?"], "the stale run changed nothing");
     assert!(idle);
 }
@@ -330,7 +337,7 @@ fn a_rename_or_delete_of_the_runs_sheets_is_refused_until_it_ends() {
     let read = app.handle_annotate(ResetAndRenumber);
     let while_reading = (
         app.refuse_start_while_path_op(&root, "renamed").is_err(),
-        app.refuse_while_path_op(&root, "saved").is_err(),
+        app.refuse_save_while_path_op(&root).is_err(),
     );
 
     let write = app.update(completion(read));

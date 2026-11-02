@@ -152,15 +152,17 @@ impl PendingPathOps {
     /// The pending operation `path` lives at or under, if any: a write to it
     /// would recreate a moved path or land in a deleted one.
     pub fn blocking_write(&self, path: &Path) -> Option<PathOpConflict> {
+        self.find(|op, root| path_is_under(path, root, op.fold))
+    }
+
+    /// As [`Self::blocking_write`] for a document save only: a save of an open
+    /// sheet is let through while a project read holds it, because the save
+    /// moves `documents_epoch` and the run drops itself (#1753). A restore or a
+    /// Replace write still goes through `blocking_write` and is refused.
+    pub fn blocking_save(&self, path: &Path) -> Option<PathOpConflict> {
         self.find(|op, root| {
             op.kind != PathOpKind::ProjectRead && path_is_under(path, root, op.fold)
         })
-    }
-
-    /// As [`Self::blocking_write`], for a caller that must also wait out a
-    /// project read: another project-wide pass over the same sheets.
-    pub fn blocking_project_wide(&self, path: &Path) -> Option<PathOpConflict> {
-        self.find(|op, root| path_is_under(path, root, op.fold))
     }
 
     /// As [`Self::blocking_write`], and also an operation that sits below
@@ -270,6 +272,15 @@ impl crate::app::Signex {
         }
     }
 
+    /// As [`Self::refuse_while_path_op`] for saving an open document, which a
+    /// project read lets through (see [`PendingPathOps::blocking_save`]).
+    pub(crate) fn refuse_save_while_path_op(&self, path: &Path) -> anyhow::Result<()> {
+        match self.document_state.pending_path_ops.blocking_save(path) {
+            Some(conflict) => anyhow::bail!(refusal(&conflict, path, "saved")),
+            None => Ok(()),
+        }
+    }
+
     /// Why the project at `project_id` cannot be saved or closed now, when a
     /// delete under its folder is pending: its entry is pruned when the delete
     /// finishes, and the project file would meanwhile still list the file.
@@ -310,16 +321,11 @@ impl crate::app::Signex {
         sheets: impl IntoIterator<Item = &'a Path>,
         outcome: &str,
     ) -> anyhow::Result<()> {
-        let ops = &self.document_state.pending_path_ops;
-        let held = |path: &Path| match ops.blocking_project_wide(path) {
-            Some(conflict) => anyhow::bail!(refusal(&conflict, path, outcome)),
-            None => Ok(()),
-        };
         for path in sheets {
-            held(path)?;
+            self.refuse_while_path_op(path, outcome)?;
         }
         for path in crate::app::project_sheets::declared_pages(&self.document_state) {
-            held(&path)?;
+            self.refuse_while_path_op(&path, outcome)?;
         }
         let Some(dir) = self
             .document_state

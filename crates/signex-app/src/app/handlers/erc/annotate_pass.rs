@@ -7,7 +7,6 @@ use super::annotate::{
     PassFailed, annotate_unopened_for_write, annotate_unopened_in_memory, read_only_sheets,
 };
 use super::annotate_job::{PassApplied, PendingWrite, RunUndo};
-use super::annotate_placements::{WalkDocs, multi_placed_files};
 use crate::app::project_sheets::ProjectSheetSet;
 
 /// What one project-wide pass does: the engine mode, and (#1315) an optional
@@ -90,9 +89,11 @@ impl Signex {
         let mut writes: Vec<PendingWrite> = Vec::new();
         // Every sheet the counter must cover - cached tabs, unopened sheets
         // and the active engine alike - in the ONE order
-        // `ordered_project_sheet_paths` defines. The preview walks the exact
-        // same order over the exact same set, so the number it promises for
-        // a sheet is the number this pass assigns it (#435).
+        // `ordered_project_sheet_paths` defines. The preview walks the same
+        // order over the same set, so the number it promises for a sheet is
+        // the number this pass assigns it (#435) - except for a sheet file
+        // placed more than once: the preview lists its symbols once, while the
+        // pass numbers them per placement (#1919).
         let locked = self.ui_state.annotate_locked.clone();
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
@@ -114,59 +115,8 @@ impl Signex {
         {
             return PassApplied::without_writes(Task::none());
         }
-        let base_dir = self
-            .document_state
-            .active_document_project()
-            .map(|project| project.dir().to_path_buf())
-            .or_else(|| {
-                project_set
-                    .root
-                    .as_deref()
-                    .and_then(std::path::Path::parent)
-                    .map(std::path::PathBuf::from)
-            });
-        let multi = multi_placed_files(&project_set, base_dir.as_deref());
-        // Group units into parts across the WHOLE project before any sheet is
-        // touched: a part whose units sit on different sheets must stay one
-        // part through a reset, which a per-sheet grouping cannot see (#691).
-        // A live engine is the document, so it wins over the assembler's copy.
-        // A file placed more than once is one unit per placement (#1835).
-        let (parts, mut next_by_prefix, first_unit, placements) = {
-            let walk = WalkDocs::new(
-                &ordered_paths,
-                |path| {
-                    self.document_state
-                        .engines
-                        .get(path)
-                        .map(|engine| engine.document().symbols.as_slice())
-                        .or_else(|| {
-                            project_set
-                                .sheets
-                                .get(path)
-                                .map(|sheet| sheet.symbols.as_slice())
-                        })
-                        .unwrap_or(&[])
-                },
-                &multi,
-            );
-            // Pass A: one per-prefix counter shared by every unit, seeded
-            // from the designators that stay. A reset is about to clear every
-            // unlocked one, so those do not hold a number back (#1835).
-            let seed = signex_types::designator::seed_counters(
-                walk.docs
-                    .iter()
-                    .flat_map(|doc| doc.iter())
-                    .filter(|sym| !sym.is_power && !sym.reference.starts_with('#'))
-                    .filter(|sym| !resets || locked.contains(&sym.uuid))
-                    .map(|sym| sym.reference.as_str()),
-            );
-            let parts = signex_types::schematic::ProjectParts::new(
-                &walk.slices(),
-                &locked,
-                self.ui_state.annotate_order,
-            );
-            (parts, seed, walk.first_unit, walk.placements)
-        };
+        let (parts, mut next_by_prefix, first_unit, placements) =
+            self.walk_project(&project_set, &ordered_paths, &locked, resets);
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
         let mut any_active_changed = false;
