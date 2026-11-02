@@ -19,7 +19,7 @@ use iced::Task;
 use super::super::contracts::Message;
 use super::super::state::Signex;
 use crate::library::drift::{
-    ApplyInput, DriftJob, DriftReport, MountedLibrary, SheetEntries, instance_stamps,
+    ApplyInput, DriftJob, DriftReport, MountedLibrary, SheetEntries, instance_stamps, part_stamps,
 };
 use crate::library::messages::LibraryMessage;
 
@@ -93,9 +93,16 @@ impl Signex {
                 (path.clone(), entries)
             })
             .collect();
+        let parts = self
+            .document_state
+            .engines
+            .iter()
+            .map(|(path, engine)| (path.clone(), part_stamps(engine.document())))
+            .collect();
         Some(DriftJob {
             generation: self.library.drift.generation,
             sheets,
+            parts,
             libs,
         })
     }

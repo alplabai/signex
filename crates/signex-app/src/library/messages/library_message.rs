@@ -626,8 +626,9 @@ pub struct ResolvedPlacement {
     /// on the symbol, where ERC, the netlist and the BOM read it (#1842).
     pub footprint: String,
     /// The part's primary datasheet link and identity fields (Manufacturer,
-    /// MPN and the row's parameters). A placement does not stamp them;
-    /// Change Component replaces the old part's with them.
+    /// MPN and the row's parameters). A placement stamps the
+    /// Manufacturer and MPN (#1867); Change Component replaces the old
+    /// part's with all of them.
     pub datasheet: String,
     pub fields: Vec<(String, String)>,
 }

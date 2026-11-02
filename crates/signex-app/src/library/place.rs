@@ -90,7 +90,7 @@ pub fn resolve_placement_of(
 /// footprint field that ERC, the netlist and the BOM read (#1842); empty
 /// when the row binds none. A footprint that cannot be read is reported and
 /// leaves the field empty, so the placement still goes ahead.
-fn footprint_name(
+pub(crate) fn footprint_name(
     own: &signex_library::adapters::local_git::LocalGitAdapter,
     row: &signex_library::ComponentRow,
     open_libraries: &[(Uuid, PathBuf)],

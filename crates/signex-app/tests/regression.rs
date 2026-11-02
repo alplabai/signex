@@ -338,6 +338,8 @@ mod library_browser_row_delete;
 mod library_components_panel_details;
 #[path = "regression/library_named_symbol_file.rs"]
 mod library_named_symbol_file;
+#[path = "regression/library_part_follows_row.rs"]
+mod library_part_follows_row;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
 #[path = "regression/library_place_footprint.rs"]

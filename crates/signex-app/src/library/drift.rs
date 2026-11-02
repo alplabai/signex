@@ -20,6 +20,8 @@ use signex_library::LibraryError;
 use signex_types::schematic::LibSymbol;
 use uuid::Uuid;
 
+use super::part_sync::{PartIdentity, PartSync};
+
 /// Stable content hash of a `LibSymbol` (FNV-1a 64 over the serde JSON of
 /// the in-memory value, whose field order is the struct's declaration
 /// order; the JSON is only a hash input, never stored). `LibSymbol` has no
@@ -64,11 +66,16 @@ pub struct DriftReport {
 /// The copies are cloned on the UI thread and hashed in the worker.
 pub type SheetEntries = (PathBuf, Vec<(String, LibSymbol)>);
 
+/// One sheet's library-backed parts: `(sheet path, [(lib_id, stamp)])`, to
+/// compare with their rows (#1867).
+pub type SheetParts = (PathBuf, Vec<(String, ApplyStamp)>);
+
 /// One requested pass, ready to run off the UI thread.
 #[derive(Debug)]
 pub struct DriftJob {
     pub generation: u64,
     pub sheets: Vec<SheetEntries>,
+    pub parts: Vec<SheetParts>,
     pub libs: Vec<MountedLibrary>,
 }
 
@@ -77,14 +84,18 @@ impl DriftJob {
     pub fn run(self) -> DriftReport {
         DriftReport {
             generation: self.generation,
-            ..compute_drift(&self.sheets, &self.libs)
+            ..compute_drift(&self.sheets, &self.parts, &self.libs)
         }
     }
 }
 
 /// Compare every embedded entry with its mounted library's current symbol.
 /// Entries whose library is not mounted are skipped (nothing to compare).
-pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftReport {
+pub fn compute_drift(
+    sheets: &[SheetEntries],
+    parts: &[SheetParts],
+    libs: &[MountedLibrary],
+) -> DriftReport {
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
@@ -135,9 +146,48 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
                 drifted.insert(lib_id.clone());
             }
         }
+        if let Some((_, placed)) = parts.iter().find(|(p, _)| p == sheet) {
+            drifted.extend(drifted_parts(placed, libs, &mut report));
+        }
         report.sheets.push((sheet.clone(), drifted));
     }
     report
+}
+
+/// The `lib_id`s with a placed part whose footprint, manufacturer or MPN
+/// differs from its row. A row that cannot be read marks its `lib_id`
+/// unreadable (keeps the previous result) instead of reading as no drift.
+fn drifted_parts(
+    placed: &[(String, ApplyStamp)],
+    libs: &[MountedLibrary],
+    report: &mut DriftReport,
+) -> BTreeSet<String> {
+    let mut libraries: HashMap<Uuid, Opened> = HashMap::new();
+    let mut drifted = BTreeSet::new();
+    for (lib_id, stamp) in placed {
+        let Some(lib) = libs.iter().find(|l| l.id == stamp.library_id) else {
+            continue;
+        };
+        let opened = libraries
+            .entry(lib.id)
+            .or_insert_with(|| open_library(libs, lib.id));
+        let Ok(opened) = opened.as_ref() else {
+            report.unreadable.insert(lib_id.clone());
+            continue;
+        };
+        match read_row(opened, stamp.row_id) {
+            RowRead::Found(row) if row_binds_lib_id(&row, lib_id) => {
+                if part_sync_of(stamp, opened, &row, libs).is_some() {
+                    drifted.insert(lib_id.clone());
+                }
+            }
+            RowRead::Failed(_) => {
+                report.unreadable.insert(lib_id.clone());
+            }
+            RowRead::Found(_) | RowRead::Missing => {}
+        }
+    }
+    drifted
 }
 
 /// Whether the row still offers the symbol `lib_id` names, as its default
@@ -179,6 +229,9 @@ pub struct ApplyStamp {
     /// version has moved since: the instance is not applied. `None` (Update
     /// from library) stamps whatever was read.
     pub approved_version: Option<String>,
+    /// The footprint, manufacturer and MPN the placed symbol holds, to
+    /// compare with its row (#1867).
+    pub have: PartIdentity,
 }
 
 /// Everything the off-thread apply read needs, built on the UI thread from
@@ -209,15 +262,33 @@ pub(crate) fn instance_stamps(
     doc.symbols
         .iter()
         .filter(|s| s.lib_id == lib_id)
-        .filter_map(|s| {
-            Some(ApplyStamp {
-                symbol: s.uuid,
-                reference: s.reference.clone(),
-                row_id: s.row_id?,
-                library_id: s.library_id?,
-                approved_version: approved.get(&s.uuid).cloned(),
-            })
-        })
+        .filter_map(|s| stamp_of(s, approved))
+        .collect()
+}
+
+fn stamp_of(
+    s: &signex_types::schematic::Symbol,
+    approved: &HashMap<Uuid, String>,
+) -> Option<ApplyStamp> {
+    Some(ApplyStamp {
+        symbol: s.uuid,
+        reference: s.reference.clone(),
+        row_id: s.row_id?,
+        library_id: s.library_id?,
+        approved_version: approved.get(&s.uuid).cloned(),
+        have: PartIdentity::of_symbol(s),
+    })
+}
+
+/// Every library-backed placed symbol of `doc` as `(lib_id, stamp)`, for the
+/// drift pass to compare with its row.
+pub(crate) fn part_stamps(
+    doc: &signex_types::schematic::SchematicSheet,
+) -> Vec<(String, ApplyStamp)> {
+    let none = HashMap::new();
+    doc.symbols
+        .iter()
+        .filter_map(|s| Some((s.lib_id.clone(), stamp_of(s, &none)?)))
         .collect()
 }
 
@@ -259,6 +330,9 @@ pub struct SymbolRead {
     pub stamps: Vec<(Uuid, String)>,
     /// One line per instance whose version is not stamped, saying why.
     pub skipped: Vec<String>,
+    /// Instances whose footprint, manufacturer or MPN differs from their row
+    /// (#1867), applied in the same undo step as the copy.
+    pub part_syncs: Vec<PartSync>,
     /// An approved instance's row moved on since the approval: the copy and
     /// every stamp of this `lib_id` are held back.
     pub held_back: bool,
@@ -360,7 +434,7 @@ fn stamp_or_reason(
     lib_id: &str,
     libraries: &mut HashMap<Uuid, Opened>,
     libs: &[MountedLibrary],
-) -> Result<(Uuid, String), NoStamp> {
+) -> Result<((Uuid, String), Option<PartSync>), NoStamp> {
     let nothing = VERSION_NOT_STAMPED;
     let (reference, row) = (&w.reference, w.row_id);
     let opened = libraries
@@ -378,7 +452,10 @@ fn stamp_or_reason(
                 "{reference} moved to {} since you approved {approved}",
                 r.version
             ))),
-            _ => Ok((w.symbol, r.version)),
+            _ => {
+                let sync = part_sync_of(w, opened, &r, libs);
+                Ok(((w.symbol, r.version), sync))
+            }
         },
         RowRead::Found(_) => Err(why(rebound_row_warning(reference, row, lib_id, nothing))),
         RowRead::Missing => Err(why(format!(
@@ -390,9 +467,37 @@ fn stamp_or_reason(
     }
 }
 
+/// The sync for `w` when its row's footprint, manufacturer or MPN differs.
+fn part_sync_of(
+    w: &ApplyStamp,
+    opened: &OpenedLibrary,
+    row: &signex_library::ComponentRow,
+    libs: &[MountedLibrary],
+) -> Option<PartSync> {
+    let want = row_identity(opened, row, libs);
+    let change = w.have.changes_to(&want);
+    (!change.is_empty()).then(|| PartSync {
+        symbol: w.symbol,
+        reference: w.reference.clone(),
+        have: w.have.clone(),
+        change,
+    })
+}
+
+fn row_identity(
+    opened: &OpenedLibrary,
+    row: &signex_library::ComponentRow,
+    libs: &[MountedLibrary],
+) -> PartIdentity {
+    let open: Vec<(Uuid, PathBuf)> = libs.iter().map(|l| (l.id, l.path.clone())).collect();
+    let footprint = super::place::footprint_name(&opened.adapter, row, &open);
+    PartIdentity::of_row(row, footprint)
+}
+
 /// What the stamp decisions of one `lib_id` came to.
 struct Decided {
     stamps: Vec<(Uuid, String)>,
+    part_syncs: Vec<PartSync>,
     skipped: Vec<String>,
     /// "U1 moved to X since you approved Y" per approved instance whose row
     /// moved (then nothing is stamped).
@@ -410,14 +515,16 @@ fn decide_stamps(
 ) -> Decided {
     let mut d = Decided {
         stamps: Vec::new(),
+        part_syncs: Vec::new(),
         skipped: Vec::new(),
         moved: Vec::new(),
         left: Vec::new(),
     };
     for w in wanted {
         match stamp_or_reason(w, lib_id, libraries, libs) {
-            Ok(stamp) => {
+            Ok((stamp, sync)) => {
                 d.stamps.push(stamp);
+                d.part_syncs.extend(sync);
                 d.left.push(w.reference.clone());
             }
             Err(NoStamp::Unreadable(why)) => {
@@ -431,6 +538,7 @@ fn decide_stamps(
         d.left.clear();
     } else {
         d.stamps.clear();
+        d.part_syncs.clear();
     }
     d
 }
@@ -494,6 +602,7 @@ pub fn read_symbols(input: ApplyInput, libs: &[MountedLibrary]) -> SymbolsRead {
                 lib_id: lib_id.clone(),
                 symbol: read.map(|(_, s)| s),
                 stamps: decided.stamps,
+                part_syncs: decided.part_syncs,
                 skipped: decided.skipped,
                 held_back,
             }
