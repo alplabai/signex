@@ -120,11 +120,7 @@ impl Signex {
     ) -> anyhow::Result<()> {
         // This write runs on the UI thread, so it cannot wait for a library
         // write a worker still has: refuse instead of freezing the window.
-        if let Some(library) = self
-            .library
-            .open_libraries
-            .iter()
-            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
+        if let Some(library) = self.library.write_target_library(path)
             && self.library.writes.pending_writes(&library.root) > 0
         {
             anyhow::bail!(
@@ -189,9 +185,7 @@ impl Signex {
         self.document_state.project_fs.invalidate();
         let mounted_library = self
             .library
-            .open_libraries
-            .iter()
-            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
+            .write_target_library(path)
             .map(|lib| lib.root.clone());
         let turn = mounted_library
             .as_deref()

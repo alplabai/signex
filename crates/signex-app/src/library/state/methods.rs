@@ -308,16 +308,29 @@ impl LibraryState {
 
     /// True when several open libraries share the deepest folder holding
     /// `file`, so none of them can be named its owner.
-    pub fn libraries_share_folder_of(&self, file: &Path) -> bool {
+    pub fn libraries_share_folder_of(&self, file: &Path, fold: CaseFold) -> bool {
+        self.deepest_libraries(file, fold).len() > 1
+    }
+
+    /// The open library a draft at `path` is written, committed and cascaded
+    /// through: the deepest one holding it (a nested library owns its own
+    /// files), so the outer library of a nested pair is never picked. When
+    /// several libraries share the deepest folder, the one with the sorted-
+    /// first `.snxlib` path, so the choice does not depend on mount order.
+    pub fn write_target_library(&self, path: &Path) -> Option<&OpenLibrary> {
+        self.deepest_libraries(path, CaseFold::host_default())
+            .into_iter()
+            .min_by(|a, b| a.root.cmp(&b.root))
+    }
+
+    fn deepest_libraries(&self, file: &Path, fold: CaseFold) -> Vec<&OpenLibrary> {
         crate::app::deepest_owners(
             file,
             self.open_libraries
                 .iter()
-                .filter_map(|lib| Some((lib.root.as_path(), lib.root_dir()?))),
-            CaseFold::host_default(),
+                .filter_map(|lib| Some((lib, lib.root_dir()?))),
+            fold,
         )
-        .len()
-            > 1
     }
 
     fn containing_index(&self, child_path: &Path, fold: CaseFold) -> Option<usize> {

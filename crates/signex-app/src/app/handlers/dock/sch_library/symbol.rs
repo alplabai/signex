@@ -613,7 +613,8 @@ impl Signex {
                 path,
                 sheets,
                 symbol,
-                self.library.libraries_share_folder_of(path),
+                self.library
+                    .libraries_share_folder_of(path, self.identity_decision(path).fold),
             ),
         }
     }

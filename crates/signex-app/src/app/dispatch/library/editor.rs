@@ -14,6 +14,8 @@ mod cascade;
 mod container_save;
 #[cfg(test)]
 mod footprint_preset_tests;
+#[cfg(test)]
+mod nested_owner_tests;
 mod primitive_save;
 #[cfg(test)]
 mod primitive_save_fold_tests;
@@ -410,14 +412,12 @@ impl Signex {
         }
     }
 
-    /// The library whose directory contains `path`: its `.snxlib` file
-    /// path, same `root_dir()` ancestor walk as `library_adapter_for`.
+    /// The library a draft at `path` is saved through: the deepest one whose
+    /// directory contains it ([`LibraryState::write_target_library`]).
     /// `None` when `path` lives outside any mounted library.
     fn library_root_containing(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
         self.library
-            .open_libraries
-            .iter()
-            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false))
+            .write_target_library(path)
             .map(|lib| lib.root.clone())
     }
 
