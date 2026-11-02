@@ -35,7 +35,11 @@ pub(crate) fn view_row_checked(ctx: &MenuContext, label: &str) -> Option<bool> {
 
 fn run(app: &mut Signex, id: &str) {
     let command = AppCommandId::new(id).unwrap();
-    let message = crate::app::command::bridge::core_to_message(&command).unwrap();
+    let message = crate::app::command::bridge::core_to_message(
+        &command,
+        &crate::app::command::CommandArgs::none(),
+    )
+    .unwrap();
     let _ = app.update(message);
 }
 

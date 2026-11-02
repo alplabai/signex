@@ -367,7 +367,10 @@ fn check_rows(
                 // A disabled stub has no on_press; only live rows are compared.
                 if let Some(pressed) = &item.on_press {
                     let command = AppCommandId::new(id).expect("catalog id is well formed");
-                    let expected = crate::app::command::bridge::core_to_message(&command);
+                    let expected = crate::app::command::bridge::core_to_message(
+                        &command,
+                        &crate::app::command::CommandArgs::none(),
+                    );
                     let expected = expected.map_or_else(
                         || "<bridge has no arm>".to_string(),
                         |message| format!("{message:?}"),

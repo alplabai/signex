@@ -32,10 +32,8 @@ impl Signex {
     /// command palette, and a future CLI later) names *what* to run
     /// without knowing the app's internal message shape.
     ///
-    /// `args` is accepted but unused: [`core_to_message`] ignores it,
-    /// because every catalog command is nullary today. It is here only
-    /// so this signature is stable ahead of a consumer that needs it —
-    /// do not thread it through `core_to_message` speculatively.
+    /// `args` carries what the caller knows that the id does not (see
+    /// [`CommandArgs`]); the bridge reads it for the commands that take it.
     ///
     /// An id can fail to resolve two ways, and both are a silent no-op,
     /// never a panic: it isn't in the catalog at all, or it's a real
@@ -54,7 +52,7 @@ impl Signex {
     pub(crate) fn dispatch_command(
         &mut self,
         command: &crate::keymap::AppCommandId,
-        _args: CommandArgs,
+        args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
         // Undo / Redo typed in an undocked tab step that window's document
@@ -65,7 +63,7 @@ impl Signex {
             && self.undocked_tab_has_canvas(window)
         {
             return self.run_in_window(window_id, true, |app| {
-                app.dispatch_command(command, _args, None)
+                app.dispatch_command(command, args, None)
             });
         }
         // Close Document follows the window the stroke came from (#1787).
@@ -91,10 +89,10 @@ impl Signex {
             match command.as_str() {
                 "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
                 "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
-                _ => core_to_message(command),
+                _ => core_to_message(command, &args),
             }
         } else {
-            core_to_message(command)
+            core_to_message(command, &args)
         };
         match (resolved, window) {
             (Some(Message::CanvasEvent(event)), Some(window_id))
@@ -296,6 +294,6 @@ mod tests {
     }
 
     fn core_message(command: &AppCommandId) -> Message {
-        bridge::core_to_message(command).expect("the command resolves")
+        bridge::core_to_message(command, &CommandArgs::none()).expect("the command resolves")
     }
 }

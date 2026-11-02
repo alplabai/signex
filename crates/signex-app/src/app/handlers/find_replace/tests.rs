@@ -677,13 +677,19 @@ fn f3_and_shift_f3_resolve_to_next_and_previous() {
     use crate::app::command::bridge::core_to_message as resolve;
     let command = |id: &str| crate::keymap::AppCommandId::new(id).expect("a catalog id");
     assert!(matches!(
-        resolve(&command("find_next")),
+        resolve(
+            &command("find_next"),
+            &crate::app::command::CommandArgs::none()
+        ),
         Some(crate::app::Message::FindReplaceMsg(
             FindReplaceMsg::NextRequested
         ))
     ));
     assert!(matches!(
-        resolve(&command("find_previous")),
+        resolve(
+            &command("find_previous"),
+            &crate::app::command::CommandArgs::none()
+        ),
         Some(crate::app::Message::FindReplaceMsg(
             FindReplaceMsg::PreviousRequested
         ))
