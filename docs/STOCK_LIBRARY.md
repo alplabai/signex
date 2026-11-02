@@ -58,3 +58,16 @@ it would discard every edit made in Signex, so it refuses to write while
 ```text
 cargo run --example build_stock_library -p signex-app -- --force
 ```
+
+## Chip passives
+
+R, C, L, Ferrite and Fuse default to `Chip-0805`; D, D_Schottky, D_Zener
+and LED default to `Chip-0805-Polarised` (pad 1 = cathode, silkscreen
+bar). Each row also lists the sizes 0201, 0402, 0603, 1206, 1210 and 2512
+(the matching `-Polarised` ones for the diodes) as alternate footprints,
+so the footprint picker offers them without a pin-map override: pads 1 and
+2 match the symbol pins. The lands are IPC-7351B nominal (density level B);
+the table and its derivation are in
+`crates/signex-app/examples/build_stock_library/chip.rs`. The shipped
+`Chip-0805` land (1.0 x 1.25 mm pads, 2.0 mm centres) is kept as it is and
+is slightly different from IPC nominal.

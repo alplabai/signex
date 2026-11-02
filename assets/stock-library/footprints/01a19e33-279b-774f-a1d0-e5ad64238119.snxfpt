@@ -1,0 +1,145 @@
+format = "snxfpt/1"
+file_uuid = "01a19e33-279b-7e29-afd6-d47a9e279e66"
+display_name = "Chip-2512"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[footprints]]
+uuid = "01a19e33-279b-774f-a1d0-e5ad64238119"
+name = "Chip-2512"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Smd	rect	1.1	3.4	-3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1.1	3.4	3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+'''
+silk_f = []
+silk_b = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = [
+    [
+    -3.9,
+    -1.95,
+],
+    [
+    3.9,
+    -1.95,
+],
+    [
+    3.9,
+    1.95,
+],
+    [
+    -3.9,
+    1.95,
+],
+]
+
+[[footprints.fab_f]]
+stroke_width = 0.1
+filled = false
+
+[footprints.fab_f.kind]
+kind = "rectangle"
+from = [
+    -3.2,
+    -1.6,
+]
+to = [
+    3.2,
+    1.6,
+]
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "6b20128f-05eb-44b8-bd27-e86683473972"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "0e71df6f-d4cd-44c0-835e-6881de15cab4"
+plane = "6b20128f-05eb-44b8-bd27-e86683473972"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "cda853a4-3665-4ffd-9f56-f1d4c28076e0"
+plane = "6b20128f-05eb-44b8-bd27-e86683473972"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+body_h = "3.2mm"
+body_w = "6.4mm"
+pad_h = "3.4mm"
+pad_spacing = "6.2mm"
+pad_w = "1.1mm"
