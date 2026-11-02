@@ -566,6 +566,7 @@ mod tests {
             offset_x: 0.0,
             offset_y: 0.0,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let bounds = iced::Rectangle::new(
             iced::Point::new(-10_000.0, -10_000.0),
@@ -772,6 +773,7 @@ mod tests {
             offset_x,
             offset_y: 0.0,
             scale,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let skip: HashSet<Uuid> = HashSet::from([Uuid::now_v7()]);
         let mut layers = DragLayers::default();
@@ -829,6 +831,8 @@ mod tests {
                     offset_x: 0.0,
                     offset_y: 0.0,
                     scale: 1.0,
+                    device_px_per_logical_px:
+                        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
                 },
                 colors: &colors,
                 viewport: iced::Size::new(10.0, 10.0),

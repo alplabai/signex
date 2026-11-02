@@ -201,11 +201,7 @@ impl Signex {
         let menu_ctx = crate::menu_bar::MenuContext {
             commands: self.command_context(Some(window_id)),
             has_project: document.active_project.is_some(),
-            // Secondary windows (detached modal, undocked tab) borrow
-            // the main window's scale. Good enough until per-window
-            // scale tracking lands — it's only wrong if the user drags
-            // a secondary window onto a monitor with a different DPI.
-            scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
+            scale_factor: ui.device_px_per_logical_px(window_id),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),
@@ -547,7 +543,11 @@ impl Signex {
                     .map(|lib| lib.display)
                     .unwrap_or_default();
                 return crate::library::editor::standalone::view_symbol(
-                    editor, panel_ctx, display, path,
+                    editor,
+                    panel_ctx,
+                    display,
+                    path,
+                    self.ui_state.device_px_per_logical_px(window_id),
                 )
                 .map(Message::Library);
             }
@@ -609,7 +609,7 @@ impl Signex {
             let slot = self.interaction_state.canvas_for_window(window_id);
             let prefs = crate::canvas::CanvasViewPrefs {
                 placement: self.placement_ghost_for_window(window_id),
-                ..self.canvas_view_prefs()
+                ..self.canvas_view_prefs(window_id)
             };
             let base: Element<'_, Message> = if crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED {
                 crate::canvas::gpu_mount::view(slot, prefs)

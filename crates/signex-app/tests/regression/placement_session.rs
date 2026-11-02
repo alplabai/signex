@@ -67,6 +67,7 @@ fn ghost_commit_lands_where_the_ghost_was_drawn() {
         offset_x: 13.0,
         offset_y: -7.0,
         scale: 3.5,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let drawn = PlacementGhost::transform_at(&camera, anchor).world_to_screen((0.0, 0.0));
     let landed = camera.world_to_screen((placed.position.x, placed.position.y));

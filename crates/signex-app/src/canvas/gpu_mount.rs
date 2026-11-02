@@ -59,6 +59,7 @@ impl SchematicCanvas<'_> {
             offset_x: cam.offset.x,
             offset_y: cam.offset.y,
             scale: cam.scale,
+            device_px_per_logical_px: self.prefs.device_px_per_logical_px,
         }
     }
 

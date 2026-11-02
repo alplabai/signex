@@ -105,6 +105,7 @@ impl PlacementGhost {
             offset_x: camera.offset_x + anchor.0 as f32 * camera.scale,
             offset_y: camera.offset_y + anchor.1 as f32 * camera.scale,
             scale: camera.scale,
+            device_px_per_logical_px: camera.device_px_per_logical_px,
         }
     }
 
@@ -144,6 +145,7 @@ impl PlacementGhost {
                 offset_x: 0.0,
                 offset_y: 0.0,
                 scale: camera.scale,
+                device_px_per_logical_px: camera.device_px_per_logical_px,
             };
             let reach = GHOST_BUILD_HALF_EXTENT_PX;
             let bounds = Rectangle::new(
@@ -191,6 +193,7 @@ mod tests {
             offset_x: 40.0,
             offset_y: -10.0,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let anchor = (2.54, 5.08);
         let shifted = PlacementGhost::transform_at(&camera, anchor);

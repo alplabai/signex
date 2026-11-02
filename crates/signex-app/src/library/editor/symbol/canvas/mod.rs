@@ -129,6 +129,10 @@ pub struct SymbolCanvas<'a> {
     /// Altium-style "centre crosshair" so the symbol's anchor is
     /// always visible.
     pub axis_color: Color,
+    /// Device pixels per logical pixel in the window this editor draws in
+    /// (`UiState::device_px_per_logical_px`); the stroke floor works in it
+    /// (#1887). Set with [`Self::with_device_px_per_logical_px`].
+    pub device_px_per_logical_px: f32,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -185,7 +189,19 @@ impl<'a> SymbolCanvas<'a> {
             selected_color: accent_color,
             text_color: palette.text,
             axis_color: palette.axis,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         }
+    }
+
+    /// The scene replay options at `scale` px/mm in this canvas's window.
+    fn draw_options(&self, scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptions {
+        symbol_draw_options(scale, self.device_px_per_logical_px)
+    }
+
+    /// Draw with the stroke floor of a window with this display scale.
+    pub fn with_device_px_per_logical_px(mut self, device_px_per_logical_px: f32) -> Self {
+        self.device_px_per_logical_px = device_px_per_logical_px;
+        self
     }
 
     /// Apply the editor's selection filter pills to this canvas.
@@ -541,7 +557,7 @@ impl<'a> SymbolCanvas<'a> {
             frame,
             &scene,
             |point| iced::Point::new(ox + point[0] * scale, oy - point[1] * scale),
-            symbol_draw_options(scale),
+            self.draw_options(scale),
         );
     }
 
@@ -581,7 +597,12 @@ impl<'a> SymbolCanvas<'a> {
             } else {
                 self.body_color
             };
-            let stroke_mm = symbol_stroke_mm(g.stroke_width, is_selected, scale);
+            let stroke_mm = symbol_stroke_mm(
+                g.stroke_width,
+                is_selected,
+                scale,
+                self.device_px_per_logical_px,
+            );
 
             match &g.kind {
                 SymbolGraphicKind::Rectangle { from, to } => {
@@ -718,7 +739,12 @@ impl<'a> SymbolCanvas<'a> {
                 id: 100_000 + i as u64,
                 p0: tip_f32,
                 p1: body_f32,
-                width_mm: symbol_stroke_mm(pin_stroke_mm, selected, scale),
+                width_mm: symbol_stroke_mm(
+                    pin_stroke_mm,
+                    selected,
+                    scale,
+                    self.device_px_per_logical_px,
+                ),
                 explicit_color: Some(to_rgba(stroke_color)),
             });
 
@@ -801,10 +827,13 @@ impl<'a> SymbolCanvas<'a> {
 }
 
 /// The replay options of the Symbol Editor at `scale` px/mm.
-fn symbol_draw_options(scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptions {
+fn symbol_draw_options(
+    scale: f32,
+    device_px_per_logical_px: f32,
+) -> crate::renderer_scene_canvas::SceneDrawOptions {
     crate::renderer_scene_canvas::SceneDrawOptions {
         scale_px_per_mm: scale,
-        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        device_px_per_logical_px,
         text_min_px: SYMBOL_TEXT_SIZE.min_px,
         text_max_px: SYMBOL_TEXT_SIZE.max_px,
     }

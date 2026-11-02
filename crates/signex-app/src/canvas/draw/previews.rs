@@ -272,6 +272,21 @@ impl SchematicCanvas<'_> {
         }
     }
 
+    /// The width the placed wire or bus draws at, under the stroke law in
+    /// this window's device-pixel grid.
+    pub(crate) fn placed_wire_stroke_px(&self, scale: f32) -> f32 {
+        let placed_mm = if self.prefs.current_tool == crate::app::Tool::Bus {
+            signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM
+        } else {
+            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM
+        };
+        signex_types::schematic::stroke_px(
+            placed_mm as f32,
+            scale,
+            self.prefs.device_px_per_logical_px,
+        )
+    }
+
     /// Wire-in-progress rubber-band, constrained by the active draw mode.
     pub(in crate::canvas) fn draw_wire_preview(
         &self,
@@ -285,17 +300,7 @@ impl SchematicCanvas<'_> {
         if self.drawing_mode && !self.wire_preview.is_empty() {
             let wire_color = self.prefs.canvas_colors.wire;
             let wire_color_iced = crate::render_config::to_iced(&wire_color);
-            // The width the placed wire or bus draws at, under the stroke law.
-            let placed_mm = if self.prefs.current_tool == crate::app::Tool::Bus {
-                signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM
-            } else {
-                signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM
-            };
-            let placed_width = signex_types::schematic::stroke_px(
-                placed_mm as f32,
-                cam.scale,
-                signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-            );
+            let placed_width = self.placed_wire_stroke_px(cam.scale);
             let preview_stroke = canvas::Stroke::default()
                 .with_color(wire_color_iced)
                 .with_width(placed_width);
