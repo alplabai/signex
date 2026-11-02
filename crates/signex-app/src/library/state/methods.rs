@@ -517,6 +517,12 @@ impl LibraryState {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
 
+    /// Dirty editors whose library path `in_library` accepts; for a caller
+    /// that compares paths by its own case policy.
+    pub fn dirty_editors_matching(&self, in_library: impl Fn(&Path) -> bool) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| in_library(&key.library_path))
+    }
+
     /// Every dirty editor address across all open libraries — the rows
     /// an app-quit prompt has to account for.
     pub fn dirty_editors(&self) -> Vec<EditorAddress> {

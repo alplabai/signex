@@ -3,7 +3,10 @@
 //! shows as drift that "Update from library" applies as one undo step.
 
 use signex_app::app::{EditMsg, Message, Signex};
+use signex_app::library::messages::{LibraryMessage, PrimitivePickerMsg};
+use signex_app::library::state::{EditorAddress, PrimitivePickerTarget};
 use signex_erc::RuleKind;
+use signex_library::PrimitiveKind;
 use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::primitive::{Footprint, PrimitiveRef};
@@ -11,7 +14,8 @@ use signex_library::primitive::{Footprint, PrimitiveRef};
 use crate::library_place_symbol::{Fixture, app_with_library, doc, fixture, place};
 use crate::library_symbol_drift::{check_drift, click_update, is_drifted, select_first};
 
-/// Bind a saved footprint named `name` on the fixture's row.
+/// Bind a saved footprint named `name` on the fixture's row, through the
+/// picker the Library Browser binds with (the app's own row edit path).
 fn bind_footprint(f: &Fixture, name: &str) {
     let adapter = LocalGitAdapter::open(&f.snxlib).expect("open");
     let footprint = Footprint::empty(name);
@@ -19,13 +23,31 @@ fn bind_footprint(f: &Fixture, name: &str) {
     adapter
         .save_footprint(footprint, "seed footprint")
         .expect("save footprint");
-    let mut row = adapter
+    drop(adapter);
+
+    let mut editor = app_with_library(f);
+    let address = EditorAddress::new(
+        f.snxlib.clone(),
+        "ICs".into(),
+        signex_library::RowId(f.row_id),
+    );
+    let _ = editor.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+        kind: PrimitiveKind::Footprint,
+        target: PrimitivePickerTarget::BrowserRow(address),
+    }));
+    let task = editor.update(Message::Library(LibraryMessage::PrimitivePicker(
+        PrimitivePickerMsg::Pick(PrimitiveRef::new(f.library_id, uuid)),
+    )));
+    crate::drive::drive(&mut editor, task);
+    let row = LocalGitAdapter::open(&f.snxlib)
+        .expect("reopen")
         .read_row("ICs", signex_library::RowId(f.row_id))
         .expect("row");
-    row.footprint_ref = Some(PrimitiveRef::new(f.library_id, uuid));
-    // A row edit moves the row's version; a part follows only a moved row.
-    row.version = format!("{}+{name}", row.version);
-    adapter.update_row("ICs", row, "bind").expect("bind");
+    assert_eq!(
+        row.footprint_ref,
+        Some(PrimitiveRef::new(f.library_id, uuid)),
+        "the picker bound the footprint"
+    );
 }
 
 fn reports(app: &Signex, rule: RuleKind) -> usize {
@@ -133,4 +155,30 @@ fn a_per_instance_footprint_override_is_not_drift_while_the_row_is_unchanged() {
         !is_drifted(&app),
         "the row is unchanged; QFN-8 is the user's choice, and Update / Apply would rewrite it to SOIC-8"
     );
+}
+
+#[test]
+fn an_in_app_footprint_edit_on_the_row_is_flagged_as_drift() {
+    let f = fixture();
+    bind_footprint(&f, "SOIC-8");
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let placed = LocalGitAdapter::open(&f.snxlib)
+        .unwrap()
+        .read_row("ICs", signex_library::RowId(f.row_id))
+        .unwrap()
+        .version;
+    select_first(&mut app);
+    check_drift(&mut app);
+    assert!(!is_drifted(&app));
+
+    bind_footprint(&f, "TSSOP-8");
+    let edited = LocalGitAdapter::open(&f.snxlib)
+        .unwrap()
+        .read_row("ICs", signex_library::RowId(f.row_id))
+        .unwrap()
+        .version;
+    assert_ne!(edited, placed, "the edit moved the row's version");
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "the part follows the edited row");
 }

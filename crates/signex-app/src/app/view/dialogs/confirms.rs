@@ -129,7 +129,8 @@ impl Signex {
             remove_options = remove_options.push(option_card(
                 "Delete file",
                 if st.is_directory_package {
-                    "The library package is deleted whole, with everything inside it, and the \n                     library is closed."
+                    "The library package is deleted whole, with everything inside it, and the \
+                     library is closed."
                 } else if is_library {
                     "The library file is permanently deleted and the library closed. Its symbol, \
                      footprint, simulation and datasheet files are deleted too when the folder \

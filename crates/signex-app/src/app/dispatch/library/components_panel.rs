@@ -63,10 +63,18 @@ impl Signex {
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
         let libraries = self.library.shared_adapters();
+        let stamp = self.components_row_stamp(&key);
         let Some(own) = self.library.shared_adapter_at(&key.library_path) else {
+            let why = format!(
+                "The library {} is not open, so the component details cannot be read.",
+                key.library_path.display()
+            );
+            let details = &mut self.library.components_panel.details;
+            let generation = details.begin(key.clone(), stamp);
+            details.finish(&key, generation, Err(why.clone()));
+            crate::diagnostics::log_warning(why);
             return Task::none();
         };
-        let stamp = self.components_row_stamp(&key);
         let generation = self
             .library
             .components_panel
@@ -367,5 +375,28 @@ impl Signex {
             table,
             row_id,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::{Message, Signex};
+    use crate::library::messages::LibraryMessage;
+    use crate::library::state::ComponentsPanelRowKey;
+
+    #[test]
+    fn a_row_of_a_library_that_is_not_open_shows_an_error() {
+        let (mut app, _boot) = Signex::new();
+        let key = ComponentsPanelRowKey {
+            library_path: std::path::PathBuf::from("gone.snxlib"),
+            table: "parts".into(),
+            row_id: signex_library::RowId::new(),
+        };
+        let _ = app.update(Message::Library(LibraryMessage::ComponentsPanelRowPressed(
+            key,
+        )));
+        let details = &app.library.components_panel.details;
+        assert!(details.error.is_some(), "no silent empty pane");
+        assert!(!details.in_flight());
     }
 }

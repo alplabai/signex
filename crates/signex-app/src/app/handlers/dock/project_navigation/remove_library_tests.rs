@@ -409,3 +409,34 @@ fn a_folder_with_a_project_file_keeps_its_primitives() {
     assert!(!f.manifest.exists());
     assert!(f.dir.join("symbols/a.snxsym").exists());
 }
+
+#[test]
+fn an_editor_dirtied_while_the_delete_ran_is_reported_not_dropped_silently() {
+    let _ = crate::diagnostics::init_logging();
+    let mut f = fixture();
+    let row = crate::library::component_preview::test_row();
+    let address = crate::library::state::EditorAddress::new(
+        f.manifest.clone(),
+        "components".into(),
+        signex_library::RowId::from_uuid(row.row_id),
+    );
+    let mut preview = crate::library::state::ComponentPreviewState::from_row(
+        f.manifest.clone(),
+        "components".into(),
+        row,
+    );
+    preview.dirty = true;
+    f.app.library.editors.insert(address, preview);
+
+    f.app.report_editors_lost_to_delete(
+        &f.manifest,
+        crate::app::state::scope::CaseFold::host_default(),
+    );
+
+    assert!(
+        crate::diagnostics::recent_entries()
+            .iter()
+            .any(|e| e.message.contains("unsaved edits") && e.message.contains("discarded")),
+        "the discarded edits are named in Messages"
+    );
+}

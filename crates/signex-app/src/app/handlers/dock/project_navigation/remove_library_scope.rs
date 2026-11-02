@@ -41,7 +41,7 @@ impl Signex {
         {
             return Some("This library is still opening. Try again in a moment.".to_string());
         }
-        if let Some(editor) = self.library.dirty_editors_for_library(target).first() {
+        if let Some(editor) = self.dirty_editors_under(target, fold).first() {
             return Some(format!(
                 "Deleting the library would discard unsaved edits to {}. Save or close it first.",
                 self.library.editor_label(editor)
@@ -55,6 +55,29 @@ impl Signex {
             "Deleting the library would discard unsaved changes to {}. Save or close it first.",
             dirty.display()
         ))
+    }
+
+    /// Editors holding unsaved edits for the library `target`, compared by
+    /// the same case policy as the drafts beside them.
+    fn dirty_editors_under(
+        &self,
+        target: &std::path::Path,
+        fold: CaseFold,
+    ) -> Vec<crate::library::state::EditorAddress> {
+        self.library
+            .dirty_editors_matching(|root| path_is_under(root, target, fold))
+    }
+
+    /// Say in Messages which unsaved editors the finished delete of `target`
+    /// takes with it: one may have gone dirty while the worker ran.
+    pub(super) fn report_editors_lost_to_delete(&self, target: &std::path::Path, fold: CaseFold) {
+        for editor in self.dirty_editors_under(target, fold) {
+            crate::diagnostics::log_warning(format!(
+                "Deleted library {}: unsaved edits to {} were discarded with it.",
+                target.display(),
+                self.library.editor_label(&editor)
+            ));
+        }
     }
 
     /// The library was deleted from `dir`: close the tabs and drop the
