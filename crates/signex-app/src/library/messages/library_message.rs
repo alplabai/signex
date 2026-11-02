@@ -546,6 +546,9 @@ pub enum LibraryMessage {
     /// name. Stage 9 ships this; the rich syntax (plan §5) is
     /// follow-up work.
     ComponentsPanelSetFilter(String),
+    /// The user dismissed the shared-library-id notices at the top of the
+    /// Components panel (#1908).
+    IdClashNoticesDismissed,
     /// "+ Add Library…" button on the Installed / Global section
     /// header. Opens an `rfd::AsyncFileDialog` with `*.snxlib`
     /// filter and lands in `ComponentsPanelAddLibraryAt`.

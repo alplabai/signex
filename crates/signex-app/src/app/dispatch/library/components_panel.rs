@@ -68,18 +68,18 @@ impl Signex {
             .components_panel
             .details
             .begin(key.clone(), stamp);
-        let libraries: Vec<(uuid::Uuid, std::path::PathBuf)> = self
-            .library
-            .open_libraries
-            .iter()
-            .map(|l| (l.library_id, l.root.clone()))
-            .collect();
+        let libraries = self.library.shared_adapters();
+        let Some(own) = self.library.shared_adapter_at(&key.library_path) else {
+            return Task::none();
+        };
         let read_key = key.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     crate::panels::components_panel::details::load::load_details(
-                        &read_key, &libraries,
+                        &read_key,
+                        own.as_ref(),
+                        &libraries,
                     )
                 })
                 .await
@@ -180,13 +180,24 @@ impl Signex {
 
     /// The button went up. A row dragged past the threshold and released
     /// over the schematic canvas starts the cursor-attached placement at the
-    /// pointer; released anywhere else, or never dragged, it places nothing.
+    /// pointer; released anywhere else (or over a tab that is not a schematic), or never
+    /// dragged, it places nothing.
     pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
         let Some(drag) = self.library.components_panel.drag.take() else {
             return Task::none();
         };
         let (x, y) = self.interaction_state.last_mouse_pos;
         if !drag.started || !self.canvas_bounds().contains(iced::Point::new(x, y)) {
+            return Task::none();
+        }
+        // Only a schematic sheet takes a part: a PCB or an editor tab under
+        // the pointer is not a drop target.
+        let on_schematic = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic));
+        if !on_schematic {
             return Task::none();
         }
         // Release point in world mm, through the live camera and the canvas

@@ -126,6 +126,11 @@ fn library_id_is_the_pinned_constant() {
         EXPECTED_LIBRARY_ID,
         "the generator's pin and the test's pin agree"
     );
+    assert_eq!(
+        signex_app::library::state::STOCK_LIBRARY_ID.to_string(),
+        EXPECTED_LIBRARY_ID,
+        "the app's STOCK_LIBRARY_ID is the committed manifest's id"
+    );
 }
 
 #[test]

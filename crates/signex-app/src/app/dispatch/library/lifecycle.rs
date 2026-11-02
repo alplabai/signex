@@ -37,6 +37,21 @@ impl Signex {
         Task::none()
     }
 
+    /// Every library path the open projects list.
+    fn open_project_library_paths(&self) -> Vec<std::path::PathBuf> {
+        self.document_state
+            .projects
+            .iter()
+            .flat_map(|project| {
+                project
+                    .data
+                    .libraries
+                    .iter()
+                    .map(|e| project.data.resolve_library_path(e))
+            })
+            .collect()
+    }
+
     /// True when `path` is a library entry of an open project.
     fn is_open_project_library(&self, path: &std::path::Path) -> bool {
         self.document_state.projects.iter().any(|project| {
@@ -130,7 +145,8 @@ impl Signex {
             Ok(prepared) => {
                 let library_id = prepared.entry.library_id;
                 let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
-                if let Err(e) = self.library.mount_prepared(prepared) {
+                let project_paths = self.open_project_library_paths();
+                if let Err(e) = self.library.mount_prepared_among(prepared, &project_paths) {
                     report(self, &path, &e);
                     return self.readmit_stock_copies(&path);
                 }

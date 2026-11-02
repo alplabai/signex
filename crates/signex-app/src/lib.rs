@@ -43,6 +43,7 @@ pub mod paste_array;
 pub mod paste_prefs;
 // Crate-internal: `IgnoreResult` is an in-tree convention, not part of
 // this crate's API surface, so the module stays private.
+pub mod double_click;
 mod ignore;
 pub mod keyboard_shortcuts_modal;
 pub mod keymap;

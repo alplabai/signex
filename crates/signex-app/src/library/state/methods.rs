@@ -65,7 +65,7 @@ impl Default for LibraryState {
             panel_search: String::new(),
             panel_expanded: Default::default(),
             panel_selected: None,
-            panel_last_click: None,
+            panel_last_click: Default::default(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -85,6 +85,7 @@ impl Default for LibraryState {
             stock_library_root: None,
             stock_editable: false,
             stock_copies_refused: Vec::new(),
+            id_clash_notices: Vec::new(),
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -324,6 +325,21 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
+    /// A shared handle on the adapter mounted for the library at `root`,
+    /// for a read that leaves the UI thread.
+    pub(crate) fn shared_adapter_at(&self, root: &Path) -> Option<Arc<dyn LibraryAdapter>> {
+        let id = self.library_at(root)?.library_id;
+        self.set.get_shared(id)
+    }
+
+    /// Shared handles on every mounted adapter, by library id.
+    pub(crate) fn shared_adapters(&self) -> Vec<(Uuid, Arc<dyn LibraryAdapter>)> {
+        self.open_libraries
+            .iter()
+            .filter_map(|lib| Some((lib.library_id, self.set.get_shared(lib.library_id)?)))
+            .collect()
+    }
+
     /// Whether `path` is the bundled stock library's file.
     pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
         self.stock_library_root
@@ -351,9 +367,8 @@ impl LibraryState {
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
         self.refuse_stock_copy(&root, library_id)?;
-        // `LibrarySet::mount` refuses this path if it is already mounted,
-        // or if another mounted library has the same `library_id` (a
-        // copied library folder, #1894); the `Conflict` names both.
+        self.resolve_id_clash(&root, library_id, &[])?;
+        // `LibrarySet::mount` refuses this path if it is already mounted.
         let read_only = read_only || self.is_locked_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
