@@ -295,6 +295,12 @@ impl Signex {
                         .selection_info
                         .push(("Library Drift".into(), "Yes".into()));
                 }
+                if drift.is_missing(&path, &lib_id) {
+                    self.document_state
+                        .panel_ctx
+                        .selection_info
+                        .push(("Library Status".into(), "Symbol missing".into()));
+                }
             }
             self.document_state
                 .panel_ctx

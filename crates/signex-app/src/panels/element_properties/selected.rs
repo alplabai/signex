@@ -65,6 +65,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         let lib_id = get("Library ID");
         let library_name = get("Library");
         let library_drifted = get("Library Drift") == "Yes";
+        let library_status = super::library_rows::LibraryStatus {
+            drifted: library_drifted,
+            missing: get("Library Status") == "Symbol missing",
+        };
         let rotation_deg = rotation_degrees(&rotation_str);
         // The Style row reads the same classifier the built-in power-port
         // body is drawn from, so the style shown is the shape on the canvas.
@@ -158,7 +162,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     c,
                     id,
                     &library_name,
-                    library_drifted,
+                    library_status,
                     muted,
                     input_bg,
                     input_bdr,
@@ -289,6 +293,10 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let library_name = get("Library");
             let symbol_choices = ctx.symbol_choices.clone();
             let library_drifted = get("Library Drift") == "Yes";
+            let library_status = super::library_rows::LibraryStatus {
+                drifted: library_drifted,
+                missing: get("Library Status") == "Symbol missing",
+            };
             let body = get("Body Style");
             let position = get("Position");
             let rotation = get("Rotation");
@@ -379,7 +387,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                             c,
                             id,
                             &library_name,
-                            library_drifted,
+                            library_status,
                             muted,
                             input_bg,
                             input_bdr,
