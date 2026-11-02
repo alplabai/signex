@@ -55,7 +55,7 @@ when a footprint opens in the editor and its sketch tags a silk layer that
 holds entries but no marked one, the editor solves the sketch as loaded,
 before any edit, and bakes its silk once. A layer with a marker was baked
 by this build and is not classified again. Each unmarked entry that
-matches an output not yet claimed (same kind, stroke width and fill,
+matches a bake output (same kind, stroke width and fill,
 geometry equal at the file's nanometre resolution, `mm_as_stored_nm`) is
 marked; each output is used at most once, and an entry that matches
 nothing stays hand-drawn. The markers are written in memory only: the

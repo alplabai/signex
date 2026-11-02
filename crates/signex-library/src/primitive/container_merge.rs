@@ -434,6 +434,24 @@ mod tests {
     }
 
     #[test]
+    fn a_real_change_on_disk_is_still_reported_beside_classified_markers() {
+        let (mut on_disk, classified) = unmarked_and_classified();
+        let uuid = on_disk.uuid;
+        let loaded_disk = FootprintFile::from_footprint(on_disk.clone());
+        let mut loaded = loaded_disk;
+        loaded.footprints[0] = classified;
+        // Another window changed X's content after this editor loaded it.
+        on_disk.description = "changed elsewhere".into();
+        let disk = FootprintFile::from_footprint(on_disk);
+        let mut editor = loaded.clone();
+        editor.footprints[0].description = "edited here".into();
+
+        let (_, merge) = editor.merge_into(&loaded, disk, Utc::now()).unwrap();
+
+        assert_eq!(merge.overwritten, [uuid], "{merge:?}");
+    }
+
+    #[test]
     fn a_repair_of_a_classified_footprint_is_still_written() {
         let (mut on_disk, mut classified) = unmarked_and_classified();
         let repair = crate::primitive::LoadRepair::DanglingRemoved(1);
