@@ -537,6 +537,8 @@ pub enum LibraryMessage {
     /// that is no longer the selected one is dropped.
     ComponentsPanelDetailsLoaded {
         key: super::super::state::ComponentsPanelRowKey,
+        /// Which read of the row this is; an older one is dropped.
+        generation: u64,
         result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
     },
     /// Live edit of the Components Panel filter input. Substring

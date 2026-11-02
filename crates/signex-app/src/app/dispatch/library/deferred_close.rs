@@ -46,6 +46,7 @@ impl Signex {
             if self.library.library_at(&root).is_some() {
                 continue;
             }
+            self.library.forget_panel_state_of(&root);
             while let Some(idx) = self
                 .document_state
                 .tabs

@@ -50,6 +50,11 @@ pub struct DetailsState {
     /// The row's `(updated, content hash)` when the read started; a later
     /// difference means the row was saved and the details are stale.
     pub stamp: Option<RowStamp>,
+    /// Counts the reads started; a result carrying an older number is
+    /// dropped, so a slow read never overwrites a newer one.
+    pub generation: u64,
+    /// A read is running. `loaded` keeps showing meanwhile.
+    pub reloading: bool,
 }
 
 /// What identifies one saved state of a row.
@@ -58,29 +63,44 @@ pub type RowStamp = (chrono::DateTime<chrono::Utc>, [u8; 32]);
 impl DetailsState {
     /// A read for the shown row is still running.
     pub fn in_flight(&self) -> bool {
-        self.key.is_some() && self.loaded.is_none() && self.error.is_none()
+        self.reloading
     }
 
-    /// Start waiting for `key`: whatever was shown before is dropped.
-    pub fn begin(&mut self, key: ComponentsPanelRowKey, stamp: Option<RowStamp>) {
-        *self = Self {
-            key: Some(key),
-            loaded: None,
-            error: None,
-            stamp,
-        };
+    /// The shown data is current for `stamp` and needs no read.
+    pub fn is_fresh(&self, key: &ComponentsPanelRowKey, stamp: Option<RowStamp>) -> bool {
+        self.key.as_ref() == Some(key)
+            && self.loaded.is_some()
+            && self.error.is_none()
+            && self.stamp == stamp
     }
 
-    /// Store a finished read. A result for a row that is no longer the
-    /// awaited one is dropped; returns whether it was kept.
+    /// Start a read of `key` and return its generation. Another row's data
+    /// is dropped; the same row's stays shown until the result lands.
+    pub fn begin(&mut self, key: ComponentsPanelRowKey, stamp: Option<RowStamp>) -> u64 {
+        if self.key.as_ref() != Some(&key) {
+            self.loaded = None;
+        }
+        self.key = Some(key);
+        self.error = None;
+        self.stamp = stamp;
+        self.reloading = true;
+        self.generation += 1;
+        self.generation
+    }
+
+    /// Store a finished read. A result for another row or an older read is
+    /// dropped; returns whether it was kept. A failed read keeps the data
+    /// already shown and adds the error.
     pub fn finish(
         &mut self,
         key: &ComponentsPanelRowKey,
+        generation: u64,
         result: Result<Box<ComponentDetails>, String>,
     ) -> bool {
-        if self.key.as_ref() != Some(key) {
+        if self.key.as_ref() != Some(key) || self.generation != generation {
             return false;
         }
+        self.reloading = false;
         match result {
             Ok(details) => self.loaded = Some(details),
             Err(why) => self.error = Some(why),
@@ -106,14 +126,21 @@ pub fn view<'a>(
     if panel.selected.is_none() {
         return empty("Select a component to see its details.", muted);
     }
-    if let Some(why) = &panel.details.error {
-        return empty(why, theme_ext::error_color(tokens));
-    }
     let Some(d) = panel.details.loaded.as_deref() else {
-        return empty("Loading…", muted);
+        return match &panel.details.error {
+            Some(why) => empty(why, theme_ext::error_color(tokens)),
+            None => empty("Loading…", muted),
+        };
     };
 
     let mut col: Column<'a, LibraryMessage> = column![].spacing(SP.s).width(Length::Fill);
+    if let Some(why) = &panel.details.error {
+        col = col.push(
+            text(why.as_str())
+                .size(ROW_TEXT_SIZE)
+                .color(theme_ext::error_color(tokens)),
+        );
+    }
     col = col.push(
         text(d.internal_pn.as_str())
             .size(SECTION_HEADER_TEXT_SIZE)
@@ -245,11 +272,22 @@ mod tests {
     #[test]
     fn a_result_for_a_row_no_longer_awaited_is_dropped() {
         let mut state = DetailsState::default();
-        state.begin(key(1), None);
-        state.begin(key(2), None);
-        assert!(!state.finish(&key(1), Err("late".into())));
+        let first = state.begin(key(1), None);
+        let second = state.begin(key(2), None);
+        assert!(!state.finish(&key(1), first, Err("late".into())));
         assert!(state.error.is_none());
-        assert!(state.finish(&key(2), Err("now".into())));
+        assert!(state.finish(&key(2), second, Err("now".into())));
         assert_eq!(state.error.as_deref(), Some("now"));
+    }
+
+    #[test]
+    fn an_older_read_of_the_same_row_is_dropped() {
+        let mut state = DetailsState::default();
+        let a1 = state.begin(key(1), None);
+        let _b = state.begin(key(2), None);
+        let a2 = state.begin(key(1), None);
+        assert!(!state.finish(&key(1), a1, Err("old".into())));
+        assert!(state.finish(&key(1), a2, Err("new".into())));
+        assert_eq!(state.error.as_deref(), Some("new"));
     }
 }

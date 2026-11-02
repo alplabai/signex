@@ -499,8 +499,15 @@ impl Signex {
                 self.handle_layout_drag_started(DragTarget::ComponentsSplit);
                 Task::none()
             }
-            LibraryMessage::ComponentsPanelDetailsLoaded { key, result } => {
-                self.library.components_panel.details.finish(&key, result);
+            LibraryMessage::ComponentsPanelDetailsLoaded {
+                key,
+                generation,
+                result,
+            } => {
+                self.library
+                    .components_panel
+                    .details
+                    .finish(&key, generation, result);
                 Task::none()
             }
             LibraryMessage::ComponentsPanelSetFilter(value) => {

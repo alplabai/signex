@@ -17,10 +17,12 @@ impl LibraryState {
         root: &Path,
         library_id: uuid::Uuid,
     ) -> Result<(), signex_library::LibraryError> {
-        if library_id != STOCK_LIBRARY_ID
-            || self.stock_library_root.is_none()
-            || self.is_stock_root(root)
-        {
+        // Only while the bundled stock is mounted or still mounting: when it
+        // failed to open (#814), a copy is all that keeps stock references in
+        // designs resolving, so it is let through.
+        let stock_live = self.stock_library.is_some()
+            || self.pending_mounts.keys().any(|p| self.is_stock_root(p));
+        if library_id != STOCK_LIBRARY_ID || !stock_live || self.is_stock_root(root) {
             return Ok(());
         }
         Err(signex_library::LibraryError::Conflict(format!(
@@ -39,6 +41,37 @@ impl LibraryState {
         self.containing_library(path)
             .is_some_and(|lib| self.is_locked_stock_root(&lib.root))
             .then_some(kind)
+    }
+
+    /// Drop what the Components and Library panels hold for the closed
+    /// library at `root`: its selection, details, row menu, drag, hover and
+    /// expand state. Without this a closed library's details stay on screen
+    /// and its row menu can still try Place or Open.
+    pub(crate) fn forget_panel_state_of(&mut self, root: &Path) {
+        let of = |key: &crate::library::state::ComponentsPanelRowKey| key.library_path == root;
+        let panel = &mut self.components_panel;
+        if panel.selected.as_ref().is_some_and(of) {
+            panel.selected = None;
+        }
+        if panel.details.key.as_ref().is_some_and(of) {
+            panel.details = Default::default();
+        }
+        if panel.row_menu.as_ref().is_some_and(|m| of(&m.key)) {
+            panel.row_menu = None;
+        }
+        if panel.drag.as_ref().is_some_and(|d| of(&d.key)) {
+            panel.drag = None;
+        }
+        if panel.hovered.as_ref().is_some_and(of) {
+            panel.hovered = None;
+        }
+        self.panel_expanded.remove(root);
+        if self.panel_selected.as_ref().is_some_and(of) {
+            self.panel_selected = None;
+        }
+        if self.panel_last_click.as_ref().is_some_and(|(k, _)| of(k)) {
+            self.panel_last_click = None;
+        }
     }
 
     /// Mounted libraries that accept writes, as `(.snxlib path, name)`.

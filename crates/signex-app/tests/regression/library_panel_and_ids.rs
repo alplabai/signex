@@ -38,11 +38,14 @@ fn settle(app: &mut Signex, message: Message) {
     }
 }
 
-/// A stock copy mounted read-only, as the only library.
+/// A stock copy mounted read-only as the stock library, the only library.
 fn app_with_stock_copy(tmp: &TempDir) -> (Signex, PathBuf) {
     copy_dir(&stock_source(), &tmp.path().join("stock"));
     let stock = tmp.path().join("stock/Stock.snxlib");
     let (mut app, _boot) = Signex::new();
+    // The world's copy is the stock library, as `library_stock_copy.rs`
+    // sets it up; any other copy carrying the stock id is refused (#1894).
+    app.library.stock_library_root = Some(stock.clone());
     app.library
         .open_library_read_only(stock.clone())
         .expect("mount stock");
@@ -154,7 +157,11 @@ fn a_stock_copy_arriving_first_is_refused_and_stock_still_mounts() {
     let stock = tmp.path().join("stock/Stock.snxlib");
     let copy = tmp.path().join("copy/Stock.snxlib");
     let (mut app, _boot) = Signex::new();
+    // The bundled stock is registered and its mount is in flight, as at
+    // startup; the copy's mount lands first.
     app.library.stock_library_root = Some(stock.clone());
+    app.library
+        .request_mount(&stock, signex_app::library::mount::MountIntent::Silent);
 
     let err = app
         .library
@@ -167,4 +174,56 @@ fn a_stock_copy_arriving_first_is_refused_and_stock_still_mounts() {
         .expect("the bundled stock library still mounts");
     assert!(app.library.library_at(&stock).is_some());
     assert!(app.library.library_at(&copy).is_none());
+}
+
+/// Review of #1895: closing a library drops what the Components and Library
+/// panels held for it, so its details and row state do not outlive it.
+#[test]
+fn closing_a_library_clears_its_panel_state() {
+    let tmp = TempDir::new().unwrap();
+    let (mut app, stock) = app_with_stock_copy(&tmp);
+    let key = first_row(&app, &stock);
+    settle(
+        &mut app,
+        picker(PickerMsg::PanelLibraryToggled(stock.clone())),
+    );
+    settle(
+        &mut app,
+        picker(PickerMsg::PanelComponentClicked(key.clone())),
+    );
+    app.library.components_panel.selected = Some(key.clone());
+    app.library.components_panel.hovered = Some(key.clone());
+    app.library.components_panel.details.key = Some(key);
+
+    settle(
+        &mut app,
+        Message::Library(LibraryMessage::CloseLibrary(stock.clone())),
+    );
+
+    assert!(app.library.library_at(&stock).is_none(), "closed");
+    let panel = &app.library.components_panel;
+    assert!(panel.selected.is_none());
+    assert!(panel.hovered.is_none());
+    assert!(panel.details.key.is_none());
+    assert!(!app.library.panel_expanded.contains(&stock));
+    assert!(app.library.panel_selected.is_none());
+    assert!(app.library.panel_last_click.is_none());
+}
+
+/// Re-review of #1894: when the bundled stock failed to open (a broken
+/// install), a copy is what keeps stock references resolving, so it mounts.
+#[test]
+fn a_stock_copy_mounts_when_the_bundled_stock_failed_to_open() {
+    let tmp = TempDir::new().unwrap();
+    copy_dir(&stock_source(), &tmp.path().join("copy"));
+    let missing = tmp.path().join("gone/Stock.snxlib");
+    let copy = tmp.path().join("copy/Stock.snxlib");
+    let (mut app, _boot) = Signex::new();
+    app.library.stock_library_root = Some(missing);
+    app.library.pending_mounts.clear();
+
+    app.library
+        .open_library(copy.clone())
+        .expect("with no bundled stock mounted or mounting, the copy mounts");
+    assert!(app.library.library_at(&copy).is_some());
 }

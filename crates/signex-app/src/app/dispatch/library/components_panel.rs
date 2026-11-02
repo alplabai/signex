@@ -29,12 +29,14 @@ impl Signex {
         &mut self,
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
-        let panel = &mut self.library.components_panel;
-        panel.selected = Some(key.clone());
-        // Selecting the row already shown reads it again (a save or a
-        // failed read leaves the pane out of date), unless that read is
-        // still running.
-        if panel.details.key.as_ref() == Some(&key) && panel.details.in_flight() {
+        self.library.components_panel.selected = Some(key.clone());
+        // The row already shown is read again only when it was saved since
+        // or its last read failed, and not while a read is running.
+        let stamp = self.components_row_stamp(&key);
+        let details = &self.library.components_panel.details;
+        if details.key.as_ref() == Some(&key)
+            && (details.in_flight() || details.is_fresh(&key, stamp))
+        {
             return Task::none();
         }
         self.start_components_details_load(key)
@@ -61,7 +63,8 @@ impl Signex {
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
         let stamp = self.components_row_stamp(&key);
-        self.library
+        let generation = self
+            .library
             .components_panel
             .details
             .begin(key.clone(), stamp);
@@ -85,6 +88,7 @@ impl Signex {
             move |result| {
                 Message::Library(LibraryMessage::ComponentsPanelDetailsLoaded {
                     key: key.clone(),
+                    generation,
                     result: result.map(Box::new),
                 })
             },
@@ -188,11 +192,11 @@ impl Signex {
         // Release point in world mm, through the live camera and the canvas
         // rectangle; the snap happens when the part arrives.
         let bounds = self.canvas_bounds();
-        let (ox, oy, scale) = self.interaction_state.active_canvas().live_camera();
-        let world = (
-            f64::from((x - bounds.x - ox) / scale),
-            f64::from((y - bounds.y - oy) / scale),
-        );
+        let at = self
+            .interaction_state
+            .active_canvas()
+            .screen_to_world(iced::Point::new(x - bounds.x, y - bounds.y));
+        let world = (f64::from(at.x), f64::from(at.y));
         let k = drag.key;
         let task = self.handle_place_library_component(k.library_path, k.table, k.row_id);
         let epoch = self.interaction_state.placement_epoch;

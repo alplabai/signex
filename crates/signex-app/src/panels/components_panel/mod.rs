@@ -374,9 +374,13 @@ fn view_library_block<'a>(
         };
         let selected = panel.selected.as_ref() == Some(&key);
         let hovered = panel.hovered.as_ref() == Some(&key);
-        col = col.push(view_row_button(
-            key, r, selected, hovered, text_c, muted, tint, hover,
-        ));
+        let colors = RowColors {
+            text: text_c,
+            muted,
+            tint,
+            hover,
+        };
+        col = col.push(view_row_button(key, r, selected, hovered, colors));
     }
 
     if matched > MAX_ROWS_PER_LIBRARY {
@@ -410,16 +414,30 @@ fn view_library_block<'a>(
 /// One row: `(internal_pn — mpn)  manufacturer`. A press selects it and
 /// arms a drag onto the schematic; a right-click selects it and opens its
 /// menu (Place / Open). The row itself never opens a tab.
+/// The theme colours a Components panel row is drawn with.
+#[derive(Debug, Clone, Copy)]
+struct RowColors {
+    text: Color,
+    muted: Color,
+    /// Selection fill.
+    tint: Color,
+    /// Hover fill.
+    hover: Color,
+}
+
 fn view_row_button<'a>(
     key: crate::library::state::ComponentsPanelRowKey,
     row_data: &'a ComponentRow,
     selected: bool,
     hovered: bool,
-    text_c: Color,
-    muted: Color,
-    tint: Color,
-    hover: Color,
+    colors: RowColors,
 ) -> Element<'a, LibraryMessage> {
+    let RowColors {
+        text: text_c,
+        muted,
+        tint,
+        hover,
+    } = colors;
     let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
 
@@ -608,10 +626,12 @@ mod tests {
                 &row,
                 false,
                 false,
-                Color::WHITE,
-                Color::WHITE,
-                Color::BLACK,
-                Color::BLACK,
+                RowColors {
+                    text: Color::WHITE,
+                    muted: Color::WHITE,
+                    tint: Color::BLACK,
+                    hover: Color::BLACK,
+                },
             )
         };
 

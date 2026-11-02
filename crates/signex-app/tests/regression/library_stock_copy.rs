@@ -160,6 +160,12 @@ fn restarted(w: &World) -> Signex {
         let task = app.update(next);
         pending.extend(run(task));
     }
+    // A real restart has one stock library. The boot task mounted the
+    // repo's; swap it for the world's copy, which carries the same id and
+    // would otherwise be refused next to it (#1894).
+    if let Some(repo_stock) = app.library.stock_library.take() {
+        app.library.close_library(&repo_stock);
+    }
     app.library.stock_library_root = Some(w.stock.clone());
     app.library
         .open_library_read_only(w.stock.clone())

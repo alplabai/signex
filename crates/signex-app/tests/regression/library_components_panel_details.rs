@@ -395,6 +395,7 @@ fn the_details_follow_a_saved_row_and_a_click_retries_after_an_error() {
     let _ = app.update(Message::Library(
         LibraryMessage::ComponentsPanelDetailsLoaded {
             key: key.clone(),
+            generation: app.library.components_panel.details.generation,
             result: Err("boom".into()),
         },
     ));
@@ -428,5 +429,57 @@ fn escape_closes_the_row_menu_and_leaves_the_tool_alone() {
         app.interaction_state.current_tool,
         signex_app::app::Tool::Wire,
         "the canvas tool was not reset"
+    );
+}
+
+#[test]
+fn pressing_the_shown_row_again_keeps_its_details_and_reads_nothing() {
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    settle(&mut app, press(&key));
+    let generation = app.library.components_panel.details.generation;
+    assert!(app.library.components_panel.details.loaded.is_some());
+
+    // The press that starts a drag lands on the selected row.
+    let task = app.update(press(&key));
+
+    let details = &app.library.components_panel.details;
+    assert!(details.loaded.is_some(), "no Loading state in between");
+    assert_eq!(details.generation, generation, "no new read");
+    assert!(run(task).is_empty(), "nothing was spawned");
+}
+
+#[test]
+fn an_older_read_of_a_row_selected_again_cannot_overwrite_the_newer_one() {
+    let mut app = app_with_stock();
+    let a = key_of(&app, "STOCK-R");
+    let b = key_of(&app, "STOCK-IC_Generic");
+
+    let first_a = app.update(press(&a));
+    let _b = app.update(press(&b));
+    let second_a = app.update(press(&a));
+    let newest = app.library.components_panel.details.generation;
+
+    // The newer read of A lands first, then the older one.
+    for message in run(second_a) {
+        let _ = app.update(message);
+    }
+    for message in run(first_a) {
+        let _ = app.update(message);
+    }
+    let _ = app.update(Message::Library(
+        LibraryMessage::ComponentsPanelDetailsLoaded {
+            key: a.clone(),
+            generation: newest - 2,
+            result: Err("older read".into()),
+        },
+    ));
+
+    let details = &app.library.components_panel.details;
+    assert_eq!(details.generation, newest);
+    assert!(details.error.is_none(), "the older result was dropped");
+    assert_eq!(
+        details.loaded.as_deref().map(|d| d.internal_pn.as_str()),
+        Some("STOCK-R")
     );
 }

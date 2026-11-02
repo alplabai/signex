@@ -154,9 +154,13 @@ impl Signex {
 
     /// Esc closes an open Components panel row menu.
     fn components_row_menu_escape(&self) -> Option<Message> {
-        self.library.components_panel.row_menu.is_some().then_some(Message::Library(
-            crate::library::LibraryMessage::ComponentsPanelRowMenuDismissed,
-        ))
+        self.library
+            .components_panel
+            .row_menu
+            .is_some()
+            .then_some(Message::Library(
+                crate::library::LibraryMessage::ComponentsPanelRowMenuDismissed,
+            ))
     }
 
     /// Esc closes an open dock tab right-click menu.

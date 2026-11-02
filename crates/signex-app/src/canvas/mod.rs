@@ -336,6 +336,14 @@ impl CanvasSlot {
         (camera.offset.x, camera.offset.y, camera.scale)
     }
 
+    /// World position (mm) of `local`, a point in pixels relative to the
+    /// canvas rectangle's top-left, through the live camera.
+    pub fn screen_to_world(&self, local: iced::Point) -> iced::Point {
+        self.camera
+            .borrow()
+            .screen_to_world(local, iced::Rectangle::default())
+    }
+
     /// Read-only borrow of the camera: for the `draw` path, held for one draw
     /// call, and for reads in `update` once its [`Self::camera_mut`] borrow
     /// has ended (the drag ghost's step). Never overlapped with `camera_mut`.
