@@ -383,7 +383,7 @@ impl Signex {
     }
 
     /// Filesystem-picked primitive. A file of a MOUNTED library binds from
-    /// that library (`containing_library`, the one ownership rule); a symbol
+    /// that library (`library_holding`, built on the one ownership rule); a symbol
     /// file of an unmounted one is classified off-thread with
     /// `enclosing_snxlib`.
     fn handle_primitive_picker_browse_result(&mut self, file: std::path::PathBuf) -> Task<Message> {
@@ -399,11 +399,11 @@ impl Signex {
         }
         let Some(library_id) = self
             .library
-            .containing_library(&file)
+            .library_holding(&file)
             .map(|lib| lib.library_id)
         else {
             if let Some(picker) = self.library.primitive_picker.as_mut() {
-                picker.error = Some("Picked file is not inside an open `.snxlib` library.".into());
+                picker.error = Some("Picked file is not in the `symbols/`, `footprints/` or `sims/` folder of an open library.".into());
             }
             return Task::none();
         };

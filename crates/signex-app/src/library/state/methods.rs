@@ -274,6 +274,26 @@ impl LibraryState {
         self.open_libraries.get_mut(index)
     }
 
+    /// The open library that actually HOLDS `file`: its owner by
+    /// [`Self::containing_library_with`], and `file` sits directly in the
+    /// owner's `symbols/`, `footprints/` or `sims/` folder (what the adapter
+    /// scans). A file elsewhere under the library's folder, or in a nested
+    /// library that is not open, is held by none.
+    pub fn library_holding_with(&self, file: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
+        let lib = self.containing_library_with(file, fold)?;
+        let root = lib.root_dir()?;
+        let key = |p: &Path| crate::app::path_key_with(p, fold);
+        let parent = key(file.parent()?);
+        ["symbols", "footprints", "sims"]
+            .iter()
+            .any(|dir| parent == key(&root.join(dir)))
+            .then_some(lib)
+    }
+
+    pub fn library_holding(&self, file: &Path) -> Option<&OpenLibrary> {
+        self.library_holding_with(file, CaseFold::host_default())
+    }
+
     fn containing_index(&self, child_path: &Path, fold: CaseFold) -> Option<usize> {
         crate::app::deepest_owner(
             child_path,

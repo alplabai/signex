@@ -472,7 +472,7 @@ fn containing_library_picks_the_deepest_library_in_either_mount_order() {
 }
 
 #[test]
-fn containing_library_follows_the_case_rule_of_the_volume() {
+fn containing_library_with_follows_the_case_rule_it_is_given() {
     let state = LibraryState {
         open_libraries: vec![bare_library("/p/Lib.snxlib")],
         ..Default::default()
@@ -483,4 +483,60 @@ fn containing_library_follows_the_case_rule_of_the_volume() {
     let variant = Path::new("/P/symbols/a.snxsym");
     assert!(state.containing_library_with(variant, folding).is_some());
     assert!(state.containing_library_with(variant, preserving).is_none());
+}
+
+#[test]
+fn two_libraries_in_one_folder_leave_the_owner_unknown_in_either_order() {
+    let file = Path::new("/p/symbols/a.snxsym");
+    for order in [
+        ["/p/a.snxlib", "/p/b.snxlib"],
+        ["/p/b.snxlib", "/p/a.snxlib"],
+    ] {
+        let state = LibraryState {
+            open_libraries: order.iter().map(|r| bare_library(r)).collect(),
+            ..Default::default()
+        };
+        assert!(state.containing_library(file).is_none(), "{order:?}");
+    }
+    // A deeper library still wins over an ambiguous pair above it.
+    let state = LibraryState {
+        open_libraries: ["/p/a.snxlib", "/p/b.snxlib", "/p/v/c.snxlib"]
+            .iter()
+            .map(|r| bare_library(r))
+            .collect(),
+        ..Default::default()
+    };
+    let deep = Path::new("/p/v/symbols/a.snxsym");
+    assert_eq!(
+        state.containing_library(deep).map(|l| l.root.clone()),
+        Some(PathBuf::from("/p/v/c.snxlib"))
+    );
+}
+
+#[test]
+fn library_holding_requires_the_primitive_folder_of_the_owner() {
+    let state = LibraryState {
+        open_libraries: vec![bare_library("/p/lib.snxlib")],
+        ..Default::default()
+    };
+    assert!(
+        state
+            .library_holding(Path::new("/p/symbols/a.snxsym"))
+            .is_some()
+    );
+    assert!(
+        state
+            .library_holding(Path::new("/p/footprints/a.snxfpt"))
+            .is_some()
+    );
+    assert!(
+        state
+            .library_holding(Path::new("/p/drafts/a.snxsym"))
+            .is_none()
+    );
+    assert!(
+        state
+            .library_holding(Path::new("/p/vendor/symbols/a.snxsym"))
+            .is_none()
+    );
 }
