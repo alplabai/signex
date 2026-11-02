@@ -23,6 +23,8 @@ fn bind_footprint(f: &Fixture, name: &str) {
         .read_row("ICs", signex_library::RowId(f.row_id))
         .expect("row");
     row.footprint_ref = Some(PrimitiveRef::new(f.library_id, uuid));
+    // A row edit moves the row's version; a part follows only a moved row.
+    row.version = format!("{}+{name}", row.version);
     adapter.update_row("ICs", row, "bind").expect("bind");
 }
 
@@ -55,6 +57,7 @@ fn a_part_placed_before_the_footprint_was_bound_updates_in_one_undo_step() {
     assert_eq!(reports(&app, RuleKind::PartWithoutFootprint), 1);
 
     bind_footprint(&f, "SOIC-8");
+    let stamped = doc(&app).symbols[0].library_version.clone();
     let id = select_first(&mut app);
     check_drift(&mut app);
     assert!(is_drifted(&app), "the bound footprint is drift");
@@ -65,6 +68,8 @@ fn a_part_placed_before_the_footprint_was_bound_updates_in_one_undo_step() {
 
     click_update(&mut app, id);
     assert_eq!(doc(&app).symbols[0].footprint, "SOIC-8");
+    let updated = doc(&app).symbols[0].library_version.clone();
+    assert_ne!(updated, stamped, "the update restamps the version");
     assert_eq!(reports(&app, RuleKind::PartWithoutFootprint), 0);
     assert!(!is_drifted(&app));
     let logged = signex_app::diagnostics::recent_entries()
@@ -76,6 +81,11 @@ fn a_part_placed_before_the_footprint_was_bound_updates_in_one_undo_step() {
     assert!(
         doc(&app).symbols[0].footprint.is_empty(),
         "one undo restores the part"
+    );
+    assert_eq!(
+        doc(&app).symbols[0].library_version,
+        stamped,
+        "the same undo reverts the version stamp"
     );
     assert_eq!(doc(&app).symbols.len(), 1, "and keeps it placed");
 }
@@ -97,4 +107,30 @@ fn a_row_footprint_change_is_reported_as_drift() {
     let id = doc(&app).symbols[0].uuid;
     click_update(&mut app, id);
     assert_eq!(doc(&app).symbols[0].footprint, "TSSOP-8");
+}
+
+#[test]
+fn a_per_instance_footprint_override_is_not_drift_while_the_row_is_unchanged() {
+    let f = fixture();
+    bind_footprint(&f, "SOIC-8");
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    assert_eq!(doc(&app).symbols[0].footprint, "SOIC-8");
+    let path = app.document_state.active_path.clone().unwrap();
+    let uuid = doc(&app).symbols[0].uuid;
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .unwrap()
+        .execute(signex_engine::Command::UpdateSymbolFootprint {
+            symbol_id: uuid,
+            footprint: "QFN-8".into(),
+        })
+        .unwrap();
+    select_first(&mut app);
+    check_drift(&mut app);
+    assert!(
+        !is_drifted(&app),
+        "the row is unchanged; QFN-8 is the user's choice, and Update / Apply would rewrite it to SOIC-8"
+    );
 }

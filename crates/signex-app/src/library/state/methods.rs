@@ -562,11 +562,11 @@ impl LibraryState {
         path: &Path,
         project_paths: &[PathBuf],
     ) -> ComponentsMountSource {
+        if self.is_stock_root(path) {
+            return ComponentsMountSource::Stock;
+        }
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
-        }
-        if self.stock_library.as_deref() == Some(path) {
-            return ComponentsMountSource::Stock;
         }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;

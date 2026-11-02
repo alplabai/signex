@@ -28,6 +28,7 @@ impl Signex {
             .to_string();
         let is_outside_project = self.is_outside_project_target(&tree_path, &target_path);
         let project_id = self.project_id_at_tree_path(&tree_path);
+        let is_directory_package = target_path.is_dir();
         self.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
             target_path,
             tree_path,
@@ -35,6 +36,7 @@ impl Signex {
             display_name,
             is_outside_project,
             unsaved_prompt: false,
+            is_directory_package,
         });
     }
 
@@ -51,6 +53,7 @@ impl Signex {
             .to_string();
         let tree_path = vec![project_idx];
         let is_outside_project = self.is_outside_project_target(&tree_path, &row.root);
+        let is_directory_package = row.root.is_dir();
         self.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
             target_path: row.root,
             tree_path,
@@ -58,6 +61,7 @@ impl Signex {
             display_name,
             is_outside_project,
             unsaved_prompt: false,
+            is_directory_package,
         });
     }
 
@@ -200,9 +204,14 @@ impl Signex {
                 return iced::Task::none();
             }
         }
+        // A library's delete also clears its known folders: a save of a
+        // primitive there must wait, or it is deleted after "saved" or
+        // recreates an orphan.
+        let mut guarded = vec![state.target_path.clone()];
+        guarded.extend(Self::library_folder_roots(&state.target_path));
         let id = self.document_state.pending_path_ops.begin_with_dependents(
             PathOpKind::Delete,
-            vec![state.target_path.clone()],
+            guarded,
             project_file.iter().cloned().collect(),
             fold,
         );

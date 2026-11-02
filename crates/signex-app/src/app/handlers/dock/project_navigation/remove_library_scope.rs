@@ -11,7 +11,7 @@ use crate::app::state::scope::{CaseFold, path_is_under};
 impl Signex {
     /// The known library folders beside the manifest `target`; empty for any
     /// other target.
-    fn library_folder_roots(target: &std::path::Path) -> Vec<std::path::PathBuf> {
+    pub(super) fn library_folder_roots(target: &std::path::Path) -> Vec<std::path::PathBuf> {
         if !crate::app::file_extension::has_extension(target, "snxlib") {
             return Vec::new();
         }
@@ -40,6 +40,12 @@ impl Signex {
             .any(|p| path_is_under(p, target, fold))
         {
             return Some("This library is still opening. Try again in a moment.".to_string());
+        }
+        if let Some(editor) = self.library.dirty_editors_for_library(target).first() {
+            return Some(format!(
+                "Deleting the library would discard unsaved edits to {}. Save or close it first.",
+                self.library.editor_label(editor)
+            ));
         }
         let dirty = Self::library_folder_roots(target)
             .iter()

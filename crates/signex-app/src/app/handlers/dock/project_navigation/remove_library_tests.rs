@@ -354,6 +354,52 @@ fn a_project_model_folder_beside_the_library_survives_delete() {
 }
 
 #[test]
+fn a_primitive_under_the_library_cannot_be_saved_while_its_delete_runs() {
+    let mut f = fixture();
+    let draft = f.dir.join("symbols/a.snxsym");
+    footprint_tab(&mut f, &draft);
+    let _ = f
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::RemoveLibrary(f.row.clone()),
+        )));
+    // The delete worker is started but not run yet.
+    let _worker = f.app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
+    assert!(
+        f.app.refuse_while_path_op(&draft, "saved").is_err(),
+        "a save during the delete worker is either deleted after it reports saved, or recreates an orphan"
+    );
+}
+
+#[test]
+fn delete_with_a_dirty_component_editor_is_refused() {
+    let mut f = fixture();
+    let row = crate::library::component_preview::test_row();
+    let address = crate::library::state::EditorAddress::new(
+        f.manifest.clone(),
+        "components".into(),
+        signex_library::RowId::from_uuid(row.row_id),
+    );
+    let mut preview = crate::library::state::ComponentPreviewState::from_row(
+        f.manifest.clone(),
+        "components".into(),
+        row,
+    );
+    preview.dirty = true;
+    f.app.library.editors.insert(address, preview);
+
+    remove(&mut f, RemoveChoice::DeleteFile);
+
+    assert!(
+        f.manifest.exists(),
+        "unsaved row edits dropped without asking"
+    );
+    assert!(f.app.document_state.error_notice.is_some());
+}
+
+#[test]
 fn a_folder_with_a_project_file_keeps_its_primitives() {
     let mut f = fixture();
     fs::write(f.dir.join("Board.SNXPRJ"), b"{}").unwrap();

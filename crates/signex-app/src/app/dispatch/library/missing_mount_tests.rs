@@ -199,14 +199,16 @@ fn two_missing(
     std::path::PathBuf,
     std::path::PathBuf,
     crate::app::ProjectId,
+    tempfile::TempDir,
 ) {
-    let dir = tempfile::tempdir().unwrap().keep();
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.snxlib"), dir.join("b.snxlib"));
     let id = add_project(app, &[&a, &b]);
     for lib in [&a, &b] {
         finish(app, lib, MountIntent::Silent, prepare_mount(lib));
     }
-    (a, b, id)
+    (a, b, id, tmp)
 }
 
 fn open_path(app: &Signex) -> Option<std::path::PathBuf> {
@@ -219,7 +221,7 @@ fn open_path(app: &Signex) -> Option<std::path::PathBuf> {
 #[test]
 fn two_missing_libraries_raise_two_dialogs_in_turn() {
     let (mut app, _task) = Signex::new();
-    let (a, b, _) = two_missing(&mut app);
+    let (a, b, _, _dir) = two_missing(&mut app);
     assert_eq!(open_path(&app), Some(a));
     assert_eq!(app.library.missing.waiting_len(), 1);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
@@ -235,7 +237,7 @@ fn two_missing_libraries_raise_two_dialogs_in_turn() {
 #[test]
 fn closing_the_project_prunes_its_queued_dialogs_and_the_open_one() {
     let (mut app, _task) = Signex::new();
-    let (_, _, id) = two_missing(&mut app);
+    let (_, _, id, _dir) = two_missing(&mut app);
     app.library.forget_missing_libraries_of(id, |_| None);
     assert!(app.library.recovery.is_none());
     assert_eq!(app.library.missing.waiting_len(), 0);
@@ -244,7 +246,7 @@ fn closing_the_project_prunes_its_queued_dialogs_and_the_open_one() {
 #[test]
 fn a_closed_projects_dialogs_pass_to_another_project_that_lists_them() {
     let (mut app, _task) = Signex::new();
-    let (a, b, first) = two_missing(&mut app);
+    let (a, b, first, _dir) = two_missing(&mut app);
     let second = add_project(&mut app, &[&a, &b]);
     app.library
         .forget_missing_libraries_of(first, |_| Some(second));
@@ -260,7 +262,7 @@ fn a_closed_projects_dialogs_pass_to_another_project_that_lists_them() {
 fn remove_from_project_marks_the_project_dirty_and_shows_the_next_dialog() {
     use crate::library::recovery::LibraryMissingChoice::RemoveFromProject;
     let (mut app, _task) = Signex::new();
-    let (a, b, _) = two_missing(&mut app);
+    let (a, b, _, _dir) = two_missing(&mut app);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
         RemoveFromProject,
     )));
@@ -282,7 +284,7 @@ fn remove_from_project_marks_the_project_dirty_and_shows_the_next_dialog() {
 fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
     use crate::library::recovery::LibraryMissingChoice::Locate;
     let (mut app, _task) = Signex::new();
-    let (a, b, _) = two_missing(&mut app);
+    let (a, b, _, _dir) = two_missing(&mut app);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
         Locate,
     )));
@@ -310,7 +312,7 @@ fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
 fn a_located_library_outranks_an_installed_copy_of_itself() {
     use crate::library::recovery::LibraryMissingChoice::Locate;
     let (mut app, _task) = Signex::new();
-    let (a, _, _) = two_missing(&mut app);
+    let (a, _, _, _dir) = two_missing(&mut app);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
         Locate,
     )));
@@ -333,7 +335,7 @@ fn a_located_library_outranks_an_installed_copy_of_itself() {
 fn a_pick_that_does_not_open_leaves_the_project_entry_alone() {
     use crate::library::recovery::LibraryMissingChoice::Locate;
     let (mut app, _task) = Signex::new();
-    let (a, _, _) = two_missing(&mut app);
+    let (a, _, _, _dir) = two_missing(&mut app);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
         Locate,
     )));
@@ -356,7 +358,7 @@ fn a_pick_that_does_not_open_leaves_the_project_entry_alone() {
 fn a_second_locate_while_picking_is_ignored() {
     use crate::library::recovery::LibraryMissingChoice::Locate;
     let (mut app, _task) = Signex::new();
-    let (a, b, _) = two_missing(&mut app);
+    let (a, b, _, _dir) = two_missing(&mut app);
     let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
         Locate,
     )));

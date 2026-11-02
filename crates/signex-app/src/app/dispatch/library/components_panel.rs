@@ -62,16 +62,16 @@ impl Signex {
         &mut self,
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
+        let libraries = self.library.shared_adapters();
+        let Some(own) = self.library.shared_adapter_at(&key.library_path) else {
+            return Task::none();
+        };
         let stamp = self.components_row_stamp(&key);
         let generation = self
             .library
             .components_panel
             .details
             .begin(key.clone(), stamp);
-        let libraries = self.library.shared_adapters();
-        let Some(own) = self.library.shared_adapter_at(&key.library_path) else {
-            return Task::none();
-        };
         let read_key = key.clone();
         Task::perform(
             async move {

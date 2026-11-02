@@ -123,12 +123,14 @@ impl Signex {
         // has nothing to exclude (#1618).
         let blockers = self.remove_blockers(st);
         // A `.snxlib` is a directory package: it is never a placed sheet.
-        let is_dir = crate::app::file_extension::has_extension(&st.target_path, "snxlib");
+        let is_library = crate::app::file_extension::has_extension(&st.target_path, "snxlib");
         let mut remove_options = column![].spacing(SP.m);
-        if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
+        if !st.is_outside_project && !blockers.blocks_delete(is_library) {
             remove_options = remove_options.push(option_card(
                 "Delete file",
-                if is_dir {
+                if st.is_directory_package {
+                    "The library package is deleted whole, with everything inside it, and the \n                     library is closed."
+                } else if is_library {
                     "The library file is permanently deleted and the library closed. Its symbol, \
                      footprint, simulation and datasheet files are deleted too when the folder \
                      is the library's own; in a folder that also holds another library or a \
@@ -163,7 +165,7 @@ impl Signex {
                 .color(text_muted),
             );
         }
-        if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_dir) {
+        if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_library) {
             prompt = prompt.push(
                 text(format!(
                     "It cannot be deleted from here: whether another sheet places it is not \
@@ -175,7 +177,7 @@ impl Signex {
         }
         // Delete is only offered when no other sheet places the file
         // (`blocks_delete`), so every listed symbol sits on the row's own parent.
-        if !blockers.blocks_delete(is_dir)
+        if !blockers.blocks_delete(is_library)
             && !st.is_outside_project
             && blockers.own_parent.is_some()
         {
@@ -210,7 +212,7 @@ impl Signex {
         }
         // Library names can repeat across folders; the full path says which
         // one is affected. Sheets and PCBs get no extra line.
-        if is_dir {
+        if is_library {
             prompt = prompt.push(
                 text(st.target_path.display().to_string())
                     .size(TS.caption)

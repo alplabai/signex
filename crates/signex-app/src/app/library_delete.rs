@@ -47,14 +47,21 @@ pub(crate) fn delete_library(
     // Named after this library, so safe to remove even beside a sibling.
     let sidecars = lock_sidecars(manifest);
     fs::remove_file(manifest).map_err(|e| e.to_string())?;
+    let mut stuck = Vec::new();
     for sidecar in sidecars {
         // Usually absent (a git library keeps its lock elsewhere).
-        fs::remove_file(sidecar).ok();
+        if let Err(e) = fs::remove_file(&sidecar)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            stuck.push(sidecar);
+        }
     }
-    let Some(dir) = library_dir else {
-        return Ok(untouched_known_folders(manifest.parent()));
+    let mut left = match library_dir {
+        Some(dir) => remove_known_artifacts(dir),
+        None => untouched_known_folders(manifest.parent()),
     };
-    Ok(remove_known_artifacts(dir))
+    left.extend(stuck);
+    Ok(left)
 }
 
 /// The no-VCS write lock and its queue beside `manifest`. A lock kept under

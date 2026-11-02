@@ -586,6 +586,9 @@ pub struct RemoveDialogState {
     /// Esc and the close button still resolve to `RemoveMsg::Close`, which
     /// is the Cancel branch.
     pub unsaved_prompt: bool,
+    /// Is the target a `.snxlib` directory package (deleted whole, with
+    /// everything inside)? Decided when the dialog opens: `view` must not stat.
+    pub is_directory_package: bool,
 }
 
 /// User choice from the Remove-from-Project modal.

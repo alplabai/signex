@@ -232,6 +232,9 @@ pub struct ApplyStamp {
     /// The footprint, manufacturer and MPN the placed symbol holds, to
     /// compare with its row (#1867).
     pub have: PartIdentity,
+    /// The row version the instance was stamped with. A row still at it has
+    /// not moved, so a differing field is the user's own override.
+    pub stamped_version: String,
 }
 
 /// Everything the off-thread apply read needs, built on the UI thread from
@@ -277,6 +280,7 @@ fn stamp_of(
         library_id: s.library_id?,
         approved_version: approved.get(&s.uuid).cloned(),
         have: PartIdentity::of_symbol(s),
+        stamped_version: s.library_version.clone(),
     })
 }
 
@@ -474,6 +478,11 @@ fn part_sync_of(
     row: &signex_library::ComponentRow,
     libs: &[MountedLibrary],
 ) -> Option<PartSync> {
+    // A row that has not moved since the stamp leaves a differing field as
+    // the user's override. No stamp (empty) counts as moved.
+    if !w.stamped_version.is_empty() && w.stamped_version == row.version {
+        return None;
+    }
     let want = row_identity(opened, row, libs);
     let change = w.have.changes_to(&want);
     (!change.is_empty()).then(|| PartSync {
