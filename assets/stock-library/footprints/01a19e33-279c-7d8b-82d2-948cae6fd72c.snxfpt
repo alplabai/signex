@@ -27,19 +27,19 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -0.86,
+    -0.91,
     -0.36,
 ],
     [
-    0.86,
+    0.91,
     -0.36,
 ],
     [
-    0.86,
+    0.91,
     0.36,
 ],
     [
-    -0.86,
+    -0.91,
     0.36,
 ],
 ]
@@ -52,11 +52,11 @@ sketch_entity = "c5819f67-5479-4152-8c1b-c6372053f7f8"
 [footprints.silk_f.kind]
 kind = "line"
 from = [
-    -0.66,
+    -0.71,
     -0.225,
 ]
 to = [
-    -0.66,
+    -0.71,
     0.225,
 ]
 
@@ -173,7 +173,7 @@ plane = "54da35ee-d9c3-4b5c-9e44-3f0986d67f35"
 construction = false
 centerline = false
 kind = "Point"
-x = -0.66
+x = -0.71
 y = -0.225
 
 [[footprints.sketch.entities]]
@@ -182,7 +182,7 @@ plane = "54da35ee-d9c3-4b5c-9e44-3f0986d67f35"
 construction = false
 centerline = false
 kind = "Point"
-x = -0.66
+x = -0.71
 y = 0.225
 
 [[footprints.sketch.entities]]

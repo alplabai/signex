@@ -19,7 +19,7 @@ number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill
 silk_f = []
 silk_b = []
 fab_b = []
-version = "0.0.1"
+version = "0.0.2"
 released = false
 created = "2026-05-04T19:01:13Z"
 updated = "2026-05-04T19:01:13Z"

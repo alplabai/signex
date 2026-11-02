@@ -313,3 +313,20 @@ fn connector_pin_count_matches_name() {
     }
     assert!(seen >= 11, "the eleven shipped connectors are present");
 }
+
+/// The committed footprints are what the generator renders: pads, silk,
+/// courtyard and fab outline all match, so a hand edit or a generator
+/// change that skipped the regenerate fails here.
+#[test]
+fn committed_footprints_equal_the_generator_output() {
+    let rendered = stock_gen::render_all().expect("render");
+    for file in &rendered {
+        let committed = read_lf(&stock_dir().join(&file.file_name));
+        assert_eq!(
+            committed,
+            file.text.replace("\r\n", "\n"),
+            "{} differs from the generator output",
+            file.file_name
+        );
+    }
+}

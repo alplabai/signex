@@ -41,6 +41,12 @@ use signex_types::layer::SignexLayer;
 use super::ids::{StockIds, StockKind};
 use super::{next_id, smd_pad, stock_timestamp};
 
+/// Version of `Chip-0805` and `Chip-0805-Polarised` since their land moved
+/// to the table above (#1938). A footprint version change is what moves the
+/// bound rows and shows placed parts in the Library Updates dialog; the
+/// other sizes are new and stay at the first stock version.
+pub const CHIP_0805_VERSION: &str = "0.0.2";
+
 /// One chip size: copper land, body and courtyard, all in mm.
 pub struct ChipSize {
     /// EIA size code, the footprint is `Chip-<code>`.
@@ -60,7 +66,7 @@ pub struct ChipSize {
 }
 
 pub const CHIP_SIZES: &[ChipSize] = &[
-    size("0201", [0.46, 0.42, 0.66], [0.6, 0.3], 0.10, 0.15),
+    size("0201", [0.46, 0.42, 0.66], [0.6, 0.3], 0.15, 0.15),
     size("0402", [0.62, 0.62, 0.90], [1.0, 0.5], 0.15, 0.15),
     size("0603", [0.95, 1.00, 1.60], [1.6, 0.8], 0.20, 0.25),
     size("0805", [1.15, 1.45, 1.80], [2.0, 1.25], 0.20, 0.25),
@@ -130,6 +136,9 @@ pub fn build(ids: &StockIds, size: &ChipSize, polarised: bool) -> Footprint {
         format!("Chip-{}", size.code)
     };
     let mut fp = Footprint::with_identity(name, ids.footprint_uuid(), stock_timestamp());
+    if size.code == "0805" {
+        fp.version = CHIP_0805_VERSION.to_string();
+    }
     let plane = ids.plane_id();
     let mut eids = ids.entity_ids();
     let mut sketch = SketchData {

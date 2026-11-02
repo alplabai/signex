@@ -315,6 +315,7 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
         let mut footprint_ref = None;
         let mut footprint_version = String::new();
         let mut alternate_footprints = Vec::new();
+        let mut row_version = STOCK_VERSION.to_string();
         if let Some(kind) = spec.footprint {
             let ids = ids_for(kind);
             let pins: BTreeSet<String> = symbol.pins.iter().map(|p| p.number.clone()).collect();
@@ -328,7 +329,12 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             }
             description.push_str(&format!(" {} footprint.", build(ids).name));
             footprint_ref = Some(PrimitiveRef::new(library_id, ids.footprint_uuid()));
-            footprint_version = STOCK_VERSION.to_string();
+            // A row on a revised footprint carries the footprint's version
+            // and bumps its own, as a footprint save cascades (#832).
+            footprint_version = build(ids).version;
+            if footprint_version != STOCK_VERSION {
+                row_version = footprint_version.clone();
+            }
             for alt in alternate_kinds(kind) {
                 let alt_ids = ids_for(*alt);
                 if pad_numbers(*alt) != pins {
@@ -364,7 +370,7 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             supply: Vec::new(),
             parameters: Default::default(),
             plm: PlmReserved::default(),
-            version: STOCK_VERSION.to_string(),
+            version: row_version,
             released: true,
             symbol_version: STOCK_VERSION.to_string(),
             footprint_version,

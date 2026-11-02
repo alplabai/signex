@@ -159,3 +159,52 @@ fn chip_0805_rows_list_the_other_sizes_as_alternates() {
         "R, C, L, Ferrite, Fuse, D, D_Schottky, D_Zener, LED"
     );
 }
+
+#[test]
+fn polarised_bar_clears_the_copper_and_its_mask_opening() {
+    let adapter = open_stock();
+    for (size, ..) in LANDS {
+        let name = format!("Chip-{size}-Polarised");
+        let fp = footprint_named(&adapter, &name);
+        let pad_1 = fp.pads.iter().find(|p| p.number == "1").expect("pad 1");
+        let mask = pad_1.solder_mask_margin.unwrap_or(0.0);
+        let copper_edge = pad_1.position[0].abs() + pad_1.size[0] / 2.0;
+        let bar = &fp.silk_f[0];
+        let FpGraphicKind::Line { from, .. } = &bar.kind else {
+            panic!("{name}: the cathode mark is a line");
+        };
+        let inner_edge = from[0].abs() - bar.stroke_width / 2.0;
+        assert!(
+            inner_edge >= copper_edge + mask + 0.04 - 1e-9,
+            "{name}: bar inner edge {inner_edge} vs copper {copper_edge} + mask {mask}"
+        );
+    }
+}
+
+#[test]
+fn only_the_revised_0805_land_moved_its_version_on() {
+    let adapter = open_stock();
+    for (size, ..) in LANDS {
+        for suffix in ["", "-Polarised"] {
+            let want = if *size == "0805" { "0.0.2" } else { "0.0.1" };
+            let fp = footprint_named(&adapter, &format!("Chip-{size}{suffix}"));
+            assert_eq!(fp.version, want, "Chip-{size}{suffix}");
+        }
+    }
+    let mut on_0805 = 0;
+    for (_, row) in adapter.iter_rows().expect("rows") {
+        let pn = row.internal_pn.as_str().to_string();
+        let Some(default) = &row.footprint_ref else {
+            assert_eq!(row.version, "0.0.1", "{pn}");
+            continue;
+        };
+        let fp = adapter.get_footprint(default.uuid).expect("default");
+        // The row pins the footprint version it was made against and its own
+        // version moved with it, so placed parts show up as updatable.
+        assert_eq!(row.footprint_version, fp.version, "{pn}");
+        let on_revised = fp.name.starts_with("Chip-0805");
+        assert_eq!(row.version, fp.version, "{pn}");
+        on_0805 += usize::from(on_revised);
+    }
+    assert_eq!(on_0805, 9);
+}

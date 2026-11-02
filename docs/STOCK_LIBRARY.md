@@ -84,4 +84,4 @@ reference is a manufacturer's IPC-7351 Density Level B table. Sources:
 The per-size numbers are in
 `crates/signex-app/examples/build_stock_library/chip.rs`. `Chip-0805`
 follows the same table (1.15 x 1.45 mm pads, 1.80 mm centres) since #1938;
-placed parts that use it pick up the new pads on the next library update.
+the two 0805 footprints and the nine rows that use them moved from version 0.0.1 to 0.0.2, so placed parts show up in Library Updates and get the new pads when the update is applied.
