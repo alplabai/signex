@@ -35,7 +35,9 @@ fn stock_rows(adapter: &LocalGitAdapter) -> Vec<ComponentRow> {
 #[test]
 fn stock_library_lists_one_placeable_row_per_non_power_symbol() {
     let rows = stock_rows(&open_stock());
-    assert_eq!(rows.len(), 34, "34 non-power stock symbols, one row each");
+    // Rows may be added in Signex (#1892), never removed: the 34 shipped
+    // rows' ids are pinned in stock_library_determinism.rs.
+    assert!(rows.len() >= 34, "the 34 shipped rows are present");
     for pn in [
         "STOCK-R",
         "STOCK-C",

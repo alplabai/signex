@@ -1,7 +1,7 @@
 //! Document tab bar — tabs for open schematic sheets and PCB.
 
 use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
-use iced::widget::{Row, container, mouse_area, row, scrollable, text, tooltip};
+use iced::widget::{Row, button, container, mouse_area, row, scrollable, text, tooltip};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
@@ -25,9 +25,11 @@ pub enum TabMessage {
     StartDrag(usize),
     /// Right-click on this tab — the app opens the per-tab context
     /// menu (Close \[filename\] / Close All Others / Close All / Open
-    /// In New Window). Replaces the inline close-X / undock buttons
-    /// that used to live on every tab.
+    /// In New Window).
     ContextMenu(usize),
+    /// The × on this tab was clicked: close it through the same path as
+    /// the context menu's "Close \[filename\]".
+    CloseClicked(usize),
 }
 
 /// Stable id of the tab strip's scrollable, so the active tab can be
@@ -110,8 +112,8 @@ pub fn view<'a>(
     for &i in &visible_indices {
         let tab = &tabs[i];
         // Tab title. A document with unsaved changes also gets a dot
-        // (the Projects tree row keeps its own); there is no close-X on
-        // the tab any more, so the two no longer compete.
+        // (the Projects tree row keeps its own), before the title; the
+        // close × sits after it.
         let label = ellipsize_title(&tab.title, MAX_TAB_TITLE_CHARS);
 
         let is_active = i == active;
@@ -119,9 +121,9 @@ pub fn view<'a>(
         let is_last = Some(i) == last_idx;
         let text_c = if is_active { text_primary } else { text_muted };
 
-        // No inline close-X / undock buttons. Both actions live in the
-        // right-click menu now (Altium parity) — the tab itself is the
-        // entire hit target.
+        // Close × after the title; undock lives in the right-click menu.
+        // The button captures its own press, so the surrounding
+        // `mouse_area` neither starts a drag nor selects the tab.
         //
         // The pill itself is a custom widget (`signex_widgets::TabPill`)
         // that paints its own bg + 3-sided border (top + L/R only) +
@@ -155,8 +157,16 @@ pub fn view<'a>(
                     .color(styles::ti(tokens.text_secondary)),
             );
         }
-        let inner = container(content.push(text(label).size(TAB_FONT_SIZE).color(text_c)))
-            .padding([SP.s, 10.0]);
+        let close_x = button(text(CLOSE_GLYPH).size(TAB_FONT_SIZE).color(text_c))
+            .padding([0.0, SP.xs])
+            .style(button::text)
+            .on_press(TabMessage::CloseClicked(i));
+        let inner = container(
+            content
+                .push(text(label).size(TAB_FONT_SIZE).color(text_c))
+                .push(close_x),
+        )
+        .padding([SP.s, 10.0]);
         // Cursor: default Pointer on hover so the bar reads as
         // "clickable tabs", switching to Grabbing only while a tab
         // is in flight so the drag-to-reorder / drag-to-undock
@@ -253,6 +263,9 @@ const READ_ONLY_LABEL: &str = "read-only";
 
 /// Tooltip line saying why a sheet is read-only.
 const READ_ONLY_TOOLTIP: &str = "Read-only: written by a newer Signex. Edit it in that version.";
+
+/// Glyph of the per-tab close button.
+const CLOSE_GLYPH: &str = "\u{00d7}";
 
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;

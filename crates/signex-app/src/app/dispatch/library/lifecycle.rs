@@ -132,7 +132,7 @@ impl Signex {
                 let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
                 if let Err(e) = self.library.mount_prepared(prepared) {
                     report(self, &path, &e);
-                    return Task::none();
+                    return self.readmit_stock_copies(&path);
                 }
                 self.library.drift.check_pending = true;
                 // Sheets opened before this library mounted skipped its
@@ -143,7 +143,7 @@ impl Signex {
             }
             Err(e) => {
                 report(self, &path, &e);
-                return Task::none();
+                return self.readmit_stock_copies(&path);
             }
         }
         match intent {
@@ -152,6 +152,16 @@ impl Signex {
                 self.finish_open_library_browser(path)
             }
         }
+    }
+
+    /// When `path` is the bundled stock and its mount failed, mount the
+    /// stock copies refused while it was mounting (#1894).
+    fn readmit_stock_copies(&mut self, path: &std::path::Path) -> Task<Message> {
+        let copies = self.library.readmit_stock_copies_after_failure(path);
+        if copies.is_empty() {
+            return Task::none();
+        }
+        crate::library::mount::spawn_pending_mounts(copies)
     }
 
     /// Close an open library — diverts to the confirm modal when any

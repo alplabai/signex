@@ -518,6 +518,13 @@ pub struct LibraryState {
     pub settings: DistributorSettings,
     /// Library left-dock search box buffer.
     pub panel_search: String,
+    /// Library panel rows the user expanded (#1895), by `.snxlib` path.
+    pub panel_expanded: std::collections::HashSet<PathBuf>,
+    /// The component a single click highlighted in the Library panel.
+    pub panel_selected: Option<ComponentsPanelRowKey>,
+    /// The Library panel's last component click, for the double-click
+    /// window that opens the component.
+    pub panel_last_click: Option<(ComponentsPanelRowKey, std::time::Instant)>,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// `(label, reason)` of each Save-All row whose off-thread datasheet
@@ -591,6 +598,14 @@ pub struct LibraryState {
     /// stock library that fails to open is never mounted, so only this
     /// field lets the open-failure recovery flows recognise it (#814).
     pub stock_library_root: Option<PathBuf>,
+    /// The stock library mounts writable so a maintainer edits what ships
+    /// (#1892). Only a source checkout's `assets/stock-library` with
+    /// `SIGNEX_EDIT_STOCK=1`; see `components_panel::stock`. Set once at
+    /// bootstrap.
+    pub stock_editable: bool,
+    /// Stock copies refused while the bundled stock was still mounting:
+    /// mounted after all if that mount fails (#1894).
+    pub stock_copies_refused: Vec<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
@@ -750,7 +765,7 @@ impl ComponentsMountSource {
 /// Per-source collapse + filter state for the Components Panel.
 /// Persists across panel re-renders but not across app restarts —
 /// cheap session-scoped UI flags.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ComponentsPanelState {
     /// `true` while the named section is collapsed. Sections are
     /// `"project"`, `"installed"`, `"global"` (stock has its own
@@ -768,6 +783,75 @@ pub struct ComponentsPanelState {
     /// Searchable row list the panel draws; kept current by
     /// `LibraryState::sync_view_caches` (#1353).
     pub rows: PanelRows,
+    /// The row a click highlighted; the details section shows it.
+    pub selected: Option<ComponentsPanelRowKey>,
+    /// Height of the list above the details section; the divider drags it.
+    pub list_height: f32,
+    /// The selected row's details, or the load that is filling them.
+    pub details: crate::panels::components_panel::details::DetailsState,
+    /// A row press that may become a drag onto the schematic.
+    pub drag: Option<ComponentsRowDrag>,
+    /// The row context menu, while open.
+    pub row_menu: Option<ComponentsRowMenu>,
+    /// The row under the pointer, for its hover tint.
+    pub hovered: Option<ComponentsPanelRowKey>,
+    /// A row dropped on the canvas: the placement epoch its read runs under
+    /// and the world point (mm) to commit the part at once it arrives.
+    pub pending_drop: Option<(u64, (f64, f64))>,
+}
+
+impl Default for ComponentsPanelState {
+    fn default() -> Self {
+        Self {
+            collapsed_project: false,
+            collapsed_installed: false,
+            collapsed_global: false,
+            collapsed_stock: false,
+            filter: String::new(),
+            rows: PanelRows::default(),
+            selected: None,
+            list_height: crate::panels::components_panel::split::DEFAULT_LIST_HEIGHT,
+            details: Default::default(),
+            drag: None,
+            row_menu: None,
+            hovered: None,
+            pending_drop: None,
+        }
+    }
+}
+
+/// One Components panel row: its library, table and row id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComponentsPanelRowKey {
+    pub library_path: PathBuf,
+    pub table: String,
+    pub row_id: signex_library::RowId,
+}
+
+/// A pressed row: it becomes a drag once the pointer moves past the
+/// threshold from `start`; released before that, it was a plain click.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentsRowDrag {
+    pub key: ComponentsPanelRowKey,
+    pub start: (f32, f32),
+    pub started: bool,
+}
+
+/// What a row menu item does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComponentsRowAction {
+    /// Attach the part to the cursor, like a drag onto the canvas.
+    Place,
+    /// Open the row's Component Preview tab for editing.
+    Open,
+}
+
+/// The row context menu: the row it acts on and where it opened.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComponentsRowMenu {
+    pub key: ComponentsPanelRowKey,
+    pub x: f32,
+    pub y: f32,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the

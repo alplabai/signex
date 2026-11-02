@@ -62,9 +62,11 @@ pub(crate) enum OverlayId {
     ContextMenu,
     TabContextMenu,
     ProjectTreeContextMenu,
+    ComponentsRowContextMenu,
     GridPicker,
     PanelList,
     DockDragZone,
+    ComponentsRowDragLabel,
     FloatingPanels,
 
     // Dialogs.
@@ -122,7 +124,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 55] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 57] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -141,9 +143,11 @@ pub(crate) const PAINT_ORDER: [OverlayId; 55] = [
     OverlayId::ContextMenu,
     OverlayId::TabContextMenu,
     OverlayId::ProjectTreeContextMenu,
+    OverlayId::ComponentsRowContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
     OverlayId::DockDragZone,
+    OverlayId::ComponentsRowDragLabel,
     OverlayId::FloatingPanels,
     OverlayId::Preferences,
     OverlayId::FindReplace,
@@ -222,7 +226,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // The hover tooltip follows the cursor and paints nothing the
         // user aims at. Capturing there would kill wheel-zoom over the
         // canvas whenever a tooltip happened to be showing.
-        OverlayId::HoverTooltip => false,
+        OverlayId::HoverTooltip | OverlayId::ComponentsRowDragLabel => false,
 
         // Everything else paints a surface over the canvas. Scrolling on
         // it — or past the end of its own scrollable — must not reach
@@ -245,6 +249,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::ContextMenu
         | OverlayId::TabContextMenu
         | OverlayId::ProjectTreeContextMenu
+        | OverlayId::ComponentsRowContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
         | OverlayId::DockDragZone
@@ -340,9 +345,15 @@ impl Signex {
             OverlayId::ProjectTreeContextMenu => {
                 layers.extend(self.project_tree_context_menu_overlay())
             }
+            OverlayId::ComponentsRowContextMenu => {
+                layers.extend(self.components_row_context_menu_overlay())
+            }
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
+            OverlayId::ComponentsRowDragLabel => {
+                layers.extend(self.components_row_drag_label_overlay())
+            }
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay()),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),

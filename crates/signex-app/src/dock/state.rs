@@ -60,6 +60,8 @@ impl DockArea {
             floating: Vec::new(),
             tab_drag: None,
             hovered_tab: None,
+            drop_preview: None,
+            tab_menu: None,
         }
     }
 
@@ -293,6 +295,19 @@ impl DockArea {
                     });
                 }
             }
+            DockMessage::TabContextMenuRequested(..) => {
+                // Needs the cursor position; the app handler opens it.
+            }
+            DockMessage::TabMenuDismissed => self.tab_menu = None,
+            DockMessage::TabMenuActionPicked(action) => {
+                // The tabs may have shifted since the menu opened: act on the
+                // panel it was opened for, or on nothing if it is gone.
+                if let Some(menu) = self.tab_menu.take()
+                    && let Some(PanelSite::Docked(pos, idx)) = self.locate(menu.kind)
+                {
+                    self.apply_tab_action(pos, idx, action);
+                }
+            }
             DockMessage::StartDragFloating(idx) => {
                 if let Some(fp) = self.floating.get_mut(idx) {
                     fp.dragging = true;
@@ -300,6 +315,7 @@ impl DockArea {
             }
             DockMessage::FloatingDragEnd(idx) => {
                 // Stop the drag; dock-zone detection handled by app before this.
+                self.drop_preview = None;
                 if let Some(fp) = self.floating.get_mut(idx) {
                     fp.dragging = false;
                 }
@@ -314,6 +330,7 @@ impl DockArea {
                 // The floating panel's own "dock" button — no drop
                 // target, so the kind goes to its home region rather
                 // than always to the right column.
+                self.drop_preview = None;
                 if idx < self.floating.len() {
                     let fp = self.floating.remove(idx);
                     self.show_panel(fp.kind);
@@ -323,6 +340,7 @@ impl DockArea {
                 // Dropped onto a dock zone: honour the zone the user
                 // aimed at, unless the kind is somehow already docked
                 // elsewhere, in which case reveal that one.
+                self.drop_preview = None;
                 if idx < self.floating.len() {
                     let fp = self.floating.remove(idx);
                     self.show_panel_at(target, fp.kind);
@@ -334,6 +352,35 @@ impl DockArea {
                 // Routed by `handle_dock_message` directly into the
                 // library subsystem before reaching this update path.
                 // Reaching here is harmless — no dock state to mutate.
+            }
+        }
+    }
+
+    /// Run a dock tab menu row on the tab at (`pos`, `idx`).
+    fn apply_tab_action(&mut self, pos: PanelPosition, idx: usize, action: DockTabAction) {
+        match action {
+            DockTabAction::Close => self.update(DockMessage::ClosePanel(pos, idx)),
+            DockTabAction::Float => {
+                let before = self.floating.len();
+                self.update(DockMessage::UndockPanel(pos, idx));
+                // `UndockPanel` hands the new panel to the cursor; a menu
+                // pick has no drag in flight, so let it rest.
+                if self.floating.len() > before
+                    && let Some(fp) = self.floating.last_mut()
+                {
+                    fp.dragging = false;
+                }
+            }
+            DockTabAction::MoveTo(target) => {
+                if target == pos {
+                    return;
+                }
+                if let Some(kind) = self.region_mut(pos).remove_panel(idx) {
+                    self.forget_tab_state(pos);
+                    self.region_mut(target).panels.push(kind);
+                    let last = self.region(target).panels.len() - 1;
+                    self.reveal_tab(target, last);
+                }
             }
         }
     }
