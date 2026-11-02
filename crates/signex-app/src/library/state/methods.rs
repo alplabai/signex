@@ -84,6 +84,7 @@ impl Default for LibraryState {
             stock_library: None,
             stock_library_root: None,
             stock_editable: false,
+            stock_copies_refused: Vec::new(),
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,

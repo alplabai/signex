@@ -332,3 +332,24 @@ fn a_dock_menu_for_a_vanished_panel_just_dismisses() {
     assert_eq!(left_panels(&app).len(), before - 1);
     assert!(app.document_state.dock.tab_menu.is_none());
 }
+
+/// Review of #1906: a panel dragged past the window edge detaches into its
+/// own window, and the drop preview that move showed goes with it.
+#[test]
+fn detaching_a_dragged_panel_clears_the_drop_preview() {
+    let (mut app, _) = app_with_main_window();
+    let _undock = app.update(Message::Dock(DockMessage::UndockPanel(
+        PanelPosition::Left,
+        0,
+    )));
+    drag_to(&mut app, -20.0, 300.0);
+    assert_eq!(
+        app.document_state.dock.drop_preview,
+        Some(PanelPosition::Left)
+    );
+    let _detach = app.update(Message::Window(
+        signex_app::app::WindowMsg::DetachFloatingPanel(0),
+    ));
+    assert!(app.document_state.dock.floating.is_empty());
+    assert_eq!(app.document_state.dock.drop_preview, None);
+}

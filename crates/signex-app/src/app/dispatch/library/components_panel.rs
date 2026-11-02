@@ -198,9 +198,15 @@ impl Signex {
             .screen_to_world(iced::Point::new(x - bounds.x, y - bounds.y));
         let world = (f64::from(at.x), f64::from(at.y));
         let k = drag.key;
+        // Only a read that starts carries the drop: the same checks
+        // `handle_place_library_component` refuses a pick with.
+        let starts = self.document_state.active_path.is_some()
+            && self.library.library_at(&k.library_path).is_some();
         let task = self.handle_place_library_component(k.library_path, k.table, k.row_id);
-        let epoch = self.interaction_state.placement_epoch;
-        self.library.components_panel.pending_drop = Some((epoch, world));
+        if starts {
+            let epoch = self.interaction_state.placement_epoch;
+            self.library.components_panel.pending_drop = Some((epoch, world));
+        }
         task
     }
 

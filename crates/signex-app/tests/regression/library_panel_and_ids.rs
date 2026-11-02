@@ -137,10 +137,7 @@ fn a_copy_of_a_mounted_library_is_refused_and_the_original_stays() {
 
     let err = refused.expect_err("a second library with the same id must not mount");
     let message = err.to_string();
-    assert!(
-        message.contains("same library id") && message.contains("copy"),
-        "{message}"
-    );
+    assert!(message.contains("copy of the bundled stock"), "{message}");
     assert!(app.library.library_at(&copy).is_none());
     assert!(app.library.library_at(&stock).is_some(), "the first stays");
     assert_eq!(app.library.open_libraries.len(), 1);
@@ -167,7 +164,10 @@ fn a_stock_copy_arriving_first_is_refused_and_stock_still_mounts() {
         .library
         .open_library(copy.clone())
         .expect_err("a copy of the stock library is refused");
-    assert!(err.to_string().contains("SIGNEX_EDIT_STOCK"), "{err}");
+    assert!(
+        err.to_string().contains("copy of the bundled stock"),
+        "{err}"
+    );
 
     app.library
         .open_library_read_only(stock.clone())
@@ -226,4 +226,35 @@ fn a_stock_copy_mounts_when_the_bundled_stock_failed_to_open() {
         .open_library(copy.clone())
         .expect("with no bundled stock mounted or mounting, the copy mounts");
     assert!(app.library.library_at(&copy).is_some());
+}
+
+/// Review of #1906: a copy refused while the bundled stock was mounting is
+/// mounted after all when that mount then fails, so stock references keep
+/// resolving whichever mount finished first.
+#[test]
+fn a_stock_copy_refused_while_stock_mounts_takes_over_when_stock_then_fails() {
+    let tmp = TempDir::new().unwrap();
+    copy_dir(&stock_source(), &tmp.path().join("copy"));
+    let missing = tmp.path().join("gone/Stock.snxlib");
+    let copy = tmp.path().join("copy/Stock.snxlib");
+    let (mut app, _boot) = Signex::new();
+    app.library.pending_mounts.clear();
+    app.library.stock_library_root = Some(missing.clone());
+    app.library
+        .request_mount(&missing, signex_app::library::mount::MountIntent::Silent);
+    assert!(
+        app.library.open_library(copy.clone()).is_err(),
+        "refused while the bundled stock mounts"
+    );
+
+    for m in run(signex_app::library::mount::spawn_pending_mounts(vec![
+        missing,
+    ])) {
+        settle(&mut app, m);
+    }
+
+    assert!(
+        app.library.library_at(&copy).is_some(),
+        "the bundled stock failed: the refused copy keeps stock references resolving"
+    );
 }

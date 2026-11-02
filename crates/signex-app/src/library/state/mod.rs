@@ -603,6 +603,9 @@ pub struct LibraryState {
     /// `SIGNEX_EDIT_STOCK=1`; see `components_panel::stock`. Set once at
     /// bootstrap.
     pub stock_editable: bool,
+    /// Stock copies refused while the bundled stock was still mounting:
+    /// mounted after all if that mount fails (#1894).
+    pub stock_copies_refused: Vec<PathBuf>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.

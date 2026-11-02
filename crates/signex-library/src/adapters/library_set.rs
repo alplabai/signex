@@ -141,7 +141,9 @@ impl LibrarySet {
 
     /// Replace whatever adapter is mounted at `lib`'s mount key with
     /// `lib`. Drops the previous adapter and returns it (or `None` if
-    /// no previous mount existed).
+    /// no previous mount existed). It skips the duplicate-id check of
+    /// [`Self::mount`]: the caller replaces a library at its own path and
+    /// must not hand it another mounted library's id.
     pub fn remount(&mut self, lib: Box<dyn LibraryAdapter>) -> Option<Arc<dyn LibraryAdapter>> {
         let key = MountKey::for_adapter(lib.as_ref());
         self.libs.insert(key, Arc::from(lib))

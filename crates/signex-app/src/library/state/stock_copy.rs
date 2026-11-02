@@ -13,7 +13,7 @@ impl LibraryState {
     /// library (it carries the stock id but is not the stock file), so the
     /// bundled one always wins, whichever mount finishes first (#1894).
     pub(crate) fn refuse_stock_copy(
-        &self,
+        &mut self,
         root: &Path,
         library_id: uuid::Uuid,
     ) -> Result<(), signex_library::LibraryError> {
@@ -25,12 +25,31 @@ impl LibraryState {
         if library_id != STOCK_LIBRARY_ID || !stock_live || self.is_stock_root(root) {
             return Ok(());
         }
+        if !self.stock_copies_refused.iter().any(|p| p == root) {
+            self.stock_copies_refused.push(root.to_path_buf());
+        }
         Err(signex_library::LibraryError::Conflict(format!(
-            "{} is a copy of the bundled stock library (same library id), so it was not opened. \
-             To change the stock library itself, run Signex from a source checkout with \
-             SIGNEX_EDIT_STOCK=1 (see docs/STOCK_LIBRARY.md)",
+            "{} is a copy of the bundled stock library, so it was not opened: the bundled \
+             stock library is used instead. To change a stock part, copy it into your own \
+             library with Copy to Library.",
             root.display()
         )))
+    }
+
+    /// The bundled stock at `root` failed to mount: request the copies
+    /// refused while it was mounting, so stock references in designs keep
+    /// resolving. Returns the paths whose mount must be spawned.
+    pub(crate) fn readmit_stock_copies_after_failure(&mut self, root: &Path) -> Vec<PathBuf> {
+        if !self.is_stock_root(root) || self.stock_library.is_some() {
+            return Vec::new();
+        }
+        std::mem::take(&mut self.stock_copies_refused)
+            .into_iter()
+            .filter(|copy| {
+                self.request_mount(copy, crate::library::mount::MountIntent::Silent)
+                    == crate::library::mount::MountRequest::Spawn
+            })
+            .collect()
     }
 
     /// The kind of `path` when it is a primitive file inside the locked
