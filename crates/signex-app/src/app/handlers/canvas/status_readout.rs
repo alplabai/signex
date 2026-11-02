@@ -8,9 +8,9 @@ use super::super::super::*;
 enum Surface<'a> {
     SymbolEditor(&'a SymbolDocument),
     FootprintEditor(&'a FootprintDocument),
-    /// A Component Preview: it draws auto-fitted previews with no camera of
-    /// its own, so it has no zoom or cursor to report.
-    ComponentPreview,
+    /// A Component Preview, Library Browser or Project tab: it has no camera
+    /// of its own, so it has no zoom or cursor to report (#1818).
+    NoCamera,
     Pcb,
     Schematic,
 }
@@ -19,17 +19,17 @@ enum Surface<'a> {
 const NO_CAMERA_ZOOM_PERCENT: f64 = 100.0;
 
 impl Signex {
-    /// What `window_id` shows. The main window shows its active tab: a
-    /// symbol or footprint editor, or a Component Preview. Any other window
-    /// reads its own schematic or PCB canvas (a Component Preview window has
-    /// no status bar).
+    /// What `window_id` shows, by the tab it shows: the main window's active
+    /// tab, or an undocked window's own tab. A schematic or PCB tab, or a
+    /// window with no tab, reads its own schematic or PCB canvas.
     fn status_surface(&self, window_id: iced::window::Id) -> Surface<'_> {
         let docs = &self.document_state;
-        if self.ui_state.main_window_id == Some(window_id)
-            && let Some(tab) = docs.tabs.get(docs.active_tab)
-        {
-            if tab.kind.as_component_editor().is_some() {
-                return Surface::ComponentPreview;
+        if let Some(tab) = docs.tab_shown_in_window(window_id, &self.ui_state) {
+            if tab.kind.as_component_editor().is_some()
+                || tab.kind.as_library_browser().is_some()
+                || tab.kind.as_project().is_some()
+            {
+                return Surface::NoCamera;
             }
             if let Some(editor) = tab
                 .kind
@@ -58,7 +58,7 @@ impl Signex {
         match self.status_surface(window_id) {
             Surface::SymbolEditor(editor) => editor.camera.zoom_percent(),
             Surface::FootprintEditor(editor) => editor.state.zoom_percent(),
-            Surface::ComponentPreview => NO_CAMERA_ZOOM_PERCENT,
+            Surface::NoCamera => NO_CAMERA_ZOOM_PERCENT,
             Surface::Pcb => self
                 .interaction_state
                 .pcb_canvas_for_window(window_id)
@@ -77,7 +77,7 @@ impl Signex {
         let own = match self.status_surface(window_id) {
             Surface::SymbolEditor(editor) => Some(editor.cursor_mm.unwrap_or_default()),
             Surface::FootprintEditor(editor) => Some(editor.state.cursor_mm.unwrap_or_default()),
-            Surface::ComponentPreview => Some((0.0, 0.0)),
+            Surface::NoCamera => Some((0.0, 0.0)),
             Surface::Pcb | Surface::Schematic => None,
         };
         own.unwrap_or((self.ui_state.cursor_x, self.ui_state.cursor_y))
