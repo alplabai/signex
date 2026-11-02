@@ -76,7 +76,8 @@ pub(crate) fn snap_outline(
 /// Snap each edge's shared coordinate once (a horizontal edge's `y`, a
 /// vertical edge's `x`) and give both its end vertices that value, so two
 /// near-equal coordinates cannot land on different pixel rows. A vertex
-/// between two collinear edges snaps its own coordinate.
+/// between two collinear edges keeps the previous edge's snapped value on
+/// their shared axis and snaps only the other axis.
 fn snap_rectilinear_ring(ring: &[Point], width: f32) -> Vec<Point> {
     let n = ring.len();
     let horizontal = |i: usize| (ring[i].y - ring[(i + 1) % n].y).abs() < AXIS_EPS;

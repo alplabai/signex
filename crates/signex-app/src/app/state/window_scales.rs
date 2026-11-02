@@ -220,7 +220,7 @@ mod tests {
                 // What the replay gives a placed wire of this direction.
                 let placed = |a: P, b: P| crate::scene_line_snap::snap_hairline(a, b, law, dpr).2;
                 let mut slot = crate::canvas::CanvasSlot::new();
-                slot.camera_mut().scale = scale;
+                slot.set_camera_scale_for_test(scale);
                 slot.drawing_mode = true;
                 slot.wire_preview = vec![
                     SchPoint::new(5.0, 5.0),

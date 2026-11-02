@@ -349,8 +349,14 @@ impl CanvasSlot {
     }
 
     /// Mutable borrow for the `update` path — pan, zoom and fit write here.
-    pub(crate) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
+    pub(in crate::canvas) fn camera_mut(&self) -> std::cell::RefMut<'_, Camera> {
         self.camera.borrow_mut()
+    }
+
+    /// Set the camera scale directly, for tests outside `canvas/`.
+    #[cfg(test)]
+    pub(crate) fn set_camera_scale_for_test(&self, scale: f32) {
+        self.camera.borrow_mut().scale = scale;
     }
 
     pub fn set_render_cache(
