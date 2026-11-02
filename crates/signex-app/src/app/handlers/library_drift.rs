@@ -109,6 +109,9 @@ impl Signex {
                 .is_some_and(|library| libs.iter().any(|l| l.id == library))
         };
         let drift = &mut self.library.drift;
+        drift
+            .unreadable_libs
+            .retain(|library, _| libs.iter().any(|l| l.id == *library));
         drift.names.retain(|lib_id, _| mounted(lib_id));
         for rows in drift.drifted.values_mut().chain(drift.missing.values_mut()) {
             rows.retain(|lib_id| mounted(lib_id));
@@ -123,21 +126,23 @@ impl Signex {
         for problem in &report.problems {
             crate::diagnostics::log_warning(problem);
         }
-        // A worker failure carries only `problems`: keep what was reported.
-        if !(report.sheets.is_empty() && !report.problems.is_empty()) {
-            for (library, (name, reason)) in &report.unreadable_libs {
-                if !self.library.drift.unreadable_libs.contains(library) {
-                    crate::diagnostics::log_warning(
-                        crate::library::drift::unreadable_library_warning(name, reason),
-                    );
-                }
-            }
-            self.library.drift.unreadable_libs = report.unreadable_libs.keys().copied().collect();
-        }
         // A worker failure carries only `problems`; keep the previous result.
         if report.sheets.is_empty() && !report.problems.is_empty() {
             return Task::none();
         }
+        // Say it once per (library, reason): a different failure is new.
+        for (library, (name, reason)) in &report.unreadable_libs {
+            if self.library.drift.unreadable_libs.get(library) != Some(reason) {
+                crate::diagnostics::log_warning(crate::library::drift::unreadable_library_warning(
+                    name, reason,
+                ));
+            }
+        }
+        self.library.drift.unreadable_libs = report
+            .unreadable_libs
+            .iter()
+            .map(|(library, (_, reason))| (*library, reason.clone()))
+            .collect();
         let mut drifted = std::collections::HashMap::new();
         for (sheet, entries) in report.sheets {
             // Closed meanwhile: nothing to show.
@@ -291,3 +296,6 @@ fn keep_unreadable_names(
         names.entry(lib_id.clone()).or_insert_with(|| name.clone());
     }
 }
+
+#[cfg(test)]
+mod tests;

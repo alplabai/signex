@@ -328,7 +328,8 @@ pub struct SymbolDocument {
     pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
     /// Bumped by every history change: commit, undo, redo and a coalesced
     /// field edit. Unlike the stack depths it moves at `HISTORY_DEPTH` and
-    /// while typing in one field, so it tells "the document changed".
+    /// while typing in one field, so it tells "the document changed". Starts
+    /// at a per-editor base from `DocumentState::next_symbol_history_base`.
     pub history_generation: u64,
     /// The field the last `record_edit` changed, tagged with the symbol
     /// it belonged to, so a run of keystrokes in one text input shares

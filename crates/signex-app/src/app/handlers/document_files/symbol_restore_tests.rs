@@ -55,7 +55,7 @@ fn a_history_restore_makes_the_delete_warning_stale() {
     let (mut app, path, file) = app_with_warning();
     assert!(warning_is_current(&app, &path));
 
-    let _ = app.apply_reloaded_with(
+    let _ = app.apply_reloaded_reporting(
         0,
         Ok(RestoreJobDocument::Symbol(Box::new(file))),
         None,

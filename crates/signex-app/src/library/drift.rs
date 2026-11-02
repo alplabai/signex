@@ -170,7 +170,19 @@ fn short_reason(error: &LibraryError) -> String {
         .split_whitespace()
         .map(|w| w.rsplit(['/', '\\']).next().unwrap_or(w))
         .collect();
-    short.join(" ").chars().take(MAX).collect()
+    let reason = short.join(" ");
+    // A lookup the scan could not decide names only the container files.
+    if !short.is_empty()
+        && short
+            .iter()
+            .all(|w| w.trim_end_matches(',').ends_with(".snxsym"))
+    {
+        return format!("{reason} could not be read or parsed")
+            .chars()
+            .take(MAX)
+            .collect();
+    }
+    reason.chars().take(MAX).collect()
 }
 
 /// The Messages line for a library whose symbols could not be read.
@@ -601,9 +613,10 @@ pub struct DriftState {
     pub missing: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
-    /// Libraries already reported as unreadable; cleared by a good pass so a
-    /// later failure is reported again.
-    pub unreadable_libs: BTreeSet<Uuid>,
+    /// Libraries already reported as unreadable, with the reason given; a
+    /// different reason is reported again, and a good pass or an unmount
+    /// clears the entry.
+    pub unreadable_libs: BTreeMap<Uuid, String>,
 }
 
 impl DriftState {
@@ -715,5 +728,25 @@ mod tests {
         let line = unreadable_library_warning(name, reason);
         assert!(line.len() < 160, "{} bytes: {line}", line.len());
         assert!(!line.contains("/nonexistent"), "{line}");
+    }
+
+    #[test]
+    fn an_unparsed_container_is_described_not_just_named() {
+        let error = LibraryError::Backend(
+            "symbol 0190 not found; 1 symbol file(s) could not be read: \
+             /libs/lib/symbols/two-unit.snxsym"
+                .into(),
+        );
+        assert_eq!(
+            short_reason(&error),
+            "two-unit.snxsym could not be read or parsed"
+        );
+    }
+
+    #[test]
+    fn an_os_reason_is_kept_as_is() {
+        let error =
+            LibraryError::Backend("list /libs/lib/symbols: Permission denied (os error 13)".into());
+        assert_eq!(short_reason(&error), "Permission denied (os error 13)");
     }
 }

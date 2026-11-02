@@ -247,6 +247,86 @@ mod tests {
         sheet
     }
 
+    use crate::app::SymbolDocument;
+    use signex_library::{Symbol, SymbolFile};
+
+    fn pending_for(editor: &SymbolDocument) -> PendingSymbolDelete {
+        PendingSymbolDelete {
+            path: editor.path.clone(),
+            symbol: editor.file.symbols[0].uuid,
+            history: editor.history_generation,
+            rows: 1,
+            sheets: 0,
+            unchecked: 0,
+            warning: SymbolDeleteWarning {
+                idx: 0,
+                name: "A".into(),
+                only_unknown: false,
+                lines: Vec::new(),
+            },
+        }
+    }
+
+    fn edit(editor: &mut SymbolDocument) {
+        assert!(editor.record_edit(None, |e| {
+            e.file.symbols[0].name.push('x');
+            true
+        }));
+    }
+
+    fn editor() -> SymbolDocument {
+        SymbolDocument::new(
+            PathBuf::from("a.snxsym"),
+            SymbolFile::from_symbol(Symbol::empty("A")),
+        )
+    }
+
+    #[test]
+    fn undo_then_a_new_edit_leaves_the_warning_stale() {
+        // Undo depth is 1 again after undo + edit; only the generation differs.
+        let mut ed = editor();
+        edit(&mut ed);
+        let pending = pending_for(&ed);
+        assert!(pending.is_current(&ed));
+
+        assert!(ed.undo());
+        assert!(!pending.is_current(&ed), "undo");
+        edit(&mut ed);
+        assert_eq!(ed.undo_snapshots.len(), 1);
+        assert!(!pending.is_current(&ed), "undo then edit");
+    }
+
+    #[test]
+    fn redo_leaves_the_warning_stale() {
+        let mut ed = editor();
+        edit(&mut ed);
+        assert!(ed.undo());
+        let pending = pending_for(&ed);
+        assert!(pending.is_current(&ed));
+
+        assert!(ed.redo());
+        assert!(!pending.is_current(&ed));
+    }
+
+    #[test]
+    fn a_reopened_editor_does_not_revive_the_warning() {
+        let (mut app, _task) = crate::app::Signex::new();
+        let path = PathBuf::from("a.snxsym");
+        let file = SymbolFile::from_symbol(Symbol::empty("A"));
+
+        app.open_symbol_editor_tab(path.clone(), file.clone());
+        edit(app.document_state.symbol_editors.get_mut(&path).unwrap());
+        let pending = pending_for(&app.document_state.symbol_editors[&path]);
+        assert!(pending.is_current(&app.document_state.symbol_editors[&path]));
+
+        // Close, reopen and make the same single edit.
+        app.document_state.symbol_editors.remove(&path);
+        app.document_state.tabs.clear();
+        app.open_symbol_editor_tab(path.clone(), file);
+        edit(app.document_state.symbol_editors.get_mut(&path).unwrap());
+        assert!(!pending.is_current(&app.document_state.symbol_editors[&path]));
+    }
+
     #[test]
     fn an_upper_case_lib_id_on_a_sheet_is_still_named() {
         let lib = library();

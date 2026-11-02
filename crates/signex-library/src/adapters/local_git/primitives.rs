@@ -1,6 +1,7 @@
 //! Primitive read/write + git-commit inherent methods on `LocalGitAdapter`.
 
 use super::helpers::*;
+use super::walk_error::{WalkErrorAction, walk_error_action};
 use super::*;
 use crate::git_identity::identity_for_repo;
 
@@ -466,33 +467,20 @@ impl LocalGitAdapter {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(e) => {
-                    let vanished = e
-                        .io_error()
-                        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound);
-                    // Only an unreadable root fails the scan (the folder
-                    // going away between the check and the walk is empty).
-                    if e.depth() == 0 {
-                        if vanished {
-                            return empty(self);
+                    let kind = e.io_error().map(std::io::Error::kind);
+                    match walk_error_action(e.depth(), kind, e.path(), &suffix) {
+                        WalkErrorAction::Empty => return empty(self),
+                        WalkErrorAction::Fail => {
+                            return Err(LibraryError::Backend(format!(
+                                "list {}: {e}",
+                                dir.display()
+                            )));
                         }
-                        return Err(LibraryError::Backend(format!(
-                            "list {}: {e}",
-                            dir.display()
-                        )));
-                    }
-                    // An entry that vanished mid-walk is gone; any other
-                    // failure is a problem file, so a lookup is undetermined
-                    // rather than NotFound.
-                    // Only a symbol file can hide a symbol; a stray entry
-                    // (a temp file, notes) that cannot be read is skipped.
-                    let is_symbol_file = e
-                        .path()
-                        .and_then(|p| p.file_name())
-                        .and_then(|n| n.to_str())
-                        .is_some_and(|n| n.ends_with(&suffix));
-                    if !vanished && is_symbol_file {
-                        let at = e.path().map_or_else(|| dir.clone(), Path::to_path_buf);
-                        problems.push(SymbolFileProblem::new(at, &e.to_string()));
+                        WalkErrorAction::Problem => {
+                            let at = e.path().map_or_else(|| dir.clone(), Path::to_path_buf);
+                            problems.push(SymbolFileProblem::new(at, &e.to_string()));
+                        }
+                        WalkErrorAction::Skip => {}
                     }
                     continue;
                 }

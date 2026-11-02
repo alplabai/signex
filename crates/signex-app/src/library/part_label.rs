@@ -2,8 +2,6 @@
 
 use std::collections::HashMap;
 
-use uuid::Uuid;
-
 use super::state::OpenLibrary;
 
 /// Shown where a part has no value worth displaying.
@@ -26,8 +24,7 @@ pub fn part_library_label(
     let Some((library, symbol)) = lib_id.split_once(':') else {
         return lib_id.to_owned();
     };
-    let (Ok(library_id), Ok(symbol_id)) = (Uuid::parse_str(library), Uuid::parse_str(symbol))
-    else {
+    let Some((library_id, symbol_id)) = super::drift::split_lib_id(lib_id) else {
         return lib_id.to_owned();
     };
     if let Some(lib) = libs.iter().find(|l| l.library_id == library_id) {
