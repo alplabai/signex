@@ -483,7 +483,14 @@ impl LocalGitAdapter {
                     // An entry that vanished mid-walk is gone; any other
                     // failure is a problem file, so a lookup is undetermined
                     // rather than NotFound.
-                    if !vanished {
+                    // Only a symbol file can hide a symbol; a stray entry
+                    // (a temp file, notes) that cannot be read is skipped.
+                    let is_symbol_file = e
+                        .path()
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.ends_with(&suffix));
+                    if !vanished && is_symbol_file {
                         let at = e.path().map_or_else(|| dir.clone(), Path::to_path_buf);
                         problems.push(SymbolFileProblem::new(at, &e.to_string()));
                     }

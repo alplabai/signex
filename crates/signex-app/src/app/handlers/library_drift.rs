@@ -73,6 +73,7 @@ impl Signex {
             self.library.drift.drifted.clear();
             self.library.drift.missing.clear();
             self.library.drift.names.clear();
+            self.library.drift.unreadable_libs.clear();
             self.update_selection_info();
             return None;
         }
