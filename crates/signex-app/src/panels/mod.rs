@@ -105,7 +105,7 @@ pub(super) use properties::{
 pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
 pub(super) use status::{view_erc, view_messages};
 pub use symbol_context::{
-    GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDisplayOptions,
+    GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteWarning, SymbolDisplayOptions,
     SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
     SymbolPinSummary,
 };

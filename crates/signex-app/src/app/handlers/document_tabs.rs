@@ -271,6 +271,14 @@ impl Signex {
         {
             self.warn_if_cascade_owed(p);
             self.document_state.symbol_editors.remove(p);
+            if self
+                .library
+                .pending_symbol_delete
+                .as_ref()
+                .is_some_and(|d| d.path == *p)
+            {
+                self.library.pending_symbol_delete = None;
+            }
             self.document_state.footprint_editors.remove(p);
             self.document_state.mark_document_clean(p);
         }

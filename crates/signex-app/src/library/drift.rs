@@ -53,6 +53,9 @@ pub struct DriftReport {
     /// `lib_id`s whose library is mounted but whose current symbol could not
     /// be read this pass. Their previous rows are kept, not cleared.
     pub unreadable: HashSet<String>,
+    /// Per sheet: the `lib_id`s whose library is mounted but no longer has
+    /// the symbol (#1845). The sheet keeps rendering its embedded copy.
+    pub missing: HashMap<PathBuf, BTreeSet<String>>,
     /// Failures to surface in the Messages panel.
     pub problems: Vec<String>,
     /// The [`DriftState::generation`] this pass was started under; a report
@@ -93,6 +96,7 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
     let mut report = DriftReport::default();
     // lib_id -> current (symbol, name); None = unreadable, already reported.
     let mut current: HashMap<String, Option<(LibSymbol, String)>> = HashMap::new();
+    let mut removed: HashSet<String> = HashSet::new();
     for (sheet, entries) in sheets {
         let mut drifted = BTreeSet::new();
         for (lib_id, embedded) in entries {
@@ -118,18 +122,32 @@ pub fn compute_drift(sheets: &[SheetEntries], libs: &[MountedLibrary]) -> DriftR
                         // A symbol the library no longer has is a real
                         // removal (its row goes); anything else is a failed
                         // read, which says nothing about drift.
-                        if !matches!(e, LibraryError::NotFound(_)) {
+                        // A removal is reported once per change as "library
+                        // symbol missing"; only a failed read is a problem
+                        // on every pass.
+                        if matches!(e, LibraryError::NotFound(_)) {
+                            removed.insert(lib_id.clone());
+                        } else {
                             report.unreadable.insert(lib_id.clone());
+                            report.problems.push(format!(
+                                "Could not check library symbol {lib_id} in {}: {e}",
+                                lib.display_name
+                            ));
                         }
-                        report.problems.push(format!(
-                            "Could not check library symbol {lib_id} in {}: {e}",
-                            lib.display_name
-                        ));
                         None
                     }
                 }
             });
-            let Some((fresh, name)) = entry else { continue };
+            let Some((fresh, name)) = entry else {
+                if removed.contains(lib_id) {
+                    report
+                        .missing
+                        .entry(sheet.clone())
+                        .or_default()
+                        .insert(lib_id.clone());
+                }
+                continue;
+            };
             report.names.insert(lib_id.clone(), name.clone());
             if content_hash(fresh) != content_hash(embedded) {
                 drifted.insert(lib_id.clone());
@@ -557,6 +575,8 @@ pub struct DriftState {
     pub generation: u64,
     /// Per sheet: the `lib_id`s whose embedded copy has drifted.
     pub drifted: HashMap<PathBuf, BTreeSet<String>>,
+    /// Per sheet: the `lib_id`s whose library symbol was deleted (#1845).
+    pub missing: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
 }
@@ -564,6 +584,10 @@ pub struct DriftState {
 impl DriftState {
     pub fn is_drifted(&self, sheet: &Path, lib_id: &str) -> bool {
         self.drifted.get(sheet).is_some_and(|d| d.contains(lib_id))
+    }
+
+    pub fn is_missing(&self, sheet: &Path, lib_id: &str) -> bool {
+        self.missing.get(sheet).is_some_and(|d| d.contains(lib_id))
     }
 
     /// Human-readable `Library/Symbol`; see [`super::part_label`] for the

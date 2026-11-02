@@ -8,6 +8,8 @@
 //! (ADR-0001 #163); zero behaviour change.
 
 use super::*;
+use crate::library::symbol_delete::PendingSymbolDelete;
+use crate::panels::SymbolDeleteWarning;
 
 /// Guard a typed Properties value: `nan` / `inf` never reaches geometry.
 /// A refusal is reported to the Messages panel and the edit is dropped.
@@ -510,6 +512,81 @@ impl Signex {
                 editor.path.display(),
                 editor.file.symbols.len()
             ));
+            return true;
+        }
+        let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
+        let history = (editor.undo_snapshots.len(), editor.redo_snapshots.len());
+        let name = editor.file.symbols[idx].name.clone();
+        // A symbol rows or open sheets still use is not deleted until the
+        // user has seen who (#1845).
+        if let Some(lines) = self.symbol_usage_lines(&path, symbol)
+            && !lines.is_empty()
+        {
+            self.library.pending_symbol_delete = Some(PendingSymbolDelete {
+                path,
+                symbol,
+                history,
+                warning: SymbolDeleteWarning { idx, name, lines },
+            });
+            self.refresh_panel_ctx();
+            return true;
+        }
+        self.delete_symbol_from_container(idx)
+    }
+
+    /// The user answered "Delete anyway" to the in-use warning.
+    pub(super) fn sch_library_confirm_delete_symbol(&mut self, idx: usize) -> bool {
+        let Some(pending) = self.library.pending_symbol_delete.take() else {
+            return true;
+        };
+        // The container changed under the warning: nothing is deleted.
+        let unchanged = pending.warning.idx == idx
+            && self
+                .active_symbol_editor_mut()
+                .is_some_and(|e| pending.is_current(e));
+        if !unchanged {
+            crate::diagnostics::log_warning(format!(
+                "{} changed since the warning; press Delete again.",
+                pending.warning.name
+            ));
+            self.refresh_panel_ctx();
+            return true;
+        }
+        self.delete_symbol_from_container(idx)
+    }
+
+    pub(super) fn sch_library_cancel_delete_symbol(&mut self) -> bool {
+        self.library.pending_symbol_delete = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Rows and open sheets that use `symbol` of the container at `path`;
+    /// `None` when the container is not inside a mounted library.
+    fn symbol_usage_lines(
+        &self,
+        path: &std::path::Path,
+        symbol: uuid::Uuid,
+    ) -> Option<Vec<String>> {
+        let library = self.library.containing_library(path)?.library_id;
+        let reference = signex_library::PrimitiveRef::new(library, symbol);
+        let sheets = self
+            .document_state
+            .engines
+            .iter()
+            .map(|(p, e)| (p.as_path(), e.document()));
+        Some(crate::library::symbol_delete::usage_lines(
+            &self.library.open_libraries,
+            sheets,
+            &reference,
+        ))
+    }
+
+    fn delete_symbol_from_container(&mut self, idx: usize) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        if editor.file.symbols.len() <= 1 || idx >= editor.file.symbols.len() {
             return true;
         }
         // The delete is its own undo step (#760): snapshot the whole

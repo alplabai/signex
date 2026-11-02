@@ -65,6 +65,12 @@ impl LibraryState {
             return;
         }
         self.closing.remove(root);
+        if self.pending_symbol_delete.as_ref().is_some_and(|d| {
+            self.containing_library(&d.path)
+                .is_some_and(|lib| lib.root == root)
+        }) {
+            self.pending_symbol_delete = None;
+        }
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that
