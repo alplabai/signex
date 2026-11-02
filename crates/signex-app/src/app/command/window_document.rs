@@ -62,34 +62,15 @@ impl Signex {
         if self.ui_state.main_window_id == Some(id) {
             return None;
         }
-        let tabs = &self.document_state.tabs;
-        match self.ui_state.windows.get(&id)? {
-            WindowKind::UndockedTab { path, .. } => {
-                Some(match tabs.iter().position(|t| &t.path == path) {
-                    Some(index) => WindowDocument::Tab(index),
-                    None => WindowDocument::NoTab,
-                })
-            }
-            WindowKind::ComponentEditor {
-                library_path,
-                table,
-                row_id,
-            } => Some(
-                match tabs.iter().position(|t| {
-                    t.kind.as_component_editor().is_some_and(|ce| {
-                        &ce.library_path == library_path
-                            && &ce.table == table
-                            && &ce.row_id == row_id
-                    })
-                }) {
-                    Some(index) => WindowDocument::Tab(index),
-                    None => WindowDocument::NoTab,
-                },
-            ),
-            // A detached panel or modal edits the main window's document, so
-            // its strokes keep the main-window behaviour.
-            WindowKind::DetachedModal(_) | WindowKind::DetachedPanel(_) => None,
-        }
+        // A detached panel or modal edits the main window's document, so its
+        // strokes keep the main-window behaviour.
+        let bound = self
+            .document_state
+            .tab_index_of_window_kind(self.ui_state.windows.get(&id)?)?;
+        Some(match bound {
+            Some(index) => WindowDocument::Tab(index),
+            None => WindowDocument::NoTab,
+        })
     }
 
     /// Close Document typed in `window`, or `None` when `window` is the main

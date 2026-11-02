@@ -110,3 +110,122 @@ fn a_project_tab_does_not_read_the_schematic_camera() {
     assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM);
     assert_eq!(app.status_cursor(window), (0.0, 0.0));
 }
+
+fn footprint(path: &std::path::Path) -> FootprintDocument {
+    let file = signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+    FootprintDocument::new(path.to_path_buf(), file)
+}
+
+fn symbol(path: &std::path::Path) -> SymbolDocument {
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
+    SymbolDocument::new(path.to_path_buf(), file)
+}
+
+#[test]
+fn an_undocked_footprints_own_align_menu_shows_in_its_window() {
+    let a = PathBuf::from("a.snxfpt");
+    let (mut app, window) = undocked(TabKind::FootprintEditor(a.clone()), &a);
+    let mut own = footprint(&a);
+    own.state.active_bar_menu =
+        Some(crate::library::editor::footprint::state::FpActiveBarMenu::Align);
+    app.document_state.footprint_editors.insert(a, own);
+    assert!(shows(&app, window, "Align Left"));
+}
+
+#[test]
+fn an_undocked_footprint_window_does_not_draw_another_footprints_active_bar() {
+    let a = PathBuf::from("a.snxfpt");
+    let b = PathBuf::from("b.snxfpt");
+    let (mut app, window) = undocked(TabKind::FootprintEditor(a.clone()), &a);
+    app.document_state
+        .footprint_editors
+        .insert(a.clone(), footprint(&a));
+    let mut other = footprint(&b);
+    other.state.active_bar_menu =
+        Some(crate::library::editor::footprint::state::FpActiveBarMenu::Align);
+    app.document_state
+        .footprint_editors
+        .insert(b.clone(), other);
+    // The user picks B in the main window; A stays in its own window.
+    app.document_state
+        .tabs
+        .push(tab(&b, TabKind::FootprintEditor(b.clone())));
+    app.document_state.active_tab = 1;
+    assert!(
+        shows(&app, window, "Layers"),
+        "A's window draws a footprint editor"
+    );
+    assert!(
+        !shows(&app, window, "Align Left"),
+        "A's window draws B's Align menu; its entries carry b.snxfpt, so a click there edits B"
+    );
+}
+
+#[test]
+fn an_undocked_symbols_own_align_menu_shows_in_its_window() {
+    let a = PathBuf::from("a.snxsym");
+    let (mut app, window) = undocked(TabKind::SymbolEditor(a.clone()), &a);
+    let mut own = symbol(&a);
+    own.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Align);
+    app.document_state.symbol_editors.insert(a, own);
+    assert!(shows(&app, window, "Align Left"));
+}
+
+#[test]
+fn an_undocked_symbol_window_does_not_draw_another_symbols_active_bar() {
+    let a = PathBuf::from("a.snxsym");
+    let b = PathBuf::from("b.snxsym");
+    let (mut app, window) = undocked(TabKind::SymbolEditor(a.clone()), &a);
+    app.document_state
+        .symbol_editors
+        .insert(a.clone(), symbol(&a));
+    let mut other = symbol(&b);
+    other.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Align);
+    app.document_state.symbol_editors.insert(b.clone(), other);
+    app.document_state
+        .tabs
+        .push(tab(&b, TabKind::SymbolEditor(b.clone())));
+    app.document_state.active_tab = 1;
+    assert!(
+        shows(&app, window, "Part 1 / 1"),
+        "A's window draws a symbol editor"
+    );
+    assert!(
+        !shows(&app, window, "Align Left"),
+        "A's window draws B's Align menu; its entries carry b.snxsym"
+    );
+}
+
+#[test]
+fn an_undocked_symbols_own_context_menu_shows_in_its_window_not_the_main_ones() {
+    let a = PathBuf::from("a.snxsym");
+    let b = PathBuf::from("b.snxsym");
+    let menu = || crate::library::editor::symbol::state::SymbolContextMenuState {
+        x: 10.0,
+        y: 10.0,
+        target: crate::library::editor::symbol::state::SymbolContextTarget::Empty,
+        open_submenu: None,
+    };
+    let (mut app, window) = undocked(TabKind::SymbolEditor(a.clone()), &a);
+    app.document_state
+        .symbol_editors
+        .insert(a.clone(), symbol(&a));
+    let mut other = symbol(&b);
+    other.context_menu = Some(menu());
+    app.document_state.symbol_editors.insert(b.clone(), other);
+    app.document_state
+        .tabs
+        .push(tab(&b, TabKind::SymbolEditor(b.clone())));
+    app.document_state.active_tab = 1;
+    assert!(
+        !shows(&app, window, "Select All"),
+        "B's context menu is not A's"
+    );
+
+    let own = app.document_state.symbol_editors.get_mut(&a).unwrap();
+    own.context_menu = Some(menu());
+    assert!(
+        shows(&app, window, "Select All"),
+        "A's own context menu shows"
+    );
+}
