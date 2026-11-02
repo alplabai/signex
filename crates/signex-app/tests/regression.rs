@@ -253,6 +253,9 @@ mod ui_scale_pref;
 #[path = "regression/external_change_followups.rs"]
 mod external_change_followups;
 
+#[path = "regression/open_document_disk_poll.rs"]
+mod open_document_disk_poll;
+
 #[path = "regression/rename_preserves_references.rs"]
 mod rename_preserves_references;
 

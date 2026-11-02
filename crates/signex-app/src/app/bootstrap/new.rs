@@ -434,6 +434,7 @@ impl Signex {
                     crate::autosave::default_recovery_dir(),
                 ),
                 project_fs: Default::default(),
+                disk_poll: Default::default(),
                 navigator_job: Default::default(),
                 ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
