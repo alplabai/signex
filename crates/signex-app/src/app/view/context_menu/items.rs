@@ -201,11 +201,8 @@ pub(super) fn submenu_launcher(
         .width(Length::Fill);
     match icon {
         Some(handle) => {
-            row = row.push(iced::widget::svg(handle).width(20).height(20).style(
-                move |_: &iced::Theme, _| iced::widget::svg::Style {
-                    color: Some(text_c),
-                },
-            ));
+            // Launchers are never disabled: keep the icon's own colours.
+            row = row.push(iced::widget::svg(handle).width(20).height(20));
         }
         None => {
             row = row.push(iced::widget::Space::new().width(iced::Length::Fixed(20.0)));
