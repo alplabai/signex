@@ -48,6 +48,7 @@ impl Signex {
             loose: Vec::new(),
             copy_confirm: None,
             copying: false,
+            opening_library: None,
         });
     }
 }
