@@ -417,7 +417,9 @@ fn copy_confirm_row<'a>(
             symbol.name
         ),
     };
-    let answers: Element<'_, LibraryMessage> = if symbol.library.is_some() {
+    let answers: Element<'_, LibraryMessage> = if picker.opening_library.is_some() {
+        text("Opening library…").size(TS.body).into()
+    } else if symbol.library.is_some() {
         row![
             secondary_btn(
                 "Open library",

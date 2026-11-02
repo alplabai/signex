@@ -404,3 +404,74 @@ fn a_truly_loose_symbol_has_no_library_and_still_offers_copy() {
     picker(&mut f.app, PrimitivePickerMsg::CopyConfirmed);
     assert_eq!(bound_symbol(&f).uuid, f.symbol.uuid);
 }
+
+#[test]
+fn a_shared_symbol_file_outside_the_project_is_not_claimed_by_a_stray_snxlib_above_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let mut f = fixture(&project);
+    // A `.snxlib` the file is not inside, higher up than the project.
+    std::fs::write(tmp.path().join("stray.snxlib"), "").unwrap();
+    let shared = tmp.path().join("shared").join("sym").join("Shared.snxsym");
+    std::fs::create_dir_all(shared.parent().unwrap()).unwrap();
+    std::fs::write(
+        &shared,
+        SymbolFile::from_symbol(Symbol::empty("SHARED"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    f.app.document_state.projects[0]
+        .data
+        .libraries
+        .push(LibraryEntry {
+            path: shared,
+            kind: LibraryEntryKind::Shared,
+            library_id: None,
+            unknown: Default::default(),
+        });
+    open_picker(&mut f);
+
+    let labels = headers(&f);
+    assert!(
+        labels
+            .iter()
+            .any(|l| l.starts_with("Not in a library: Shared.snxsym")),
+        "{labels:?}"
+    );
+    let picked = f.app.library.primitive_picker.as_ref().unwrap();
+    assert!(picked.loose.iter().all(|s| s.library.is_none()));
+}
+
+#[test]
+fn a_failed_open_of_the_symbols_library_shows_in_the_picker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let snxlib = unmounted_library_symbol(&mut f, tmp.path());
+    open_picker(&mut f);
+    let held = f
+        .app
+        .library
+        .primitive_picker
+        .as_ref()
+        .unwrap()
+        .loose
+        .iter()
+        .find(|s| s.name == "HELD")
+        .cloned()
+        .unwrap();
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(held));
+    std::fs::remove_file(&snxlib).unwrap();
+    picker(&mut f.app, PrimitivePickerMsg::OpenLibraryConfirmed);
+
+    let open = f.app.library.primitive_picker.as_ref().expect("still open");
+    assert!(open.opening_library.is_none());
+    assert!(
+        open.error
+            .as_deref()
+            .is_some_and(|e| e.starts_with("Could not open library x")),
+        "{:?}",
+        open.error
+    );
+}

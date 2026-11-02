@@ -104,6 +104,7 @@ impl Signex {
             .unwrap_or_else(|| path.display().to_string());
         let report =
             |this: &mut Self, path: &std::path::Path, err: &signex_library::LibraryError| {
+                this.picker_mount_settled(path, Some(err.to_string()));
                 let error = anyhow::anyhow!("could not open library {}: {err}", path.display());
                 // Lead with the library name: the Messages panel cuts long lines.
                 crate::diagnostics::log_error(&format!("Failed to mount library {name}"), &error);
@@ -135,6 +136,7 @@ impl Signex {
                     return Task::none();
                 }
                 self.library.drift.check_pending = true;
+                self.picker_mount_settled(&path, None);
                 // Sheets opened before this library mounted skipped its
                 // symbols; scan them now (#1449).
                 if newly_mounted {

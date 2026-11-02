@@ -426,6 +426,8 @@ pub struct PrimitivePickerState {
     pub copy_confirm: Option<super::loose_symbols::LooseSymbol>,
     /// A copy is running on a worker.
     pub copying: bool,
+    /// The unmounted `.snxlib` the picker asked to open and is waiting on.
+    pub opening_library: Option<std::path::PathBuf>,
 }
 
 /// The pick a copy of a loose symbol was made for (#1841).

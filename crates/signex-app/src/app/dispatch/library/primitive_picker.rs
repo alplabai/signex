@@ -36,6 +36,7 @@ impl Signex {
             loose: Vec::new(),
             copy_confirm: None,
             copying: false,
+            opening_library: None,
         });
         self.list_loose_symbols_task(kind)
     }

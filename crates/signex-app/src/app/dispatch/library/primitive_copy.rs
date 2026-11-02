@@ -9,7 +9,7 @@
 use super::*;
 use crate::app::file_extension::has_extension;
 use crate::library::loose_symbols::{
-    LooseRead, LooseSource, LooseSymbol, copy_into_library, read_loose_symbols,
+    LooseRead, LooseSymbol, copy_into_library, read_loose_symbols,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -21,31 +21,30 @@ impl Signex {
         if kind != PrimitiveKind::Symbol {
             return Task::none();
         }
-        let files: Vec<LooseSource> = self
+        // A file under a mounted library's directory is left out even when it
+        // is outside that library's `symbols/` folder: this is the same rule
+        // `containing_library` applies everywhere, and `push_loose` hides
+        // the same files once the library is open.
+        let files: Vec<PathBuf> = self
             .document_state
             .projects
             .iter()
             .flat_map(|project| {
-                let stop = project.path.parent().map(std::path::Path::to_path_buf);
                 project
                     .data
                     .libraries
                     .iter()
                     .map(|entry| project.data.resolve_library_path(entry))
-                    .map(move |file| LooseSource {
-                        file,
-                        stop: stop.clone(),
-                    })
             })
-            .filter(|source| has_extension(&source.file, "snxsym"))
-            .filter(|source| self.library.containing_library(&source.file).is_none())
+            .filter(|path| has_extension(path, "snxsym"))
+            .filter(|path| self.library.containing_library(path).is_none())
             .collect();
         read_loose_task(files, false)
     }
 
     /// A file outside every library, picked with Browse.
     pub(super) fn read_browsed_loose_symbol(&self, file: PathBuf) -> Task<Message> {
-        read_loose_task(vec![LooseSource { file, stop: None }], true)
+        read_loose_task(vec![file], true)
     }
 
     pub(super) fn handle_loose_listed(
@@ -88,16 +87,55 @@ impl Signex {
     }
 
     /// "Open library" was answered yes: mount the `.snxlib` the symbol
-    /// belongs to through the usual mount request. Its symbols then list
-    /// under it, so the user picks from there.
+    /// belongs to through the usual mount request. The question stays up as
+    /// "Opening library…" until the mount lands ([`Self::picker_mount_settled`]);
+    /// the library's symbols then list under it and the user picks from there.
     pub(super) fn handle_open_library_confirmed(&mut self) -> Task<Message> {
+        let Some(picker) = self.library.primitive_picker.as_ref() else {
+            return Task::none();
+        };
+        let Some(library) = picker.copy_confirm.as_ref().and_then(|s| s.library.clone()) else {
+            return Task::none();
+        };
+        if picker.opening_library.is_some() {
+            return Task::none();
+        }
+        let mounted = self.library.library_at(&library).is_some();
         let Some(picker) = self.library.primitive_picker.as_mut() else {
             return Task::none();
         };
-        let Some(library) = picker.copy_confirm.take().and_then(|s| s.library) else {
-            return Task::none();
-        };
+        picker.error = None;
+        if mounted {
+            picker.copy_confirm = None;
+        } else {
+            picker.opening_library = Some(library.clone());
+        }
         self.mount_added_libraries(vec![library])
+    }
+
+    /// A mount finished: if it is the library the picker is opening, end the
+    /// "Opening…" state. A failure goes to the picker's error line; a success
+    /// is noted in the Messages panel, since the library is open for this
+    /// session only and is not in the project's library list.
+    pub(crate) fn picker_mount_settled(&mut self, path: &std::path::Path, failure: Option<String>) {
+        let Some(picker) = self.library.primitive_picker.as_mut() else {
+            return;
+        };
+        if picker.opening_library.as_deref() != Some(path) {
+            return;
+        }
+        picker.opening_library = None;
+        picker.copy_confirm = None;
+        let name = path
+            .file_stem()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        match failure {
+            Some(why) => picker.error = Some(format!("Could not open library {name}: {why}")),
+            None => crate::diagnostics::log_info(format!(
+                "Library {name} is open for this session. It is not in the project's library \
+                 list; add it to the project to keep it."
+            )),
+        }
     }
 
     pub(super) fn handle_copy_declined(&mut self) -> Task<Message> {
@@ -222,7 +260,7 @@ impl Signex {
     }
 }
 
-fn read_loose_task(files: Vec<LooseSource>, from_browse: bool) -> Task<Message> {
+fn read_loose_task(files: Vec<PathBuf>, from_browse: bool) -> Task<Message> {
     if files.is_empty() {
         return Task::none();
     }
