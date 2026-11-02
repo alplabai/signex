@@ -320,17 +320,25 @@ impl Signex {
             OverlayId::PrintPreview => layers.extend(self.print_preview_overlay()),
             OverlayId::BomPreview => layers.extend(self.bom_preview_overlay()),
             OverlayId::NetColorCustom => layers.extend(self.net_color_custom_overlay()),
-            OverlayId::PlacementPaused => layers.extend(self.placement_paused_overlay()),
-            OverlayId::SchematicActiveBar => layers.extend(self.schematic_active_bar_overlay()),
-            OverlayId::FootprintActiveBar => layers.extend(self.footprint_active_bar_overlay()),
-            OverlayId::FootprintContextMenu => layers.extend(self.footprint_context_menu_overlay()),
-            OverlayId::FootprintMoveBy => layers.extend(self.footprint_move_by_overlay()),
-            OverlayId::FootprintAlign => layers.extend(self.footprint_align_overlay()),
-            OverlayId::SymbolEditorActiveBar => {
-                layers.extend(self.symbol_editor_active_bar_overlay())
+            OverlayId::PlacementPaused => layers.extend(self.placement_paused_overlay(window_id)),
+            OverlayId::SchematicActiveBar => {
+                layers.extend(self.schematic_active_bar_overlay(window_id))
             }
-            OverlayId::SymbolContextMenu => layers.extend(self.symbol_context_menu_overlay()),
-            OverlayId::TextEdit => layers.extend(self.text_edit_overlay()),
+            OverlayId::FootprintActiveBar => {
+                layers.extend(self.footprint_active_bar_overlay(window_id))
+            }
+            OverlayId::FootprintContextMenu => {
+                layers.extend(self.footprint_context_menu_overlay(window_id))
+            }
+            OverlayId::FootprintMoveBy => layers.extend(self.footprint_move_by_overlay(window_id)),
+            OverlayId::FootprintAlign => layers.extend(self.footprint_align_overlay(window_id)),
+            OverlayId::SymbolEditorActiveBar => {
+                layers.extend(self.symbol_editor_active_bar_overlay(window_id))
+            }
+            OverlayId::SymbolContextMenu => {
+                layers.extend(self.symbol_context_menu_overlay(window_id))
+            }
+            OverlayId::TextEdit => layers.extend(self.text_edit_overlay(window_id)),
             OverlayId::ActiveBarMenu => layers.extend(self.active_bar_menu_overlay()),
             OverlayId::ContextMenu => layers.extend(self.context_menu_overlay()),
             OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay()),
