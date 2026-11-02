@@ -981,4 +981,42 @@ mod tests {
         app.mark_installed_engine_saved(&path, installed);
         assert!(app.document_state.engines[&path].is_at_save_point());
     }
+
+    /// #1916 — a disk-conflict Reload whose install failed keeps the older
+    /// edited sheet dirty, the old baseline and the save failure; an installed
+    /// one is clean and adopts the disk hash. Covers only the settle rule:
+    /// `Engine::new_with_path` cannot fail, so no seam makes the real
+    /// `apply_reloaded_reporting` install fail.
+    #[test]
+    fn a_failed_disk_reload_install_keeps_the_conflict_state() {
+        use crate::persist::ContentHash;
+        let path = PathBuf::from("reload-1916.snxsch");
+        let (mut app, _boot) = Signex::new();
+        let engine =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()))
+                .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.active_path = Some(path.clone());
+        app.document_state.mark_document_dirty(&path);
+        let old = ContentHash::of(b"old");
+        let disk = ContentHash::of(b"external");
+        app.record_disk_baseline(&path, old);
+        app.document_state
+            .document_saves
+            .record_failure(path.clone(), "disk changed".into());
+
+        assert!(!app.settle_disk_reload(&path, disk, false));
+        assert!(app.document_state.is_document_dirty(&path));
+        assert_eq!(app.document_state.document_saves.baseline(&path), Some(old));
+        assert!(app.document_state.document_saves.failure(&path).is_some());
+
+        assert!(app.settle_disk_reload(&path, disk, true));
+        assert!(!app.document_state.is_document_dirty(&path));
+        assert!(app.document_state.engines[&path].is_at_save_point());
+        assert_eq!(
+            app.document_state.document_saves.baseline(&path),
+            Some(disk)
+        );
+        assert!(app.document_state.document_saves.failure(&path).is_none());
+    }
 }
