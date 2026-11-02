@@ -533,6 +533,7 @@ fn chip_0805(ids: &StockIds, name: &str, polarised: bool) -> Footprint {
             kind,
             stroke_width: 0.1,
             filled: false,
+            sketch_entity: None,
         };
         fp.fab_f = vec![
             // Body outline, then the cathode line inside the pad-1 end.

@@ -116,6 +116,7 @@ fn text_frame_round_trips_and_defaults_none() {
         },
         stroke_width: 0.15,
         filled: false,
+        sketch_entity: None,
     });
 
     let serialised = toml::to_string(&fp).unwrap();

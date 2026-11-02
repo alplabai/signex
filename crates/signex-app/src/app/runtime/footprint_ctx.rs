@@ -577,6 +577,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             kind_label,
             stroke_width_mm: g.stroke_width,
             filled: g.filled,
+            from_sketch: g.is_baked(),
             kind,
         })
     });

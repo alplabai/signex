@@ -361,6 +361,12 @@ impl CanvasSlot {
         self.camera.borrow_mut()
     }
 
+    /// Set the camera scale directly, for tests outside `canvas/`.
+    #[cfg(test)]
+    pub(crate) fn set_camera_scale_for_test(&self, scale: f32) {
+        self.camera.borrow_mut().scale = scale;
+    }
+
     pub fn set_render_cache(
         &mut self,
         render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,

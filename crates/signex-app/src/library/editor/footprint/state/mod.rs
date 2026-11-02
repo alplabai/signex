@@ -33,6 +33,7 @@ pub mod pad;
 pub mod placement;
 pub mod selection;
 pub mod selection_filter;
+pub mod silk_selection;
 pub mod snap_options;
 pub mod tool;
 

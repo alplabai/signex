@@ -188,6 +188,80 @@ mod tests {
         assert_eq!((y_2x * 2.0).fract(), 0.5, "snapped on the device grid");
     }
 
+    /// The wire preview, the bus-entry ghost and the sheet frame are drawn
+    /// straight to the frame, outside the scene lock. The functions the draw
+    /// sites stroke from (`wire_preview_strokes`, `ghost_bus_entry_line`,
+    /// `sheet_frame_line`) must give the width the scene replay gives a placed
+    /// wire at every zoom, in 1x and 2x windows: whole device pixels for an
+    /// axis-aligned segment (400 % unsnapped was 1.8 px against a placed
+    /// 2 px), the exact stroke law for the 45 degree bus entry (#1888).
+    #[test]
+    fn previews_ghost_and_frame_draw_at_the_placed_wire_width() {
+        use iced::{Point as P, Rectangle, Size};
+        use signex_types::schematic::{Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM};
+        let (mut app, main) = app_with_main();
+        let tab = undocked(&mut app);
+        scale_changed(&mut app, main, 1.0);
+        scale_changed(&mut app, tab, 2.0);
+        let bounds = Rectangle::new(P::ORIGIN, Size::new(2000.0, 2000.0));
+        let cursor = P::new(900.0, 700.0);
+        for window in [main, tab] {
+            let dpr = app.ui_state.device_px_per_logical_px(window);
+            for zoom in [0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0] {
+                let scale = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * zoom;
+                let transform = ScreenTransform {
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    scale,
+                    device_px_per_logical_px: dpr,
+                };
+                let law = schematic_draw_options(&transform)
+                    .stroke_px(SCHEMATIC_RENDER_MIN_STROKE_MM as f32);
+                // What the replay gives a placed wire of this direction.
+                let placed = |a: P, b: P| crate::scene_line_snap::snap_hairline(a, b, law, dpr).2;
+                let mut slot = crate::canvas::CanvasSlot::new();
+                slot.set_camera_scale_for_test(scale);
+                slot.drawing_mode = true;
+                slot.wire_preview = vec![
+                    SchPoint::new(5.0, 5.0),
+                    SchPoint::new(40.0, 5.0),
+                    SchPoint::new(40.0, 30.0),
+                ];
+                slot.ghost_bus_entry = Some((2.54, 2.54));
+                let canvas =
+                    crate::canvas::SchematicCanvas::new(&slot, app.canvas_view_prefs(window));
+                let context = format!("{zoom}x zoom, {dpr}x window");
+
+                let strokes = canvas
+                    .wire_preview_strokes(bounds, cursor, None)
+                    .expect("a wire is in progress");
+                assert!(strokes.placed.len() == 2 && !strokes.rubber.is_empty());
+                for (a, b, width) in strokes.placed.iter().chain(&strokes.rubber) {
+                    assert_eq!(*width, placed(*a, *b), "wire preview, {context}");
+                }
+                let (a, b, width) = strokes.placed[0];
+                assert_eq!(a.y, b.y, "a horizontal run stays horizontal");
+                if law * dpr < 4.0 {
+                    assert_eq!((width * dpr).fract(), 0.0, "whole device px, {context}");
+                }
+
+                let (a, b, width) = canvas
+                    .ghost_bus_entry_line(bounds, cursor)
+                    .expect("a ghost is showing");
+                assert_ne!((a.x, a.y), (b.x, b.y));
+                assert_eq!(width, placed(a, b), "bus-entry ghost, {context}");
+                assert_eq!(
+                    width, law,
+                    "a 45 degree entry keeps the exact law, {context}"
+                );
+
+                let (a, b) = (P::new(3.3, 5.3), P::new(90.1, 5.3));
+                let frame = canvas.sheet_frame_line(a, b, SCHEMATIC_RENDER_MIN_STROKE_MM, scale);
+                assert_eq!(frame.2, placed(a, b), "sheet frame, {context}");
+            }
+        }
+    }
+
     #[test]
     fn a_bad_reading_is_ignored() {
         let (mut app, main) = app_with_main();

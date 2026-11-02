@@ -608,6 +608,8 @@ pub struct FootprintSelectedSilkSummary {
     pub stroke_width_mm: f64,
     /// `true` = solid fill; `false` = outline only.
     pub filled: bool,
+    /// Baked from the sketch: shown read-only, edited in Sketch mode.
+    pub from_sketch: bool,
     /// Per-kind geometry — only the field set matching `kind_label`
     /// is meaningful at any given time. `None` slots stay None.
     pub kind: SilkKindGeometry,
