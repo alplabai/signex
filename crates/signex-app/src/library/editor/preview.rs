@@ -149,8 +149,21 @@ fn render_panes<'a>(
         }
     }
 
+    // A resolved symbol is drawn; the text summary stays the fallback for an
+    // unbound or still-loading one.
+    let symbol_drawing = (!symbol_unbound)
+        .then_some(state.symbol.as_ref())
+        .flatten()
+        .map(|sym| {
+            signex_widgets::symbol_preview::symbol_preview(
+                sym.to_lib_symbol(sym.name.clone()),
+                PREVIEW_PANE_HEIGHT,
+            )
+            .map(|()| LibraryMessage::Noop)
+        });
     let symbol_pane = render_pane(
         "Symbol",
+        symbol_drawing,
         if symbol_unbound {
             "No symbol bound".to_string()
         } else {
@@ -161,8 +174,28 @@ fn render_panes<'a>(
         symbol_btn_label,
         tokens,
     );
+    // Drawn with the Components panel's footprint canvas, like the symbol.
+    let footprint_drawing = (!footprint_unbound)
+        .then_some(state.footprint.as_ref())
+        .flatten()
+        .map(|fp| {
+            let primary = theme_ext::text_primary(tokens);
+            let program =
+                crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
+                    fp.clone(),
+                    theme_ext::accent(tokens),
+                    primary,
+                    theme_ext::text_secondary(tokens),
+                    primary,
+                );
+            iced::widget::canvas(program)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        });
     let footprint_pane = render_pane(
         "Footprint",
+        footprint_drawing,
         if footprint_unbound {
             "No footprint bound".to_string()
         } else {
@@ -189,6 +222,7 @@ fn render_panes<'a>(
 
 fn render_pane<'a>(
     label: &'a str,
+    drawing: Option<Element<'a, LibraryMessage>>,
     summary: String,
     unbound: bool,
     open_msg: Option<LibraryMessage>,
@@ -202,6 +236,7 @@ fn render_pane<'a>(
     };
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+    let pane_fill = crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Faint);
 
     let header = row![
         text(label).size(TS.body).color(muted),
@@ -210,14 +245,16 @@ fn render_pane<'a>(
     ]
     .align_y(iced::Alignment::Center);
 
-    let body = container(text(summary).size(TS.body).color(text_c))
+    let content: Element<'a, LibraryMessage> = match drawing {
+        Some(drawing) => drawing,
+        None => text(summary).size(TS.body).color(text_c).into(),
+    };
+    let body = container(content)
         .padding(10)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.02,
-            ))),
+            background: Some(iced::Background::Color(pane_fill)),
             border: Border {
                 width: 1.0,
                 radius: 3.0.into(),

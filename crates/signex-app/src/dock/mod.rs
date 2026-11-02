@@ -13,4 +13,7 @@ pub use layout_sync::{
     DOCK_LAYOUT_SAVE_DEBOUNCE, DockLayoutBarrier, DockLayoutMsg, DockLayoutSnapshot,
     DockLayoutStore, DockLayoutSync, DockLayoutWrite, RegionLayout,
 };
-pub use types::{DockArea, DockMessage, FloatingPanel, PanelPosition, PanelSite};
+pub use placement::{DropGeometry, RegionExtent, drop_target};
+pub use types::{
+    DockArea, DockMessage, DockTabAction, DockTabMenu, FloatingPanel, PanelPosition, PanelSite,
+};

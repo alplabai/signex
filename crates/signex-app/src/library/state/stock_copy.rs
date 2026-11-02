@@ -5,14 +5,92 @@ use std::path::{Path, PathBuf};
 use super::LibraryState;
 use crate::library::stock_copy::StockPrimitiveKind;
 
+/// The pinned `library_id` of the bundled stock library (#323).
+pub const STOCK_LIBRARY_ID: uuid::Uuid = uuid::uuid!("019df45d-af5e-7a00-8c3b-dd3bf89b40ae");
+
 impl LibraryState {
-    /// The kind of `path` when it is a primitive file inside the stock
-    /// library, which mounts read-only; `None` for any other path.
+    /// Refuse a library at `root` that is a copy of the bundled stock
+    /// library (it carries the stock id but is not the stock file), so the
+    /// bundled one always wins, whichever mount finishes first (#1894).
+    pub(crate) fn refuse_stock_copy(
+        &mut self,
+        root: &Path,
+        library_id: uuid::Uuid,
+    ) -> Result<(), signex_library::LibraryError> {
+        // Only while the bundled stock is mounted or still mounting: when it
+        // failed to open (#814), a copy is all that keeps stock references in
+        // designs resolving, so it is let through.
+        let stock_live = self.stock_library.is_some()
+            || self.pending_mounts.keys().any(|p| self.is_stock_root(p));
+        if library_id != STOCK_LIBRARY_ID || !stock_live || self.is_stock_root(root) {
+            return Ok(());
+        }
+        if !self.stock_copies_refused.iter().any(|p| p == root) {
+            self.stock_copies_refused.push(root.to_path_buf());
+        }
+        Err(signex_library::LibraryError::Conflict(format!(
+            "{} is a copy of the bundled stock library, so it was not opened: the bundled \
+             stock library is used instead. To change a stock part, copy it into your own \
+             library with Copy to Library.",
+            root.display()
+        )))
+    }
+
+    /// The bundled stock at `root` failed to mount: request the copies
+    /// refused while it was mounting, so stock references in designs keep
+    /// resolving. Returns the paths whose mount must be spawned.
+    pub(crate) fn readmit_stock_copies_after_failure(&mut self, root: &Path) -> Vec<PathBuf> {
+        if !self.is_stock_root(root) || self.stock_library.is_some() {
+            return Vec::new();
+        }
+        std::mem::take(&mut self.stock_copies_refused)
+            .into_iter()
+            .filter(|copy| {
+                self.request_mount(copy, crate::library::mount::MountIntent::Silent)
+                    == crate::library::mount::MountRequest::Spawn
+            })
+            .collect()
+    }
+
+    /// The kind of `path` when it is a primitive file inside the locked
+    /// stock library; `None` for any other path, and for every path while
+    /// a maintainer edits the stock library itself (#1892).
     pub(crate) fn stock_primitive_kind(&self, path: &Path) -> Option<StockPrimitiveKind> {
         let kind = StockPrimitiveKind::of_path(path)?;
         self.containing_library(path)
-            .is_some_and(|lib| self.is_stock_root(&lib.root))
+            .is_some_and(|lib| self.is_locked_stock_root(&lib.root))
             .then_some(kind)
+    }
+
+    /// Drop what the Components and Library panels hold for the closed
+    /// library at `root`: its selection, details, row menu, drag, hover and
+    /// expand state. Without this a closed library's details stay on screen
+    /// and its row menu can still try Place or Open.
+    pub(crate) fn forget_panel_state_of(&mut self, root: &Path) {
+        let of = |key: &crate::library::state::ComponentsPanelRowKey| key.library_path == root;
+        let panel = &mut self.components_panel;
+        if panel.selected.as_ref().is_some_and(of) {
+            panel.selected = None;
+        }
+        if panel.details.key.as_ref().is_some_and(of) {
+            panel.details = Default::default();
+        }
+        if panel.row_menu.as_ref().is_some_and(|m| of(&m.key)) {
+            panel.row_menu = None;
+        }
+        if panel.drag.as_ref().is_some_and(|d| of(&d.key)) {
+            panel.drag = None;
+        }
+        if panel.hovered.as_ref().is_some_and(of) {
+            panel.hovered = None;
+        }
+        self.panel_expanded.remove(root);
+        if self.panel_selected.as_ref().is_some_and(of) {
+            self.panel_selected = None;
+        }
+        if self.panel_last_click.as_ref().is_some_and(|(k, _)| of(k)) {
+            self.panel_last_click = None;
+        }
     }
 
     /// Mounted libraries that accept writes, as `(.snxlib path, name)`.

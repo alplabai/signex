@@ -35,6 +35,14 @@ impl Signex {
     ) -> Task<Message> {
         // #1378 - Esc abandons a pending chord, a waiting `T A` included.
         self.cancel_pending_chord();
+        // Esc mid-drag drops the panel where it floats and clears the preview.
+        if self.cancel_floating_drag() {
+            return Task::none();
+        }
+        // Esc mid-drag of a Components panel row drops nothing.
+        if self.library.components_panel.drag.take().is_some() {
+            return Task::none();
+        }
         match self.input_target(window) {
             // #547 — an Esc inside a detached modal's own window
             // addresses THAT modal and nothing else. The ladder is not
@@ -85,6 +93,12 @@ impl Signex {
             // could only ever fire `FootprintToolEscape` at an editor
             // living in another window.
             InputTarget::UndockedTab => {
+                if let Some(dismiss) = self.dock_tab_menu_escape() {
+                    return self.update(dismiss);
+                }
+                if let Some(dismiss) = self.components_row_menu_escape() {
+                    return self.update(dismiss);
+                }
                 if let Some(overlay_msg) = self.escape_overlay_message() {
                     return self.update(overlay_msg);
                 }
@@ -92,6 +106,13 @@ impl Signex {
             }
 
             InputTarget::Main => {
+                // An open dock-tab menu takes the Esc before anything else.
+                if let Some(dismiss) = self.dock_tab_menu_escape() {
+                    return self.update(dismiss);
+                }
+                if let Some(dismiss) = self.components_row_menu_escape() {
+                    return self.update(dismiss);
+                }
                 // The modal Esc ladder resolves FIRST, and here rather
                 // than in the keyboard subscription (#535). Two things
                 // follow from resolving it against live state:
@@ -117,6 +138,38 @@ impl Signex {
                 self.escape_editor_or_tool_reset()
             }
         }
+    }
+
+    /// Stop a floating-panel drag in flight, leaving the panel floating.
+    /// `true` when there was one.
+    fn cancel_floating_drag(&mut self) -> bool {
+        let dock = &mut self.document_state.dock;
+        let dragging = dock.floating.iter().any(|fp| fp.dragging);
+        for fp in &mut dock.floating {
+            fp.dragging = false;
+        }
+        let had_preview = dock.drop_preview.take().is_some();
+        dragging || had_preview
+    }
+
+    /// Esc closes an open Components panel row menu.
+    fn components_row_menu_escape(&self) -> Option<Message> {
+        self.library
+            .components_panel
+            .row_menu
+            .is_some()
+            .then_some(Message::Library(
+                crate::library::LibraryMessage::ComponentsPanelRowMenuDismissed,
+            ))
+    }
+
+    /// Esc closes an open dock tab right-click menu.
+    fn dock_tab_menu_escape(&self) -> Option<Message> {
+        self.document_state
+            .dock
+            .tab_menu
+            .is_some()
+            .then_some(Message::Dock(crate::dock::DockMessage::TabMenuDismissed))
     }
 
     /// v0.15 — the main window's post-ladder Esc: if its active tab is a

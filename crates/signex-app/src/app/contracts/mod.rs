@@ -16,6 +16,8 @@ pub enum DragTarget {
     LeftPanel,
     RightPanel,
     BottomPanel,
+    /// The divider between the Components panel list and its details.
+    ComponentsSplit,
 }
 
 #[derive(Debug, Clone)]

@@ -41,10 +41,10 @@ pub(super) fn view_action_row<'a>(
     let table_for_add = Some(table.to_string());
     let add_btn = button(
         text("Add Component")
-            .size(BROWSER_TEXT_SIZE)
+            .size(BROWSER_HEADER_SIZE)
             .color(iced::Color::WHITE),
     )
-    .padding([SP.s, SP.l])
+    .padding([SP.xs, SP.m])
     .on_press_maybe((!read_only).then(|| LibraryMessage::BrowserAddComponent {
         library_path: library_for_add,
         table: table_for_add,
@@ -70,8 +70,8 @@ pub(super) fn view_action_row<'a>(
     // action row is the entry point.
     let edit_btn: Element<'a, LibraryMessage> =
         if let Some(open_edit) = edit_details_message(library_path, table, selected, read_only) {
-            button(text("Edit Details").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([SP.s, SP.l])
+            button(text("Edit Details").size(BROWSER_HEADER_SIZE).color(text_c))
+                .padding([SP.xs, SP.m])
                 .on_press(open_edit)
                 .style(move |_: &Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -87,8 +87,8 @@ pub(super) fn view_action_row<'a>(
                 })
                 .into()
         } else {
-            container(text("Edit Details").size(BROWSER_TEXT_SIZE).color(muted))
-                .padding([SP.s, SP.l])
+            container(text("Edit Details").size(BROWSER_HEADER_SIZE).color(muted))
+                .padding([SP.xs, SP.m])
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
                         1.0, 1.0, 1.0, 0.02,
@@ -110,10 +110,10 @@ pub(super) fn view_action_row<'a>(
         let table_for_del = table.to_string();
         button(
             text("Delete Selected")
-                .size(BROWSER_TEXT_SIZE)
+                .size(BROWSER_HEADER_SIZE)
                 .color(text_c),
         )
-        .padding([SP.s, SP.l])
+        .padding([SP.xs, SP.m])
         .on_press(LibraryMessage::BrowserDeleteRowRequest {
             library_path: library_for_del,
             table: table_for_del,
@@ -134,39 +134,43 @@ pub(super) fn view_action_row<'a>(
         .into()
     } else {
         // Greyed-out placeholder when no row is selected.
-        container(text("Delete Selected").size(BROWSER_TEXT_SIZE).color(muted))
-            .padding([SP.s, SP.l])
-            .style(move |_: &Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.02,
-                ))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..Default::default()
-            })
-            .into()
+        container(
+            text("Delete Selected")
+                .size(BROWSER_HEADER_SIZE)
+                .color(muted),
+        )
+        .padding([SP.xs, SP.m])
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.02,
+            ))),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..Default::default()
+        })
+        .into()
     };
 
     let mut actions = row![
         add_btn,
-        Space::new().width(8),
+        Space::new().width(SP.s),
         edit_btn,
-        Space::new().width(8),
+        Space::new().width(SP.s),
         delete_btn
     ]
     .spacing(0)
     .align_y(iced::Alignment::Center);
     if read_only {
-        actions = actions.push(Space::new().width(12)).push(
+        actions = actions.push(Space::new().width(SP.m)).push(
             text("This library ships with Signex and is not editable.")
-                .size(BROWSER_TEXT_SIZE)
+                .size(BROWSER_HEADER_SIZE)
                 .color(muted),
         );
     }
-    container(actions).padding([SP.m, SP.s]).into()
+    container(actions).padding([SP.s, SP.s]).into()
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@
 //! search-filter predicate. Extracted verbatim from the former
 //! single-file `browser` module.
 
+use super::names::PrimitiveNames;
 use super::sort::CellSortKey;
 use super::*;
 use signex_types::object_id::short_id;
@@ -73,13 +74,13 @@ impl ColumnKind {
     /// The row's sort key for this column. A parameter orders by its
     /// `ParamValue` (a measurement by base-unit quantity); every other
     /// column orders by its cell text.
-    pub(super) fn sort_key_for(&self, r: &ComponentRow) -> CellSortKey {
+    pub(super) fn sort_key_for(&self, r: &ComponentRow, names: &PrimitiveNames) -> CellSortKey {
         match self {
             ColumnKind::Parameter(key) => match r.parameters.get(key) {
                 Some(value) => CellSortKey::from_param(value),
                 None => CellSortKey::from_cell(""),
             },
-            _ => CellSortKey::from_cell(&self.cell_value(r)),
+            _ => CellSortKey::from_cell(&self.cell_value_named(r, names)),
         }
     }
 
@@ -112,7 +113,14 @@ impl ColumnKind {
     /// [`ColumnKind::Rev`], the value is the bare semver string (the
     /// 🔒/🔓 badge is added at render time, not in the sort key, so
     /// released and unreleased rows still sort by version order).
+    #[cfg(test)]
     pub(super) fn cell_value(&self, r: &ComponentRow) -> String {
+        self.cell_value_named(r, &PrimitiveNames::none())
+    }
+
+    /// [`Self::cell_value`] with the Symbol and Footprint cells showing the
+    /// bound primitive's name; the short id stands in when it is not listed.
+    pub(super) fn cell_value_named(&self, r: &ComponentRow, names: &PrimitiveNames) -> String {
         match self {
             ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
             ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
@@ -122,16 +130,17 @@ impl ColumnKind {
                 if r.is_symbol_unbound() {
                     "—".to_string()
                 } else {
-                    // Surface the short uuid prefix so the user has an
-                    // at-a-glance signal without bloating the column
-                    // width. Full path/name is in the Properties panel.
-                    format!("• {}", short_id(&r.symbol_ref.uuid))
+                    names
+                        .symbol(&r.symbol_ref)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| format!("• {}", short_id(&r.symbol_ref.uuid)))
                 }
             }
             ColumnKind::Footprint => match &r.footprint_ref {
-                Some(fp) if !r.is_footprint_unbound() => {
-                    format!("• {}", short_id(&fp.uuid))
-                }
+                Some(fp) if !r.is_footprint_unbound() => names
+                    .footprint(fp)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("• {}", short_id(&fp.uuid))),
                 _ => "—".to_string(),
             },
             ColumnKind::Tags => match r.parameters.get("tags") {
@@ -339,7 +348,18 @@ fn shorten_label(key: &str) -> String {
     }
 }
 
-pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str) -> bool {
+pub(super) fn row_matches_filter(r: &ComponentRow, needle: &str, names: &PrimitiveNames) -> bool {
+    let bound = [
+        names.symbol(&r.symbol_ref),
+        r.footprint_ref.as_ref().and_then(|fp| names.footprint(fp)),
+    ];
+    if bound
+        .into_iter()
+        .flatten()
+        .any(|n| n.to_lowercase().contains(needle))
+    {
+        return true;
+    }
     if r.internal_pn.as_str().to_lowercase().contains(needle) {
         return true;
     }
@@ -420,7 +440,11 @@ mod sort_tests {
     fn sorted_display(values: Vec<ParamValue>) -> Vec<String> {
         let column = ColumnKind::Parameter("value".into());
         let mut rows: Vec<ComponentRow> = values.into_iter().map(param_row).collect();
-        super::super::sort::sort_by_cell_key(&mut rows, |r| column.sort_key_for(r), false);
+        super::super::sort::sort_by_cell_key(
+            &mut rows,
+            |r| column.sort_key_for(r, &PrimitiveNames::none()),
+            false,
+        );
         rows.iter().map(|r| column.cell_value(r)).collect()
     }
 

@@ -592,6 +592,11 @@ pub enum PrimitiveEdit {
 pub enum PickerMsg {
     /// Left-dock library panel search box edited.
     PanelSearchChanged(String),
+    /// A Library panel library row's ▸ / ▾ was clicked (#1895).
+    PanelLibraryToggled(std::path::PathBuf),
+    /// A component listed under an expanded Library panel row was
+    /// clicked: one click highlights it, a double click opens it.
+    PanelComponentClicked(super::state::ComponentsPanelRowKey),
     FilterChanged(String),
     SelectComponent(uuid::Uuid),
     PlaceSelected,

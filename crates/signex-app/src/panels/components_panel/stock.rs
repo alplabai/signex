@@ -1,8 +1,14 @@
 //! Bundled stock library: locate it next to the executable and mount it.
 //!
 //! The Stock section is not user-configured state, so nothing here reads or
-//! writes `global_libraries.toml`. The app never writes to the stock
-//! directory; only `open_library` (a read of the manifest) touches it.
+//! writes `global_libraries.toml`. The stock library mounts read-only and
+//! the app never writes to it, except in the maintainer mode below.
+//!
+//! Maintainer mode (#1892): with `SIGNEX_EDIT_STOCK=1` set, a build run from
+//! a source checkout mounts `assets/stock-library/Stock.snxlib` writable, so
+//! the stock parts are edited in the normal editors and the saved files go
+//! out by PR. An installed copy is never made writable: the next update
+//! would overwrite the edits.
 //!
 //! Install layouts (the installer packaging agrees on exactly these):
 //! - Windows: `<exe dir>\library\Stock.snxlib`
@@ -13,6 +19,9 @@
 use std::path::{Path, PathBuf};
 
 const STOCK_FILE: &str = "Stock.snxlib";
+
+/// Environment variable that asks for the maintainer mode; `1` turns it on.
+pub const EDIT_STOCK_ENV: &str = "SIGNEX_EDIT_STOCK";
 
 /// Packaging layout, split from `cfg!` so each one is testable anywhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +53,18 @@ impl InstallLayout {
 
 fn dev_path(root: &Path) -> PathBuf {
     root.join("assets").join("stock-library").join(STOCK_FILE)
+}
+
+/// Whether the stock library at `path` mounts writable: the maintainer
+/// asked for it and `path` is a source checkout's copy, never an
+/// installed one.
+pub fn is_stock_editable(path: &Path, requested: bool) -> bool {
+    requested && path.ends_with(Path::new("assets").join("stock-library").join(STOCK_FILE))
+}
+
+/// Whether the maintainer mode was asked for in the environment.
+fn edit_stock_requested() -> bool {
+    std::env::var_os(EDIT_STOCK_ENV).is_some_and(|v| v == "1")
 }
 
 /// Pure resolver: installed copy first, then the dev checkout (the
@@ -89,15 +110,25 @@ pub fn register_stock(library_state: &mut crate::library::LibraryState) -> Optio
         );
         return None;
     };
-    register_stock_at(library_state, path)
+    let editable = is_stock_editable(&path, edit_stock_requested());
+    if editable {
+        tracing::warn!(
+            target: "signex::library",
+            path = %path.display(),
+            "{EDIT_STOCK_ENV}=1: the stock library mounts writable; saves change what ships"
+        );
+    }
+    register_stock_at(library_state, path, editable)
 }
 
 fn register_stock_at(
     library_state: &mut crate::library::LibraryState,
     path: PathBuf,
+    editable: bool,
 ) -> Option<PathBuf> {
     use crate::library::mount::{MountIntent, MountRequest};
     library_state.stock_library_root = Some(path.clone());
+    library_state.stock_editable = editable;
     (library_state.request_mount(&path, MountIntent::Silent) == MountRequest::Spawn).then_some(path)
 }
 
@@ -199,13 +230,17 @@ mod tests {
         let mut lib = crate::library::LibraryState::default();
         let path = PathBuf::from("/nowhere/Stock.snxlib");
         assert_eq!(
-            register_stock_at(&mut lib, path.clone()),
+            register_stock_at(&mut lib, path.clone(), false),
             Some(path.clone())
         );
         assert_eq!(lib.stock_library_root, Some(path.clone()));
         assert!(lib.open_libraries.is_empty(), "nothing is read here");
         assert!(lib.is_read_only_target(&path), "guarded before it lands");
-        assert_eq!(register_stock_at(&mut lib, path), None, "already requested");
+        assert_eq!(
+            register_stock_at(&mut lib, path, false),
+            None,
+            "already requested"
+        );
     }
 
     /// A writable mount of the stock file (a global entry, a project
@@ -215,7 +250,7 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let path = dev_path(&root);
         let mut lib = crate::library::LibraryState::default();
-        register_stock_at(&mut lib, path.clone());
+        register_stock_at(&mut lib, path.clone(), false);
         let prepared = crate::library::mount::prepare_mount(&path).unwrap();
         lib.mount_prepared(prepared).unwrap();
         assert!(lib.is_read_only(&path));
@@ -231,8 +266,44 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let path = dev_path(&root);
         let mut lib = crate::library::LibraryState::default();
-        register_stock_at(&mut lib, path.clone());
+        register_stock_at(&mut lib, path.clone(), false);
         lib.open_library(path.clone()).unwrap();
         assert!(lib.is_read_only(&path));
+    }
+
+    /// #1892: the maintainer mode needs both the request and a source
+    /// checkout's copy; an installed copy never becomes writable.
+    #[test]
+    fn only_a_requested_source_checkout_copy_is_editable() {
+        let dev = Path::new("/work/signex/assets/stock-library/Stock.snxlib");
+        let installed = Path::new("C:/Signex/library/Stock.snxlib");
+        assert!(is_stock_editable(dev, true));
+        assert!(!is_stock_editable(dev, false));
+        assert!(!is_stock_editable(installed, true));
+        assert!(!is_stock_editable(installed, false));
+    }
+
+    /// #1892: in maintainer mode the stock library mounts writable, stays
+    /// the Stock section, and its primitives open directly for editing.
+    #[test]
+    fn an_editable_stock_library_mounts_writable_and_opens_its_files() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let path = dev_path(&root);
+        let mut lib = crate::library::LibraryState::default();
+        register_stock_at(&mut lib, path.clone(), true);
+        let prepared = crate::library::mount::prepare_mount(&path).unwrap();
+        lib.mount_prepared(prepared).unwrap();
+        assert!(!lib.is_read_only(&path));
+        assert_eq!(lib.stock_library, Some(path.clone()));
+        assert_eq!(
+            lib.mount_source_for(&path, &[]),
+            crate::library::state::ComponentsMountSource::Stock
+        );
+        let symbol = path.parent().unwrap().join("symbols").join("R.snxsym");
+        assert_eq!(lib.stock_primitive_kind(&symbol), None, "no copy detour");
+        assert!(
+            lib.is_read_only_target(&path),
+            "recovery flows (git re-init, binding repair) still never run on it"
+        );
     }
 }
