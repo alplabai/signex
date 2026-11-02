@@ -399,32 +399,42 @@ impl Signex {
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
     ) -> Task<Message> {
-        self.apply_reloaded_with(idx, outcome, restored_bytes, true)
+        self.apply_reloaded_reporting(idx, outcome, restored_bytes, true)
+            .0
     }
 
-    /// [`Self::apply_reloaded`]; `commit` false installs the document without
-    /// a "Restore" commit (a disk-conflict Reload restores nothing).
-    pub(crate) fn apply_reloaded_with(
+    /// [`Self::apply_reloaded`] plus whether the reloaded document was
+    /// installed (`commit` false installs without a "Restore" commit: a
+    /// disk-conflict Reload restores nothing): false when a failure card replaced it or a schematic's new
+    /// engine could not start and the older one was kept.
+    pub(crate) fn apply_reloaded_reporting(
         &mut self,
         idx: usize,
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
         commit: bool,
-    ) -> Task<Message> {
+    ) -> (Task<Message>, bool) {
         let Some(tab) = self.document_state.tabs.get(idx) else {
-            return Task::none();
+            return (Task::none(), false);
         };
+        let mut document_installed = true;
         let path = tab.path.clone();
         let kind = tab.kind.clone();
         match outcome {
-            Err(RestoreFailure::NotReloaded { why, unreadable }) => match kind {
-                crate::app::TabKind::Schematic => {
-                    self.fail_schematic_reload(&path, idx, &why, unreadable)
+            Err(RestoreFailure::NotReloaded { why, unreadable }) => {
+                match kind {
+                    crate::app::TabKind::Schematic => {
+                        self.fail_schematic_reload(&path, idx, &why, unreadable)
+                    }
+                    crate::app::TabKind::Pcb => self.fail_pcb_reload(&path, idx, &why, unreadable),
+                    _ => self.fail_primitive_reload(&path, &why, unreadable),
                 }
-                crate::app::TabKind::Pcb => self.fail_pcb_reload(&path, idx, &why, unreadable),
-                _ => self.fail_primitive_reload(&path, &why, unreadable),
-            },
-            Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
+                return (Task::none(), false);
+            }
+            Err(RestoreFailure::NotRestored(message)) => {
+                self.report_restore_failure(message);
+                return (Task::none(), false);
+            }
             Ok(RestoreJobDocument::Schematic(sheet)) => {
                 crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
                 let installed = if idx == self.document_state.active_tab {
@@ -443,6 +453,7 @@ impl Signex {
                     self.install_schematic_at(&path, *sheet)
                 };
                 self.settle_restored_schematic(&path, installed, commit, restored_bytes);
+                document_installed = installed;
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
@@ -500,9 +511,9 @@ impl Signex {
                     self.commit_restore(&path, restored_bytes);
                 }
             }
-            Ok(RestoreJobDocument::Library) => return self.reload_library_tab(&kind),
+            Ok(RestoreJobDocument::Library) => return (self.reload_library_tab(&kind), true),
         }
-        Task::none()
+        (Task::none(), document_installed)
     }
 
     /// Reload-after-restore for `.snxlib` tabs. The restore rewrote the
