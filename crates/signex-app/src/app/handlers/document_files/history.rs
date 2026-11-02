@@ -481,7 +481,14 @@ impl Signex {
                 }
             }
             Ok(RestoreJobDocument::Symbol(file)) => {
-                let state = crate::app::SymbolDocument::new(path.clone(), *file);
+                let mut state = crate::app::SymbolDocument::new(path.clone(), *file);
+                // Carry the counter over so a delete warning raised on the
+                // replaced editor reads stale (#1903).
+                state.history_generation = self
+                    .document_state
+                    .symbol_editors
+                    .get(&path)
+                    .map_or(0, |old| old.history_generation + 1);
                 self.warn_if_cascade_owed(&path);
                 self.document_state
                     .symbol_editors

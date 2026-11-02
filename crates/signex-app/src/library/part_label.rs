@@ -13,8 +13,8 @@ const NO_VALUE: &str = "\u{2014}";
 const SHORT_ID_LEN: usize = 8;
 
 /// A readable name for a placed symbol's `"<library uuid>:<symbol uuid>"` id:
-/// the drift scan's `Library/Symbol`, else what the mounted libraries know,
-/// else a short form of the two uuids.
+/// the drift scan's `Library/Symbol`, else what the mounted libraries know
+/// (`Library/<short symbol id>` for a symbol they no longer list), else a short form of the two uuids.
 pub fn part_library_label(
     lib_id: &str,
     drift_names: &HashMap<String, String>,
@@ -33,7 +33,7 @@ pub fn part_library_label(
     if let Some(lib) = libs.iter().find(|l| l.library_id == library_id) {
         return match lib.cached_symbols.iter().find(|s| s.uuid == symbol_id) {
             Some(s) => format!("{}/{}", lib.display_name, s.name),
-            None => lib.display_name.clone(),
+            None => format!("{}/{}", lib.display_name, short_id(symbol)),
         };
     }
     format!("{}:{}", short_id(library), short_id(symbol))
@@ -112,11 +112,15 @@ mod tests {
     }
 
     #[test]
-    fn a_mounted_library_without_the_symbol_names_the_library() {
+    fn two_removed_symbols_of_one_library_get_different_labels() {
         let lib_id = Uuid::now_v7();
         let libs = [library("Stock", lib_id, Vec::new())];
-        let id = format!("{lib_id}:{}", Uuid::now_v7());
-        assert_eq!(part_library_label(&id, &HashMap::new(), &libs), "Stock");
+        let label =
+            |sym: Uuid| part_library_label(&format!("{lib_id}:{sym}"), &HashMap::new(), &libs);
+        let (a, b) = (Uuid::now_v7(), Uuid::now_v7());
+        assert_ne!(label(a), label(b));
+        assert!(label(a).starts_with("Stock/"), "{}", label(a));
+        assert!(label(a).len() < 20, "{}", label(a));
     }
 
     #[test]

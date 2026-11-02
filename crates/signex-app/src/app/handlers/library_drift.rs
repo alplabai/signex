@@ -122,6 +122,17 @@ impl Signex {
         for problem in &report.problems {
             crate::diagnostics::log_warning(problem);
         }
+        // A worker failure carries only `problems`: keep what was reported.
+        if !(report.sheets.is_empty() && !report.problems.is_empty()) {
+            for (library, (name, reason)) in &report.unreadable_libs {
+                if !self.library.drift.unreadable_libs.contains(library) {
+                    crate::diagnostics::log_warning(
+                        crate::library::drift::unreadable_library_warning(name, reason),
+                    );
+                }
+            }
+            self.library.drift.unreadable_libs = report.unreadable_libs.keys().copied().collect();
+        }
         // A worker failure carries only `problems`; keep the previous result.
         if report.sheets.is_empty() && !report.problems.is_empty() {
             return Task::none();
@@ -196,7 +207,10 @@ impl Signex {
                 .collect();
             crate::diagnostics::log_warning(format!(
                 "{}: library symbol missing for {}; the sheet keeps its embedded copy.",
-                sheet.display(),
+                sheet.file_name().map_or_else(
+                    || sheet.display().to_string(),
+                    |n| n.to_string_lossy().into_owned()
+                ),
                 names.join(", ")
             ));
         }

@@ -126,9 +126,13 @@ impl Signex {
         };
         let (baseline, generation, zoom_step) =
             (old.baseline.clone(), old.save_generation, old.zoom_step);
+        // A new counter value, so a delete warning raised on the old editor
+        // reads stale (#1903).
+        let history_generation = old.history_generation + 1;
         let mut editor = SymbolDocument::new(path.to_path_buf(), file);
         editor.baseline = baseline;
         editor.save_generation = generation;
+        editor.history_generation = history_generation;
         editor.zoom_step = zoom_step;
         editor.mark_dirty();
         self.document_state

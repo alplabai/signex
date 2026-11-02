@@ -7,6 +7,7 @@ use signex_app::app::{
     ContextMenuMsg, Message, Signex, SymbolDocument, TabContextAction, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
+use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
 use signex_app::panels::PanelMsg;
 use signex_library::{Symbol, SymbolFile};
 use std::path::PathBuf;
@@ -294,29 +295,79 @@ fn an_edit_after_the_warning_makes_it_stale_and_confirm_says_so() {
     );
 }
 
+fn add_pin(app: &mut Signex, path: &std::path::Path) {
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Symbol(SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 }),
+    }));
+}
+
 #[test]
 fn an_edit_at_full_history_depth_makes_the_warning_stale() {
     let f = fixture();
     let mut app = app_with_library(&f);
     place(&mut app, &f);
     let path = open_container_editor(&mut app, &f);
-    let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     for _ in 0..SymbolDocument::HISTORY_DEPTH + 5 {
-        let snapshot = editor.snapshot();
-        editor.commit_history(snapshot);
+        add_pin(&mut app, &path);
     }
-    assert_eq!(editor.undo_snapshots.len(), SymbolDocument::HISTORY_DEPTH);
+    let depth = |app: &Signex| {
+        app.document_state.symbol_editors[&path]
+            .undo_snapshots
+            .len()
+    };
+    assert_eq!(depth(&app), SymbolDocument::HISTORY_DEPTH);
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
     assert!(warning_shown(&app));
 
     // The stack stays at its cap, so a depth comparison sees no change.
-    let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
-    let snapshot = editor.snapshot();
-    editor.commit_history(snapshot);
-    assert_eq!(editor.undo_snapshots.len(), SymbolDocument::HISTORY_DEPTH);
+    add_pin(&mut app, &path);
+    assert_eq!(depth(&app), SymbolDocument::HISTORY_DEPTH);
     panel(&mut app, PanelMsg::SchLibrarySelectSymbol(1));
 
     assert!(!warning_shown(&app), "an edit at full depth is an edit");
+}
+
+#[test]
+fn a_coalesced_field_edit_after_the_warning_makes_it_stale() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    open_container_editor(&mut app, &f);
+    // The first keystroke opens the step the next one joins.
+    panel(
+        &mut app,
+        PanelMsg::SymEditorSetSymbolName("TWO-UNIT-1".into()),
+    );
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    assert!(warning_shown(&app));
+
+    panel(
+        &mut app,
+        PanelMsg::SymEditorSetSymbolName("TWO-UNIT-12".into()),
+    );
+    panel(&mut app, PanelMsg::SchLibrarySelectSymbol(1));
+
+    assert!(!warning_shown(&app), "a joined keystroke is an edit");
+}
+
+#[test]
+fn an_undo_after_the_warning_makes_it_stale() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let path = open_container_editor(&mut app, &f);
+    add_pin(&mut app, &path);
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    assert!(warning_shown(&app));
+
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEdit::Symbol(SymbolEditorMsg::Undo),
+    }));
+    panel(&mut app, PanelMsg::SchLibrarySelectSymbol(1));
+
+    assert!(!warning_shown(&app), "an undo is an edit");
 }
 
 /// A `symbols/` folder that cannot be listed is not a removal (#1903).

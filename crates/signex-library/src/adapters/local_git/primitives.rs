@@ -447,10 +447,13 @@ impl LocalGitAdapter {
         let present = dir
             .try_exists()
             .map_err(|e| LibraryError::Backend(format!("check {}: {e}", dir.display())))?;
+        let empty = |this: &Self| {
+            this.record_symbol_problems(&[]);
+            this.symbol_index.rebuild(&[]);
+            Ok(Vec::new())
+        };
         if !present {
-            self.record_symbol_problems(&[]);
-            self.symbol_index.rebuild(&[]);
-            return Ok(Vec::new());
+            return empty(self);
         }
         let suffix = format!(".{SYMBOL_EXT}");
         let mut out: Vec<(PathBuf, SymbolFile)> = Vec::new();
@@ -460,8 +463,33 @@ impl LocalGitAdapter {
             .max_depth(1)
             .into_iter()
         {
-            let entry =
-                entry.map_err(|e| LibraryError::Backend(format!("list {}: {e}", dir.display())))?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    let vanished = e
+                        .io_error()
+                        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound);
+                    // Only an unreadable root fails the scan (the folder
+                    // going away between the check and the walk is empty).
+                    if e.depth() == 0 {
+                        if vanished {
+                            return empty(self);
+                        }
+                        return Err(LibraryError::Backend(format!(
+                            "list {}: {e}",
+                            dir.display()
+                        )));
+                    }
+                    // An entry that vanished mid-walk is gone; any other
+                    // failure is a problem file, so a lookup is undetermined
+                    // rather than NotFound.
+                    if !vanished {
+                        let at = e.path().map_or_else(|| dir.clone(), Path::to_path_buf);
+                        problems.push(SymbolFileProblem::new(at, &e.to_string()));
+                    }
+                    continue;
+                }
+            };
             let path = entry.path();
             if !path.is_file() {
                 continue;
