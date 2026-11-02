@@ -24,6 +24,9 @@ pub type DiskObservation = Result<ContentHash, DiskDrift>;
 #[derive(Default)]
 pub struct DiskPoll {
     in_flight: bool,
+    /// Baselines as the running pass started; an observation whose baseline
+    /// moved since (a save landed meanwhile) is stale and dropped.
+    started_with: HashMap<PathBuf, ContentHash>,
     /// The change already reported per path; a poll that sees the same file
     /// again stays quiet.
     reported: HashMap<PathBuf, DiskObservation>,
@@ -79,7 +82,12 @@ impl Signex {
         if paths.is_empty() {
             return Task::none();
         }
-        self.document_state.disk_poll.in_flight = true;
+        let d = &mut self.document_state;
+        d.disk_poll.started_with = paths
+            .iter()
+            .filter_map(|p| Some((p.clone(), d.document_saves.baseline(p)?)))
+            .collect();
+        d.disk_poll.in_flight = true;
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_all(paths))
@@ -95,17 +103,26 @@ impl Signex {
         seen: Vec<(PathBuf, DiskObservation)>,
     ) -> Task<Message> {
         self.document_state.disk_poll.in_flight = false;
+        let started_with = std::mem::take(&mut self.document_state.disk_poll.started_with);
         for (path, observed) in seen {
             let d = &mut self.document_state;
             let open = d.tabs.iter().any(|tab| tab.path == path);
             // A write begun since the read owns the file's state now.
-            if !open || d.document_saves.is_saving(&path) {
+            if !open
+                || d.document_saves.is_saving(&path)
+                || started_with.get(&path).copied() != d.document_saves.baseline(&path)
+            {
                 continue;
             }
             let known = match observed {
                 Ok(hash) => d.document_saves.knows(&path, hash),
                 Err(_) => false,
             };
+            // A card already up keeps the slot; leave the change unreported so
+            // a later tick raises it once the slot is free.
+            if !known && d.error_notice.is_some() {
+                continue;
+            }
             if !d.disk_poll.observe(path.clone(), observed, known) {
                 continue;
             }
@@ -115,9 +132,7 @@ impl Signex {
                 "[disk] {name} {}; nothing was changed in the open document",
                 drift.describe()
             ));
-            if self.document_state.error_notice.is_none() {
-                self.document_state.error_notice = Some(ErrorNotice::disk_changed(path, drift));
-            }
+            self.document_state.error_notice = Some(ErrorNotice::disk_changed(path, drift));
         }
         Task::none()
     }

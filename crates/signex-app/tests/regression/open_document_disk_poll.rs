@@ -82,3 +82,36 @@ fn the_same_change_is_reported_once() {
         "no second notice for one change"
     );
 }
+
+#[test]
+fn a_deleted_sheet_raises_the_card_on_the_poll() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("PollGone1877.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    fs::remove_file(&path).unwrap();
+
+    poll(&mut app);
+
+    assert_eq!(card_title(&app).as_deref(), Some("File Missing on Disk"));
+}
+
+#[test]
+fn a_change_met_while_another_notice_shows_is_reported_once_the_slot_frees() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("PollBusy1877.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    fs::write(&path, sheet_text("A3")).unwrap();
+    poll(&mut app);
+    // A second change while the first card is still up must not be lost.
+    fs::write(&path, sheet_text("A2")).unwrap();
+    poll(&mut app);
+    app.document_state.error_notice = None;
+
+    poll(&mut app);
+
+    assert_eq!(card_title(&app).as_deref(), Some("File Changed on Disk"));
+}
