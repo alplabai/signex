@@ -442,7 +442,12 @@ impl LocalGitAdapter {
 
     pub(super) fn scan_symbol_files(&self) -> Result<Vec<(PathBuf, SymbolFile)>, LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
-        if !dir.exists() {
+        // Only a folder that is really absent is empty; one that cannot be
+        // checked or listed is a backend failure, never "not found" (#1903).
+        let present = dir
+            .try_exists()
+            .map_err(|e| LibraryError::Backend(format!("check {}: {e}", dir.display())))?;
+        if !present {
             self.record_symbol_problems(&[]);
             self.symbol_index.rebuild(&[]);
             return Ok(Vec::new());
@@ -454,8 +459,9 @@ impl LocalGitAdapter {
             .min_depth(1)
             .max_depth(1)
             .into_iter()
-            .filter_map(Result::ok)
         {
+            let entry =
+                entry.map_err(|e| LibraryError::Backend(format!("list {}: {e}", dir.display())))?;
             let path = entry.path();
             if !path.is_file() {
                 continue;

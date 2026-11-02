@@ -189,11 +189,9 @@ impl Signex {
             let names: Vec<String> = ids
                 .iter()
                 .map(|id| {
-                    let name = self
-                        .library
+                    self.library
                         .drift
-                        .display_name(id, &self.library.open_libraries);
-                    format!("{name} [{id}]")
+                        .display_name(id, &self.library.open_libraries)
                 })
                 .collect();
             crate::diagnostics::log_warning(format!(
