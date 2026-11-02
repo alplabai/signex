@@ -229,3 +229,80 @@ fn an_undocked_symbols_own_context_menu_shows_in_its_window_not_the_main_ones() 
         "A's own context menu shows"
     );
 }
+
+/// B is active in main; A is undocked. `set` opens a menu or dialog on B
+/// only, so only the window that owns it may draw it.
+fn two_footprints(set: fn(&mut FootprintDocument)) -> (Signex, iced::window::Id) {
+    let a = PathBuf::from("a.snxfpt");
+    let b = PathBuf::from("b.snxfpt");
+    let (mut app, window) = undocked(TabKind::FootprintEditor(a.clone()), &a);
+    app.document_state
+        .footprint_editors
+        .insert(a.clone(), footprint(&a));
+    let mut other = footprint(&b);
+    set(&mut other);
+    app.document_state
+        .footprint_editors
+        .insert(b.clone(), other);
+    app.document_state
+        .tabs
+        .push(tab(&b, TabKind::FootprintEditor(b.clone())));
+    app.document_state.active_tab = 1;
+    (app, window)
+}
+
+fn open_context_menu(editor: &mut FootprintDocument) {
+    editor.state.context_menu = Some(
+        crate::library::editor::footprint::state::FootprintContextMenuState {
+            x: 10.0,
+            y: 10.0,
+            target: crate::library::editor::footprint::state::FootprintContextTarget::Empty,
+            submenu: None,
+        },
+    );
+}
+
+fn open_move_by(editor: &mut FootprintDocument) {
+    editor.state.move_by_modal = Some(crate::library::editor::footprint::state::MoveByModal {
+        dx_buf: String::new(),
+        dy_buf: String::new(),
+    });
+}
+
+#[test]
+fn an_undocked_footprint_window_does_not_draw_another_footprints_context_menu() {
+    let (mut app, window) = two_footprints(open_context_menu);
+    assert!(
+        !shows(&app, window, "Find Similar Objects"),
+        "B's context menu is not A's"
+    );
+    let own = app
+        .document_state
+        .footprint_editors
+        .get_mut(&PathBuf::from("a.snxfpt"))
+        .unwrap();
+    open_context_menu(own);
+    assert!(
+        shows(&app, window, "Find Similar Objects"),
+        "A's own menu shows"
+    );
+}
+
+#[test]
+fn an_undocked_footprint_window_does_not_draw_another_footprints_move_by_dialog() {
+    let (mut app, window) = two_footprints(open_move_by);
+    assert!(
+        !shows(&app, window, "Move Selection By"),
+        "B's dialog is not A's"
+    );
+    let own = app
+        .document_state
+        .footprint_editors
+        .get_mut(&PathBuf::from("a.snxfpt"))
+        .unwrap();
+    open_move_by(own);
+    assert!(
+        shows(&app, window, "Move Selection By"),
+        "A's own dialog shows"
+    );
+}
