@@ -193,9 +193,10 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
-        "place_local_net_label" | "place_net_label" => {
-            Message::Tool(ToolMessage::SelectTool(Tool::Label))
-        }
+        // An alias of Place Net Label, which is an Active Bar command.
+        "place_local_net_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlaceNetLabel,
+        )),
         "place_no_connect" => Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)),
         // The same Active Bar actions the buttons send, so a key and a click
         // arm the same tool. The Place menu's Power Port row sends GND too.
@@ -567,6 +568,19 @@ mod tests {
                 crate::active_bar::ActiveBarAction::PlaceJunction
             ))
         ));
+        // Place Net Label arms the net label and its ghost, the same as the
+        // Active Bar button; the local alias shares the arm (#1920).
+        for id in ["place_net_label", "place_local_net_label"] {
+            assert!(
+                matches!(
+                    resolve(id),
+                    Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                        crate::active_bar::ActiveBarAction::PlaceNetLabel
+                    ))
+                ),
+                "{id}"
+            );
+        }
         assert!(matches!(
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))

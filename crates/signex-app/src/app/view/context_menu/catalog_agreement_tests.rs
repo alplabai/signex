@@ -238,7 +238,7 @@ const SURFACE_ACTION: &[(&str, &str, &str)] = &[
     (
         "place_net_label",
         "ContextMenu(Action(ActiveBar(PlaceNetLabel)))",
-        "row clears a stale Global/Hierarchical pending_port and arms the NET ghost via handle_active_bar_action; the palette, key and Place menu (Tool(SelectTool(Label))) keep the stale port, so a click places a port (#1920)",
+        "closes the menu, then runs the Active Bar handler directly",
     ),
     (
         "place_no_erc",

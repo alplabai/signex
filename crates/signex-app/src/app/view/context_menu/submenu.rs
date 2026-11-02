@@ -31,13 +31,7 @@ fn active_bar_row(
     planned: bool,
     hint: &dyn Fn(&str) -> String,
 ) -> DropdownEntry<Message> {
-    // Net Label's id is bridged to the tool picker rather than listed in the
-    // Active Bar table, so the flyout names it here.
-    let id = id_for_action(&action).or(match action {
-        crate::active_bar::ActiveBarAction::PlaceNetLabel => Some("place_net_label"),
-        _ => None,
-    });
-    let Some(id) = id else {
+    let Some(id) = id_for_action(&action) else {
         return if !enabled {
             dd_disabled(Some(icon), fallback, None)
         } else if planned {
