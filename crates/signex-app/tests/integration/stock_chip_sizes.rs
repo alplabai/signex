@@ -8,16 +8,17 @@ use signex_library::adapter::LibraryAdapter;
 use signex_library::adapters::local_git::LocalGitAdapter;
 use signex_library::primitive::footprint::{Footprint, FpGraphicKind};
 
-/// `(size, pad length, pad width, centre-to-centre)` in mm. Spelled out
-/// here, apart from the generator's table, so editing one fails the test.
-const LANDS: &[(&str, f64, f64, f64)] = &[
-    ("0201", 0.35, 0.30, 0.70),
-    ("0402", 0.55, 0.55, 1.05),
-    ("0603", 0.80, 0.90, 1.65),
-    ("0805", 1.00, 1.25, 2.00),
-    ("1206", 1.00, 1.75, 3.05),
-    ("1210", 1.00, 2.65, 3.05),
-    ("2512", 1.10, 3.40, 6.20),
+/// `(size, pad length, pad width, centre-to-centre, Z, G)` in mm. Spelled
+/// out here, apart from the generator's table, so editing one fails the
+/// test. Z is the outer span and G the inner gap.
+const LANDS: &[(&str, f64, f64, f64, f64, f64)] = &[
+    ("0201", 0.46, 0.42, 0.66, 1.12, 0.20),
+    ("0402", 0.62, 0.62, 0.90, 1.52, 0.28),
+    ("0603", 0.95, 1.00, 1.60, 2.55, 0.65),
+    ("0805", 1.15, 1.45, 1.80, 2.95, 0.65),
+    ("1206", 1.15, 1.80, 3.00, 4.15, 1.85),
+    ("1210", 1.15, 2.70, 3.00, 4.15, 1.85),
+    ("2512", 1.45, 3.50, 6.20, 7.65, 4.75),
 ];
 
 fn open_stock() -> LocalGitAdapter {
@@ -53,7 +54,11 @@ fn courtyard_half_width(fp: &Footprint) -> f64 {
 #[test]
 fn every_chip_footprint_has_two_smd_pads_with_the_tabled_land() {
     let adapter = open_stock();
-    for (size, len, wid, centre) in LANDS {
+    for (size, len, wid, centre, z, g) in LANDS {
+        assert!(
+            close((z - g) / 2.0, *len) && close((z + g) / 2.0, *centre),
+            "{size}: Z/G"
+        );
         for suffix in ["", "-Polarised"] {
             let name = format!("Chip-{size}{suffix}");
             let fp = footprint_named(&adapter, &name);
@@ -75,9 +80,6 @@ fn every_chip_footprint_has_two_smd_pads_with_the_tabled_land() {
                 p1.position,
                 p2.position
             );
-            if suffix.is_empty() && *size == "0805" {
-                continue; // shipped without courtyard or fab outline
-            }
             assert_eq!(fp.courtyard.points.len(), 4, "{name} courtyard");
             assert!(
                 courtyard_half_width(&fp) > centre / 2.0 + len / 2.0,

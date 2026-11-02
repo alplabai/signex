@@ -13,8 +13,8 @@ anchor = [
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
-1	Smd	rect	1.1	3.4	-3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
-2	Smd	rect	1.1	3.4	3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+1	Smd	rect	1.45	3.5	-3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1.45	3.5	3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
 '''
 silk_f = []
 silk_b = []
@@ -28,20 +28,20 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -3.9,
-    -1.95,
+    -4.075,
+    -2.0,
 ],
     [
-    3.9,
-    -1.95,
+    4.075,
+    -2.0,
 ],
     [
-    3.9,
-    1.95,
+    4.075,
+    2.0,
 ],
     [
-    -3.9,
-    1.95,
+    -4.075,
+    2.0,
 ],
 ]
 
@@ -140,6 +140,6 @@ kind = "Single"
 [footprints.sketch.parameters]
 body_h = "3.2mm"
 body_w = "6.4mm"
-pad_h = "3.4mm"
+pad_h = "3.5mm"
 pad_spacing = "6.2mm"
-pad_w = "1.1mm"
+pad_w = "1.45mm"

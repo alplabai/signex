@@ -66,8 +66,22 @@ and LED default to `Chip-0805-Polarised` (pad 1 = cathode, silkscreen
 bar). Each row also lists the sizes 0201, 0402, 0603, 1206, 1210 and 2512
 (the matching `-Polarised` ones for the diodes) as alternate footprints,
 so the footprint picker offers them without a pin-map override: pads 1 and
-2 match the symbol pins. The lands are IPC-7351B nominal (density level B);
-the table and its derivation are in
-`crates/signex-app/examples/build_stock_library/chip.rs`. The shipped
-`Chip-0805` land (1.0 x 1.25 mm pads, 2.0 mm centres) is kept as it is and
-is slightly different from IPC nominal.
+2 match the symbol pins.
+
+IPC-7351 itself gives fillet goals, not fixed per-size lands, so the
+reference is a manufacturer's IPC-7351 Density Level B table. Sources:
+
+- 0201 to 1210: KEMET, "Surface Mount Multilayer Ceramic Chip Capacitors
+  (SMD MLCCs) - C0G Dielectric, 10-250 VDC (Commercial Grade)", C1003_C0G,
+  3/30/2016, p.10, "Table 3 - Chip Capacitor Land Pattern Design
+  Recommendations per IPC-7351", Density Level B.
+- 2512: Vishay D/CRCW e3 thick-film chip resistors, Doc 20035,
+  "Recommended Solder Pad Dimensions", reflow (no IPC-labelled nominal 2512
+  land was found).
+- Courtyard excess: IPC-7351 (Feb 2005) Tables 3-5 and 3-6, nominal (0.15
+  mm for 0201 and 0402, 0.25 mm from 0603 up).
+
+The per-size numbers are in
+`crates/signex-app/examples/build_stock_library/chip.rs`. `Chip-0805`
+follows the same table (1.15 x 1.45 mm pads, 1.80 mm centres) since #1938;
+placed parts that use it pick up the new pads on the next library update.

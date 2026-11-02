@@ -1,24 +1,32 @@
 //! Two-pad chip lands (resistor, capacitor, inductor, fuse, diode, LED)
 //! in the EIA sizes 0201 to 2512, plain and with a cathode mark.
 //!
-//! One builder serves every size; [`CHIP_SIZES`] is the data. Land numbers
-//! (mm) for 0201, 0402, 0603, 1206, 1210 and 2512 come from the IPC-7351B
-//! chip-component formulas at the nominal density level (B), with the
-//! EIA body size and terminal tolerances, rounded to 0.05 mm:
+//! One builder serves every size; [`CHIP_SIZES`] is the data. IPC-7351
+//! gives fillet goals, not fixed per-size lands, so the lands are a
+//! manufacturer's IPC-7351 table at density level B (nominal), in mm:
 //!
 //! ```text
-//! size  pad (len x wid)  centre  body (l x w)  courtyard excess
-//! 0201  0.35 x 0.30      0.70    0.6 x 0.3      0.10
-//! 0402  0.55 x 0.55      1.05    1.0 x 0.5      0.15
-//! 0603  0.80 x 0.90      1.65    1.6 x 0.8      0.25
-//! 0805  1.00 x 1.25      2.00    2.0 x 1.25     shipped land, kept as is
-//! 1206  1.00 x 1.75      3.05    3.2 x 1.6      0.25
-//! 1210  1.00 x 2.65      3.05    3.2 x 2.5      0.25
-//! 2512  1.10 x 3.40      6.20    6.4 x 3.2      0.25
+//! size  pad (len x wid)  c-c   Z     G     body (l x w)  courtyard excess
+//! 0201  0.46 x 0.42      0.66  1.12  0.20  0.6 x 0.3     0.15
+//! 0402  0.62 x 0.62      0.90  1.52  0.28  1.0 x 0.5     0.15
+//! 0603  0.95 x 1.00      1.60  2.55  0.65  1.6 x 0.8     0.25
+//! 0805  1.15 x 1.45      1.80  2.95  0.65  2.0 x 1.25    0.25
+//! 1206  1.15 x 1.80      3.00  4.15  1.85  3.2 x 1.6     0.25
+//! 1210  1.15 x 2.70      3.00  4.15  1.85  3.2 x 2.5     0.25
+//! 2512  1.45 x 3.50      6.20  7.65  4.75  6.4 x 3.2     0.25
 //! ```
 //!
-//! The 0805 row is the land that shipped first (#1657) and stays byte
-//! for byte; IPC-7351B nominal for 0805 is about 1.0 x 1.4 at 1.9 centre.
+//! Sources:
+//! - 0201 to 1210: KEMET, "Surface Mount Multilayer Ceramic Chip
+//!   Capacitors (SMD MLCCs) - C0G Dielectric, 10-250 VDC (Commercial
+//!   Grade)", C1003_C0G, 3/30/2016, p.10, "Table 3 - Chip Capacitor Land
+//!   Pattern Design Recommendations per IPC-7351", Density Level B.
+//! - 2512: Vishay D/CRCW e3 thick-film chip resistors, Doc 20035,
+//!   "Recommended Solder Pad Dimensions", reflow (no IPC-labelled nominal
+//!   2512 land was found).
+//! - Courtyard excess: IPC-7351 (Feb 2005) Tables 3-5 and 3-6, nominal;
+//!   0.15 below 1608 metric, 0.25 from 0603 up.
+//!
 //! Pad 1 is the left pad. In the polarised variant it is the cathode,
 //! marked by a 0.12 mm silkscreen bar `bar_gap` outside the copper, a fab
 //! cathode line and a courtyard that holds the bar.
@@ -47,33 +55,18 @@ pub struct ChipSize {
     pub body_wid: f64,
     /// Copper edge to cathode bar.
     pub bar_gap: f64,
-    /// Courtyard half-extent of the plain footprint (IPC excess included).
-    pub court_hx: f64,
-    pub court_hy: f64,
-    /// Plain variant carries courtyard and fab outline (the shipped
-    /// 0805 does not).
-    pub plain_outline: bool,
+    /// IPC courtyard excess beyond the copper.
+    pub court_excess: f64,
 }
 
 pub const CHIP_SIZES: &[ChipSize] = &[
-    size("0201", [0.35, 0.30, 0.70], [0.6, 0.3], 0.10, [0.625, 0.25]),
-    size("0402", [0.55, 0.55, 1.05], [1.0, 0.5], 0.15, [0.95, 0.425]),
-    size("0603", [0.80, 0.90, 1.65], [1.6, 0.8], 0.20, [1.475, 0.70]),
-    ChipSize {
-        code: "0805",
-        pad_len: 1.0,
-        pad_wid: 1.25,
-        centre: 2.0,
-        body_len: 2.0,
-        body_wid: 1.25,
-        bar_gap: 0.2,
-        court_hx: 1.9,
-        court_hy: 0.9,
-        plain_outline: false,
-    },
-    size("1206", [1.00, 1.75, 3.05], [3.2, 1.6], 0.20, [2.275, 1.125]),
-    size("1210", [1.00, 2.65, 3.05], [3.2, 2.5], 0.20, [2.275, 1.575]),
-    size("2512", [1.10, 3.40, 6.20], [6.4, 3.2], 0.20, [3.90, 1.95]),
+    size("0201", [0.46, 0.42, 0.66], [0.6, 0.3], 0.10, 0.15),
+    size("0402", [0.62, 0.62, 0.90], [1.0, 0.5], 0.15, 0.15),
+    size("0603", [0.95, 1.00, 1.60], [1.6, 0.8], 0.20, 0.25),
+    size("0805", [1.15, 1.45, 1.80], [2.0, 1.25], 0.20, 0.25),
+    size("1206", [1.15, 1.80, 3.00], [3.2, 1.6], 0.20, 0.25),
+    size("1210", [1.15, 2.70, 3.00], [3.2, 2.5], 0.20, 0.25),
+    size("2512", [1.45, 3.50, 6.20], [6.4, 3.2], 0.20, 0.25),
 ];
 
 const fn size(
@@ -81,7 +74,7 @@ const fn size(
     pad: [f64; 3],
     body: [f64; 2],
     bar_gap: f64,
-    court: [f64; 2],
+    court_excess: f64,
 ) -> ChipSize {
     ChipSize {
         code,
@@ -91,9 +84,7 @@ const fn size(
         body_len: body[0],
         body_wid: body[1],
         bar_gap,
-        court_hx: court[0],
-        court_hy: court[1],
-        plain_outline: true,
+        court_excess,
     }
 }
 
@@ -195,15 +186,16 @@ pub fn build(ids: &StockIds, size: &ChipSize, polarised: bool) -> Footprint {
         sketch.entities.push(bar);
     }
 
-    if polarised || size.plain_outline {
+    {
         // Courtyard and fab outline are plain footprint fields: the
         // sketch courtyard tag (a unit struct) cannot be written as TOML.
+        let plain_hx = um(outer + size.court_excess);
         let hx = if polarised {
-            size.court_hx.max(um(bar_x + 0.2))
+            plain_hx.max(um(bar_x + 0.2))
         } else {
-            size.court_hx
+            plain_hx
         };
-        let hy = size.court_hy;
+        let hy = um(size.pad_wid.max(size.body_wid) / 2.0 + size.court_excess);
         fp.courtyard = Polygon::new(vec![[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]]);
         let (bx, by) = (size.body_len / 2.0, size.body_wid / 2.0);
         let fab = |kind| FpGraphic {

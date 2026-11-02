@@ -13,12 +13,11 @@ anchor = [
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
-1	Smd	rect	1	1.25	-1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
-2	Smd	rect	1	1.25	1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+1	Smd	rect	1.15	1.45	-0.9	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1.15	1.45	0.9	0	0	Top Layer|Top Solder|Top Paste			0.05	0
 '''
 silk_f = []
 silk_b = []
-fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
@@ -27,7 +26,39 @@ updated = "2026-05-04T19:01:13Z"
 schema_version = 3
 
 [footprints.courtyard]
-points = []
+points = [
+    [
+    -1.725,
+    -0.975,
+],
+    [
+    1.725,
+    -0.975,
+],
+    [
+    1.725,
+    0.975,
+],
+    [
+    -1.725,
+    0.975,
+],
+]
+
+[[footprints.fab_f]]
+stroke_width = 0.1
+filled = false
+
+[footprints.fab_f.kind]
+kind = "rectangle"
+from = [
+    -1.0,
+    -0.625,
+]
+to = [
+    1.0,
+    0.625,
+]
 
 [footprints.body_3d]
 shape = "Extrude"
@@ -109,6 +140,6 @@ kind = "Single"
 [footprints.sketch.parameters]
 body_h = "1.25mm"
 body_w = "2.0mm"
-pad_h = "1.25mm"
-pad_spacing = "2.0mm"
-pad_w = "1.0mm"
+pad_h = "1.45mm"
+pad_spacing = "1.8mm"
+pad_w = "1.15mm"

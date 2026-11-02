@@ -13,8 +13,8 @@ anchor = [
 ]
 pads_tsv = '''
 number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
-1	Smd	rect	1	1.25	-1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
-2	Smd	rect	1	1.25	1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+1	Smd	rect	1.15	1.45	-0.9	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1.15	1.45	0.9	0	0	Top Layer|Top Solder|Top Paste			0.05	0
 '''
 silk_b = []
 fab_b = []
@@ -27,20 +27,20 @@ schema_version = 3
 [footprints.courtyard]
 points = [
     [
-    -1.9,
-    -0.9,
+    -1.875,
+    -0.975,
 ],
     [
-    1.9,
-    -0.9,
+    1.875,
+    -0.975,
 ],
     [
-    1.9,
-    0.9,
+    1.875,
+    0.975,
 ],
     [
-    -1.9,
-    0.9,
+    -1.875,
+    0.975,
 ],
 ]
 
@@ -52,11 +52,11 @@ sketch_entity = "7fff648f-930d-4e7e-a1e8-ddcc9023e196"
 [footprints.silk_f.kind]
 kind = "line"
 from = [
-    -1.7,
+    -1.675,
     -0.7,
 ]
 to = [
-    -1.7,
+    -1.675,
     0.7,
 ]
 
@@ -173,7 +173,7 @@ plane = "8a342c96-d25f-4908-b59a-7f6af7468ca1"
 construction = false
 centerline = false
 kind = "Point"
-x = -1.7
+x = -1.675
 y = -0.7
 
 [[footprints.sketch.entities]]
@@ -182,7 +182,7 @@ plane = "8a342c96-d25f-4908-b59a-7f6af7468ca1"
 construction = false
 centerline = false
 kind = "Point"
-x = -1.7
+x = -1.675
 y = 0.7
 
 [[footprints.sketch.entities]]
@@ -200,6 +200,6 @@ layer = "top_silk"
 [footprints.sketch.parameters]
 body_h = "1.25mm"
 body_w = "2.0mm"
-pad_h = "1.25mm"
-pad_spacing = "2.0mm"
-pad_w = "1.0mm"
+pad_h = "1.45mm"
+pad_spacing = "1.8mm"
+pad_w = "1.15mm"
