@@ -241,8 +241,11 @@ impl Signex {
                 result,
             ),
             LibraryMessage::DesignatorsScanned { generation, result } => {
-                self.apply_designator_scan(generation, &result);
-                Task::none()
+                if self.apply_designator_scan(generation, &result) {
+                    self.commit_pending_drop()
+                } else {
+                    Task::none()
+                }
             }
             LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
             LibraryMessage::SymbolChoiceResolved {

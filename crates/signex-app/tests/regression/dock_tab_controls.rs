@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 use crate::primitive_dirty_quit::{edit_description_via_panel, open_footprint_editor};
 
+/// Opens one kind of context menu on the app.
+type MenuOpener = dyn Fn(&mut Signex);
+
 fn app_with_main_window() -> (Signex, iced::window::Id) {
     let (mut app, _t) = Signex::new();
     let id = iced::window::Id::unique();
@@ -275,7 +278,7 @@ fn opening_any_context_menu_closes_the_others() {
             LibraryMessage::ComponentsPanelRowRightClicked(key),
         ));
     };
-    let openers: [(&str, &dyn Fn(&mut Signex)); 5] = [
+    let openers: [(&str, &MenuOpener); 5] = [
         ("canvas", &canvas),
         ("document-tab", &doc_tab),
         ("project-tree", &tree),

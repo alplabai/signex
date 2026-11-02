@@ -117,22 +117,38 @@ impl Signex {
             self.report_place_failure(&detail);
             return Task::none();
         }
-        // A row dropped on the canvas commits at the drop point in this one
-        // gesture, then the placement tool ends.
-        let placed = match drop {
-            Some((_, (x, y)))
-                if arm_epoch == self.interaction_state.placement_epoch
-                    && self.interaction_state.placement.is_some() =>
-            {
-                let (x, y) = self.snap_to_grid(x, y);
-                let task = self.handle_placement_click(x, y);
-                self.cancel_placement_session();
-                task
-            }
-            _ => Task::none(),
-        };
         // Closed sheets' numbers arrive off-thread; the ghost refreshes then.
-        Task::batch([placed, self.start_designator_scan(&target_sheet)])
+        let scan = self.start_designator_scan(&target_sheet);
+        let Some(drop) = drop else {
+            return scan;
+        };
+        // A row dropped on the canvas commits at the drop point in this one
+        // gesture. It waits for the scan when the closed sheets' numbers are
+        // not known yet, so it cannot reuse a designator one of them holds.
+        self.library.components_panel.pending_drop = Some(drop);
+        if !self.designators_current(&target_sheet) {
+            return scan;
+        }
+        Task::batch([self.commit_pending_drop(), scan])
+    }
+
+    /// Place the dropped row at its drop point and end the tool, when the
+    /// drop still belongs to the armed placement.
+    pub(crate) fn commit_pending_drop(&mut self) -> Task<Message> {
+        let Some((epoch, (x, y))) = self.library.components_panel.pending_drop.take() else {
+            return Task::none();
+        };
+        if epoch != self.interaction_state.placement_epoch
+            || self.interaction_state.placement.is_none()
+        {
+            return Task::none();
+        }
+        // The scan may have just landed: number the part from it.
+        self.refresh_placement_reference();
+        let (x, y) = self.snap_to_grid(x, y);
+        let task = self.handle_placement_click(x, y);
+        self.cancel_placement_session();
+        task
     }
 
     fn arm_resolved(
