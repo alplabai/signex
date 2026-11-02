@@ -282,6 +282,7 @@ impl LibraryState {
         if self.tab_resolve_generations.get(&outcome.address) != Some(&outcome.generation) {
             return;
         }
+        self.tab_resolve_generations.remove(&outcome.address);
         if let Some(state) = self.editors.get_mut(&outcome.address) {
             outcome.reads.apply_to(&outcome.needs, state);
         }
