@@ -300,17 +300,35 @@ fn scoped_to_window<'a>(
         .into_iter()
         .map(|layer| match owner {
             None => layer,
-            Some(window) => layer.map(move |message| match message {
-                Message::ActiveBar(inner) => Message::ActiveBar(
-                    crate::active_bar::ActiveBarMsg::ScopedToWindow(window, Box::new(inner)),
-                ),
-                Message::ContextMenu(inner) => {
-                    Message::ContextMenu(ContextMenuMsg::ScopedToWindow(window, Box::new(inner)))
-                }
-                other => other,
-            }),
+            Some(window) => layer.map(move |message| scope_overlay_message(window, message)),
         })
         .collect()
+}
+
+/// Tag an Active Bar or context-menu `message` with the undocked `window`
+/// that sent it; anything else passes through (#1910).
+pub(crate) fn scope_overlay_message(window: iced::window::Id, message: Message) -> Message {
+    match message {
+        Message::ActiveBar(inner) => Message::ActiveBar(
+            crate::active_bar::ActiveBarMsg::ScopedToWindow(window, Box::new(inner)),
+        ),
+        Message::ContextMenu(inner) => {
+            Message::ContextMenu(ContextMenuMsg::ScopedToWindow(window, Box::new(inner)))
+        }
+        other => other,
+    }
+}
+
+/// Remap what an undocked window's canvas emits: canvas events carry the
+/// window, a right-click opens the menu for that window's sheet (#1910).
+pub(crate) fn scope_canvas_message(window_id: iced::window::Id, message: Message) -> Message {
+    match message {
+        Message::CanvasEvent(event) => Message::CanvasEventInWindow { window_id, event },
+        show @ Message::ContextMenu(ContextMenuMsg::Show(..)) => {
+            scope_overlay_message(window_id, show)
+        }
+        other => other,
+    }
 }
 
 pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {

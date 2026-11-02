@@ -165,3 +165,125 @@ fn the_main_windows_dropdown_does_not_paint_in_an_undocked_window() {
     assert!(!f.app.active_bar_menu_overlay(f.main).is_empty());
     assert!(f.app.active_bar_menu_overlay(f.window).is_empty());
 }
+
+#[test]
+fn a_scoped_edit_marks_only_its_sheet_dirty_and_is_undoable_there() {
+    let mut f = fixture();
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    let _ = f.app.update(scoped_menu(
+        f.window,
+        ContextMenuMsg::Action(ContextAction::Delete),
+    ));
+    let dirty = f.app.document_state.dirty_document_paths();
+    assert!(dirty.contains(&f.a), "A is dirty");
+    assert!(!dirty.contains(&f.b), "B is clean");
+    assert!(f.app.document_state.engines[&f.a].can_undo());
+    assert!(!f.app.document_state.engines[&f.b].can_undo());
+}
+
+#[test]
+fn move_selection_by_xy_from_an_undocked_window_moves_its_sheet() {
+    let mut f = fixture();
+    let (a_before, b_before) = (wire_ends(&f.app, &f.a), wire_ends(&f.app, &f.b));
+    let _ = f.app.update(scoped_bar(
+        f.window,
+        ActiveBarMsg::Action(ActiveBarAction::MoveSelectionXY),
+    ));
+    assert_eq!(f.app.ui_state.move_selection.sheet.as_ref(), Some(&f.a));
+    let _ = f
+        .app
+        .update(Message::MoveSelection(MoveSelectionMsg::DxChanged(
+            "10".into(),
+        )));
+    // The dialog paints in the main window, so Apply arrives untagged.
+    let _ = f
+        .app
+        .update(Message::MoveSelection(MoveSelectionMsg::Apply));
+    assert_ne!(wire_ends(&f.app, &f.a), a_before, "A's wire moved");
+    assert_eq!(wire_ends(&f.app, &f.b), b_before, "B is untouched");
+    assert!(!f.app.document_state.dirty_document_paths().contains(&f.b));
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.b.as_path())
+    );
+}
+
+#[test]
+fn find_similar_from_an_undocked_window_keeps_working_on_its_sheet() {
+    let mut f = fixture();
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    let _ = f.app.update(scoped_menu(
+        f.window,
+        ContextMenuMsg::Action(ContextAction::FindSimilar),
+    ));
+    let state = f.app.ui_state.find_similar.as_ref().expect("dialog opened");
+    assert_eq!(state.origin.as_ref(), Some(&f.a));
+    let property = state.values.last().expect("a property").property;
+    // The dialog paints in the main window, so its messages arrive untagged.
+    let _ = f.app.update(Message::Selection(
+        crate::app::selection_request::SelectionRequest::FindSimilar(
+            crate::find_similar::FindSimilarMsg::PropertySet(property, true),
+        ),
+    ));
+    let state = f.app.ui_state.find_similar.as_ref().expect("still open");
+    assert!(state.same.contains(&property));
+}
+
+#[test]
+fn a_menu_in_the_main_window_closes_an_undocked_windows_dropdown() {
+    let mut f = fixture();
+    let _ = f.app.update(scoped_bar(
+        f.window,
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align),
+    ));
+    let _ = f
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::Show(5.0, 5.0)));
+    assert!(f.app.interaction_state.active_bar_menu.is_none());
+    assert!(f.app.interaction_state.context_menu.is_some());
+}
+
+#[test]
+fn closing_an_undocked_window_drops_the_overlays_it_opened() {
+    let mut f = fixture();
+    let _ = f.app.update(scoped_bar(
+        f.window,
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align),
+    ));
+    f.app.close_overlays_owned_by(f.window);
+    assert!(f.app.interaction_state.active_bar_menu.is_none());
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    f.app.close_overlays_owned_by(f.window);
+    assert!(f.app.interaction_state.context_menu.is_none());
+}
+
+#[test]
+fn the_view_tags_overlay_and_canvas_messages_with_their_window() {
+    use crate::app::view::overlay_id::{scope_canvas_message, scope_overlay_message};
+    let window = iced::window::Id::unique();
+    let bar = scope_overlay_message(window, Message::ActiveBar(ActiveBarMsg::CloseMenus));
+    assert!(matches!(
+        bar,
+        Message::ActiveBar(ActiveBarMsg::ScopedToWindow(w, _)) if w == window
+    ));
+    let menu = scope_overlay_message(window, Message::ContextMenu(ContextMenuMsg::Close));
+    assert!(matches!(
+        menu,
+        Message::ContextMenu(ContextMenuMsg::ScopedToWindow(w, _)) if w == window
+    ));
+    let passed = scope_overlay_message(window, Message::MoveSelection(MoveSelectionMsg::Close));
+    assert!(matches!(passed, Message::MoveSelection(_)));
+    let show = scope_canvas_message(window, Message::ContextMenu(ContextMenuMsg::Show(1.0, 2.0)));
+    assert!(matches!(
+        show,
+        Message::ContextMenu(ContextMenuMsg::ScopedToWindow(w, _)) if w == window
+    ));
+    let other = scope_canvas_message(window, Message::ContextMenu(ContextMenuMsg::Close));
+    assert!(matches!(other, Message::ContextMenu(ContextMenuMsg::Close)));
+}

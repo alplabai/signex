@@ -359,6 +359,7 @@ impl Signex {
             open: true,
             dx: "0".to_string(),
             dy: "0".to_string(),
+            sheet: self.document_state.active_path.clone(),
         };
         self.handle_detach_modal(super::super::super::state::ModalId::MoveSelection)
     }
@@ -369,6 +370,21 @@ impl Signex {
     }
 
     pub(crate) fn handle_move_selection_apply(&mut self) -> Task<Message> {
+        // The dialog paints in the main window, so Apply arrives untagged:
+        // run it against the sheet it was opened on (#1910).
+        if let Some(sheet) = self.ui_state.move_selection.sheet.clone()
+            && self.document_state.active_path.as_ref() != Some(&sheet)
+        {
+            if let Some(window) = self.undocked_schematic_window(&sheet) {
+                return self
+                    .run_in_window_document(window, |app| app.handle_move_selection_apply());
+            }
+            self.ui_state.move_selection.open = false;
+            crate::diagnostics::log_info(
+                "Move Selection closed: the sheet it was opened on is no longer shown",
+            );
+            return Task::none();
+        }
         // Classify both axes before acting: a refused axis (`nan` / `inf` /
         // overflow) must not be read as "0 on that axis" while the other
         // axis still moves the selection. `move_offset` has already logged

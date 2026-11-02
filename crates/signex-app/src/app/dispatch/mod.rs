@@ -176,6 +176,7 @@ impl Signex {
                     return self.flush_quit_writes_then(iced::exit());
                 }
                 self.ui_state.forget_window_os_scale(id);
+                self.close_overlays_owned_by(id);
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
                 }
@@ -451,6 +452,7 @@ impl Signex {
                 // canvas here too — otherwise `SecondaryWindowClosed`
                 // short-circuits on `windows.remove -> None` and the
                 // canvas cache + selection leak.
+                self.close_overlays_owned_by(id);
                 self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);

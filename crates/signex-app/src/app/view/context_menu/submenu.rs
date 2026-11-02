@@ -339,8 +339,9 @@ pub(super) fn add_new_entries(
 impl Signex {
     /// Build the secondary submenu (Place / Align / Add New to Project)
     /// shown to the right of the parent context menu. Resolves the
-    /// `selected` (the shown sheet's selection count) / target project from `self`, then delegates to the
-    /// pure entry builders and renders via the shared widget.
+    /// `selected` is the shown sheet's selection count; the target project is
+    /// resolved from `self`. The pure entry builders do the rest and the
+    /// shared widget renders it.
     pub(in crate::app::view) fn view_context_submenu(
         &self,
         kind: ContextSubmenu,

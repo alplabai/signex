@@ -224,6 +224,14 @@ impl Signex {
                 .clear_overlay_cache();
             return Task::none();
         }
+        // A dropdown another window opened is closed, not left invisible and
+        // blocking this window's menu.
+        if self.interaction_state.active_bar_menu.is_some()
+            && self.interaction_state.active_bar_menu_window != window
+        {
+            self.interaction_state.active_bar_menu = None;
+            self.interaction_state.active_bar_menu_window = None;
+        }
         if self.interaction_state.active_bar_menu.is_none() {
             let world = self.cursor_world_now();
             self.close_all_context_menus();

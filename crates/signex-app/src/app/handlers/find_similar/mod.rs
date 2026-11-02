@@ -25,6 +25,19 @@ pub(crate) fn pick_seed(
 
 impl Signex {
     pub(crate) fn handle_find_similar_message(&mut self, msg: FindSimilarMsg) -> Task<Message> {
+        // The dialog paints in the main window, so its messages arrive untagged:
+        // run them against the sheet it was opened on (#1910).
+        if !matches!(msg, FindSimilarMsg::OpenRequested { .. })
+            && let Some(origin) = self
+                .ui_state
+                .find_similar
+                .as_ref()
+                .and_then(|s| s.origin.clone())
+            && self.document_state.active_path.as_ref() != Some(&origin)
+            && let Some(window) = self.undocked_schematic_window(&origin)
+        {
+            return self.run_in_window_document(window, |app| app.handle_find_similar_message(msg));
+        }
         self.close_find_similar_if_sheet_changed();
         match msg {
             FindSimilarMsg::OpenRequested { at } => self.open_find_similar(at),

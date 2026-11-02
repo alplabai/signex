@@ -20,12 +20,15 @@ impl Signex {
         match msg {
             ActiveBarMsg::ScopedToWindow(window, inner) => {
                 let opens_menu = matches!(*inner, ActiveBarMsg::ToggleMenu(_));
-                let task = self
-                    .run_in_window_document(window, |app| app.handle_active_bar_message(*inner));
-                if opens_menu {
-                    self.interaction_state.active_bar_menu_window = self.overlay_owner(window);
-                }
-                task
+                // The owner is recorded inside the closure, so a message the
+                // window drops (it is closing) never re-homes an open dropdown.
+                self.run_in_window_document(window, |app| {
+                    let task = app.handle_active_bar_message(*inner);
+                    if opens_menu {
+                        app.interaction_state.active_bar_menu_window = app.overlay_owner(window);
+                    }
+                    task
+                })
             }
             ActiveBarMsg::ToggleMenu(menu) => {
                 self.interaction_state.active_bar_menu = Some(menu);
