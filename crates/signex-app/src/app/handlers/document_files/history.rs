@@ -399,24 +399,13 @@ impl Signex {
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
     ) -> Task<Message> {
-        self.apply_reloaded_with(idx, outcome, restored_bytes, true)
-    }
-
-    /// [`Self::apply_reloaded`]; `commit` false installs the document without
-    /// a "Restore" commit (a disk-conflict Reload restores nothing).
-    pub(crate) fn apply_reloaded_with(
-        &mut self,
-        idx: usize,
-        outcome: Result<RestoreJobDocument, RestoreFailure>,
-        restored_bytes: Option<crate::persist::SharedBytes>,
-        commit: bool,
-    ) -> Task<Message> {
-        self.apply_reloaded_reporting(idx, outcome, restored_bytes, commit)
+        self.apply_reloaded_reporting(idx, outcome, restored_bytes, true)
             .0
     }
 
-    /// [`Self::apply_reloaded_with`] plus whether the reloaded document was
-    /// installed: false when a failure card replaced it or a schematic's new
+    /// [`Self::apply_reloaded`] plus whether the reloaded document was
+    /// installed (`commit` false installs without a "Restore" commit: a
+    /// disk-conflict Reload restores nothing): false when a failure card replaced it or a schematic's new
     /// engine could not start and the older one was kept.
     pub(crate) fn apply_reloaded_reporting(
         &mut self,
