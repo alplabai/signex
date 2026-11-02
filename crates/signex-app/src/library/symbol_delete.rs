@@ -95,23 +95,7 @@ pub fn usage_lines<'a>(
         }
     }
     let lib_id = super::place::lib_id_of(symbol);
-    let mut placed = Vec::new();
-    for (path, sheet) in sheets {
-        let refs: Vec<&str> = sheet
-            .symbols
-            .iter()
-            .filter(|s| s.lib_id == lib_id)
-            .map(|s| s.reference.as_str())
-            .collect();
-        if !refs.is_empty() {
-            let name = path.file_name().map_or_else(
-                || path.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            );
-            placed.push(format!("{name}: {}", refs.join(", ")));
-        }
-    }
-    placed.sort();
+    let placed = placed_on_sheets(sheets, |id| id == lib_id);
     let mut lines = Vec::new();
     if !rows.is_empty() {
         lines.push(format!("Component rows: {}", capped(&rows)));
@@ -129,6 +113,60 @@ pub fn usage_lines<'a>(
         rows: rows.len(),
         sheets: placed.len(),
         unchecked: unchecked_count,
+    }
+}
+
+/// One entry per open sheet that has parts whose `lib_id` satisfies
+/// `is_symbol`: the sheet file and the references placed from it.
+fn placed_on_sheets<'a>(
+    sheets: impl Iterator<Item = (&'a Path, &'a SchematicSheet)>,
+    is_symbol: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    let mut placed = Vec::new();
+    for (path, sheet) in sheets {
+        let refs: Vec<&str> = sheet
+            .symbols
+            .iter()
+            .filter(|s| is_symbol(&s.lib_id))
+            .map(|s| s.reference.as_str())
+            .collect();
+        if !refs.is_empty() {
+            let name = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            placed.push(format!("{name}: {}", refs.join(", ")));
+        }
+    }
+    placed.sort();
+    placed
+}
+
+/// The scan for a container that is not inside a mounted library: its
+/// component rows cannot be checked (usage is unknown), but open sheets are
+/// still matched by the symbol's uuid, whatever library the part names.
+pub fn usage_outside_library<'a>(
+    container: &Path,
+    sheets: impl Iterator<Item = (&'a Path, &'a SchematicSheet)>,
+    symbol: Uuid,
+) -> SymbolUsage {
+    let suffix = format!(":{symbol}");
+    let placed = placed_on_sheets(sheets, |id| id.ends_with(&suffix));
+    let mut lines = vec![format!(
+        "{} is not inside a mounted library; its component rows were not checked",
+        container.display()
+    )];
+    if !placed.is_empty() {
+        lines.push(format!(
+            "Open sheets with placed parts: {}",
+            capped(&placed)
+        ));
+    }
+    SymbolUsage {
+        lines,
+        rows: 0,
+        sheets: placed.len(),
+        unchecked: 1,
     }
 }
 

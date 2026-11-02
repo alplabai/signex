@@ -118,7 +118,13 @@ impl LibraryState {
     /// stay coherent.
     pub fn refresh_components(&mut self, root: &Path) -> Result<(), LibraryError> {
         let adapter = self.adapter_at(root)?;
-        let snapshot = LibrarySnapshot::read(adapter, root)?;
+        let snapshot = match LibrarySnapshot::read(adapter, root) {
+            Ok(snapshot) => snapshot,
+            Err(e) => {
+                self.mark_tables_not_listed(root);
+                return Err(e);
+            }
+        };
         self.supersede_refreshes(root);
         self.apply_snapshot(root, snapshot);
         Ok(())
@@ -203,6 +209,11 @@ impl LibraryState {
         let root = root_buf.as_path();
         let mounted = self.library_at(root).is_some();
         let latest = mounted && self.refresh_generations.get(root) == Some(&generation);
+        // A failed read here is a failed table listing: the same rule as a
+        // failed load, so a delete does not trust the stale rows (#1845).
+        if latest && snapshot.is_err() {
+            self.mark_tables_not_listed(root);
+        }
         let applied = latest.then(|| snapshot.map(|snapshot| self.apply_snapshot(root, snapshot)));
         let follow_ups = if mounted && (latest || last_in_flight) {
             self.pending_follow_ups.remove(root).unwrap_or_default()
@@ -264,6 +275,12 @@ impl LibraryState {
         self.refresh_generations
             .insert(root.to_path_buf(), generation);
         generation
+    }
+
+    fn mark_tables_not_listed(&mut self, root: &Path) {
+        if let Some(lib) = self.library_at_mut(root) {
+            lib.dangling.tables_not_listed = true;
+        }
     }
 
     fn apply_snapshot(&mut self, root: &Path, snapshot: LibrarySnapshot) {

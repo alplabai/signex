@@ -421,3 +421,28 @@ fn restoring_the_header_and_refreshing_names_the_row_again() {
     assert!(!warning.only_unknown);
     assert_eq!(symbol_count(&app, &path), 2);
 }
+
+#[test]
+fn a_symbol_outside_any_mounted_library_is_not_deleted_silently() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    // The library is closed (or failed to mount, or is still mounting);
+    // its `.snxsym` is then opened from disk.
+    app.library.close_library(&f.snxlib);
+    let path = open_container_editor(&mut app, &f);
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    assert_eq!(
+        symbol_count(&app, &path),
+        2,
+        "no mounted library: its rows and the placed part were not checked, so usage is unknown"
+    );
+    let ctx = app.document_state.panel_ctx.symbol_editor.as_ref().unwrap();
+    let warning = ctx.delete_warning.as_ref().expect("a warning");
+    let lines = warning.lines.join("\n");
+    assert!(lines.contains("is not inside a mounted library"), "{lines}");
+    assert!(
+        lines.contains("Open sheets with placed parts"),
+        "the open sheet is still found by symbol uuid: {lines}"
+    );
+}
