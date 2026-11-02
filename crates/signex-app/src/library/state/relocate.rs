@@ -114,11 +114,16 @@ impl LibraryState {
             for address in &mut confirm.dirty_editors {
                 rebase_address(address, old, new);
             }
-            // Drafts sit in the library's folder, not under the `.snxlib` file.
-            if let (Some(old_dir), Some(new_dir)) = (old.parent(), new.parent()) {
-                for path in &mut confirm.dirty_paths {
-                    *path = rebased_or_same(path, old_dir, new_dir);
-                }
+            // Drafts move like `rekey_library_documents` moves them: under
+            // the library itself (folder layout), else in its parent folder.
+            for path in &mut confirm.dirty_paths {
+                *path = match rebase_path(path, old, new) {
+                    Some(moved) => moved,
+                    None => match (old.parent(), new.parent()) {
+                        (Some(old_dir), Some(new_dir)) => rebased_or_same(path, old_dir, new_dir),
+                        _ => path.clone(),
+                    },
+                };
             }
         }
         if let Some(picker) = self.primitive_picker.as_mut() {

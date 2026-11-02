@@ -458,7 +458,7 @@ impl Signex {
             self.document_state.dirty_primitive_paths().collect();
         let path_labels = paths.iter().map(|path| {
             let dir = drafts.contains(path).then(|| {
-                let fold = self.identity_decision(path).fold;
+                let fold = self.draft_fold(path);
                 crate::app::state::scope::owning_library(path, &roots, fold)
                     .and_then(|lib| lib.parent())
             });

@@ -174,6 +174,7 @@ impl Signex {
             project_idx,
             &self.library.dirty_editors(),
             &self.draft_library_roots(),
+            &self.dirty_draft_folds(),
         )
     }
 

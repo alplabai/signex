@@ -258,22 +258,53 @@ impl Signex {
         roots
     }
 
-    /// Dirty symbol and footprint drafts owned by the library at `root`
-    /// (deepest containing library folder), sorted. Same collector as the
-    /// quit and Close Project prompts.
+    /// The case rule that decides which library owns the draft at `path`:
+    /// the one rule every prompt uses, so a draft has one owner in all of
+    /// them on a volume that mixes case rules.
+    pub(crate) fn draft_fold(&self, path: &std::path::Path) -> crate::app::state::CaseFold {
+        self.identity_decision(path).fold
+    }
+
+    /// [`Self::draft_fold`] for every dirty draft.
+    pub(crate) fn dirty_draft_folds(
+        &self,
+    ) -> std::collections::HashMap<std::path::PathBuf, crate::app::state::CaseFold> {
+        self.document_state
+            .dirty_primitive_paths()
+            .map(|path| {
+                let fold = self.draft_fold(&path);
+                (path, fold)
+            })
+            .collect()
+    }
+
+    /// Dirty symbol and footprint drafts the library at `root` could own,
+    /// sorted. Only mounted libraries (and `root`) compete: a library an open
+    /// project lists but nobody mounted must not take a draft away from the
+    /// one being closed. A draft tied between libraries of one folder is
+    /// listed for each of them.
     pub(crate) fn dirty_primitive_paths_of_library(
         &self,
         root: &std::path::Path,
     ) -> Vec<std::path::PathBuf> {
-        use crate::app::state::scope::{owning_library, path_key_with};
-        let roots = self.draft_library_roots();
+        use crate::app::state::scope::{owning_libraries, path_key_with};
+        let mut roots: Vec<std::path::PathBuf> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| lib.root.clone())
+            .collect();
+        roots.push(root.to_path_buf());
+        roots.sort();
+        roots.dedup();
         let mut paths: Vec<std::path::PathBuf> = self
             .document_state
             .dirty_primitive_paths()
             .filter(|path| {
-                let fold = self.identity_decision(path).fold;
-                owning_library(path, &roots, fold)
-                    .is_some_and(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
+                let fold = self.draft_fold(path);
+                owning_libraries(path, &roots, fold)
+                    .into_iter()
+                    .any(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
             })
             .collect();
         paths.sort();
