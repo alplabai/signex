@@ -418,7 +418,17 @@ fn copy_confirm_row<'a>(
         ),
     };
     let answers: Element<'_, LibraryMessage> = if picker.opening_library.is_some() {
-        text("Opening library…").size(TS.body).into()
+        row![
+            text("Opening library…").size(TS.body),
+            secondary_btn(
+                "Cancel",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
+                tokens,
+            ),
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .into()
     } else if symbol.library.is_some() {
         row![
             secondary_btn(

@@ -81,6 +81,7 @@ impl Signex {
     pub(super) fn handle_loose_chosen(&mut self, symbol: LooseSymbol) -> Task<Message> {
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = Some(symbol);
+            picker.opening_library = None;
             picker.error = None;
         }
         Task::none()
@@ -125,7 +126,14 @@ impl Signex {
             return;
         }
         picker.opening_library = None;
-        picker.copy_confirm = None;
+        // Only the question about this library; a newer pick keeps its own.
+        if picker
+            .copy_confirm
+            .as_ref()
+            .is_some_and(|s| s.library.as_deref() == Some(path))
+        {
+            picker.copy_confirm = None;
+        }
         let name = path
             .file_stem()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
@@ -141,6 +149,8 @@ impl Signex {
     pub(super) fn handle_copy_declined(&mut self) -> Task<Message> {
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = None;
+            // Also "Cancel" of an open in progress: the mount lands unannounced.
+            picker.opening_library = None;
         }
         Task::none()
     }

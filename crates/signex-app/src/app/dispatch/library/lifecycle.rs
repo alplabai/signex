@@ -83,6 +83,7 @@ impl Signex {
                 path = %path.display(),
                 "mount_finished: no longer pending (closed while preparing); discarding"
             );
+            self.picker_mount_settled(&path, Some("cancelled".into()));
             return Task::none();
         };
         let Some(result) = prepared.take() else {
@@ -91,6 +92,7 @@ impl Signex {
                 path = %path.display(),
                 "mount_finished: payload already taken; library not mounted"
             );
+            self.picker_mount_settled(&path, Some("cancelled".into()));
             return Task::none();
         };
         // Raised only for a mount the user asked for by name (#532).

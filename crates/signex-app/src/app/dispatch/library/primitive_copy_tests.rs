@@ -475,3 +475,120 @@ fn a_failed_open_of_the_symbols_library_shows_in_the_picker() {
         open.error
     );
 }
+
+fn chosen_held(f: &mut Fixture) -> crate::library::loose_symbols::LooseSymbol {
+    let held = f
+        .app
+        .library
+        .primitive_picker
+        .as_ref()
+        .unwrap()
+        .loose
+        .iter()
+        .find(|s| s.name == "HELD")
+        .cloned()
+        .unwrap();
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(held.clone()));
+    held
+}
+
+fn opening(f: &Fixture) -> Option<PathBuf> {
+    f.app
+        .library
+        .primitive_picker
+        .as_ref()
+        .unwrap()
+        .opening_library
+        .clone()
+}
+
+#[test]
+fn a_mount_cancelled_while_preparing_clears_the_opening_state() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let snxlib = unmounted_library_symbol(&mut f, tmp.path());
+    open_picker(&mut f);
+    chosen_held(&mut f);
+    f.app
+        .library
+        .primitive_picker
+        .as_mut()
+        .unwrap()
+        .opening_library = Some(snxlib.clone());
+
+    // The mount finishes after its request was withdrawn (library closed).
+    let task = f
+        .app
+        .update(Message::Library(LibraryMessage::MountFinished {
+            path: snxlib,
+            prepared: crate::library::mount::PreparedMountCell::new(Err(
+                signex_library::LibraryError::Backend("x".into()),
+            )),
+        }));
+    settle(&mut f.app, task);
+
+    assert_eq!(opening(&f), None);
+    let open = f.app.library.primitive_picker.as_ref().unwrap();
+    assert!(
+        open.error
+            .as_deref()
+            .is_some_and(|e| e.contains("cancelled"))
+    );
+}
+
+#[test]
+fn cancel_while_opening_clears_the_opening_state() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let snxlib = unmounted_library_symbol(&mut f, tmp.path());
+    open_picker(&mut f);
+    chosen_held(&mut f);
+    f.app
+        .library
+        .primitive_picker
+        .as_mut()
+        .unwrap()
+        .opening_library = Some(snxlib);
+    picker(&mut f.app, PrimitivePickerMsg::CopyDeclined);
+    assert_eq!(opening(&f), None);
+}
+
+#[test]
+fn picking_another_symbol_while_opening_drops_the_opening_state_and_keeps_the_new_pick() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let snxlib = unmounted_library_symbol(&mut f, tmp.path());
+    open_picker(&mut f);
+    chosen_held(&mut f);
+    f.app
+        .library
+        .primitive_picker
+        .as_mut()
+        .unwrap()
+        .opening_library = Some(snxlib.clone());
+    let loose = f
+        .app
+        .library
+        .primitive_picker
+        .as_ref()
+        .unwrap()
+        .loose
+        .iter()
+        .find(|s| s.name == "GATEDRV8")
+        .cloned()
+        .unwrap();
+
+    picker(&mut f.app, PrimitivePickerMsg::PickLoose(loose.clone()));
+    assert_eq!(opening(&f), None);
+
+    // The mount of the first library still lands: the new pick stays.
+    f.app
+        .library
+        .primitive_picker
+        .as_mut()
+        .unwrap()
+        .opening_library = Some(snxlib.clone());
+    f.app.picker_mount_settled(&snxlib, None);
+    let open = f.app.library.primitive_picker.as_ref().unwrap();
+    assert_eq!(open.copy_confirm.as_ref(), Some(&loose));
+}
