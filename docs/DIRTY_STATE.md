@@ -86,6 +86,27 @@ when no history step can reproduce the file any more:
   `finish_save_as` see a different revision, forget the point and leave the
   sheet dirty, even if the Undo had cleared it meanwhile.
 
+Who sets the save point (#1854):
+
+- `mark_document_clean` is for a landed save: it clears the marks and calls
+  `Engine::mark_saved`. A discard (Discard All, an undo that drops a parked
+  engine, a Save As old key, the unopened-sheet Annotate write, a rolled
+  back re-prefix) calls `clear_document_dirty`, which leaves the engine's
+  save point alone. A re-prefix rollback whose `discard_undo_group_top`
+  fails or finds the run is not on top leaves that sheet dirty.
+- A sheet read from disk or restored is marked saved only when the engine
+  was just installed (`install_active_engine` / `install_schematic_at`
+  return whether it was); a failed install cannot mark the older engine.
+- History-recorded edits outside the mark paths go through
+  `mark_history_edit_dirty`: the non-active sheets of a project-wide Replace
+  and a recorded library update on a parked sheet, so undo back to the save
+  point clears them. Unrecorded updates still use the outside mark.
+
+Known limit: Undo then Redo while a write is in flight forgets the save
+point. The write's completion sees a different revision and `mark_saved`
+refuses, so the sheet stays dirty until the next save. It errs safe: the
+sheet reads dirty when it could read clean; nothing is lost.
+
 `DirtyDocuments` also remembers which marked paths were marked from outside
 the history (`mark_document_dirty` and its display-only twin: a project
 edit, a net colour or class, an annotate pass, a restore). The history can

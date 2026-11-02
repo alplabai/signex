@@ -427,9 +427,9 @@ impl Signex {
             Err(RestoreFailure::NotRestored(message)) => self.report_restore_failure(message),
             Ok(RestoreJobDocument::Schematic(sheet)) => {
                 crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
-                if idx == self.document_state.active_tab {
+                let installed = if idx == self.document_state.active_tab {
                     self.discard_state_of_replaced_engine();
-                    self.apply_loaded_schematic(Some(*sheet), true, false, false);
+                    let installed = self.apply_loaded_schematic(Some(*sheet), true, false, false);
                     // Undocked windows on this sheet were redrawn by that;
                     // their selections point into the old engine too.
                     self.refresh_slots_from_engine(
@@ -438,13 +438,12 @@ impl Signex {
                         crate::schematic_runtime::RenderInvalidation::FULL,
                         true,
                     );
+                    installed
                 } else {
-                    self.install_schematic_at(&path, *sheet);
-                }
+                    self.install_schematic_at(&path, *sheet)
+                };
                 // The restored bytes are on disk and are what the engine holds.
-                if let Some(engine) = self.document_state.engines.get_mut(&path) {
-                    engine.mark_saved();
-                }
+                self.mark_installed_engine_saved(&path, installed);
                 // A restored sheet from a newer Signex is read-only and can
                 // never be saved: leaving it dirty would make quit ask to
                 // save an unsaveable file (#1402). It matches disk, so

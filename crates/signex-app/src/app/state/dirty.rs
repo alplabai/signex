@@ -146,16 +146,35 @@ impl DocumentState {
         }
     }
 
-    /// The document at `path` matches the disk (a save landed) or its edits
-    /// were discarded: clear every place that knew it dirty.
+    /// An edit recorded in the engine's history at `path` that no command
+    /// path marked: dirty now, and clean again when undo returns to the save
+    /// point. A path with no engine falls back to a plain dirty mark.
+    pub fn mark_history_edit_dirty(&mut self, path: &Path) {
+        if self.engines.contains_key(path) {
+            self.sync_history_dirty(path);
+        } else {
+            self.mark_document_dirty(path);
+        }
+    }
+
+    /// The document at `path` matches the disk (a save landed): clear every
+    /// place that knew it dirty and make the engine's history position the
+    /// point undo and redo return to as clean. A discard uses
+    /// [`Self::clear_document_dirty`] instead: any engine left at `path`
+    /// need not equal the file there.
     pub fn mark_document_clean(&mut self, path: &Path) {
-        self.dirty_docs.paths.remove(path);
-        self.dirty_docs.external.remove(path);
-        // The engine's document is what is (now) on disk: its history
-        // position is the point undo and redo return to as clean.
+        self.clear_document_dirty(path);
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+    }
+
+    /// Clear every stored dirty mark of `path` without touching the engine's
+    /// save point: for a discard, where an engine at `path` is not known to
+    /// equal the file.
+    pub fn clear_document_dirty(&mut self, path: &Path) {
+        self.dirty_docs.paths.remove(path);
+        self.dirty_docs.external.remove(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.set_dirty(false);
         }

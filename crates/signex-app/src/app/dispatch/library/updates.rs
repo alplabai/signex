@@ -621,7 +621,11 @@ impl Signex {
                         // as in the mutation gateway.
                         self.ui_state.net_color_redo.remove(sheet);
                     }
-                    self.document_state.mark_document_dirty(sheet);
+                    if record_history {
+                        self.document_state.mark_history_edit_dirty(sheet);
+                    } else {
+                        self.document_state.mark_document_dirty(sheet);
+                    }
                     self.refresh_panel_ctx();
                 }
                 false
