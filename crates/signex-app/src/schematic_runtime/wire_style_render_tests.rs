@@ -44,6 +44,7 @@ fn scene_line(sheet: &SchematicRenderSnapshot, styling: Option<WireStyling<'_>>)
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let scene = build_schematic_scene(
@@ -72,6 +73,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let no_colors = HashMap::new();
@@ -228,6 +230,7 @@ fn junction_draw_color(styling: Option<WireStyling<'_>>) -> [f32; 4] {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     let snapshot = build_renderer_snapshot(
@@ -329,6 +332,7 @@ fn every_segment_of_a_bent_wire_gets_the_same_colour_and_width() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
 

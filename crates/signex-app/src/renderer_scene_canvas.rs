@@ -660,6 +660,7 @@ mod arc_span_tests {
             offset_x: 17.0,
             offset_y: 23.0,
             scale: 3.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let map = |p: [f32; 2]| transform.world_to_screen((p[0] as f64, p[1] as f64));
         assert!(
@@ -811,6 +812,7 @@ mod canvas_font_tests {
             offset_x: 0.0,
             offset_y: 0.0,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let colors =
             signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);

@@ -473,6 +473,10 @@ pub struct CanvasViewPrefs<'a> {
     /// treat the Component tool as a placing tool then, not only the one
     /// whose canvas holds the cursor ghost (#1776).
     pub power_port_pending: bool,
+    /// Device pixels per logical pixel in the window this canvas draws in
+    /// (`UiState::device_px_per_logical_px`): the stroke floor and the
+    /// hairline snap work on that grid (#1887).
+    pub device_px_per_logical_px: f32,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -893,6 +897,7 @@ mod tests {
             selection_filters: filters,
             placement: None,
             power_port_pending: false,
+            device_px_per_logical_px: 1.0,
         }
     }
 

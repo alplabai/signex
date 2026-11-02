@@ -803,6 +803,15 @@ impl Signex {
             Message::Window(WindowMsg::WindowResizedFor(id, size.width, size.height))
         });
 
+        // A window's OS scale changed (moved to another screen, or the
+        // system setting changed): every window, with its id (#1887).
+        let window_rescale = iced::window::events().filter_map(|(id, event)| match event {
+            iced::window::Event::Rescaled(scale) => {
+                Some(Message::Window(WindowMsg::WindowScaleChanged(id, scale)))
+            }
+            _ => None,
+        });
+
         // Hover-open timer for the right-click context-menu submenus.
         // Active while ANY menu that owns submenus is open — canvas
         // right-click, project-tree right-click, or document-tab
@@ -889,6 +898,7 @@ impl Signex {
             window_close,
             window_close_request,
             window_resize,
+            window_rescale,
             hover_tick,
             hover_tooltip_tick,
             net_hover_tick,
