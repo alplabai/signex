@@ -490,7 +490,13 @@ fn row_identity(
     libs: &[MountedLibrary],
 ) -> PartIdentity {
     let open: Vec<(Uuid, PathBuf)> = libs.iter().map(|l| (l.id, l.path.clone())).collect();
-    let footprint = super::place::footprint_name(&opened.adapter, row, &open);
+    // Unreadable reads as "no footprint on offer", which never flags drift;
+    // the placement-time warning would repeat on every pass.
+    let footprint = super::place::read_footprint_name(&opened.adapter, row, &open)
+        .unwrap_or_else(|why| {
+            tracing::debug!(target: "signex::library", pn = %row.internal_pn, %why, "drift: footprint unreadable");
+            String::new()
+        });
     PartIdentity::of_row(row, footprint)
 }
 

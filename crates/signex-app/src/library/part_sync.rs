@@ -22,16 +22,35 @@ pub struct PartIdentity {
     pub footprint: String,
     pub manufacturer: String,
     pub mpn: String,
+    /// The field the part keeps its MPN under (one of `MPN_FIELDS`); empty
+    /// for a row, and for a part with no MPN yet, which gets `MPN_FIELD`.
+    pub mpn_key: String,
 }
 
 impl PartIdentity {
     /// What the placed `symbol` holds now.
     pub fn of_symbol(symbol: &Symbol) -> Self {
-        let field = |key: &str| symbol.fields.get(key).cloned().unwrap_or_default();
+        Self::of_fields(&symbol.footprint, &symbol.fields)
+    }
+
+    /// What a part with `footprint` and `fields` holds.
+    fn of_fields(footprint: &str, fields: &HashMap<String, String>) -> Self {
+        let field = |key: &str| fields.get(key).cloned().unwrap_or_default();
+        // ERC and the BOM read an MPN under any of its aliases; so does this.
+        let (mpn_key, mpn) = signex_types::schematic::MPN_FIELDS
+            .iter()
+            .find_map(|key| {
+                fields
+                    .get(*key)
+                    .filter(|v| !v.trim().is_empty())
+                    .map(|v| ((*key).to_owned(), v.clone()))
+            })
+            .unwrap_or_default();
         Self {
-            footprint: symbol.footprint.clone(),
+            footprint: footprint.to_owned(),
             manufacturer: field(MANUFACTURER_FIELD),
-            mpn: field(MPN_FIELD),
+            mpn,
+            mpn_key,
         }
     }
 
@@ -41,6 +60,7 @@ impl PartIdentity {
             footprint,
             manufacturer: row.primary_mpn.manufacturer.clone(),
             mpn: row.primary_mpn.mpn.clone(),
+            mpn_key: String::new(),
         }
     }
 
@@ -102,8 +122,17 @@ impl PartSync {
         footprint
             .into_iter()
             .chain(field(MANUFACTURER_FIELD, &self.change.manufacturer))
-            .chain(field(MPN_FIELD, &self.change.mpn))
+            .chain(field(self.mpn_key(), &self.change.mpn))
             .collect()
+    }
+
+    /// The field the new MPN goes into: the alias the part already uses.
+    fn mpn_key(&self) -> &str {
+        if self.have.mpn_key.is_empty() {
+            MPN_FIELD
+        } else {
+            &self.have.mpn_key
+        }
     }
 
     /// The Messages line: `U1: updated from library (footprint "" -> "SOIC-8")`.
@@ -150,7 +179,28 @@ mod tests {
             footprint: footprint.into(),
             manufacturer: manufacturer.into(),
             mpn: mpn.into(),
+            mpn_key: String::new(),
         }
+    }
+
+    #[test]
+    fn an_mpn_kept_under_an_alias_is_read_and_updated_there() {
+        let fields = HashMap::from([("Manufacturer Part Number".to_owned(), "OLD".to_owned())]);
+        let have = PartIdentity::of_fields("", &fields);
+        assert_eq!(have.mpn, "OLD");
+        let sync = PartSync {
+            symbol: Uuid::nil(),
+            reference: "U1".into(),
+            change: have.changes_to(&id("", "", "NEW")),
+            have,
+        };
+        let Some(Command::SetSymbolField { key, value, .. }) = sync.commands().pop() else {
+            panic!("an MPN edit");
+        };
+        assert_eq!(
+            (key.as_str(), value.as_str()),
+            ("Manufacturer Part Number", "NEW")
+        );
     }
 
     #[test]
