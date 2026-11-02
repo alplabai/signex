@@ -151,6 +151,9 @@ mod undo_marker_divergence;
 #[path = "regression/primitive_dirty_quit.rs"]
 mod primitive_dirty_quit;
 
+#[path = "regression/close_prompt_primitives.rs"]
+mod close_prompt_primitives;
+
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 

@@ -127,6 +127,24 @@ pub(crate) fn project_owning_sheet_with<'a>(
     OwnershipIndex::build(0, projects, loaded, Some(fold)).owner(projects, path)
 }
 
+/// The library that owns the symbol / footprint draft at `path`: among the
+/// `.snxlib` files in `libraries`, the one whose folder contains the draft and
+/// is deepest, so a library nested in another's folder owns its own drafts.
+/// The one ownership decision the Close Project and Close Library prompts
+/// share.
+pub(crate) fn owning_library<'a>(
+    path: &Path,
+    libraries: &'a [PathBuf],
+    fold: CaseFold,
+) -> Option<&'a PathBuf> {
+    libraries
+        .iter()
+        .filter_map(|lib| Some((lib, lib.parent()?)))
+        .filter(|(_, dir)| path_is_under(path, dir, fold))
+        .max_by_key(|(_, dir)| path_key_with(dir, fold).len())
+        .map(|(lib, _)| lib)
+}
+
 /// True when `path` is `root` or lies under it, compared component-wise on
 /// [`path_key_with`] keys so a differently-cased or `\\`-separated spelling of
 /// the same file still matches.
