@@ -757,3 +757,25 @@ fn a_rollback_that_could_not_discard_the_run_does_not_mark_the_sheet_clean() {
         "the run is still in the sheet"
     );
 }
+
+#[test]
+fn a_rollback_that_could_not_discard_the_run_marks_the_active_sheet_dirty() {
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
+    let root = dir.join("a_root.snxsch");
+    // The pass has not marked the active sheet dirty yet, and it is in no
+    // `newly_dirty`; the run could not be discarded from it.
+    assert!(!app.document_state.is_document_dirty(&root));
+    let touched = [root.clone()];
+    let _ = app.roll_back_reprefix(
+        Some(signex_engine::UndoGroupId::new(u64::MAX)),
+        &touched,
+        &std::collections::HashSet::new(),
+        &[],
+        "test",
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        app.document_state.is_document_dirty(&root),
+        "the message says the sheet stays unsaved, so it must be dirty"
+    );
+}

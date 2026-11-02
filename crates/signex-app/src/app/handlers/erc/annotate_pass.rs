@@ -375,6 +375,12 @@ impl Signex {
                 self.document_state.clear_document_dirty(path);
             }
         }
+        // The message below says these sheets stay unsaved: make that true.
+        // The active sheet is in no `newly_dirty` (the pass marks it only
+        // after it succeeds), so without this it would read clean.
+        for path in &not_rolled_back {
+            self.document_state.mark_document_dirty(path);
+        }
         if not_rolled_back.is_empty() {
             crate::diagnostics::log_warning(format!(
                 "{label}: a sheet could not be converted, so the whole run was undone and \
