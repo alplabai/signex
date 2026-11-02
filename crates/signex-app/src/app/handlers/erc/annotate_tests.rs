@@ -526,13 +526,14 @@ fn assert_unopened_sheet_untouched_while(
     let refs = child_refs(&dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, [expected], "the sheet file was not rewritten");
-    assert!(
-        logged_since(
-            since,
-            &format!("{pass}: z_child.snxsch was left unchanged, {reason}")
-        ),
-        "the skip is reported"
-    );
+    // Annotate here is Reset & Renumber, which refuses the run rather than
+    // number around the sheet (#1753); Reset Duplicates still skips it.
+    let said = if pass == "Annotate" {
+        format!("{pass} was not run: it would skip z_child.snxsch ({reason})")
+    } else {
+        format!("{pass}: z_child.snxsch was left unchanged, {reason}")
+    };
+    assert!(logged_since(since, &said), "the skip is reported");
 }
 
 fn claim_restore(app: &mut Signex, path: PathBuf) {

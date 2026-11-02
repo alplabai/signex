@@ -5,7 +5,9 @@ use crate::patch::{DocumentPatch, PatchPair, SemanticPatch};
 use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::{alphabetic_prefix, split_reference};
-use signex_types::schematic::{AnnotateOrder, ProjectParts, Symbol, annotation_order};
+use signex_types::schematic::{
+    AnnotateOrder, InstancePath, ProjectParts, Symbol, annotation_order,
+};
 use uuid::Uuid;
 
 use super::Engine;
@@ -31,6 +33,19 @@ pub struct AnnotateScope<'a> {
     /// every unit of a part together; locked parts, power parts and `#`
     /// designators are skipped here as well.
     pub reprefix: Option<&'a HashMap<Uuid, String>>,
+    /// Empty for a sheet placed once. For a file placed more than once
+    /// (#1835): one entry per placement, root placement first, each with its
+    /// own `sheet` ordinal in `parts`; the sheet is then numbered once per
+    /// placement and the designators land in `Symbol.instances`.
+    pub placements: &'a [AnnotatePlacement],
+}
+
+/// One placement of a sheet file in a project-wide pass (#1835).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnnotatePlacement {
+    /// This placement's ordinal in the slice `ProjectParts` was built from.
+    pub sheet: usize,
+    pub path: InstancePath,
 }
 
 impl Engine {
@@ -50,6 +65,7 @@ impl Engine {
             locked: &locked,
             undo_group: None,
             reprefix: None,
+            placements: &[],
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -59,7 +75,8 @@ impl Engine {
     /// by every sheet of the pass, so numbering and part membership carry over
     /// from sheet to sheet. Symbols in `scope.locked` are skipped (Altium's
     /// "Lock" column); see [`ProjectParts`] for how a lock treats the rest of
-    /// its part. Returns whether anything changed.
+    /// its part. A sheet with `scope.placements` is numbered once per
+    /// placement (#1835). Returns whether anything changed.
     pub fn annotate_in_project(
         &mut self,
         mode: AnnotateMode,
@@ -80,160 +97,33 @@ impl Engine {
         // a later sheet must never take a designator from a sheet that no
         // longer holds it.
         let counters_before = (next_by_prefix.clone(), assigned.clone());
-        let AnnotateScope {
-            parts,
-            sheet,
-            locked,
-            undo_group,
-            reprefix,
-        } = scope;
-        let is_designator_target = |sym: &Symbol| -> bool {
-            !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
+        let numbered = if scope.placements.is_empty() {
+            number_symbols(
+                &mut self.document.symbols,
+                mode,
+                next_by_prefix,
+                scope,
+                assigned,
+            )
+        } else {
+            self.number_placements(mode, next_by_prefix, scope, assigned)
         };
-        let order = annotation_order(&self.document.symbols, parts.order());
-        // Set by every phase that rewrites a designator, so each rewrite gets
-        // an undo step and a dirty mark (#829).
-        let mut changed = false;
-
-        // Phase 0: re-prefix. A part pinned by a locked unit keeps its
-        // designator whole, whatever the map says.
-        if let Some(targets) = reprefix {
-            for (idx, symbol) in self.document.symbols.iter_mut().enumerate() {
-                let Some(prefix) = targets.get(&symbol.uuid) else {
-                    continue;
-                };
-                let pinned = parts
-                    .part(sheet, idx)
-                    .is_some_and(|part| parts.locked_designator(part).is_some());
-                if !is_designator_target(symbol) || pinned {
-                    continue;
-                }
-                let target = format!("{prefix}?");
-                if symbol.reference != target {
-                    symbol.reference = target;
-                    changed = true;
-                }
-            }
+        if let Err(error) = numbered {
+            // Wrapping would re-issue a designator that already exists (and
+            // panics in debug): undo this pass's partial renumber, and the
+            // counters it advanced.
+            self.document = before;
+            (*next_by_prefix, *assigned) = counters_before;
+            return Err(error);
         }
-
-        // Phase 1: reset to '?' if requested. A part with a locked unit keeps
-        // the locked unit's designator on its other units.
-        if matches!(
-            mode,
-            AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
-        ) {
-            for (idx, symbol) in self.document.symbols.iter_mut().enumerate() {
-                if !is_designator_target(symbol) {
-                    continue;
-                }
-                let target = match parts
-                    .part(sheet, idx)
-                    .and_then(|part| parts.locked_designator(part))
-                {
-                    Some(designator) => designator.to_string(),
-                    None => {
-                        let prefix = alphabetic_prefix(&symbol.reference);
-                        if prefix.is_empty() {
-                            continue;
-                        }
-                        format!("{prefix}?")
-                    }
-                };
-                if symbol.reference != target {
-                    symbol.reference = target;
-                    changed = true;
-                }
-            }
-        }
-        if matches!(mode, AnnotateMode::ResetOnly) {
-            // Nothing to reset: no undo step, and an unopened sheet is not
-            // rewritten on disk (the caller saves on `Ok(true)`).
-            if !changed {
-                self.restore_revision(mark);
-                self.connectivity_revision = connectivity;
-                return Ok(false);
-            }
-            let patch_pair = PatchPair {
-                semantic: SemanticPatch::SymbolFieldsUpdated,
-                document: DocumentPatch::SYMBOLS,
-            };
-            self.record_grouped_history(before, patch_pair, undo_group);
-            return Ok(true);
-        }
-
-        // Phase 2: merge this sheet's existing numbers into the shared map
-        // so later sheets don't collide.
-        for symbol in &self.document.symbols {
-            if !is_designator_target(symbol) {
-                continue;
-            }
-            let (prefix, number) = split_reference(&symbol.reference);
-            if prefix.is_empty() {
-                continue;
-            }
-            if let Some(n) = number {
-                let entry = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
-                if n > *entry {
-                    *entry = n;
-                }
-            }
-        }
-
-        // Phase 3: renumber '?' symbols using the shared counter.
-        for idx in order {
-            let symbol = &mut self.document.symbols[idx];
-            if !is_designator_target(symbol) {
-                continue;
-            }
-            if !symbol.reference.ends_with('?') {
-                continue;
-            }
-            // A re-prefix run numbers only the parts the user confirmed.
-            if reprefix.is_some_and(|targets| !targets.contains_key(&symbol.uuid)) {
-                continue;
-            }
-            let part = parts.part(sheet, idx);
-            // A locked unit pins its whole part. Only an unannotated part can
-            // get here (Phase 1 already moved annotated siblings onto the
-            // locked designator), and it stays unannotated.
-            if part.is_some_and(|p| parts.locked_designator(p).is_some()) {
-                continue;
-            }
-            if let Some(designator) = part.and_then(|p| assigned.get(&p)) {
-                symbol.reference = designator.clone();
-                changed = true;
-                continue;
-            }
-            let prefix = alphabetic_prefix(&symbol.reference).to_owned();
-            if prefix.is_empty() {
-                continue;
-            }
-            let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
-            let Some(issued) = next.checked_add(1) else {
-                // Wrapping would re-issue a designator that already exists
-                // (and panics in debug). Undo this pass's partial renumber, and
-                // the counters it advanced.
-                self.document = before;
-                (*next_by_prefix, *assigned) = counters_before;
-                return Err(EngineError::DesignatorOverflow { prefix });
-            };
-            *next = issued;
-            symbol.reference = format!("{prefix}{issued}");
-            if let Some(part) = part {
-                assigned.insert(part, symbol.reference.clone());
-            }
-            changed = true;
-        }
-
-        // A designator reset in Phase 1 and handed back unchanged in Phase 3
-        // is no edit; annotation only ever rewrites `reference`.
-        let changed = changed
-            && self
-                .document
-                .symbols
-                .iter()
-                .zip(&before.symbols)
-                .any(|(now, was)| now.reference != was.reference);
+        // A designator reset and handed back unchanged is no edit; annotation
+        // only ever rewrites `reference` and the placement entries.
+        let changed = self
+            .document
+            .symbols
+            .iter()
+            .zip(&before.symbols)
+            .any(|(now, was)| now.reference != was.reference || now.instances != was.instances);
         if !changed {
             self.restore_revision(mark);
             self.connectivity_revision = connectivity;
@@ -243,9 +133,136 @@ impl Engine {
             semantic: SemanticPatch::SymbolFieldsUpdated,
             document: DocumentPatch::SYMBOLS,
         };
-        self.record_grouped_history(before, patch_pair, undo_group);
+        self.record_grouped_history(before, patch_pair, scope.undo_group);
         Ok(true)
     }
+}
+
+/// Run the numbering phases over `symbols`, reading and writing `reference`.
+/// On overflow `symbols` may be half renumbered; the caller discards them.
+pub(super) fn number_symbols(
+    symbols: &mut [Symbol],
+    mode: AnnotateMode,
+    next_by_prefix: &mut HashMap<String, u32>,
+    scope: AnnotateScope<'_>,
+    assigned: &mut HashMap<usize, String>,
+) -> Result<(), EngineError> {
+    let AnnotateScope {
+        parts,
+        sheet,
+        locked,
+        reprefix,
+        ..
+    } = scope;
+    let is_designator_target = |sym: &Symbol| -> bool {
+        !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
+    };
+    let order = annotation_order(symbols, parts.order());
+
+    // Phase 0: re-prefix. A part pinned by a locked unit keeps its
+    // designator whole, whatever the map says.
+    if let Some(targets) = reprefix {
+        for (idx, symbol) in symbols.iter_mut().enumerate() {
+            let Some(prefix) = targets.get(&symbol.uuid) else {
+                continue;
+            };
+            let pinned = parts
+                .part(sheet, idx)
+                .is_some_and(|part| parts.locked_designator(part).is_some());
+            if !is_designator_target(symbol) || pinned {
+                continue;
+            }
+            symbol.reference = format!("{prefix}?");
+        }
+    }
+
+    // Phase 1: reset to '?' if requested. A part with a locked unit keeps
+    // the locked unit's designator on its other units.
+    if matches!(
+        mode,
+        AnnotateMode::ResetOnly | AnnotateMode::ResetAndRenumber
+    ) {
+        for (idx, symbol) in symbols.iter_mut().enumerate() {
+            if !is_designator_target(symbol) {
+                continue;
+            }
+            let target = match parts
+                .part(sheet, idx)
+                .and_then(|part| parts.locked_designator(part))
+            {
+                Some(designator) => designator.to_string(),
+                None => {
+                    let prefix = alphabetic_prefix(&symbol.reference);
+                    if prefix.is_empty() {
+                        continue;
+                    }
+                    format!("{prefix}?")
+                }
+            };
+            symbol.reference = target;
+        }
+    }
+    if matches!(mode, AnnotateMode::ResetOnly) {
+        return Ok(());
+    }
+
+    // Phase 2: merge this sheet's existing numbers into the shared map
+    // so later sheets don't collide.
+    for symbol in symbols.iter() {
+        if !is_designator_target(symbol) {
+            continue;
+        }
+        let (prefix, number) = split_reference(&symbol.reference);
+        if prefix.is_empty() {
+            continue;
+        }
+        if let Some(n) = number {
+            let entry = next_by_prefix.entry(prefix.to_owned()).or_insert(0);
+            if n > *entry {
+                *entry = n;
+            }
+        }
+    }
+
+    // Phase 3: renumber '?' symbols using the shared counter.
+    for idx in order {
+        let symbol = &mut symbols[idx];
+        if !is_designator_target(symbol) {
+            continue;
+        }
+        if !symbol.reference.ends_with('?') {
+            continue;
+        }
+        // A re-prefix run numbers only the parts the user confirmed.
+        if reprefix.is_some_and(|targets| !targets.contains_key(&symbol.uuid)) {
+            continue;
+        }
+        let part = parts.part(sheet, idx);
+        // A locked unit pins its whole part. Only an unannotated part can
+        // get here (Phase 1 already moved annotated siblings onto the
+        // locked designator), and it stays unannotated.
+        if part.is_some_and(|p| parts.locked_designator(p).is_some()) {
+            continue;
+        }
+        if let Some(designator) = part.and_then(|p| assigned.get(&p)) {
+            symbol.reference = designator.clone();
+            continue;
+        }
+        let prefix = alphabetic_prefix(&symbol.reference).to_owned();
+        if prefix.is_empty() {
+            continue;
+        }
+        let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
+        let Some(issued) = next.checked_add(1) else {
+            return Err(EngineError::DesignatorOverflow { prefix });
+        };
+        *next = issued;
+        symbol.reference = format!("{prefix}{issued}");
+        if let Some(part) = part {
+            assigned.insert(part, symbol.reference.clone());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -429,6 +446,7 @@ mod tests {
                 locked,
                 undo_group: None,
                 reprefix: None,
+                placements: &[],
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)

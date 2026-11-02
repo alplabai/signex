@@ -7,6 +7,7 @@ use super::annotate::{
     PassFailed, annotate_unopened_for_write, annotate_unopened_in_memory, read_only_sheets,
 };
 use super::annotate_job::{PassApplied, PendingWrite, RunUndo};
+use super::annotate_placements::{WalkDocs, multi_placed_files};
 use crate::app::project_sheets::ProjectSheetSet;
 
 /// What one project-wide pass does: the engine mode, and (#1315) an optional
@@ -87,43 +88,53 @@ impl Signex {
             label,
         } = pass;
         let mut writes: Vec<PendingWrite> = Vec::new();
-        // Pass A: seed the shared counter from every sheet's already-
-        // annotated symbols. This happens inside annotate_with_seed's
-        // phase 2, but running a separate seed pass first ensures
-        // order-independence — without this, sheet B could reuse
-        // numbers it considers free that sheet A actually claims.
-        // One per-prefix counter shared by every project sheet, so designators
-        // don't collide across the sheets of the project.
-        let mut next_by_prefix = signex_types::designator::seed_counters(
-            project_set
-                .sheets
-                .values()
-                .flat_map(|sheet| sheet.symbols.iter())
-                .filter(|sym| !sym.is_power && !sym.reference.starts_with('#'))
-                .map(|sym| sym.reference.as_str()),
-        );
-
-        // Pass B: walk every sheet the counter must cover — cached tabs,
-        // unopened sheets, and the active engine alike — in the ONE order
+        // Every sheet the counter must cover - cached tabs, unopened sheets
+        // and the active engine alike - in the ONE order
         // `ordered_project_sheet_paths` defines. The preview walks the exact
         // same order over the exact same set, so the number it promises for
-        // a sheet is the number this pass assigns it (#435): the active
-        // engine no longer gets an unconditional last turn regardless of
-        // where its path sorts.
+        // a sheet is the number this pass assigns it (#435).
         let locked = self.ui_state.annotate_locked.clone();
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
             &project_set,
             active_path.as_deref(),
         );
+        let read_only = read_only_sheets(&self.document_state, &project_set);
+        let resets = reprefix.is_none()
+            && matches!(
+                mode,
+                signex_engine::AnnotateMode::ResetOnly
+                    | signex_engine::AnnotateMode::ResetAndRenumber
+            );
+        // A Reset & Renumber that skipped a sheet would number around the
+        // designators that sheet keeps and could collide with them (#1753).
+        if reprefix.is_none()
+            && matches!(mode, signex_engine::AnnotateMode::ResetAndRenumber)
+            && self.refuse_reset_that_skips(label, &project_set, &ordered_paths, &read_only)
+        {
+            return PassApplied::without_writes(Task::none());
+        }
+        let base_dir = self
+            .document_state
+            .active_document_project()
+            .map(|project| project.dir().to_path_buf())
+            .or_else(|| {
+                project_set
+                    .root
+                    .as_deref()
+                    .and_then(std::path::Path::parent)
+                    .map(std::path::PathBuf::from)
+            });
+        let multi = multi_placed_files(&project_set, base_dir.as_deref());
         // Group units into parts across the WHOLE project before any sheet is
         // touched: a part whose units sit on different sheets must stay one
         // part through a reset, which a per-sheet grouping cannot see (#691).
         // A live engine is the document, so it wins over the assembler's copy.
-        let parts = {
-            let documents: Vec<&[signex_types::schematic::Symbol]> = ordered_paths
-                .iter()
-                .map(|path| {
+        // A file placed more than once is one unit per placement (#1835).
+        let (parts, mut next_by_prefix, first_unit, placements) = {
+            let walk = WalkDocs::new(
+                &ordered_paths,
+                |path| {
                     self.document_state
                         .engines
                         .get(path)
@@ -135,17 +146,29 @@ impl Signex {
                                 .map(|sheet| sheet.symbols.as_slice())
                         })
                         .unwrap_or(&[])
-                })
-                .collect();
-            signex_types::schematic::ProjectParts::new(
-                &documents,
+                },
+                &multi,
+            );
+            // Pass A: one per-prefix counter shared by every unit, seeded
+            // from the designators that stay. A reset is about to clear every
+            // unlocked one, so those do not hold a number back (#1835).
+            let seed = signex_types::designator::seed_counters(
+                walk.docs
+                    .iter()
+                    .flat_map(|doc| doc.iter())
+                    .filter(|sym| !sym.is_power && !sym.reference.starts_with('#'))
+                    .filter(|sym| !resets || locked.contains(&sym.uuid))
+                    .map(|sym| sym.reference.as_str()),
+            );
+            let parts = signex_types::schematic::ProjectParts::new(
+                &walk.slices(),
                 &locked,
                 self.ui_state.annotate_order,
-            )
+            );
+            (parts, seed, walk.first_unit, walk.placements)
         };
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
-        let read_only = read_only_sheets(&self.document_state, &project_set);
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
         // One project-wide undo step per run, unless the preference asks for
@@ -172,10 +195,11 @@ impl Signex {
         for (sheet, path) in ordered_paths.iter().enumerate() {
             let scope = signex_engine::AnnotateScope {
                 parts: &parts,
-                sheet,
+                sheet: first_unit[sheet],
                 locked: &locked,
                 undo_group,
                 reprefix,
+                placements: &placements[sheet],
             };
             if read_only.contains(path) {
                 continue;

@@ -11,7 +11,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Symbol;
+use super::{Symbol, SymbolInstance};
 
 /// The `ChildSheet.uuid` chain from the walk root to one occurrence of a sheet.
 /// A root page is the empty chain.
@@ -122,6 +122,38 @@ impl Symbol {
             }
             Some((InstancePath::parse(&e.path)?, reference))
         })
+    }
+
+    /// Give the placement at `path` the designator `reference`: the first
+    /// entry for the path is changed (a blank one becomes valid), else an
+    /// entry is added. `reference` is stored as given; callers trim.
+    pub fn set_instance_designator(&mut self, path: &InstancePath, reference: String) {
+        let at_path =
+            |entry: &SymbolInstance| InstancePath::parse(&entry.path).as_ref() == Some(path);
+        if let Some(entry) = self.instances.iter_mut().find(|e| at_path(e)) {
+            entry.reference = reference;
+            return;
+        }
+        let project = self
+            .instances
+            .first()
+            .map(|e| e.project.clone())
+            .unwrap_or_default();
+        self.instances.push(SymbolInstance {
+            project,
+            path: path.to_string(),
+            reference,
+            unit: self.unit,
+        });
+    }
+
+    /// Drop every entry for the placement at `path`, so it falls back to
+    /// `reference`. Returns whether anything was dropped.
+    pub fn clear_instance_designator(&mut self, path: &InstancePath) -> bool {
+        let before = self.instances.len();
+        self.instances
+            .retain(|entry| InstancePath::parse(&entry.path).as_ref() != Some(path));
+        self.instances.len() != before
     }
 
     fn instance_entry_in(&self, path: &InstancePath) -> Option<&str> {
