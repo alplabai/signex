@@ -421,3 +421,66 @@ fn refresh_snapshot_carries_row_descriptions() {
 
     assert_eq!(snapshot.summaries()[0].description, "100 nF 50 V X7R");
 }
+
+fn bare_library(root: &str) -> OpenLibrary {
+    OpenLibrary {
+        root: PathBuf::from(root),
+        display_name: root.into(),
+        library_id: Uuid::now_v7(),
+        tables: HashMap::new(),
+        cached_components: Vec::new(),
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+    }
+}
+
+#[test]
+fn containing_library_picks_the_deepest_library_in_either_mount_order() {
+    let file = Path::new("/p/vendor/symbols/a.snxsym");
+    for order in [
+        ["/p/lib.snxlib", "/p/vendor/v.snxlib"],
+        ["/p/vendor/v.snxlib", "/p/lib.snxlib"],
+    ] {
+        let mut state = LibraryState {
+            open_libraries: order.iter().map(|r| bare_library(r)).collect(),
+            ..Default::default()
+        };
+        assert_eq!(
+            state.containing_library(file).map(|l| l.root.clone()),
+            Some(PathBuf::from("/p/vendor/v.snxlib")),
+            "mount order {order:?}"
+        );
+        assert_eq!(
+            state.containing_library_mut(file).map(|l| l.root.clone()),
+            Some(PathBuf::from("/p/vendor/v.snxlib")),
+        );
+        // A file of the outer library only still belongs to the outer one.
+        assert_eq!(
+            state
+                .containing_library(Path::new("/p/symbols/b.snxsym"))
+                .map(|l| l.root.clone()),
+            Some(PathBuf::from("/p/lib.snxlib")),
+        );
+    }
+}
+
+#[test]
+fn containing_library_follows_the_case_rule_of_the_volume() {
+    let state = LibraryState {
+        open_libraries: vec![bare_library("/p/Lib.snxlib")],
+        ..Default::default()
+    };
+    let folding = crate::app::CaseFold::FOLD;
+    let preserving = crate::app::CaseFold::PRESERVE;
+    // The library folder is `/p`; only the `P` spelling differs.
+    let variant = Path::new("/P/symbols/a.snxsym");
+    assert!(state.containing_library_with(variant, folding).is_some());
+    assert!(state.containing_library_with(variant, preserving).is_none());
+}

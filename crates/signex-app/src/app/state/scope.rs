@@ -137,12 +137,29 @@ pub(crate) fn owning_library<'a>(
     libraries: &'a [PathBuf],
     fold: CaseFold,
 ) -> Option<&'a PathBuf> {
-    libraries
-        .iter()
-        .filter_map(|lib| Some((lib, lib.parent()?)))
+    deepest_owner(
+        path,
+        libraries
+            .iter()
+            .filter_map(|lib| Some((lib, lib.parent()?))),
+        fold,
+    )
+}
+
+/// The candidate whose folder is the DEEPEST one holding `path`, by
+/// [`path_is_under`]. The one "which library holds this file" rule: Close
+/// Project, Close Library, the symbol delete warning and the picker all go
+/// through it, so nested library folders resolve the same way everywhere.
+pub(crate) fn deepest_owner<'a, T>(
+    path: &Path,
+    candidates: impl IntoIterator<Item = (T, &'a Path)>,
+    fold: CaseFold,
+) -> Option<T> {
+    candidates
+        .into_iter()
         .filter(|(_, dir)| path_is_under(path, dir, fold))
         .max_by_key(|(_, dir)| path_key_with(dir, fold).len())
-        .map(|(lib, _)| lib)
+        .map(|(owner, _)| owner)
 }
 
 /// True when `path` is `root` or lies under it, compared component-wise on

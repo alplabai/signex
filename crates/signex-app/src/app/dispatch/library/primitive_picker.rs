@@ -382,60 +382,30 @@ impl Signex {
         self.refresh_library_task(&address.library_path, RefreshFollowUp::Nothing)
     }
 
-    /// Filesystem-picked primitive — auto-mount the containing
-    /// `.snxlib`, then synthesize a Pick.
+    /// Filesystem-picked primitive. A file of a MOUNTED library binds from
+    /// that library (`containing_library`, the one ownership rule); a symbol
+    /// file of an unmounted one is classified off-thread with
+    /// `enclosing_snxlib`.
     fn handle_primitive_picker_browse_result(&mut self, file: std::path::PathBuf) -> Task<Message> {
-        // Locate the containing `.snxlib`. Path layout is
-        // `<some>/<lib>.snxlib/<symbols|footprints|sims>/<name>.<ext>`.
-        let snxlib_dir = file
-            .ancestors()
-            .find(|p| {
-                p.extension()
-                    .and_then(|s| s.to_str())
-                    .map(|ext| ext.eq_ignore_ascii_case("snxlib"))
-                    .unwrap_or(false)
-            })
-            .map(|p| p.to_path_buf());
-        let Some(snxlib_dir) = snxlib_dir else {
-            let is_symbol = self
-                .library
-                .primitive_picker
-                .as_ref()
-                .is_some_and(|p| p.kind == PrimitiveKind::Symbol);
-            if is_symbol {
-                // A symbol file outside every library: offer a copy (#1841).
-                return self.read_browsed_loose_symbol(file);
-            }
-            if let Some(picker) = self.library.primitive_picker.as_mut() {
-                picker.error = Some(
-                    "Picked file is not inside a `.snxlib` library. v0.9 only supports primitives bound through libraries."
-                        .into(),
-                );
-            }
-            return Task::none();
-        };
-        // Mount the library if not already.
-        if let Err(e) = commands::open_library(&mut self.library, snxlib_dir.clone()) {
-            tracing::warn!(
-                target: "signex::library",
-                path = %snxlib_dir.display(),
-                error = %e,
-                "browse-pick: open_library failed"
-            );
-            if let Some(picker) = self.library.primitive_picker.as_mut() {
-                picker.error = Some(format!("open library failed: {e}"));
-            }
-            return Task::none();
+        let is_symbol = self
+            .library
+            .primitive_picker
+            .as_ref()
+            .is_some_and(|p| p.kind == PrimitiveKind::Symbol);
+        if is_symbol {
+            // The read answers mounted (bind) or unmounted (copy / open the
+            // library, #1841) off-thread; see `handle_loose_listed`.
+            return self.read_browsed_loose_symbol(file);
         }
-        // Resolve library_id + parse uuid from filename.
-        let library_id = match self.library.library_at(&snxlib_dir) {
-            Some(lib) => lib.library_id,
-            None => {
-                if let Some(picker) = self.library.primitive_picker.as_mut() {
-                    picker.error = Some("Library failed to mount.".into());
-                }
-                return Task::none();
+        let Some(library_id) = self
+            .library
+            .containing_library(&file)
+            .map(|lib| lib.library_id)
+        else {
+            if let Some(picker) = self.library.primitive_picker.as_mut() {
+                picker.error = Some("Picked file is not inside an open `.snxlib` library.".into());
             }
+            return Task::none();
         };
         let uuid = match self.library.primitive_uuid_in_file(library_id, &file) {
             Ok(uuid) => uuid,
@@ -446,9 +416,8 @@ impl Signex {
                 return Task::none();
             }
         };
-        let primitive_ref = PrimitiveRef::new(library_id, uuid);
         Task::done(Message::Library(LibraryMessage::PrimitivePicker(
-            PrimitivePickerMsg::Pick(primitive_ref),
+            PrimitivePickerMsg::Pick(PrimitiveRef::new(library_id, uuid)),
         )))
     }
 }

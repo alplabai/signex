@@ -632,3 +632,58 @@ fn browsing_a_file_of_an_open_library_is_not_called_unopened() {
     assert_eq!(bound.library_id, f.library_id);
     assert_eq!(bound.uuid, held_uuid);
 }
+
+/// A mounted library nested in another's folder, in a directory that also
+/// holds an unmounted `.snxlib` (so the on-disk layout rule cannot name one).
+#[test]
+fn browsing_a_file_of_a_nested_open_library_binds_from_the_inner_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let nested = tmp.path().join("cells-lib").join("vendor");
+    let snxlib = nested.join("v.snxlib");
+    let id = Uuid::now_v7();
+    {
+        let manifest = SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: id,
+            library: LibrarySection {
+                name: "v".into(),
+                description: None,
+            },
+            mode: LibraryMode::default(),
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+            classes: Vec::new(),
+        };
+        drop(
+            LocalGitAdapter::init(
+                &snxlib,
+                manifest,
+                LibraryInitOptions {
+                    enable_git: false,
+                    use_lfs: false,
+                },
+            )
+            .expect("init"),
+        );
+        drop(LocalGitAdapter::recover_init(&snxlib).expect("recover_init"));
+    }
+    // A second `.snxlib` beside it: the on-disk layout rule names neither.
+    std::fs::write(nested.join("other.snxlib"), "").unwrap();
+    f.app.library.open_library(nested.join("v.snxlib")).unwrap();
+    let held = nested.join("symbols").join("Held.snxsym");
+    std::fs::create_dir_all(held.parent().unwrap()).unwrap();
+    std::fs::write(
+        &held,
+        SymbolFile::from_symbol(Symbol::empty("HELD"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    open_picker(&mut f);
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(held)));
+    assert!(f.app.library.primitive_picker.is_none());
+    let bound = bound_symbol(&f);
+    assert_eq!(bound.library_id, id);
+    assert_ne!(bound.library_id, f.library_id);
+}

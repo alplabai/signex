@@ -59,10 +59,7 @@ impl Signex {
         // the directory-form route does; it is never offered as a copy.
         if from_browse
             && let [only] = read.symbols.as_slice()
-            && let Some(lib) = only
-                .library
-                .as_deref()
-                .and_then(|path| self.library.library_at(path))
+            && let Some(lib) = self.library.containing_library(&only.file)
         {
             let reference = signex_library::PrimitiveRef::new(lib.library_id, only.uuid);
             return Task::done(Message::Library(LibraryMessage::PrimitivePicker(

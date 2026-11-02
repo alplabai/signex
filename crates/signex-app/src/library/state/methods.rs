@@ -1,6 +1,7 @@
 //! `LibraryState` / `OpenLibrary` methods (open/close/refresh/reload).
 
 use super::*;
+use crate::app::CaseFold;
 
 /// Move one primitive listing onto its cache, keeping the previous
 /// contents when the adapter failed.
@@ -253,19 +254,35 @@ impl LibraryState {
     /// itself, so `<root_dir>/symbols/foo.snxsym` correctly resolves
     /// to its library.
     pub fn containing_library(&self, child_path: &Path) -> Option<&OpenLibrary> {
-        self.open_libraries.iter().find(|lib| {
-            lib.root_dir()
-                .map(|d| child_path.starts_with(d))
-                .unwrap_or(false)
-        })
+        self.containing_library_with(child_path, CaseFold::host_default())
+    }
+
+    /// [`Self::containing_library`] under an explicit case rule. The deepest
+    /// matching folder wins, so a library nested in another's folder owns its
+    /// own files.
+    pub fn containing_library_with(
+        &self,
+        child_path: &Path,
+        fold: CaseFold,
+    ) -> Option<&OpenLibrary> {
+        let index = self.containing_index(child_path, fold)?;
+        self.open_libraries.get(index)
     }
 
     pub fn containing_library_mut(&mut self, child_path: &Path) -> Option<&mut OpenLibrary> {
-        self.open_libraries.iter_mut().find(|lib| {
-            lib.root_dir()
-                .map(|d| child_path.starts_with(d))
-                .unwrap_or(false)
-        })
+        let index = self.containing_index(child_path, CaseFold::host_default())?;
+        self.open_libraries.get_mut(index)
+    }
+
+    fn containing_index(&self, child_path: &Path, fold: CaseFold) -> Option<usize> {
+        crate::app::deepest_owner(
+            child_path,
+            self.open_libraries
+                .iter()
+                .enumerate()
+                .filter_map(|(i, lib)| Some((i, lib.root_dir()?))),
+            fold,
+        )
     }
 
     /// Open the `*.snxlib/` at `root`, mounting the adapter under its
