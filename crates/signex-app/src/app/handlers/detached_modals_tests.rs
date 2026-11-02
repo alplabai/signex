@@ -154,6 +154,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 loose: Vec::new(),
                 copy_confirm: None,
                 copying: false,
+                opening_library: None,
             })
         }
         ModalId::LibraryDocumentOptions => {
