@@ -49,9 +49,12 @@ impl SchematicCanvas<'_> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let action = self.update_left_pressed(state, bounds, cursor);
-                // A press drops a click-click float, or starts one whose
-                // selection is not landed yet: either way no ghost stands.
-                state.ghost.clear();
+                // A press that drops a click-click float ends its ghost; a
+                // press that starts one (selection not landed yet) or misses
+                // the canvas keeps whatever ghost the live float has.
+                if !self.is_moving(state) {
+                    state.ghost.clear();
+                }
                 action
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
