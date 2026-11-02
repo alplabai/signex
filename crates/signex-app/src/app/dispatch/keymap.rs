@@ -187,12 +187,25 @@ impl Signex {
                 }
             }
 
-            // An undocked tab carries its own document. `view_center`
-            // gates the footprint / symbol / library-browser surfaces on
-            // `is_main`, so such a window can only ever host a schematic
-            // or PCB canvas — `Footprint` and `Library` are unreachable
-            // there by construction, not by omission.
+            // An undocked tab carries its own document, and `view_center`
+            // shows it: a primitive editor or Library Browser window gets
+            // the library contexts of its own tab.
             InputTarget::UndockedTab => {
+                let own_kind = window.and_then(|id| {
+                    self.document_state
+                        .tab_shown_in_window(id, &self.ui_state)
+                        .map(|tab| &tab.kind)
+                });
+                match own_kind {
+                    Some(TabKind::FootprintEditor(_)) => {
+                        contexts.push(ShortcutContext::Footprint);
+                        contexts.push(ShortcutContext::Library);
+                    }
+                    Some(TabKind::SymbolEditor(_)) | Some(TabKind::LibraryBrowser(_)) => {
+                        contexts.push(ShortcutContext::Library);
+                    }
+                    _ => {}
+                }
                 let has_schematic = window
                     .and_then(|id| self.document_state.engine_for_window(id, &self.ui_state))
                     .is_some();
@@ -277,6 +290,27 @@ mod tests {
                 && !elsewhere.contains(&ShortcutContext::Library),
             "an undocked window cannot host those surfaces (`view_center` gates \
              them on `is_main`), so their contexts must not be live: {elsewhere:?}"
+        );
+    }
+
+    /// #1818: an undocked footprint editor window shows that editor, so its
+    /// strokes resolve in the footprint and library contexts.
+    #[test]
+    fn an_undocked_footprint_window_gets_the_footprint_contexts() {
+        let mut app = app_with_footprint_tab();
+        let tab = open_window(
+            &mut app,
+            WindowKind::UndockedTab {
+                path: std::path::PathBuf::from("/tmp/part.snxfpt"),
+                title: "part".to_string(),
+            },
+        );
+
+        let contexts = app.shortcut_contexts(Some(tab));
+        assert!(
+            contexts.contains(&ShortcutContext::Footprint)
+                && contexts.contains(&ShortcutContext::Library),
+            "{contexts:?}"
         );
     }
 

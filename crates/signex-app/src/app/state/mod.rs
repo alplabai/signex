@@ -40,6 +40,7 @@ pub(crate) mod sheet_refs;
 mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
+mod window_tab;
 
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
