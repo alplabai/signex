@@ -272,6 +272,7 @@ impl LibraryState {
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = snapshot.tables;
             lib.dangling.unreadable_tables = snapshot.unreadable_tables;
+            lib.dangling.tables_not_listed = false;
             lib.pricing = snapshot.pricing;
             lib.cached_components = snapshot.summaries;
             lib.cached_classes = snapshot.classes;

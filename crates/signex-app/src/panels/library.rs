@@ -315,9 +315,13 @@ fn delete_warning_block<'a>(
     muted: Color,
 ) -> Element<'a, PanelMsg> {
     let mut block: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).push(
-        text(format!("Symbol \"{}\" is still in use", warning.name))
-            .size(TS.body)
-            .color(primary),
+        text(if warning.only_unknown {
+            format!("Symbol \"{}\" may still be in use", warning.name)
+        } else {
+            format!("Symbol \"{}\" is still in use", warning.name)
+        })
+        .size(TS.body)
+        .color(primary),
     );
     for line in &warning.lines {
         block = block.push(text(line.as_str()).size(TS.caption).color(muted));

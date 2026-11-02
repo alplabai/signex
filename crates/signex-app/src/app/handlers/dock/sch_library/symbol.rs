@@ -527,9 +527,11 @@ impl Signex {
                     history,
                     rows: usage.rows,
                     sheets: usage.sheets,
+                    unchecked: usage.unchecked,
                     warning: SymbolDeleteWarning {
                         idx,
                         name,
+                        only_unknown: usage.rows == 0 && usage.sheets == 0,
                         lines: usage.lines,
                     },
                 });
@@ -537,7 +539,7 @@ impl Signex {
                 return true;
             }
             Some(_) => crate::diagnostics::log_info(format!(
-                "{name}: deleted without a warning; only open sheets and mounted libraries were checked, not closed sheets or unmounted libraries."
+                "{name} deleted. Not used by open sheets or mounted libraries; closed sheets were not checked."
             )),
             None => {}
         }
@@ -562,10 +564,23 @@ impl Signex {
             self.refresh_panel_ctx();
             return true;
         }
-        crate::diagnostics::log_warning(format!(
-            "{} deleted: {} component row(s) and {} open sheet(s) now point at a missing library symbol.",
-            pending.warning.name, pending.rows, pending.sheets
-        ));
+        let name = &pending.warning.name;
+        let unchecked = pending.unchecked;
+        crate::diagnostics::log_warning(if pending.warning.only_unknown {
+            format!(
+                "{name} deleted; {unchecked} table(s) could not be read, so whether anything used it is unknown."
+            )
+        } else if unchecked > 0 {
+            format!(
+                "{name} deleted: {} component row(s) and {} open sheet(s) now point at a missing library symbol, plus {unchecked} table(s) that could not be read.",
+                pending.rows, pending.sheets
+            )
+        } else {
+            format!(
+                "{name} deleted: {} component row(s) and {} open sheet(s) now point at a missing library symbol.",
+                pending.rows, pending.sheets
+            )
+        });
         self.delete_symbol_from_container(idx)
     }
 

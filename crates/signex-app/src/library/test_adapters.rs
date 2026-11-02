@@ -64,6 +64,29 @@ impl LibraryAdapter for FailingListingAdapter {
     }
 }
 
+/// An adapter whose table list cannot be read (#1845): nothing else works.
+pub(crate) struct FailingTableListAdapter {
+    inner: FailingListingAdapter,
+}
+
+impl FailingTableListAdapter {
+    pub(crate) fn new(library_id: Uuid) -> Self {
+        Self {
+            inner: FailingListingAdapter::new(library_id),
+        }
+    }
+}
+
+impl LibraryAdapter for FailingTableListAdapter {
+    fn manifest(&self) -> &Manifest {
+        self.inner.manifest()
+    }
+
+    fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
+        Err(LibraryError::Backend("table list unavailable".to_string()))
+    }
+}
+
 /// An adapter that counts every call a `view` could use to reach the
 /// disk. `manifest()` is deliberately uncounted: it is a borrow of the
 /// in-memory header and does no IO.

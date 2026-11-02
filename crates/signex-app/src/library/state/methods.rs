@@ -707,7 +707,14 @@ impl OpenLibrary {
         // Stamp before reading: a write racing the read then costs one
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
-        let names = adapter.list_tables()?;
+        let names = match adapter.list_tables() {
+            Ok(names) => names,
+            Err(e) => {
+                self.dangling.tables_not_listed = true;
+                return Err(e);
+            }
+        };
+        self.dangling.tables_not_listed = false;
         let super::table_scan::TableScan {
             tables,
             summaries,

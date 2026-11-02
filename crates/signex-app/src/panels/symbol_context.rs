@@ -264,6 +264,9 @@ pub enum GraphicFieldId {
 pub struct SymbolDeleteWarning {
     pub idx: usize,
     pub name: String,
+    /// Nothing is confirmed in use, but some table was not read, so the
+    /// symbol may still be in use.
+    pub only_unknown: bool,
     /// One line per kind of user (component rows, open sheets).
     pub lines: Vec<String>,
 }

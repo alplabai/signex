@@ -28,6 +28,8 @@ pub struct PendingSymbolDelete {
     /// How many rows and open sheets the warning named.
     pub rows: usize,
     pub sheets: usize,
+    /// Tables (or whole table lists) that could not be read.
+    pub unchecked: usize,
     pub warning: SymbolDeleteWarning,
 }
 
@@ -53,6 +55,8 @@ pub struct SymbolUsage {
     pub lines: Vec<String>,
     pub rows: usize,
     pub sheets: usize,
+    /// Unreadable tables plus libraries whose table list failed.
+    pub unchecked: usize,
 }
 
 /// Rows and open sheets that use `symbol`, plus a line for every table of a
@@ -65,6 +69,12 @@ pub fn usage_lines<'a>(
     let mut rows = Vec::new();
     let mut unchecked = Vec::new();
     for lib in libs {
+        if lib.dangling.tables_not_listed {
+            unchecked.push(format!(
+                "Tables of {} could not be listed; its rows were not checked",
+                lib.display_name
+            ));
+        }
         for table in &lib.dangling.unreadable_tables {
             unchecked.push(format!(
                 "Table {table} ({}) could not be read; its rows were not checked",
@@ -112,11 +122,13 @@ pub fn usage_lines<'a>(
             capped(&placed)
         ));
     }
+    let unchecked_count = unchecked.len();
     lines.extend(unchecked);
     SymbolUsage {
         lines,
         rows: rows.len(),
         sheets: placed.len(),
+        unchecked: unchecked_count,
     }
 }
 
@@ -131,4 +143,57 @@ fn capped(items: &[String]) -> String {
         text.push_str(&format!("; and {} more", items.len() - MAX_LISTED));
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::library::state::LibraryDisplaySettings;
+    use crate::library::test_adapters::{FailingListingAdapter, FailingTableListAdapter};
+    use std::collections::HashMap;
+
+    fn library() -> OpenLibrary {
+        OpenLibrary {
+            root: PathBuf::from("/tmp/a.snxlib"),
+            display_name: "Lib".into(),
+            library_id: Uuid::now_v7(),
+            tables: HashMap::new(),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: LibraryDisplaySettings::default(),
+        }
+    }
+
+    fn scan(lib: &OpenLibrary) -> SymbolUsage {
+        let symbol = PrimitiveRef::new(lib.library_id, Uuid::now_v7());
+        usage_lines(std::slice::from_ref(lib), std::iter::empty(), &symbol)
+    }
+
+    #[test]
+    fn a_library_whose_table_list_failed_is_unchecked_until_it_reloads() {
+        let mut lib = library();
+        assert!(
+            lib.reload_tables(&FailingTableListAdapter::new(lib.library_id))
+                .is_err()
+        );
+
+        let usage = scan(&lib);
+        assert_eq!(usage.unchecked, 1);
+        assert!(
+            usage.lines[0].contains("could not be listed"),
+            "{:?}",
+            usage.lines
+        );
+
+        lib.reload_tables(&FailingListingAdapter::new(lib.library_id))
+            .unwrap();
+        assert!(scan(&lib).lines.is_empty(), "a good load clears the flag");
+    }
 }

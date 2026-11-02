@@ -378,3 +378,46 @@ fn delete_anyway_says_how_many_rows_and_sheets_now_dangle() {
         ]) >= 1
     );
 }
+
+#[test]
+fn restoring_the_header_and_refreshing_names_the_row_again() {
+    let f = fixture();
+    let healthy = std::fs::read_to_string(&f.snxlib).unwrap();
+    break_ics_table_header(&f);
+    let mut app = app_with_library(&f);
+    let path = open_container_editor(&mut app, &f);
+
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    let warning = app
+        .document_state
+        .panel_ctx
+        .symbol_editor
+        .as_ref()
+        .unwrap()
+        .delete_warning
+        .clone()
+        .expect("a warning");
+    assert!(warning.only_unknown, "nothing is confirmed in use");
+    panel(&mut app, PanelMsg::SchLibraryDeleteCancelled);
+
+    std::fs::write(&f.snxlib, healthy).unwrap();
+    app.library
+        .refresh_components(&f.snxlib)
+        .expect("refresh after the repair");
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+
+    let warning = app
+        .document_state
+        .panel_ctx
+        .symbol_editor
+        .as_ref()
+        .unwrap()
+        .delete_warning
+        .clone()
+        .expect("the row still uses it");
+    let lines = warning.lines.join("\n");
+    assert!(!lines.contains("could not be read"), "{lines}");
+    assert!(lines.contains("Component rows"), "{lines}");
+    assert!(!warning.only_unknown);
+    assert_eq!(symbol_count(&app, &path), 2);
+}
