@@ -501,6 +501,9 @@ pub enum DeleteIo {
     /// The target is outside the project or a shared library; not deleted.
     Refused,
     Deleted,
+    /// A library was deleted; these files were not library artifacts (or could
+    /// not be removed) and are still on disk.
+    DeletedLeaving(Vec<PathBuf>),
     /// `remove_file` / `remove_dir_all` failed with this OS text.
     Failed(String),
     /// As `Failed`, and the saved project no longer lists the file either: its

@@ -49,6 +49,10 @@ mod project_rename_recovery_tests;
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
+#[cfg(test)]
+mod remove_library_tests;
+mod remove_library_usage;
+use remove_library_usage::report_library_leftovers;
 mod rename;
 mod rename_apply;
 mod rename_library;

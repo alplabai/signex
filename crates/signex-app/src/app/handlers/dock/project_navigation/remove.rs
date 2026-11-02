@@ -250,8 +250,12 @@ impl Signex {
             // A tab may still hold the target (#736), and one opened by a
             // route that does not consult the pending set must not outlive
             // the file.
-            DeleteIo::Orphan | DeleteIo::Deleted => {
-                if matches!(io, DeleteIo::Deleted) && !request.placing.is_empty() {
+            DeleteIo::Orphan | DeleteIo::Deleted | DeleteIo::DeletedLeaving(_) => {
+                if let DeleteIo::DeletedLeaving(left) = &io {
+                    report_library_leftovers(&request.display_name, left);
+                }
+                let removed_file = matches!(io, DeleteIo::Deleted | DeleteIo::DeletedLeaving(_));
+                if removed_file && !request.placing.is_empty() {
                     crate::diagnostics::log_warning(format!(
                         "Deleted {}: {} sheet symbol(s) still point at it and now show a missing \
                          sheet ({}). Remove or re-point them; ERC and netlist export report them.",
@@ -262,6 +266,7 @@ impl Signex {
                 }
                 tasks = self.close_tabs_of_removed(target, true, request.fold);
                 self.drop_deleted_documents(target, request.fold);
+                tasks.push(self.unmount_removed_library(&request.dialog, true));
                 self.settle_removed_entry(&request, entry);
             }
             DeleteIo::Refused => {
@@ -528,9 +533,42 @@ impl Signex {
             tasks.push(self.begin_delete(&state, fold));
             return iced::Task::batch(tasks);
         }
+        tasks.push(self.unmount_removed_library(&state, false));
         self.prune_removed_entry(&state, true);
         self.refresh_panel_ctx();
         iced::Task::batch(tasks)
+    }
+
+    /// Unmount the library a Remove took out of the project, so its symbols
+    /// and editors stop being served. Left mounted while another open project
+    /// still lists it. A delete drops the editors outright (the files are
+    /// gone); an exclude goes through the Close Library path, which asks
+    /// first when an editor holds unsaved edits.
+    fn unmount_removed_library(
+        &mut self,
+        dialog: &crate::app::RemoveDialogState,
+        deleted: bool,
+    ) -> iced::Task<Message> {
+        let target = &dialog.target_path;
+        let is_library = crate::app::file_extension::has_extension(target, "snxlib");
+        if !is_library || self.library.library_at(target).is_none() {
+            return iced::Task::none();
+        }
+        let Some(state) = self.repointed_dialog(dialog) else {
+            return iced::Task::none();
+        };
+        let Some(owner) = state.tree_path.first().copied() else {
+            return iced::Task::none();
+        };
+        let fold = self.shared_use_fold(&state);
+        if self.library_listed_by_other_project(owner, target, fold) {
+            return iced::Task::none();
+        }
+        if deleted {
+            self.library.close_library(target);
+            return iced::Task::none();
+        }
+        self.handle_close_library(target.clone())
     }
 
     /// The file is gone: bring the in-memory project in line with what the

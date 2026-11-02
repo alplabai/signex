@@ -128,7 +128,14 @@ impl Signex {
         if !st.is_outside_project && !blockers.blocks_delete(is_dir) {
             remove_options = remove_options.push(option_card(
                 "Delete file",
-                "File will be removed from project and permanently deleted.",
+                if is_dir {
+                    "The library file is permanently deleted and the library closed. Its symbol, \
+                     footprint, simulation and datasheet files are deleted too when the folder \
+                     is the library's own; in the project folder or a folder shared with \
+                     another library only the library file goes. Other files are left."
+                } else {
+                    "File will be removed from project and permanently deleted."
+                },
                 Message::Remove(RemoveMsg::Confirm(crate::app::RemoveChoice::DeleteFile)),
             ));
         }
@@ -203,12 +210,15 @@ impl Signex {
         }
         // Library names can repeat across folders; the full path says which
         // one is affected. Sheets and PCBs get no extra line.
-        if st.display_name.ends_with(".snxlib") {
+        if is_dir {
             prompt = prompt.push(
                 text(st.target_path.display().to_string())
                     .size(TS.caption)
                     .color(text_muted),
             );
+            if let Some(line) = self.library_usage_line(st) {
+                prompt = prompt.push(text(line).size(TS.caption).color(text_muted));
+            }
         }
 
         let dialog = container(
