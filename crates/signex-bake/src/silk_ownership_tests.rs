@@ -325,4 +325,18 @@ fn construction_only_silk_tag_needs_no_recovery() {
         recover_legacy_silk(&mut fp, &Solver::default()),
         LegacySilk::NotNeeded
     );
+
+    // A silk tag on a Point bakes nothing, so it needs no recovery either.
+    let (mut fp, _, _) = silk_line_footprint();
+    let sketch = fp.sketch.as_mut().unwrap();
+    sketch.entities.retain(|e| e.silk.is_none());
+    sketch.entities[0].silk = Some(SilkAttr {
+        layer: SignexLayer::TopSilk,
+    });
+    fp.silk_f.push(text("REF"));
+    assert!(!needs_legacy_silk_recovery(&fp));
+    assert_eq!(
+        recover_legacy_silk(&mut fp, &Solver::default()),
+        LegacySilk::NotNeeded
+    );
 }

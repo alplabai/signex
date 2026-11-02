@@ -517,11 +517,12 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
 
 #[cfg(test)]
 mod tests {
-    use super::shortcut_label;
+    use super::{Footprint, FootprintEditorMsg, shortcut_label, silk_delete_msg};
     use crate::keymap::{
         AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
         ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
     };
+    use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
 
     fn keymap_with(bindings: Vec<(ShortcutBindingAction, &str)>) -> CompiledKeymap {
         CompiledKeymap::compile(&ShortcutProfile {
@@ -558,12 +559,6 @@ mod tests {
         assert_eq!(shortcut_label(&keymap, "cut"), "", "never bound");
         assert_eq!(shortcut_label(&keymap, "paste"), "F4");
     }
-}
-
-#[cfg(test)]
-mod silk_delete_tests {
-    use super::*;
-    use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
 
     #[test]
     fn a_baked_silk_entry_has_no_delete_message() {

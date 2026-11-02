@@ -313,7 +313,9 @@ fn a_construction_only_silk_tag_does_not_classify_a_file_this_build_saved() {
         // skips it, so nothing is owed a classification.
         fp.silk_f.drain(..1);
         for e in &mut fp.sketch.as_mut().unwrap().entities {
-            e.construction = e.silk.is_some();
+            if e.silk.is_some() {
+                e.construction = true;
+            }
         }
         make_unsolvable(fp);
     });
