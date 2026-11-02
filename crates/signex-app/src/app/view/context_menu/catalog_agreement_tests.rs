@@ -8,6 +8,12 @@
 //! active keymap's hint for that id. A row with no id must be one of the
 //! surface-local rows below, so a literal label reintroduced for a command
 //! fails here instead of drifting quietly.
+//!
+//! It also compares each row's `on_press` with `bridge::resolve(id)` (#1727).
+//! `SURFACE_ACTION` exists because context-menu rows still send their own
+//! `ContextAction` / `ActiveBar` messages instead of dispatching their
+//! `AppCommandId` (Command Registry #278 is not yet extended to row actions),
+//! so its pins are a migration record, not a design endorsement.
 
 use super::*;
 
@@ -232,7 +238,7 @@ const SURFACE_ACTION: &[(&str, &str, &str)] = &[
     (
         "place_net_label",
         "ContextMenu(Action(ActiveBar(PlaceNetLabel)))",
-        "FIXME(review): the row arms the net-label ghost via handle_active_bar_action; the palette and key arm only the tool",
+        "row clears a stale Global/Hierarchical pending_port and arms the NET ghost via handle_active_bar_action; the palette, key and Place menu (Tool(SelectTool(Label))) keep the stale port, so a click places a port (#1920)",
     ),
     (
         "place_no_erc",
@@ -383,6 +389,9 @@ fn check_rows(
     }
 }
 
+/// Also compares each row's `on_press` with `bridge::resolve(id)` (#1727);
+/// rows that still send their own action are pinned in `SURFACE_ACTION`
+/// (a migration record until #278 covers row actions).
 #[test]
 fn command_rows_read_label_and_shortcut_from_the_catalog() {
     let tokens = theme_tokens(TID);
