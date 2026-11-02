@@ -31,8 +31,8 @@ pub const SCHEMATIC_MIN_STROKE_DEVICE_PX: f32 = 1.0;
 // Under one device pixel a 0.254 mm body at 100 % lost whole rectangle edges.
 const _: () = assert!(SCHEMATIC_MIN_STROKE_DEVICE_PX >= 1.0);
 
-/// Device pixels per logical pixel for surfaces the window's display scale
-/// does not reach yet: the floor and snap then work in logical pixels.
+/// Device pixels per logical pixel for a surface that has no window (tests,
+/// headless draws): the floor and snap then work in logical pixels.
 pub const UNSCALED_DEVICE_PX_PER_LOGICAL_PX: f32 = 1.0;
 
 /// The world width a stroke stored as `width_mm` draws at: never thinner

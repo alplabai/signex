@@ -128,13 +128,13 @@ impl Signex {
         };
         let project_name = project.data.name.clone();
         // The project's dirty paths, split into the ones it saves / discards
-        // and the ones another open project claims. Primitive editors live
-        // under `<project>/<lib>.snxlib/symbols|footprints/<file>`, so the
-        // scan walks ancestors rather than the immediate parent, and the
-        // project's own `.snxprj` sits at the root and is picked up too.
-        // Component Preview rows are keyed by row, not file, so they are
-        // not among the dirty paths; the scan places them too (#666): a row is
-        // the project's only when its library is the project's own.
+        // and the ones it leaves open (another open project claims them, or
+        // they belong to a shared / global library that stays mounted).
+        // Symbol and footprint drafts are placed by their owning library and
+        // sheets by the reference walk; the project's own `.snxprj` is picked
+        // up too. Component Preview rows are keyed by row, not file, so they
+        // are not among the dirty paths; the scan places them too (#666): a
+        // row is the project's only when its library is the project's own.
         let scan = self.current_close_scan(project_idx, &sheet_refs);
         if let Some(line) = scan.warning(&project_name) {
             crate::diagnostics::log_warning(line);
@@ -169,8 +169,12 @@ impl Signex {
         project_idx: usize,
         sheet_refs: &SheetRefs,
     ) -> crate::app::state::sheet_refs::CloseScan {
-        self.document_state
-            .close_scan(sheet_refs, project_idx, &self.library.dirty_editors())
+        self.document_state.close_scan(
+            sheet_refs,
+            project_idx,
+            &self.library.dirty_editors(),
+            &self.draft_library_roots(),
+        )
     }
 
     /// Inner close-project flow that actually drops tabs + the
@@ -634,14 +638,7 @@ impl Signex {
                 // dirty marks are gone either way).
                 let mut tasks: Vec<Task<Message>> = Vec::new();
                 for path in &state.dirty_paths {
-                    self.forget_net_colors_of(path);
-                    self.document_state
-                        .document_saves
-                        .forget_where(|p| p == path);
-                    self.document_state.document_saves.forget_disk_records(path);
-                    self.document_state.remove_engine(path);
-                    self.document_state.mark_document_clean(path);
-                    tasks.push(self.discard_primitive_editor(path));
+                    tasks.push(self.discard_document_draft(path));
                 }
                 // Component Preview rows outlive the project's tabs, so
                 // discard their drafts explicitly.
@@ -657,6 +654,21 @@ impl Signex {
                 Task::batch(tasks)
             }
         }
+    }
+
+    /// Throw away the unsaved state of the document at `path`: its sheet
+    /// engine and save records, its net colours, its dirty mark, and any
+    /// symbol / footprint editor and tab. The one discard both Discard All
+    /// prompts (Close Project, Close Library) run per file.
+    pub(crate) fn discard_document_draft(&mut self, path: &std::path::Path) -> Task<Message> {
+        self.forget_net_colors_of(path);
+        self.document_state
+            .document_saves
+            .forget_where(|p| p == path);
+        self.document_state.document_saves.forget_disk_records(path);
+        self.document_state.remove_engine(path);
+        self.document_state.mark_document_clean(path);
+        self.discard_primitive_editor(path)
     }
 
     /// Drop the symbol/footprint editor behind `path`, and its tab, so a
@@ -1064,7 +1076,7 @@ mod tests {
         let result = app.resolve_sheet_refs_blocking();
         let _ = app.handle_close_refs_resolved(project_id, result);
 
-        // The draft is not reached by any sheet walk, so it is kept (no
+        // The draft's library is not this project's, so it is kept (no
         // prompt, editor stays open) rather than discarded. It only gets that
         // far when the gate saw it despite the missing panel refresh.
         assert!(app.ui_state.project_close_confirm.is_none());

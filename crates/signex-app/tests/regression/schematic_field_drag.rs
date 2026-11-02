@@ -117,6 +117,7 @@ fn dragging_the_reference_field_moves_drawn_text_and_hit_box() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 1.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let bounds = Rectangle::new(ScreenPoint::ORIGIN, Size::new(800.0, 600.0));

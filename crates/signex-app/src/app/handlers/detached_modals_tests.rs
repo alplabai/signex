@@ -129,6 +129,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                     library_path: "l.snxlib".into(),
                     library_name: "l".into(),
                     dirty_editors: Vec::new(),
+                    dirty_paths: Vec::new(),
                 })
         }
         ModalId::LibraryRecovery => {

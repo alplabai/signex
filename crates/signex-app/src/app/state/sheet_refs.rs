@@ -25,7 +25,7 @@ use super::reference_policy::{
 use super::scope::{CaseFold, KeyMap, ReachSets, path_key_with};
 use super::sheet_read::{WalkLimits, read_child_refs};
 use super::volume_case::{IgnoresCase, VolumeCase};
-use super::{DocumentState, ProjectId, scope};
+use super::{DocumentState, LoadedProject, ProjectId, scope};
 use crate::app::project_sheets::{normalize_clamped, ownership_reference};
 use crate::library::state::EditorAddress;
 
@@ -590,14 +590,20 @@ impl DocumentState {
     }
 
     /// Split the dirty documents of `projects[closing]` into [`CloseScan`]'s
-    /// lists. `rows` are the dirty Component Preview editors to place.
+    /// lists. `rows` are the dirty Component Preview editors to place and
+    /// `libraries` the `.snxlib` files drafts may belong to.
     ///
     /// A dirty path is associated with the project when it sits in the
     /// project directory, backs one of its tabs, is reached by its walk, or is
     /// its `.snxprj`. It is `mine` only when the project's own walk reaches it
     /// (or it is the project's `.snxprj`) AND no other open project's walk
     /// does; everything else associated is `kept`. Location, tabs and library
-    /// mounts are never evidence of ownership.
+    /// mounts are never evidence of ownership for a sheet.
+    ///
+    /// A symbol or footprint draft is placed by its owning library instead
+    /// ([`Self::primitive_is_closing_projects`]): `mine` only when that is a
+    /// project-local library of this project alone; a shared or global
+    /// library's draft is `kept`, since closing the project leaves it mounted.
     ///
     /// A row is `mine` only when its library file is one of the project's own
     /// library entries, no other open project lists the same library, and it
@@ -607,6 +613,7 @@ impl DocumentState {
         sheet_refs: &SheetRefs,
         closing: usize,
         rows: &[EditorAddress],
+        libraries: &[PathBuf],
     ) -> CloseScan {
         let Some(project) = self.projects.get(closing) else {
             return CloseScan::default();
@@ -616,7 +623,16 @@ impl DocumentState {
         let project_file = keys.key(&project.path);
         let mut scan = CloseScan::default();
         let dirty = self.dirty_document_paths();
+        let primitives: HashSet<PathBuf> = self.dirty_primitive_paths().collect();
         for path in &dirty {
+            // A symbol or footprint draft is placed by its library, not by the
+            // sheet walk, like a Component Preview row below.
+            if primitives.contains(path)
+                && self.primitive_is_closing_projects(closing, path, libraries)
+            {
+                scan.mine.push(path.clone());
+                continue;
+            }
             let reached = reach.reached_by(closing, path);
             let is_project_file = keys.key(path) == project_file;
             let backs_tab = self
@@ -655,6 +671,53 @@ impl DocumentState {
         scan.mine.sort();
         scan.kept.sort();
         scan
+    }
+
+    /// Does the symbol / footprint draft at `path` belong to `projects[closing]`
+    /// alone? Its owning library ([`scope::owning_library`] over `libraries`)
+    /// must be a project-local library of the closing project, listed by no
+    /// other open project and not inside another open project's directory,
+    /// and the draft itself must not sit in a project nested in the closing
+    /// one's folder. A shared or global library outlives the project, so its
+    /// drafts are not the project's to save or discard.
+    fn primitive_is_closing_projects(
+        &self,
+        closing: usize,
+        path: &Path,
+        libraries: &[PathBuf],
+    ) -> bool {
+        use signex_types::project::LibraryEntryKind;
+        let Some(project) = self.projects.get(closing) else {
+            return false;
+        };
+        let fold = project.case_fold;
+        let Some(owner) = scope::owning_library(path, libraries, fold) else {
+            return false;
+        };
+        let owner_key = path_key_with(owner, fold);
+        let lists = |p: &LoadedProject, local_only: bool| {
+            p.data.libraries.iter().any(|entry| {
+                (!local_only || entry.kind == LibraryEntryKind::ProjectLocal)
+                    && path_key_with(&p.data.resolve_library_path(entry), fold) == owner_key
+            })
+        };
+        let others = || {
+            self.projects
+                .iter()
+                .enumerate()
+                .filter(move |(i, _)| *i != closing)
+                .map(|(_, p)| p)
+        };
+        // A draft inside a project nested in the closing one's folder is that
+        // project's, even when the closing project's library is its owner.
+        let in_nested_project = |p: &LoadedProject| {
+            scope::path_is_under(path, p.dir(), p.case_fold)
+                && !scope::path_is_under(project.dir(), p.dir(), p.case_fold)
+        };
+        lists(project, true)
+            && !others().any(|p| lists(p, false))
+            && !others().any(|p| scope::path_is_under(owner, p.dir(), p.case_fold))
+            && !others().any(in_nested_project)
     }
 
     /// File-identity keys of the library files `projects[idx]` mounts.
@@ -956,7 +1019,7 @@ mod tests {
         docs.mark_document_dirty(&shared);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| true);
-        let scan = docs.close_scan(&refs, 0, &[]);
+        let scan = docs.close_scan(&refs, 0, &[], &[]);
 
         assert!(scan.mine.is_empty(), "{:?}", scan.mine);
         assert_eq!(scan.kept, vec![shared]);
@@ -983,7 +1046,7 @@ mod tests {
         docs.mark_document_dirty(&dirty);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
-        let scan = docs.close_scan(&refs, 0, &[]);
+        let scan = docs.close_scan(&refs, 0, &[], &[]);
 
         assert!(
             scan.mine.is_empty(),
@@ -1022,7 +1085,7 @@ mod tests {
         docs.mark_document_dirty(&unsaved);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
-        let scan = docs.close_scan(&refs, 0, &[]);
+        let scan = docs.close_scan(&refs, 0, &[], &[]);
 
         assert!(
             !scan.mine.contains(&unsaved),
@@ -1046,7 +1109,7 @@ mod tests {
         docs.mark_document_dirty(&a_dir.join("N.snxsch"));
 
         let refs = docs.sheet_ref_inputs().resolve(ignores_case);
-        docs.close_scan(&refs, 0, &[])
+        docs.close_scan(&refs, 0, &[], &[])
     }
 
     #[test]

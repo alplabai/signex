@@ -29,6 +29,7 @@ fn at(
         offset_x: x,
         offset_y: 0.0,
         scale,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     cache
         .scene_for(
@@ -60,6 +61,57 @@ fn generation_is_stable_on_pan_and_bumps_on_rebuild() {
     assert_eq!(cache.generation(), None);
     at(&mut cache, &sheet, 0.0, 8.0);
     assert!(cache.generation().expect("rebuilt") > zoomed);
+}
+
+/// A scene and the drag static layer keyed on its inputs are rebuilt when
+/// the window's display scale changes, even with the camera unmoved (#1887).
+#[test]
+fn a_new_display_scale_rebuilds_the_scene_and_misses_the_fit() {
+    let sheet = sheet_with_wire();
+    let colors = canvas_colors(ThemeId::Signex);
+    let transform_at = |dpi: f32| ScreenTransform {
+        offset_x: 0.0,
+        offset_y: 0.0,
+        scale: 4.0,
+        device_px_per_logical_px: dpi,
+    };
+    let mut cache = ContentSceneCache::default();
+    let build = |cache: &mut ContentSceneCache, dpi: f32| {
+        cache.scene_for(
+            &sheet,
+            &transform_at(dpi),
+            &colors,
+            bounds(),
+            None,
+            Default::default(),
+        );
+        cache.generation().expect("built")
+    };
+    let first = build(&mut cache, 1.0);
+    assert_eq!(build(&mut cache, 1.0), first, "same scale: kept");
+    assert!(build(&mut cache, 2.0) > first, "new scale: rebuilt");
+
+    let built_at_1x = SceneInputs::capture(
+        &transform_at(1.0),
+        &colors,
+        bounds().size(),
+        None,
+        Default::default(),
+    );
+    assert!(!built_at_1x.fits_in_place(
+        &transform_at(2.0),
+        &colors,
+        bounds().size(),
+        None,
+        Default::default()
+    ));
+    assert!(built_at_1x.fits_in_place(
+        &transform_at(1.0),
+        &colors,
+        bounds().size(),
+        None,
+        Default::default()
+    ));
 }
 
 /// Two windows' caches feed one `SchematicSurface` pipeline slot, so their
@@ -137,6 +189,7 @@ fn invalidate_forces_a_rebuild_and_a_theme_change_does_too() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let other = canvas_colors(ThemeId::Nord);
     cache.scene_for(
@@ -160,6 +213,7 @@ fn a_panned_scene_still_contains_the_wire() {
             offset_x: x,
             offset_y: 0.0,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let scene = cache.scene_for(
             &sheet,
@@ -197,6 +251,7 @@ fn replay_after_pan(sheet: &SchematicRenderSnapshot, dx: f32, dy: f32) -> (bool,
             offset_x: x,
             offset_y: y,
             scale: 4.0,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let scene = cache.scene_for(
             sheet,
@@ -253,6 +308,7 @@ fn drag_path_bounds_at_a_non_zero_origin_keep_a_left_edge_wire() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let widget = Rectangle::new(iced::Point::new(250.0, 90.0), iced::Size::new(800.0, 600.0));
     let raw = build_schematic_scene(
@@ -284,6 +340,7 @@ fn setting_the_render_cache_drops_the_cached_scene() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: 4.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let _ = slot.content_scene_for_test().scene_for(
         &sheet,

@@ -14,6 +14,7 @@ fn scene_of(drawings: Vec<SchDrawing>) -> Scene {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: SCALE,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
     build_schematic_scene(
@@ -201,6 +202,7 @@ fn above_drawings_go_to_the_front_bucket_in_file_order() {
         offset_x: 0.0,
         offset_y: 0.0,
         scale: SCALE,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 600.0));
 
