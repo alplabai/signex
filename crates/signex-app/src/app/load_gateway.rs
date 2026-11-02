@@ -981,4 +981,28 @@ mod tests {
         app.mark_installed_engine_saved(&path, installed);
         assert!(app.document_state.engines[&path].is_at_save_point());
     }
+
+    /// #1916 — a disk-conflict Reload whose install failed keeps the older
+    /// edited sheet dirty; an installed one is clean.
+    #[test]
+    fn a_failed_disk_reload_install_keeps_the_sheet_dirty() {
+        let path = PathBuf::from("reload-1916.snxsch");
+        let (mut app, _boot) = Signex::new();
+        let engine =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()))
+                .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.active_path = Some(path.clone());
+        app.document_state.mark_document_dirty(&path);
+        let installed =
+            app.install_active_engine(path.clone(), Err(signex_engine::EngineError::MissingPath));
+        assert!(!installed);
+
+        app.settle_disk_reload(&path, installed);
+        assert!(app.document_state.is_document_dirty(&path));
+
+        app.settle_disk_reload(&path, true);
+        assert!(!app.document_state.is_document_dirty(&path));
+        assert!(app.document_state.engines[&path].is_at_save_point());
+    }
 }

@@ -278,6 +278,15 @@ impl Signex {
         )
     }
 
+    /// The reloaded document matches disk only when it was installed: a
+    /// failed install leaves the older, possibly edited engine at `path`
+    /// dirty, the same rule as a History restore (#1854).
+    pub(crate) fn settle_disk_reload(&mut self, path: &std::path::Path, installed: bool) {
+        if installed {
+            self.document_state.mark_document_clean(path);
+        }
+    }
+
     pub(crate) fn handle_disk_reload_finished(
         &mut self,
         path: PathBuf,
@@ -316,8 +325,8 @@ impl Signex {
             return Task::none();
         }
         let ReloadedFile { document, hash } = *reloaded;
-        let task = self.apply_reloaded_with(idx, Ok(document), None, false);
-        self.document_state.mark_document_clean(&path);
+        let (task, installed) = self.apply_reloaded_reporting(idx, Ok(document), None, false);
+        self.settle_disk_reload(&path, installed);
         self.document_state.document_saves.clear_failure(&path);
         self.record_disk_baseline(&path, hash);
         crate::diagnostics::log_info(format!("[reload] Reloaded {name} from disk"));
