@@ -431,6 +431,7 @@ fn deliver(
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
                 .flatten(),
             power_port_pending: false,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);
         view.update(state, &event, BOUNDS, mouse::Cursor::Available(at))

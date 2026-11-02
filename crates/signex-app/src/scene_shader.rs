@@ -98,12 +98,14 @@ pub trait SceneSurface: 'static + Send + Sync + std::fmt::Debug {
     /// it while sharing the same scene shape.
     const TEXT_SIZE: TextSizePolicy;
 
-    /// Thinnest a stroke may render, in logical pixels — the same floor this
-    /// surface's CPU replay applies, so zooming out thins geometry to the same
-    /// minimum on both paths instead of letting the GPU fade it away. Per
-    /// surface because the two disagree: the schematic uses the stroke law's
-    /// floor (`signex_types::schematic::min_stroke_logical_px`), the PCB 0.5 px.
-    const MIN_STROKE_PX: f32;
+    /// Thinnest a stroke may render, in device pixels, on a surface with
+    /// `device_px_per_logical_px` device pixels per logical pixel: the same
+    /// floor this surface's CPU replay applies, so zooming out thins
+    /// geometry to the same minimum on both paths instead of letting the GPU
+    /// fade it away. The schematic floors at one device pixel
+    /// (`signex_types::schematic::min_stroke_logical_px`), the PCB at 0.5
+    /// logical px.
+    fn min_stroke_device_px(device_px_per_logical_px: f32) -> f32;
 
     /// Smallest a circle may render, in logical pixels. Both CPU replays use
     /// 0.5 px today; it lives per surface anyway, because a value that is "the
@@ -125,7 +127,9 @@ impl SceneSurface for PcbSurface {
     const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(6.0, 64.0);
     /// Mirrors the PCB CPU replay's own clamps — `pcb_canvas::draw_lines` and
     /// `draw_circles` both floor via `renderer_scene_canvas::MIN_STROKE_PX`.
-    const MIN_STROKE_PX: f32 = crate::renderer_scene_canvas::MIN_STROKE_PX;
+    fn min_stroke_device_px(device_px_per_logical_px: f32) -> f32 {
+        crate::renderer_scene_canvas::MIN_STROKE_PX * device_px_per_logical_px
+    }
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
@@ -140,10 +144,11 @@ pub struct SchematicSurface;
 impl SceneSurface for SchematicSurface {
     const LABEL: &'static str = "schematic";
     const TEXT_SIZE: TextSizePolicy = crate::schematic_runtime::SCHEMATIC_TEXT_SIZE;
-    // Logical px like the CPU canvas, which has no display scale yet (#1858).
-    const MIN_STROKE_PX: f32 = signex_types::schematic::min_stroke_logical_px(
-        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-    );
+    // One device pixel, as in the CPU canvas (#1887).
+    fn min_stroke_device_px(device_px_per_logical_px: f32) -> f32 {
+        signex_types::schematic::min_stroke_logical_px(device_px_per_logical_px)
+            * device_px_per_logical_px
+    }
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
@@ -159,7 +164,9 @@ pub struct SchematicDragSurface;
 impl SceneSurface for SchematicDragSurface {
     const LABEL: &'static str = "schematic drag";
     const TEXT_SIZE: TextSizePolicy = SchematicSurface::TEXT_SIZE;
-    const MIN_STROKE_PX: f32 = SchematicSurface::MIN_STROKE_PX;
+    fn min_stroke_device_px(device_px_per_logical_px: f32) -> f32 {
+        SchematicSurface::min_stroke_device_px(device_px_per_logical_px)
+    }
     const MIN_RADIUS_PX: f32 = SchematicSurface::MIN_RADIUS_PX;
 }
 
@@ -338,7 +345,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         pipeline.camera.update(
             queue,
             CameraUniform::ortho(vp_px, offset_mm, scale_px)
-                .with_min_feature_px(S::MIN_STROKE_PX * dpi, S::MIN_RADIUS_PX * dpi),
+                .with_min_feature_px(S::min_stroke_device_px(dpi), S::MIN_RADIUS_PX * dpi),
         );
 
         // Upload only what changed, and only what is near the view. The
@@ -633,6 +640,7 @@ mod tests {
             offset_x,
             offset_y,
             scale,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         // The world point that lands on the widget's top-left pixel.
         let origin = world_origin_mm([offset_x, offset_y], scale);
@@ -679,7 +687,9 @@ mod tests {
         impl SceneSurface for OtherSurface {
             const LABEL: &'static str = "other";
             const TEXT_SIZE: TextSizePolicy = TextSizePolicy::new(1.0, 128.0);
-            const MIN_STROKE_PX: f32 = 0.5;
+            fn min_stroke_device_px(device_px_per_logical_px: f32) -> f32 {
+                0.5 * device_px_per_logical_px
+            }
             const MIN_RADIUS_PX: f32 = 0.5;
         }
 
@@ -706,8 +716,8 @@ mod tests {
     fn the_drag_surface_carries_the_schematic_constants() {
         assert_eq!(SchematicDragSurface::TEXT_SIZE, SchematicSurface::TEXT_SIZE);
         assert_eq!(
-            SchematicDragSurface::MIN_STROKE_PX,
-            SchematicSurface::MIN_STROKE_PX
+            SchematicDragSurface::min_stroke_device_px(2.0),
+            SchematicSurface::min_stroke_device_px(2.0)
         );
         assert_eq!(
             SchematicDragSurface::MIN_RADIUS_PX,
@@ -721,17 +731,28 @@ mod tests {
             SchematicSurface::TEXT_SIZE,
             crate::schematic_runtime::SCHEMATIC_TEXT_SIZE
         );
-        assert_eq!(
-            SchematicSurface::MIN_STROKE_PX,
-            crate::schematic_runtime::schematic_draw_options(
+        // The GPU floor is one device pixel at every display scale, which is
+        // the CPU replay's floor (logical) times the scale (#1887).
+        for dpi in [1.0_f32, 1.25, 1.5, 2.0] {
+            let cpu = crate::schematic_runtime::schematic_draw_options(
                 &crate::schematic_runtime::ScreenTransform {
                     offset_x: 0.0,
                     offset_y: 0.0,
                     scale: 1.0,
-                }
+                    device_px_per_logical_px: dpi,
+                },
             )
-            .stroke_px(0.0)
-        );
+            .stroke_px(0.0);
+            let gpu = SchematicSurface::min_stroke_device_px(dpi);
+            assert!(
+                (gpu - 1.0).abs() < 1e-6,
+                "{dpi}x: GPU floor is {gpu} device px"
+            );
+            assert!(
+                (gpu - cpu * dpi).abs() < 1e-6,
+                "{dpi}x: CPU {cpu} vs GPU {gpu}"
+            );
+        }
         assert_eq!(
             SchematicSurface::MIN_RADIUS_PX,
             crate::renderer_scene_canvas::MIN_RADIUS_PX

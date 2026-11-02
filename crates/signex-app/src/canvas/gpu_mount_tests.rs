@@ -431,6 +431,7 @@ fn fixture_has_a_rotated_text_the_fallback_must_draw() {
         offset_x: OFFSET,
         offset_y: OFFSET,
         scale: SCALE,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(
         iced::Point::ORIGIN,

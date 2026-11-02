@@ -209,6 +209,7 @@ fn stroke_kinds_share_one_zoom_law_1858() {
             offset_x: 0.0,
             offset_y: 0.0,
             scale,
+            device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let bounds = Rectangle::new(ScreenPoint::ORIGIN, Size::new(320.0 * scale, 320.0 * scale));
         let scene = build_schematic_scene(
@@ -222,10 +223,12 @@ fn stroke_kinds_share_one_zoom_law_1858() {
         .expect("the sheet draws");
         // The CPU replay and the GPU surface raise thin strokes to one floor.
         let cpu_floor = schematic_draw_options(&transform).stroke_px(0.0);
-        if cpu_floor != SchematicSurface::MIN_STROKE_PX {
+        let gpu_floor = SchematicSurface::min_stroke_device_px(
+            signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        );
+        if cpu_floor != gpu_floor {
             broken.push(format!(
-                "{zoom}%: CPU floor {cpu_floor} px, GPU floor {} px",
-                SchematicSurface::MIN_STROKE_PX
+                "{zoom}%: CPU floor {cpu_floor} px, GPU floor {gpu_floor} px"
             ));
         }
         let by_kind = widths_by_kind(&scene, &colors);

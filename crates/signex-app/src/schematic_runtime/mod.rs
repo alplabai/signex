@@ -95,6 +95,9 @@ pub struct ScreenTransform {
     pub offset_x: f32,
     pub offset_y: f32,
     pub scale: f32,
+    /// Device pixels per logical pixel of the window it draws in: the stroke
+    /// floor and the hairline snap work on that grid (#1887).
+    pub device_px_per_logical_px: f32,
 }
 
 impl ScreenTransform {
@@ -464,8 +467,7 @@ pub fn schematic_draw_options(
 ) -> crate::renderer_scene_canvas::SceneDrawOptions {
     crate::renderer_scene_canvas::SceneDrawOptions {
         scale_px_per_mm: transform.scale,
-        // The window's display scale is not plumbed into the CPU canvas yet.
-        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        device_px_per_logical_px: transform.device_px_per_logical_px,
         text_min_px: SCHEMATIC_TEXT_SIZE.min_px,
         text_max_px: SCHEMATIC_TEXT_SIZE.max_px,
     }

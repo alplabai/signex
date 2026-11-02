@@ -8,6 +8,19 @@ use iced::Size;
 use iced::widget::canvas;
 
 impl SymbolCanvas<'_> {
+    /// Screen width of a preview stroke of library width `width_mm`: the law
+    /// the scene replay applies, at this window's display scale (#1887).
+    pub(in crate::library::editor::symbol::canvas) fn preview_stroke_px(
+        &self,
+        width_mm: f64,
+        scale: f32,
+    ) -> f32 {
+        let dpi = self.device_px_per_logical_px;
+        stroke_px(symbol_stroke_mm(width_mm, false, scale, dpi), scale, dpi)
+    }
+}
+
+impl SymbolCanvas<'_> {
     /// Rubber-band box selection overlay (Window blue / Crossing green).
     pub(in crate::library::editor::symbol::canvas) fn draw_box_select_overlay(
         &self,
@@ -102,7 +115,7 @@ impl SymbolCanvas<'_> {
                 &canvas::Path::rectangle(rect_origin, rect_size),
                 canvas::Stroke::default()
                     .with_color(preview_color)
-                    .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                    .with_width(self.preview_stroke_px(0.0, scale)),
             );
         }
     }
@@ -138,10 +151,7 @@ impl SymbolCanvas<'_> {
             &canvas::Path::line(tip, w2s(geom.body_end)),
             canvas::Stroke::default()
                 .with_color(preview_color)
-                .with_width(stroke_px(
-                    symbol_stroke_mm(self.pin_stroke_mm(), false, cam.scale),
-                    cam.scale,
-                ))
+                .with_width(self.preview_stroke_px(self.pin_stroke_mm(), cam.scale))
                 .with_line_cap(canvas::LineCap::Round),
         );
     }
@@ -172,7 +182,7 @@ impl SymbolCanvas<'_> {
                 &canvas::Path::line(p0, p1),
                 canvas::Stroke::default()
                     .with_color(preview_color)
-                    .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale))
+                    .with_width(self.preview_stroke_px(0.0, scale))
                     .with_line_cap(canvas::LineCap::Round),
             );
         }
@@ -216,7 +226,7 @@ impl SymbolCanvas<'_> {
                 &canvas::Path::circle(center_p, radius_screen),
                 canvas::Stroke::default()
                     .with_color(preview_color)
-                    .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                    .with_width(self.preview_stroke_px(0.0, scale)),
             );
         }
     }
@@ -304,7 +314,7 @@ impl SymbolCanvas<'_> {
                         &arc_path,
                         canvas::Stroke::default()
                             .with_color(preview_color)
-                            .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                            .with_width(self.preview_stroke_px(0.0, scale)),
                     );
                 }
             } else if let Some((cur_x, cur_y)) = state.arc_cursor {
@@ -358,7 +368,7 @@ impl SymbolCanvas<'_> {
             &path,
             canvas::Stroke::default()
                 .with_color(preview_color)
-                .with_width(stroke_px(symbol_stroke_mm(0.0, false, scale), scale)),
+                .with_width(self.preview_stroke_px(0.0, scale)),
         );
         for &(x, y) in self.polygon_vertices {
             frame.fill(&canvas::Path::circle(w2s(x, y), 3.0), preview_color);
