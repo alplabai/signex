@@ -143,6 +143,9 @@ pub struct CanvasSlot {
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Fit the whole sheet at the next canvas event, so the paper size and the
+    /// canvas size are the ones laid out by then, not the ones at load (#1941).
+    pending_sheet_fit: std::cell::Cell<bool>,
     /// Bounds of the canvas as of the last canvas event — lets menu zoom (which has no
     /// cursor and no event bounds) find the view centre.
     viewport: std::cell::Cell<Rectangle>,
@@ -265,6 +268,7 @@ impl CanvasSlot {
             selected: Vec::new(),
             net_highlight: None,
             pending_fit: std::cell::Cell::new(None),
+            pending_sheet_fit: std::cell::Cell::new(false),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
             drawing_mode: false,
@@ -417,7 +421,33 @@ impl CanvasSlot {
                 iced::Point::new(bounds.min_x as f32, bounds.min_y as f32),
                 iced::Size::new(bounds.width() as f32, bounds.height() as f32),
             )));
+        } else {
+            self.fit_to_sheet();
         }
+    }
+
+    /// Fit and centre the whole sheet paper at the next canvas event (#1941).
+    pub fn fit_to_sheet(&self) {
+        self.pending_sheet_fit.set(true);
+    }
+
+    /// Apply a queued fit against the canvas's real `viewport`; whether the
+    /// camera moved. A sheet fit reads the paper size as it is now.
+    pub fn resolve_pending_fit(&self, viewport: Rectangle) -> bool {
+        if let Some(target) = self.pending_fit.take() {
+            self.pending_sheet_fit.set(false);
+            self.camera_mut().fit_rect(target, viewport);
+            return true;
+        }
+        if self.pending_sheet_fit.take() {
+            let paper = Rectangle::new(
+                iced::Point::ORIGIN,
+                iced::Size::new(self.paper_width_mm, self.paper_height_mm),
+            );
+            self.camera_mut().fit_rect(paper, viewport);
+            return true;
+        }
+        false
     }
 }
 

@@ -701,8 +701,10 @@ impl Signex {
             }
         }
 
+        // The first time a sheet is shown it opens fitted and centred, whatever
+        // it holds; the fit is taken at the next canvas event (#1941).
         if fit_to_content {
-            self.interaction_state.active_canvas_mut().fit_to_content();
+            self.interaction_state.active_canvas().fit_to_sheet();
         }
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
