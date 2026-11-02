@@ -164,6 +164,8 @@ mod dirty_paths_gateway;
 mod single_dirty_source;
 
 // #1250 — a locked symbol refuses delete and move, with a Messages note.
+#[path = "regression/drag_ghost_lock_parity.rs"]
+mod drag_ghost_lock_parity;
 #[path = "regression/symbol_locked_enforced.rs"]
 mod symbol_locked_enforced;
 

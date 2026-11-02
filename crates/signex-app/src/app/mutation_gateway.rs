@@ -262,20 +262,22 @@ impl Signex {
         engine.set_wire_colors(colors);
         let mut failed = None;
 
-        // The same rule as a batch: locked symbols are skipped and named. A
-        // command that is nothing but locked symbols still reaches the
-        // engine, so the user is told why nothing happened.
-        let command = if engine.names_locked_item(&command) {
-            let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
-            match kept.pop() {
-                Some(pruned) => {
-                    Self::report_locked_skips(&skipped);
-                    pruned
-                }
-                None => command,
+        // The same rule as a batch: held items are skipped and named, a
+        // wire on a locked pin included. A command that is nothing but locked
+        // items still reaches the engine, so the user is told why nothing
+        // happened; one that is only held items the engine would not refuse
+        // (a wire on a locked pin) does nothing, and says so.
+        let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
+        let command = match kept.pop() {
+            Some(pruned) => {
+                Self::report_locked_skips(&skipped);
+                pruned
             }
-        } else {
-            command
+            None if engine.names_locked_item(&command) => command,
+            None => {
+                Self::report_locked_skips(&skipped);
+                return (CommandOutcome::Unchanged, None);
+            }
         };
 
         let executed = if record_history {

@@ -48,7 +48,10 @@ impl SchematicCanvas<'_> {
                 action
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                self.update_left_pressed(state, bounds, cursor)
+                let action = self.update_left_pressed(state, bounds, cursor);
+                // A press that drops a click-click float ends its ghost too.
+                self.refresh_drag_ghost(state);
+                action
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 let action = self.update_left_released(state);

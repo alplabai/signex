@@ -92,7 +92,7 @@ pub fn log_locked_holds(held: &[String]) {
         return;
     }
     log_warning(format!(
-        "Locked, will not move when dropped: {}; unlock the locked object in Properties to move it",
+        "Will not move when dropped, held by a lock on {} (the object itself, or the part or wire it is attached to); unlock that in Properties to move it",
         held.join(", ")
     ));
 }
