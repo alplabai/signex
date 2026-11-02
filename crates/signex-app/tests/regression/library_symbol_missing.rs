@@ -309,3 +309,72 @@ fn closing_the_tab_or_the_library_drops_the_warning() {
         "library closed"
     );
 }
+
+/// Rename the last header column of the fixture's `ICs` table, as a
+/// hand-edited or newer library would have it: the library still opens, but
+/// `read_table("ICs")` fails its schema check.
+fn break_ics_table_header(f: &crate::library_place_symbol::Fixture) {
+    let text = std::fs::read_to_string(&f.snxlib).unwrap();
+    let mut file = signex_library::library_file::LibraryFile::parse(&text).unwrap();
+    let table = file.tables.get_mut("ICs").expect("fixture table");
+    let last = table.columns.len() - 1;
+    table.columns[last] = format!("{}_renamed", table.columns[last]);
+    std::fs::write(&f.snxlib, file.write().unwrap()).unwrap();
+}
+
+#[test]
+fn a_symbol_bound_only_by_a_row_asks_first() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let path = open_container_editor(&mut app, &f);
+
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+
+    assert_eq!(symbol_count(&app, &path), 2, "the ICs row uses it");
+}
+
+#[test]
+fn a_symbol_whose_table_could_not_be_read_is_not_deleted_silently() {
+    let f = fixture();
+    break_ics_table_header(&f);
+    let mut app = app_with_library(&f);
+    let path = open_container_editor(&mut app, &f);
+
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+
+    assert_eq!(
+        symbol_count(&app, &path),
+        2,
+        "a table that could not be read is not proof the symbol is unused"
+    );
+    let ctx = app.document_state.panel_ctx.symbol_editor.as_ref().unwrap();
+    let lines = ctx
+        .delete_warning
+        .as_ref()
+        .expect("a warning")
+        .lines
+        .join("\n");
+    assert!(
+        lines.contains("Table ICs")
+            && lines.contains("could not be read; its rows were not checked"),
+        "{lines}"
+    );
+}
+
+#[test]
+fn delete_anyway_says_how_many_rows_and_sheets_now_dangle() {
+    let _ = signex_app::diagnostics::init_logging();
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    open_container_editor(&mut app, &f);
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    panel(&mut app, PanelMsg::SchLibraryDeleteConfirmed(0));
+
+    assert!(
+        logged(&[
+            "TWO-UNIT deleted: 1 component row(s) and 1 open sheet(s)",
+            "missing library symbol"
+        ]) >= 1
+    );
+}

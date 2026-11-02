@@ -712,6 +712,7 @@ impl OpenLibrary {
             tables,
             summaries,
             pricing,
+            unreadable,
         } = super::table_scan::scan_tables(
             adapter,
             names,
@@ -734,6 +735,7 @@ impl OpenLibrary {
             },
         );
         self.tables = tables;
+        self.dangling.unreadable_tables = unreadable;
         self.pricing = pricing;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();

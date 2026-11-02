@@ -519,17 +519,27 @@ impl Signex {
         let name = editor.file.symbols[idx].name.clone();
         // A symbol rows or open sheets still use is not deleted until the
         // user has seen who (#1845).
-        if let Some(lines) = self.symbol_usage_lines(&path, symbol)
-            && !lines.is_empty()
-        {
-            self.library.pending_symbol_delete = Some(PendingSymbolDelete {
-                path,
-                symbol,
-                history,
-                warning: SymbolDeleteWarning { idx, name, lines },
-            });
-            self.refresh_panel_ctx();
-            return true;
+        match self.symbol_usage_lines(&path, symbol) {
+            Some(usage) if !usage.lines.is_empty() => {
+                self.library.pending_symbol_delete = Some(PendingSymbolDelete {
+                    path,
+                    symbol,
+                    history,
+                    rows: usage.rows,
+                    sheets: usage.sheets,
+                    warning: SymbolDeleteWarning {
+                        idx,
+                        name,
+                        lines: usage.lines,
+                    },
+                });
+                self.refresh_panel_ctx();
+                return true;
+            }
+            Some(_) => crate::diagnostics::log_info(format!(
+                "{name}: deleted without a warning; only open sheets and mounted libraries were checked, not closed sheets or unmounted libraries."
+            )),
+            None => {}
         }
         self.delete_symbol_from_container(idx)
     }
@@ -552,6 +562,10 @@ impl Signex {
             self.refresh_panel_ctx();
             return true;
         }
+        crate::diagnostics::log_warning(format!(
+            "{} deleted: {} component row(s) and {} open sheet(s) now point at a missing library symbol.",
+            pending.warning.name, pending.rows, pending.sheets
+        ));
         self.delete_symbol_from_container(idx)
     }
 
@@ -567,7 +581,7 @@ impl Signex {
         &self,
         path: &std::path::Path,
         symbol: uuid::Uuid,
-    ) -> Option<Vec<String>> {
+    ) -> Option<crate::library::symbol_delete::SymbolUsage> {
         let library = self.library.containing_library(path)?.library_id;
         let reference = signex_library::PrimitiveRef::new(library, symbol);
         let sheets = self

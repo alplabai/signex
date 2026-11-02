@@ -19,6 +19,7 @@ pub struct LibrarySnapshot {
     tables: HashMap<String, Vec<ComponentRow>>,
     summaries: Vec<ComponentSummary>,
     pricing: HashMap<Uuid, signex_library::RowPricing>,
+    unreadable_tables: Vec<String>,
     classes: Vec<signex_library::ClassEntry>,
     symbols: Result<Vec<PrimitiveSummary>, LibraryError>,
     symbols_partial: bool,
@@ -65,6 +66,7 @@ impl LibrarySnapshot {
             tables,
             summaries,
             pricing,
+            unreadable,
         } = scan_tables(
             adapter,
             names,
@@ -91,6 +93,7 @@ impl LibrarySnapshot {
             tables,
             summaries,
             pricing,
+            unreadable_tables: unreadable,
             symbols: adapter.list_symbols(),
             symbols_partial: adapter.symbol_listing_is_partial(),
             footprints: adapter.list_footprints(),
@@ -268,6 +271,7 @@ impl LibraryState {
         self.clock = chrono::Utc::now();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = snapshot.tables;
+            lib.dangling.unreadable_tables = snapshot.unreadable_tables;
             lib.pricing = snapshot.pricing;
             lib.cached_components = snapshot.summaries;
             lib.cached_classes = snapshot.classes;

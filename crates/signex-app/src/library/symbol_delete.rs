@@ -25,6 +25,9 @@ pub struct PendingSymbolDelete {
     /// `(undo, redo)` depths of the editor when the warning was raised; an
     /// edit, undo or redo since then makes the warning stale.
     pub history: (usize, usize),
+    /// How many rows and open sheets the warning named.
+    pub rows: usize,
+    pub sheets: usize,
     pub warning: SymbolDeleteWarning,
 }
 
@@ -42,15 +45,32 @@ impl PendingSymbolDelete {
     }
 }
 
-/// The lines naming every row and open sheet that use `symbol`; empty when
-/// nothing does.
+/// What the scan found for one symbol.
+#[derive(Debug, Default)]
+pub struct SymbolUsage {
+    /// One line per kind of finding (rows, open sheets, unreadable tables);
+    /// empty when nothing uses the symbol and nothing was left unchecked.
+    pub lines: Vec<String>,
+    pub rows: usize,
+    pub sheets: usize,
+}
+
+/// Rows and open sheets that use `symbol`, plus a line for every table of a
+/// mounted library that could not be read: what binds into it is unknown.
 pub fn usage_lines<'a>(
     libs: &[OpenLibrary],
     sheets: impl Iterator<Item = (&'a Path, &'a SchematicSheet)>,
     symbol: &PrimitiveRef,
-) -> Vec<String> {
+) -> SymbolUsage {
     let mut rows = Vec::new();
+    let mut unchecked = Vec::new();
     for lib in libs {
+        for table in &lib.dangling.unreadable_tables {
+            unchecked.push(format!(
+                "Table {table} ({}) could not be read; its rows were not checked",
+                lib.display_name
+            ));
+        }
         let mut tables: Vec<_> = lib.tables.iter().collect();
         tables.sort_by(|a, b| a.0.cmp(b.0));
         for (table, list) in tables {
@@ -92,7 +112,12 @@ pub fn usage_lines<'a>(
             capped(&placed)
         ));
     }
-    lines
+    lines.extend(unchecked);
+    SymbolUsage {
+        lines,
+        rows: rows.len(),
+        sheets: placed.len(),
+    }
 }
 
 fn capped(items: &[String]) -> String {

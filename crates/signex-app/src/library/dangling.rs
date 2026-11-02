@@ -33,6 +33,9 @@ pub struct DanglingSweep {
     pub listings_complete: bool,
     /// Bindings that resolved to nothing at the last sweep.
     pub refs: Vec<DanglingRef>,
+    /// Tables whose rows could not be read at the last load; they are
+    /// cached empty, so what binds into them is unknown (#1845).
+    pub unreadable_tables: Vec<String>,
 }
 
 impl DanglingSweep {
