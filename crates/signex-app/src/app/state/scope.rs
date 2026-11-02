@@ -127,23 +127,66 @@ pub(crate) fn project_owning_sheet_with<'a>(
     OwnershipIndex::build(0, projects, loaded, Some(fold)).owner(projects, path)
 }
 
-/// The library that owns the symbol / footprint draft at `path`: among the
-/// `.snxlib` files in `libraries`, the one whose folder contains the draft and
+/// The libraries that own the symbol / footprint draft at `path`: among the
+/// `.snxlib` files in `libraries`, those whose folder contains the draft and
 /// is deepest, so a library nested in another's folder owns its own drafts.
-/// The one ownership decision the Close Project and Close Library prompts
-/// share.
-pub(crate) fn owning_library<'a>(
+/// Several libraries in one folder all own what sits there; one library listed
+/// under two spellings counts once (by [`path_key_with`]). The Close Library
+/// prompts list the draft for every owner.
+pub(crate) fn owning_libraries<'a>(
     path: &Path,
     libraries: &'a [PathBuf],
     fold: CaseFold,
-) -> Option<&'a PathBuf> {
-    deepest_owner(
+) -> Vec<&'a PathBuf> {
+    let mut owners = deepest_owners(
         path,
         libraries
             .iter()
             .filter_map(|lib| Some((lib, lib.parent()?))),
         fold,
-    )
+    );
+    let mut seen = std::collections::HashSet::new();
+    owners.retain(|lib| seen.insert(path_key_with(lib, fold)));
+    owners
+}
+
+/// The one library that owns the draft at `path`, or `None` when none does or
+/// several share its folder (no single one can claim it: Close Project keeps
+/// such a draft).
+pub(crate) fn owning_library<'a>(
+    path: &Path,
+    libraries: &'a [PathBuf],
+    fold: CaseFold,
+) -> Option<&'a PathBuf> {
+    match owning_libraries(path, libraries, fold).as_slice() {
+        [only] => Some(*only),
+        _ => None,
+    }
+}
+
+/// Every candidate whose folder is the DEEPEST one holding `path`, by
+/// [`path_is_under`]; empty when none holds it.
+pub(crate) fn deepest_owners<'a, T>(
+    path: &Path,
+    candidates: impl IntoIterator<Item = (T, &'a Path)>,
+    fold: CaseFold,
+) -> Vec<T> {
+    let mut best: Vec<T> = Vec::new();
+    let mut deepest = 0;
+    for (owner, dir) in candidates {
+        if !path_is_under(path, dir, fold) {
+            continue;
+        }
+        let depth = path_key_with(dir, fold).len();
+        if best.is_empty() || depth > deepest {
+            best.clear();
+            deepest = depth;
+        }
+        if depth == deepest {
+            best.push(owner);
+        }
+    }
+    best
 }
 
 /// The candidate whose folder is the DEEPEST one holding `path`, by
@@ -157,23 +200,9 @@ pub(crate) fn deepest_owner<'a, T: PartialEq>(
     candidates: impl IntoIterator<Item = (T, &'a Path)>,
     fold: CaseFold,
 ) -> Option<T> {
-    let mut best: Option<(T, usize)> = None;
-    let mut tied = false;
-    for (owner, dir) in candidates {
-        if !path_is_under(path, dir, fold) {
-            continue;
-        }
-        let depth = path_key_with(dir, fold).len();
-        match &best {
-            Some((_, deepest)) if *deepest > depth => {}
-            Some((held, deepest)) if *deepest == depth => tied |= *held != owner,
-            _ => {
-                best = Some((owner, depth));
-                tied = false;
-            }
-        }
-    }
-    best.filter(|_| !tied).map(|(owner, _)| owner)
+    let mut owners = deepest_owners(path, candidates, fold).into_iter();
+    let first = owners.next()?;
+    owners.all(|other| other == first).then_some(first)
 }
 
 /// True when `path` is `root` or lies under it, compared component-wise on
@@ -414,6 +443,28 @@ mod tests {
     use super::*;
     use crate::app::state::ProjectId;
     use signex_types::project::{ProjectData, SheetEntry};
+
+    #[test]
+    fn one_library_under_two_spellings_owns_a_draft_once() {
+        let libs = vec![
+            PathBuf::from("/work/a/../shared/x.snxlib"),
+            PathBuf::from("/work/b/../shared/x.snxlib"),
+        ];
+        let draft = Path::new("/work/shared/symbols/s.snxsym");
+        let fold = CaseFold::PRESERVE;
+        assert_eq!(owning_libraries(draft, &libs, fold).len(), 1);
+        assert!(owning_library(draft, &libs, fold).is_some());
+    }
+
+    #[test]
+    fn two_libraries_in_one_folder_both_own_a_draft_but_neither_claims_it_alone() {
+        let libs = vec![PathBuf::from("/w/a.snxlib"), PathBuf::from("/w/b.snxlib")];
+        let draft = Path::new("/w/symbols/s.snxsym");
+        let fold = CaseFold::PRESERVE;
+        assert_eq!(owning_libraries(draft, &libs, fold).len(), 2);
+        // Close Project asks `owning_library`: a tied draft is kept.
+        assert_eq!(owning_library(draft, &libs, fold), None);
+    }
 
     #[test]
     fn a_unicode_look_alike_does_not_share_an_identity_key_with_the_real_path() {

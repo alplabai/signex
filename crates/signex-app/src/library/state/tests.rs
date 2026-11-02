@@ -519,24 +519,13 @@ fn library_holding_requires_the_primitive_folder_of_the_owner() {
         open_libraries: vec![bare_library("/p/lib.snxlib")],
         ..Default::default()
     };
-    assert!(
-        state
-            .library_holding(Path::new("/p/symbols/a.snxsym"))
-            .is_some()
-    );
-    assert!(
-        state
-            .library_holding(Path::new("/p/footprints/a.snxfpt"))
-            .is_some()
-    );
-    assert!(
-        state
-            .library_holding(Path::new("/p/drafts/a.snxsym"))
-            .is_none()
-    );
-    assert!(
-        state
-            .library_holding(Path::new("/p/vendor/symbols/a.snxsym"))
-            .is_none()
-    );
+    use signex_library::PrimitiveKind::{Footprint, Symbol};
+    let holds = |file: &str, kind| state.library_holding(Path::new(file), kind).is_some();
+    assert!(holds("/p/symbols/a.snxsym", Symbol));
+    assert!(holds("/p/footprints/a.snxfpt", Footprint));
+    assert!(!holds("/p/drafts/a.snxsym", Symbol));
+    assert!(!holds("/p/vendor/symbols/a.snxsym", Symbol));
+    // A file in another kind's folder is not held as this kind.
+    assert!(!holds("/p/footprints/a.snxsym", Symbol));
+    assert!(!holds("/p/symbols/a.snxfpt", Footprint));
 }

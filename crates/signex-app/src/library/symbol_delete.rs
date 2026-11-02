@@ -142,18 +142,25 @@ fn placed_on_sheets<'a>(
     placed
 }
 
-/// The scan for a container that is not inside a mounted library: its
+/// The scan for a container whose library is unknown: it is outside every
+/// mounted library, or (`shared_folder`) several share its folder. Its
 /// component rows cannot be checked (usage is unknown), but open sheets are
 /// still matched by the symbol's uuid, whatever library the part names.
 pub fn usage_outside_library<'a>(
     container: &Path,
     sheets: impl Iterator<Item = (&'a Path, &'a SchematicSheet)>,
     symbol: Uuid,
+    shared_folder: bool,
 ) -> SymbolUsage {
     let suffix = format!(":{symbol}");
     let placed = placed_on_sheets(sheets, |id| id.ends_with(&suffix));
+    let why = if shared_folder {
+        "its library cannot be told apart (several libraries share its folder)"
+    } else {
+        "it is not inside a mounted library"
+    };
     let mut lines = vec![format!(
-        "{} is not inside a mounted library; its component rows were not checked",
+        "{}: {why}; its component rows were not checked",
         container.display()
     )];
     if !placed.is_empty() {
@@ -186,6 +193,24 @@ fn capped(items: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shared_folder_is_not_called_unmounted() {
+        let file = Path::new("/w/symbols/s.snxsym");
+        let lines = |shared| {
+            usage_outside_library(file, std::iter::empty(), Uuid::nil(), shared)
+                .lines
+                .join("\n")
+        };
+        assert!(lines(false).contains("is not inside a mounted library"));
+        let shared = lines(true);
+        assert!(
+            shared.contains("several libraries share its folder"),
+            "{shared}"
+        );
+        assert!(!shared.contains("not inside a mounted library"), "{shared}");
+    }
+
     use crate::library::state::LibraryDisplaySettings;
     use crate::library::test_adapters::{FailingListingAdapter, FailingTableListAdapter};
     use std::collections::HashMap;

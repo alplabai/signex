@@ -130,6 +130,10 @@ fn a_symbol_and_a_row_are_both_listed_and_both_discarded() {
 /// (display entry only; nothing is written through it).
 fn mount_nested_library(f: &mut Fixture) -> PathBuf {
     let root = f.file.parent().unwrap().join("vendor").join("V.snxlib");
+    mount_display_only(f, root)
+}
+
+fn mount_display_only(f: &mut Fixture, root: PathBuf) -> PathBuf {
     f.app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "V".into(),
@@ -236,4 +240,51 @@ fn drafts_are_labelled_by_their_path_in_the_library() {
     );
     assert_eq!(dirty_path_label(&plain, Some(dir)), "symbols/s.snxsym");
     assert_eq!(dirty_path_label(&plain, None), "s.snxsym");
+}
+
+/// One library listed by an open project under another spelling of its path
+/// (`<dir>/proj/../Lib.snxlib`) is still one library: Close Library asks.
+#[test]
+fn one_library_under_two_spellings_still_owns_its_draft() {
+    use signex_types::project::{LibraryEntry, LibraryEntryKind};
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let mut workspace = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.join("proj").to_string_lossy(),
+        &[],
+    );
+    let mut project = workspace.document_state.projects.remove(0);
+    project.data.libraries.push(LibraryEntry {
+        path: PathBuf::from("..").join("Lib.snxlib"),
+        kind: LibraryEntryKind::ProjectLocal,
+        library_id: None,
+        unknown: Default::default(),
+    });
+    f.app.document_state.projects.push(project);
+    let symbol = symbol_in_library(&f, "s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+
+    let confirm = f.app.library.close_library_confirm.as_ref().expect("asked");
+    assert_eq!(confirm.dirty_paths, vec![symbol]);
+}
+
+/// Two libraries in one folder: the draft in that folder is listed by Close
+/// Library of EITHER one, so neither close drops it unseen.
+#[test]
+fn libraries_sharing_a_folder_each_list_the_shared_draft() {
+    let mut f = fixture();
+    let other = f.file.parent().unwrap().join("Other.snxlib");
+    let sibling = mount_display_only(&mut f, other);
+    let symbol = symbol_in_library(&f, "s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+    let confirm = f.app.library.close_library_confirm.take().expect("asked");
+    assert_eq!(confirm.dirty_paths, vec![symbol.clone()]);
+
+    send(&mut f, LibraryMessage::CloseLibrary(sibling));
+    let confirm = f.app.library.close_library_confirm.as_ref().expect("asked");
+    assert_eq!(confirm.dirty_paths, vec![symbol]);
 }

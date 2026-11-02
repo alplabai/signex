@@ -235,15 +235,17 @@ impl Signex {
         &self,
         root: &std::path::Path,
     ) -> Vec<std::path::PathBuf> {
-        use crate::app::state::scope::{owning_library, path_key_with};
+        use crate::app::state::scope::{owning_libraries, path_key_with};
         let roots = self.draft_library_roots();
         let mut paths: Vec<std::path::PathBuf> = self
             .document_state
             .dirty_primitive_paths()
             .filter(|path| {
+                // Libraries sharing a folder all list its drafts.
                 let fold = self.identity_decision(path).fold;
-                owning_library(path, &roots, fold)
-                    .is_some_and(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
+                owning_libraries(path, &roots, fold)
+                    .iter()
+                    .any(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
             })
             .collect();
         paths.sort();

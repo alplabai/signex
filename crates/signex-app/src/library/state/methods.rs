@@ -274,24 +274,50 @@ impl LibraryState {
         self.open_libraries.get_mut(index)
     }
 
-    /// The open library that actually HOLDS `file`: its owner by
-    /// [`Self::containing_library_with`], and `file` sits directly in the
-    /// owner's `symbols/`, `footprints/` or `sims/` folder (what the adapter
-    /// scans). A file elsewhere under the library's folder, or in a nested
+    /// The open library that actually HOLDS `file` as a primitive of `kind`:
+    /// its owner by [`Self::containing_library_with`], and `file` sits
+    /// directly in the owner's folder for that kind (`symbols/`,
+    /// `footprints/` or `sims/`, what the adapter scans). A file elsewhere
+    /// under the library's folder, in another kind's folder, or in a nested
     /// library that is not open, is held by none.
-    pub fn library_holding_with(&self, file: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
+    pub fn library_holding_with(
+        &self,
+        file: &Path,
+        kind: signex_library::PrimitiveKind,
+        fold: CaseFold,
+    ) -> Option<&OpenLibrary> {
+        use signex_library::PrimitiveKind;
+        let dir = match kind {
+            PrimitiveKind::Symbol => "symbols",
+            PrimitiveKind::Footprint => "footprints",
+            PrimitiveKind::Sim => "sims",
+            _ => return None,
+        };
         let lib = self.containing_library_with(file, fold)?;
-        let root = lib.root_dir()?;
         let key = |p: &Path| crate::app::path_key_with(p, fold);
-        let parent = key(file.parent()?);
-        ["symbols", "footprints", "sims"]
-            .iter()
-            .any(|dir| parent == key(&root.join(dir)))
-            .then_some(lib)
+        (key(file.parent()?) == key(&lib.root_dir()?.join(dir))).then_some(lib)
     }
 
-    pub fn library_holding(&self, file: &Path) -> Option<&OpenLibrary> {
-        self.library_holding_with(file, CaseFold::host_default())
+    pub fn library_holding(
+        &self,
+        file: &Path,
+        kind: signex_library::PrimitiveKind,
+    ) -> Option<&OpenLibrary> {
+        self.library_holding_with(file, kind, CaseFold::host_default())
+    }
+
+    /// True when several open libraries share the deepest folder holding
+    /// `file`, so none of them can be named its owner.
+    pub fn libraries_share_folder_of(&self, file: &Path) -> bool {
+        crate::app::deepest_owners(
+            file,
+            self.open_libraries
+                .iter()
+                .filter_map(|lib| Some((lib.root.as_path(), lib.root_dir()?))),
+            CaseFold::host_default(),
+        )
+        .len()
+            > 1
     }
 
     fn containing_index(&self, child_path: &Path, fold: CaseFold) -> Option<usize> {

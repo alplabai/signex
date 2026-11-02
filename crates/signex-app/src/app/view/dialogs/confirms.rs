@@ -459,7 +459,9 @@ impl Signex {
         let path_labels = paths.iter().map(|path| {
             let dir = drafts.contains(path).then(|| {
                 let fold = self.identity_decision(path).fold;
-                crate::app::state::scope::owning_library(path, &roots, fold)
+                // Libraries sharing a folder share its relative label.
+                crate::app::state::scope::owning_libraries(path, &roots, fold)
+                    .first()
                     .and_then(|lib| lib.parent())
             });
             crate::library::close_prompt::dirty_path_label(path, dir.flatten())

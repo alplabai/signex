@@ -387,19 +387,17 @@ impl Signex {
     /// file of an unmounted one is classified off-thread with
     /// `enclosing_snxlib`.
     fn handle_primitive_picker_browse_result(&mut self, file: std::path::PathBuf) -> Task<Message> {
-        let is_symbol = self
-            .library
-            .primitive_picker
-            .as_ref()
-            .is_some_and(|p| p.kind == PrimitiveKind::Symbol);
-        if is_symbol {
+        let Some(kind) = self.library.primitive_picker.as_ref().map(|p| p.kind) else {
+            return Task::none();
+        };
+        if kind == PrimitiveKind::Symbol {
             // The read answers mounted (bind) or unmounted (copy / open the
             // library, #1841) off-thread; see `handle_loose_listed`.
             return self.read_browsed_loose_symbol(file);
         }
         let Some(library_id) = self
             .library
-            .library_holding(&file)
+            .library_holding(&file, kind)
             .map(|lib| lib.library_id)
         else {
             if let Some(picker) = self.library.primitive_picker.as_mut() {

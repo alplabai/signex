@@ -609,7 +609,12 @@ impl Signex {
                 let reference = signex_library::PrimitiveRef::new(lib.library_id, symbol);
                 usage_lines(&self.library.open_libraries, sheets, &reference)
             }
-            None => usage_outside_library(path, sheets, symbol),
+            None => usage_outside_library(
+                path,
+                sheets,
+                symbol,
+                self.library.libraries_share_folder_of(path),
+            ),
         }
     }
 
