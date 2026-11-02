@@ -181,6 +181,9 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+// #1718 — hand-placed silk survives a sketch re-bake and a save.
+#[path = "regression/footprint_hand_silk_rebake.rs"]
+mod footprint_hand_silk_rebake;
 #[path = "regression/footprint_legacy_pad_stack.rs"]
 mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]

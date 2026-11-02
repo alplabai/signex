@@ -6,8 +6,8 @@
 //! the endpoint / field setters take. The dispatcher in `mod.rs` routes
 //! these panel messages here.
 //!
-//! Pure code motion out of the former `sch_library.rs` god-file
-//! (ADR-0001 #163); zero behaviour change.
+//! An entry baked from the sketch is refused here (#1718): the next bake
+//! would undo the edit, so it is edited in Sketch mode.
 
 use super::super::*;
 
@@ -28,6 +28,22 @@ pub(crate) enum SilkTextField {
     Size,
 }
 
+/// The selected top-silk entry Pads mode may edit. Settles an owed drag
+/// solve first, since its bake can move the entry; refuses, with a
+/// Messages line, an entry the sketch baked.
+fn editable_selected_silk(editor: &mut crate::app::FootprintDocument) -> Option<usize> {
+    use crate::library::editor::footprint::state::silk_selection::{
+        is_sketch_owned_silk, report_sketch_owned_silk,
+    };
+    editor.settle_pending_solve();
+    let idx = editor.state.selected_silk_f?;
+    if is_sketch_owned_silk(editor.primitive(), idx) {
+        report_sketch_owned_silk(idx);
+        return None;
+    }
+    Some(idx)
+}
+
 /// Coalescing target for a silk field edit: the graphic index plus
 /// which of its fields, so two fields of one graphic do not merge.
 fn silk_key(idx: usize, field: usize) -> u128 {
@@ -43,7 +59,7 @@ impl Signex {
         let parsed = crate::numeric_field::parse_field_f64(&value);
         if let Some(parsed) = parsed
             && let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(idx) = editor.state.selected_silk_f
+            && let Some(idx) = editable_selected_silk(editor)
         {
             let key = Some(("silk_line_endpoint", silk_key(idx, endpoint as usize)));
             editor.record_edit(key, |editor| {
@@ -76,7 +92,7 @@ impl Signex {
         let parsed = crate::numeric_field::parse_field_f64(&value);
         if let Some(parsed) = parsed
             && let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(idx) = editor.state.selected_silk_f
+            && let Some(idx) = editable_selected_silk(editor)
         {
             let key = Some(("silk_text_field", silk_key(idx, field as usize)));
             editor.record_edit(key, |editor| {
@@ -113,7 +129,7 @@ impl Signex {
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let parsed = crate::numeric_field::parse_field_f64(v);
-            if let Some(idx) = editor.state.selected_silk_f
+            if let Some(idx) = editable_selected_silk(editor)
                 && let Some(w) = parsed
                 && w >= 0.0
             {
@@ -137,7 +153,7 @@ impl Signex {
         on: &bool,
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(idx) = editor.state.selected_silk_f
+            && let Some(idx) = editable_selected_silk(editor)
         {
             editor.record_edit(None, |editor| {
                 let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) else {
@@ -162,7 +178,7 @@ impl Signex {
         // Text or no silk graphic is selected.
         let value = value.to_string();
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(idx) = editor.state.selected_silk_f
+            && let Some(idx) = editable_selected_silk(editor)
         {
             editor.record_edit(Some(("silk_text", idx as u128)), |editor| {
                 use signex_library::primitive::footprint::FpGraphicKind;
@@ -188,7 +204,7 @@ impl Signex {
         // v0.18.24 — delete the currently-selected silk-front
         // graphic and clear the selection.
         if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(idx) = editor.state.selected_silk_f
+            && let Some(idx) = editable_selected_silk(editor)
         {
             editor.record_edit(None, |editor| {
                 let removed = editor.with_parts(|state, primitive| {

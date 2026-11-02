@@ -7,8 +7,7 @@ a `.snxfpt` written by hand or by an import, silk drawn in Pads mode. An
 empty bake must therefore not clear every field. The sketch **owns** a
 kind when either holds:
 
-- an entity of the sketch is tagged for it (`silk` on `TopSilk` owns
-  `silk_f`, on `BottomSilk` owns `silk_b`; `courtyard`, `mask_opening`,
+- an entity of the sketch is tagged for it (`courtyard`, `mask_opening`,
   `mask_exclude`, `paste_aperture`, `pour`, `keepout`, `board_cutout`,
   `v_score` own the kind of the same name), or
 - an earlier bake produced it and recorded it in `baked_kinds`.
@@ -27,8 +26,41 @@ from imported geometry; there is no migration). The same holds for pads: if
 the first edit in a newer build deletes every entity of a sketch baked by an
 older build, the sketch-baked pads are kept, as they were before.
 
-A non-empty silk bake still replaces the whole of `silk_f` / `silk_b`,
-hand-drawn entries included: baked entries are not marked by origin.
+### Silk is owned entry by entry
+
+Silk (`silk_f`, `silk_b`) shares its layers with hand-drawn entries (Place
+String, text frames, the Pads-mode line, arc and polygon tools), so it is
+not owned as a whole field. Every entry a bake makes carries the id of the
+sketch entity it came from (`sketch_entity`); an entry without one is
+hand-drawn. Every bake, empty or not, and the clear after every entity is
+deleted, rebuild each silk layer the same way: the bake's output first,
+then every unmarked entry in its existing order. An entry is removed
+because it carries a marker, never by looking its entity up, so an entry
+whose entity is gone goes too. The merge lives in
+`signex_bake::silk_ownership`; the editor moves the Properties selection
+with its entry.
+
+A baked entry belongs to the sketch: it can be selected, Properties shows
+it read-only ("From sketch: edit in Sketch mode"), and Pads-mode edits and
+deletes of it are refused with a Messages line, since the next bake would
+undo them.
+
+Silk is no longer recorded in `baked_kinds`. The `silk_f` / `silk_b`
+tokens stay reserved; a bake drops one an older build wrote.
+
+**Files from older builds.** A file written before the marker existed has
+no marked silk. When such a footprint opens in the editor and its sketch
+tags a silk layer holding unmarked entries, the editor solves the sketch as
+loaded, before any edit, and bakes its silk once. Each unmarked entry that
+matches an output not yet claimed (same kind, stroke width and fill,
+geometry equal at the file's nanometre resolution, `mm_as_stored_nm`) is
+marked; each output is used at most once, and an entry that matches
+nothing stays hand-drawn. The markers are written in memory only: the
+document is not dirtied and a save treats the footprint as unchanged until
+the user edits it. If the sketch does not solve, nothing is marked or
+removed and the Messages panel warns that the next sketch edit may
+duplicate that silk. Because an older build drops the field it does not
+know when it saves, this runs on every open, not once per file.
 
 ### File format
 
@@ -37,7 +69,15 @@ read with a default, so a file the sketch never baked saves byte-identical
 and an older file loads. Tokens: `silk_f`, `silk_b`, `courtyard`,
 `mask_openings`, `mask_excludes`, `paste_apertures`, `pours`, `keepouts`,
 `cutouts`, `v_scores`, `pads`. A token is never renamed or reused for another
-meaning; a token this build does not know is kept as read.
+meaning; a token this build does not know is kept as read. `silk_f` and
+`silk_b` are reserved: this build no longer writes them.
+
+A silk graphic (`[[footprints.silk_f]]`, `[[footprints.silk_b]]`) carries
+an optional `sketch_entity = "<uuid>"`, written only when set and read with
+a default. A file without markers loads, and saves byte-identical; an older
+build reads a file with markers (it ignores the key) and drops them when it
+saves. The format token stays `snxfpt/1` and `FOOTPRINT_SCHEMA_VERSION`
+is unchanged.
 
 ## Redundant constraints
 

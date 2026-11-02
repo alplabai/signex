@@ -271,135 +271,149 @@ pub(super) fn view_selection<'a>(
                         silk.idx.to_string(),
                     );
 
-                    use crate::panels::SilkKindGeometry;
-                    match &silk.kind {
-                        SilkKindGeometry::Line { from_mm, to_mm } => {
-                            col = col.push(pad_input_row(
-                                "From X (mm)",
-                                "0",
-                                format!("{:.3}", from_mm[0]),
-                                PanelMsg::FpEditorSetSilkLineFromX,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                            col = col.push(pad_input_row(
-                                "From Y (mm)",
-                                "0",
-                                format!("{:.3}", from_mm[1]),
-                                PanelMsg::FpEditorSetSilkLineFromY,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                            col = col.push(pad_input_row(
-                                "To X (mm)",
-                                "0",
-                                format!("{:.3}", to_mm[0]),
-                                PanelMsg::FpEditorSetSilkLineToX,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                            col = col.push(pad_input_row(
-                                "To Y (mm)",
-                                "0",
-                                format!("{:.3}", to_mm[1]),
-                                PanelMsg::FpEditorSetSilkLineToY,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
+                    if silk.from_sketch {
+                        // #1718: a baked entry is the sketch's; Pads mode
+                        // shows it but does not edit it.
+                        col = col.push(
+                            container(
+                                text("From sketch: edit in Sketch mode")
+                                    .size(9)
+                                    .color(muted),
+                            )
+                            .padding([SP.s, SP.m])
+                            .width(Length::Fill),
+                        );
+                    } else {
+                        use crate::panels::SilkKindGeometry;
+                        match &silk.kind {
+                            SilkKindGeometry::Line { from_mm, to_mm } => {
+                                col = col.push(pad_input_row(
+                                    "From X (mm)",
+                                    "0",
+                                    format!("{:.3}", from_mm[0]),
+                                    PanelMsg::FpEditorSetSilkLineFromX,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                                col = col.push(pad_input_row(
+                                    "From Y (mm)",
+                                    "0",
+                                    format!("{:.3}", from_mm[1]),
+                                    PanelMsg::FpEditorSetSilkLineFromY,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                                col = col.push(pad_input_row(
+                                    "To X (mm)",
+                                    "0",
+                                    format!("{:.3}", to_mm[0]),
+                                    PanelMsg::FpEditorSetSilkLineToX,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                                col = col.push(pad_input_row(
+                                    "To Y (mm)",
+                                    "0",
+                                    format!("{:.3}", to_mm[1]),
+                                    PanelMsg::FpEditorSetSilkLineToY,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                            }
+                            SilkKindGeometry::Text {
+                                position_mm,
+                                content,
+                                size_mm,
+                            } => {
+                                col = col.push(pad_input_row(
+                                    "Content",
+                                    "TEXT",
+                                    content.clone(),
+                                    PanelMsg::FpEditorSetSilkText,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                                col = col.push(pad_input_row(
+                                    "Position X (mm)",
+                                    "0",
+                                    format!("{:.3}", position_mm[0]),
+                                    PanelMsg::FpEditorSetSilkTextPositionX,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                                col = col.push(pad_input_row(
+                                    "Position Y (mm)",
+                                    "0",
+                                    format!("{:.3}", position_mm[1]),
+                                    PanelMsg::FpEditorSetSilkTextPositionY,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                                col = col.push(pad_input_row(
+                                    "Size (mm)",
+                                    "1.0",
+                                    format!("{:.3}", size_mm),
+                                    PanelMsg::FpEditorSetSilkTextSize,
+                                    muted,
+                                    primary,
+                                    border_c,
+                                ));
+                            }
+                            SilkKindGeometry::Other => {
+                                col = col.push(
+                                    container(
+                                        text("Use Sketch mode for parametric editing")
+                                            .size(9)
+                                            .color(muted),
+                                    )
+                                    .padding([SP.s, SP.m])
+                                    .width(Length::Fill),
+                                );
+                            }
                         }
-                        SilkKindGeometry::Text {
-                            position_mm,
-                            content,
-                            size_mm,
-                        } => {
-                            col = col.push(pad_input_row(
-                                "Content",
-                                "TEXT",
-                                content.clone(),
-                                PanelMsg::FpEditorSetSilkText,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                            col = col.push(pad_input_row(
-                                "Position X (mm)",
-                                "0",
-                                format!("{:.3}", position_mm[0]),
-                                PanelMsg::FpEditorSetSilkTextPositionX,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                            col = col.push(pad_input_row(
-                                "Position Y (mm)",
-                                "0",
-                                format!("{:.3}", position_mm[1]),
-                                PanelMsg::FpEditorSetSilkTextPositionY,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                            col = col.push(pad_input_row(
-                                "Size (mm)",
-                                "1.0",
-                                format!("{:.3}", size_mm),
-                                PanelMsg::FpEditorSetSilkTextSize,
-                                muted,
-                                primary,
-                                border_c,
-                            ));
-                        }
-                        SilkKindGeometry::Other => {
-                            col = col.push(
-                                container(
-                                    text("Use Sketch mode for parametric editing")
-                                        .size(9)
-                                        .color(muted),
-                                )
-                                .padding([SP.s, SP.m])
-                                .width(Length::Fill),
-                            );
-                        }
-                    }
 
-                    // Stroke width (all kinds).
-                    col = col.push(pad_input_row(
-                        "Stroke width (mm)",
-                        "0.15",
-                        format!("{:.3}", silk.stroke_width_mm),
-                        PanelMsg::FpEditorSetSilkStrokeWidth,
-                        muted,
-                        primary,
-                        border_c,
-                    ));
-                    // Filled flag (only meaningful for closed shapes;
-                    // surfacing for all so the user can flip it without
-                    // hunting for the right tool).
-                    col = col.push(pad_check_row(
-                        "Filled",
-                        silk.filled,
-                        PanelMsg::FpEditorToggleSilkFilled,
-                        muted,
-                        primary,
-                    ));
-                    col = col.push(
-                        container(
-                            row![grid_manager_btn(
-                                "Delete",
-                                Some(PanelMsg::FpEditorDeleteSelectedSilk),
-                                primary,
-                                border_c,
-                            )]
-                            .spacing(SP.s)
-                            .align_y(iced::Alignment::Center),
-                        )
-                        .padding([SP.s, SP.m])
-                        .width(Length::Fill),
-                    );
+                        // Stroke width (all kinds).
+                        col = col.push(pad_input_row(
+                            "Stroke width (mm)",
+                            "0.15",
+                            format!("{:.3}", silk.stroke_width_mm),
+                            PanelMsg::FpEditorSetSilkStrokeWidth,
+                            muted,
+                            primary,
+                            border_c,
+                        ));
+                        // Filled flag (only meaningful for closed shapes;
+                        // surfacing for all so the user can flip it without
+                        // hunting for the right tool).
+                        col = col.push(pad_check_row(
+                            "Filled",
+                            silk.filled,
+                            PanelMsg::FpEditorToggleSilkFilled,
+                            muted,
+                            primary,
+                        ));
+                        col = col.push(
+                            container(
+                                row![grid_manager_btn(
+                                    "Delete",
+                                    Some(PanelMsg::FpEditorDeleteSelectedSilk),
+                                    primary,
+                                    border_c,
+                                )]
+                                .spacing(SP.s)
+                                .align_y(iced::Alignment::Center),
+                            )
+                            .padding([SP.s, SP.m])
+                            .width(Length::Fill),
+                        );
+                    }
                 } // end if !fp_silk_graphic collapsed
             } else {
                 // Selection Filter — Altium-style flat pill grid for
