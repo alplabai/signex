@@ -508,6 +508,20 @@ impl Signex {
     }
 }
 
+/// Whether `command` acts on a selection, the shape `without_locked` prunes.
+fn is_selection_command(command: &signex_engine::Command) -> bool {
+    use signex_engine::Command;
+    matches!(
+        command,
+        Command::MoveSelection { .. }
+            | Command::RotateSelection { .. }
+            | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
+            | Command::DeleteSelection { .. }
+            | Command::MoveEach { .. }
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -916,18 +930,4 @@ mod tests {
             None
         );
     }
-}
-
-/// Whether `command` acts on a selection, the shape `without_locked` prunes.
-fn is_selection_command(command: &signex_engine::Command) -> bool {
-    use signex_engine::Command;
-    matches!(
-        command,
-        Command::MoveSelection { .. }
-            | Command::RotateSelection { .. }
-            | Command::MirrorSelection { .. }
-            | Command::TransformSelection { .. }
-            | Command::DeleteSelection { .. }
-            | Command::MoveEach { .. }
-    )
 }
