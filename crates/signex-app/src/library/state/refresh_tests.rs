@@ -213,3 +213,77 @@ fn a_late_read_of_a_closed_library_leaves_the_reopened_mount_alone() {
     assert_eq!(landed.follow_ups, [clean(2)]);
     assert!(!state.refresh_in_flight(&root));
 }
+
+fn tables_not_listed(state: &LibraryState, root: &Path) -> bool {
+    state
+        .library_at(root)
+        .expect("library open")
+        .dangling
+        .tables_not_listed
+}
+
+#[test]
+fn a_refresh_that_lands_clears_tables_not_listed() {
+    let (mut state, root, symbols) = mounted();
+    set_symbols(&symbols, &["R_0805"]);
+    state
+        .library_at_mut(&root)
+        .unwrap()
+        .dangling
+        .tables_not_listed = true;
+    let start = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin");
+    let snapshot = read(&start, &root);
+
+    state.finish_refresh(&root, start.generation, snapshot);
+
+    assert!(!tables_not_listed(&state, &root));
+}
+
+#[test]
+fn a_refresh_whose_table_listing_fails_marks_the_tables_not_listed() {
+    let root = PathBuf::from("/tmp/refresh-unlisted.snxlib");
+    let mut state = LibraryState::default();
+    let library_id = Uuid::now_v7();
+    state
+        .set
+        .mount(Box::new(
+            crate::library::test_adapters::FailingTableListAdapter::new(library_id),
+        ))
+        .expect("mount stub");
+    state.open_libraries.push(OpenLibrary {
+        root: root.clone(),
+        display_name: "Unlisted".into(),
+        library_id,
+        tables: HashMap::new(),
+        cached_components: Vec::new(),
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+    });
+
+    // Off-thread path.
+    let start = state
+        .begin_refresh(&root, RefreshFollowUp::Nothing)
+        .expect("begin");
+    let snapshot = read(&start, &root);
+    assert!(snapshot.is_err());
+    state.finish_refresh(&root, start.generation, snapshot);
+    assert!(tables_not_listed(&state, &root), "async path");
+
+    // Synchronous path follows the same rule.
+    state
+        .library_at_mut(&root)
+        .unwrap()
+        .dangling
+        .tables_not_listed = false;
+    assert!(state.refresh_components(&root).is_err());
+    assert!(tables_not_listed(&state, &root), "sync path");
+}

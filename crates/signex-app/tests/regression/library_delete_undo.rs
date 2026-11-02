@@ -104,6 +104,12 @@ fn symbol_delete_is_its_own_undo_step() {
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::SchLibraryDeleteSymbol(1),
     )));
+    // The container is not inside a mounted library, so its usage is
+    // unknown and the delete asks first (#1845); confirm it.
+    assert_eq!(sym_summary(&app, &path), [("A".into(), 1), ("B".into(), 0)]);
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::SchLibraryDeleteConfirmed(1),
+    )));
     assert_eq!(sym_summary(&app, &path), [("A".into(), 1)]);
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
