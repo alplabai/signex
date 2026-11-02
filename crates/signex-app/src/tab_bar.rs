@@ -157,10 +157,16 @@ pub fn view<'a>(
                     .color(styles::ti(tokens.text_secondary)),
             );
         }
-        let close_x = button(text(CLOSE_GLYPH).size(TAB_FONT_SIZE).color(text_c))
-            .padding([0.0, SP.xs])
-            .style(button::text)
-            .on_press(TabMessage::CloseClicked(i));
+        let close_x = button(
+            container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE))
+                .width(CLOSE_HIT_SIZE)
+                .height(CLOSE_HIT_SIZE)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center),
+        )
+        .padding(0)
+        .style(close_button_style(tokens, text_c))
+        .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
                 .push(text(label).size(TAB_FONT_SIZE).color(text_c))
@@ -269,6 +275,10 @@ const CLOSE_GLYPH: &str = "\u{00d7}";
 
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
+/// Close x glyph size and square hit target, both relative to the tab
+/// text so they scale with the base font size.
+const CLOSE_GLYPH_SIZE: f32 = TAB_FONT_SIZE * 1.25;
+const CLOSE_HIT_SIZE: f32 = TAB_FONT_SIZE * 1.5;
 
 /// Dirty dot diameter as a fraction of the tab font size.
 const DIRTY_DOT_EM: f32 = 0.6;
@@ -335,6 +345,35 @@ pub(crate) fn read_only_tab_paths(
 }
 
 /// Round dot in the theme's error colour, shown before a dirty tab's title.
+/// Style of the per-tab close x: transparent at rest with the tab's text
+/// colour; hover and press add the shared overlay fills and brighten the
+/// glyph to the primary text colour.
+fn close_button_style(
+    tokens: &ThemeTokens,
+    rest_text: iced::Color,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    use crate::styles::tokens::{Overlay, overlay};
+    let bright = styles::ti(tokens.text);
+    let hover = overlay(tokens, Overlay::Hover);
+    let pressed = overlay(tokens, Overlay::Pressed);
+    move |_, status| {
+        let fill = match status {
+            button::Status::Hovered => Some(hover),
+            button::Status::Pressed => Some(pressed),
+            _ => None,
+        };
+        button::Style {
+            background: fill.map(iced::Background::Color),
+            text_color: if fill.is_some() { bright } else { rest_text },
+            border: iced::Border {
+                radius: 3.0.into(),
+                ..iced::Border::default()
+            },
+            ..button::Style::default()
+        }
+    }
+}
+
 fn dirty_dot<'a>(tokens: &ThemeTokens) -> Element<'a, TabMessage> {
     let colour = styles::ti(tokens.error);
     let d = dirty_dot_diameter(TAB_FONT_SIZE);
@@ -564,5 +603,25 @@ mod tests {
         let cut = ellipsize_title("a_very_long_sheet_name_that_overflows.snxsch", 10);
         assert_eq!(cut.chars().count(), 10);
         assert!(cut.ends_with('…'));
+    }
+
+    /// The close x shows hover and pressed feedback in every built-in
+    /// theme (light and dark): the fill and glyph both change from rest.
+    #[test]
+    fn close_button_hover_and_pressed_differ_from_rest() {
+        use iced::widget::button::Status;
+        for &id in signex_types::theme::ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let rest_text = crate::styles::ti(tokens.text_secondary);
+            let style = super::close_button_style(&tokens, rest_text);
+            let theme = iced::Theme::Dark;
+            let active = style(&theme, Status::Active);
+            let hovered = style(&theme, Status::Hovered);
+            let pressed = style(&theme, Status::Pressed);
+            assert!(active.background.is_none(), "{id:?}");
+            assert_ne!(hovered.background, active.background, "{id:?}");
+            assert_ne!(pressed.background, hovered.background, "{id:?}");
+            assert_ne!(hovered.text_color, active.text_color, "{id:?}");
+        }
     }
 }
