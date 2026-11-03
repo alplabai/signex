@@ -1,5 +1,5 @@
 use super::*;
-use signex_types::schematic::{Graphic, HAlign, LibGraphic, VAlign, lower_symbol};
+use signex_types::schematic::{Graphic, HAlign, LibGraphic, Pin, VAlign, lower_symbol};
 
 fn text_graphic(text: &str, unit_hint: f64) -> Graphic {
     Graphic::Text {
@@ -300,7 +300,66 @@ fn a_pin_name_is_inside_the_body_past_the_pin_end() {
         (y - (-5.08 + 2.54 + off)).abs() < 1e-4,
         "TOP hangs inside: {y}"
     );
-    assert_eq!((align.as_str(), v_align.as_str()), ("Center", "Top"));
+    // Vertical names are turned 90 degrees and end at the anchor.
+    assert_eq!((align.as_str(), v_align.as_str()), ("Right", "Center"));
+}
+
+/// #1961 / #662: pin text positions, alignment and turn are the canvas's
+/// lowering, not a second layout.
+#[test]
+fn pin_text_follows_the_shared_pin_label_lowering() {
+    use signex_types::schematic::{LibPin, PinDirection, PinShapeStyle, lower_pin_labels};
+    let mut lib = lib_text();
+    lib.pins.push(LibPin {
+        unit: 0,
+        body_style: 1,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(0.0, 5.08),
+            rotation: 270.0,
+            length: 2.54,
+            name: "TOP".into(),
+            number: "7".into(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    });
+    let sym = Symbol::default();
+    let xform = PageTransform {
+        mm_to_unit: 1.0,
+        translate_x: 0.0,
+        translate_y: 0.0,
+    };
+    let mut out = Vec::new();
+    push_symbol_pins(
+        &mut out,
+        &sym,
+        &lib,
+        &xform,
+        &signex_types::markup::ExpressionEvalContext::default(),
+        None,
+        &SchematicPalette::classic(),
+    );
+    for label in lower_pin_labels(&lib, &sym) {
+        let found = out.iter().any(|e| match e {
+            SvgElement::Text {
+                x,
+                y,
+                text,
+                rotation_deg,
+                ..
+            } => {
+                *text == label.text
+                    && (*x - label.position.x as f32).abs() < 1e-4
+                    && (*y - label.position.y as f32).abs() < 1e-4
+                    && *rotation_deg == label.rotation_deg as f32
+            }
+            _ => false,
+        });
+        assert!(found, "{label:?} missing from {out:?}");
+    }
 }
 
 /// #1858: output pins stroke at the symbol's library width, like the body

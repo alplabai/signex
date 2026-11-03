@@ -35,18 +35,10 @@ fn placed() -> Symbol {
     }
 }
 
-fn texts(labels: &[SymbolPrimitive]) -> Vec<(&str, f64, f64, HAlign)> {
+fn texts(labels: &[PinLabel]) -> Vec<(&str, f64, f64, HAlign)> {
     labels
         .iter()
-        .filter_map(|l| match l {
-            SymbolPrimitive::Text {
-                text,
-                position,
-                h_align,
-                ..
-            } => Some((text.as_str(), position.x, position.y, *h_align)),
-            _ => None,
-        })
+        .map(|l| (l.text.as_str(), l.position.x, l.position.y, l.h_align))
         .collect()
 }
 
@@ -110,4 +102,42 @@ fn mirrored_symbol_flips_the_name_side() {
     let got = texts(&labels);
     let name = got.iter().find(|t| t.0 == "IN").expect("name");
     assert_eq!(name.3, HAlign::Right, "{name:?}");
+}
+
+#[test]
+fn rotated_symbol_turns_text_vertical_with_number_left_of_the_line() {
+    // Pin at the symbol's left, body end 2.54 mm to its right; rotating the
+    // symbol 90 degrees stands it on end.
+    let lib = lib_with_pins(vec![pin("1", "IN", -7.62, 0.0, 0.0)]);
+    let mut sym = placed();
+    sym.rotation = 90.0;
+    let labels = lower_pin_labels(&lib, &sym);
+    let number = labels.iter().find(|l| l.text == "1").expect("number");
+    let name = labels.iter().find(|l| l.text == "IN").expect("name");
+    let line_x = 100.0;
+    assert!(
+        number.position.x < line_x && number.rotation_deg == 90.0,
+        "{number:?}"
+    );
+    assert_eq!(number.v_align, VAlign::Bottom, "{number:?}");
+    // The name runs along the vertical pin axis, past the body end.
+    assert!((name.position.x - line_x).abs() < 1e-6, "{name:?}");
+    assert_eq!(name.rotation_deg, 90.0, "{name:?}");
+    // Tip at y 107.62, body end at 105.08: the name starts just past the
+    // body end and reads upward into the body.
+    assert!(
+        name.position.y < 105.08 && name.h_align == HAlign::Left,
+        "{name:?}"
+    );
+    assert!((number.position.y - 106.35).abs() < 1e-6, "{number:?}");
+}
+
+#[test]
+fn horizontal_pin_text_stays_upright() {
+    let lib = lib_with_pins(vec![pin("1", "IN", -7.62, 0.0, 0.0)]);
+    assert!(
+        lower_pin_labels(&lib, &placed())
+            .iter()
+            .all(|l| l.rotation_deg == 0.0)
+    );
 }

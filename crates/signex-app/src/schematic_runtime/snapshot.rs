@@ -16,6 +16,7 @@ pub fn build_renderer_snapshot(
     let mut labels = Vec::new();
     let mut reference_value_texts = Vec::new();
     let mut parameter_texts = Vec::new();
+    let mut pin_texts = Vec::new();
     let document_family = snapshot.font_family.as_deref();
 
     for wire in &snapshot.wires {
@@ -207,10 +208,10 @@ pub fn build_renderer_snapshot(
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
             if let Some(lib) = snapshot.lib_symbols.get(&symbol.lib_id) {
-                symbol::push_primitives(
+                symbol::push_pin_labels(
                     &signex_types::schematic::lower_pin_labels(lib, symbol),
                     &style,
-                    &mut sink,
+                    &mut pin_texts,
                 );
             }
         }
@@ -417,7 +418,7 @@ pub fn build_renderer_snapshot(
         arcs,
         polygons,
         labels,
-        pin_texts: Vec::new(),
+        pin_texts,
         reference_value_texts,
         parameter_texts,
         overlays: OverlayInputs::default(),

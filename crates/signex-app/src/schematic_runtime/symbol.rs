@@ -5,7 +5,7 @@
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
 use signex_types::schematic::{
-    LibSymbol, SymbolPrimitive, arc_polyline, lower_placed_symbol, primitives_bounds,
+    LibSymbol, PinLabel, SymbolPrimitive, arc_polyline, lower_placed_symbol, primitives_bounds,
 };
 
 /// Half extents of the box a symbol gets when its library graphics are
@@ -263,6 +263,26 @@ pub(super) fn push_primitives(
             }
         }
     }
+}
+
+/// Pin numbers and names of one placed symbol, in the theme's pin colour.
+pub(super) fn push_pin_labels(
+    labels: &[PinLabel],
+    style: &SymbolStyle,
+    pin_texts: &mut Vec<TextInput>,
+) {
+    pin_texts.extend(labels.iter().map(|l| TextInput {
+        content: l.text.clone(),
+        position: [l.position.x as f32, l.position.y as f32],
+        size_mm: l.size as f32,
+        color: to_rgba(style.pin),
+        bold: false,
+        italic: false,
+        family: style.family.clone(),
+        rotation_rad: l.rotation_deg.to_radians() as f32,
+        h_align: l.h_align,
+        v_align: l.v_align,
+    }));
 }
 
 #[cfg(test)]

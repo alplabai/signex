@@ -329,7 +329,7 @@ fn sheet_with_ic_pins(show_numbers: bool, show_names: bool) -> SchematicSheet {
     sheet
 }
 
-fn placed_ic_texts(sheet: &SchematicSheet) -> Vec<String> {
+fn placed_ic_pin_texts(sheet: &SchematicSheet) -> Vec<TextInput> {
     let transform = ScreenTransform {
         offset_x: 400.0,
         offset_y: 400.0,
@@ -340,10 +340,26 @@ fn placed_ic_texts(sheet: &SchematicSheet) -> Vec<String> {
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
     let snap =
         build_renderer_snapshot(sheet, &transform, &colors, bounds, None, Default::default());
-    snap.parameter_texts
+    snap.pin_texts
+}
+
+fn placed_ic_texts(sheet: &SchematicSheet) -> Vec<String> {
+    placed_ic_pin_texts(sheet)
         .into_iter()
         .map(|t| t.content)
         .collect()
+}
+
+#[test]
+fn placed_ic_pin_text_uses_the_pin_colour() {
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let want = to_rgba(to_iced(&colors.pin));
+    let texts = placed_ic_pin_texts(&sheet_with_ic_pins(true, true));
+    assert!(!texts.is_empty() && texts.iter().all(|t| t.color == want));
+    assert!(
+        texts.iter().all(|t| t.rotation_rad == 0.0),
+        "horizontal pins"
+    );
 }
 
 /// #1961: a placed IC drew bare pin lines. Its pin numbers and names are in
