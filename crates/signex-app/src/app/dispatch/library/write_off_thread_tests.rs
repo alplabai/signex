@@ -884,6 +884,12 @@ mod deferred_close_tests;
 #[path = "library_tabs_tests.rs"]
 mod library_tabs_tests;
 
+#[path = "close_primitives_tests.rs"]
+mod close_primitives_tests;
+
+#[path = "close_ownership_tests.rs"]
+mod close_ownership_tests;
+
 // Unix only: the test makes its unreadable file with `chmod 000`.
 #[cfg(unix)]
 #[path = "held_back_tests.rs"]

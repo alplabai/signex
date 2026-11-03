@@ -51,6 +51,8 @@ mod external_edits;
 #[cfg(test)]
 mod grid_window_tests;
 mod lifecycle;
+#[cfg(test)]
+mod missing_mount_tests;
 mod new_component;
 mod new_row;
 mod pricing;
@@ -114,6 +116,7 @@ impl Signex {
                 }
         );
         let task = self.route_library_message(msg);
+        let task = Task::batch([task, self.refresh_components_details_if_stale()]);
         if per_event {
             self.sync_diagnostics_panel_ctx();
             // A part-number keystroke in the preview retitles its tab.
@@ -196,7 +199,9 @@ impl Signex {
                 table,
                 row_id,
             } => self.handle_open_component_row(library_path, table, row_id),
-            LibraryMessage::OpenPrimitiveEditor { path } => self.handle_open_primitive_editor(path),
+            // The Component Preview's Open Symbol / Footprint Editor buttons
+            // share the one open path, stock copy diversion included (#1891).
+            LibraryMessage::OpenPrimitiveEditor { path } => self.handle_open_primitive(path),
             LibraryMessage::EditorEvent {
                 library_path,
                 table,
@@ -236,8 +241,11 @@ impl Signex {
                 result,
             ),
             LibraryMessage::DesignatorsScanned { generation, result } => {
-                self.apply_designator_scan(generation, &result);
-                Task::none()
+                if self.apply_designator_scan(generation, &result) {
+                    self.commit_pending_drop()
+                } else {
+                    Task::none()
+                }
             }
             LibraryMessage::PlacedPart(msg) => self.dispatch_placed_part_message(msg),
             LibraryMessage::SymbolChoiceResolved {
@@ -466,8 +474,51 @@ impl Signex {
             LibraryMessage::ComponentsPanelToggleSection(src) => {
                 self.handle_components_panel_toggle_section(src)
             }
+            LibraryMessage::ComponentsPanelRowPressed(key) => {
+                self.handle_components_panel_row_pressed(key)
+            }
+            LibraryMessage::ComponentsPanelRowRightClicked(key) => {
+                self.handle_components_panel_row_right_clicked(key)
+            }
+            LibraryMessage::ComponentsPanelRowEntered(key) => {
+                self.library.components_panel.hovered = Some(key);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelRowExited(key) => {
+                let panel = &mut self.library.components_panel;
+                if panel.hovered.as_ref() == Some(&key) {
+                    panel.hovered = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelRowMenuDismissed => {
+                self.library.components_panel.row_menu = None;
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelRowMenuPicked(action) => {
+                self.handle_components_panel_row_menu_picked(action)
+            }
+            LibraryMessage::ComponentsPanelSplitDragStarted => {
+                self.handle_layout_drag_started(DragTarget::ComponentsSplit);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelDetailsLoaded {
+                key,
+                generation,
+                result,
+            } => {
+                self.library
+                    .components_panel
+                    .details
+                    .finish(&key, generation, result);
+                Task::none()
+            }
             LibraryMessage::ComponentsPanelSetFilter(value) => {
                 self.library.components_panel.filter = value;
+                Task::none()
+            }
+            LibraryMessage::IdClashNoticesDismissed => {
+                self.library.id_clash_notices.clear();
                 Task::none()
             }
             LibraryMessage::ComponentsPanelAddLibrary(source) => {

@@ -137,7 +137,8 @@ impl DockArea {
                 .on_enter(DockMessage::TabHoverEnter(position, i))
                 .on_exit(DockMessage::TabHoverExit(position, i))
                 .on_press(DockMessage::TabDragStart(position, i))
-                .on_release(DockMessage::TabClick(position, i));
+                .on_release(DockMessage::TabClick(position, i))
+                .on_right_press(DockMessage::TabContextMenuRequested(position, i));
 
             tab_row = tab_row.push(tab);
         }

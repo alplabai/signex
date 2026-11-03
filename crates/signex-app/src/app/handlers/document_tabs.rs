@@ -76,6 +76,15 @@ impl Signex {
                 }
                 Task::done(Message::ContextMenu(ContextMenuMsg::ShowTab(idx)))
             }
+            TabMessage::CloseClicked(idx) => {
+                // Same path as the menu's "Close [filename]". An undocked
+                // window's single tab has no strip index to close.
+                if !is_main {
+                    return Task::none();
+                }
+                self.ui_state.tab_dragging = None;
+                self.handle_tab_context_action(crate::app::TabContextAction::Close(idx))
+            }
             TabMessage::StartDrag(idx) => {
                 // Drag-to-reorder / drag-out-to-detach originates only
                 // from the main tab bar. The single-tab bar inside an
@@ -271,6 +280,14 @@ impl Signex {
         {
             self.warn_if_cascade_owed(p);
             self.document_state.symbol_editors.remove(p);
+            if self
+                .library
+                .pending_symbol_delete
+                .as_ref()
+                .is_some_and(|d| d.path == *p)
+            {
+                self.library.pending_symbol_delete = None;
+            }
             self.document_state.footprint_editors.remove(p);
             self.document_state.mark_document_clean(p);
         }

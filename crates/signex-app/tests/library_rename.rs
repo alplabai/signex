@@ -891,6 +891,7 @@ fn the_primitive_picker_target_follows_the_rename() {
         loose: Vec::new(),
         copy_confirm: None,
         copying: false,
+        opening_library: None,
     });
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 

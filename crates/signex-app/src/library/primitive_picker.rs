@@ -100,14 +100,28 @@ fn list_items(
             };
         }
     }
-    push_loose(&mut items, loose, needle);
+    push_loose(&mut items, state, loose, needle);
     items
 }
 
 /// The symbols of files in no library, one group per file (#1841).
-fn push_loose(items: &mut Vec<ListItem>, loose: &[LooseSymbol], needle: &str) {
+fn push_loose(
+    items: &mut Vec<ListItem>,
+    state: &LibraryState,
+    loose: &[LooseSymbol],
+    needle: &str,
+) {
+    // A library opened since the list was read lists its own symbols.
+    let loose: Vec<&LooseSymbol> = loose
+        .iter()
+        .filter(|s| {
+            s.library
+                .as_deref()
+                .is_none_or(|l| state.library_at(l).is_none())
+        })
+        .collect();
     let mut files: Vec<&std::path::Path> = Vec::new();
-    for symbol in loose {
+    for symbol in &loose {
         if !files.contains(&symbol.file.as_path()) {
             files.push(symbol.file.as_path());
         }
@@ -121,8 +135,7 @@ fn push_loose(items: &mut Vec<ListItem>, loose: &[LooseSymbol], needle: &str) {
             loose
                 .iter()
                 .filter(|s| s.file == file && (needle.is_empty() || contains_ci(&s.name, needle)))
-                .cloned()
-                .map(ListItem::Loose),
+                .map(|s| ListItem::Loose((*s).clone())),
         );
         let count = items.len() - start - 1;
         if count == 0 {
@@ -133,10 +146,24 @@ fn push_loose(items: &mut Vec<ListItem>, loose: &[LooseSymbol], needle: &str) {
             || file.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
+        let owner = loose
+            .iter()
+            .find(|s| s.file == file)
+            .and_then(|s| s.library.as_deref());
         items[start] = ListItem::Header {
-            text: format!("Not in a library: {name}  ({count})"),
+            text: match owner {
+                Some(lib) => format!("In library {} (not open): {name}  ({count})", lib_name(lib)),
+                None => format!("Not in a library: {name}  ({count})"),
+            },
         };
     }
+}
+
+fn lib_name(snxlib: &std::path::Path) -> String {
+    snxlib.file_stem().map_or_else(
+        || snxlib.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 /// Entries to build for `count` list entries at `scroll_y`. The viewport is
@@ -379,11 +406,45 @@ fn copy_confirm_row<'a>(
         .library_path()
         .and_then(|path| state.library_at(path))
         .map_or("this library", |lib| lib.display_name.as_str());
-    let question = format!(
-        "Copy {} into library {library}? The original file stays as it is.",
-        symbol.name
-    );
-    let answers: Element<'_, LibraryMessage> = if picker.copying {
+    let question = match symbol.library.as_deref() {
+        Some(lib) => format!(
+            "{} is in library {}, which is not open. Open it to pick the symbol from there.",
+            symbol.name,
+            lib_name(lib)
+        ),
+        None => format!(
+            "Copy {} into library {library}? The original file stays as it is.",
+            symbol.name
+        ),
+    };
+    let answers: Element<'_, LibraryMessage> = if picker.opening_library.is_some() {
+        row![
+            text("Opening library…").size(TS.body),
+            secondary_btn(
+                "Cancel",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
+                tokens,
+            ),
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else if symbol.library.is_some() {
+        row![
+            secondary_btn(
+                "Open library",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::OpenLibraryConfirmed),
+                tokens,
+            ),
+            secondary_btn(
+                "Cancel",
+                LibraryMessage::PrimitivePicker(PrimitivePickerMsg::CopyDeclined),
+                tokens,
+            ),
+        ]
+        .spacing(SP.s)
+        .into()
+    } else if picker.copying {
         text("Copying…").size(TS.body).into()
     } else {
         row![
@@ -430,6 +491,18 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
             .any(|w| w.eq_ignore_ascii_case(n));
     }
     hay.to_lowercase().contains(needle)
+}
+
+/// The header labels the list shows for `picker`, for tests.
+#[cfg(test)]
+pub(crate) fn header_labels(state: &LibraryState, picker: &PrimitivePickerState) -> Vec<String> {
+    list_items(state, picker.kind, "", &picker.loose)
+        .into_iter()
+        .filter_map(|item| match item {
+            ListItem::Header { text } => Some(text),
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

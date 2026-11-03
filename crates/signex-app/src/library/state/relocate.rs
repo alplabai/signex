@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use signex_library::LibraryError;
 
-use super::{EditorAddress, LibraryState, PrimitivePickerTarget};
+use super::{ComponentsPanelRowKey, EditorAddress, LibraryState, PrimitivePickerTarget};
 
 /// `path` moved from under `old` to under `new`, or `None` when it does
 /// not live at or below `old`. A library's own key equals `old`; the
@@ -27,6 +27,10 @@ fn rebased_or_same(path: &Path, old: &Path, new: &Path) -> PathBuf {
 
 fn rebase_address(address: &mut EditorAddress, old: &Path, new: &Path) {
     address.library_path = rebased_or_same(&address.library_path, old, new);
+}
+
+fn rebase_key(key: &mut ComponentsPanelRowKey, old: &Path, new: &Path) {
+    key.library_path = rebased_or_same(&key.library_path, old, new);
 }
 
 fn rebase_picker_target(target: &mut PrimitivePickerTarget, old: &Path, new: &Path) {
@@ -110,6 +114,17 @@ impl LibraryState {
             for address in &mut confirm.dirty_editors {
                 rebase_address(address, old, new);
             }
+            // Drafts move like `rekey_library_documents` moves them: under
+            // the library itself (folder layout), else in its parent folder.
+            for path in &mut confirm.dirty_paths {
+                *path = match rebase_path(path, old, new) {
+                    Some(moved) => moved,
+                    None => match (old.parent(), new.parent()) {
+                        (Some(old_dir), Some(new_dir)) => rebased_or_same(path, old_dir, new_dir),
+                        _ => path.clone(),
+                    },
+                };
+            }
         }
         if let Some(picker) = self.primitive_picker.as_mut() {
             rebase_picker_target(&mut picker.target, old, new);
@@ -122,6 +137,31 @@ impl LibraryState {
         if let Some(options) = self.document_options.as_mut() {
             options.library_path = rebased_or_same(&options.library_path, old, new);
         }
+        self.rekey_panel_state(old, new);
         Ok(())
+    }
+
+    /// Move what the Components and Library panels hold for the library at
+    /// `old` (selection, details, row menu, drag, hover, expand state and
+    /// the last click) to `new`.
+    fn rekey_panel_state(&mut self, old: &Path, new: &Path) {
+        let panel = &mut self.components_panel;
+        for key in [
+            panel.selected.as_mut(),
+            panel.details.key.as_mut(),
+            panel.hovered.as_mut(),
+            panel.row_menu.as_mut().map(|m| &mut m.key),
+            panel.drag.as_mut().map(|d| &mut d.key),
+            self.panel_selected.as_mut(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            rebase_key(key, old, new);
+        }
+        self.panel_last_click.rekey(|key| rebase_key(key, old, new));
+        if self.panel_expanded.remove(old) {
+            self.panel_expanded.insert(new.to_path_buf());
+        }
     }
 }

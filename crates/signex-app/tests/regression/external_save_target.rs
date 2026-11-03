@@ -544,6 +544,7 @@ fn ask_exclude_and_save(app: &mut Signex, path: &Path) {
         display_name: path.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     let _ = app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::ExcludeFromProject,

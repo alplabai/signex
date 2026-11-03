@@ -80,6 +80,7 @@ fn delete_dialog(target: &Path) -> RemoveDialogState {
         display_name: target.file_name().unwrap().to_string_lossy().into_owned(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     }
 }
 

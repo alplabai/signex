@@ -39,12 +39,16 @@ use crate::styles::Spacing;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: Spacing = Spacing::DEFAULT;
 
+pub mod details;
 pub mod global_prefs;
+pub mod split;
 pub mod stock;
 
 const PANEL_TEXT_SIZE: f32 = 11.0;
 const SECTION_HEADER_TEXT_SIZE: f32 = 12.0;
 const ROW_TEXT_SIZE: f32 = 10.0;
+/// Pointer travel that turns a row press into a drag.
+pub(crate) const DRAG_THRESHOLD: f32 = ROW_TEXT_SIZE;
 /// Most rows built per library per frame; the rest are summarised by a
 /// "N more — refine search" row so a huge library cannot stall the view.
 const MAX_ROWS_PER_LIBRARY: usize = 200;
@@ -89,6 +93,9 @@ pub fn view<'a>(
     // ── Three collapsible source sections ────────────────────────
     let mut col: Column<'a, LibraryMessage> =
         column![].spacing(0).width(Length::Fill).push(filter_row);
+    if !state.id_clash_notices.is_empty() {
+        col = col.push(id_clash_notices(state, tokens));
+    }
 
     // Derive Project library paths from the panel context. Each
     // `ProjectPanelInfo.libraries[].root` is the absolute, resolved
@@ -143,9 +150,54 @@ pub fn view<'a>(
         );
     }
 
-    container(crate::panels::panel_scrollable(col).height(Length::Fill))
-        .width(Length::Fill)
+    // List (fixed height) | draggable divider | details (the rest).
+    let divider = iced::widget::mouse_area(
+        container(Space::new())
+            .height(split::HANDLE_HEIGHT)
+            .width(Length::Fill)
+            .style(crate::styles::resize_handle(tokens)),
+    )
+    .interaction(iced::mouse::Interaction::ResizingVertically)
+    .on_press(LibraryMessage::ComponentsPanelSplitDragStarted);
+
+    column![
+        container(crate::panels::panel_scrollable(col))
+            .height(state.components_panel.list_height)
+            .width(Length::Fill),
+        divider,
+        container(details::view(
+            &state.components_panel,
+            tokens,
+            &ctx.canvas_colors,
+            ctx.device_px_per_logical_px,
+        ))
         .height(Length::Fill)
+        .width(Length::Fill),
+    ]
+    .spacing(0)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+/// Non-modal list of libraries refused or closed for sharing a library id
+/// with a stronger source (#1908), with one Dismiss button.
+fn id_clash_notices<'a>(
+    state: &'a LibraryState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let mut notices: Column<'a, LibraryMessage> = column![].spacing(SP.xs);
+    for notice in &state.id_clash_notices {
+        notices = notices.push(text(notice.message()).size(ROW_TEXT_SIZE).color(text_c));
+    }
+    let dismiss = button(text("Dismiss").size(ROW_TEXT_SIZE).color(text_c))
+        .padding([SP.xs, SP.m])
+        .on_press(LibraryMessage::IdClashNoticesDismissed)
+        .style(crate::styles::menu_item(tokens));
+    container(notices.push(dismiss))
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
         .into()
 }
 
@@ -303,9 +355,7 @@ fn component_row_label(internal_pn: &str, mpn: &str) -> String {
 
 /// Render one mounted library inside its source section: a small
 /// header row with the library name + a row count, then a flat list
-/// of every component matching the panel-wide filter. Clicking a row
-/// fires `LibraryMessage::OpenComponentRow` so the existing Component
-/// Preview tab opens — same flow the project tree uses.
+/// of every component matching the panel-wide filter.
 fn view_library_block<'a>(
     lib: &'a OpenLibrary,
     panel: &'a crate::library::state::ComponentsPanelState,
@@ -314,7 +364,8 @@ fn view_library_block<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let hover_c = crate::styles::ti(tokens.hover);
+    let tint = crate::styles::tokens::selection_tint(tokens);
+    let hover = crate::styles::tokens::overlay(tokens, crate::styles::tokens::Overlay::Hover);
 
     let mut col: Column<'a, LibraryMessage> = column![].spacing(0);
 
@@ -345,14 +396,20 @@ fn view_library_block<'a>(
         let Some(r) = lib.tables.get(table).and_then(|t| t.get(index)) else {
             continue;
         };
-        col = col.push(view_row_button(
-            lib.root.clone(),
-            table.to_owned(),
-            r,
-            text_c,
+        let key = crate::library::state::ComponentsPanelRowKey {
+            library_path: lib.root.clone(),
+            table: table.to_owned(),
+            row_id: signex_library::RowId::from_uuid(r.row_id),
+        };
+        let selected = panel.selected.as_ref() == Some(&key);
+        let hovered = panel.hovered.as_ref() == Some(&key);
+        let colors = RowColors {
+            text: text_c,
             muted,
-            hover_c,
-        ));
+            tint,
+            hover,
+        };
+        col = col.push(view_row_button(key, r, selected, hovered, colors));
     }
 
     if matched > MAX_ROWS_PER_LIBRARY {
@@ -383,28 +440,37 @@ fn view_library_block<'a>(
     col.into()
 }
 
-/// One row — the label button fires `OpenComponentRow` on click; the
-/// trailing "Place" button fires `ComponentsPanelPlace` (#1160). Mirrors the
-/// row layout of the existing legacy Components panel so users see
-/// the same `(internal_pn — mpn)  manufacturer` shape.
-fn view_row_button<'a>(
-    library_path: PathBuf,
-    table: String,
-    row_data: &'a ComponentRow,
-    text_c: Color,
+/// One row: `(internal_pn — mpn)  manufacturer`. A press selects it and
+/// arms a drag onto the schematic; a right-click selects it and opens its
+/// menu (Place / Open). The row itself never opens a tab.
+/// The theme colours a Components panel row is drawn with.
+#[derive(Debug, Clone, Copy)]
+struct RowColors {
+    text: Color,
     muted: Color,
-    hover_c: Color,
+    /// Selection fill.
+    tint: Color,
+    /// Hover fill.
+    hover: Color,
+}
+
+fn view_row_button<'a>(
+    key: crate::library::state::ComponentsPanelRowKey,
+    row_data: &'a ComponentRow,
+    selected: bool,
+    hovered: bool,
+    colors: RowColors,
 ) -> Element<'a, LibraryMessage> {
-    let row_id = signex_library::RowId::from_uuid(row_data.row_id);
+    let RowColors {
+        text: text_c,
+        muted,
+        tint,
+        hover,
+    } = colors;
     let label_left = component_row_label(row_data.internal_pn.as_str(), &row_data.primary_mpn.mpn);
     let label_right = row_data.primary_mpn.manufacturer.clone();
-    let place = LibraryMessage::ComponentsPanelPlace {
-        library_path: library_path.clone(),
-        table: table.clone(),
-        row_id,
-    };
 
-    let label_button = button(
+    let content = container(
         row![
             text(label_left)
                 .size(ROW_TEXT_SIZE)
@@ -421,47 +487,20 @@ fn view_row_button<'a>(
     )
     .padding([SP.xs, 28.0])
     .width(Length::Fill)
-    .on_press(LibraryMessage::OpenComponentRow {
-        library_path,
-        table,
-        row_id,
-    })
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            text_color: text_c,
-            border: Border::default(),
-            ..iced::widget::button::Style::default()
-        }
+    .style(move |_: &Theme| container::Style {
+        background: if selected {
+            Some(Background::Color(tint))
+        } else {
+            hovered.then_some(Background::Color(hover))
+        },
+        ..container::Style::default()
     });
 
-    let place_button = button(text("Place").size(ROW_TEXT_SIZE).color(text_c))
-        .padding([ROW_TEXT_SIZE * 0.2, ROW_TEXT_SIZE * 0.8])
-        .on_press(place)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
-                _ => None,
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: text_c,
-                border: Border {
-                    color: muted,
-                    width: 1.0,
-                    radius: (ROW_TEXT_SIZE * 0.3).into(),
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
-
-    row![label_button, place_button]
-        .align_y(iced::Alignment::Center)
-        .spacing(ROW_TEXT_SIZE * 0.4)
+    iced::widget::mouse_area(content)
+        .on_press(LibraryMessage::ComponentsPanelRowPressed(key.clone()))
+        .on_right_press(LibraryMessage::ComponentsPanelRowRightClicked(key.clone()))
+        .on_enter(LibraryMessage::ComponentsPanelRowEntered(key.clone()))
+        .on_exit(LibraryMessage::ComponentsPanelRowExited(key))
         .into()
 }
 
@@ -561,8 +600,8 @@ mod tests {
             )
         }
         let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
-        let places = texts.iter().filter(|t| t.text == "Place").count();
-        assert_eq!(places, 200);
+        let rows = texts.iter().filter(|t| t.text.starts_with("PN-")).count();
+        assert_eq!(rows, 200);
         crate::layout_probe::find(&texts, "50 more — refine search");
 
         // Narrowing the filter below the cap removes the summary row.
@@ -570,7 +609,10 @@ mod tests {
         state.sync_view_caches();
         let texts = crate::layout_probe::lay_out_texts(build(&state, &tokens), window);
         assert!(texts.iter().all(|t| !t.text.contains("refine search")));
-        assert_eq!(texts.iter().filter(|t| t.text == "Place").count(), 11);
+        assert_eq!(
+            texts.iter().filter(|t| t.text.starts_with("PN-")).count(),
+            11
+        );
     }
 
     #[test]
@@ -590,10 +632,11 @@ mod tests {
         );
     }
 
-    /// Click the row's "Place" button the way the runtime would and check
-    /// the message it publishes. Dropping `on_press` leaves it empty.
+    /// Press and right-click a row the way the runtime would. A row has no
+    /// buttons: no "Place" / "Open" text, a press selects, a right-click
+    /// asks for the menu.
     #[test]
-    fn clicking_a_row_place_button_publishes_the_place_message() {
+    fn a_row_has_no_buttons_and_publishes_press_and_right_click() {
         use iced::advanced::clipboard;
         use iced::{Event, Point, Size, mouse};
         use iced_runtime::UserInterface;
@@ -604,46 +647,71 @@ mod tests {
         let window = Size::new(600.0, 200.0);
         let build = || {
             view_row_button(
-                PathBuf::from("lib.snxlib"),
-                "Passives".to_owned(),
+                crate::library::state::ComponentsPanelRowKey {
+                    library_path: PathBuf::from("lib.snxlib"),
+                    table: "Passives".to_owned(),
+                    row_id,
+                },
                 &row,
-                Color::WHITE,
-                Color::WHITE,
-                Color::BLACK,
+                false,
+                false,
+                RowColors {
+                    text: Color::WHITE,
+                    muted: Color::WHITE,
+                    tint: Color::BLACK,
+                    hover: Color::BLACK,
+                },
             )
         };
 
         let texts = crate::layout_probe::lay_out_texts(build(), window);
-        let place = crate::layout_probe::find(&texts, "Place").bounds;
-        let at = Point::new(place.x + place.width / 2.0, place.y + place.height / 2.0);
+        assert!(texts.iter().all(|t| t.text != "Place" && t.text != "Open"));
+        let label = crate::layout_probe::find(&texts, "R0805_10k — ERA-3AED103V").bounds;
+        let at = Point::new(label.x + label.width / 2.0, label.y + label.height / 2.0);
 
-        let mut renderer = crate::layout_probe::headless_renderer();
-        let mut ui = UserInterface::build(build(), window, Cache::default(), &mut renderer);
-        let mut published = Vec::new();
-        let _ = ui.update(
-            &[
-                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            ],
-            mouse::Cursor::Available(at),
-            &mut renderer,
-            &mut clipboard::Null,
-            &mut published,
-        );
+        let publish = |events: &[Event]| {
+            let mut renderer = crate::layout_probe::headless_renderer();
+            let mut ui = UserInterface::build(build(), window, Cache::default(), &mut renderer);
+            let mut published = Vec::new();
+            let _ = ui.update(
+                events,
+                mouse::Cursor::Available(at),
+                &mut renderer,
+                &mut clipboard::Null,
+                &mut published,
+            );
+            // Hover enter/exit are not clicks.
+            published.retain(|m| {
+                !matches!(
+                    m,
+                    LibraryMessage::ComponentsPanelRowEntered(_)
+                        | LibraryMessage::ComponentsPanelRowExited(_)
+                )
+            });
+            published
+        };
 
-        assert_eq!(published.len(), 1, "one click, one message");
-        match &published[0] {
-            LibraryMessage::ComponentsPanelPlace {
-                library_path,
-                table,
-                row_id: id,
-            } => {
-                assert_eq!(library_path, &PathBuf::from("lib.snxlib"));
-                assert_eq!(table, "Passives");
-                assert_eq!(*id, row_id);
+        let pressed = publish(&[Event::Mouse(mouse::Event::ButtonPressed(
+            mouse::Button::Left,
+        ))]);
+        assert_eq!(pressed.len(), 1, "one press, one message");
+        match &pressed[0] {
+            LibraryMessage::ComponentsPanelRowPressed(key) => {
+                assert_eq!(key.library_path, PathBuf::from("lib.snxlib"));
+                assert_eq!(key.table, "Passives");
+                assert_eq!(key.row_id, row_id);
             }
-            _ => panic!("expected ComponentsPanelPlace"),
+            _ => panic!("expected ComponentsPanelRowPressed"),
         }
+
+        let right = publish(&[Event::Mouse(mouse::Event::ButtonPressed(
+            mouse::Button::Right,
+        ))]);
+        assert_eq!(right.len(), 1);
+        assert!(matches!(
+            right[0],
+            LibraryMessage::ComponentsPanelRowRightClicked(_)
+        ));
     }
 
     #[test]

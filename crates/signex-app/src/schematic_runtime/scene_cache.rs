@@ -25,6 +25,9 @@ use crate::scene_generation::next_scene_generation;
 /// What a built scene depends on, captured when it was built.
 pub(crate) struct SceneInputs {
     scale: f32,
+    /// The window's display scale: the replay's stroke floor and snap depend
+    /// on it, so a move to another display is a different input (#1887).
+    device_px_per_logical_px: f32,
     offset: (f32, f32),
     viewport: iced::Size,
     colors: CanvasColors,
@@ -159,6 +162,7 @@ impl SceneInputs {
     ) -> Self {
         Self {
             scale: transform.scale,
+            device_px_per_logical_px: transform.device_px_per_logical_px,
             offset: (transform.offset_x, transform.offset_y),
             viewport,
             colors: *colors,
@@ -178,6 +182,7 @@ impl SceneInputs {
         overrides: SceneOverrides<'_>,
     ) -> bool {
         (self.scale - transform.scale).abs() < 0.0001
+            && self.device_px_per_logical_px == transform.device_px_per_logical_px
             && self.viewport == viewport
             && self.colors == *colors
             && self.focus.as_ref() == focus_set

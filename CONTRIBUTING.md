@@ -98,6 +98,13 @@ The release packages for Linux are built on Ubuntu 22.04 so they need glibc
 2.35 or newer (`scripts/check_glibc_ceiling.sh`, #1688); a build from source
 links against your own glibc.
 
+### Editing the bundled stock library
+
+Run a build from your checkout with `SIGNEX_EDIT_STOCK=1` to edit
+`assets/stock-library/` in Signex itself; the saved files are what ships.
+The committed files are the source of truth, not the seed generator. See
+[docs/STOCK_LIBRARY.md](docs/STOCK_LIBRARY.md).
+
 ### Verify Your Changes
 
 ```bash
@@ -408,6 +415,9 @@ them, so the rest is on the author.
   `crates/signex-app/src/app/command/bridge.rs`, a ratchet that only shrinks.
   Ids are public API: never renamed or removed without an alias. A command is
   not a `Message`.
+- **Decided behaviour** ([docs/DECISIONS.md](docs/DECISIONS.md)): golden tests
+  pin the menus, command catalog and built-in shortcuts; changing one needs a
+  maintainer decision that names it.
 - **Deferred work**
   ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
   owed work is explicit model state. Every boundary (save, undo, redo,

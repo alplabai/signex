@@ -148,6 +148,7 @@ fn filled_library_arc_draws_a_filled_polygon() {
         offset_x: 400.0,
         offset_y: 400.0,
         scale: 10.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
@@ -172,6 +173,7 @@ fn snapshot_draws_the_library_body_not_the_placeholder() {
         offset_x: 400.0,
         offset_y: 400.0,
         scale: 10.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
@@ -200,6 +202,7 @@ fn snapshot_marks_a_missing_library_entry_with_its_lib_id() {
         offset_x: 400.0,
         offset_y: 400.0,
         scale: 10.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     };
     let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
     let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);

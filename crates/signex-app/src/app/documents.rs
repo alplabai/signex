@@ -326,6 +326,11 @@ pub struct SymbolDocument {
     /// recorded; populated by `SymbolUndo` so the user can step
     /// forward again after undoing.
     pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// Bumped by every history change: commit, undo, redo and a coalesced
+    /// field edit. Unlike the stack depths it moves at `HISTORY_DEPTH` and
+    /// while typing in one field, so it tells "the document changed". Starts
+    /// at a per-editor base from `DocumentState::next_symbol_history_base`.
+    pub history_generation: u64,
     /// The field the last `record_edit` changed, tagged with the symbol
     /// it belonged to, so a run of keystrokes in one text input shares
     /// one undo step. Cleared by every other history push, undo and redo.
@@ -426,6 +431,7 @@ impl SymbolDocument {
             placement_paused: false,
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
+            history_generation: 0,
             last_edit_key: None,
             mid_drag: false,
             graphic_fill_picker: None,
@@ -609,8 +615,14 @@ impl FootprintDocument {
 
     fn build(path: PathBuf, mut file: signex_library::FootprintFile, log_repairs: bool) -> Self {
         let active_idx = 0;
-        let baseline = file.clone();
+        let mut baseline = file.clone();
         let repaired = Self::take_load_repairs(&path, &mut file, log_repairs);
+        crate::library::editor::footprint::legacy_silk::recover_legacy_silk(
+            &path,
+            &mut file,
+            &mut baseline,
+            log_repairs,
+        );
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
             &file.footprints[active_idx],
         );
@@ -843,6 +855,9 @@ impl FootprintDocument {
         self.state.selected_pad = snap.selected_pad;
         self.state.selected_sketch = snap.selected_sketch;
         self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
+        // Bakes shift hand-entry indices and the snapshot keeps no silk
+        // selection, so a stale index would point at another entry.
+        self.state.clear_silk_selection();
         self.canvas_cache.clear();
         self.mark_dirty();
         // The sketch was just replaced: a drag solve still in flight ran on

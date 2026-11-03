@@ -25,6 +25,7 @@ impl SchematicCanvas<'_> {
             offset_x: cam.offset.x,
             offset_y: cam.offset.y,
             scale: cam.scale,
+            device_px_per_logical_px: self.prefs.device_px_per_logical_px,
         };
         // #632 — this used to republish the camera into a
         // `live_camera: Cell<(f32, f32, f32)>` on every frame so `view` could
@@ -90,6 +91,7 @@ impl SchematicCanvas<'_> {
             offset_x: cam.offset.x,
             offset_y: cam.offset.y,
             scale: cam.scale,
+            device_px_per_logical_px: self.prefs.device_px_per_logical_px,
         };
         let bounds = crate::schematic_runtime::frame_local_bounds(bounds);
         let focus_set = self.auto_focus_set();
@@ -378,6 +380,7 @@ impl SchematicCanvas<'_> {
                     offset_x: cam.offset.x,
                     offset_y: cam.offset.y,
                     scale: cam.scale,
+                    device_px_per_logical_px: self.prefs.device_px_per_logical_px,
                 };
                 crate::schematic_runtime::selection::draw_selection_overlay(
                     frame,

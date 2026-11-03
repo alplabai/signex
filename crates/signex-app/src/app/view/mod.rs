@@ -138,8 +138,15 @@ impl Signex {
                         *row_id,
                     );
                     if let Some(editor) = self.library.editors.get(&address) {
-                        crate::library::editor::view(editor, &self.library, tokens, address)
-                            .map(Message::Library)
+                        crate::library::editor::view(
+                            editor,
+                            &self.library,
+                            tokens,
+                            &self.document_state.panel_ctx.canvas_colors,
+                            self.ui_state.device_px_per_logical_px(window_id),
+                            address,
+                        )
+                        .map(Message::Library)
                     } else {
                         // Window mapping exists but the editor state
                         // has been dropped (rare race during teardown
@@ -201,11 +208,7 @@ impl Signex {
         let menu_ctx = crate::menu_bar::MenuContext {
             commands: self.command_context(Some(window_id)),
             has_project: document.active_project.is_some(),
-            // Secondary windows (detached modal, undocked tab) borrow
-            // the main window's scale. Good enough until per-window
-            // scale tracking lands — it's only wrong if the user drags
-            // a secondary window onto a monitor with a different DPI.
-            scale_factor: crate::ui_scale::render_scale(ui.main_window_scale, ui.ui_scale),
+            scale_factor: ui.device_px_per_logical_px(window_id),
             active_keymap: Some(std::sync::Arc::clone(&ui.active_keymap)),
             recent_projects: ui.recent_projects.entries(),
             open_panels: self.open_panels(),
@@ -506,8 +509,15 @@ impl Signex {
                 editor_id.row_id,
             );
             return if let Some(editor) = self.library.editors.get(&address) {
-                crate::library::editor::view(editor, &self.library, tokens, address)
-                    .map(Message::Library)
+                crate::library::editor::view(
+                    editor,
+                    &self.library,
+                    tokens,
+                    &self.document_state.panel_ctx.canvas_colors,
+                    self.ui_state.device_px_per_logical_px(window_id),
+                    address,
+                )
+                .map(Message::Library)
             } else {
                 container(
                     column![
@@ -524,12 +534,12 @@ impl Signex {
             };
         }
 
-        // Standalone primitive editor tabs. `.snxsym` / `.snxfpt`
-        // open as main-window document tabs alongside `.snxsch` /
-        // `.snxpcb`. Lookup is path-keyed via
-        // `DocumentState.symbol_editors` / `footprint_editors`.
-        if is_main
-            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+        // Standalone primitive editor and Library Browser tabs, in the main
+        // window or in the undocked window of that tab (#1818). Lookup is
+        // path-keyed via `DocumentState.symbol_editors` / `footprint_editors`.
+        if let Some(active_tab) = self
+            .document_state
+            .tab_shown_in_window(window_id, &self.ui_state)
         {
             if let Some(path) = active_tab.kind.as_symbol_editor()
                 && let Some(editor) = self.document_state.symbol_editors.get(path)
@@ -547,7 +557,11 @@ impl Signex {
                     .map(|lib| lib.display)
                     .unwrap_or_default();
                 return crate::library::editor::standalone::view_symbol(
-                    editor, panel_ctx, display, path,
+                    editor,
+                    panel_ctx,
+                    display,
+                    path,
+                    self.ui_state.device_px_per_logical_px(window_id),
                 )
                 .map(Message::Library);
             }
@@ -609,7 +623,7 @@ impl Signex {
             let slot = self.interaction_state.canvas_for_window(window_id);
             let prefs = crate::canvas::CanvasViewPrefs {
                 placement: self.placement_ghost_for_window(window_id),
-                ..self.canvas_view_prefs()
+                ..self.canvas_view_prefs(window_id)
             };
             let base: Element<'_, Message> = if crate::feature_flags::SCHEMATIC_GPU_RENDER_ENABLED {
                 crate::canvas::gpu_mount::view(slot, prefs)

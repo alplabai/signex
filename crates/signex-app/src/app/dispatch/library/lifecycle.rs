@@ -25,7 +25,24 @@ impl Signex {
     /// Result of the `rfd` directory pick — mount the library at `path`,
     /// routing any open error into the recovery flow.
     pub(super) fn handle_open_library_at(&mut self, path: std::path::PathBuf) -> Task<Message> {
-        if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
+        self.open_library_at_as(path, false)
+    }
+
+    /// [`Self::handle_open_library_at`]; `as_project` ranks `path` as a
+    /// project library even though no project lists it yet (Locate Library
+    /// repoints the entries only after the mount).
+    pub(super) fn open_library_at_as(
+        &mut self,
+        path: std::path::PathBuf,
+        as_project: bool,
+    ) -> Task<Message> {
+        let mut project_paths = self.open_project_library_paths();
+        if as_project {
+            project_paths.push(path.clone());
+        }
+        if let Err(e) =
+            commands::open_library_among(&mut self.library, path.clone(), &project_paths)
+        {
             tracing::warn!(target: "signex::library", error = %e, path = %path.display(), "open_library failed");
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
@@ -35,6 +52,39 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// Every library path the open projects list.
+    pub(super) fn open_project_library_paths(&self) -> Vec<std::path::PathBuf> {
+        self.document_state
+            .projects
+            .iter()
+            .flat_map(|project| {
+                project
+                    .data
+                    .libraries
+                    .iter()
+                    .map(|e| project.data.resolve_library_path(e))
+            })
+            .collect()
+    }
+
+    /// The open project that lists `path` as a library, if any.
+    fn owning_project_of_library(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<crate::app::state::ProjectId> {
+        self.document_state
+            .projects
+            .iter()
+            .find(|project| {
+                project
+                    .data
+                    .libraries
+                    .iter()
+                    .any(|e| project.data.resolve_library_path(e) == path)
+            })
+            .map(|project| project.id)
     }
 
     /// A `.snxlib` mount prepared off the UI thread has landed — issue
@@ -55,10 +105,12 @@ impl Signex {
     ///    panicking because a dropped mount is a stale cache, not a
     ///    corrupt one.
     ///
-    /// A prepare error only warns, which is exactly what both converted
-    /// call sites did synchronously. The `rfd` directory-pick path
-    /// (`handle_open_library_at`) is deliberately still synchronous and
-    /// keeps routing its errors into the recovery flow.
+    /// A `Silent` mount opens the Library Missing dialog only when the
+    /// `.snxlib` is gone and the path is a library of an open project;
+    /// every other `Silent` failure is logged (#532). An `OpenBrowserTab`
+    /// mount routes every recoverable error to its dialog and raises a
+    /// card for the rest. The synchronous `rfd` directory-pick path
+    /// (`handle_open_library_at`) always routes and otherwise raises a card.
     pub(super) fn handle_mount_finished(
         &mut self,
         path: std::path::PathBuf,
@@ -70,6 +122,7 @@ impl Signex {
                 path = %path.display(),
                 "mount_finished: no longer pending (closed while preparing); discarding"
             );
+            self.picker_mount_settled(&path, Some("cancelled".into()));
             return Task::none();
         };
         let Some(result) = prepared.take() else {
@@ -78,6 +131,7 @@ impl Signex {
                 path = %path.display(),
                 "mount_finished: payload already taken; library not mounted"
             );
+            self.picker_mount_settled(&path, Some("cancelled".into()));
             return Task::none();
         };
         // Raised only for a mount the user asked for by name (#532).
@@ -85,23 +139,57 @@ impl Signex {
         // project's libraries — popping a blocking card there would
         // greet the user with one modal per stale path at startup, for
         // an operation they never invoked.
-        let mut report = |path: &std::path::Path, reason: &str| {
-            let error = anyhow::anyhow!("could not open library {}: {reason}", path.display());
-            crate::diagnostics::log_error("Failed to mount library", &error);
-            if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
-                self.document_state.error_notice =
-                    Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
-            }
-        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        let report =
+            |this: &mut Self, path: &std::path::Path, err: &signex_library::LibraryError| {
+                this.picker_mount_settled(path, Some(err.to_string()));
+                let error = anyhow::anyhow!("could not open library {}: {err}", path.display());
+                // Lead with the library name: the Messages panel cuts long lines.
+                crate::diagnostics::log_error(&format!("Failed to mount library {name}"), &error);
+                // A background mount only logs, except a project library whose
+                // file is gone: that gets Library Missing (#1846). Global and
+                // stock libraries, and git trouble, never pop a dialog at
+                // startup (#532). A mount the user asked for routes fully.
+                let silent_missing_owner = match intent {
+                    crate::library::mount::MountIntent::OpenBrowserTab => None,
+                    crate::library::mount::MountIntent::Silent => {
+                        if matches!(err, signex_library::LibraryError::LibraryFileMissing { .. })
+                            && !this.library.is_read_only_target(path)
+                        {
+                            this.owning_project_of_library(path)
+                        } else {
+                            None
+                        }
+                    }
+                };
+                // Several missing libraries queue their dialogs (#1897).
+                if let Some(owner) = silent_missing_owner {
+                    this.library.raise_missing_library(path, owner);
+                    return;
+                }
+                let routable = matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab);
+                if routable && route_open_error(&mut this.library, path, err) {
+                    return;
+                }
+                if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
+                    this.document_state.error_notice =
+                        Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
+                }
+            };
         match result {
             Ok(prepared) => {
                 let library_id = prepared.entry.library_id;
                 let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
-                if let Err(e) = self.library.mount_prepared(prepared) {
-                    report(&path, &e.to_string());
-                    return Task::none();
+                let project_paths = self.open_project_library_paths();
+                if let Err(e) = self.library.mount_prepared_among(prepared, &project_paths) {
+                    report(self, &path, &e);
+                    return self.readmit_stock_copies(&path);
                 }
                 self.library.drift.check_pending = true;
+                self.picker_mount_settled(&path, None);
                 // Sheets opened before this library mounted skipped its
                 // symbols; scan them now (#1449).
                 if newly_mounted {
@@ -109,8 +197,8 @@ impl Signex {
                 }
             }
             Err(e) => {
-                report(&path, &e);
-                return Task::none();
+                report(self, &path, &e);
+                return self.readmit_stock_copies(&path);
             }
         }
         match intent {
@@ -121,12 +209,22 @@ impl Signex {
         }
     }
 
+    /// When `path` is the bundled stock and its mount failed, mount the
+    /// stock copies refused while it was mounting (#1894).
+    fn readmit_stock_copies(&mut self, path: &std::path::Path) -> Task<Message> {
+        let copies = self.library.readmit_stock_copies_after_failure(path);
+        if copies.is_empty() {
+            return Task::none();
+        }
+        crate::library::mount::spawn_pending_mounts(copies)
+    }
+
     /// Close an open library — diverts to the confirm modal when any
     /// Component Preview editor against it is dirty, so the user can Save
     /// All / Discard All / Cancel rather than lose the edits silently.
     pub(crate) fn handle_close_library(&mut self, path: std::path::PathBuf) -> Task<Message> {
         let dirty = self.library.dirty_editors_for_library(&path);
-        if dirty.is_empty() {
+        if dirty.is_empty() && self.dirty_primitive_paths_of_library(&path).is_empty() {
             self.close_library_or_defer(&path);
         } else {
             self.raise_close_library_prompt(path, dirty);
@@ -152,11 +250,86 @@ impl Signex {
         dirty_editors: Vec<EditorAddress>,
     ) {
         let library_name = self.library.library_label(&library_path);
+        let dirty_paths = self.dirty_primitive_paths_of_library(&library_path);
         self.library.close_library_confirm = Some(CloseLibraryConfirmState {
             library_path,
             library_name,
             dirty_editors,
+            dirty_paths,
         });
+    }
+
+    /// Every `.snxlib` a symbol / footprint draft can belong to: the mounted
+    /// libraries plus those the open projects list. The candidate set for
+    /// [`owning_library`](crate::app::state::scope::owning_library).
+    pub(crate) fn draft_library_roots(&self) -> Vec<std::path::PathBuf> {
+        let mut roots: Vec<std::path::PathBuf> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| lib.root.clone())
+            .collect();
+        for project in &self.document_state.projects {
+            for entry in &project.data.libraries {
+                roots.push(project.data.resolve_library_path(entry));
+            }
+        }
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
+    /// The case rule that decides which library owns the draft at `path`:
+    /// the one rule every prompt uses, so a draft has one owner in all of
+    /// them on a volume that mixes case rules.
+    pub(crate) fn draft_fold(&self, path: &std::path::Path) -> crate::app::state::CaseFold {
+        self.identity_decision(path).fold
+    }
+
+    /// [`Self::draft_fold`] for every dirty draft.
+    pub(crate) fn dirty_draft_folds(
+        &self,
+    ) -> std::collections::HashMap<std::path::PathBuf, crate::app::state::CaseFold> {
+        self.document_state
+            .dirty_primitive_paths()
+            .map(|path| {
+                let fold = self.draft_fold(&path);
+                (path, fold)
+            })
+            .collect()
+    }
+
+    /// Dirty symbol and footprint drafts the library at `root` could own,
+    /// sorted. Only mounted libraries (and `root`) compete: a library an open
+    /// project lists but nobody mounted must not take a draft away from the
+    /// one being closed. A draft tied between libraries of one folder is
+    /// listed for each of them.
+    pub(crate) fn dirty_primitive_paths_of_library(
+        &self,
+        root: &std::path::Path,
+    ) -> Vec<std::path::PathBuf> {
+        use crate::app::state::scope::{owning_libraries, path_key_with};
+        let mut roots: Vec<std::path::PathBuf> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| lib.root.clone())
+            .collect();
+        roots.push(root.to_path_buf());
+        roots.sort();
+        roots.dedup();
+        let mut paths: Vec<std::path::PathBuf> = self
+            .document_state
+            .dirty_primitive_paths()
+            .filter(|path| {
+                let fold = self.draft_fold(path);
+                owning_libraries(path, &roots, fold)
+                    .into_iter()
+                    .any(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
+            })
+            .collect();
+        paths.sort();
+        paths
     }
 
     /// User picked Save All / Discard All / Cancel in the close prompt.
@@ -175,6 +348,24 @@ impl Signex {
                     .cancel_pending_close(&confirm.library_path, "the close prompt was cancelled");
             }
             CloseLibraryChoice::DiscardAll => {
+                // Discard only what the user was shown: an edit made since
+                // is not in the list, so the prompt is raised again with
+                // the live list and nothing is discarded.
+                let live_rows = self
+                    .library
+                    .dirty_editors_for_library(&confirm.library_path);
+                let live_paths = self.dirty_primitive_paths_of_library(&confirm.library_path);
+                if live_rows.iter().any(|r| !confirm.dirty_editors.contains(r))
+                    || live_paths.iter().any(|p| !confirm.dirty_paths.contains(p))
+                {
+                    crate::diagnostics::log_warning(format!(
+                        "Close Library '{}': the unsaved edits changed since the prompt; \
+                         review the list and confirm again. Nothing was discarded",
+                        confirm.library_name
+                    ));
+                    self.raise_close_library_prompt(confirm.library_path, live_rows);
+                    return Task::none();
+                }
                 // Drop the library's editors now: a close that waits for
                 // writes must not find the discarded drafts dirty and ask
                 // again when it comes due.
@@ -182,7 +373,12 @@ impl Signex {
                 self.library
                     .editors
                     .retain(|key, _| key.library_path != *root);
+                let mut tasks = Vec::new();
+                for path in &confirm.dirty_paths {
+                    tasks.push(self.discard_document_draft(path));
+                }
                 self.close_library_or_defer(root);
+                return Task::batch(tasks);
             }
             CloseLibraryChoice::SaveAll => {
                 // Persist every dirty editor's row through the adapter
@@ -193,7 +389,7 @@ impl Signex {
                 // (#110). The user can retry, or pick Discard All.
                 return self.begin_save_all(
                     "Close Library",
-                    &[],
+                    &confirm.dirty_paths,
                     &confirm.dirty_editors,
                     crate::app::contracts::SaveAllNext::CloseLibrary {
                         library_path: confirm.library_path,
