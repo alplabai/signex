@@ -259,9 +259,9 @@ impl Signex {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.04)
             };
             let inner = if on {
-                text("\u{2713}").size(9).color(Color::WHITE)
+                text("\u{2713}").size(TS.caption).color(Color::WHITE)
             } else {
-                text(" ").size(9)
+                text(" ").size(TS.caption)
             };
             let pip = container(inner)
                 .width(14)

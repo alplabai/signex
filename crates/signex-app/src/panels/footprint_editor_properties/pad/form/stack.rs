@@ -238,7 +238,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         // holes, Copper Offset shifts the copper outline relative to
         // the hole centre. Only shown for Multi-Layer pads.
         col = col.push(
-            container(text("Hole Details").size(9).color(muted))
+            container(text("Hole Details").size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
                 .width(Length::Fill),
         );

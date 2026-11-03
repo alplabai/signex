@@ -467,7 +467,7 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let hint = iced::widget::container(
             iced::widget::text("A dialog is open: click to show it, Esc to cancel")
-                .size(12)
+                .size(TS.label)
                 .color(crate::styles::ti(tokens.text_secondary)),
         )
         .width(Length::Fill)

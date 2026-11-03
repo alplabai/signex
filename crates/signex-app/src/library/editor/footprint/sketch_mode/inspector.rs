@@ -200,12 +200,12 @@ fn view_warnings<'a>(
         col = col.push(text("(none)").size(TS.caption).color(muted));
     } else {
         for w in editor.state.solve_warnings.iter().take(8) {
-            col = col.push(text(w).size(9).color(muted));
+            col = col.push(text(w).size(TS.caption).color(muted));
         }
         if editor.state.solve_warnings.len() > 8 {
             col = col.push(
                 text(format!("… +{} more", editor.state.solve_warnings.len() - 8))
-                    .size(9)
+                    .size(TS.caption)
                     .color(muted),
             );
         }
@@ -287,7 +287,11 @@ fn view_role<'a>(
     // a Line or Arc selection.
     let is_point = matches!(entity.kind, EntityKind::Point { .. });
     if !is_point {
-        col = col.push(text("Pad role applies to Points only").size(9).color(muted));
+        col = col.push(
+            text("Pad role applies to Points only")
+                .size(TS.caption)
+                .color(muted),
+        );
     }
 
     col.into()

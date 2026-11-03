@@ -76,7 +76,9 @@ fn header_row<'a>(
     let muted = theme_ext::text_secondary(tokens);
 
     row![
-        text(state.row.internal_pn.as_str()).size(15).color(text_c),
+        text(state.row.internal_pn.as_str())
+            .size(TS.heading)
+            .color(text_c),
         Space::new().width(12),
         text(format!("class: {}", state.row.class.as_str()))
             .size(TS.body)
