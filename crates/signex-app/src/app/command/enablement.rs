@@ -89,79 +89,17 @@ pub(crate) struct CommandContext {
 
 /// Whether `command` can act in `ctx`. Unlisted commands are enabled.
 pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
-    if is_planned_command(command) {
-        return false;
-    }
-    match command.as_str() {
-        "save_document" => {
-            ctx.document_is_schematic
-                || ctx.document_is_editor
-                || (ctx.document_has_file && ctx.project_dirty)
-        }
-        "save_document_as" => ctx.document_is_schematic || ctx.document_is_editor,
-        "print" => ctx.document_is_schematic,
-        "close_active_document" => ctx.has_document,
-        "undo" => ctx.can_undo,
-        "redo" => ctx.can_redo,
-        "cut" | "copy" | "duplicate" => ctx.has_selection,
-        // Arrange acts on drawings only; a selection of circuit elements
-        // leaves it nothing to do (#1583).
-        "bring_drawings_to_front"
-        | "send_drawings_to_back"
-        | "bring_drawings_forward"
-        | "send_drawings_backward" => ctx.has_schematic && ctx.has_drawing_selection,
-        // E edits the selected object in the schematic and in the
-        // footprint / symbol editors, whose selections `has_selection`
-        // does not read, so a keystroke must not be dropped there.
-        "edit_object_properties" | "edit_selected_object_properties" => {
-            ctx.has_selection || ctx.has_footprint_editor || ctx.has_symbol_editor
-        }
-        // The Export menu row is gated on `has_schematic`; without an
-        // engine the handler does nothing.
-        "report_manager_bom" => ctx.has_schematic,
-        // Up Hierarchy opens the sheet whose symbol places the active one;
-        // a top-level page has none (#1772).
-        "leave_sheet" | "navigate_up_hierarchy" => ctx.has_parent_sheet,
-        // The footprint editor deletes its own selection, which is not the
-        // schematic canvas's; with none it is a no-op.
-        "delete_selection" => ctx.has_selection || ctx.has_footprint_editor,
-        "remove_last_vertex" => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
-        "paste"
-        | "smart_paste"
-        | "paste_special"
-        | "paste_array"
-        | "repeat_last_item"
-        | "rubber_stamp_copy"
-        | "select_all"
-        | "place_wire"
-        | "place_bus"
-        | "place_net_label"
-        | "place_local_net_label"
-        | "place_junction"
-        | "place_power_symbol"
-        | "place_global_label"
-        | "place_hierarchical_label"
-        | "place_port"
-        | "place_off_sheet_connector"
-        | "open_components_panel"
-        | "place_symbol"
-        | "measure_distance"
-        | "break_wire" => ctx.has_schematic,
-        // These assemble the project's sheets, not only the active tab's.
-        "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => {
-            ctx.has_schematic || ctx.has_sheets
-        }
-        // The table lists the active sheet's symbols.
-        "open_parameter_manager" => ctx.has_schematic,
-        "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => {
-            ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas
-        }
-        // The keystroke opens the footprint editor's grid picker and does
-        // nothing elsewhere. The View menu row shares the label but cycles
-        // the schematic / PCB grid; see [`cycle_grid_menu_enabled`].
-        "cycle_snap_grid_forward" | "open_grid_picker" => ctx.has_footprint_editor,
-        _ => true,
-    }
+    super::needs::needs(command).is_none_or(|needs| needs.is_met(ctx))
+}
+
+/// Why `command` cannot act in `ctx`, or `None` when it can.
+pub(crate) fn disabled_reason(
+    command: &AppCommandId,
+    ctx: &CommandContext,
+) -> Option<&'static str> {
+    super::needs::needs(command)
+        .filter(|needs| !needs.is_met(ctx))
+        .map(super::needs::Needs::reason)
 }
 
 /// View ▸ Cycle Grid Size: the menu row sends `MenuMessage::CycleGrid`,
@@ -765,6 +703,38 @@ mod tests {
                         b.as_str()
                     );
                 }
+            }
+        }
+    }
+
+    /// A command is enabled exactly when it has no reason to be disabled,
+    /// for every catalog id (#1928).
+    #[test]
+    fn the_disabled_reason_agrees_with_is_enabled_for_every_command() {
+        let facts: [fn(&mut CommandContext); 6] = [
+            |c| c.has_schematic = true,
+            |c| c.has_selection = true,
+            |c| c.has_footprint_editor = true,
+            |c| c.can_undo = true,
+            |c| c.has_document = true,
+            |c| c.has_sheets = true,
+        ];
+        let mut contexts = vec![CommandContext::default()];
+        contexts.extend(facts.iter().map(|set| {
+            let mut ctx = CommandContext::default();
+            set(&mut ctx);
+            ctx
+        }));
+        for name in crate::keymap::all_command_ids() {
+            let command = id(name);
+            for ctx in &contexts {
+                let reason = disabled_reason(&command, ctx);
+                assert_eq!(
+                    reason.is_none(),
+                    is_enabled(&command, ctx),
+                    "{name} in {ctx:?}"
+                );
+                assert!(reason.is_none_or(|r| !r.is_empty()), "{name}");
             }
         }
     }
