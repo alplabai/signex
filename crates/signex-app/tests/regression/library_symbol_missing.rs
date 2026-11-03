@@ -7,6 +7,7 @@ use signex_app::app::{
     ContextMenuMsg, Message, Signex, SymbolDocument, TabContextAction, TabInfo, TabKind,
 };
 use signex_app::dock::DockMessage;
+use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
 use signex_app::panels::PanelMsg;
 use signex_library::{Symbol, SymbolFile};
 use std::path::PathBuf;
@@ -186,15 +187,29 @@ fn repeated_passes_over_a_missing_symbol_log_it_once() {
     place(&mut app, &f);
     remove_symbol_from_library(&f);
     let lib_id = doc(&app).symbols[0].lib_id.clone();
+    // The line names the library; a unique name keeps the count per test.
+    let marker = format!("Lib-{}", f.library_id);
+    app.library.open_libraries[0].display_name = marker.clone();
 
     check_drift(&mut app);
     check_drift(&mut app);
     check_drift(&mut app);
 
     assert_eq!(
-        logged(&[&lib_id, "library symbol missing"]),
+        logged(&[&marker, "library symbol missing"]),
         1,
         "the removal is reported once per change"
+    );
+    // The Messages panel cuts a line at 160 bytes: with the full lib_id in
+    // it the closing words never arrive.
+    assert_eq!(
+        logged(&[
+            &marker,
+            "library symbol missing",
+            "keeps its embedded copy."
+        ]),
+        1,
+        "the line is short enough to arrive whole"
     );
     assert_eq!(
         logged(&[&lib_id, "Could not check library symbol"]),
@@ -277,6 +292,111 @@ fn an_edit_after_the_warning_makes_it_stale_and_confirm_says_so() {
     assert!(
         logged(&["TWO-UNIT", "changed since the warning; press Delete again"]) >= 1,
         "the refusal reaches the Messages panel"
+    );
+}
+
+fn add_pin(app: &mut Signex, path: &std::path::Path) {
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.to_path_buf(),
+        msg: PrimitiveEdit::Symbol(SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 }),
+    }));
+}
+
+#[test]
+fn an_edit_at_full_history_depth_makes_the_warning_stale() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let path = open_container_editor(&mut app, &f);
+    for _ in 0..SymbolDocument::HISTORY_DEPTH + 5 {
+        add_pin(&mut app, &path);
+    }
+    let depth = |app: &Signex| {
+        app.document_state.symbol_editors[&path]
+            .undo_snapshots
+            .len()
+    };
+    assert_eq!(depth(&app), SymbolDocument::HISTORY_DEPTH);
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    assert!(warning_shown(&app));
+
+    // The stack stays at its cap, so a depth comparison sees no change.
+    add_pin(&mut app, &path);
+    assert_eq!(depth(&app), SymbolDocument::HISTORY_DEPTH);
+    panel(&mut app, PanelMsg::SchLibrarySelectSymbol(1));
+
+    assert!(!warning_shown(&app), "an edit at full depth is an edit");
+}
+
+#[test]
+fn a_coalesced_field_edit_after_the_warning_makes_it_stale() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    open_container_editor(&mut app, &f);
+    // The first keystroke opens the step the next one joins.
+    panel(
+        &mut app,
+        PanelMsg::SymEditorSetSymbolName("TWO-UNIT-1".into()),
+    );
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    assert!(warning_shown(&app));
+
+    panel(
+        &mut app,
+        PanelMsg::SymEditorSetSymbolName("TWO-UNIT-12".into()),
+    );
+    panel(&mut app, PanelMsg::SchLibrarySelectSymbol(1));
+
+    assert!(!warning_shown(&app), "a joined keystroke is an edit");
+}
+
+#[test]
+fn an_undo_after_the_warning_makes_it_stale() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let path = open_container_editor(&mut app, &f);
+    add_pin(&mut app, &path);
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    assert!(warning_shown(&app));
+
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEdit::Symbol(SymbolEditorMsg::Undo),
+    }));
+    panel(&mut app, PanelMsg::SchLibrarySelectSymbol(1));
+
+    assert!(!warning_shown(&app), "an undo is an edit");
+}
+
+/// A `symbols/` folder that cannot be listed is not a removal (#1903).
+#[cfg(unix)]
+#[test]
+fn an_unlistable_symbols_folder_does_not_mark_parts_missing() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    select_first(&mut app);
+    let folder = container_path(&f).parent().unwrap().to_path_buf();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let restore = || std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755));
+    if std::fs::read_dir(&folder).is_ok() {
+        restore().unwrap();
+        eprintln!("skipped: permissions are not enforced (running as root?)");
+        return;
+    }
+
+    check_drift(&mut app);
+    restore().unwrap();
+
+    let sheet = app.document_state.active_path.clone().unwrap();
+    let lib_id = doc(&app).symbols[0].lib_id.clone();
+    assert!(!app.library.drift.is_missing(&sheet, &lib_id));
+    assert_ne!(
+        info(&app, "Library Status").as_deref(),
+        Some("Symbol missing")
     );
 }
 

@@ -454,6 +454,7 @@ impl Signex {
                 instance_note_due: false,
                 recovery_check_due: Vec::new(),
                 sheet_edit_epoch: 0,
+                symbol_editors_opened: 0,
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),
@@ -480,6 +481,9 @@ impl Signex {
                     symbol_lists_key: None,
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
+                    canvas_colors: signex_types::theme::canvas_colors(ThemeId::Signex),
+                    device_px_per_logical_px:
+                        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,

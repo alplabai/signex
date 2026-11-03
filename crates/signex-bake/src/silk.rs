@@ -68,14 +68,17 @@ pub fn bake_silk(
             }
         };
 
+        if !entity.bakes_silk_on(attr.layer) {
+            warnings.push(format!(
+                "entity {}: SilkAttr on a Point is meaningless (no renderable primitive); skipping",
+                entity.id
+            ));
+            continue;
+        }
+
         match entity_to_graphic(entity, sketch, solve) {
             Ok(Some(g)) => target.push(g),
-            Ok(None) => {
-                warnings.push(format!(
-                    "entity {}: SilkAttr on a Point is meaningless (no renderable primitive); skipping",
-                    entity.id
-                ));
-            }
+            Ok(None) => {}
             Err(msg) => warnings.push(format!("entity {}: silk bake skipped — {}", entity.id, msg)),
         }
     }

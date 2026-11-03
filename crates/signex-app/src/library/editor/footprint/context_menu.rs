@@ -21,8 +21,11 @@ use iced::{Background, Border, Element, Length, Padding};
 
 use signex_types::theme::ThemeTokens;
 
+use signex_library::primitive::footprint::Footprint;
+
 use crate::app::FootprintDocument;
 use crate::keymap::{AppCommandId, CompiledKeymap};
+use crate::library::editor::footprint::state::silk_selection::is_sketch_owned_silk;
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
 };
@@ -46,6 +49,12 @@ fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> &'static str {
         FpGraphicKind::Text { .. } => "String",
         FpGraphicKind::Polygon { .. } => "Region",
     }
+}
+
+/// The message the silk menu's Delete sends; `None` (item disabled) for an
+/// entry baked from the sketch, which the next bake would bring back.
+fn silk_delete_msg(fp: &Footprint, idx: usize) -> Option<FootprintEditorMsg> {
+    (!is_sketch_owned_silk(fp, idx)).then_some(FootprintEditorMsg::DeleteSilkF)
 }
 
 const MENU_WIDTH: f32 = 220.0;
@@ -314,12 +323,11 @@ pub fn view_context_menu<'a>(
             // `state.selected_silk_f` — the show-context-menu handler
             // set that when target == SilkF(idx) so this fires the
             // right delete.
-            items.push(item_msg(
-                tokens,
-                "Delete",
-                "Del",
-                make_msg(FootprintEditorMsg::DeleteSilkF),
-            ));
+            // A baked entry comes back with the next bake: not deletable.
+            items.push(match silk_delete_msg(editor.primitive(), idx) {
+                Some(msg) => item_msg(tokens, "Delete", "Del", make_msg(msg)),
+                None => item_disabled(tokens, "Delete", "Del"),
+            });
             items.push(separator(tokens));
             items.push(item_disabled(tokens, "Find Similar Objects...", ""));
         }
@@ -509,11 +517,12 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
 
 #[cfg(test)]
 mod tests {
-    use super::shortcut_label;
+    use super::{Footprint, FootprintEditorMsg, shortcut_label, silk_delete_msg};
     use crate::keymap::{
         AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
         ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
     };
+    use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
 
     fn keymap_with(bindings: Vec<(ShortcutBindingAction, &str)>) -> CompiledKeymap {
         CompiledKeymap::compile(&ShortcutProfile {
@@ -549,5 +558,27 @@ mod tests {
         assert_eq!(shortcut_label(&keymap, "copy"), "", "unbound by the user");
         assert_eq!(shortcut_label(&keymap, "cut"), "", "never bound");
         assert_eq!(shortcut_label(&keymap, "paste"), "F4");
+    }
+
+    #[test]
+    fn a_baked_silk_entry_has_no_delete_message() {
+        let mut fp = Footprint::empty("t");
+        let hand = FpGraphic::drawn(
+            FpGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [1.0, 0.0],
+            },
+            0.12,
+            false,
+        );
+        let mut baked = hand.clone();
+        baked.sketch_entity = Some(signex_sketch::id::SketchEntityId::new());
+        fp.silk_f = vec![baked, hand];
+
+        assert!(silk_delete_msg(&fp, 0).is_none());
+        assert!(matches!(
+            silk_delete_msg(&fp, 1),
+            Some(FootprintEditorMsg::DeleteSilkF)
+        ));
     }
 }

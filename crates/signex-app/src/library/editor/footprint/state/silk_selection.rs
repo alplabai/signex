@@ -21,6 +21,16 @@ impl FootprintEditorState {
             }
         }
     }
+
+    /// Drop the top-silk selection and a silk context-menu target.
+    pub fn clear_silk_selection(&mut self) {
+        self.selected_silk_f = None;
+        if let Some(FootprintContextTarget::SilkF(_)) =
+            self.context_menu.as_ref().map(|menu| menu.target)
+        {
+            self.context_menu = None;
+        }
+    }
 }
 
 /// Whether `silk_f[idx]` was baked from the sketch. Pads mode shows such

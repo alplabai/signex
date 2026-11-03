@@ -126,6 +126,16 @@ impl DocumentState {
         }
     }
 
+    /// Where a newly opened symbol editor's `history_generation` starts. Each
+    /// editor gets its own 2^32-step range, so a generation never repeats
+    /// across editor instances and a delete warning raised on a closed editor
+    /// reads stale on the reopened one (#1903).
+    pub fn next_symbol_history_base(&mut self) -> u64 {
+        let base = self.symbol_editors_opened << 32;
+        self.symbol_editors_opened += 1;
+        base
+    }
+
     /// A schematic sheet changed: ERC results taken earlier no longer describe it.
     pub fn note_sheet_edit(&mut self) {
         self.sheet_edit_epoch += 1;
