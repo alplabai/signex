@@ -78,7 +78,9 @@ pub fn draw_grid(
         return;
     };
     frame.with_clip(clip, |frame| {
-        draw_grid_clipped(frame, camera, grid_mm, bounds, color, page_w, page_h, style);
+        draw_grid_clipped(
+            frame, camera, grid_mm, bounds, clip, color, page_w, page_h, style,
+        );
     });
 }
 
@@ -130,13 +132,14 @@ pub(crate) fn axis_stops(lo: f32, hi: f32, step: f32) -> impl Iterator<Item = f3
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "the draw inputs of `draw_grid`, minus the device scale already spent on the clip"
+    reason = "the draw inputs of `draw_grid`, with the device scale already spent on `clip`"
 )]
 fn draw_grid_clipped(
     frame: &mut canvas::Frame,
     camera: &Camera,
     grid_mm: f32,
     bounds: iced::Rectangle,
+    clip: iced::Rectangle,
     color: Color,
     page_w: f32,
     page_h: f32,
@@ -184,6 +187,9 @@ fn draw_grid_clipped(
         return;
     }
 
+    // Half the thin stroke width, so a cross arm's end stays inside the clip.
+    const GLYPH_EDGE_SLACK: f32 = 0.3;
+
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
 
@@ -196,17 +202,11 @@ fn draw_grid_clipped(
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
     if matches!(style, GridStyle::Lines) {
-        let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
-        let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
-        let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
-        let page_right = camera.world_to_screen(Point::new(page_w, 0.0), bounds).x;
-        let line_y_top = page_top.max(0.0);
-        let line_y_bot = page_bot.min(bounds.height);
-        let line_x_left = page_left.max(0.0);
-        let line_x_right = page_right.min(bounds.width);
+        let (line_x_left, line_x_right) = (clip.x, clip.x + clip.width);
+        let (line_y_top, line_y_bot) = (clip.y, clip.y + clip.height);
         for wx in axis_stops(wx_min, wx_max, minor_mm) {
             let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
-            if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
+            if sx >= line_x_left && sx <= line_x_right {
                 let line =
                     canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
                 frame.stroke(&line, minor_stroke);
@@ -214,7 +214,7 @@ fn draw_grid_clipped(
         }
         for wy in axis_stops(wy_min, wy_max, minor_mm) {
             let sy = camera.world_to_screen(Point::new(0.0, wy), bounds).y;
-            if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
+            if sy >= line_y_top && sy <= line_y_bot {
                 let line =
                     canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
                 frame.stroke(&line, minor_stroke);
@@ -224,10 +224,16 @@ fn draw_grid_clipped(
         for wy in axis_stops(wy_min, wy_max, minor_mm) {
             for wx in axis_stops(wx_min, wx_max, minor_mm) {
                 let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
-                if screen.x < -dot_radius
-                    || screen.x > bounds.width + dot_radius
-                    || screen.y < -dot_radius
-                    || screen.y > bounds.height + dot_radius
+                // The whole glyph must sit inside the paper clip, so no
+                // renderer can draw it over the canvas background.
+                let reach = match style {
+                    GridStyle::SmallCrosses => cross_arm,
+                    _ => dot_radius,
+                } + GLYPH_EDGE_SLACK;
+                if screen.x - reach < clip.x
+                    || screen.x + reach > clip.x + clip.width
+                    || screen.y - reach < clip.y
+                    || screen.y + reach > clip.y + clip.height
                 {
                     continue;
                 }
@@ -272,18 +278,12 @@ fn draw_grid_clipped(
         .with_color(major_color)
         .with_width(0.5);
 
-    let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
-    let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
-    let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
-    let page_right = camera.world_to_screen(Point::new(page_w, 0.0), bounds).x;
-    let line_y_top = page_top.max(0.0);
-    let line_y_bot = page_bot.min(bounds.height);
-    let line_x_left = page_left.max(0.0);
-    let line_x_right = page_right.min(bounds.width);
+    let (line_x_left, line_x_right) = (clip.x, clip.x + clip.width);
+    let (line_y_top, line_y_bot) = (clip.y, clip.y + clip.height);
 
     for mx in axis_stops(wx_min, wx_max, major_mm) {
         let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
-        if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
+        if sx >= line_x_left && sx <= line_x_right {
             let line = canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
             frame.stroke(&line, stroke);
         }
@@ -291,7 +291,7 @@ fn draw_grid_clipped(
 
     for my in axis_stops(wy_min, wy_max, major_mm) {
         let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
-        if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
+        if sy >= line_y_top && sy <= line_y_bot {
             let line =
                 canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
             frame.stroke(&line, stroke);
@@ -344,6 +344,10 @@ mod pitch_tests {
                 assert!(
                     on_device(clip.x) && on_device(clip.x + clip.width),
                     "dpr {dpr}"
+                );
+                assert!(
+                    on_device(clip.y) && on_device(clip.y + clip.height),
+                    "dpr {dpr} (y)"
                 );
             }
         }

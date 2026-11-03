@@ -1,4 +1,4 @@
-//! #1941 - a new project's sheet opens fitted and centred in the canvas, using
+//! #1941 - a new project's sheet opens fitted and centred in the canvas (View > Fit All), using
 //! the canvas's real size once it is known.
 
 use signex_app::app::{FileMsg, Message, Signex};
@@ -24,15 +24,15 @@ fn new_project_sheet_fits_the_canvas_once_its_size_is_known() {
 
     let (w, h) = (canvas.paper_width_mm, canvas.paper_height_mm);
     let (x, y, scale) = canvas.live_camera();
-    // Fit Document: the sheet fills the canvas inside its margin on the
-    // tighter axis, and is centred on both.
-    let fits_w = (viewport.width - 80.0) / w;
-    let fits_h = (viewport.height - 80.0) / h;
-    assert!(
-        (scale - fits_w.min(fits_h)).abs() < 1e-3,
-        "scale {scale} vs {}",
-        fits_w.min(fits_h)
+    // View > Fit All on an empty sheet fits the paper rect.
+    let mut expected = signex_app::canvas::Camera::default();
+    expected.fit_rect(
+        iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(w, h)),
+        viewport,
     );
+    assert!((scale - expected.scale).abs() < 1e-3, "scale {scale}");
+    assert!((x - expected.offset.x).abs() < 1e-2);
+    assert!((y - expected.offset.y).abs() < 1e-2);
     assert!((x + w * scale / 2.0 - viewport.width / 2.0).abs() < 1e-2);
     assert!((y + h * scale / 2.0 - viewport.height / 2.0).abs() < 1e-2);
     assert!(

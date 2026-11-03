@@ -669,7 +669,8 @@ impl Signex {
 
     /// Refresh the canvas and panel context against the active schematic
     /// engine, optionally installing `schematic` as that engine's document
-    /// first.
+    /// first. `fit_sheet` queues a fit of the paper at the next canvas event
+    /// (the sheet's first show).
     ///
     /// There is no "commit to the active tab" step: since the parked-session
     /// refactor, schematic tabs keep their document in
@@ -682,7 +683,7 @@ impl Signex {
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
-        fit_to_content: bool,
+        fit_sheet: bool,
         refresh_panel_ctx: bool,
     ) -> bool {
         let installed = match schematic {
@@ -703,7 +704,7 @@ impl Signex {
 
         // The first time a sheet is shown it opens fitted and centred, whatever
         // it holds; the fit is taken at the next canvas event (#1941).
-        if fit_to_content {
+        if fit_sheet {
             self.interaction_state.active_canvas().fit_to_sheet();
         }
         if clear_bg_cache {
