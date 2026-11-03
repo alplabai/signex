@@ -127,6 +127,8 @@ impl Signex {
                     self.ui_state.window_size = (w, h);
                     return self.main_window_mode_task(id);
                 }
+                // An undocked tab window's own size places its overlays.
+                self.ui_state.set_undocked_window_size(id, (w, h));
                 Task::none()
             }
             WindowMsg::WindowScaleChanged(id, scale) => {
@@ -176,6 +178,7 @@ impl Signex {
                     return self.flush_quit_writes_then(iced::exit());
                 }
                 self.ui_state.forget_window_os_scale(id);
+                self.ui_state.forget_undocked_window_size(id);
                 self.close_overlays_owned_by(id);
                 if self.ui_state.focused_window == Some(id) {
                     self.ui_state.focused_window = None;
@@ -453,6 +456,7 @@ impl Signex {
                 // short-circuits on `windows.remove -> None` and the
                 // canvas cache + selection leak.
                 self.close_overlays_owned_by(id);
+                self.ui_state.forget_undocked_window_size(id);
                 self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);

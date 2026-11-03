@@ -250,6 +250,11 @@ impl Signex {
     pub(crate) fn dispatch_context_menu_message(&mut self, msg: ContextMenuMsg) -> Task<Message> {
         match msg {
             ContextMenuMsg::ScopedToWindow(window, inner) => match *inner {
+                // Hover state is global, not per document: no re-entry.
+                hover @ (ContextMenuMsg::SubmenuHover(_)
+                | ContextMenuMsg::SubmenuLeave
+                | ContextMenuMsg::SubmenuEnterPanel
+                | ContextMenuMsg::SubmenuLeavePanel) => self.dispatch_context_menu_message(hover),
                 ContextMenuMsg::Show(x, y) => self.run_in_window_document(window, |app| {
                     app.show_canvas_context_menu(x, y, app.overlay_owner(window))
                 }),

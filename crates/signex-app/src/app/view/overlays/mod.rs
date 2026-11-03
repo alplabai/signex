@@ -395,7 +395,7 @@ impl Signex {
             + crate::active_bar::BAR_TOP_MARGIN_PX
             + crate::active_bar::BAR_HEIGHT_PX
             + crate::active_bar::BAR_DROPDOWN_GAP_PX;
-        let (ww, _) = ui.window_size;
+        let (ww, _) = ui.size_of_window(window_id);
         let adjusted_x =
             x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww);
         vec![
@@ -431,7 +431,7 @@ impl Signex {
         // possible row count (≈ 22 rows × 22 px + padding) and
         // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
         // lands too close to an edge.
-        let (win_w, win_h) = self.ui_state.window_size;
+        let (win_w, win_h) = self.ui_state.size_of_window(window_id);
         let menu_w = Self::CONTEXT_MENU_WIDTH;
         let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
         let edge_margin: f32 = 4.0;

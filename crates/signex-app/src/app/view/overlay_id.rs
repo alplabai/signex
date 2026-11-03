@@ -320,13 +320,16 @@ pub(crate) fn scope_overlay_message(window: iced::window::Id, message: Message) 
 }
 
 /// Remap what an undocked window's canvas emits: canvas events carry the
-/// window, a right-click opens the menu for that window's sheet (#1910).
+/// window, a right-click opens the menu for that window's sheet, and an
+/// Active Bar button pressed on the canvas (right-press, #1509) acts there
+/// (#1910).
 pub(crate) fn scope_canvas_message(window_id: iced::window::Id, message: Message) -> Message {
     match message {
         Message::CanvasEvent(event) => Message::CanvasEventInWindow { window_id, event },
         show @ Message::ContextMenu(ContextMenuMsg::Show(..)) => {
             scope_overlay_message(window_id, show)
         }
+        bar @ Message::ActiveBar(_) => scope_overlay_message(window_id, bar),
         other => other,
     }
 }

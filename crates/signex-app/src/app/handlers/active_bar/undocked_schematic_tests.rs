@@ -254,13 +254,237 @@ fn closing_an_undocked_window_drops_the_overlays_it_opened() {
         f.window,
         ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align),
     ));
-    f.app.close_overlays_owned_by(f.window);
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::SecondaryWindowClosed(f.window)));
     assert!(f.app.interaction_state.active_bar_menu.is_none());
+    let mut f = fixture();
     let _ = f
         .app
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
-    f.app.close_overlays_owned_by(f.window);
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::SecondaryWindowClosed(f.window)));
     assert!(f.app.interaction_state.context_menu.is_none());
+}
+
+#[test]
+fn reattaching_an_undocked_window_drops_the_overlays_it_opened() {
+    let mut f = fixture();
+    let _ = f.app.update(scoped_bar(
+        f.window,
+        ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align),
+    ));
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::ReattachTab(f.window)));
+    assert!(f.app.interaction_state.active_bar_menu.is_none());
+    let mut f = fixture();
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::ReattachTab(f.window)));
+    assert!(f.app.interaction_state.context_menu.is_none());
+}
+
+#[test]
+fn a_right_press_on_an_undocked_windows_active_bar_belongs_to_that_window() {
+    use crate::app::view::overlay_id::scope_canvas_message;
+    let mut f = fixture();
+    // The canvas publishes the right-press as a plain ActiveBar message (#1509).
+    let pressed = scope_canvas_message(
+        f.window,
+        Message::ActiveBar(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)),
+    );
+    let _ = f.app.update(pressed);
+    assert_eq!(
+        f.app.interaction_state.active_bar_menu_window,
+        Some(f.window)
+    );
+    assert!(!f.app.active_bar_menu_overlay(f.window).is_empty());
+    assert!(f.app.active_bar_menu_overlay(f.main).is_empty());
+    // A dropdown entry arrives tagged by the window that paints it and acts
+    // on that window's sheet (Rotate stands in: Align needs two items).
+    let (a_before, b_before) = (wire_ends(&f.app, &f.a), wire_ends(&f.app, &f.b));
+    let _ = f.app.update(scoped_bar(
+        f.window,
+        ActiveBarMsg::Action(ActiveBarAction::RotateSelection),
+    ));
+    assert_ne!(wire_ends(&f.app, &f.a), a_before, "A's wire rotated");
+    assert_eq!(wire_ends(&f.app, &f.b), b_before, "B is untouched");
+}
+
+#[test]
+fn submenu_hover_from_an_undocked_window_is_handled_without_the_document() {
+    let mut f = fixture();
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    let _ = f.app.update(scoped_menu(
+        f.window,
+        ContextMenuMsg::SubmenuHover(ContextSubmenu::Place),
+    ));
+    assert_eq!(
+        f.app.interaction_state.submenu_launcher_hovered,
+        Some(ContextSubmenu::Place)
+    );
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::SubmenuEnterPanel));
+    assert!(f.app.interaction_state.submenu_panel_hovered);
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::SubmenuLeavePanel));
+    assert!(!f.app.interaction_state.submenu_panel_hovered);
+}
+
+#[test]
+fn an_undocked_windows_size_places_its_overlays() {
+    let mut f = fixture();
+    f.app.ui_state.window_size = (1400.0, 900.0);
+    let _ = f.app.update(Message::Window(WindowMsg::WindowResizedFor(
+        f.window, 600.0, 500.0,
+    )));
+    assert_eq!(f.app.ui_state.size_of_window(f.window), (600.0, 500.0));
+    assert_eq!(f.app.ui_state.size_of_window(f.main), (1400.0, 900.0));
+    assert_eq!(f.app.ui_state.window_size, (1400.0, 900.0));
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::ReattachTab(f.window)));
+    assert_eq!(f.app.ui_state.size_of_window(f.window), (1400.0, 900.0));
+}
+
+#[test]
+fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
+    let mut f = fixture();
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    let _ = f.app.update(scoped_menu(
+        f.window,
+        ContextMenuMsg::Action(ContextAction::Copy),
+    ));
+    let (a_before, b_before) = (wire_ends(&f.app, &f.a), wire_ends(&f.app, &f.b));
+    // The clipboard read's follow-up comes back untagged, with the main
+    // window on sheet B.
+    let request = PasteRequest {
+        intent: PasteIntent::SmartPaste,
+        epoch: f.app.interaction_state.placement_epoch,
+        path: Some(f.a.clone()),
+        dialog: 0,
+    };
+    let _ = f.app.update(Message::Edit(EditMsg::PasteTextRead {
+        request,
+        text: None,
+    }));
+    assert_eq!(wire_ends(&f.app, &f.a).len(), a_before.len() + 1);
+    assert_eq!(wire_ends(&f.app, &f.b), b_before, "B is untouched");
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.b.as_path())
+    );
+}
+
+#[test]
+fn a_paste_numbering_read_for_an_undocked_window_is_kept_for_its_sheet() {
+    let mut f = fixture();
+    let request = PasteRequest {
+        intent: PasteIntent::Paste,
+        epoch: f.app.interaction_state.placement_epoch,
+        path: Some(f.a.clone()),
+        dialog: 0,
+    };
+    let _ = f.app.update(Message::Edit(EditMsg::PasteCountersSeeded {
+        request,
+        seed: std::sync::Arc::new(Default::default()),
+    }));
+    let kept = f.app.interaction_state.paste_counters.as_ref();
+    assert_eq!(kept.map(|c| &c.target), Some(&f.a));
+}
+
+#[test]
+fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet() {
+    use crate::library::messages::{
+        LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
+    };
+    use crate::library::state::{ChangePreview, PickerMode};
+    use signex_engine::ComponentReplacement;
+
+    let mut f = fixture();
+    let doc = f.app.document_state.engines[&f.a].document().clone();
+    let symbol = doc
+        .symbols
+        .iter()
+        .find(|s| !s.is_power)
+        .expect("a part")
+        .clone();
+    let mut lib_symbol = doc.lib_symbols[&symbol.lib_id].clone();
+    lib_symbol.id = "L:NEW".to_string();
+    let resolved = ResolvedPlacement {
+        lib_id: "L:NEW".to_string(),
+        lib_symbol,
+        library_id: uuid::Uuid::from_u128(7),
+        row_id: uuid::Uuid::from_u128(8),
+        library_version: "1".to_string(),
+        internal_pn: "NEW-1".to_string(),
+        value: "NEWVALUE".to_string(),
+        is_power: false,
+        prefix: "R".to_string(),
+        class: "generic".to_string(),
+        prefix_override: None,
+        footprint: String::new(),
+        datasheet: String::new(),
+        fields: Vec::new(),
+    };
+    let target = PlacedPartTarget {
+        sheet: f.a.clone(),
+        engine_instance: f.app.document_state.engines[&f.a].instance_id(),
+        symbol_id: symbol.uuid,
+    };
+    let replacement = ComponentReplacement {
+        lib_symbol: resolved.lib_symbol.clone(),
+        library_id: Some(resolved.library_id),
+        row_id: Some(resolved.row_id),
+        library_version: resolved.library_version.clone(),
+        value: resolved.value.clone(),
+        footprint: String::new(),
+        datasheet: String::new(),
+        fields: Vec::new(),
+    };
+    let preview = signex_engine::change_component_preview(&doc, symbol.uuid, &replacement);
+    f.app.library.picker = Some(crate::library::PickerState {
+        mode: PickerMode::ChangePreview(Box::new(ChangePreview {
+            target,
+            reference: symbol.reference.clone(),
+            resolved,
+            preview,
+        })),
+        ..Default::default()
+    });
+    let values = |app: &Signex, path: &Path| {
+        app.document_state.engines[path]
+            .document()
+            .symbols
+            .iter()
+            .map(|s| s.value.clone())
+            .collect::<Vec<_>>()
+    };
+    let b_before = values(&f.app, &f.b);
+    let _ = f.app.update(Message::Library(LibraryMessage::PlacedPart(
+        PlacedPartMsg::ChangeConfirmed,
+    )));
+    assert!(
+        values(&f.app, &f.a).iter().any(|v| v == "NEWVALUE"),
+        "A's part changed"
+    );
+    assert_eq!(values(&f.app, &f.b), b_before, "B is untouched");
+    assert!(f.app.library.picker.is_none());
+    assert_eq!(
+        f.app.document_state.active_path.as_deref(),
+        Some(f.b.as_path())
+    );
 }
 
 #[test]
@@ -283,6 +507,14 @@ fn the_view_tags_overlay_and_canvas_messages_with_their_window() {
     assert!(matches!(
         show,
         Message::ContextMenu(ContextMenuMsg::ScopedToWindow(w, _)) if w == window
+    ));
+    let bar_press = scope_canvas_message(
+        window,
+        Message::ActiveBar(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)),
+    );
+    assert!(matches!(
+        bar_press,
+        Message::ActiveBar(ActiveBarMsg::ScopedToWindow(w, _)) if w == window
     ));
     let other = scope_canvas_message(window, Message::ContextMenu(ContextMenuMsg::Close));
     assert!(matches!(other, Message::ContextMenu(ContextMenuMsg::Close)));

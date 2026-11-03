@@ -111,6 +111,9 @@ pub struct UiState {
     /// dropped when it closes (#1887). Read
     /// through [`Self::device_px_per_logical_px`].
     pub window_os_scales: std::collections::HashMap<iced::window::Id, f32>,
+    /// Size of every undocked tab window, kept so its dropdown and context
+    /// menu are placed inside it, not inside the main window (#1910).
+    pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
