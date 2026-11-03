@@ -21,6 +21,17 @@ the commands that send a canvas event (Fit All). Cut, Copy, Paste, Delete,
 Select All, Find, the Place rows, Zoom In / Out and AutoFocus still act on the
 main window's active tab, as their shortcuts do.
 
+A menu click that cannot run is not silent: `run_menu_command` logs a command
+the window cannot act on to the Messages panel ("Menu: <id> did nothing:
+<reason>"), and the bridge already logs an unknown or unmapped id.
+
+No button without a function: `menu_bar/tests/walk.rs` also presses every live
+row in each window state (no document, a project alone, a schematic with and
+without selection, a dirty one, a symbol editor, a footprint editor, a PCB tab,
+an undocked window) and fails if a click moves nothing and starts no job.
+`KNOWN_INERT` lists the rows allowed to do that and is empty; it may only
+shrink.
+
 A live row's command must run: `menu_bar/tests/walk.rs` checks, for every row
 in each kind of window state, that a live row's `CommandOutcome` is `Ran` and a
 greyed row's is `Disabled`. The golden fixture still names each such row by the
