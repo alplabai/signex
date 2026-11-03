@@ -60,6 +60,25 @@ pub(super) fn net_of_target(
     }
 }
 
+/// The net a hover card is for. Unlike [`net_of_target`], a placed symbol
+/// answers only within pin pick tolerance of a pin; its body belongs to the
+/// part, whose own card shows there.
+pub(super) fn net_of_hover(
+    data: &ProjectNetData,
+    sheet: &SheetKey,
+    item: &SelectedItem,
+    at: Point,
+    occurrence: Option<&InstancePath>,
+) -> Option<usize> {
+    if item.kind == SelectedKind::Symbol {
+        return data
+            .index
+            .pin_near(sheet, at, PIN_TOLERANCE_MM, occurrence)
+            .map(|(net, _)| net);
+    }
+    net_of_target(data, sheet, item, at, occurrence)
+}
+
 /// Where `item` sits on `sheet`: a point on it to centre the view on.
 pub(super) fn item_position(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Point> {
     let id = item.uuid;

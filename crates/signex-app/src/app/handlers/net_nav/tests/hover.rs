@@ -64,6 +64,17 @@ fn a_pin_shows_the_net_it_is_on() {
 }
 
 #[test]
+fn a_symbol_body_shows_the_part_and_only_its_pin_end_shows_the_net() {
+    let mut p = project();
+    // Well away from the pin end: the body, so no net card (#1958).
+    dwell_on(&mut p, ROOT_R1, SelectedKind::Symbol, (0.0, 8.0));
+    assert!(p.app.document_state.net_nav.hover.card.is_none());
+    // At the pin end the net card is back.
+    dwell_on(&mut p, ROOT_R1, SelectedKind::Symbol, (0.2, 0.1));
+    assert_eq!(card(&p).name, "VCC");
+}
+
+#[test]
 fn a_label_shows_its_net_and_class() {
     let mut p = project();
     let id = p.app.document_state.projects[0].id;
