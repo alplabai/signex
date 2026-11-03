@@ -32,6 +32,7 @@ use crate::panels::PanelMsg;
 mod footprint;
 mod numeric_input;
 mod symbol;
+mod symbol_delete;
 
 use footprint::{SilkLineEndpoint, SilkTextField};
 use numeric_input::{

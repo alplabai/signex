@@ -84,6 +84,13 @@ fn warning(app: &Signex) -> Option<SymbolDeleteWarning> {
         .clone()
 }
 
+fn logged(needle: &str) -> bool {
+    let _ = signex_app::diagnostics::init_logging();
+    signex_app::diagnostics::recent_entries()
+        .iter()
+        .any(|e| e.message.contains(needle))
+}
+
 fn run(app: &mut Signex, task: Task<Message>) {
     crate::settle_support::settle_task(app, task);
 }
@@ -91,6 +98,7 @@ fn run(app: &mut Signex, task: Task<Message>) {
 struct Setup {
     app: Signex,
     path: PathBuf,
+    library_id: uuid::Uuid,
     _dir: tempfile::TempDir,
 }
 
@@ -114,6 +122,7 @@ fn setup(sheets: &[(&str, Option<&str>)], unreadable: &[&str]) -> Setup {
     Setup {
         app,
         path,
+        library_id: f.library_id,
         _dir: dir,
     }
 }
@@ -124,6 +133,7 @@ fn a_closed_sheet_that_places_the_symbol_is_named_when_the_scan_lands() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[("closed.snxsch", Some("U9"))], &[]);
 
     let task = delete(&mut app, 0);
@@ -151,6 +161,7 @@ fn an_unreadable_closed_sheet_is_unchecked_never_unused() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[], &["broken.snxsch"]);
 
     let task = delete(&mut app, 1);
@@ -173,6 +184,7 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[("clean.snxsch", None)], &[]);
 
     let task = delete(&mut app, 1);
@@ -181,6 +193,9 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
 
     assert_eq!(symbol_count(&app, &path), 1);
     assert!(warning(&app).is_none());
+    assert!(logged(
+        "SIBLING deleted. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
+    ));
 }
 
 #[test]
@@ -189,6 +204,7 @@ fn a_scan_that_lands_after_the_symbol_file_changed_is_dropped() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[("clean.snxsch", None)], &[]);
 
     let task = delete(&mut app, 1);
@@ -201,6 +217,9 @@ fn a_scan_that_lands_after_the_symbol_file_changed_is_dropped() {
 
     assert_eq!(symbol_count(&app, &path), 2, "a stale scan deletes nothing");
     assert!(warning(&app).is_none(), "and leaves no warning behind");
+    assert!(logged(
+        "SIBLING changed since the warning; press Delete again."
+    ));
 }
 
 #[test]
@@ -209,6 +228,7 @@ fn a_scan_for_a_replaced_warning_does_not_answer_the_new_one() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[("clean.snxsch", None)], &[]);
 
     let first = delete(&mut app, 0);
@@ -229,6 +249,7 @@ fn a_cancelled_warning_ignores_its_late_scan() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[("clean.snxsch", None)], &[]);
 
     let task = delete(&mut app, 1);
@@ -245,6 +266,7 @@ fn delete_anyway_while_the_scan_runs_says_closed_sheets_were_not_checked() {
         mut app,
         path,
         _dir,
+        ..
     } = setup(&[("closed.snxsch", Some("U9"))], &[]);
 
     let _task = delete(&mut app, 0);
@@ -256,4 +278,127 @@ fn delete_anyway_while_the_scan_runs_says_closed_sheets_were_not_checked() {
             && e.message.contains("Closed sheets were not checked")
     });
     assert!(said);
+}
+
+fn child_ref(name: &str) -> signex_types::schematic::ChildSheet {
+    signex_types::schematic::ChildSheet {
+        uuid: uuid::Uuid::now_v7(),
+        name: name.into(),
+        filename: name.into(),
+        position: signex_types::schematic::Point::new(0.0, 0.0),
+        size: (10.0, 10.0),
+        stroke_width: 0.0,
+        fill: Default::default(),
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    }
+}
+
+#[test]
+fn a_closed_child_sheet_reached_only_by_a_sheet_symbol_is_scanned() {
+    let Setup {
+        mut app,
+        path,
+        library_id,
+        _dir,
+    } = setup(&[], &[]);
+    let dir = _dir.path();
+    // The project declares only root.snxsch; child.snxsch is a hierarchical
+    // child that places the unused sibling.
+    let sibling = app.document_state.symbol_editors[&path].file.symbols[1].uuid;
+    let id = signex_app::library::place::lib_id_of(&PrimitiveRef::new(library_id, sibling));
+    let mut root = SchematicSheet::default();
+    root.child_sheets.push(child_ref("child.snxsch"));
+    let mut child = SchematicSheet::default();
+    child.symbols.push(Symbol {
+        lib_id: id,
+        reference: "U7".into(),
+        ..Default::default()
+    });
+    for (name, sheet) in [("root.snxsch", root), ("child.snxsch", child)] {
+        std::fs::write(
+            dir.join(name),
+            SnxSchematic::new(sheet).write_string().unwrap(),
+        )
+        .unwrap();
+    }
+    open_project(&mut app, dir, &["root.snxsch"]);
+
+    let task = delete(&mut app, 1);
+    run(&mut app, task);
+
+    let text = warning(&app).expect("the child keeps it").lines.join("\n");
+    assert!(text.contains("child.snxsch: U7"), "{text}");
+    assert_eq!(symbol_count(&app, &path), 2);
+}
+
+#[test]
+fn a_scan_landing_after_a_tab_switch_deletes_only_in_its_own_file() {
+    let Setup {
+        mut app,
+        path,
+        _dir,
+        ..
+    } = setup(&[("clean.snxsch", None)], &[]);
+    let task = delete(&mut app, 1);
+
+    // Another symbol file, also with two symbols, becomes the active tab.
+    let other = PathBuf::from("other.snxsym");
+    let mut file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("O1"));
+    file.symbols.push(signex_library::Symbol::empty("O2"));
+    app.document_state.symbol_editors.insert(
+        other.clone(),
+        signex_app::app::SymbolDocument::new(other.clone(), file),
+    );
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "other".into(),
+        path: other.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: signex_app::app::TabKind::SymbolEditor(other.clone()),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    run(&mut app, task);
+
+    assert_eq!(
+        symbol_count(&app, &other),
+        2,
+        "the active file is untouched"
+    );
+    assert_eq!(
+        symbol_count(&app, &path),
+        1,
+        "the file that asked is changed"
+    );
+}
+
+#[test]
+fn a_symbol_placed_on_an_open_sheet_during_the_scan_stops_the_delete() {
+    let Setup {
+        mut app,
+        path,
+        library_id,
+        _dir,
+    } = setup(&[("clean.snxsch", None)], &[]);
+    let task = delete(&mut app, 1);
+
+    let sibling = app.document_state.symbol_editors[&path].file.symbols[1].uuid;
+    let id = signex_app::library::place::lib_id_of(&PrimitiveRef::new(library_id, sibling));
+    let engine = app.document_state.active_engine_mut().expect("open sheet");
+    let mut sheet = engine.document().clone();
+    sheet.symbols.push(Symbol {
+        lib_id: id,
+        reference: "U5".into(),
+        ..Default::default()
+    });
+    engine.set_document(sheet);
+    run(&mut app, task);
+
+    let shown = warning(&app).expect("the placement keeps it");
+    assert!(shown.lines.join("\n").contains("U5"), "{:?}", shown.lines);
+    assert!(!shown.checking);
+    assert_eq!(symbol_count(&app, &path), 2);
 }

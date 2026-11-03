@@ -116,9 +116,17 @@ fn an_unused_symbol_is_deleted_at_once() {
     let path = open_container_editor(&mut app, &f);
 
     // The sibling is bound by no row and placed nowhere.
+    let _ = signex_app::diagnostics::init_logging();
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(1));
 
     assert_eq!(symbol_count(&app, &path), 1);
+    assert!(
+        logged(&[
+            "SIBLING deleted",
+            "closed sheets were not checked (no project is open)"
+        ]) >= 1,
+        "with no project open the closed sheets were not checked, and the log says so"
+    );
 }
 
 #[test]

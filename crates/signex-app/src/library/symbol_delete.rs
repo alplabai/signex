@@ -54,10 +54,15 @@ impl PendingSymbolDelete {
                 .is_some_and(|s| s.uuid == self.symbol)
     }
 
-    /// Fold the closed-sheet scan into the warning. Nothing found and nothing
-    /// unchecked leaves `warning.lines` empty: the delete is then safe to run.
-    pub fn apply_closed_scan(&mut self, scan: &ClosedSheetScan) {
-        self.warning.lines.truncate(self.base_lines);
+    /// Fold the closed-sheet scan into the warning, together with the
+    /// in-memory usage read again now: rows and open sheets may have changed
+    /// while the scan ran. Nothing found and nothing unchecked leaves
+    /// `warning.lines` empty: the delete is then safe to run.
+    pub fn apply_closed_scan(&mut self, usage: SymbolUsage, scan: &ClosedSheetScan) {
+        self.rows = usage.rows;
+        self.sheets = usage.sheets;
+        self.base_lines = usage.lines.len();
+        self.warning.lines = usage.lines;
         if !scan.placed.is_empty() {
             self.warning.lines.push(format!(
                 "Closed sheets with placed parts: {}",
@@ -71,7 +76,7 @@ impl PendingSymbolDelete {
             ));
         }
         self.closed = scan.placed.len();
-        self.unchecked += scan.unreadable.len();
+        self.unchecked = usage.unchecked + scan.unreadable.len();
         self.warning.only_unknown = self.rows == 0 && self.sheets == 0 && self.closed == 0;
         self.warning.checking = false;
     }
@@ -397,10 +402,13 @@ mod tests {
             "Checking whether symbol \"A\" is in use"
         );
 
-        pending.apply_closed_scan(&ClosedSheetScan {
-            placed: Vec::new(),
-            unreadable: vec!["x.snxsch could not be read".into()],
-        });
+        pending.apply_closed_scan(
+            SymbolUsage::default(),
+            &ClosedSheetScan {
+                placed: Vec::new(),
+                unreadable: vec!["x.snxsch could not be read".into()],
+            },
+        );
 
         assert_eq!(pending.unchecked, 1);
         assert_eq!(
@@ -413,10 +421,13 @@ mod tests {
             "Symbol \"A\" may still be in use"
         );
 
-        pending.apply_closed_scan(&ClosedSheetScan {
-            placed: vec!["y.snxsch: U1".into()],
-            unreadable: Vec::new(),
-        });
+        pending.apply_closed_scan(
+            SymbolUsage::default(),
+            &ClosedSheetScan {
+                placed: vec!["y.snxsch: U1".into()],
+                unreadable: Vec::new(),
+            },
+        );
         assert!(!pending.warning.only_unknown);
         assert_eq!(pending.warning.heading(), "Symbol \"A\" is still in use");
     }

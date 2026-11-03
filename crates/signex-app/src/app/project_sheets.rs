@@ -212,6 +212,11 @@ pub(crate) fn load_sheet(
     )
 }
 
+/// The identity of a sheet path under the host's key rules.
+pub(crate) fn host_path_key(path: &Path) -> String {
+    path_key_with(path, CaseFold::host_default())
+}
+
 /// A disk parse of one sheet, ignoring open tabs (a worker has no engines).
 pub(crate) fn load_sheet_disk(path: &Path) -> Result<Option<SchematicSheet>, String> {
     load_sheet_with(&|_| None, path)

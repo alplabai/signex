@@ -55,22 +55,80 @@ impl ClosedSheetScan {
 pub struct ClosedSheetsReport {
     pub serial: u64,
     pub scan: ClosedSheetScan,
+    /// The sheets that were open when the scan began and so were skipped.
+    pub skipped_open: Vec<PathBuf>,
 }
 
-/// Read every sheet in `paths` and collect the ones that place `target`.
-pub fn scan_closed_sheets(paths: &[PathBuf], target: SymbolMatch) -> ClosedSheetScan {
-    let mut scan = ClosedSheetScan::default();
-    for path in paths {
-        match crate::app::project_sheets::load_sheet_disk(path) {
-            Ok(Some(sheet)) => scan.placed.extend(placed_on_sheets(
-                std::iter::once((path.as_path(), &sheet)),
-                |id| target.matches(id),
-            )),
+/// Where the disk scan starts, gathered in `update` from memory.
+#[derive(Debug, Clone, Default)]
+pub struct ScanPlan {
+    /// Sheets to read, and to follow down their `child_sheets`: every
+    /// declared page and root of the open projects, plus the children of the
+    /// open sheets. Sheets that are open are not listed (memory covers them).
+    pub seeds: Vec<PathBuf>,
+    /// Sheets open as tabs; a walk that reaches one skips it, its content and
+    /// children were already counted from memory.
+    pub open: Vec<PathBuf>,
+    /// Child references that could not be resolved, so nothing was read.
+    pub unresolved: Vec<String>,
+}
+
+impl ScanPlan {
+    /// There is something only the disk can answer.
+    pub fn has_work(&self) -> bool {
+        !self.seeds.is_empty() || !self.unresolved.is_empty()
+    }
+}
+
+use crate::app::project_sheets::host_path_key as key;
+
+/// Read every sheet the plan reaches, children included, and collect the
+/// ones that place `target`. A sheet visited twice is read once.
+pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetScan {
+    let mut scan = ClosedSheetScan {
+        placed: Vec::new(),
+        unreadable: plan.unresolved.clone(),
+    };
+    let open: std::collections::HashSet<String> = plan.open.iter().map(|p| key(p)).collect();
+    let mut visited = std::collections::HashSet::new();
+    let mut queue: Vec<PathBuf> = plan.seeds.clone();
+    while let Some(path) = queue.pop() {
+        let k = key(&path);
+        if open.contains(&k) || !visited.insert(k) {
+            continue;
+        }
+        let sheet = match crate::app::project_sheets::load_sheet_disk(&path) {
+            Ok(Some(sheet)) => sheet,
             // Declared but absent: nothing was read, so nothing is known.
-            Ok(None) => scan
-                .unreadable
-                .push(format!("{} (file not found)", file_name(path))),
-            Err(why) => scan.unreadable.push(format!("{} {why}", file_name(path))),
+            Ok(None) => {
+                scan.unreadable
+                    .push(format!("{} (file not found)", file_name(&path)));
+                continue;
+            }
+            Err(why) => {
+                scan.unreadable.push(format!("{} {why}", file_name(&path)));
+                continue;
+            }
+        };
+        scan.placed.extend(placed_on_sheets(
+            std::iter::once((path.as_path(), &sheet)),
+            |id| target.matches(id),
+        ));
+        let dir = path.parent().unwrap_or_else(|| Path::new(""));
+        for child in &sheet.child_sheets {
+            use crate::app::project_sheets::{
+                ChildReferenceRefusal, resolve_child_reference_quiet,
+            };
+            match resolve_child_reference_quiet(dir, &child.filename) {
+                Ok(resolved) => queue.push(resolved),
+                Err(ChildReferenceRefusal::Empty) => {}
+                Err(ChildReferenceRefusal::Escapes { reference, .. }) => {
+                    scan.unreadable.push(format!(
+                        "{}: child sheet {reference} is outside the project folder",
+                        file_name(&path)
+                    ))
+                }
+            }
         }
     }
     scan.placed.sort();
