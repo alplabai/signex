@@ -521,7 +521,7 @@ impl Signex {
     /// The draft at `path` matches disk: drop its dirty markers, and the
     /// editor itself when it was closed while dirty and parked for Save All.
     fn mark_primitive_clean(&mut self, path: &std::path::Path) {
-        self.document_state.mark_document_clean(path);
+        self.document_state.mark_landed_draft_clean(path);
         if !self.document_is_held_open(path) {
             self.document_state.symbol_editors.remove(path);
             self.document_state.footprint_editors.remove(path);

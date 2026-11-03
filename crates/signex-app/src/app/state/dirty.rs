@@ -171,11 +171,31 @@ impl DocumentState {
     /// point undo and redo return to as clean. A discard uses
     /// [`Self::clear_document_dirty`] instead: any engine left at `path`
     /// need not equal the file there.
+    ///
+    /// A symbol or footprint draft at `path` takes its CURRENT history depth
+    /// as the save point, as an engine does: "matches the disk" names the
+    /// content on screen, so a later Undo must not read clean at an older
+    /// depth. A landed draft save, whose snapshot already set the point and
+    /// whose editor may have moved on since, uses
+    /// [`Self::mark_landed_draft_clean`].
     pub fn mark_document_clean(&mut self, path: &Path) {
         self.clear_document_dirty(path);
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+        if let Some(editor) = self.symbol_editors.get_mut(path) {
+            editor.mark_saved();
+        }
+        if let Some(editor) = self.footprint_editors.get_mut(path) {
+            editor.mark_saved();
+        }
+    }
+
+    /// A draft save landed: clear every stored dirty mark and leave the
+    /// draft's save point where the save snapshot put it (edits made while
+    /// the write ran are past it and stay unsaved).
+    pub fn mark_landed_draft_clean(&mut self, path: &Path) {
+        self.clear_document_dirty(path);
     }
 
     /// Clear every stored dirty mark of `path` without touching the engine's
