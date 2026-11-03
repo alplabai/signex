@@ -497,4 +497,17 @@ mod tests {
         let _ = by_menu.update(Message::Menu(crate::menu_bar::MenuMessage::PlaceLabel));
         assert_eq!(label_types_after_click(&mut by_menu), [LabelType::Net]);
     }
+
+    /// The `SelectTool` arm itself drops a port the previous pick armed
+    /// (#1920), independent of any caller that also clears it.
+    #[test]
+    fn selecting_a_tool_drops_a_pending_port() {
+        let mut app = app_with_empty_sheet();
+        let _ = app.update(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePort,
+        )));
+        assert!(app.interaction_state.pending_port.is_some(), "port armed");
+        let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
+        assert!(app.interaction_state.pending_port.is_none());
+    }
 }

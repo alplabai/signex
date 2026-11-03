@@ -130,21 +130,8 @@ fn assert_menu_closed(app: &Signex, what: &str) {
 /// The canvas menu's rows for the app's current selection, as
 /// `view_context_menu` builds them.
 fn canvas_rows(app: &Signex) -> Vec<DropdownEntry<Message>> {
-    let canvas = app.interaction_state.active_canvas();
-    let selection = CanvasSelection {
-        has_selection: !canvas.selected.is_empty(),
-        child_sheet_selected: canvas
-            .selected
-            .iter()
-            .any(|item| item.kind == SelectedKind::ChildSheet),
-        drawing_selected: !app.selected_drawing_ids().is_empty(),
-        placed_part_selected: app.has_placed_part_selected(),
-    };
+    let (selection, project_key) = app.canvas_menu_inputs();
     let sc = CanvasShortcuts::resolve(|id| app.keymap_shortcut_label(id));
-    let project_key = app
-        .document_state
-        .active_document_project()
-        .map(|p| vec![p.id.to_string()]);
     let tokens = theme_tokens(TID);
     canvas_menu_entries(TID, &tokens, selection, None, project_key, &sc)
 }

@@ -132,7 +132,7 @@ fn dd_disabled_row_is_passive() {
 fn dd_msg_row_carries_message_and_optional_shortcut() {
     let with_sc = dd_msg(
         None,
-        "Cut",
+        "Open Child Sheet",
         "Ctrl+X",
         Message::ContextMenu(ContextMenuMsg::Action(ContextAction::OpenChildSheet)),
     );

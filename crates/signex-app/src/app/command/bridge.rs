@@ -143,7 +143,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             Message::Menu(MenuMessage::OpenPropertiesPanel)
         }
         // The selected sheet symbol's child-sheet actions: the canvas menu
-        // rows send the same context-menu action (#271).
+        // rows send the same context-menu action (#271). These three go round
+        // the message loop twice (row -> Command -> here); harmless, the
+        // second `context_menu.take()` finds None.
         "open_child_sheet" => context_action(ContextAction::OpenChildSheet),
         "create_sheet_from_sheet_symbol" => context_action(ContextAction::CreateChildSheet),
         "sync_sheet_pins" => context_action(ContextAction::SyncSheetPins),

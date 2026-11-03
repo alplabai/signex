@@ -226,7 +226,7 @@ fn a_launcher_failure_reaches_messages() {
 }
 
 #[test]
-fn the_context_menu_action_and_the_command_id_reach_the_datasheet_flow() {
+fn the_command_id_reaches_the_datasheet_flow() {
     let f = fixture();
     let mut app = placed_part(&f, "ZD7");
 
@@ -284,7 +284,7 @@ fn edit_symbol_opens_the_source_symbol_in_the_symbol_editor() {
 }
 
 #[test]
-fn edit_symbol_through_the_context_menu_opens_the_same_tab() {
+fn edit_symbol_through_its_command_id_opens_the_same_tab() {
     let f = fixture();
     let path = symbol_file(&f);
     let mut app = placed_part(&f, "ZE2");

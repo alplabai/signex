@@ -163,10 +163,9 @@ impl Signex {
             .into()
     }
 
-    /// Canvas right-click menu. Resolves selection state + shortcut hints
-    /// from `self`, then delegates to the pure [`canvas_menu_entries`].
-    pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
-        let tid = self.ui_state.effective_theme_id();
+    /// The selection shape and project row key the canvas menu is built
+    /// from; the view and the row-effect tests share it.
+    pub(super) fn canvas_menu_inputs(&self) -> (CanvasSelection, Option<Vec<String>>) {
         let canvas = self.interaction_state.active_canvas();
         let selection = CanvasSelection {
             has_selection: !canvas.selected.is_empty(),
@@ -177,17 +176,25 @@ impl Signex {
             drawing_selected: !self.selected_drawing_ids().is_empty(),
             placed_part_selected: self.has_placed_part_selected(),
         };
-        let active_submenu = self.interaction_state.context_submenu;
-        // Shortcut hints read from the active keymap profile; a command
-        // it does not bind has none.
-        let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
-        let tokens = &self.document_state.panel_ctx.tokens;
         // The project row's tree key, the same one the project tree's own
         // menu sends, so the action follows the project if rows reorder.
         let project_key = self
             .document_state
             .active_document_project()
             .map(|p| vec![p.id.to_string()]);
+        (selection, project_key)
+    }
+
+    /// Canvas right-click menu. Resolves selection state + shortcut hints
+    /// from `self`, then delegates to the pure [`canvas_menu_entries`].
+    pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
+        let tid = self.ui_state.effective_theme_id();
+        let (selection, project_key) = self.canvas_menu_inputs();
+        let active_submenu = self.interaction_state.context_submenu;
+        // Shortcut hints read from the active keymap profile; a command
+        // it does not bind has none.
+        let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
+        let tokens = &self.document_state.panel_ctx.tokens;
         let entries = canvas_menu_entries(tid, tokens, selection, active_submenu, project_key, &sc);
         signex_widgets::active_bar_dropdown::view(entries, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }
