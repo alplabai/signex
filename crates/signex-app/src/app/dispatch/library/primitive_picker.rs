@@ -367,11 +367,14 @@ impl Signex {
                 }
             }
             Err(failure) => {
-                // Offer "Reload saved version" when the row moved on.
-                if failure.row_changed
-                    && let Some(state) = self.library.editors.get_mut(&address)
-                {
-                    state.stale_base = true;
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    // The bound row never reached disk: no clean mark holds.
+                    state.history.forget();
+                    state.dirty = true;
+                    // Offer "Reload saved version" when the row moved on.
+                    if failure.row_changed {
+                        state.stale_base = true;
+                    }
                 }
                 crate::diagnostics::log_warning(format!(
                     "Primitive binding for row {} was not saved: {}",

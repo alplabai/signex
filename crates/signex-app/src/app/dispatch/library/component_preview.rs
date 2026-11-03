@@ -443,6 +443,7 @@ impl Signex {
         library_path: &std::path::Path,
         rows: &[RowId],
     ) -> Task<Message> {
+        self.forget_dirty_editors_of(library_path, rows);
         let clean = self.clean_editors_of(library_path, rows);
         Task::batch(clean.iter().map(|address| {
             crate::library::preview_reads::reload_task(&mut self.library, address, true, false)
@@ -456,6 +457,7 @@ impl Signex {
         library_path: &std::path::Path,
         rows: &[RowId],
     ) {
+        self.forget_dirty_editors_of(library_path, rows);
         for address in self.clean_editors_of(library_path, rows) {
             self.library.reload_editor_blocking(&address, true);
         }
@@ -503,6 +505,21 @@ impl Signex {
             })
             .map(|(a, _)| a.clone())
             .collect()
+    }
+
+    /// A dirty editor keeps its old base, so its saved position names disk
+    /// content the library no longer stores: undo must not read it clean.
+    /// An editor whose own save is in flight is left alone.
+    fn forget_dirty_editors_of(&mut self, library_path: &std::path::Path, rows: &[RowId]) {
+        for (a, s) in self.library.editors.iter_mut() {
+            if a.library_path == library_path
+                && rows.contains(&a.row_id)
+                && s.has_unsaved_edits()
+                && s.saving_row.is_none()
+            {
+                s.history.forget();
+            }
+        }
     }
 
     fn clean_editors_of(

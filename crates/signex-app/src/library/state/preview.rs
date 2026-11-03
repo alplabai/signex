@@ -300,6 +300,10 @@ impl ComponentPreviewState {
         if let Some(saving) = &self.saving_row {
             keep.extend(self.staged_assets_pinned_by(saving));
         }
+        // An undo or redo can pin a replaced PDF again.
+        for row in self.history.rows() {
+            keep.extend(self.staged_assets_pinned_by(row));
+        }
         self.staged_datasheets
             .retain(|hash, _| keep.iter().any(|a| &a.hash == hash));
     }

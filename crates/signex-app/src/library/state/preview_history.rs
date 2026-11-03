@@ -41,6 +41,11 @@ impl RowHistory {
         !self.point.is_at(self.undo.len())
     }
 
+    /// Every row an undo or redo can restore.
+    pub fn rows(&self) -> impl Iterator<Item = &ComponentRow> {
+        self.undo.iter().chain(self.redo.iter())
+    }
+
     /// The current row is what a save is writing.
     pub fn mark_saved(&mut self) {
         self.point.mark_saved(self.undo.len());
@@ -143,6 +148,9 @@ impl ComponentPreviewState {
             self.history.record(before);
         }
         self.dirty = true;
+        // A replaced pick is spent unless the row, the copy being saved or an
+        // undo / redo step pins it.
+        self.prune_staged_datasheets();
     }
 
     /// The row changed outside an inline edit and no snapshot can undo it

@@ -188,6 +188,12 @@ position", and a half-typed value in `params_edit_buf` still counts as unsaved
 - A re-bound primitive (an edit that changes a primitive reference, and the
   bind from the picker) drops every step: a snapshot cannot hold the resolved
   symbol, footprint or model. The row keeps whatever dirtiness it had.
+- An alternate symbol added from the picker is one step like an inline edit.
+  A bind whose write fails leaves the row dirty and forgets the point. A write
+  by the browser or a cascade to a row whose editor is dirty forgets the point,
+  since it names disk content the library no longer holds.
+- Staged PDFs are kept while any undo or redo step pins them, so an undo to a
+  replaced pick still has bytes to write.
 - A reload replaces the editor state, so its history is new and the row clean;
   Close and Discard remove the state with its history. There is no autosave
   recovery for a row, so no recovered copy starts clean.

@@ -91,6 +91,21 @@ fn an_edit_made_while_the_write_runs_keeps_the_row_dirty() {
 }
 
 #[test]
+fn an_outside_write_to_a_dirty_row_makes_undo_stay_dirty() {
+    let (mut app, address) = app_with_clean_editor();
+    set_lifecycle(&mut app, &address, LifecycleState::Released);
+    let root = address.library_path.clone();
+    let _ = app.refresh_clean_editors(&root, &[address.row_id]);
+
+    let preview = editor(&mut app, &address);
+    assert!(preview.step_history(true));
+    assert!(
+        preview.dirty,
+        "the saved position names replaced disk content"
+    );
+}
+
+#[test]
 fn a_reload_starts_clean_with_no_history() {
     let (mut app, address) = app_with_clean_editor();
     set_lifecycle(&mut app, &address, LifecycleState::Released);
