@@ -686,6 +686,9 @@ pub struct LibraryState {
     /// Latest row reload planned per Component Preview. A reload applies
     /// only while its generation is still the one here.
     pub editor_reload_generations: HashMap<EditorAddress, u64>,
+    /// Latest first-visit tab lookup planned per Component Preview. A
+    /// lookup applies only while its generation is still the one here.
+    pub tab_resolve_generations: HashMap<EditorAddress, u64>,
     /// The Properties panel's summaries of the selected row's bindings,
     /// read off the UI thread.
     pub row_summary_job: super::row_summaries::RowSummaryJob,

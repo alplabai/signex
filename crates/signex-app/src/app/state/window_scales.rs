@@ -13,6 +13,15 @@ impl UiState {
         crate::ui_scale::render_scale(os_scale, self.ui_scale)
     }
 
+    /// Device pixels per logical pixel of the main window, 1.0 before it opens.
+    #[must_use]
+    pub fn main_device_px_per_logical_px(&self) -> f32 {
+        self.main_window_id.map_or(
+            signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+            |id| self.device_px_per_logical_px(id),
+        )
+    }
+
     /// Record a window's OS scale. Only a window the app tracks is stored,
     /// so a reading that arrives after the window closed does not bring its
     /// entry back. A non-finite or non-positive reading is dropped. Returns

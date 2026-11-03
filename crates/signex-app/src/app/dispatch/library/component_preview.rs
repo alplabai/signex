@@ -118,7 +118,14 @@ impl Signex {
                 // not replace what was typed.
                 return self.reload_editor_from_server(&address, true);
             }
-            EditorMsg::ReloadConfirmed => return self.reload_editor_from_server(&address, false),
+            EditorMsg::ReloadConfirmed => {
+                // The bar goes at once; the read that replaces the copy
+                // lands later (#1756).
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    state.reload_confirming = false;
+                }
+                return self.reload_editor_from_server(&address, false);
+            }
             EditorMsg::ReloadCancelled => {
                 if let Some(state) = self.library.editors.get_mut(&address) {
                     state.reload_confirming = false;
@@ -420,7 +427,15 @@ impl Signex {
         address: &EditorAddress,
         require_clean: bool,
     ) -> Task<Message> {
-        crate::library::preview_reads::reload_task(&mut self.library, address, require_clean, true)
+        let task = crate::library::preview_reads::reload_task(
+            &mut self.library,
+            address,
+            require_clean,
+            true,
+        );
+        // A row whose library is gone logs a warning instead of reading.
+        self.sync_diagnostics_panel_ctx();
+        task
     }
 
     /// After a write to `rows` that did not go through their Component
@@ -436,9 +451,14 @@ impl Signex {
         rows: &[RowId],
     ) -> Task<Message> {
         let clean = self.clean_editors_of(library_path, rows);
-        Task::batch(clean.iter().map(|address| {
-            crate::library::preview_reads::reload_task(&mut self.library, address, true, false)
-        }))
+        let tasks: Vec<_> = clean
+            .iter()
+            .map(|address| {
+                crate::library::preview_reads::reload_task(&mut self.library, address, true, false)
+            })
+            .collect();
+        self.sync_diagnostics_panel_ctx();
+        Task::batch(tasks)
     }
 
     /// [`Self::refresh_clean_editors`] on this thread, for the save that is
@@ -464,11 +484,12 @@ impl Signex {
         rows: &[RowId],
     ) -> Task<Message> {
         let dirty = self.dirty_editors_of(library_path, rows);
-        Task::batch(
-            dirty.iter().map(|address| {
-                crate::library::preview_reads::rebase_task(&mut self.library, address)
-            }),
-        )
+        let tasks: Vec<_> = dirty
+            .iter()
+            .map(|address| crate::library::preview_reads::rebase_task(&mut self.library, address))
+            .collect();
+        self.sync_diagnostics_panel_ctx();
+        Task::batch(tasks)
     }
 
     /// [`Self::rebase_dirty_editors`] on this thread, for the blocking save.

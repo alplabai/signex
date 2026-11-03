@@ -73,6 +73,7 @@ impl Signex {
             self.library.drift.drifted.clear();
             self.library.drift.missing.clear();
             self.library.drift.names.clear();
+            self.library.drift.unreadable_libs.clear();
             self.update_selection_info();
             return None;
         }
@@ -108,6 +109,9 @@ impl Signex {
                 .is_some_and(|library| libs.iter().any(|l| l.id == library))
         };
         let drift = &mut self.library.drift;
+        drift
+            .unreadable_libs
+            .retain(|library, _| libs.iter().any(|l| l.id == *library));
         drift.names.retain(|lib_id, _| mounted(lib_id));
         for rows in drift.drifted.values_mut().chain(drift.missing.values_mut()) {
             rows.retain(|lib_id| mounted(lib_id));
@@ -126,6 +130,19 @@ impl Signex {
         if report.sheets.is_empty() && !report.problems.is_empty() {
             return Task::none();
         }
+        // Say it once per (library, reason): a different failure is new.
+        for (library, (name, reason)) in &report.unreadable_libs {
+            if self.library.drift.unreadable_libs.get(library) != Some(reason) {
+                crate::diagnostics::log_warning(crate::library::drift::unreadable_library_warning(
+                    name, reason,
+                ));
+            }
+        }
+        self.library.drift.unreadable_libs = report
+            .unreadable_libs
+            .iter()
+            .map(|(library, (_, reason))| (*library, reason.clone()))
+            .collect();
         let mut drifted = std::collections::HashMap::new();
         for (sheet, entries) in report.sheets {
             // Closed meanwhile: nothing to show.
@@ -189,16 +206,17 @@ impl Signex {
             let names: Vec<String> = ids
                 .iter()
                 .map(|id| {
-                    let name = self
-                        .library
+                    self.library
                         .drift
-                        .display_name(id, &self.library.open_libraries);
-                    format!("{name} [{id}]")
+                        .display_name(id, &self.library.open_libraries)
                 })
                 .collect();
             crate::diagnostics::log_warning(format!(
                 "{}: library symbol missing for {}; the sheet keeps its embedded copy.",
-                sheet.display(),
+                sheet.file_name().map_or_else(
+                    || sheet.display().to_string(),
+                    |n| n.to_string_lossy().into_owned()
+                ),
                 names.join(", ")
             ));
         }
@@ -278,3 +296,6 @@ fn keep_unreadable_names(
         names.entry(lib_id.clone()).or_insert_with(|| name.clone());
     }
 }
+
+#[cfg(test)]
+mod tests;

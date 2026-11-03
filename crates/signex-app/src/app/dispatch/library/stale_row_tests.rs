@@ -684,3 +684,43 @@ fn a_dirty_preview_on_tab_draws_the_rewritten_symbol(tab: crate::library::state:
     assert_eq!(preview.row.description, "Mine");
     assert_eq!(preview.row.symbol_version, "9.9.9");
 }
+
+#[test]
+fn the_confirm_bar_goes_as_soon_as_the_reload_is_confirmed() {
+    let (mut app, address) = app_with_row(1, 1);
+    commit_cell(&mut app, &address, "R-115b");
+    let task = app.handle_editor_event(address.clone(), EditorMsg::ReloadRequested);
+    run_write(&mut app, task);
+    assert!(editor(&app, &address).reload_confirming);
+    // The task that reads the row has not run yet.
+    let _task = app.handle_editor_event(address.clone(), EditorMsg::ReloadConfirmed);
+    assert!(!editor(&app, &address).reload_confirming);
+}
+
+/// #1756: a reload of a row whose library is no longer mounted logs a
+/// warning, and the Messages panel's copy of the log must catch up in the
+/// same step.
+#[test]
+fn a_reload_of_a_row_whose_library_is_gone_warns_in_the_messages_panel() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, address) = app_with_row(1, 1);
+    let library_id = app
+        .library
+        .library_at(&address.library_path)
+        .expect("open")
+        .library_id;
+    app.library.set.unmount(library_id);
+    app.document_state.panel_ctx.diagnostics.clear();
+
+    drop(app.reload_editor_from_server(&address, false));
+
+    let needle = format!("Row {} could not be reloaded", address.row_id);
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|entry| entry.message.contains(&needle)),
+        "the warning reaches the diagnostics context"
+    );
+}
