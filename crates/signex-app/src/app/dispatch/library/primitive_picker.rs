@@ -397,11 +397,20 @@ impl Signex {
         }
         let Some(library_id) = self
             .library
-            .library_holding(&file, kind)
+            .library_holding_with(&file, kind, self.identity_fold_for(&file))
             .map(|lib| lib.library_id)
         else {
+            let folder = match kind {
+                PrimitiveKind::Footprint => "footprints",
+                _ => "sims",
+            };
+            let message = format!(
+                "{}: not in the `{folder}/` folder of an open library.",
+                file.display()
+            );
+            crate::diagnostics::log_warning(&message);
             if let Some(picker) = self.library.primitive_picker.as_mut() {
-                picker.error = Some("Picked file is not in the `symbols/`, `footprints/` or `sims/` folder of an open library.".into());
+                picker.error = Some(message);
             }
             return Task::none();
         };

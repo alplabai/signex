@@ -372,6 +372,7 @@ mod tests {
             Path::new("/tmp/x.snxsym"),
             std::iter::once((path.as_path(), &sheet)),
             symbol.uuid,
+            false,
         );
         assert_eq!(outside.sheets, 1);
     }

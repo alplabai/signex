@@ -23,7 +23,7 @@ impl Signex {
         }
         // A file under a mounted library's directory is left out even when it
         // is outside that library's `symbols/` folder: this is the same rule
-        // `containing_library` applies everywhere, and `push_loose` hides
+        // `deepest_libraries` applies everywhere, and `push_loose` hides
         // the same files once the library is open.
         let files: Vec<PathBuf> = self
             .document_state
@@ -37,7 +37,11 @@ impl Signex {
                     .map(|entry| project.data.resolve_library_path(entry))
             })
             .filter(|path| has_extension(path, "snxsym"))
-            .filter(|path| self.library.containing_library(path).is_none())
+            .filter(|path| {
+                !self
+                    .library
+                    .is_in_mounted_library(path, self.identity_fold_for(path))
+            })
             .collect();
         read_loose_task(files, false)
     }
@@ -59,9 +63,11 @@ impl Signex {
         // the directory-form route does; it is never offered as a copy.
         if from_browse
             && let [only] = read.symbols.as_slice()
-            && let Some(lib) = self
-                .library
-                .library_holding(&only.file, PrimitiveKind::Symbol)
+            && let Some(lib) = self.library.library_holding_with(
+                &only.file,
+                PrimitiveKind::Symbol,
+                self.identity_fold_for(&only.file),
+            )
         {
             let reference = signex_library::PrimitiveRef::new(lib.library_id, only.uuid);
             return Task::done(Message::Library(LibraryMessage::PrimitivePicker(

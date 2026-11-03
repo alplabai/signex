@@ -288,3 +288,64 @@ fn libraries_sharing_a_folder_each_list_the_shared_draft() {
     let confirm = f.app.library.close_library_confirm.as_ref().expect("asked");
     assert_eq!(confirm.dirty_paths, vec![symbol]);
 }
+
+/// #1916: a library mounted under a `..` spelling still saves a draft
+/// opened under the plain spelling.
+#[test]
+fn a_draft_saves_when_its_library_is_mounted_under_another_spelling() {
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(dir.join("proj")).unwrap();
+    let spelled = dir
+        .join("proj")
+        .join("..")
+        .join(f.file.file_name().unwrap());
+    let file = f.file.clone();
+    f.app
+        .library
+        .open_libraries
+        .iter_mut()
+        .find(|lib| lib.root == file)
+        .unwrap()
+        .root = spelled;
+    let symbol = symbol_in_library(&f, "s.snxsym");
+    std::fs::create_dir_all(symbol.parent().unwrap()).unwrap();
+    open_dirty_symbol(&mut f, &symbol);
+
+    let saved = f.app.save_primitive_tab_blocking(&symbol);
+    assert!(saved.is_ok(), "save failed: {saved:?}");
+    assert!(symbol.exists());
+}
+
+/// The Close Library prompt and the save must agree on a draft's library:
+/// a draft the prompt lists as this library's is saved through it.
+#[test]
+fn the_close_prompt_and_the_save_agree_on_a_drafts_library() {
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let other_case = dir
+        .parent()
+        .unwrap()
+        .join(dir.file_name().unwrap().to_string_lossy().to_uppercase());
+    let symbol = other_case.join("symbols").join("s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+
+    let listed = f
+        .app
+        .library
+        .close_library_confirm
+        .as_ref()
+        .is_some_and(|c| c.dirty_paths.contains(&symbol));
+    let target = f
+        .app
+        .library
+        .write_target_library(&symbol, f.app.identity_fold_for(&symbol))
+        .map(|l| l.root.clone());
+    assert_eq!(
+        listed,
+        target.is_some(),
+        "Close Library lists the draft as this library's: {listed}; the save routes it through: {target:?}"
+    );
+}

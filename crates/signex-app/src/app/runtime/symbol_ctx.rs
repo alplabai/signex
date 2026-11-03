@@ -118,7 +118,10 @@ pub(super) fn build_symbol_editor_panel_ctx(
     // Resolve the containing `.snxlib` so the Properties panel's
     // Document Options branch can render real per-library values.
     // Lone-file edits (no mounted library) fall through to defaults.
-    let display = match app.library.containing_library(&path) {
+    let display = match app
+        .library
+        .containing_library_with(&path, app.identity_fold_for(&path))
+    {
         Some(lib) => SymbolDisplayOptions {
             sheet_color: lib.display.sheet_color,
             grid_visible: lib.display.grid_visible,

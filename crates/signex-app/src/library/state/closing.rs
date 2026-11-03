@@ -3,6 +3,7 @@
 //! library".
 
 use super::*;
+use crate::app::CaseFold;
 
 impl LibraryState {
     /// Libraries whose close was deferred and whose writes are all done.
@@ -24,6 +25,22 @@ impl LibraryState {
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_else(|| root.display().to_string())
             })
+    }
+
+    /// Drop the pending symbol delete held by the library at `root`, when a
+    /// close of it would go ahead now. Call before [`Self::close_library`]:
+    /// the owner of the symbol is looked up while the library is mounted.
+    pub fn drop_symbol_delete_held_by(&mut self, root: &Path, fold: CaseFold) {
+        if self.writes.pending(root) > 0 {
+            return;
+        }
+        let held = self.pending_symbol_delete.as_ref().is_some_and(|d| {
+            self.containing_library_with(&d.path, fold)
+                .is_some_and(|lib| lib.root == root)
+        });
+        if held {
+            self.pending_symbol_delete = None;
+        }
     }
 
     /// Whether a close of the library at `root` waits for its writes.
@@ -65,12 +82,6 @@ impl LibraryState {
             return;
         }
         self.closing.remove(root);
-        if self.pending_symbol_delete.as_ref().is_some_and(|d| {
-            self.containing_library(&d.path)
-                .is_some_and(|lib| lib.root == root)
-        }) {
-            self.pending_symbol_delete = None;
-        }
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that

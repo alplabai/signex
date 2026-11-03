@@ -122,7 +122,10 @@ fn planning_a_preview_refresh_reads_no_primitive() {
     let mut fx = fixture();
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
 
-    let plan = fx.state.plan_preview_refresh(&saved).expect("a plan");
+    let plan = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("a plan");
 
     assert_eq!(fx.reads.load(Ordering::SeqCst), 0, "update only plans");
     let _readout = plan.read();
@@ -133,7 +136,10 @@ fn planning_a_preview_refresh_reads_no_primitive() {
 fn a_fresh_readout_replaces_the_resolved_symbol() {
     let mut fx = fixture();
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
-    let plan = fx.state.plan_preview_refresh(&saved).expect("a plan");
+    let plan = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("a plan");
     fx.store("New");
 
     fx.state.apply_preview_readout(plan.read());
@@ -146,8 +152,14 @@ fn a_readout_superseded_by_a_newer_plan_is_dropped() {
     let mut fx = fixture();
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
     fx.store("Middle");
-    let first = fx.state.plan_preview_refresh(&saved).expect("first plan");
-    let second = fx.state.plan_preview_refresh(&saved).expect("second plan");
+    let first = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("first plan");
+    let second = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("second plan");
     let early = first.read();
     fx.store("Newest");
     let late = second.read();
@@ -162,7 +174,10 @@ fn a_readout_superseded_by_a_newer_plan_is_dropped() {
 fn a_readout_for_a_library_closed_meanwhile_is_dropped() {
     let mut fx = fixture();
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
-    let plan = fx.state.plan_preview_refresh(&saved).expect("a plan");
+    let plan = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("a plan");
     fx.store("New");
     let readout = plan.read();
     fx.state.open_libraries.clear();
@@ -176,7 +191,10 @@ fn a_readout_for_a_library_closed_meanwhile_is_dropped() {
 fn a_preview_that_was_rebound_meanwhile_keeps_its_symbol() {
     let mut fx = fixture();
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
-    let plan = fx.state.plan_preview_refresh(&saved).expect("a plan");
+    let plan = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("a plan");
     fx.store("New");
     let readout = plan.read();
     let library_id = fx.state.open_libraries[0].library_id;
@@ -203,7 +221,9 @@ fn a_failed_lookup_keeps_the_previous_copy() {
     state.open_libraries = std::mem::take(&mut fx.state.open_libraries);
     state.editors = std::mem::take(&mut fx.state.editors);
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
-    let plan = state.plan_preview_refresh(&saved).expect("a plan");
+    let plan = state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("a plan");
 
     state.apply_preview_readout(plan.read());
 
@@ -224,14 +244,21 @@ fn a_preview_that_never_resolved_stays_lazy() {
         .symbol = None;
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
 
-    assert!(fx.state.plan_preview_refresh(&saved).is_none());
+    assert!(
+        fx.state
+            .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+            .is_none()
+    );
 }
 
 #[test]
 fn a_readout_planned_under_a_closed_mount_does_not_land_on_the_next_mount() {
     let mut fx = fixture();
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
-    let plan = fx.state.plan_preview_refresh(&saved).expect("a plan");
+    let plan = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default())
+        .expect("a plan");
     fx.store("New");
     let readout = plan.read();
     let library_id = fx.state.open_libraries[0].library_id;
@@ -268,7 +295,9 @@ fn a_save_in_a_nested_library_refreshes_its_own_previews() {
     fx.state.open_libraries.rotate_right(1);
     let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
 
-    let plan = fx.state.plan_preview_refresh(&saved);
+    let plan = fx
+        .state
+        .plan_preview_refresh(&saved, crate::app::CaseFold::host_default());
 
     assert!(
         plan.is_some(),

@@ -244,23 +244,12 @@ impl LibraryState {
         self.open_libraries.iter_mut().find(|lib| lib.root == path)
     }
 
-    /// Find the open library whose `root_dir` is an ancestor of
-    /// `child_path`. Used to resolve `.snxsym` / `.snxfpt` files back
-    /// to the `.snxlib` they live alongside — e.g. for sourcing
-    /// per-library canvas display settings
-    /// ([`LibraryDisplaySettings`]).
-    ///
-    /// Per `v0.9-snxlib-as-file-plan.md` §2 Stage C the comparison
-    /// is against the `.snxlib`'s *parent directory*, not the file
-    /// itself, so `<root_dir>/symbols/foo.snxsym` correctly resolves
-    /// to its library.
-    pub fn containing_library(&self, child_path: &Path) -> Option<&OpenLibrary> {
-        self.containing_library_with(child_path, CaseFold::host_default())
-    }
-
-    /// [`Self::containing_library`] under an explicit case rule. The deepest
-    /// matching folder wins, so a library nested in another's folder owns its
-    /// own files.
+    /// Find the open library whose `root_dir` is an ancestor of `child_path`
+    /// (so `<root_dir>/symbols/foo.snxsym` resolves to its library; used for
+    /// per-library canvas display settings). The deepest matching folder
+    /// wins, so a library nested in another's folder owns its own files.
+    /// `fold` is the path's identity rule (`Signex::identity_fold_for`): the
+    /// one case rule shared with the close prompts and the save routing.
     pub fn containing_library_with(
         &self,
         child_path: &Path,
@@ -270,8 +259,12 @@ impl LibraryState {
         self.open_libraries.get(index)
     }
 
-    pub fn containing_library_mut(&mut self, child_path: &Path) -> Option<&mut OpenLibrary> {
-        let index = self.containing_index(child_path, CaseFold::host_default())?;
+    pub fn containing_library_mut_with(
+        &mut self,
+        child_path: &Path,
+        fold: CaseFold,
+    ) -> Option<&mut OpenLibrary> {
+        let index = self.containing_index(child_path, fold)?;
         self.open_libraries.get_mut(index)
     }
 
@@ -299,12 +292,10 @@ impl LibraryState {
         (key(file.parent()?) == key(&lib.root_dir()?.join(dir))).then_some(lib)
     }
 
-    pub fn library_holding(
-        &self,
-        file: &Path,
-        kind: signex_library::PrimitiveKind,
-    ) -> Option<&OpenLibrary> {
-        self.library_holding_with(file, kind, CaseFold::host_default())
+    /// True when some open library holds `file` in its folder, even when
+    /// several share it and none can be named its owner.
+    pub fn is_in_mounted_library(&self, file: &Path, fold: CaseFold) -> bool {
+        !self.deepest_libraries(file, fold).is_empty()
     }
 
     /// True when several open libraries share the deepest folder holding
@@ -316,12 +307,12 @@ impl LibraryState {
     /// The open library a draft at `path` is written, committed and cascaded
     /// through: the deepest one holding it (a nested library owns its own
     /// files), so the outer library of a nested pair is never picked. When
-    /// several libraries share the deepest folder, the one with the sorted-
-    /// first `.snxlib` path, so the choice does not depend on mount order.
-    pub fn write_target_library(&self, path: &Path) -> Option<&OpenLibrary> {
-        self.deepest_libraries(path, CaseFold::host_default())
+    /// several libraries share the deepest folder, the one with the smallest
+    /// path key, so the choice depends on neither mount order nor spelling.
+    pub fn write_target_library(&self, path: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
+        self.deepest_libraries(path, fold)
             .into_iter()
-            .min_by(|a, b| a.root.cmp(&b.root))
+            .min_by_key(|lib| crate::app::path_key_with(&lib.root, fold))
     }
 
     fn deepest_libraries(&self, file: &Path, fold: CaseFold) -> Vec<&OpenLibrary> {

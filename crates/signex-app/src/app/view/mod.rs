@@ -539,7 +539,7 @@ impl Signex {
                 // mounted library) get safe defaults.
                 let display = self
                     .library
-                    .containing_library(path)
+                    .containing_library_with(path, self.identity_fold_for(path))
                     .map(|lib| lib.display)
                     .unwrap_or_default();
                 return crate::library::editor::standalone::view_symbol(

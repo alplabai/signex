@@ -181,7 +181,7 @@ impl Signex {
             return None;
         }
         self.library
-            .write_target_library(path)
+            .write_target_library(path, self.identity_fold_for(path))
             .map(|lib| lib.root.clone())
     }
 }

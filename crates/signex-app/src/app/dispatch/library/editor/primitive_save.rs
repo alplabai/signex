@@ -120,7 +120,9 @@ impl Signex {
     ) -> anyhow::Result<()> {
         // This write runs on the UI thread, so it cannot wait for a library
         // write a worker still has: refuse instead of freezing the window.
-        if let Some(library) = self.library.write_target_library(path)
+        if let Some(library) = self
+            .library
+            .write_target_library(path, self.identity_fold_for(path))
             && self.library.writes.pending_writes(&library.root) > 0
         {
             anyhow::bail!(
@@ -183,15 +185,23 @@ impl Signex {
         // The container write may add or replace a listed `.snxsym` /
         // `.snxfpt` without changing the path set (#111).
         self.document_state.project_fs.invalidate();
-        let mounted_library = self
-            .library
-            .write_target_library(path)
-            .map(|lib| lib.root.clone());
+        let fold = self.identity_fold_for(path);
+        let target = self.library.write_target_library(path, fold);
+        let mounted_library = target.map(|lib| lib.root.clone());
+        let write_path = write_path_under(path, target);
+        if mounted_library.is_some() && self.library.libraries_share_folder_of(path, fold) {
+            crate::diagnostics::log_warning(format!(
+                "{}: several libraries share its folder; saved through {}.",
+                path.display(),
+                self.library
+                    .library_label(mounted_library.as_deref().unwrap_or(path)),
+            ));
+        }
         let turn = mounted_library
             .as_deref()
             .map(|library| self.library.writes.turn(library));
         let write = PrimitiveWrite {
-            path: path.to_path_buf(),
+            path: write_path,
             mode,
             mounted_library,
             now,
@@ -579,5 +589,21 @@ impl Signex {
                 ),
             ),
         }
+    }
+}
+
+/// The path a save writes: `path`, spelled under the mounted library's own
+/// folder when it is held by another spelling of it (`..`, case). The
+/// adapter takes the write lock for, and checks, the raw prefix; the file is
+/// the same one.
+fn write_path_under(
+    path: &std::path::Path,
+    library: Option<&crate::library::state::OpenLibrary>,
+) -> std::path::PathBuf {
+    match library.and_then(|lib| lib.root_dir()) {
+        Some(dir) if !path.starts_with(dir) => {
+            crate::app::state::scope::rebase_under(path, dir, dir)
+        }
+        _ => path.to_path_buf(),
     }
 }

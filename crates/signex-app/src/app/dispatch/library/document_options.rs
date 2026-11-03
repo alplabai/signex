@@ -72,10 +72,14 @@ impl Signex {
 
     /// Modal — apply the draft to the library and close.
     pub(super) fn handle_document_options_apply(&mut self) -> Task<Message> {
-        if let Some(s) = self.library.document_options.take()
-            && let Some(lib) = self.library.containing_library_mut(&s.library_path)
-        {
-            lib.display = s.draft;
+        if let Some(s) = self.library.document_options.take() {
+            let fold = self.identity_fold_for(&s.library_path);
+            if let Some(lib) = self
+                .library
+                .containing_library_mut_with(&s.library_path, fold)
+            {
+                lib.display = s.draft;
+            }
         }
         // Clear every primitive editor's canvas cache so the
         // new sheet color / grid paints immediately. Cheap.
