@@ -414,13 +414,6 @@ impl Signex {
                 Task::none()
             }
             AnnotateMsg::ReprefixPressed if self.annotate_preview_is_loading() => Task::none(),
-            // A run is going (its dialog buttons are off): a second request
-            // would only be refused with a notice.
-            AnnotateMsg::Run(_) | AnnotateMsg::ReprefixPressed
-                if self.ui_state.annotate_runs.is_running() =>
-            {
-                Task::none()
-            }
             AnnotateMsg::ReprefixPressed => {
                 let task = self.handle_reprefix_pressed();
                 // Its refusals are Messages lines, on screen in this frame.

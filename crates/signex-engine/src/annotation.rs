@@ -34,9 +34,11 @@ pub struct AnnotateScope<'a> {
     /// designators are skipped here as well.
     pub reprefix: Option<&'a HashMap<Uuid, String>>,
     /// Empty for a sheet placed once. For a file placed more than once
-    /// (#1835): one entry per placement, root placement first, each with its
-    /// own `sheet` ordinal in `parts`; the sheet is then numbered once per
-    /// placement and the designators land in `Symbol.instances`.
+    /// (#1835): one entry per placement, sorted by instance path (root, then
+    /// the lowest uuid chain first), each with its own `sheet` ordinal in
+    /// `parts`; the sheet is then numbered once per placement. `reference`
+    /// takes the first placement's designator and every non-root placement
+    /// gets a `Symbol.instances` entry.
     pub placements: &'a [AnnotatePlacement],
 }
 

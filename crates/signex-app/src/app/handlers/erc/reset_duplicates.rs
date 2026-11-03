@@ -79,18 +79,7 @@ fn reset_placed(
         if unchanged {
             continue;
         }
-        let all_unannotated = finals.iter().all(|f| f.trim().ends_with('?'));
-        for (place, last) in places.iter().zip(&finals) {
-            if place.is_root() {
-                continue;
-            }
-            if all_unannotated {
-                sym.clear_instance_designator(place);
-            } else {
-                sym.set_instance_designator(place, last.clone());
-            }
-        }
-        sym.reference.clone_from(&finals[0]);
+        sym.write_placement_designators(places, &finals);
         changed = true;
     }
     changed

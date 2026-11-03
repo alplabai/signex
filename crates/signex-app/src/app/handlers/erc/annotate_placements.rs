@@ -12,8 +12,10 @@ use crate::app::Signex;
 use crate::app::project_sheets::{self as ps, ProjectSheetSet};
 use crate::app::state::DocumentState;
 
-/// Every sheet file the project reaches more than once, with the placement
-/// (root first) of each occurrence. Files placed once are absent.
+/// Every sheet file the project reaches more than once, or whose symbols hold
+/// an instance entry at its one placement (such a file resolves through the
+/// entry, not `reference`), with the placement (root first) of each
+/// occurrence. Other files are absent.
 pub(super) fn multi_placed_files(
     set: &ProjectSheetSet,
     base_dir: Option<&Path>,
@@ -53,7 +55,15 @@ pub(super) fn multi_placed_files(
             paths.sort();
             paths.dedup();
             let file = graph.paths.get(&key)?.clone();
-            (paths.len() > 1).then_some((file, paths))
+            let resolves_by_entry = |path: &InstancePath| {
+                set.sheets.get(&file).is_some_and(|sheet| {
+                    sheet
+                        .symbols
+                        .iter()
+                        .any(|symbol| symbol.has_instance_entry_in(path))
+                })
+            };
+            (paths.len() > 1 || paths.iter().any(resolves_by_entry)).then_some((file, paths))
         })
         .collect()
 }

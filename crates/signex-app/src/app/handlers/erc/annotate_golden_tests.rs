@@ -454,3 +454,31 @@ fn reset_and_renumber_refuses_the_run_when_a_sheet_cannot_be_read() {
         "{notice}"
     );
 }
+
+#[test]
+fn a_child_left_with_one_placement_is_numbered_where_it_resolves() {
+    // A child placed twice and annotated; then one sheet symbol is deleted
+    // and a new part goes on the root.
+    let (mut app, dir, [_, b]) = project_with_a_child_placed_twice();
+    let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
+    settle_task(&mut app, task);
+    let root_path = dir.join("b_root.snxsch");
+    let mut root = app.document_state.engines[&root_path].document().clone();
+    root.child_sheets.retain(|child| child.uuid == b);
+    root.symbols.push(symbol("Q?", 1, 100.0));
+    open_with(&mut app.document_state, &root_path, root);
+
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    settle_task(&mut app, task);
+    let root_refs = refs_of(app.document_state.engines[&root_path].document());
+    let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
+    let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    std::fs::remove_dir_all(&dir).ok();
+    let at_b = designators_at(&child, b);
+    assert!(
+        !at_b.contains(&root_refs[1]),
+        "the root's new part got {} although the remaining placement resolves to {at_b:?} (child reference {:?})",
+        root_refs[1],
+        refs_of(&child)
+    );
+}

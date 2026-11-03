@@ -759,7 +759,7 @@ fn a_rollback_that_found_no_run_leaves_an_unrelated_edit_dirty() {
 }
 
 #[test]
-fn a_rollback_that_recorded_nothing_on_the_active_sheet_leaves_it_clean() {
+fn a_rollback_that_found_no_run_on_the_active_sheet_leaves_it_unsaved() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
     let root = dir.join("a_root.snxsch");
     // Open through a save point, so the history decides dirty and the
@@ -771,17 +771,19 @@ fn a_rollback_that_recorded_nothing_on_the_active_sheet_leaves_it_clean() {
         .mark_saved();
     app.document_state.sync_history_dirty(&root);
     assert!(!app.document_state.is_document_dirty(&root));
+    // The pass marked the sheet dirty before the rollback ran.
+    app.document_state.mark_document_dirty(&root);
     let touched = [root.clone()];
     let _ = app.roll_back_reprefix(
         Some(signex_engine::UndoGroupId::new(u64::MAX)),
         &touched,
         &std::collections::HashSet::new(),
-        &[],
+        &touched,
         "test",
     );
     std::fs::remove_dir_all(&dir).ok();
     assert!(
-        !app.document_state.is_document_dirty(&root),
-        "the run recorded nothing on this sheet, so it is not left unsaved"
+        app.document_state.is_document_dirty(&root),
+        "the run may still be in the sheet, so it stays unsaved"
     );
 }

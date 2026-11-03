@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use signex_types::schematic::Symbol;
+use signex_types::schematic::{InstancePath, Symbol};
 
 use crate::EngineError;
 use crate::annotation::{AnnotateScope, number_symbols};
@@ -49,18 +49,10 @@ impl Engine {
             if !touched {
                 continue;
             }
-            let all_unannotated = finals.iter().all(|refs| refs[idx].trim().ends_with('?'));
-            for (placement, refs) in scope.placements.iter().zip(&finals) {
-                if placement.path.is_root() {
-                    continue;
-                }
-                if all_unannotated {
-                    symbol.clear_instance_designator(&placement.path);
-                } else {
-                    symbol.set_instance_designator(&placement.path, refs[idx].clone());
-                }
-            }
-            symbol.reference.clone_from(&finals[0][idx]);
+            let places: Vec<InstancePath> =
+                scope.placements.iter().map(|p| p.path.clone()).collect();
+            let designators: Vec<String> = finals.iter().map(|refs| refs[idx].clone()).collect();
+            symbol.write_placement_designators(&places, &designators);
         }
         Ok(())
     }

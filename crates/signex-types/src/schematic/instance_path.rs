@@ -147,6 +147,29 @@ impl Symbol {
         });
     }
 
+    /// Write per-placement designators back: `finals[i]` is the designator at
+    /// `places[i]`. `places` is sorted, so the root placement (if any) comes
+    /// first; `reference` takes `finals[0]`, and every non-root placement gets
+    /// an explicit entry, so removing one placement never moves the others.
+    /// When every placement is unannotated (`R?`) the entries are cleared
+    /// instead.
+    pub fn write_placement_designators(&mut self, places: &[InstancePath], finals: &[String]) {
+        let all_unannotated = finals.iter().all(|f| f.trim().ends_with('?'));
+        for (place, designator) in places.iter().zip(finals) {
+            if place.is_root() {
+                continue;
+            }
+            if all_unannotated {
+                self.clear_instance_designator(place);
+            } else {
+                self.set_instance_designator(place, designator.clone());
+            }
+        }
+        if let Some(first) = finals.first() {
+            self.reference.clone_from(first);
+        }
+    }
+
     /// Drop every entry for the placement at `path`, so it falls back to
     /// `reference`. Returns whether anything was dropped.
     pub fn clear_instance_designator(&mut self, path: &InstancePath) -> bool {

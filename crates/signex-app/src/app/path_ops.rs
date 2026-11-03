@@ -40,7 +40,8 @@ impl PathOpKind {
         match self {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
-            Self::ProjectRewrite | Self::ProjectRead => "project-wide rewrite",
+            Self::ProjectRewrite => "project-wide rewrite",
+            Self::ProjectRead => "project-wide read",
             Self::AddSheet => "new-sheet add",
             Self::SaveAsSheet => "Save As",
         }

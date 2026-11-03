@@ -257,12 +257,27 @@ fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run
     let root = root_path(&dir);
     let read = app.handle_annotate(ResetAndRenumber);
     let message = completion(read);
-    let allowed = app.refuse_save_while_path_op(&root).is_ok();
+    // A real save of the open root: not refused, and its completion moves the
+    // epoch that cancels the run.
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "a_root".into(),
+        path: root.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.mark_document_dirty(&root);
+    let epoch = app.document_state.documents_epoch;
+    let save = app.save_active_document();
+    let allowed = save.is_ok();
+    if let Ok(save) = save {
+        settle_task(&mut app, save);
+    }
+    let epoch_moved = app.document_state.documents_epoch != epoch;
     // Only a document save is let through: a History restore or a Replace
     // write of the sheet is still refused while the read holds it.
     let restore_refused = app.refuse_while_path_op(&root, "restored").is_err();
-    // The save's completion moves the epoch.
-    app.document_state.note_documents_changed();
 
     let task = app.update(message);
     settle_task(&mut app, task);
@@ -273,6 +288,7 @@ fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run
     );
     std::fs::remove_dir_all(&dir).ok();
     assert!(allowed, "a save is no longer refused during the read");
+    assert!(epoch_moved, "the save completion moves the epoch");
     assert!(
         restore_refused,
         "a restore is still refused during the read"
@@ -282,20 +298,24 @@ fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run
 }
 
 #[test]
-fn run_requests_from_the_dialog_are_ignored_while_a_run_is_going() {
+fn run_requests_from_the_dialog_are_refused_in_messages_while_a_run_is_going() {
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     let read = app.handle_annotate(ResetAndRenumber);
     assert!(app.ui_state.annotate_runs.is_running());
     app.document_state.error_notice = None;
 
+    let _ = crate::diagnostics::init_logging();
+    let since = crate::diagnostics::newest_entry_id();
     let ignored = app.dispatch_annotate_message(AnnotateMsg::Run(ResetAndRenumber));
-    let silent = app.document_state.error_notice.is_none();
+    let notice = notice_detail(&app);
+    let logged = logged_since(since, "Annotate was not run");
 
     settle_task(&mut app, ignored);
     settle_task(&mut app, read);
     let idle = pending_nothing(&app, &[&child_path(&dir)]);
     std::fs::remove_dir_all(&dir).ok();
-    assert!(silent, "the gated request raised no notice");
+    assert!(notice.contains("still going"), "{notice}");
+    assert!(logged, "a stale click still reaches the Messages panel");
     assert!(idle);
 }
 
