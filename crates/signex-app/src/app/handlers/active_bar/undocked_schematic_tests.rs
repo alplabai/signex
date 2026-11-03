@@ -90,6 +90,14 @@ fn scoped_menu(window: iced::window::Id, inner: ContextMenuMsg) -> Message {
     Message::ContextMenu(ContextMenuMsg::ScopedToWindow(window, Box::new(inner)))
 }
 
+/// What pressing a catalog command row of the context menu sends.
+fn command_row(id: &str) -> ContextAction {
+    ContextAction::Command {
+        id: crate::keymap::AppCommandId::new(id).unwrap(),
+        project: None,
+    }
+}
+
 #[test]
 fn an_active_bar_action_from_an_undocked_window_acts_on_its_sheet() {
     let mut f = fixture();
@@ -118,7 +126,7 @@ fn a_context_menu_action_from_an_undocked_window_acts_on_its_sheet() {
     assert_eq!(menu.window, Some(f.window));
     let _ = f.app.update(scoped_menu(
         f.window,
-        ContextMenuMsg::Action(ContextAction::Delete),
+        ContextMenuMsg::Action(command_row("delete_selection")),
     ));
     assert!(wire_ends(&f.app, &f.a).is_empty(), "A's wire is deleted");
     assert_eq!(wire_ends(&f.app, &f.b).len(), 1, "B keeps its wire");
@@ -174,7 +182,7 @@ fn a_scoped_edit_marks_only_its_sheet_dirty_and_is_undoable_there() {
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
     let _ = f.app.update(scoped_menu(
         f.window,
-        ContextMenuMsg::Action(ContextAction::Delete),
+        ContextMenuMsg::Action(command_row("delete_selection")),
     ));
     let dirty = f.app.document_state.dirty_document_paths();
     assert!(dirty.contains(&f.a), "A is dirty");
@@ -218,7 +226,7 @@ fn find_similar_from_an_undocked_window_keeps_working_on_its_sheet() {
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
     let _ = f.app.update(scoped_menu(
         f.window,
-        ContextMenuMsg::Action(ContextAction::FindSimilar),
+        ContextMenuMsg::Action(command_row("find_similar_objects")),
     ));
     let state = f.app.ui_state.find_similar.as_ref().expect("dialog opened");
     assert_eq!(state.origin.as_ref(), Some(&f.a));
@@ -364,7 +372,7 @@ fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
     let _ = f.app.update(scoped_menu(
         f.window,
-        ContextMenuMsg::Action(ContextAction::Copy),
+        ContextMenuMsg::Action(command_row("copy")),
     ));
     let (a_before, b_before) = (wire_ends(&f.app, &f.a), wire_ends(&f.app, &f.b));
     // The clipboard read's follow-up comes back untagged, with the main
@@ -395,7 +403,7 @@ fn a_paste_follow_up_for_a_window_without_a_canvas_is_cancelled_not_applied() {
         .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
     let _ = f.app.update(scoped_menu(
         f.window,
-        ContextMenuMsg::Action(ContextAction::Copy),
+        ContextMenuMsg::Action(command_row("copy")),
     ));
     f.app.interaction_state.canvases.remove(&f.window);
     let (a_before, b_before) = (wire_ends(&f.app, &f.a), wire_ends(&f.app, &f.b));
