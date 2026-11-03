@@ -51,9 +51,6 @@ impl SymbolPalette {
 pub(super) struct PinTextLayout {
     // Pin number (physical number) on/above the pin line.
     pub(super) number_size_mm: f32,
-    pub(super) pin_pitch_mm: f32,
-    pub(super) number_offset_ratio_of_pitch: f32,
-    pub(super) number_along_ratio: f32,
     // Pin name label near the symbol body edge.
     pub(super) name_size_mm: f32,
     pub(super) name_offset_x_mm: f32,
@@ -61,9 +58,6 @@ pub(super) struct PinTextLayout {
 
 pub(super) const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
     number_size_mm: 1.27,
-    pin_pitch_mm: 2.54,
-    number_offset_ratio_of_pitch: 0.10,
-    number_along_ratio: 0.18,
     name_size_mm: 1.27,
     name_offset_x_mm: 0.50,
 };
@@ -133,57 +127,18 @@ impl PinRenderGeometry {
         let unit = rotate_vec(Vec2d::new(1.0, 0.0), angle_rad);
         let body_end = Vec2d::new(tip.x + unit.x * pin.length, tip.y + unit.y * pin.length);
 
-        // Outer normal: 90° CCW from unit = (-unit.y, unit.x).
-        // Pick the side that is visually "outer": prefer +y, break ties with -x.
-        let n_ccw = rotate_vec(unit, FRAC_PI_2);
-        let n_cw = Vec2d::new(-n_ccw.x, -n_ccw.y);
-        let normal = if (n_ccw.y - n_cw.y).abs() > f64::EPSILON {
-            if n_ccw.y > n_cw.y { n_ccw } else { n_cw }
-        } else if n_ccw.x < n_cw.x {
-            n_ccw
-        } else {
-            n_cw
-        };
-
-        // Text rotation for iced screen space.
-        //
-        // World coordinates are Y-up; iced canvas is Y-down. The world→screen
-        // transform is: screen_y = oy − world_y × scale, which negates the Y
-        // component. To make text align with the pin direction in screen space
-        // we must negate unit.y: atan2(−uy, ux).
-        //
-        // Normalize to (−π/2, π/2] so text is never upside-down.
-        // Use strict `<` for the lower bound so that Up-pin angle (exactly
-        // −π/2) is kept as-is — it makes text flow upward on screen, which
-        // is the correct readable direction for Up pins.
-        let mut text_rotation = (-(unit.y as f32)).atan2(unit.x as f32);
-        let flipped: bool;
-        if text_rotation > std::f32::consts::FRAC_PI_2 {
-            text_rotation -= std::f32::consts::PI;
-            flipped = true;
-        } else if text_rotation < -std::f32::consts::FRAC_PI_2 {
-            text_rotation += std::f32::consts::PI;
-            flipped = true;
-        } else {
-            flipped = false;
-        }
-        // When flipped (only Left-facing pins after normalization), the text's
-        // local +x axis points opposite the pin direction — reverse h_align so
-        // the name still extends away from the tip.
-        let name_h_align = if flipped { HAlign::Right } else { HAlign::Left };
-
-        let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
-            * PIN_TEXT_LAYOUT.number_offset_ratio_of_pitch as f64;
-        let along_mm = pin.length * PIN_TEXT_LAYOUT.number_along_ratio as f64;
-
-        let number_pos = Vec2d::new(
-            tip.x + unit.x * along_mm + normal.x * number_offset_mm,
-            tip.y + unit.y * along_mm + normal.y * number_offset_mm,
+        // One layout for sheet and editor (`pin_text_layout`, Y-down): the
+        // editor's world is Y-up, so flip y going in and coming out.
+        let layout = signex_types::schematic::pin_text_layout(
+            signex_types::schematic::Point::new(tip.x, -tip.y),
+            (unit.x, -unit.y),
+            pin.length,
+            PIN_TEXT_LAYOUT.name_offset_x_mm as f64,
         );
-        let name_pos = Vec2d::new(
-            tip.x + unit.x * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
-            tip.y + unit.y * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
-        );
+        let number_pos = Vec2d::new(layout.number_pos.x, -layout.number_pos.y);
+        let name_pos = Vec2d::new(layout.name_pos.x, -layout.name_pos.y);
+        let text_rotation = layout.rotation_rad as f32;
+        let name_h_align = layout.name_h_align;
 
         Self {
             tip,

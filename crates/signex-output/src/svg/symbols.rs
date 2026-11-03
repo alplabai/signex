@@ -1,8 +1,8 @@
 //! Symbol emitters — library body graphics and pins.
 //!
 //! Body graphics and pin stubs come from the shared `lower_placed_symbol`
-//! lowering, the same list the canvas draws. Pin names and numbers are
-//! SVG-only for now and are placed here.
+//! lowering, the same list the canvas draws. Pin numbers and names come from
+//! the shared `lower_pin_labels`, with the expression text evaluated here.
 
 use super::geometry::{arc_path_commands, circle_path};
 use super::labels::{halign_to_svg, valign_to_svg};
@@ -147,7 +147,7 @@ pub(super) fn push_symbol_pins(
             ),
             align: halign_to_svg(label.h_align),
             v_align: valign_to_svg(label.v_align),
-            rotation_deg: 0.0,
+            rotation_deg: label.rotation_rad.to_degrees() as f32,
             fill_rgb,
             text: normalize_standard_text_with_ctx(&label.text, &pin_eval_ctx),
         });

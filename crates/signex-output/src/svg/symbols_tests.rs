@@ -294,13 +294,15 @@ fn a_pin_name_is_inside_the_body_past_the_pin_end() {
     assert!(y.abs() < 1e-4, "IN is on the pin line: {y}");
     assert_eq!(align, "Left");
     let (_, x, y, align, v_align) = names.iter().find(|n| n.0 == "TOP").expect("TOP");
-    assert!(x.abs() < 1e-4, "TOP is centred on the pin: {x}");
+    assert!(x.abs() < 1e-4, "TOP sits on the pin axis: {x}");
     // Screen Y is down: the body end is at y = 2.54 - 5.08 below the tip.
     assert!(
         (y - (-5.08 + 2.54 + off)).abs() < 1e-4,
-        "TOP hangs inside: {y}"
+        "TOP runs inside: {y}"
     );
-    assert_eq!((align.as_str(), v_align.as_str()), ("Center", "Top"));
+    // The name turns with the vertical pin (read top-to-bottom), so in its own
+    // frame it still starts at the anchor and runs away from the edge.
+    assert_eq!((align.as_str(), v_align.as_str()), ("Left", "Center"));
 }
 
 /// #1858: output pins stroke at the symbol's library width, like the body

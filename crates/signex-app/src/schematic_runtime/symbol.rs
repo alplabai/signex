@@ -176,7 +176,7 @@ pub(super) fn pin_text_inputs(
     symbol: &Symbol,
     style: &PinTextStyle,
 ) -> Vec<TextInput> {
-    let Some(lib) = lib.filter(|_| !symbol.is_power) else {
+    let Some(lib) = lib else {
         return Vec::new();
     };
     lower_pin_labels(lib, symbol)
@@ -192,7 +192,7 @@ pub(super) fn pin_text_inputs(
             bold: false,
             italic: false,
             family: style.family.clone(),
-            rotation_rad: 0.0,
+            rotation_rad: label.rotation_rad as f32,
             h_align: label.h_align,
             v_align: label.v_align,
         })

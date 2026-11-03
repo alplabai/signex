@@ -10,7 +10,7 @@ use iced::{Point, Rectangle, Size};
 use signex_app::app::{Message, Signex};
 use signex_app::library::LibraryMessage;
 use signex_app::schematic_runtime::{ScreenTransform, build_renderer_snapshot};
-use signex_types::schematic::{PinLabelKind, lower_pin_labels};
+use signex_types::schematic::{HAlign, VAlign};
 use signex_types::theme::{ThemeId, canvas_colors};
 
 use crate::library_place_symbol::{PLACE_AT, app_with_empty_sheet, click, doc, run};
@@ -68,26 +68,67 @@ fn a_placed_stock_ic_renders_its_pin_numbers_and_names() {
     let snap =
         build_renderer_snapshot(sheet, &transform, &colors, bounds, None, Default::default());
 
-    let drawn: Vec<&str> = snap.pin_texts.iter().map(|t| t.content.as_str()).collect();
-    for pin in lib.pins.iter().map(|p| &p.pin) {
+    assert_eq!(snap.pin_texts.len(), 16, "8 numbers and 8 names");
+    assert_eq!(
+        (sym.rotation, sym.mirror_x, sym.mirror_y),
+        (0.0, false, false)
+    );
+    let rgba = |c: &signex_types::theme::Color| [c.r, c.g, c.b, c.a].map(|v| f32::from(v) / 255.0);
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-4;
+    let (sx, sy) = (sym.position.x as f32, sym.position.y as f32);
+    let (reach, along) = (2.54 + 0.508, 2.54 * 0.18);
+
+    for lp in &lib.pins {
+        let pin = &lp.pin;
+        // Pins left of the body point right (into it), those right of it
+        // point left. Library y is up, the sheet's is down.
+        let dir: f32 = if pin.position.x < 0.0 { 1.0 } else { -1.0 };
+        let tip = (sx + pin.position.x as f32, sy - pin.position.y as f32);
+        let find = |content: &str| {
+            let hits: Vec<_> = snap
+                .pin_texts
+                .iter()
+                .filter(|t| t.content == content)
+                .collect();
+            assert_eq!(hits.len(), 1, "exactly one text {content:?}");
+            hits[0]
+        };
+
+        let name = find(&pin.name);
+        assert!(near(name.position[0], tip.0 + dir * reach), "{}", pin.name);
+        assert!(near(name.position[1], tip.1), "{}", pin.name);
+        assert!(near(name.rotation_rad, 0.0));
+        assert_eq!(
+            name.h_align,
+            if dir > 0.0 {
+                HAlign::Left
+            } else {
+                HAlign::Right
+            }
+        );
+        assert_eq!(name.v_align, VAlign::Center);
         assert!(
-            drawn.contains(&pin.number.as_str()),
-            "number {}",
+            rgba(&colors.pin)
+                .iter()
+                .zip(name.color)
+                .all(|(a, b)| near(*a, b))
+        );
+
+        let number = find(&pin.number);
+        assert!(
+            near(number.position[0], tip.0 + dir * along),
+            "{}",
             pin.number
         );
-        assert!(drawn.contains(&pin.name.as_str()), "name {}", pin.name);
-    }
-    assert_eq!(snap.pin_texts.len(), 16);
-
-    // Names sit inside the body (pin ends at x = +-5.08 from the origin),
-    // numbers outside it, beside the pin line.
-    for label in lower_pin_labels(lib, sym) {
-        let x = (label.position.x - sym.position.x).abs();
-        match label.kind {
-            PinLabelKind::Name => assert!(x < 5.08, "name {} is inside the body", label.text),
-            PinLabelKind::Number => {
-                assert!(x > 5.08, "number {} is outside the body", label.text)
-            }
-        }
+        assert!(near(number.position[1], tip.1 - 0.254), "{}", pin.number);
+        assert!(near(number.rotation_rad, 0.0));
+        assert_eq!(number.h_align, HAlign::Center);
+        assert_eq!(number.v_align, VAlign::Bottom);
+        assert!(
+            rgba(&colors.reference)
+                .iter()
+                .zip(number.color)
+                .all(|(a, b)| near(*a, b))
+        );
     }
 }
