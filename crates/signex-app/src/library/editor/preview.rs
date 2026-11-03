@@ -80,40 +80,42 @@ fn description_text(description: &str) -> &str {
     if d.is_empty() { NO_DESCRIPTION } else { d }
 }
 
-fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
+/// The texts the Preview header card shows. The part number, class and
+/// state are the shell header's (`editor::view_header`), not repeated here.
+struct HeaderTexts {
+    description: String,
+    manufacturer: String,
+    mpn: String,
+}
+
+fn header_texts(row_data: &ComponentRow) -> HeaderTexts {
     let (manufacturer, mpn) = mpn_fields(
         &row_data.primary_mpn.manufacturer,
         &row_data.primary_mpn.mpn,
     );
+    HeaderTexts {
+        description: description_text(&row_data.description).to_string(),
+        manufacturer,
+        mpn,
+    }
+}
+
+fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let HeaderTexts {
+        description,
+        manufacturer,
+        mpn,
+    } = header_texts(row_data);
     let description_color = if row_data.description.trim().is_empty() {
         muted
     } else {
         text_c
     };
 
-    let identity = column![
-        row![
-            text(row_data.internal_pn.as_str())
-                .size(TS.heading)
-                .color(text_c),
-            text(format!(
-                "{} · {:?}",
-                row_data.class.as_str(),
-                row_data.state
-            ))
-            .size(TS.body)
-            .color(muted),
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
-        text(description_text(&row_data.description))
-            .size(TS.body)
-            .color(description_color),
-    ]
-    .spacing(SP.xs)
-    .width(Length::FillPortion(3));
+    let identity = column![text(description).size(TS.body).color(description_color)]
+        .width(Length::FillPortion(3));
 
     let labelled = |label: &'static str, value: String| {
         let value_color = if value == NOT_SET { muted } else { text_c };
@@ -569,6 +571,21 @@ fn where_used_footer<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_header_card_does_not_repeat_the_shell_identity() {
+        let mut row = crate::library::component_preview::test_row();
+        row.description = "10k resistor".into();
+        let texts = header_texts(&row);
+        let shown = [&texts.description, &texts.manufacturer, &texts.mpn];
+        let pn = row.internal_pn.as_str();
+        assert!(!pn.is_empty());
+        for text in shown {
+            assert!(!text.contains(pn), "{text}");
+            assert!(!text.contains(row.class.as_str()), "{text}");
+        }
+        assert_eq!(texts.description, "10k resistor");
+    }
 
     #[test]
     fn blank_manufacturer_and_mpn_read_not_set() {

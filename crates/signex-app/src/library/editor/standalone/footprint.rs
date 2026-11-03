@@ -154,7 +154,7 @@ fn view_footprint_top_strip<'a>(
                 },
                 border: Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: crate::styles::RADIUS.into(),
                     color: if active { accent } else { border },
                 },
                 ..iced::widget::button::Style::default()
@@ -198,7 +198,7 @@ fn view_footprint_top_strip<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
         },
         ..iced::widget::button::Style::default()
@@ -223,7 +223,7 @@ fn view_footprint_top_strip<'a>(
             ))),
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: crate::styles::RADIUS.into(),
                 color: border,
             },
             ..iced::widget::button::Style::default()
@@ -290,8 +290,8 @@ fn view_footprint_layers_strip<'a>(
         let pill = button(
             row![
                 container(text("").size(TS.caption))
-                    .width(Length::Fixed(8.0))
-                    .height(Length::Fixed(8.0))
+                    .width(Length::Fixed(SP.m))
+                    .height(Length::Fixed(SP.m))
                     .style(move |_: &Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(swatch)),
                         border: Border {
@@ -383,7 +383,7 @@ fn view_footprint_sketch_toolbar<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: iced::Color { a: 0.6, ..accent },
         },
         ..iced::widget::button::Style::default()
@@ -406,7 +406,7 @@ fn view_footprint_sketch_toolbar<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
         },
         ..iced::widget::button::Style::default()
@@ -460,8 +460,8 @@ fn view_footprint_toolbar<'a>(
         let pill = button(
             row![
                 container(text("").size(TS.body))
-                    .width(Length::Fixed(8.0))
-                    .height(Length::Fixed(8.0))
+                    .width(Length::Fixed(SP.m))
+                    .height(Length::Fixed(SP.m))
                     .style(move |_: &Theme| iced::widget::container::Style {
                         background: Some(iced::Background::Color(swatch)),
                         border: Border {
@@ -493,7 +493,7 @@ fn view_footprint_toolbar<'a>(
             },
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: crate::styles::RADIUS.into(),
                 color: if on {
                     swatch
                 } else {
@@ -523,7 +523,7 @@ fn view_footprint_toolbar<'a>(
             ))),
             border: Border {
                 width: 1.0,
-                radius: 3.0.into(),
+                radius: crate::styles::RADIUS.into(),
                 color: border,
             },
             ..iced::widget::button::Style::default()
@@ -546,7 +546,7 @@ fn view_footprint_toolbar<'a>(
         ))),
         border: Border {
             width: 1.0,
-            radius: 3.0.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
         },
         ..iced::widget::button::Style::default()
@@ -579,7 +579,7 @@ fn view_footprint_toolbar<'a>(
                 },
                 border: Border {
                     width: 1.0,
-                    radius: 3.0.into(),
+                    radius: crate::styles::RADIUS.into(),
                     color: border,
                 },
                 ..iced::widget::button::Style::default()

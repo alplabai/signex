@@ -404,7 +404,7 @@ fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, Li
         background: close_background(&tokens, status),
         border: Border {
             width: crate::styles::HAIRLINE,
-            radius: SP.xs.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
         },
         text_color: text_c,

@@ -61,7 +61,7 @@ pub(super) fn store_assets(
 }
 
 /// The row's name in advice lines: its MPN, else its internal part number.
-fn part_name(row: &signex_library::ComponentRow) -> String {
+pub(super) fn part_name(row: &signex_library::ComponentRow) -> String {
     let mpn = row.primary_mpn.mpn.trim();
     if !mpn.is_empty() {
         return mpn.to_string();

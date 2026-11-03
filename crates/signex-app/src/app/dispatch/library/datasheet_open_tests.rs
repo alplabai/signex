@@ -248,3 +248,18 @@ fn a_stored_pinned_pdf_launches_its_library_file() {
         [DatasheetLocation::Pinned { .. }]
     ));
 }
+
+#[test]
+fn advice_names_the_part_by_mpn_then_internal_pn_then_a_fallback() {
+    use super::datasheet_save::part_name;
+    let mut row = test_row();
+    row.primary_mpn.mpn = "  LM358  ".into();
+    assert_eq!(part_name(&row), "LM358");
+
+    row.primary_mpn.mpn = "  ".into();
+    row.internal_pn = signex_library::InternalPn::new("R0805_10k");
+    assert_eq!(part_name(&row), "R0805_10k");
+
+    row.internal_pn = signex_library::InternalPn::new(" ");
+    assert_eq!(part_name(&row), "this component");
+}
