@@ -117,10 +117,16 @@ impl Signex {
         {
             let (can_undo, can_redo) = self.component_history_of(&address);
             let undo = command.as_str() == "undo";
-            if if undo { can_undo } else { can_redo } {
-                self.step_component_editor_at(&address, undo);
+            if !(if undo { can_undo } else { can_redo }) {
+                let reason = if undo {
+                    "Nothing to undo"
+                } else {
+                    "Nothing to redo"
+                };
+                return (CommandOutcome::disabled(reason), Task::none());
             }
-            return Task::none();
+            self.step_component_editor_at(&address, undo);
+            return (CommandOutcome::Ran, Task::none());
         }
         // Close Document follows the window the stroke came from (#1787).
         if command.as_str() == "close_active_document"
