@@ -27,14 +27,15 @@ const _: () = assert!(MARKER_DISC_ALPHA <= 0.3 && MARKER_HALO_ALPHA <= MARKER_DI
 /// Point-marker sizes: a world size in mm that grows with zoom, floored in
 /// screen px so the marker stays readable zoomed out (as the No-Connect cross
 /// is). The cross reads at normal zoom, and its corners stay inside the ring
-/// at both sizes.
-const MARKER_HALO_RADIUS_MM: f32 = 3.6;
+/// at both sizes. The halo stays under half the 2.54 mm pin pitch, so the
+/// markers of neighbouring pins do not overlap.
+const MARKER_HALO_RADIUS_MM: f32 = 1.8;
 const MARKER_HALO_RADIUS_MIN_PX: f32 = 18.0;
-const MARKER_RING_RADIUS_MM: f32 = 2.0;
+const MARKER_RING_RADIUS_MM: f32 = 1.0;
 const MARKER_RING_RADIUS_MIN_PX: f32 = 10.0;
-const MARKER_CROSS_HALF_LEN_MM: f32 = 1.2;
+const MARKER_CROSS_HALF_LEN_MM: f32 = 0.7;
 const MARKER_CROSS_HALF_LEN_MIN_PX: f32 = 6.0;
-const MARKER_STROKE_MM: f32 = 0.3;
+const MARKER_STROKE_MM: f32 = 0.2;
 const MARKER_STROKE_MIN_PX: f32 = 2.0;
 const _: () = assert!(
     MARKER_CROSS_HALF_LEN_MIN_PX * std::f32::consts::SQRT_2 < MARKER_RING_RADIUS_MIN_PX

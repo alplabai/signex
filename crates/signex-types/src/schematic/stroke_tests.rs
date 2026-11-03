@@ -23,9 +23,11 @@ fn a_wire_width_is_one_value_for_the_canvas_and_the_exports() {
     // Default: no own width, or a class width of 0.
     assert_eq!(wire_stroke_mm(0.0, None), SCHEMATIC_DEFAULT_WIRE_STROKE_MM);
     assert_eq!(
-        wire_stroke_mm(0.3, Some(0.0)),
+        wire_stroke_mm(0.0, Some(0.0)),
         SCHEMATIC_DEFAULT_WIRE_STROKE_MM
     );
+    // A class width of 0 is unset: the wire keeps its own.
+    assert_eq!(wire_stroke_mm(0.3, Some(0.0)), 0.3);
     assert_eq!(
         wire_stroke_mm(f64::NAN, None),
         SCHEMATIC_DEFAULT_WIRE_STROKE_MM

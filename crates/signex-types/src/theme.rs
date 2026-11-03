@@ -193,9 +193,23 @@ pub struct CanvasColors {
     /// DRC violation marker, warning severity.
     pub drc_warning: Color,
     pub selection: Color,
+    /// PCB ratsnest lines. Its own colour, so a change to the selection
+    /// outline does not recolour the ratsnest; files without it read as the
+    /// old default.
+    #[serde(default = "default_ratsnest")]
+    pub ratsnest: Color,
     pub bus: Color,
     pub grid: Color,
     pub cursor: Color,
+}
+
+fn default_ratsnest() -> Color {
+    Color {
+        r: 0x00,
+        g: 0x78,
+        b: 0xD4,
+        a: 0xFF,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +258,8 @@ const CATPPUCCIN_MOCHA_CANVAS: CanvasColors = CanvasColors {
     erc_warning: c(0xF3, 0x8B, 0xA8),
     drc_error: c(0xF3, 0x8B, 0xA8),
     drc_warning: c(0xF3, 0x8B, 0xA8),
-    selection: c(0xF9, 0xE2, 0xAF), // Catppuccin yellow: distinct from the lavender-white pin lines
+    selection: c(0xFF, 0xEE, 0x00), // Bright yellow: apart from the pin, wire and label colours
+    ratsnest: c(0xF5, 0xE0, 0xDC),
     bus: c(0x89, 0xDC, 0xEB),
     grid: c(0x45, 0x47, 0x5A),
     cursor: c(0xF5, 0xE0, 0xDC),
@@ -288,7 +303,8 @@ const VSCODE_DARK_CANVAS: CanvasColors = CanvasColors {
     erc_warning: c(0xF4, 0x44, 0x47),
     drc_error: c(0xF4, 0x44, 0x47),
     drc_warning: c(0xF4, 0x44, 0x47),
-    selection: c(0xFF, 0xCC, 0x00), // Amber: distinct from the light-grey pin lines
+    selection: c(0xFF, 0xFF, 0x00), // Bright yellow: apart from the pin, wire and label colours
+    ratsnest: c(0xFF, 0xFF, 0xFF),
     bus: c(0x9C, 0xDC, 0xFE),
     grid: c(0x3C, 0x3C, 0x3C),
     cursor: c(0xFF, 0xFF, 0xFF),
@@ -336,9 +352,10 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0x80, 0x00, 0x00),
     drc_warning: c(0x80, 0x00, 0x00),
     selection: c(0x00, 0xA0, 0x00), // Altium-style green; reads on cream paper and on dark chrome
-    bus: c(0x00, 0x00, 0x80),       // Navy blue bus (rendered thicker)
-    grid: c(0xC0, 0xC0, 0xC0),      // Light gray grid dots/lines
-    cursor: c(0x00, 0x00, 0x00),    // Black cursor crosshair
+    ratsnest: c(0x00, 0x78, 0xD4),
+    bus: c(0x00, 0x00, 0x80),    // Navy blue bus (rendered thicker)
+    grid: c(0xC0, 0xC0, 0xC0),   // Light gray grid dots/lines
+    cursor: c(0x00, 0x00, 0x00), // Black cursor crosshair
 };
 
 // ===== Alp Lab =====
@@ -405,7 +422,8 @@ const GITHUB_DARK_CANVAS: CanvasColors = CanvasColors {
     erc_warning: c(0xFF, 0x7B, 0x72),
     drc_error: c(0xFF, 0x7B, 0x72),
     drc_warning: c(0xFF, 0x7B, 0x72),
-    selection: c(0xE3, 0xB3, 0x41), // Amber: distinct from the pale pin lines
+    selection: c(0xFF, 0xDD, 0x00), // Bright yellow: apart from the pin, wire and label colours
+    ratsnest: c(0xFF, 0xFF, 0xFF),
     bus: c(0x79, 0xC0, 0xFF),
     grid: c(0x30, 0x36, 0x3D),
     cursor: c(0xFF, 0xFF, 0xFF),
@@ -450,6 +468,7 @@ const SOLARIZED_LIGHT_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0xDC, 0x32, 0x2F),
     drc_warning: c(0xDC, 0x32, 0x2F),
     selection: c(0x00, 0x2B, 0x36),
+    ratsnest: c(0x00, 0x2B, 0x36),
     bus: c(0x6C, 0x71, 0xC4),
     grid: c(0x93, 0xA1, 0xA1),
     cursor: c(0x00, 0x2B, 0x36),
@@ -493,7 +512,8 @@ const NORD_CANVAS: CanvasColors = CanvasColors {
     erc_warning: c(0xBF, 0x61, 0x6A),
     drc_error: c(0xBF, 0x61, 0x6A),
     drc_warning: c(0xBF, 0x61, 0x6A),
-    selection: c(0xEB, 0xCB, 0x8B), // Nord yellow: distinct from the snow-white pin lines
+    selection: c(0xFF, 0xCC, 0x00), // Bright amber: apart from the pin, wire and label colours
+    ratsnest: c(0xEC, 0xEF, 0xF4),
     bus: c(0x81, 0xA1, 0xC1),
     grid: c(0x4C, 0x56, 0x6A),
     cursor: c(0xEC, 0xEF, 0xF4),
@@ -547,21 +567,53 @@ mod tests {
         }
     }
 
-    /// The selection outline must stand out from the pin lines it surrounds
-    /// (Nord and the VS Code / GitHub darks once matched their pin colour).
+    /// The selection outline must stand out from every item colour it can
+    /// sit on or beside: wires, buses, junctions, bodies, pins, every label
+    /// kind, power and no-connect (Nord and the VS Code / GitHub darks once
+    /// matched their pin colour, and two themes a label colour).
     #[test]
-    fn selection_is_distinct_from_the_pin_colour_in_every_builtin() {
+    fn selection_is_distinct_from_every_item_colour_in_every_builtin() {
+        let apart = |a: Color, b: Color| {
+            [a.r.abs_diff(b.r), a.g.abs_diff(b.g), a.b.abs_diff(b.b)]
+                .into_iter()
+                .map(u32::from)
+                .sum::<u32>()
+        };
         for &id in ThemeId::BUILTINS {
             let c = canvas_colors(id);
-            let distance = [
-                c.selection.r.abs_diff(c.pin.r),
-                c.selection.g.abs_diff(c.pin.g),
-                c.selection.b.abs_diff(c.pin.b),
-            ]
-            .into_iter()
-            .map(u32::from)
-            .sum::<u32>();
-            assert!(distance >= 96, "{id:?}: selection is too close to the pin");
+            for (name, item) in [
+                ("wire", c.wire),
+                ("bus", c.bus),
+                ("junction", c.junction),
+                ("body", c.body),
+                ("pin", c.pin),
+                ("net_label", c.net_label),
+                ("global_label", c.global_label),
+                ("hier_label", c.hier_label),
+                ("power", c.power),
+                ("no_connect", c.no_connect),
+            ] {
+                let distance = apart(c.selection, item);
+                assert!(
+                    distance >= 96,
+                    "{id:?}: selection is {distance} from {name}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_ratsnest_keeps_the_colour_selection_used_to_have() {
+        let old = |id| match id {
+            ThemeId::CatppuccinMocha => (0xF5, 0xE0, 0xDC),
+            ThemeId::VsCodeDark | ThemeId::GitHubDark => (0xFF, 0xFF, 0xFF),
+            ThemeId::Signex | ThemeId::Alplab | ThemeId::Custom => (0x00, 0x78, 0xD4),
+            ThemeId::SolarizedLight => (0x00, 0x2B, 0x36),
+            ThemeId::Nord => (0xEC, 0xEF, 0xF4),
+        };
+        for &id in ThemeId::BUILTINS {
+            let r = canvas_colors(id).ratsnest;
+            assert_eq!((r.r, r.g, r.b), old(id), "{id:?}");
         }
     }
 

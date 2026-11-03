@@ -9,15 +9,25 @@ use signex_types::schematic::{
 
 use super::fixture::*;
 use crate::app::Message;
-use crate::app::handlers::menu::export::tests::sheet_with_net;
 use crate::canvas::CanvasEvent;
 
 /// `R1` at (50, 50): a body from x 47.5 to 52.5, pin 1 from the tip at x 45,
 /// pin 2 from the tip at x 55, nothing wired.
 fn part_sheet(hide_pin_2: bool) -> (SchematicSheet, uuid::Uuid) {
-    let mut sheet = sheet_with_net("R1", "VCC", &[]);
-    sheet.wires.clear();
-    sheet.labels.clear();
+    part_sheet_wired(hide_pin_2, false)
+}
+
+/// [`part_sheet`], with pin 1 wired to a global label `SIG` when `wired`.
+fn part_sheet_wired(hide_pin_2: bool, wired: bool) -> (SchematicSheet, uuid::Uuid) {
+    let mut sheet = sheet_with_net("R1", "SIG", &[]);
+    if wired {
+        sheet.wires[0].start = Point::new(45.0, 50.0);
+        sheet.wires[0].end = Point::new(40.0, 50.0);
+        sheet.labels[0].position = Point::new(40.0, 50.0);
+    } else {
+        sheet.wires.clear();
+        sheet.labels.clear();
+    }
     let lib = sheet.lib_symbols.get_mut("Device:R").expect("lib symbol");
     lib.graphics = vec![LibGraphic {
         unit: 0,
@@ -148,6 +158,41 @@ fn the_pin_rows_take_their_nets_from_the_project_net_index() {
 }
 
 #[test]
+fn a_cold_cache_pin_click_shows_the_net_once_the_index_lands() {
+    let (sheet, part) = part_sheet_wired(false, true);
+    let mut p = single_sheet_project(sheet);
+    // On the pin line, clear of the wire that ends at its tip.
+    click(&mut p, 46.5, 50.0);
+    assert_eq!(selected_part(&p), Some(part));
+    assert_eq!(focused(&p).as_deref(), Some("1"));
+    assert_eq!(info(&p, "Pin Net: 1"), None, "the index is not built yet");
+
+    // The build the click started lands; no hover is involved.
+    p.app.settle_net_index_blocking();
+    assert_eq!(
+        focused(&p).as_deref(),
+        Some("1"),
+        "the focus survives the refill"
+    );
+    assert_eq!(info(&p, "Pin Net: 1").as_deref(), Some("SIG"));
+    assert_eq!(selected_part(&p), Some(part));
+}
+
+#[test]
+fn another_selection_drops_the_pin_focus_for_good() {
+    let (sheet, part) = part_sheet_wired(false, true);
+    let mut p = single_sheet_project(sheet);
+    click(&mut p, 46.5, 50.0);
+    assert_eq!(focused(&p).as_deref(), Some("1"));
+    // Select nothing, then the same part again by box: no stale focus.
+    click(&mut p, 10.0, 10.0);
+    assert_eq!(focused(&p), None);
+    p.select_uuid(part, SelectedKind::Symbol);
+    p.app.update_selection_info();
+    assert_eq!(focused(&p), None);
+}
+
+#[test]
 fn a_click_on_the_body_centre_focuses_no_pin() {
     let (mut p, part) = project_with_part(false);
     click(&mut p, 50.0, 50.0);
@@ -206,6 +251,16 @@ fn the_body_centre_picks_no_pin_even_at_a_wide_tolerance() {
     for tolerance in [0.64, 1.27, 2.6, pin_pick_tolerance_mm(0.3)] {
         assert_eq!(symbol_pin_at(&sheet, part, centre, tolerance), None);
     }
+    // Near the top edge, between the pin lines: still inside the body.
+    for tolerance in [0.64, 1.27, 2.6, pin_pick_tolerance_mm(0.3)] {
+        for at in [(52.2, 50.8), (52.2, 49.2), (47.8, 50.8), (47.8, 49.2)] {
+            assert_eq!(
+                symbol_pin_at(&sheet, part, Point::new(at.0, at.1), tolerance),
+                None,
+                "{at:?} at {tolerance}"
+            );
+        }
+    }
     let near_tip = symbol_pin_at(&sheet, part, Point::new(45.1, 50.0), 0.64);
     assert_eq!(near_tip.map(|p| p.key).as_deref(), Some("1"));
     // Beside the pin line, past the tolerance, is no pin; along it is.
@@ -227,4 +282,64 @@ fn zoomed_far_out_a_pin_stays_pickable_within_the_px_floor() {
             .as_deref(),
         Some("1")
     );
+}
+
+/// The stock resistor (IEC rectangle) at (50, 50): body x +-1.016, y +-1.27,
+/// stroke 0.254, pins 1 and 2 at y -+3.81 with length 2.54.
+fn stock_r_sheet() -> (SchematicSheet, uuid::Uuid) {
+    let (mut sheet, id) = part_sheet(false);
+    let lib = sheet.lib_symbols.get_mut("Device:R").expect("lib symbol");
+    lib.graphics = vec![LibGraphic {
+        unit: 0,
+        body_style: 1,
+        graphic: Graphic::Rectangle {
+            start: Point::new(-1.016, 1.27),
+            end: Point::new(1.016, -1.27),
+            width: 0.254,
+            fill: FillType::None,
+        },
+    }];
+    for (lp, (y, rotation)) in lib.pins.iter_mut().zip([(3.81, 270.0), (-3.81, 90.0)]) {
+        lp.pin.position = Point::new(0.0, y);
+        lp.pin.rotation = rotation;
+        lp.pin.length = 2.54;
+    }
+    (sheet, id)
+}
+
+#[test]
+fn the_whole_stock_r_body_belongs_to_the_part_at_every_zoom() {
+    use signex_types::schematic::{pin_pick_tolerance_mm, symbol_pin_at};
+    let (sheet, part) = stock_r_sheet();
+    let pick = |dx: f64, dy: f64, tolerance: f64| {
+        symbol_pin_at(&sheet, part, Point::new(50.0 + dx, 50.0 + dy), tolerance).map(|p| p.key)
+    };
+    // 100 %, 25 %, 10 % and the 0.3 px/mm of the review.
+    for scale in [3.0, 0.75, 0.3, 0.15] {
+        let tolerance = pin_pick_tolerance_mm(scale);
+        for dx in [0.0, 0.5, 0.9, -0.9] {
+            for dy in [0.0, 1.0, -1.0, 1.2, -1.2] {
+                assert_eq!(
+                    pick(dx, dy, tolerance),
+                    None,
+                    "({dx}, {dy}) inside the body at {scale} px/mm"
+                );
+            }
+        }
+        // The pin lines, and the stub just past the body edge, still pick.
+        assert_eq!(pick(0.0, -2.5, tolerance).as_deref(), Some("1"));
+        assert_eq!(pick(0.0, 2.5, tolerance).as_deref(), Some("2"));
+        assert_eq!(pick(0.0, -1.4, tolerance).as_deref(), Some("1"));
+    }
+}
+
+#[test]
+fn a_real_click_near_the_stock_r_top_edge_selects_the_part_with_no_pin() {
+    let (sheet, part) = stock_r_sheet();
+    let mut p = single_sheet_project(sheet);
+    click(&mut p, 50.9, 49.0);
+    assert_eq!(selected_part(&p), Some(part));
+    assert_eq!(focused(&p), None);
+    click(&mut p, 50.0, 47.5);
+    assert_eq!(focused(&p).as_deref(), Some("1"));
 }

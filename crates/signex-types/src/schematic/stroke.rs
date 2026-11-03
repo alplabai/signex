@@ -52,12 +52,13 @@ pub fn effective_stroke_mm(width_mm: f64) -> f64 {
 }
 
 /// The world width a wire is drawn and exported at: the net class width, else
-/// the wire's own, raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`]; a width of
-/// `0` (or one that is not a finite number) is the default,
-/// [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`]. The canvas, hit-test and every export
-/// take the width from here.
+/// the wire's own, raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`]. A class width
+/// of `0` (or not a finite number) is unset and falls back to the wire's own;
+/// an own width of `0` is the default, [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`].
+/// The canvas, the selection box and every export take the width from here.
 #[must_use]
 pub fn wire_stroke_mm(own_mm: f64, class_mm: Option<f64>) -> f64 {
+    let class_mm = class_mm.filter(|w| w.is_finite() && *w > 0.0);
     let width = class_mm.unwrap_or(own_mm);
     if width.is_finite() && width > 0.0 {
         width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)

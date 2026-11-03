@@ -83,6 +83,38 @@ impl Signex {
             .fresh(project, &planned.key)
     }
 
+    /// Start a build of the active project's index when it has none current,
+    /// for the Pins rows of a clicked symbol. The task's landing refreshes the
+    /// rows (`refresh_pin_rows`); nothing is parked.
+    pub(crate) fn warm_net_index_for_pin_rows(&mut self) -> Task<Message> {
+        let Some(project) = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|p| self.project_of_sheet(p))
+        else {
+            return Task::none();
+        };
+        if self.ready_net_data(project).is_some() {
+            return Task::none();
+        }
+        match self.net_index_lookup(project) {
+            IndexLookup::Building(build) => build,
+            IndexLookup::Ready(_) | IndexLookup::Unavailable => Task::none(),
+        }
+    }
+
+    /// A landed index fills the net of each pin of the selected symbol.
+    fn refresh_pin_rows(&mut self) {
+        let one_symbol = matches!(
+            self.interaction_state.active_canvas().selected.as_slice(),
+            [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
+        );
+        if one_symbol {
+            self.update_selection_info();
+        }
+    }
+
     /// Plan a build of `project`'s index when the cache holds none for its
     /// current key. `None` when it is fresh, already building, or failed.
     fn plan_net_index_job(&mut self, project: ProjectId) -> Result<NetIndexJob, IndexLookup> {
@@ -188,6 +220,7 @@ impl Signex {
             Stored::Fresh(data) => {
                 self.report_index_warnings(outcome);
                 self.refresh_highlight_from(outcome.project, &data);
+                self.refresh_pin_rows();
                 self.run_pending_for(outcome.project)
             }
         }

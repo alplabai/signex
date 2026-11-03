@@ -1,5 +1,6 @@
-//! Which pin of a placed symbol a point picks: the one rule behind hover,
-//! click-select and the right-click menu.
+//! Which pin of a placed symbol a point picks: the one rule behind the hover
+//! card, click-select and the net highlight. (The right-click menu picks the
+//! part only and does not use it.)
 //!
 //! A pin wins only within the pick tolerance of its line (tip to body end).
 //! The inside of the body belongs to the part, filled or not, so a point
@@ -51,7 +52,7 @@ pub fn symbol_pin_at(
 ) -> Option<PickedPin> {
     let sym = document.symbols.iter().find(|s| s.uuid == symbol)?;
     let lib = document.resolve_lib_symbol(sym)?;
-    if inside_body(&lower_symbol(&lib, sym), at, tolerance_mm) {
+    if inside_body(&lower_symbol(&lib, sym), at) {
         return None;
     }
     let xform = SymbolTransform::from_symbol(sym);
@@ -85,11 +86,11 @@ pub fn symbol_pin_at(
         .map(|(_, pin)| pin)
 }
 
-/// Whether `at` is inside the body outline, pulled in on every side so a pin
-/// that meets the body edge can still be picked there: by `margin`, but never
-/// by more than a quarter of the body's smaller side, so a small body keeps
-/// an inside however wide the tolerance is.
-fn inside_body(primitives: &[SymbolPrimitive], at: Point, margin: f64) -> bool {
+/// Whether `at` is inside the drawn body: the box through the middle of its
+/// outline strokes (the outer bounds pulled in by half the stroke), so a pin that
+/// meets the outline still picks at its end. Everything inside the outline
+/// belongs to the part, at any zoom.
+fn inside_body(primitives: &[SymbolPrimitive], at: Point) -> bool {
     let body: Vec<SymbolPrimitive> = primitives
         .iter()
         .filter(|p| {
@@ -105,11 +106,15 @@ fn inside_body(primitives: &[SymbolPrimitive], at: Point, margin: f64) -> bool {
     let Some(bounds) = primitives_bounds(&body) else {
         return false;
     };
-    let margin = margin.min(0.25 * (bounds.max_x - bounds.min_x).min(bounds.max_y - bounds.min_y));
-    at.x > bounds.min_x + margin
-        && at.x < bounds.max_x - margin
-        && at.y > bounds.min_y + margin
-        && at.y < bounds.max_y - margin
+    let edge = body
+        .iter()
+        .filter_map(SymbolPrimitive::stroke_width)
+        .fold(0.0, f64::max)
+        * 0.5;
+    at.x > bounds.min_x + edge
+        && at.x < bounds.max_x - edge
+        && at.y > bounds.min_y + edge
+        && at.y < bounds.max_y - edge
 }
 
 #[cfg(test)]

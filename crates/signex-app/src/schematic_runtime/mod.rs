@@ -621,7 +621,7 @@ fn collect_item_bounds_with(
         out.push(ItemBound {
             item: SelectedItem::new(wire.uuid, SelectedKind::Wire),
             bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y)
-                .expand(drawn_wire_width_mm(wire, None)),
+                .expand(drawn_wire_width_mm(wire, None) * 0.5),
             anchor: Point::new(
                 (wire.start.x + wire.end.x) * 0.5,
                 (wire.start.y + wire.end.y) * 0.5,

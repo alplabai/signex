@@ -13,22 +13,19 @@ pub(super) fn pin_keys(info: &[(String, String)]) -> Vec<String> {
 
 /// Add each pin's net (`nets`: pin key and net name) and, when the click that
 /// selected `symbol` landed on one of its pins, the `Focused Pin` row.
-/// Returns whether a pin was focused.
 pub(super) fn add_pin_rows(
     info: &mut Vec<(String, String)>,
     symbol: Uuid,
     clicked: Option<(Uuid, String)>,
     nets: Vec<(String, String)>,
-) -> bool {
+) {
     for (pin, net) in nets {
         info.push((format!("{}{pin}", info_keys::PIN_NET_PREFIX), net));
     }
     let Some((_, pin)) = clicked.filter(|(owner, _)| *owner == symbol) else {
-        return false;
+        return;
     };
-    if !pin_keys(info).contains(&pin) {
-        return false;
+    if pin_keys(info).contains(&pin) {
+        info.push((info_keys::FOCUSED_PIN.into(), pin));
     }
-    info.push((info_keys::FOCUSED_PIN.into(), pin));
-    true
 }

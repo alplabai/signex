@@ -135,8 +135,8 @@ impl Signex {
     }
 
     /// The pin of the placed symbol `item` that the point `at` picks on the
-    /// sheet at `sheet`: the one rule for hover, click and the right-click
-    /// menu (`signex_types::schematic::symbol_pin_at`).
+    /// sheet at `sheet`: the one rule for hover, click and the net highlight
+    /// (`signex_types::schematic::symbol_pin_at`).
     pub(crate) fn pin_under(
         &self,
         sheet: &std::path::Path,

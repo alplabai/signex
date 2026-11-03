@@ -209,8 +209,24 @@ impl Signex {
                 .active_canvas_mut()
                 .clear_content_cache();
         }
-        // Read once: a later refresh (box select, edit) shows no pin focus.
-        let clicked_pin = self.interaction_state.clicked_pin.take();
+        // The clicked pin stays focused through refreshes (an edit, the net
+        // index landing) for as long as its part is the one selected part; any
+        // other selection drops it.
+        let keeps_focus = self
+            .interaction_state
+            .clicked_pin
+            .as_ref()
+            .is_some_and(|(owner, _)| {
+                matches!(
+                    self.interaction_state.active_canvas().selected.as_slice(),
+                    [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
+                        && item.uuid == *owner
+                )
+            });
+        if !keeps_focus {
+            self.interaction_state.clicked_pin = None;
+        }
+        let clicked_pin = self.interaction_state.clicked_pin.clone();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
@@ -252,20 +268,12 @@ impl Signex {
             self.document_state.panel_ctx.selection_info = details.info;
             let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
             let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
-            let focused = pin_focus::add_pin_rows(
+            pin_focus::add_pin_rows(
                 &mut self.document_state.panel_ctx.selection_info,
                 details.selected_uuid,
                 clicked_pin,
                 nets,
             );
-            if focused {
-                // A pin click opens the Pins section; the user can collapse
-                // it again, and that choice stands until the next pin click.
-                self.document_state
-                    .panel_ctx
-                    .collapsed_sections
-                    .remove(crate::panels::PINS_SECTION_KEY);
-            }
             // A tab opened through a placement shows, and edits, that
             // placement's designator (#1151).
             if let Some(designator) = self

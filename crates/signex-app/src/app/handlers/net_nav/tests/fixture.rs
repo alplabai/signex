@@ -13,7 +13,8 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use crate::app::handlers::menu::export::tests::{app_workspace, sheet_with_net};
+use crate::app::handlers::menu::export::tests::app_workspace;
+pub(super) use crate::app::handlers::menu::export::tests::sheet_with_net;
 use crate::app::{Message, NetNavMsg, Signex, UiMsg};
 
 pub(super) fn id(n: u128) -> Uuid {
