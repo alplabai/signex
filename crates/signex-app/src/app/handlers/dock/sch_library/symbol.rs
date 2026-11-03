@@ -42,7 +42,8 @@ impl Signex {
         else {
             return true;
         };
-        if let Some(lib) = self.library.containing_library_mut(&path) {
+        let fold = self.identity_fold_for(&path);
+        if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
             mutator(&mut lib.display);
         }
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {

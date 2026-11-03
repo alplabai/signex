@@ -48,7 +48,7 @@ impl Signex {
                 )
             } else {
                 format!(
-                    "{name} deleted. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked (other projects were not)."
+                    "{name} deleted. Not used by open sheets or mounted libraries; closed sheets of open projects checked, other projects not."
                 )
             });
             self.delete_symbol_from_container(&path, idx, symbol);
@@ -228,7 +228,7 @@ impl Signex {
         if pending.warning.lines.is_empty() {
             let pending = self.library.pending_symbol_delete.take().expect("pending");
             crate::diagnostics::log_info(format!(
-                "{} deleted from {}. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked (other projects were not).",
+                "{} deleted from {}. Not used by open sheets or mounted libraries; closed sheets of open projects checked, other projects not.",
                 pending.warning.name,
                 pending.path.file_name().map_or_else(
                     || pending.path.display().to_string(),
@@ -358,14 +358,20 @@ impl Signex {
             .engines
             .iter()
             .map(|(p, e)| (p.as_path(), e.document()));
-        match self.library.containing_library(path) {
+        let fold = self.identity_fold_for(path);
+        match self.library.containing_library_with(path, fold) {
             Some(lib) => {
                 let reference = signex_library::PrimitiveRef::new(lib.library_id, symbol);
                 let usage = usage_lines(&self.library.open_libraries, sheets, &reference);
                 (usage, SymbolMatch::InLibrary(lib.library_id, symbol))
             }
             None => (
-                usage_outside_library(path, sheets, symbol),
+                usage_outside_library(
+                    path,
+                    sheets,
+                    symbol,
+                    self.library.libraries_share_folder_of(path, fold),
+                ),
                 SymbolMatch::AnyLibrary(symbol),
             ),
         }

@@ -602,13 +602,10 @@ impl<'a> SchematicCanvas<'a> {
         if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
             return Some(frame);
         }
+        // Locked items stay in place in the ghost, as on commit (#1918).
+        let moved = state.ghost.plain_selection(revision, &self.selected);
         Some(drag_layers::DragFrame {
-            moving: std::rc::Rc::new(shift_snapshot_for_selection(
-                &session.lifted,
-                &self.selected,
-                dx,
-                dy,
-            )),
+            moving: std::rc::Rc::new(shift_snapshot_for_selection(&session.lifted, moved, dx, dy)),
             skip: session.ids.clone(),
         })
     }
@@ -660,10 +657,20 @@ impl<'a> SchematicCanvas<'a> {
             return;
         };
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
-        if !self.keeps_wires(state) || self.selected.is_empty() || too_big {
+        if self.selected.is_empty() {
             return;
         }
+        let keep_wires = self.keeps_wires(state);
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            if !keep_wires || too_big {
+                state
+                    .ghost
+                    .hold_locked(snap, cache.revision(), &self.selected, keep_wires);
+                if let Some(held) = state.ghost.take_unreported_held() {
+                    crate::diagnostics::log_locked_holds(&held);
+                }
+                return;
+            }
             let (gx, gy) = self.ghost_delta(dx, dy);
             state.ghost.refresh_with(
                 snap,
@@ -857,6 +864,10 @@ pub enum CanvasEvent {
         zoom_pct: f64,
     },
     CursorMoved,
+    /// The user moved the view with the pointer: a wheel zoom or a pan drag.
+    /// Handled like [`Self::CursorMoved`]; a separate event so the app can
+    /// tell a deliberate gesture from a hover or a queued fit landing.
+    ViewMoved,
     FitAll,
     /// Frame the current selection (`zoom_to_selection_area`, #1256).
     FitSelection,
@@ -902,6 +913,24 @@ pub enum CanvasEvent {
     },
 }
 
+impl CanvasEvent {
+    /// Whether the event is the user acting on the canvas with the pointer:
+    /// a click, a box select, a drag-move, a wheel zoom or a pan. A hover,
+    /// and the fit / centre commands a key or the menu sends, are not.
+    pub fn is_user_gesture(&self) -> bool {
+        matches!(
+            self,
+            Self::Clicked { .. }
+                | Self::CtrlClicked { .. }
+                | Self::DoubleClicked { .. }
+                | Self::BoxSelect { .. }
+                | Self::MoveSelected { .. }
+                | Self::MovePicked { .. }
+                | Self::ViewMoved
+        )
+    }
+}
+
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
@@ -910,6 +939,8 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
+#[cfg(test)]
+mod view_gesture_tests;
 
 #[cfg(test)]
 mod tests {

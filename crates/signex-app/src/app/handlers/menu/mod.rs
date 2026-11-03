@@ -12,6 +12,10 @@ mod view_commands;
 
 impl Signex {
     pub(crate) fn handle_menu_message(&mut self, msg: MenuMessage) -> Task<Message> {
+        // A row that carries a command id runs it like its shortcut does.
+        if let MenuMessage::Command(id) = &msg {
+            return self.run_menu_command(id, None);
+        }
         if let Some(task) = self.handle_menu_file_command(&msg) {
             return task;
         }

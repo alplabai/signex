@@ -209,7 +209,7 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
     assert_eq!(symbol_count(&app, &path), 1);
     assert!(warning(&app).is_none());
     assert!(logged(
-        "CLEAN-SIB deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked (other projects were not)."
+        "CLEAN-SIB deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; closed sheets of open projects checked, other projects not."
     ));
 }
 
