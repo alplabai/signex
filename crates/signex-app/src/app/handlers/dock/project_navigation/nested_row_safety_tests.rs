@@ -65,6 +65,7 @@ fn an_unlisted_nested_sheet_cannot_be_excluded_and_keeps_its_unsaved_edits() {
     // The unsaved-edits stage must not be a way around it.
     app.ui_state.remove_dialog = Some(RemoveDialogState {
         unsaved_prompt: true,
+        is_directory_package: false,
         ..dialog
     });
     let discarded = app.handle_exclude_dirty_choice(ExcludeDirtyChoice::Discard);

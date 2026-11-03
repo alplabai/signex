@@ -49,6 +49,11 @@ mod project_rename_recovery_tests;
 mod project_rename_tests;
 mod remove;
 mod remove_guard;
+mod remove_library_scope;
+#[cfg(test)]
+mod remove_library_tests;
+mod remove_library_usage;
+use remove_library_usage::report_library_leftovers;
 mod rename;
 mod rename_apply;
 mod rename_library;
@@ -115,7 +120,7 @@ impl Signex {
                     )
                 });
                 if !is_openable {
-                    self.interaction_state.last_tree_click = None;
+                    self.interaction_state.last_tree_click.clear();
                     // `follow` is still its initial `Task::none()` here —
                     // nothing between the `let mut follow` above and this
                     // early return assigns it. Spelled out explicitly so
@@ -133,15 +138,11 @@ impl Signex {
                 // actually opens the file. Otherwise the memo just
                 // updates so the next tick is treated as the first
                 // click of a fresh sequence.
-                const TREE_DOUBLE_CLICK_WINDOW: std::time::Duration =
-                    std::time::Duration::from_millis(500);
-                let now = std::time::Instant::now();
-                let is_double = matches!(
-                    &self.interaction_state.last_tree_click,
-                    Some((prev, t)) if prev == key && now.duration_since(*t) <= TREE_DOUBLE_CLICK_WINDOW
-                );
+                let is_double = self
+                    .interaction_state
+                    .last_tree_click
+                    .register(key.clone(), std::time::Instant::now());
                 if is_double {
-                    self.interaction_state.last_tree_click = None;
                     if let Some(missing) = self.missing_child_sheet_at(path) {
                         follow = self.offer_create_child_sheet(&missing);
                     } else if let Some(node) = selected_node {
@@ -153,8 +154,6 @@ impl Signex {
                             ),
                         }
                     }
-                } else {
-                    self.interaction_state.last_tree_click = Some((key.clone(), now));
                 }
                 true
             }

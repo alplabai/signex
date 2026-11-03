@@ -96,7 +96,7 @@ impl Signex {
     /// fold, case-folded when any open project's volume folds. Folding can
     /// only report more sharing, and another project's probe describes its
     /// own folder, not the volume of a file it reaches (#1034).
-    fn shared_use_fold(&self, state: &RemoveDialogState) -> CaseFold {
+    pub(super) fn shared_use_fold(&self, state: &RemoveDialogState) -> CaseFold {
         let fold = self.dialog_fold(state);
         let any_folds = self
             .document_state
@@ -130,7 +130,7 @@ impl Signex {
     /// directory. Both sides are normalised lexically (`..` and `.` folded,
     /// no IO) and compared under the prompt's case rule, so `b/../Lib.snxlib`
     /// and `Lib.snxlib` are one library.
-    fn library_listed_by_other_project(
+    pub(super) fn library_listed_by_other_project(
         &self,
         owner: usize,
         path: &std::path::Path,

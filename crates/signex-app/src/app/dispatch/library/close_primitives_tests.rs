@@ -5,13 +5,13 @@ use super::*;
 use crate::app::{SymbolDocument, TabInfo, TabKind};
 use crate::library::messages::CloseLibraryChoice;
 
-fn send(f: &mut Fixture, msg: LibraryMessage) {
+pub(super) fn send(f: &mut Fixture, msg: LibraryMessage) {
     let task = f.app.update(Message::Library(msg));
     run_task(&mut f.app, task);
 }
 
 /// A dirty symbol editor (with its tab) at `path`.
-fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
+pub(super) fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     f.app.document_state.symbol_editors.insert(
         path.to_path_buf(),
@@ -27,11 +27,11 @@ fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
     f.app.document_state.mark_document_dirty(path);
 }
 
-fn symbol_in_library(f: &Fixture, name: &str) -> PathBuf {
+pub(super) fn symbol_in_library(f: &Fixture, name: &str) -> PathBuf {
     f.file.parent().unwrap().join("symbols").join(name)
 }
 
-fn request_close(f: &mut Fixture) {
+pub(super) fn request_close(f: &mut Fixture) {
     send(f, LibraryMessage::CloseLibrary(f.file.clone()));
 }
 
@@ -130,6 +130,11 @@ fn a_symbol_and_a_row_are_both_listed_and_both_discarded() {
 /// (display entry only; nothing is written through it).
 fn mount_nested_library(f: &mut Fixture) -> PathBuf {
     let root = f.file.parent().unwrap().join("vendor").join("V.snxlib");
+    mount_library_at(f, root)
+}
+
+/// A display-only mount of a library at `root`.
+pub(super) fn mount_library_at(f: &mut Fixture, root: PathBuf) -> PathBuf {
     f.app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "V".into(),

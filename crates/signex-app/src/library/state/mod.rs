@@ -530,7 +530,7 @@ pub struct LibraryState {
     pub panel_selected: Option<ComponentsPanelRowKey>,
     /// The Library panel's last component click, for the double-click
     /// window that opens the component.
-    pub panel_last_click: Option<(ComponentsPanelRowKey, std::time::Instant)>,
+    pub panel_last_click: crate::double_click::DoubleClick<ComponentsPanelRowKey>,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// `(label, reason)` of each Save-All row whose off-thread datasheet
@@ -564,6 +564,8 @@ pub struct LibraryState {
     /// Library recovery dialog — Stage 10 of v0.9-snxlib-as-file.
     /// `None` while closed; one of three modal flows when set.
     pub recovery: Option<super::recovery::RecoveryDialog>,
+    /// Library Missing dialogs queued behind `recovery` (#1897).
+    pub missing: missing_queue::MissingLibraries,
     /// "Library Options" modal state — `None` while closed. Opens
     /// after the user picks a `.snxlib` save target in the New Library
     /// Save-As dialog (Stage 11 of `v0.9-snxlib-as-file-plan.md`). The
@@ -612,6 +614,9 @@ pub struct LibraryState {
     /// Stock copies refused while the bundled stock was still mounting:
     /// mounted after all if that mount fails (#1894).
     pub stock_copies_refused: Vec<PathBuf>,
+    /// Libraries refused or closed because another shares their
+    /// `library_id` (#1908); the Components panel lists them.
+    pub id_clash_notices: Vec<IdClashNotice>,
     /// Components Panel UI state — collapsed sections + substring
     /// filter. Stage 9 ships the simple substring matcher; the full
     /// search syntax (plan §5) is polish work.
@@ -688,6 +693,9 @@ pub struct LibraryState {
     /// Latest row reload planned per Component Preview. A reload applies
     /// only while its generation is still the one here.
     pub editor_reload_generations: HashMap<EditorAddress, u64>,
+    /// Latest first-visit tab lookup planned per Component Preview. A
+    /// lookup applies only while its generation is still the one here.
+    pub tab_resolve_generations: HashMap<EditorAddress, u64>,
     /// The Properties panel's summaries of the selected row's bindings,
     /// read off the UI thread.
     pub row_summary_job: super::row_summaries::RowSummaryJob,
@@ -907,7 +915,9 @@ pub struct LibraryCreateOptionsState {
 }
 
 mod closing;
+mod id_precedence;
 mod methods;
+mod missing_queue;
 mod new_library_defaults;
 mod panel_rows;
 #[cfg(test)]
@@ -929,6 +939,7 @@ mod tests;
 mod uncommitted;
 mod under_folder;
 
+pub use id_precedence::IdClashNotice;
 pub use methods::*;
 pub use new_library_defaults::NewLibraryDefaults;
 pub use panel_rows::PanelRows;
@@ -937,5 +948,6 @@ pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;
+pub use stock_copy::STOCK_LIBRARY_ID;
 pub use symbol_choice::SymbolChoiceRequests;
 pub use uncommitted::{CommitNowReport, UncommittedState};

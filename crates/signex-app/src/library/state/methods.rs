@@ -67,7 +67,7 @@ impl Default for LibraryState {
             panel_search: String::new(),
             panel_expanded: Default::default(),
             panel_selected: None,
-            panel_last_click: None,
+            panel_last_click: Default::default(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -77,6 +77,7 @@ impl Default for LibraryState {
             primitive_picker: None,
             document_options: None,
             recovery: None,
+            missing: Default::default(),
             create_options: None,
             library_updates: None,
             queued_library_updates: Vec::new(),
@@ -87,6 +88,7 @@ impl Default for LibraryState {
             stock_library_root: None,
             stock_editable: false,
             stock_copies_refused: Vec::new(),
+            id_clash_notices: Vec::new(),
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -102,6 +104,7 @@ impl Default for LibraryState {
             refresh_generation_counter: 0,
             preview_generations: HashMap::new(),
             editor_reload_generations: HashMap::new(),
+            tab_resolve_generations: HashMap::new(),
             row_summary_job: Default::default(),
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
@@ -279,7 +282,17 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, false)
+        self.open_library_marked(root, false, &[])
+    }
+
+    /// [`Self::open_library`] knowing which paths the open projects list,
+    /// so a shared `library_id` is settled by source (#1908).
+    pub fn open_library_among(
+        &mut self,
+        root: PathBuf,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false, project_paths)
     }
 
     /// Mount the library at `root` read-only — the stock library that
@@ -287,7 +300,7 @@ impl LibraryState {
     /// with `LibraryError::ReadOnly` whatever the install directory's
     /// permissions are. Idempotent like [`Self::open_library`].
     pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, true)
+        self.open_library_marked(root, true, &[])
     }
 
     /// True when the library mounted at `root` is read-only.
@@ -326,6 +339,21 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
+    /// A shared handle on the adapter mounted for the library at `root`,
+    /// for a read that leaves the UI thread.
+    pub(crate) fn shared_adapter_at(&self, root: &Path) -> Option<Arc<dyn LibraryAdapter>> {
+        let id = self.library_at(root)?.library_id;
+        self.set.get_shared(id)
+    }
+
+    /// Shared handles on every mounted adapter, by library id.
+    pub(crate) fn shared_adapters(&self) -> Vec<(Uuid, Arc<dyn LibraryAdapter>)> {
+        self.open_libraries
+            .iter()
+            .filter_map(|lib| Some((lib.library_id, self.set.get_shared(lib.library_id)?)))
+            .collect()
+    }
+
     /// Whether `path` is the bundled stock library's file.
     pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
         self.stock_library_root
@@ -340,7 +368,12 @@ impl LibraryState {
         !self.stock_editable && self.is_stock_root(path)
     }
 
-    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
+    fn open_library_marked(
+        &mut self,
+        root: PathBuf,
+        read_only: bool,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             self.cancel_pending_close(&root, "it was opened again");
             return Ok(());
@@ -353,9 +386,8 @@ impl LibraryState {
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
         self.refuse_stock_copy(&root, library_id)?;
-        // `LibrarySet::mount` refuses this path if it is already mounted,
-        // or if another mounted library has the same `library_id` (a
-        // copied library folder, #1894); the `Conflict` names both.
+        self.resolve_id_clash(&root, library_id, project_paths)?;
+        // `LibrarySet::mount` refuses this path if it is already mounted.
         let read_only = read_only || self.is_locked_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
@@ -488,6 +520,12 @@ impl LibraryState {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
 
+    /// Dirty editors whose library path `in_library` accepts; for a caller
+    /// that compares paths by its own case policy.
+    pub fn dirty_editors_matching(&self, in_library: impl Fn(&Path) -> bool) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| in_library(&key.library_path))
+    }
+
     /// Every dirty editor address across all open libraries — the rows
     /// an app-quit prompt has to account for.
     pub fn dirty_editors(&self) -> Vec<EditorAddress> {
@@ -533,11 +571,11 @@ impl LibraryState {
         path: &Path,
         project_paths: &[PathBuf],
     ) -> ComponentsMountSource {
+        if self.is_stock_root(path) {
+            return ComponentsMountSource::Stock;
+        }
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
-        }
-        if self.stock_library.as_deref() == Some(path) {
-            return ComponentsMountSource::Stock;
         }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;
