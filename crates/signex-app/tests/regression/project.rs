@@ -111,6 +111,7 @@ fn arm_remove_dialog(app: &mut Signex, target: &Path) {
             .to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
 }
 

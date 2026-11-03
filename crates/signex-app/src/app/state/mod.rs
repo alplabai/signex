@@ -11,6 +11,8 @@ pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
+#[cfg(test)]
+mod draft_ownership_tests;
 mod error_notice;
 mod interaction;
 mod keymap_recorder;

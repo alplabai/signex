@@ -59,12 +59,22 @@ pub(crate) fn validated_filename(
     if !keeps_extension {
         return Err(EngineError::InvalidChildSheetFilename(filename.to_string()));
     }
-    let key = file_key(filename);
-    let clash = children
-        .iter()
-        .any(|c| c.uuid != id && file_key(c.filename.trim()) == key);
-    if clash {
+    if other_sheet_symbol_using_file(children, id, filename).is_some() {
         return Err(EngineError::DuplicateChildSheetFile(filename.to_string()));
     }
     Ok(filename.to_string())
+}
+
+/// The sheet symbol, other than `id`, that already points at `filename`: the
+/// one-placement-per-file rule `Command::ModifyChildSheet` enforces. Lets a
+/// dialog tell the user before the command refuses.
+pub fn other_sheet_symbol_using_file<'a>(
+    children: &'a [ChildSheet],
+    id: Uuid,
+    filename: &str,
+) -> Option<&'a ChildSheet> {
+    let key = file_key(filename.trim());
+    children
+        .iter()
+        .find(|c| c.uuid != id && file_key(c.filename.trim()) == key)
 }

@@ -122,6 +122,23 @@ fn clean_where_clears_every_match_across_set_and_drafts() {
     );
 }
 
+#[test]
+fn a_draft_whose_save_is_in_flight_is_still_a_dirty_primitive() {
+    let path = Path::new("/lib/symbols/s.snxsym");
+    let mut d = with_symbol(path);
+    d.keep_document_dirty_until_saved(path);
+    assert!(
+        !d.symbol_editors[path].is_dirty(),
+        "the snapshot reset the flag"
+    );
+    assert_eq!(
+        d.dirty_primitive_paths().collect::<Vec<_>>(),
+        vec![path.to_path_buf()]
+    );
+    d.mark_document_clean(path);
+    assert_eq!(d.dirty_primitive_paths().count(), 0);
+}
+
 /// A saved engine with one symbol, and the symbol's id.
 fn saved_engine() -> (signex_engine::Engine, uuid::Uuid) {
     let id = uuid::Uuid::now_v7();

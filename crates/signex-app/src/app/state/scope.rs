@@ -137,12 +137,29 @@ pub(crate) fn owning_library<'a>(
     libraries: &'a [PathBuf],
     fold: CaseFold,
 ) -> Option<&'a PathBuf> {
-    libraries
+    owning_libraries(path, libraries, fold).pop()
+}
+
+/// Every library [`owning_library`] could pick: all whose folder contains
+/// `path` and is deepest. Two `.snxlib` files in one folder tie, and a prompt
+/// that picked one would let the other close without asking.
+pub(crate) fn owning_libraries<'a>(
+    path: &Path,
+    libraries: &'a [PathBuf],
+    fold: CaseFold,
+) -> Vec<&'a PathBuf> {
+    let under: Vec<(&PathBuf, usize)> = libraries
         .iter()
         .filter_map(|lib| Some((lib, lib.parent()?)))
         .filter(|(_, dir)| path_is_under(path, dir, fold))
-        .max_by_key(|(_, dir)| path_key_with(dir, fold).len())
+        .map(|(lib, dir)| (lib, path_key_with(dir, fold).len()))
+        .collect();
+    let deepest = under.iter().map(|(_, depth)| *depth).max();
+    under
+        .into_iter()
+        .filter(|(_, depth)| Some(*depth) == deepest)
         .map(|(lib, _)| lib)
+        .collect()
 }
 
 /// True when `path` is `root` or lies under it, compared component-wise on

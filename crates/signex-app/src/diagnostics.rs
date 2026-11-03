@@ -73,6 +73,30 @@ pub fn log_warning(message: impl AsRef<str>) {
     warn!("{}", message.as_ref());
 }
 
+/// Tell the user which locked objects an edit passed over.
+pub fn log_locked_skips(skipped: &[String]) {
+    if skipped.is_empty() {
+        return;
+    }
+    log_warning(format!(
+        "Skipped {} locked object(s): {}; unlock in Properties to change them",
+        skipped.len(),
+        skipped.join(", ")
+    ));
+}
+
+/// Tell the user what a drag in flight would leave in place because of a
+/// lock, before the drop; `held` carries the reasons `without_locked` names.
+pub fn log_locked_holds(held: &[String]) {
+    if held.is_empty() {
+        return;
+    }
+    log_warning(format!(
+        "Will not move when dropped: {}; unlock the locked object in Properties to move it",
+        held.join(", ")
+    ));
+}
+
 pub fn log_error(context: &str, error: &anyhow::Error) {
     error!("{context}: {error:#}");
 }

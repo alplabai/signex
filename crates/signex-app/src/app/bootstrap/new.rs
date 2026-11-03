@@ -616,7 +616,7 @@ impl Signex {
                 submenu_panel_hovered: false,
                 submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
-                last_tree_click: None,
+                last_tree_click: Default::default(),
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
