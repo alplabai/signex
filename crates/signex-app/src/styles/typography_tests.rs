@@ -42,18 +42,25 @@ fn scales_track_a_changed_base() {
 }
 
 #[test]
-fn every_step_is_a_fixed_ratio_of_the_base() {
-    let (a, b) = (TypeScale::from_base(11.0), TypeScale::from_base(22.0));
-    for (x, y) in [
-        (a.caption, b.caption),
-        (a.label, b.label),
-        (a.title, b.title),
-        (a.heading, b.heading),
-        (a.display, b.display),
-        (a.glyph, b.glyph),
-        (a.micro, b.micro),
-    ] {
-        assert!((y - 2.0 * x).abs() < 1e-4);
+fn every_step_keeps_its_authored_ratio_to_body_at_any_base() {
+    for base in [11.0_f32, 12.0, 22.0] {
+        let ts = TypeScale::from_base(base);
+        for (step, authored_px) in [
+            (ts.caption, 10.0),
+            (ts.body, 11.0),
+            (ts.label, 12.0),
+            (ts.title, 13.0),
+            (ts.heading, 14.0),
+            (ts.display, 20.0),
+            (ts.glyph, 24.0),
+            (ts.micro, 4.0),
+            (ts.banner, 64.0),
+        ] {
+            assert!(
+                (step / ts.body - authored_px / 11.0).abs() < 1e-4,
+                "base {base}: step {step} is not {authored_px}/11 of body"
+            );
+        }
     }
 }
 
@@ -176,7 +183,28 @@ fn swept_files_use_scale_tokens_not_literals() {
     );
 }
 
-/// Every `.size(<literal>)` under `src/` (the widget text size). A size is
+/// Names of `const NAME: f32 = <number>;` items in `src`: a text size
+/// routed through one of these is still a hardcoded literal.
+fn literal_f32_consts(src: &str) -> Vec<String> {
+    src.lines()
+        .filter_map(|l| {
+            let l = l
+                .trim_start()
+                .trim_start_matches("pub(crate) ")
+                .trim_start_matches("pub(super) ")
+                .trim_start_matches("pub ");
+            let rest = l.strip_prefix("const ")?;
+            let (name, value) = rest.split_once(": f32 =")?;
+            value
+                .trim_start()
+                .starts_with(|c: char| c.is_ascii_digit())
+                .then(|| name.trim().to_string())
+        })
+        .collect()
+}
+
+/// Every `.size(<literal>)` under `src/` (the widget text size), or `.size(NAME)` where `NAME` is a
+/// numeric `f32` const. A size is
 /// a `TypeScale` step, so it follows the base size; padding and spacing
 /// literals are still allowed outside `SWEPT`.
 #[test]
@@ -190,6 +218,7 @@ fn no_text_size_literal_survives_anywhere_in_signex_app() {
                 && path.file_name().is_some_and(|n| n != "typography_tests.rs")
             {
                 let src = std::fs::read_to_string(&path).expect("source readable");
+                let consts = literal_f32_consts(&src);
                 for (n, line) in src.lines().enumerate() {
                     if line.trim_start().starts_with("//") {
                         continue;
@@ -197,7 +226,13 @@ fn no_text_size_literal_survives_anywhere_in_signex_app() {
                     let mut rest = line;
                     while let Some(at) = rest.find(".size(") {
                         let after = &rest[at + ".size(".len()..];
-                        if after.starts_with(|c: char| c.is_ascii_digit()) {
+                        let ident: String = after
+                            .chars()
+                            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                            .collect();
+                        if after.starts_with(|c: char| c.is_ascii_digit())
+                            || consts.contains(&ident)
+                        {
                             bad.push(format!("{}:{}: {}", path.display(), n + 1, line.trim()));
                         }
                         rest = after;

@@ -10,7 +10,7 @@ use super::super::*;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Body text size of the modal's compact controls.
-const FIELD_TEXT: f32 = 11.0;
+const FIELD_TEXT: f32 = crate::styles::TypeScale::DEFAULT.body;
 /// Numeric field width, in multiples of the text size (fits `5080.00`).
 const FIELD_WIDTH_EM: f32 = 7.0;
 

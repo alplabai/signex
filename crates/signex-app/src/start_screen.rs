@@ -23,7 +23,7 @@ use crate::menu_bar::MenuMessage;
 use crate::styles;
 
 /// Base text size every other measure on this screen is derived from.
-const BASE: f32 = 12.0;
+const BASE: f32 = crate::styles::TypeScale::DEFAULT.body;
 
 /// How many recent projects the start screen lists (File ▸ Open Recent
 /// keeps more).

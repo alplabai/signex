@@ -29,7 +29,7 @@
 //! one step up. Spacing steps are `2 / 4 / 8 / 12 / 16` px at an 11 px base;
 //! an off-grid padding snaps to the nearest step, ties toward the smaller one.
 //! Literals outside the table fold onto `heading` (15, 16), `display` (20),
-//! `glyph` (24 and the 64 px pause icon at 2.5x) and `micro` (4, separator rows).
+//! `glyph` (24), `banner` (the 64 px pause icon) and `micro` (4, separator rows).
 
 /// Base size, in px, that the scales are defined against. It is the `body`
 /// size.
@@ -69,6 +69,8 @@ pub struct TypeScale {
     pub glyph: f32,
     /// Rows of rule characters used as thin separators (4 px).
     pub micro: f32,
+    /// The large pause icon on the placement-paused card (64 px).
+    pub banner: f32,
 }
 
 impl TypeScale {
@@ -86,6 +88,7 @@ impl TypeScale {
             display: base * 20.0 / 11.0,
             glyph: base * 24.0 / 11.0,
             micro: base * 4.0 / 11.0,
+            banner: base * 64.0 / 11.0,
         }
     }
 }

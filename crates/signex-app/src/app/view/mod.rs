@@ -33,7 +33,7 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 // every submenu launcher visually aligned across the whole app
 // (canvas right-click, project-tree right-click, File/Edit/View menu).
 const SUBMENU_ARROW: &str = "›";
-const SUBMENU_ARROW_SIZE: f32 = 18.0;
+const SUBMENU_ARROW_SIZE: f32 = crate::styles::chrome_px(18.0);
 
 /// Chrome strip search bar width in pixels — the widest it ever gets;
 /// `chrome_search_bar_geometry` shrinks it below this on narrow windows.

@@ -155,7 +155,7 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let card = container(
             column![
-                iced::widget::text("⏸").size(TS.glyph * 2.5).color(accent_c),
+                iced::widget::text("⏸").size(TS.banner).color(accent_c),
                 iced::widget::text("Placement Paused")
                     .size(TS.heading)
                     .color(text_c),
