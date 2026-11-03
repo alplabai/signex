@@ -114,3 +114,100 @@ fn a_reload_starts_clean_with_no_history() {
     assert!(!preview.dirty);
     assert!(!preview.step_history(true), "the reload dropped the steps");
 }
+
+/// Open a Component editor tab for `address` as the main window's active tab,
+/// the way opening it does (`active_path` is `None`).
+fn open_component_tab(app: &mut Signex, address: &EditorAddress) {
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "row".into(),
+        path: address.synthetic_tab_path(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::ComponentEditor(crate::app::ComponentEditorTab {
+            library_path: address.library_path.clone(),
+            table: address.table.clone(),
+            row_id: address.row_id,
+        }),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = None;
+}
+
+fn command(name: &str) -> crate::keymap::AppCommandId {
+    crate::keymap::AppCommandId::new(name).unwrap()
+}
+
+#[test]
+fn ctrl_z_in_a_component_tab_reaches_the_row_history() {
+    let (mut app, address) = app_with_clean_editor();
+    open_component_tab(&mut app, &address);
+    set_lifecycle(&mut app, &address, LifecycleState::Released);
+    assert!(editor(&mut app, &address).dirty);
+    let ctx = app.command_context(None);
+    assert!(
+        ctx.can_undo && !ctx.can_redo,
+        "the menu rows follow the row history"
+    );
+    let _task = app.dispatch_command(
+        &command("undo"),
+        crate::app::command::CommandArgs::none(),
+        None,
+    );
+    assert!(
+        !editor(&mut app, &address).dirty,
+        "Ctrl+Z was dropped by the enablement gate"
+    );
+    assert!(app.command_context(None).can_redo);
+    let _task = app.dispatch_command(
+        &command("redo"),
+        crate::app::command::CommandArgs::none(),
+        None,
+    );
+    assert!(editor(&mut app, &address).dirty);
+}
+
+#[test]
+fn ctrl_z_in_a_component_window_steps_that_window_not_the_main_tab() {
+    let (mut app, address) = app_with_clean_editor();
+    open_component_tab(&mut app, &address);
+    set_lifecycle(&mut app, &address, LifecycleState::Released);
+    // The main window shows another tab.
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "other".into(),
+        path: std::path::PathBuf::from("other.snxsch"),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::ComponentEditor {
+            library_path: address.library_path.clone(),
+            table: address.table.clone(),
+            row_id: address.row_id,
+        },
+    );
+    assert!(app.command_context(Some(window)).can_undo);
+    let _task = app.dispatch_command(
+        &command("undo"),
+        crate::app::command::CommandArgs::none(),
+        Some(window),
+    );
+    assert!(
+        !editor(&mut app, &address).dirty,
+        "the window's own row stepped"
+    );
+}
+
+#[test]
+fn an_edit_typed_before_an_outside_write_reload_lands_cannot_undo_clean() {
+    let (mut app, address) = app_with_clean_editor();
+    let root = address.library_path.clone();
+    let _reload = app.refresh_clean_editors(&root, &[address.row_id]);
+    set_lifecycle(&mut app, &address, LifecycleState::Released);
+    let preview = editor(&mut app, &address);
+    assert!(preview.step_history(true));
+    assert!(preview.dirty, "the library was written behind this editor");
+}

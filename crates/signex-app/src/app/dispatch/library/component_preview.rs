@@ -394,7 +394,7 @@ impl Signex {
             // The saved copy is stored; what was typed since is not.
             // Only the new base revision is taken over, and the pins and
             // version a cascade moved the saved copy to (#1840).
-            crate::library::preview_rebase::rebase_onto_cascade(&mut state.row, &row);
+            state.rebase_onto_cascade(&row);
             // Whatever the history says, the row differs from the copy
             // stored: no undo may read it clean.
             if !state.history.is_dirty() {
@@ -507,15 +507,14 @@ impl Signex {
             .collect()
     }
 
-    /// A dirty editor keeps its old base, so its saved position names disk
-    /// content the library no longer stores: undo must not read it clean.
-    /// An editor whose own save is in flight is left alone.
+    /// An editor of a written row keeps its old base until a reload lands
+    /// (a clean one's reload yields to an edit typed first), so its saved
+    /// position names disk content the library no longer stores: undo must
+    /// not read it clean. An editor whose own save is in flight is left
+    /// alone.
     fn forget_dirty_editors_of(&mut self, library_path: &std::path::Path, rows: &[RowId]) {
         for (a, s) in self.library.editors.iter_mut() {
-            if a.library_path == library_path
-                && rows.contains(&a.row_id)
-                && s.has_unsaved_edits()
-                && s.saving_row.is_none()
+            if a.library_path == library_path && rows.contains(&a.row_id) && s.saving_row.is_none()
             {
                 s.history.forget();
             }

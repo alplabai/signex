@@ -68,6 +68,18 @@ impl Signex {
                 app.dispatch_command(command, _args, None)
             });
         }
+        // Undo / Redo typed in a Component Preview window step that
+        // window's row history, not the main window's active tab (#1854).
+        if matches!(command.as_str(), "undo" | "redo")
+            && let Some(address) = self.window_component_editor(window)
+        {
+            let (can_undo, can_redo) = self.component_history_of(&address);
+            let undo = command.as_str() == "undo";
+            if if undo { can_undo } else { can_redo } {
+                self.step_component_editor_at(&address, undo);
+            }
+            return Task::none();
+        }
         // Close Document follows the window the stroke came from (#1787).
         if command.as_str() == "close_active_document"
             && let Some(task) = self.close_document_in_window(window)

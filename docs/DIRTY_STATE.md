@@ -173,13 +173,16 @@ the live row's, only the edits move, and the typed-but-uncommitted buffers are
 dropped. An inline edit that changed the row is one step
 (`begin_edit` / `finish_edit` around `apply_inline_edit` and the save-time buffer
 flush). The flag after Undo, Redo or a landed save is "away from the saved
-position", and a half-typed value in `params_edit_buf` still counts as unsaved
-(`has_unsaved_edits`) whatever the history says.
+position". A half-typed value in `params_edit_buf` counts as unsaved
+(`has_unsaved_edits`) only where a reload or a cascade rebase decides whether
+to replace the row; the close, quit and reopen gates read `.dirty`. The first
+Ctrl+Z with a half-typed value only drops the typed text; the next one steps.
 
 - The point is set where the save snapshot is taken (`begin_save`, beside
   `saving_row`). A row with a write in flight stays dirty whatever Undo does;
   the landing re-derives the flag, and a landed copy that differs from the row
-  on screen (`edited_since_save`) is dirty and forgets the point.
+  on screen (`edited_since_save`) is dirty and keeps the point, so undoing back
+  to the saved copy reads clean.
 - A failed or abandoned write (`abort_save`) forgets the point.
 - Forgotten, so the row stays dirty until the next save: an edit after undoing
   below the point, the saved step evicted at depth 100, and an edit that marks
@@ -190,8 +193,13 @@ position", and a half-typed value in `params_edit_buf` still counts as unsaved
   symbol, footprint or model. The row keeps whatever dirtiness it had.
 - An alternate symbol added from the picker is one step like an inline edit.
   A bind whose write fails leaves the row dirty and forgets the point. A write
-  by the browser or a cascade to a row whose editor is dirty forgets the point,
-  since it names disk content the library no longer holds.
+  by the browser, a modal or a cascade to a row forgets the point of every
+  editor of it (a clean editor's reload yields to an edit typed first), since
+  it names disk content the library no longer holds. A cascade's pins and
+  version are also carried into every undo and redo step, so stepping never
+  brings back a pre-cascade pin (#1840).
+- Every edit is one step; there is no coalescing of keystrokes, so about 100
+  edits evict the opened state and undo can then no longer read clean.
 - Staged PDFs are kept while any undo or redo step pins them, so an undo to a
   replaced pick still has bytes to write.
 - A reload replaces the editor state, so its history is new and the row clean;

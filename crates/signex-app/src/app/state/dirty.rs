@@ -14,8 +14,9 @@
 //! - a Component editor keeps its flag in `LibraryState.editors`, keyed by
 //!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`. The flag
 //!   follows a row undo history with a saved position (`RowHistory`, #1854),
-//!   so Undo back to the saved row reads clean; a half-typed value in an edit
-//!   buffer still counts as unsaved (`has_unsaved_edits`).
+//!   so Undo back to the saved row reads clean. The close, quit and reopen gates
+//!   read that flag; a half-typed value in an edit buffer counts as unsaved
+//!   only for the reload and rebase decisions (`has_unsaved_edits`).
 //!
 //! Tabs, the title bar count, the quit and close gates, Save All and the
 //! project tree all ask [`DocumentState::is_document_dirty`] or one of its

@@ -394,7 +394,7 @@ impl LibraryState {
                 return ReloadApplied::Dropped;
             }
             if let Some(edited) = self.editors.get_mut(&address) {
-                super::preview_rebase::rebase_onto_cascade(&mut edited.row, &row);
+                edited.rebase_onto_cascade(&row);
                 edited.stale_base = false;
             }
             return ReloadApplied::Rebased;
