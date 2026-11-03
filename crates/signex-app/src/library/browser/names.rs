@@ -120,7 +120,7 @@ mod tests {
             .find(|l| l.root == stock)
             .expect("mounted")
             .cached_footprints = footprints;
-        state.refresh_loaded_previews(&stock);
+        state.refresh_loaded_previews(&stock, crate::app::CaseFold::host_default());
 
         let lib = state.library_at(&stock).expect("mounted");
         let table = active_table(lib, &browser);

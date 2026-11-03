@@ -261,7 +261,7 @@ impl Signex {
 
     /// Every `.snxlib` a symbol / footprint draft can belong to: the mounted
     /// libraries plus those the open projects list. The candidate set for
-    /// [`owning_library`](crate::app::state::scope::owning_library).
+    /// [`owning_libraries`](crate::app::state::scope::owning_libraries).
     pub(crate) fn draft_library_roots(&self) -> Vec<std::path::PathBuf> {
         let mut roots: Vec<std::path::PathBuf> = self
             .library
@@ -283,7 +283,7 @@ impl Signex {
     /// the one rule every prompt uses, so a draft has one owner in all of
     /// them on a volume that mixes case rules.
     pub(crate) fn draft_fold(&self, path: &std::path::Path) -> crate::app::state::CaseFold {
-        self.identity_decision(path).fold
+        self.identity_fold_for(path)
     }
 
     /// [`Self::draft_fold`] for every dirty draft.
@@ -322,6 +322,7 @@ impl Signex {
             .document_state
             .dirty_primitive_paths()
             .filter(|path| {
+                // Libraries sharing a folder all list its drafts.
                 let fold = self.draft_fold(path);
                 owning_libraries(path, &roots, fold)
                     .into_iter()

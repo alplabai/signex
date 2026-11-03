@@ -494,7 +494,9 @@ mod tests {
 
         let mut by_menu = app_with_empty_sheet();
         arm_port(&mut by_menu);
-        let _ = by_menu.update(Message::Menu(crate::menu_bar::MenuMessage::PlaceLabel));
+        let _ = by_menu.update(Message::Menu(crate::menu_bar::MenuMessage::command(
+            "place_net_label",
+        )));
         assert_eq!(label_types_after_click(&mut by_menu), [LabelType::Net]);
     }
 

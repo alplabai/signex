@@ -10,7 +10,6 @@
 use signex_app::app::{DragTarget, FootprintDocument, LoadedProject, Message, Signex, UiMsg};
 use signex_app::diagnostics;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit};
-use signex_app::menu_bar::MenuMessage;
 use signex_library::{Footprint, FootprintFile};
 use signex_types::project::ProjectData;
 use std::path::Path;
@@ -39,7 +38,13 @@ fn idle_cursor_move_only_records_the_position() {
 #[test]
 fn idle_cursor_move_repairs_panel_ctx_mirrors_left_stale_by_other_dispatchers() {
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::Menu(MenuMessage::ToggleGrid));
+    // Leave the mirror stale directly: a dispatcher that flips the flag and
+    // skips `finish_update` is what the repair on idle moves is for.
+    app.ui_state.grid_visible = !app.document_state.panel_ctx.grid_visible;
+    assert_ne!(
+        app.document_state.panel_ctx.grid_visible, app.ui_state.grid_visible,
+        "the mirror must start stale"
+    );
     idle_move(&mut app);
     assert_eq!(
         app.document_state.panel_ctx.grid_visible,
