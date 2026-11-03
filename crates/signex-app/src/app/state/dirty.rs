@@ -26,9 +26,11 @@
 //! siblings, and every write goes through [`DocumentState::mark_document_dirty`],
 //! [`DocumentState::mark_history_edit_dirty`], [`DocumentState::sync_history_dirty`],
 //! [`DocumentState::mark_document_clean`], [`DocumentState::clear_document_dirty`]
-//! or [`DocumentState::rekey_document_dirty`] (a project also has `note_project_clean_state` and `sync_project_history_dirty`).
-//! The set's contents are private to this module, so the compiler keeps it that way. Rationale and the
-//! failures the old three-way mirror caused: docs/DIRTY_STATE.md.
+//! or [`DocumentState::rekey_document_dirty`] (a project also has
+//! `note_project_clean_state` and `sync_project_history_dirty`). The set's
+//! contents are private to this module, so the compiler keeps it that way.
+//! Rationale and the failures the old three-way mirror caused:
+//! docs/DIRTY_STATE.md.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

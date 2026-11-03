@@ -39,14 +39,7 @@ impl DocumentState {
         if self.is_document_dirty(&path) {
             return;
         }
-        match encode_project(&project.data) {
-            Ok(bytes) => {
-                self.dirty_docs.project_saved.insert(path, bytes);
-            }
-            Err(_) => {
-                self.dirty_docs.project_saved.remove(&path);
-            }
-        }
+        self.record_project_saved_state(&path);
     }
 
     /// A history step (edit, undo, redo) changed project `id`: it is dirty
@@ -70,16 +63,20 @@ impl DocumentState {
             self.dirty_docs.paths.remove(&path);
         } else {
             self.dirty_docs.paths.insert(path);
-            if affects_erc {
-                self.note_sheet_edit();
-            }
+        }
+        // The epoch tracks the content changing, not the dirty mark: a step
+        // that lands back on the saved rules still outdates ERC results.
+        if affects_erc {
+            self.note_sheet_edit();
         }
     }
 
     /// A write of `bytes` to the project file landed but did not leave the
     /// project clean (edited meanwhile): the file holds `bytes`, so an undo
     /// back to them is clean. `newest` is false when a later write is still
-    /// to land, which makes the file's content unknown until it does.
+    /// to land, which makes the file's content unknown until it does. Callers
+    /// that pass a literal `true` (path ops) rely on the path-op guards
+    /// keeping them from overlapping a project save.
     pub(crate) fn note_project_bytes_on_disk(&mut self, path: &Path, bytes: Vec<u8>, newest: bool) {
         if newest && self.projects.iter().any(|p| p.path == path) {
             self.dirty_docs
@@ -112,5 +109,10 @@ impl DocumentState {
                 self.dirty_docs.project_saved.remove(path);
             }
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_project_saved_state(&self, path: &Path) -> bool {
+        self.dirty_docs.project_saved.contains_key(path)
     }
 }

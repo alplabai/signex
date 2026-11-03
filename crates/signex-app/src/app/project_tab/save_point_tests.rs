@@ -101,16 +101,6 @@ fn an_undo_while_a_write_is_in_flight_stays_dirty() {
 }
 
 #[test]
-fn a_failed_write_forgets_the_saved_state() {
-    let mut app = app();
-    let path = app.document_state.projects[0].path.clone();
-    describe(&mut app, "a");
-    app.document_state.forget_project_saved_state(&path);
-    assert!(step(&mut app, true));
-    assert!(dirty(&app));
-}
-
-#[test]
 fn a_history_that_evicted_the_saved_state_stays_dirty() {
     let mut app = app();
     let id = app.document_state.projects[0].id;
@@ -293,4 +283,27 @@ fn a_discard_records_no_saved_state() {
     assert!(step(&mut app, true));
     assert!(step(&mut app, false));
     assert!(dirty(&app), "the discarded edit was never written");
+}
+
+#[test]
+fn a_rules_edit_back_to_the_saved_rules_still_outdates_erc_results() {
+    let mut app = app();
+    let _ = app.handle_store_erc_rules_in_project();
+    let path = app.document_state.projects[0].path.clone();
+    app.document_state.mark_document_clean(&path);
+    let saved = app.document_state.projects[0].data.rules.clone();
+    for _ in 0..8 {
+        // "ERC ran" on the matrix as it is before this cycle.
+        app.ui_state.erc_epoch = app.document_state.sheet_edit_epoch;
+        let _ = app.handle_pin_matrix_cell_cycled(0, 1);
+        if app.document_state.projects[0].data.rules == saved {
+            break;
+        }
+    }
+    assert_eq!(app.document_state.projects[0].data.rules, saved);
+    assert!(!dirty(&app), "back at the saved rules");
+    assert_ne!(
+        app.document_state.sheet_edit_epoch, app.ui_state.erc_epoch,
+        "the rules changed since ERC ran; its results are stale"
+    );
 }

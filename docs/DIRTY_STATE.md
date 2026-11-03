@@ -232,10 +232,12 @@ branch cannot leave a stale position behind.
   (`forget_project_saved_state`), a discard (`clear_document_dirty`), a rename or
   Save As (`rekey_document_dirty`), and a project that was already dirty when its
   first history edit came in.
-- The roughly twenty edits outside the histories (a library added, removed or
-  renamed, a sheet list change, a sheet reference rewrite, a Save As repoint)
+- The roughly twenty edits outside the histories (a library added or removed,
+  a sheet list change, a sheet reference rewrite, a Save As repoint)
   keep `mark_document_dirty`: they sit in `external`, so undo never hides them and
-  only a save clears them.
+  only a save clears them. A library rename that patches the saved `.snxprj` on
+  disk neither marks nor records bytes: memory already carries the rename, and a
+  project dirty from a history edit before it cannot undo back to clean.
 
 ## Why a draft can also sit in the set
 
