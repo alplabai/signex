@@ -168,6 +168,16 @@ pub fn tooltip_style(
     }
 }
 
+/// SVG style for a row icon. An enabled row keeps the SVG's own colours
+/// (`color: None`); a disabled one is tinted to the muted text colour.
+/// `Some(c)` recolours the whole SVG, so it must never be used on an
+/// enabled row.
+fn icon_style(disabled: bool, muted: iced::Color) -> iced::widget::svg::Style {
+    iced::widget::svg::Style {
+        color: disabled.then_some(muted),
+    }
+}
+
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
 /// specifies a fixed panel width in px (e.g. 220) when the menu is
 /// list-style; `None` lets the panel auto-size (used for the Filter
@@ -236,12 +246,13 @@ where
                     .width(Length::Shrink);
                 // Leading icon column — fixed-width for alignment.
                 if let Some(handle) = icon {
-                    row_w =
-                        row_w.push(svg(handle).width(20).height(20).style(move |_: &Theme, _| {
-                            iced::widget::svg::Style {
-                                color: Some(row_text_c),
-                            }
-                        }));
+                    // Tint only via `icon_style` (disabled rows); never always.
+                    row_w = row_w.push(
+                        svg(handle)
+                            .width(20)
+                            .height(20)
+                            .style(move |_: &Theme, _| icon_style(disabled, muted)),
+                    );
                 } else {
                     row_w = row_w.push(Space::new().width(Length::Fixed(20.0)));
                 }
@@ -382,4 +393,20 @@ where
         }
     })
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enabled_icon_keeps_its_own_colours() {
+        assert_eq!(icon_style(false, iced::Color::WHITE).color, None);
+    }
+
+    #[test]
+    fn disabled_icon_is_tinted_muted() {
+        let muted = iced::Color::from_rgb(0.5, 0.5, 0.5);
+        assert_eq!(icon_style(true, muted).color, Some(muted));
+    }
 }

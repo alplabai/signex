@@ -8,8 +8,10 @@ mod altium_import;
 #[cfg(test)]
 mod commit_bytes_tests;
 mod dir_case;
+mod disk_poll;
 mod external_change;
 pub(crate) use dir_case::FoldAnswer;
+pub(crate) use disk_poll::{DiskPoll, DiskRead};
 pub(crate) use external_change::ReloadedFile;
 #[cfg(test)]
 mod dir_case_tests;
@@ -55,6 +57,8 @@ mod save_fold_tests;
 mod spelling;
 #[cfg(test)]
 mod spelling_tests;
+#[cfg(test)]
+mod symbol_restore_tests;
 
 /// Save-As dialog Task for a symbol / footprint, used by the first save
 /// of a new primitive and by File > Save As (#671). The dialog defaults

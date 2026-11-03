@@ -33,6 +33,7 @@ pub mod chrome;
 pub mod config_root;
 pub mod diagnostics;
 pub mod dock;
+pub mod double_click;
 pub mod feature_flags;
 pub mod find_replace;
 pub mod find_similar;

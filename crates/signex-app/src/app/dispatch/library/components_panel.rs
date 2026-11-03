@@ -62,24 +62,32 @@ impl Signex {
         &mut self,
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
+        let libraries = self.library.shared_adapters();
         let stamp = self.components_row_stamp(&key);
+        let Some(own) = self.library.shared_adapter_at(&key.library_path) else {
+            let why = format!(
+                "The library {} is not open, so the component details cannot be read.",
+                key.library_path.display()
+            );
+            let details = &mut self.library.components_panel.details;
+            let generation = details.begin(key.clone(), stamp);
+            details.finish(&key, generation, Err(why.clone()));
+            crate::diagnostics::log_warning(why);
+            return Task::none();
+        };
         let generation = self
             .library
             .components_panel
             .details
             .begin(key.clone(), stamp);
-        let libraries: Vec<(uuid::Uuid, std::path::PathBuf)> = self
-            .library
-            .open_libraries
-            .iter()
-            .map(|l| (l.library_id, l.root.clone()))
-            .collect();
         let read_key = key.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     crate::panels::components_panel::details::load::load_details(
-                        &read_key, &libraries,
+                        &read_key,
+                        own.as_ref(),
+                        &libraries,
                     )
                 })
                 .await
@@ -180,13 +188,24 @@ impl Signex {
 
     /// The button went up. A row dragged past the threshold and released
     /// over the schematic canvas starts the cursor-attached placement at the
-    /// pointer; released anywhere else, or never dragged, it places nothing.
+    /// pointer; released anywhere else (or over a tab that is not a schematic), or never
+    /// dragged, it places nothing.
     pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
         let Some(drag) = self.library.components_panel.drag.take() else {
             return Task::none();
         };
         let (x, y) = self.interaction_state.last_mouse_pos;
         if !drag.started || !self.canvas_bounds().contains(iced::Point::new(x, y)) {
+            return Task::none();
+        }
+        // Only a schematic sheet takes a part: a PCB or an editor tab under
+        // the pointer is not a drop target.
+        let on_schematic = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic));
+        if !on_schematic {
             return Task::none();
         }
         // Release point in world mm, through the live camera and the canvas
@@ -356,5 +375,28 @@ impl Signex {
             table,
             row_id,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::{Message, Signex};
+    use crate::library::messages::LibraryMessage;
+    use crate::library::state::ComponentsPanelRowKey;
+
+    #[test]
+    fn a_row_of_a_library_that_is_not_open_shows_an_error() {
+        let (mut app, _boot) = Signex::new();
+        let key = ComponentsPanelRowKey {
+            library_path: std::path::PathBuf::from("gone.snxlib"),
+            table: "parts".into(),
+            row_id: signex_library::RowId::new(),
+        };
+        let _ = app.update(Message::Library(LibraryMessage::ComponentsPanelRowPressed(
+            key,
+        )));
+        let details = &app.library.components_panel.details;
+        assert!(details.error.is_some(), "no silent empty pane");
+        assert!(!details.in_flight());
     }
 }

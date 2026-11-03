@@ -5,13 +5,13 @@ use super::*;
 use crate::app::{SymbolDocument, TabInfo, TabKind};
 use crate::library::messages::CloseLibraryChoice;
 
-fn send(f: &mut Fixture, msg: LibraryMessage) {
+pub(super) fn send(f: &mut Fixture, msg: LibraryMessage) {
     let task = f.app.update(Message::Library(msg));
     run_task(&mut f.app, task);
 }
 
 /// A dirty symbol editor (with its tab) at `path`.
-fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
+pub(super) fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     f.app.document_state.symbol_editors.insert(
         path.to_path_buf(),
@@ -27,11 +27,11 @@ fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
     f.app.document_state.mark_document_dirty(path);
 }
 
-fn symbol_in_library(f: &Fixture, name: &str) -> PathBuf {
+pub(super) fn symbol_in_library(f: &Fixture, name: &str) -> PathBuf {
     f.file.parent().unwrap().join("symbols").join(name)
 }
 
-fn request_close(f: &mut Fixture) {
+pub(super) fn request_close(f: &mut Fixture) {
     send(f, LibraryMessage::CloseLibrary(f.file.clone()));
 }
 
@@ -130,6 +130,11 @@ fn a_symbol_and_a_row_are_both_listed_and_both_discarded() {
 /// (display entry only; nothing is written through it).
 fn mount_nested_library(f: &mut Fixture) -> PathBuf {
     let root = f.file.parent().unwrap().join("vendor").join("V.snxlib");
+    mount_library_at(f, root)
+}
+
+/// A display-only mount of a library at `root`.
+pub(super) fn mount_library_at(f: &mut Fixture, root: PathBuf) -> PathBuf {
     f.app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "V".into(),
@@ -236,4 +241,223 @@ fn drafts_are_labelled_by_their_path_in_the_library() {
     );
     assert_eq!(dirty_path_label(&plain, Some(dir)), "symbols/s.snxsym");
     assert_eq!(dirty_path_label(&plain, None), "s.snxsym");
+}
+
+/// One library listed by an open project under another spelling of its path
+/// (`<dir>/proj/../Lib.snxlib`) is still one library: Close Library asks.
+#[test]
+fn one_library_under_two_spellings_still_owns_its_draft() {
+    use signex_types::project::{LibraryEntry, LibraryEntryKind};
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let mut workspace = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.join("proj").to_string_lossy(),
+        &[],
+    );
+    let mut project = workspace.document_state.projects.remove(0);
+    project.data.libraries.push(LibraryEntry {
+        path: PathBuf::from("..").join("Lib.snxlib"),
+        kind: LibraryEntryKind::ProjectLocal,
+        library_id: None,
+        unknown: Default::default(),
+    });
+    f.app.document_state.projects.push(project);
+    let symbol = symbol_in_library(&f, "s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+
+    let confirm = f.app.library.close_library_confirm.as_ref().expect("asked");
+    assert_eq!(confirm.dirty_paths, vec![symbol]);
+}
+
+/// Two libraries in one folder: the draft in that folder is listed by Close
+/// Library of EITHER one, so neither close drops it unseen.
+#[test]
+fn libraries_sharing_a_folder_each_list_the_shared_draft() {
+    let mut f = fixture();
+    let other = f.file.parent().unwrap().join("Other.snxlib");
+    let sibling = mount_library_at(&mut f, other);
+    let symbol = symbol_in_library(&f, "s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+    let confirm = f.app.library.close_library_confirm.take().expect("asked");
+    assert_eq!(confirm.dirty_paths, vec![symbol.clone()]);
+
+    send(&mut f, LibraryMessage::CloseLibrary(sibling));
+    let confirm = f.app.library.close_library_confirm.as_ref().expect("asked");
+    assert_eq!(confirm.dirty_paths, vec![symbol]);
+}
+
+/// #1916: a library mounted under a `..` spelling still saves a draft
+/// opened under the plain spelling.
+#[test]
+fn a_draft_saves_when_its_library_is_mounted_under_another_spelling() {
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(dir.join("proj")).unwrap();
+    let spelled = dir
+        .join("proj")
+        .join("..")
+        .join(f.file.file_name().unwrap());
+    let file = f.file.clone();
+    f.app
+        .library
+        .open_libraries
+        .iter_mut()
+        .find(|lib| lib.root == file)
+        .unwrap()
+        .root = spelled;
+    let symbol = symbol_in_library(&f, "s.snxsym");
+    std::fs::create_dir_all(symbol.parent().unwrap()).unwrap();
+    open_dirty_symbol(&mut f, &symbol);
+
+    let saved = f.app.save_primitive_tab_blocking(&symbol);
+    assert!(saved.is_ok(), "save failed: {saved:?}");
+    assert!(symbol.exists());
+}
+
+/// The Close Library prompt and the save must agree on a draft's library:
+/// a draft the prompt lists as this library's is saved through it.
+#[test]
+fn the_close_prompt_and_the_save_agree_on_a_drafts_library() {
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let other_case = dir
+        .parent()
+        .unwrap()
+        .join(dir.file_name().unwrap().to_string_lossy().to_uppercase());
+    let symbol = other_case.join("symbols").join("s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    request_close(&mut f);
+
+    let listed = f
+        .app
+        .library
+        .close_library_confirm
+        .as_ref()
+        .is_some_and(|c| c.dirty_paths.contains(&symbol));
+    let target = f
+        .app
+        .library
+        .write_target_library(&symbol, f.app.identity_fold_for(&symbol))
+        .map(|l| l.root.clone());
+    assert_eq!(
+        listed,
+        target.is_some(),
+        "Close Library lists the draft as this library's: {listed}; the save routes it through: {target:?}"
+    );
+}
+
+/// Two distinct folders that differ only in case, with the volume's case
+/// rule still undecided (identity assumes they are one): a draft in the
+/// second must land in its own file, never in the library folder's file of
+/// the same name.
+#[cfg(unix)]
+#[test]
+fn a_case_variant_folder_keeps_its_own_file_when_the_volume_is_case_sensitive() {
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let other = dir
+        .parent()
+        .unwrap()
+        .join(dir.file_name().unwrap().to_string_lossy().to_uppercase());
+    std::fs::create_dir_all(other.join("symbols")).unwrap();
+    if other.canonicalize().unwrap() == dir.canonicalize().unwrap() {
+        return; // a case-insensitive volume: one folder, nothing to tell apart
+    }
+    let library_file = symbol_in_library(&f, "s.snxsym");
+    std::fs::create_dir_all(library_file.parent().unwrap()).unwrap();
+    std::fs::write(&library_file, "library original").unwrap();
+    let symbol = other.join("symbols").join("s.snxsym");
+    open_dirty_symbol(&mut f, &symbol);
+
+    let saved = f.app.save_primitive_tab_blocking(&symbol);
+
+    assert!(symbol.exists(), "the draft's own file was saved: {saved:?}");
+    assert_eq!(
+        std::fs::read_to_string(&library_file).unwrap(),
+        "library original",
+        "the other folder's file must not be touched"
+    );
+}
+
+/// `link/..` after a symlink: the kernel resolves `..` from the link target,
+/// so the lexical rebase names another folder than the draft's.
+#[cfg(unix)]
+#[test]
+fn a_dotdot_after_a_symlink_keeps_the_drafts_own_file() {
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let elsewhere = dir.join("elsewhere").join("deep");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, dir.join("link")).unwrap();
+    // Lexically `<dir>/link/..` is `<dir>`; on disk it is `<dir>/elsewhere`.
+    let spelled = dir
+        .join("link")
+        .join("..")
+        .join(f.file.file_name().unwrap());
+    let file = f.file.clone();
+    f.app
+        .library
+        .open_libraries
+        .iter_mut()
+        .find(|lib| lib.root == file)
+        .unwrap()
+        .root = spelled;
+    let library_file = symbol_in_library(&f, "s.snxsym");
+    std::fs::create_dir_all(library_file.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(dir.join("elsewhere").join("symbols")).unwrap();
+    let wrong = dir.join("elsewhere").join("symbols").join("s.snxsym");
+    std::fs::write(&wrong, "other library original").unwrap();
+    open_dirty_symbol(&mut f, &library_file);
+
+    let saved = f.app.save_primitive_tab_blocking(&library_file);
+
+    assert!(
+        library_file.exists(),
+        "the draft's own file was saved: {saved:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&wrong).unwrap(),
+        "other library original"
+    );
+}
+
+/// A project-listed `.snxsym` in a folder that two libraries share is held
+/// by a library, so it is not offered as a loose symbol to copy.
+#[test]
+fn a_symbol_in_a_folder_two_libraries_share_is_not_loose() {
+    use signex_types::project::{LibraryEntry, LibraryEntryKind};
+    let mut f = fixture();
+    let dir = f.file.parent().unwrap().to_path_buf();
+    let other = dir.join("Other.snxlib");
+    mount_library_at(&mut f, other);
+    let mut workspace = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.join("proj").to_string_lossy(),
+        &[],
+    );
+    let mut project = workspace.document_state.projects.remove(0);
+    let entry = |path: PathBuf| LibraryEntry {
+        path,
+        kind: LibraryEntryKind::ProjectLocal,
+        library_id: None,
+        unknown: Default::default(),
+    };
+    project
+        .data
+        .libraries
+        .push(entry(dir.join("shared.snxsym")));
+    project
+        .data
+        .libraries
+        .push(entry(dir.join("..").join("loose.snxsym")));
+    f.app.document_state.projects.push(project);
+
+    let loose = f.app.loose_symbol_candidates();
+
+    assert_eq!(loose.len(), 1, "{loose:?}");
+    assert!(loose[0].ends_with("loose.snxsym"), "{loose:?}");
 }

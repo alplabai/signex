@@ -522,6 +522,10 @@ impl Signex {
                 self.library.components_panel.filter = value;
                 Task::none()
             }
+            LibraryMessage::IdClashNoticesDismissed => {
+                self.library.id_clash_notices.clear();
+                Task::none()
+            }
             LibraryMessage::ComponentsPanelAddLibrary(source) => {
                 self.handle_components_panel_add_library(source)
             }

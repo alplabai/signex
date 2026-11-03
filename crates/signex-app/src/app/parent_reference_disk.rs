@@ -108,6 +108,8 @@ fn patch_parent(parent: &Path, planned: &[&ReferenceRewrite], renamed: &Renamed<
     if parsed.is_from_newer_minor() {
         return ParentDisk::Skipped("was written by a newer Signex and is read-only".to_string());
     }
+    // The write below saves any repair made while parsing: say so.
+    crate::app::sheet_repairs::log_sheet_repairs(parent, &parsed.sheet.take_load_repairs());
     let bytes = match parsed.write_string() {
         Ok(text) => text.into_bytes(),
         Err(e) => return ParentDisk::Skipped(format!("could not be encoded: {e}")),

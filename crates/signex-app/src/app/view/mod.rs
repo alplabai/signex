@@ -138,8 +138,15 @@ impl Signex {
                         *row_id,
                     );
                     if let Some(editor) = self.library.editors.get(&address) {
-                        crate::library::editor::view(editor, &self.library, tokens, address)
-                            .map(Message::Library)
+                        crate::library::editor::view(
+                            editor,
+                            &self.library,
+                            tokens,
+                            &self.document_state.panel_ctx.canvas_colors,
+                            self.ui_state.device_px_per_logical_px(window_id),
+                            address,
+                        )
+                        .map(Message::Library)
                     } else {
                         // Window mapping exists but the editor state
                         // has been dropped (rare race during teardown
@@ -502,8 +509,15 @@ impl Signex {
                 editor_id.row_id,
             );
             return if let Some(editor) = self.library.editors.get(&address) {
-                crate::library::editor::view(editor, &self.library, tokens, address)
-                    .map(Message::Library)
+                crate::library::editor::view(
+                    editor,
+                    &self.library,
+                    tokens,
+                    &self.document_state.panel_ctx.canvas_colors,
+                    self.ui_state.device_px_per_logical_px(window_id),
+                    address,
+                )
+                .map(Message::Library)
             } else {
                 container(
                     column![
@@ -539,7 +553,7 @@ impl Signex {
                 // mounted library) get safe defaults.
                 let display = self
                     .library
-                    .containing_library(path)
+                    .containing_library_with(path, self.identity_fold_for(path))
                     .map(|lib| lib.display)
                     .unwrap_or_default();
                 return crate::library::editor::standalone::view_symbol(

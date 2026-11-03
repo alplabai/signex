@@ -47,9 +47,6 @@ impl Signex {
             MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),
             MenuMessage::PreviousDocumentTab => Some(self.step_document_tab(false)),
             MenuMessage::PreviousSheet => Some(self.step_schematic_sheet(false)),
-            MenuMessage::OpenPreferences => {
-                Some(self.update(Message::Preferences(PreferencesMsg::Open)))
-            }
             MenuMessage::OpenPassiveCalculator => {
                 Some(self.update(Message::Overlay(OverlayMsg::OpenPassiveCalculator)))
             }

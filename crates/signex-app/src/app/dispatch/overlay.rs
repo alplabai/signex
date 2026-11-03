@@ -65,10 +65,7 @@ impl Signex {
             }
             OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
             OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
-            OverlayMsg::DismissFirstRunTour => {
-                self.ui_state.first_run_tour_open = false;
-                dismiss_first_run_tour_task()
-            }
+            OverlayMsg::DismissFirstRunTour => self.dismiss_first_run_tour(),
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
             OverlayMsg::FocusAt {
@@ -348,16 +345,24 @@ impl Signex {
                     .context_menu
                     .take()
                     .and_then(|menu| menu.world);
+                // The project tree's menu closes with the canvas one: a row of
+                // either runs a command, and neither may outlive the pick.
+                self.interaction_state.project_tree_context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
                 self.interaction_state.submenu_launcher_hovered = None;
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
                 match action {
-                    ContextAction::Copy => self.dispatch_edit_message(EditMsg::Copy),
-                    ContextAction::Cut => self.dispatch_edit_message(EditMsg::Cut),
-                    ContextAction::Paste => self.dispatch_edit_message(EditMsg::Paste),
-                    ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
+                    ContextAction::Command { id, project } => {
+                        let args = crate::app::command::CommandArgs::in_context(
+                            crate::app::command::InvocationContext {
+                                origin: opened_at,
+                                project,
+                            },
+                        );
+                        self.dispatch_command(&id, args, None)
+                    }
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet().unwrap_or_else(Task::none)
                     }
@@ -372,31 +377,9 @@ impl Signex {
                         self.sync_diagnostics_panel_ctx();
                         Task::none()
                     }
-                    ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),
-                    ContextAction::SelectAll => self
-                        .handle_selection_request(selection_request::SelectionRequest::SelectAll),
-                    ContextAction::ZoomFit => {
-                        self.handle_canvas_interaction_event(CanvasEvent::FitAll)
-                    }
-                    ContextAction::RotateSelected => {
-                        self.dispatch_edit_message(EditMsg::RotateSelectedCounterclockwise)
-                    }
-                    ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
-                    ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
-                    ContextAction::ArrangeDrawings(arrange) => {
-                        self.dispatch_edit_message(EditMsg::ArrangeDrawings(arrange))
-                    }
-                    ContextAction::PlacedPart(action) => {
-                        self.dispatch_library_message(crate::library::LibraryMessage::PlacedPart(
-                            crate::library::PlacedPartMsg::ActionRequested(action),
-                        ))
-                    }
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
-                    ContextAction::FindSimilar => self.handle_find_similar_message(
-                        crate::find_similar::FindSimilarMsg::OpenRequested { at: opened_at },
-                    ),
                 }
             }
         }
@@ -695,13 +678,36 @@ impl Signex {
 
 /// Persist the first-run tour dismissal on a blocking worker, never in
 /// `update` (#1469).
-pub(super) fn dismiss_first_run_tour_task() -> Task<Message> {
+pub(in crate::app) fn dismiss_first_run_tour_task() -> Task<Message> {
     crate::fonts::background_pref_write("first_run_tour_dismissed", || {
         crate::fonts::write_first_run_tour_dismissed(true)
     })
 }
 
 impl Signex {
+    /// Close the first-run tour card on a deliberate pointer gesture on a
+    /// canvas ([`crate::canvas::CanvasEvent::is_user_gesture`]) and persist
+    /// that, off the update thread. Nothing for a hover or a key's command.
+    pub(super) fn dismiss_first_run_tour_on(
+        &mut self,
+        event: &crate::canvas::CanvasEvent,
+    ) -> Task<Message> {
+        if event.is_user_gesture() {
+            self.dismiss_first_run_tour()
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Close the first-run tour card if it is open, and persist that.
+    pub(super) fn dismiss_first_run_tour(&mut self) -> Task<Message> {
+        if !self.ui_state.first_run_tour_open {
+            return Task::none();
+        }
+        self.ui_state.first_run_tour_open = false;
+        dismiss_first_run_tour_task()
+    }
+
     /// Close every right-click menu (canvas, document tab, project tree,
     /// dock tab, Components row) and their submenu state. Each menu's open
     /// handler calls this first, so exactly one is ever open.

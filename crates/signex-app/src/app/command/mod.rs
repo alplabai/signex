@@ -2,21 +2,25 @@
 //! (`bridge.rs`), the dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]), and the enablement gate
 //! ([`enablement::is_enabled`]) the menu bar reads too. The palette and the
-//! keymap run commands through [`Signex::dispatch_command`]. Of the menu items
-//! only Undo and Redo reach it, and only from an undocked window's menu or the
-//! native menu; the main window's menu emits its own `Message` variants
-//! (`handlers/menu/editing.rs`).
+//! keymap run commands through [`Signex::dispatch_command`], and so do the
+//! context menus' command rows (`ContextAction::Command`, #1727), which pass
+//! the click point and project in [`InvocationContext`]. The menu bar's rows
+//! that carry a command id run it here too (`MenuMessage::Command`, #1922):
+//! the main window's, an undocked window's and the native menu's.
 
 pub(crate) mod active_bar;
 mod args;
 pub(crate) mod bridge;
 pub(crate) mod enablement;
+mod needs;
+mod outcome;
 mod window_document;
 
-pub(crate) use args::CommandArgs;
+pub(crate) use args::{CommandArgs, InvocationContext};
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
+pub(crate) use outcome::CommandOutcome;
 
 use iced::Task;
 
@@ -28,35 +32,69 @@ impl Signex {
     /// resolved [`Message`] had been sent directly.
     ///
     /// Deliberately takes an id + args, never a [`Message`] — the whole
-    /// point of the registry is that a caller (keyboard today; menu,
-    /// command palette, and a future CLI later) names *what* to run
+    /// point of the registry is that a caller (keyboard, menu, command
+    /// palette, context menu, and a future CLI) names *what* to run
     /// without knowing the app's internal message shape.
     ///
-    /// `args` is accepted but unused: [`core_to_message`] ignores it,
-    /// because every catalog command is nullary today. It is here only
-    /// so this signature is stable ahead of a consumer that needs it —
-    /// do not thread it through `core_to_message` speculatively.
+    /// Keymap, palette and menu callers have no use for the result; this is
+    /// [`Self::dispatch_command_reporting`] without it.
+    pub(crate) fn dispatch_command(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        args: CommandArgs,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        self.dispatch_command_reporting(command, args, window).1
+    }
+
+    /// A menu row's command, from the window `window` (`None`: the main one).
+    /// The row was live, so it normally runs; if it does not, the Messages
+    /// panel says why: a command the window cannot act on is named here, and
+    /// an unknown or unmapped id is logged by the bridge.
+    pub(crate) fn run_menu_command(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
+        if let CommandOutcome::Disabled { reason } = outcome {
+            crate::diagnostics::log_info(format!(
+                "Menu: {} did nothing: {reason}",
+                command.as_str()
+            ));
+        }
+        task
+    }
+
+    /// [`Self::dispatch_command`], reporting what happened (#1928).
     ///
-    /// An id can fail to resolve two ways, and both are a silent no-op,
-    /// never a panic: it isn't in the catalog at all, or it's a real
-    /// catalog id with no live arm in `core_to_message` yet. Ids come
-    /// from user-editable TOML keymap profiles today and a CLI later —
-    /// both are untrusted input, not a programmer error.
+    /// `args` carries what the caller knows that the id does not (see
+    /// [`CommandArgs`]); the bridge reads it for the commands that take it.
+    ///
+    /// An id can fail to resolve two ways, and both are a no-op that is
+    /// reported, never a panic: it isn't in the catalog at all
+    /// ([`CommandOutcome::UnknownId`]), or it's a real catalog id with no
+    /// live arm in `core_to_message` yet ([`CommandOutcome::NoBridgeArm`]).
+    /// Ids come from user-editable TOML keymap profiles today and a CLI
+    /// later — both are untrusted input, not a programmer error.
     ///
     /// `window` is the window the command was invoked from, if any. A canvas
     /// event goes to the canvas of the undocked window it was typed in; the
     /// plain [`Message::CanvasEvent`] always targets the main window (#525).
     ///
     /// A command [`is_enabled`] says has nothing to act on in that window is
-    /// dropped here, the same rule the menu bar greys its row by (#368),
-    /// unless its handler tells the user why it did nothing
-    /// ([`enablement::explains_when_unavailable`]).
-    pub(crate) fn dispatch_command(
+    /// dropped here, the same rule the menu bar greys its row by (#368), and
+    /// reported as [`CommandOutcome::Disabled`] with the reason, unless its
+    /// handler tells the user why it did nothing
+    /// ([`enablement::explains_when_unavailable`]): that one still runs, and
+    /// is reported as `Disabled` too, so a caller is never told `Ran` for a
+    /// command that had nothing to act on.
+    pub(crate) fn dispatch_command_reporting(
         &mut self,
         command: &crate::keymap::AppCommandId,
-        _args: CommandArgs,
+        args: CommandArgs,
         window: Option<iced::window::Id>,
-    ) -> Task<Message> {
+    ) -> (CommandOutcome, Task<Message>) {
         // Undo / Redo typed in an undocked tab step that window's document
         // and are gated by its history, not the main window's active tab
         // (#1546).
@@ -64,25 +102,31 @@ impl Signex {
             && matches!(command.as_str(), "undo" | "redo")
             && self.undocked_tab_has_canvas(window)
         {
-            return self.run_in_window(window_id, true, |app| {
-                app.dispatch_command(command, _args, None)
+            let mut outcome = CommandOutcome::Ran;
+            let task = self.run_in_window(window_id, true, |app| {
+                let (inner, task) = app.dispatch_command_reporting(command, args, None);
+                outcome = inner;
+                task
             });
+            return (outcome, task);
         }
         // Close Document follows the window the stroke came from (#1787).
         if command.as_str() == "close_active_document"
-            && let Some(task) = self.close_document_in_window(window)
+            && let Some(result) = self.close_document_in_window(window)
         {
-            return task;
+            return result;
         }
         // Save, Save As, Print and the tab stepper act on the document the
         // window shows (#1794).
-        if let Some(task) = self.window_document_command(command, window) {
-            return task;
+        if let Some(result) = self.window_document_command(command, &args, window) {
+            return result;
         }
-        if !is_enabled(command, &self.command_context(window))
-            && !enablement::explains_when_unavailable(command)
-        {
-            return Task::none();
+        let unmet = enablement::disabled_reason(command, &self.command_context(window));
+        if unmet.is_some() && !enablement::explains_when_unavailable(command) {
+            return (
+                CommandOutcome::disabled(unmet.unwrap_or_default()),
+                Task::none(),
+            );
         }
         // Undo / Redo follow the window the stroke came from: in the ERC
         // dialog they step the project's rule history and never reach the
@@ -91,12 +135,20 @@ impl Signex {
             match command.as_str() {
                 "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
                 "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
-                _ => core_to_message(command),
+                _ => core_to_message(command, &args),
             }
         } else {
-            core_to_message(command)
+            core_to_message(command, &args)
         };
-        match (resolved, window) {
+        let outcome = match (unmet, &resolved) {
+            (Some(reason), _) => CommandOutcome::disabled(reason),
+            (None, Some(_)) => CommandOutcome::Ran,
+            (None, None) if crate::keymap::metadata_for(command).is_some() => {
+                CommandOutcome::NoBridgeArm
+            }
+            (None, None) => CommandOutcome::UnknownId,
+        };
+        let task = match (resolved, window) {
             (Some(Message::CanvasEvent(event)), Some(window_id))
                 if self.interaction_state.canvases.contains_key(&window_id) =>
             {
@@ -104,7 +156,8 @@ impl Signex {
             }
             (Some(message), _) => self.dispatch_update(message),
             (None, _) => Task::none(),
-        }
+        };
+        (outcome, task)
     }
 }
 
@@ -167,14 +220,16 @@ mod tests {
     }
 
     /// An id with no catalog entry at all is untrusted input, not a
-    /// programmer error — it must resolve to a no-op, never panic.
+    /// programmer error — it must resolve to a no-op, never panic, and say
+    /// it was unknown (#1928).
     #[test]
     fn unknown_id_is_a_no_op_and_does_not_panic() {
         let (mut app, _task) = Signex::new();
 
         let command = AppCommandId::new("not_a_real_command").unwrap();
-        let task = app.dispatch_command(&command, CommandArgs::none(), None);
+        let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
+        assert_eq!(outcome, CommandOutcome::UnknownId);
         assert_eq!(task.units(), 0);
     }
 
@@ -191,9 +246,113 @@ mod tests {
             "test fixture drifted: center_on_cursor is no longer a catalog id"
         );
 
-        let task = app.dispatch_command(&command, CommandArgs::none(), None);
+        let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
+        assert_eq!(outcome, CommandOutcome::NoBridgeArm);
         assert_eq!(task.units(), 0);
+    }
+
+    /// A command with nothing to act on is dropped and says why (#1928).
+    #[test]
+    fn a_disabled_command_reports_why_it_did_nothing() {
+        let (mut app, _task) = Signex::new();
+
+        let command = AppCommandId::new("place_wire").unwrap();
+        let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
+
+        assert_eq!(
+            outcome,
+            CommandOutcome::Disabled {
+                reason: "No schematic is open".to_string()
+            }
+        );
+        assert_eq!(task.units(), 0);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
+    }
+
+    /// A command whose handler explains itself still runs while disabled,
+    /// and is reported as disabled rather than as having run (#1928).
+    #[test]
+    fn an_explaining_command_runs_but_is_reported_disabled() {
+        let _ = crate::diagnostics::init_logging();
+        let (mut app, _task) = Signex::new();
+
+        let command = AppCommandId::new("place_diff_pair").unwrap();
+        let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
+
+        assert_eq!(
+            outcome,
+            CommandOutcome::Disabled {
+                reason: "Planned, not available yet".to_string()
+            }
+        );
+        assert!(
+            crate::diagnostics::recent_entries().iter().any(|e| e
+                .message
+                .starts_with("Planned, not available yet: Differential Pair")),
+            "the handler ran and explained"
+        );
+    }
+
+    #[test]
+    fn an_enabled_known_command_reports_that_it_ran() {
+        let (mut app, _task) = Signex::new();
+
+        let command = AppCommandId::new("cycle_selection_mode").unwrap();
+        let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
+
+        assert_eq!(outcome, CommandOutcome::Ran);
+    }
+
+    /// Close Document typed in a detached modal or panel does nothing; the
+    /// outcome says so instead of `Ran` (#1792, #1928).
+    #[test]
+    fn close_document_in_a_detached_modal_is_reported_disabled() {
+        let (mut app, _task) = Signex::new();
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::DetachedModal(crate::app::state::ModalId::ErcDialog),
+        );
+
+        let command = AppCommandId::new("close_active_document").unwrap();
+        let (outcome, task) =
+            app.dispatch_command_reporting(&command, CommandArgs::none(), Some(window));
+
+        assert!(matches!(outcome, CommandOutcome::Disabled { .. }));
+        assert_eq!(task.units(), 0);
+    }
+
+    /// #1922: a menu click that does not run says why in the Messages panel.
+    #[test]
+    fn a_menu_click_that_cannot_run_is_logged() {
+        let _ = crate::diagnostics::init_logging();
+        let (mut app, _task) = Signex::new();
+        let click = |app: &mut Signex, id: &str| {
+            let _ = app.update(Message::Menu(crate::menu_bar::MenuMessage::command(id)));
+        };
+        let count = |needle: &str| crate::diagnostics::logged_count(needle);
+
+        let disabled = count("Menu: place_wire did nothing: No schematic is open");
+        click(&mut app, "place_wire");
+        assert_eq!(
+            count("Menu: place_wire did nothing: No schematic is open"),
+            disabled + 1
+        );
+
+        let unmapped = count("command 'center_on_cursor'");
+        click(&mut app, "center_on_cursor");
+        assert!(
+            count("command 'center_on_cursor'") > unmapped,
+            "no bridge arm"
+        );
+
+        let unknown = count("command 'no_such_menu_command'");
+        click(&mut app, "no_such_menu_command");
+        assert!(
+            count("command 'no_such_menu_command'") > unknown,
+            "unknown id"
+        );
     }
 
     /// #103 - `unselect_all` empties the active canvas selection. It used
@@ -296,6 +455,6 @@ mod tests {
     }
 
     fn core_message(command: &AppCommandId) -> Message {
-        bridge::core_to_message(command).expect("the command resolves")
+        bridge::core_to_message(command, &CommandArgs::none()).expect("the command resolves")
     }
 }

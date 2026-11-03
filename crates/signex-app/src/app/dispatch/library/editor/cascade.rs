@@ -172,12 +172,16 @@ impl Signex {
         }
     }
 
-    fn cascade_root(&self, path: &std::path::Path, rows: &[RowId]) -> Option<std::path::PathBuf> {
+    pub(super) fn cascade_root(
+        &self,
+        path: &std::path::Path,
+        rows: &[RowId],
+    ) -> Option<std::path::PathBuf> {
         if rows.is_empty() {
             return None;
         }
         self.library
-            .library_containing(path)
+            .write_target_library(path, self.identity_fold_for(path))
             .map(|lib| lib.root.clone())
     }
 }

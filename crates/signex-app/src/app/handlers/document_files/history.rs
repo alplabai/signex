@@ -413,11 +413,12 @@ impl Signex {
         outcome: Result<RestoreJobDocument, RestoreFailure>,
         restored_bytes: Option<crate::persist::SharedBytes>,
         commit: bool,
-    ) -> (Task<Message>, bool) {
+    ) -> (Task<Message>, bool, bool) {
         let Some(tab) = self.document_state.tabs.get(idx) else {
-            return (Task::none(), false);
+            return (Task::none(), false, false);
         };
         let mut document_installed = true;
+        let mut document_repaired = false;
         let path = tab.path.clone();
         let kind = tab.kind.clone();
         match outcome {
@@ -429,31 +430,15 @@ impl Signex {
                     crate::app::TabKind::Pcb => self.fail_pcb_reload(&path, idx, &why, unreadable),
                     _ => self.fail_primitive_reload(&path, &why, unreadable),
                 }
-                return (Task::none(), false);
+                return (Task::none(), false, false);
             }
             Err(RestoreFailure::NotRestored(message)) => {
                 self.report_restore_failure(message);
-                return (Task::none(), false);
+                return (Task::none(), false, false);
             }
             Ok(RestoreJobDocument::Schematic(sheet)) => {
-                crate::app::load_gateway::report_unrecognized_sheet_size(&path, &sheet.paper_size);
-                let installed = if idx == self.document_state.active_tab {
-                    self.discard_state_of_replaced_engine();
-                    let installed = self.apply_loaded_schematic(Some(*sheet), true, false, false);
-                    // Undocked windows on this sheet were redrawn by that;
-                    // their selections point into the old engine too.
-                    self.refresh_slots_from_engine(
-                        &path,
-                        false,
-                        crate::schematic_runtime::RenderInvalidation::FULL,
-                        true,
-                    );
-                    installed
-                } else {
-                    self.install_schematic_at(&path, *sheet)
-                };
-                self.settle_restored_schematic(&path, installed, commit, restored_bytes);
-                document_installed = installed;
+                (document_installed, document_repaired) =
+                    self.install_reloaded_schematic(idx, &path, *sheet, commit, restored_bytes);
             }
             Ok(RestoreJobDocument::Pcb(board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
@@ -492,7 +477,16 @@ impl Signex {
                 }
             }
             Ok(RestoreJobDocument::Symbol(file)) => {
-                let state = crate::app::SymbolDocument::new(path.clone(), *file);
+                let mut state = crate::app::SymbolDocument::new(path.clone(), *file);
+                // Carry the counter over so a delete warning raised on the
+                // replaced editor reads stale (#1903).
+                let carried = self
+                    .document_state
+                    .symbol_editors
+                    .get(&path)
+                    .map(|old| old.history_generation + 1);
+                state.history_generation =
+                    carried.unwrap_or_else(|| self.document_state.next_symbol_history_base());
                 self.warn_if_cascade_owed(&path);
                 self.document_state
                     .symbol_editors
@@ -504,9 +498,11 @@ impl Signex {
                     self.commit_restore(&path, restored_bytes);
                 }
             }
-            Ok(RestoreJobDocument::Library) => return (self.reload_library_tab(&kind), true),
+            Ok(RestoreJobDocument::Library) => {
+                return (self.reload_library_tab(&kind), true, false);
+            }
         }
-        (Task::none(), document_installed)
+        (Task::none(), document_installed, document_repaired)
     }
 
     /// Reload-after-restore for `.snxlib` tabs. The restore rewrote the
@@ -640,6 +636,46 @@ impl Signex {
             self.apply_loaded_empty_document(false);
         }
         self.report_restore_failure(restore_reload_card(path, why, unreadable));
+    }
+
+    /// Install a sheet read back from disk (Reload, History restore) into the
+    /// tab at `idx`, report what loading repaired, and decide the dirty mark.
+    /// Returns whether a repair left the sheet differing from its file, so a
+    /// caller that cleans the document afterwards can keep it modified.
+    pub(crate) fn install_reloaded_schematic(
+        &mut self,
+        idx: usize,
+        path: &std::path::Path,
+        mut sheet: signex_types::schematic::SchematicSheet,
+        commit: bool,
+        restored_bytes: Option<crate::persist::SharedBytes>,
+    ) -> (bool, bool) {
+        crate::app::load_gateway::report_unrecognized_sheet_size(path, &sheet.paper_size);
+        let repaired =
+            crate::app::sheet_repairs::log_sheet_repairs(path, &sheet.take_load_repairs())
+                && !sheet.is_read_only();
+        let installed = if idx == self.document_state.active_tab {
+            self.discard_state_of_replaced_engine();
+            let installed = self.apply_loaded_schematic(Some(sheet), true, false, false);
+            // Undocked windows on this sheet were redrawn by that;
+            // their selections point into the old engine too.
+            self.refresh_slots_from_engine(
+                path,
+                false,
+                crate::schematic_runtime::RenderInvalidation::FULL,
+                true,
+            );
+            installed
+        } else {
+            self.install_schematic_at(path, sheet)
+        };
+        self.settle_restored_schematic(path, installed, commit, restored_bytes);
+        // The file still holds what was repaired: not what the engine holds.
+        let repaired = installed && repaired;
+        if repaired {
+            self.set_reloaded_dirty(path, true);
+        }
+        (installed, repaired)
     }
 
     /// Records whether a document just reloaded from disk is dirty. Every

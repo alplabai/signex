@@ -14,6 +14,8 @@ mod cascade;
 mod container_save;
 #[cfg(test)]
 mod footprint_preset_tests;
+#[cfg(test)]
+mod nested_owner_tests;
 mod primitive_save;
 #[cfg(test)]
 mod primitive_save_fold_tests;
@@ -73,7 +75,10 @@ impl Signex {
         let path = self.resolve_held_spelling_now(path);
         // A stock primitive is read-only: edit a copy in the user's library
         // instead of opening the stock file (#813).
-        if let Some(kind) = self.library.stock_primitive_kind(&path) {
+        if let Some(kind) = self
+            .library
+            .stock_primitive_kind(&path, self.identity_fold_for(&path))
+        {
             // The footprint editor release gate applies to the copy too.
             if kind == crate::library::stock_copy::StockPrimitiveKind::Footprint
                 && !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED
@@ -215,24 +220,25 @@ impl Signex {
         // `.snxlib` shares the same view settings (Altium "Document
         // Options" parity). Run these before the editor-level
         // dispatch so the editor closure doesn't see them.
+        let fold = self.identity_fold_for(&path);
         match &msg {
             SymbolEditorMsg::SetSheetColor(color) => {
                 let color = *color;
-                if let Some(lib) = self.library.containing_library_mut(&path) {
+                if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
                     lib.display.sheet_color = color;
                 }
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
             SymbolEditorMsg::ToggleGrid => {
-                if let Some(lib) = self.library.containing_library_mut(&path) {
+                if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
                     lib.display.grid_visible = !lib.display.grid_visible;
                 }
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
             SymbolEditorMsg::CycleGridSize => {
-                if let Some(lib) = self.library.containing_library_mut(&path) {
+                if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
                     let sizes = crate::canvas::grid::GRID_SIZES_MM;
                     let current_idx = sizes
                         .iter()
@@ -245,7 +251,7 @@ impl Signex {
                 return Task::none();
             }
             SymbolEditorMsg::CycleUnit => {
-                if let Some(lib) = self.library.containing_library_mut(&path) {
+                if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
                     use signex_types::coord::Unit;
                     lib.display.unit = match lib.display.unit {
                         Unit::Mm => Unit::Mil,
@@ -410,12 +416,12 @@ impl Signex {
         }
     }
 
-    /// The library whose directory contains `path`: its `.snxlib` file
-    /// path, same `root_dir()` ancestor walk as `library_adapter_for`.
+    /// The library a draft at `path` is saved through: the deepest one whose
+    /// directory contains it ([`LibraryState::write_target_library`]).
     /// `None` when `path` lives outside any mounted library.
     fn library_root_containing(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
         self.library
-            .library_containing(path)
+            .write_target_library(path, self.identity_fold_for(path))
             .map(|lib| lib.root.clone())
     }
 
@@ -437,9 +443,10 @@ impl Signex {
         // Set now, not only when the read lands: a failed read must still
         // trigger the check.
         self.library.drift.check_pending = true;
+        let fold = self.identity_fold_for(path);
         Task::batch([
             self.refresh_library_task(&root, RefreshFollowUp::Nothing),
-            crate::library::preview_refresh::preview_refresh_task(&mut self.library, path),
+            crate::library::preview_refresh::preview_refresh_task(&mut self.library, path, fold),
         ])
     }
 
@@ -461,7 +468,8 @@ impl Signex {
         {
             lib.reload_primitives(adapter);
         }
-        self.library.refresh_loaded_previews(path);
+        let fold = self.identity_fold_for(path);
+        self.library.refresh_loaded_previews(path, fold);
         self.library.drift.check_pending = true;
     }
 }

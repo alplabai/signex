@@ -93,6 +93,9 @@ pub fn view<'a>(
     // ── Three collapsible source sections ────────────────────────
     let mut col: Column<'a, LibraryMessage> =
         column![].spacing(0).width(Length::Fill).push(filter_row);
+    if !state.id_clash_notices.is_empty() {
+        col = col.push(id_clash_notices(state, tokens));
+    }
 
     // Derive Project library paths from the panel context. Each
     // `ProjectPanelInfo.libraries[].root` is the absolute, resolved
@@ -162,14 +165,40 @@ pub fn view<'a>(
             .height(state.components_panel.list_height)
             .width(Length::Fill),
         divider,
-        container(details::view(&state.components_panel, tokens))
-            .height(Length::Fill)
-            .width(Length::Fill),
+        container(details::view(
+            &state.components_panel,
+            tokens,
+            &ctx.canvas_colors,
+            ctx.device_px_per_logical_px,
+        ))
+        .height(Length::Fill)
+        .width(Length::Fill),
     ]
     .spacing(0)
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
+}
+
+/// Non-modal list of libraries refused or closed for sharing a library id
+/// with a stronger source (#1908), with one Dismiss button.
+fn id_clash_notices<'a>(
+    state: &'a LibraryState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let mut notices: Column<'a, LibraryMessage> = column![].spacing(SP.xs);
+    for notice in &state.id_clash_notices {
+        notices = notices.push(text(notice.message()).size(ROW_TEXT_SIZE).color(text_c));
+    }
+    let dismiss = button(text("Dismiss").size(ROW_TEXT_SIZE).color(text_c))
+        .padding([SP.xs, SP.m])
+        .on_press(LibraryMessage::IdClashNoticesDismissed)
+        .style(crate::styles::menu_item(tokens));
+    container(notices.push(dismiss))
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
+        .into()
 }
 
 /// Render a single mount-source section with its collapsible header,

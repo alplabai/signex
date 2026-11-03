@@ -140,6 +140,7 @@ impl Signex {
                 let task = self.handle_disk_reload_finished(path, edit_stamp, result);
                 Task::batch([task, self.finish_update()])
             }
+            FileMsg::DocumentDiskPolled(seen) => self.handle_document_disk_polled(seen),
             FileMsg::DocumentSaved(done) => {
                 let task = self.handle_document_saved(done);
                 iced::Task::batch([task, self.finish_update()])

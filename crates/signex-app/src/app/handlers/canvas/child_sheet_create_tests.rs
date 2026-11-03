@@ -425,7 +425,7 @@ fn a_project_being_renamed_refuses_inline_in_the_dialog_not_in_a_notice() {
 }
 
 #[test]
-fn open_it_on_a_file_another_symbol_uses_keeps_the_dialog_and_registers_nothing() {
+fn a_file_another_symbol_uses_is_not_offered_to_open_and_says_who_has_it() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, top, id) = parent_with_symbol(dir.path());
     // A second symbol already points at taken.snxsch.
@@ -445,7 +445,15 @@ fn open_it_on_a_file_another_symbol_uses_keeps_the_dialog_and_registers_nothing(
     std::fs::write(dir.path().join("taken.snxsch"), "x").expect("existing file");
     dialog_with(&mut app, id, "taken.snxsch");
     assert!(app.plan_child_sheet_from_dialog().is_none());
-    assert!(confirm(&app).exists);
+    let offered = confirm(&app);
+    assert!(!offered.exists, "no Open it for a file already placed");
+    assert!(
+        offered
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("'taken' already points at it")),
+        "{offered:?}"
+    );
     let listed_before = app.document_state.projects[0].data.sheets.len();
     let _ = app.handle_create_child_sheet_open_existing();
     let c = confirm(&app);

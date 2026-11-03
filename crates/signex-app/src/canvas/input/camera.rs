@@ -10,8 +10,7 @@ impl SchematicCanvas<'_> {
         // `self.pending_fit` into `state.pending_fit` and apply it from
         // there on the same call; with the camera owned here, the
         // `Program::State` copy had no reader left and was removed.
-        if let Some(target) = self.pending_fit.take() {
-            self.camera_mut().fit_rect(target, bounds);
+        if self.resolve_pending_fit(bounds) {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));
@@ -40,8 +39,7 @@ impl SchematicCanvas<'_> {
             }
             // Grid + content need redraw on zoom
             return Some(
-                canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
-                    .and_capture(),
+                canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved)).and_capture(),
             );
         }
         None

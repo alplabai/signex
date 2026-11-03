@@ -77,7 +77,10 @@ fn active_bar_path_neither_labels_nor_records() {
 fn context_menu_path_neither_labels_nor_records() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::Action(
-        ContextAction::ActiveBar(ActiveBarAction::PlaceParameterSet),
+        ContextAction::Command {
+            id: AppCommandId::new("place_parameter_set").unwrap(),
+            project: None,
+        },
     )));
     assert_clean(&mut app, "context menu");
 }

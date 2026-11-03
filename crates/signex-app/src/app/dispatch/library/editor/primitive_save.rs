@@ -134,7 +134,9 @@ impl Signex {
     ) -> anyhow::Result<()> {
         // This write runs on the UI thread, so it cannot wait for a library
         // write a worker still has: refuse instead of freezing the window.
-        if let Some(library) = self.library.library_containing(path)
+        if let Some(library) = self
+            .library
+            .write_target_library(path, self.identity_fold_for(path))
             && self.library.writes.pending_writes(&library.root) > 0
         {
             anyhow::bail!(
@@ -197,15 +199,24 @@ impl Signex {
         // The container write may add or replace a listed `.snxsym` /
         // `.snxfpt` without changing the path set (#111).
         self.document_state.project_fs.invalidate();
-        let mounted_library = self
-            .library
-            .library_containing(path)
-            .map(|lib| lib.root.clone());
+        let fold = self.identity_fold_for(path);
+        let target = self.library.write_target_library(path, fold);
+        let mounted_library = target.map(|lib| lib.root.clone());
+        let mounted_alias = alias_under(path, target);
+        if mounted_library.is_some() && self.library.libraries_share_folder_of(path, fold) {
+            crate::diagnostics::log_warning(format!(
+                "{}: several libraries share its folder; saved through {}.",
+                path.display(),
+                self.library
+                    .library_label(mounted_library.as_deref().unwrap_or(path)),
+            ));
+        }
         let turn = mounted_library
             .as_deref()
             .map(|library| self.library.writes.turn(library));
         let write = PrimitiveWrite {
             path: path.to_path_buf(),
+            mounted_alias,
             mode,
             mounted_library,
             now,
@@ -220,8 +231,9 @@ impl Signex {
     }
 
     /// Stamp the changed primitives and the save `generation`, then clone
-    /// the editor's container. Clears the editor's dirty flag: any edit from
-    /// here on sets it again.
+    /// the editor's container. Clears the editor's dirty flag and makes the
+    /// snapshot's undo depth its save point: any edit from here on sets the
+    /// flag again, and Undo back to the depth clears it (#1854).
     fn snapshot_primitive(
         &mut self,
         path: &std::path::Path,
@@ -241,7 +253,7 @@ impl Signex {
             if !changed.is_empty() {
                 editor.file.updated = now;
             }
-            editor.set_dirty(false);
+            editor.mark_saved();
             editor.save_generation = generation;
             let snapshot = Snapshot::Symbol {
                 file: editor.file.clone(),
@@ -276,7 +288,7 @@ impl Signex {
             if !changed.is_empty() {
                 editor.file.updated = now;
             }
-            editor.set_dirty(false);
+            editor.mark_saved();
             editor.save_generation = generation;
             let snapshot = Snapshot::Footprint {
                 file: editor.file.clone(),
@@ -344,8 +356,6 @@ impl Signex {
         refresh: PostSaveRefresh<'_>,
     ) {
         self.document_state.document_saves.finish(&done.path);
-        // The write's turn is released: a close that waited for it is due.
-        self.close_libraries_whose_writes_are_done();
         let PrimitiveSaveDone {
             path,
             generation,
@@ -359,6 +369,10 @@ impl Signex {
             }
             Err(reason) => self.fail_primitive_save(&path, generation, save_as, reason),
         }
+        // The write's turn is released and the draft settled (a draft with a
+        // save in flight counts as unsaved): a close that waited for it is
+        // due, and a failed write holds it.
+        self.close_libraries_whose_writes_are_done();
     }
 
     /// Run the saves queued while the write to `path` (or a case variant of
@@ -458,6 +472,11 @@ impl Signex {
                     cascade::apply_symbol_versions(&mut editor.file, versions);
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
+                    // Older undo steps still hold the pre-bump version, so
+                    // the saved depth no longer reproduces the file.
+                    if editor.is_dirty() && !versions.is_empty() {
+                        editor.save_point.forget();
+                    }
                     editor.is_dirty()
                 }),
             WrittenContainer::Footprint(saved) => self
@@ -468,6 +487,9 @@ impl Signex {
                     cascade::apply_footprint_versions(&mut editor.file, versions);
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
+                    if editor.is_dirty() && !versions.is_empty() {
+                        editor.save_point.forget();
+                    }
                     editor.is_dirty()
                 }),
         };
@@ -520,10 +542,20 @@ impl Signex {
     /// The draft at `path` matches disk: drop its dirty markers, and the
     /// editor itself when it was closed while dirty and parked for Save All.
     fn mark_primitive_clean(&mut self, path: &std::path::Path) {
-        self.document_state.mark_document_clean(path);
+        self.document_state.mark_landed_draft_clean(path);
         if !self.document_is_held_open(path) {
             self.document_state.symbol_editors.remove(path);
             self.document_state.footprint_editors.remove(path);
+        }
+    }
+
+    /// The draft at `path` has no state known to match disk.
+    fn forget_draft_save_point(&mut self, path: &std::path::Path) {
+        let document = &mut self.document_state;
+        if let Some(editor) = document.symbol_editors.get_mut(path) {
+            editor.save_point.forget();
+        } else if let Some(editor) = document.footprint_editors.get_mut(path) {
+            editor.save_point.forget();
         }
     }
 
@@ -543,8 +575,11 @@ impl Signex {
             }
             None => ("Save failed", ours.then(|| path.to_path_buf()), reason),
         };
-        // The snapshot cleared the flag; the draft is still unsaved.
+        // The snapshot cleared the flag; the draft is still unsaved. Its
+        // save point named content that never reached disk, so Undo back to
+        // that depth must not read clean.
         if let Some(draft) = &draft {
+            self.forget_draft_save_point(draft);
             self.document_state.mark_document_dirty(draft);
         }
         let failed_path = draft.unwrap_or_else(|| path.to_path_buf());
@@ -594,4 +629,16 @@ impl Signex {
             ),
         }
     }
+}
+
+/// `path` spelled under the mounted library's own folder, when the library
+/// holds it under another spelling (`..`, case). Only a guess from the text:
+/// the worker checks on disk that it is the same directory
+/// (`PrimitiveWrite::route`) before writing through it.
+fn alias_under(
+    path: &std::path::Path,
+    library: Option<&crate::library::state::OpenLibrary>,
+) -> Option<std::path::PathBuf> {
+    let dir = library?.root_dir()?;
+    (!path.starts_with(dir)).then(|| crate::app::state::scope::rebase_under(path, dir, dir))
 }

@@ -258,12 +258,26 @@ impl LibraryState {
     /// That is reachable: a synchronous `open_library` call site can
     /// mount the same path while this preparation was in flight.
     pub fn mount_prepared(&mut self, prepared: PreparedMount) -> Result<(), LibraryError> {
+        self.mount_prepared_among(prepared, &[])
+    }
+
+    /// [`Self::mount_prepared`] knowing which paths the open projects list,
+    /// so a shared `library_id` is settled by source (#1908).
+    pub fn mount_prepared_among(
+        &mut self,
+        prepared: PreparedMount,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
         if self.library_at(&prepared.entry.root).is_some() {
             return Ok(());
         }
         self.refuse_stock_copy(&prepared.entry.root, prepared.entry.library_id)?;
-        // A `Conflict` here means this path, or another library with the
-        // same `library_id`, is already mounted (#1894).
+        self.resolve_id_clash(
+            &prepared.entry.root,
+            prepared.entry.library_id,
+            project_paths,
+        )?;
+        // A `Conflict` here means this path is already mounted.
         // The bundled stock library is read-only, whichever request
         // (global entry, project library, Add Library) mounts it first;
         // only the maintainer mode of #1892 mounts it writable.

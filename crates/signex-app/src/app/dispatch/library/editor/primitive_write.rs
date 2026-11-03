@@ -30,6 +30,9 @@ pub(super) struct PrimitiveWrite {
     pub mode: ContainerWrite,
     /// The `.snxlib` of the open library whose directory holds `path`.
     pub mounted_library: Option<std::path::PathBuf>,
+    /// `path` spelled under the mounted library's folder, set when the raw
+    /// prefix does not hold. Used only if it names the same directory.
+    pub mounted_alias: Option<std::path::PathBuf>,
     pub now: chrono::DateTime<chrono::Utc>,
     pub snapshot: Snapshot,
     /// This write's place in the owning library's write order (#893): the
@@ -50,6 +53,33 @@ struct WriteContext<'a> {
 }
 
 impl PrimitiveWrite {
+    /// The file to write and the mounted library to write it through. A
+    /// draft held under another spelling of the library's folder is written
+    /// at that spelling only when both parents are the same directory on
+    /// disk; a case variant on a case-sensitive volume, or `..` after a
+    /// symlink, is another folder, and the draft keeps its own file and the
+    /// library found from it.
+    fn route(&self) -> (std::path::PathBuf, Option<std::path::PathBuf>) {
+        let Some(library) = self.mounted_library.clone() else {
+            return (self.path.clone(), None);
+        };
+        let Some(alias) = &self.mounted_alias else {
+            return (self.path.clone(), Some(library));
+        };
+        let same_dir = match (
+            self.path.parent().map(std::fs::canonicalize),
+            alias.parent().map(std::fs::canonicalize),
+        ) {
+            (Some(Ok(own)), Some(Ok(mounted))) => own == mounted,
+            _ => false,
+        };
+        if same_dir {
+            (alias.clone(), Some(library))
+        } else {
+            (self.path.clone(), None)
+        }
+    }
+
     pub(super) fn run(self) -> Result<PrimitiveWritten, String> {
         if let Some(turn) = &self.turn {
             turn.wait();
@@ -72,10 +102,11 @@ impl PrimitiveWrite {
     }
 
     fn write(self) -> Result<PrimitiveWritten, String> {
-        let library = SaveLibrary::resolve(&self.path, self.mounted_library.as_deref());
+        let (path, mounted) = self.route();
+        let library = SaveLibrary::resolve(&path, mounted.as_deref());
         let context = WriteContext {
             library: &library,
-            path: &self.path,
+            path: &path,
             now: self.now,
             options: SaveOptions {
                 mode: self.mode,
@@ -99,7 +130,7 @@ impl PrimitiveWrite {
         };
         library.report_held_back();
         // The reason leads: the Messages panel cuts long lines.
-        written.map_err(|e| format!("{e} (writing {})", self.path.display()))
+        written.map_err(|e| format!("{e} (writing {})", path.display()))
     }
 }
 

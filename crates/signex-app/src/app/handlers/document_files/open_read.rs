@@ -194,7 +194,11 @@ impl Signex {
         }
     }
 
-    fn open_symbol_editor_tab(&mut self, path: PathBuf, file: signex_library::SymbolFile) {
+    pub(crate) fn open_symbol_editor_tab(
+        &mut self,
+        path: PathBuf,
+        file: signex_library::SymbolFile,
+    ) {
         let title = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -206,7 +210,8 @@ impl Signex {
                 }
             });
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        let state = crate::app::SymbolDocument::new(path.clone(), file);
+        let mut state = crate::app::SymbolDocument::new(path.clone(), file);
+        state.history_generation = self.document_state.next_symbol_history_base();
         self.document_state
             .symbol_editors
             .insert(path.clone(), state);

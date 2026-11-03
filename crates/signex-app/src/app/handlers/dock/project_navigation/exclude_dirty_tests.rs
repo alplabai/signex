@@ -35,6 +35,7 @@ fn folding_project_with_dirty_lowercase_sheet() -> (Signex, tempfile::TempDir, P
         display_name: "X.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     (app, tmp, held)
 }
@@ -153,6 +154,7 @@ fn two_folding_projects_sharing_one_sheet() -> (Signex, tempfile::TempDir, PathB
         display_name: "Power.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     (app, tmp, a_sheet, b_sheet)
 }
@@ -211,6 +213,7 @@ fn prompt_follows_its_project_when_an_earlier_project_closes() {
         display_name: "X.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: true,
+        is_directory_package: false,
     };
 
     app.document_state.projects.remove(0);
@@ -318,6 +321,7 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
         display_name: "Lib.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
 
     exclude_then(&mut app, ExcludeDirtyChoice::Save);

@@ -132,7 +132,9 @@ impl Builder {
             self.item(
                 APP_MENU_TITLE,
                 PREFERENCES_LABEL,
-                Some(MenuMessage::OpenPreferences),
+                crate::keymap::AppCommandId::new("open_preferences")
+                    .ok()
+                    .map(MenuMessage::Command),
                 true,
                 Some(Accelerator::CommandComma),
             ),

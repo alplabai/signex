@@ -136,7 +136,7 @@ fn place_menu_rows_arm_their_tools() {
 fn place_power_port_row_arms_a_power_port() {
     let mut app = app_with_empty_sheet();
     assert!(app.interaction_state.pending_power.is_none());
-    let _ = app.update(Message::Menu(MenuMessage::PlacePowerPort));
+    let _ = app.update(crate::menu_support::menu_row("place_power_symbol"));
     let (net, lib_id) = app
         .interaction_state
         .pending_power

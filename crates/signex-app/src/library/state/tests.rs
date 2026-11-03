@@ -421,3 +421,165 @@ fn refresh_snapshot_carries_row_descriptions() {
 
     assert_eq!(snapshot.summaries()[0].description, "100 nF 50 V X7R");
 }
+
+fn bare_library(root: &str) -> OpenLibrary {
+    OpenLibrary {
+        root: PathBuf::from(root),
+        display_name: root.into(),
+        library_id: Uuid::now_v7(),
+        tables: HashMap::new(),
+        cached_components: Vec::new(),
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+    }
+}
+
+#[test]
+fn containing_library_picks_the_deepest_library_in_either_mount_order() {
+    let file = Path::new("/p/vendor/symbols/a.snxsym");
+    for order in [
+        ["/p/lib.snxlib", "/p/vendor/v.snxlib"],
+        ["/p/vendor/v.snxlib", "/p/lib.snxlib"],
+    ] {
+        let mut state = LibraryState {
+            open_libraries: order.iter().map(|r| bare_library(r)).collect(),
+            ..Default::default()
+        };
+        assert_eq!(
+            state
+                .containing_library_with(file, crate::app::CaseFold::host_default())
+                .map(|l| l.root.clone()),
+            Some(PathBuf::from("/p/vendor/v.snxlib")),
+            "mount order {order:?}"
+        );
+        assert_eq!(
+            state
+                .containing_library_mut_with(file, crate::app::CaseFold::host_default())
+                .map(|l| l.root.clone()),
+            Some(PathBuf::from("/p/vendor/v.snxlib")),
+        );
+        // A file of the outer library only still belongs to the outer one.
+        assert_eq!(
+            state
+                .containing_library_with(
+                    Path::new("/p/symbols/b.snxsym"),
+                    crate::app::CaseFold::host_default()
+                )
+                .map(|l| l.root.clone()),
+            Some(PathBuf::from("/p/lib.snxlib")),
+        );
+    }
+}
+
+#[test]
+fn containing_library_with_follows_the_case_rule_it_is_given() {
+    let state = LibraryState {
+        open_libraries: vec![bare_library("/p/Lib.snxlib")],
+        ..Default::default()
+    };
+    let folding = crate::app::CaseFold::FOLD;
+    let preserving = crate::app::CaseFold::PRESERVE;
+    // The library folder is `/p`; only the `P` spelling differs.
+    let variant = Path::new("/P/symbols/a.snxsym");
+    assert!(state.containing_library_with(variant, folding).is_some());
+    assert!(state.containing_library_with(variant, preserving).is_none());
+}
+
+#[test]
+fn two_libraries_in_one_folder_leave_the_owner_unknown_in_either_order() {
+    let file = Path::new("/p/symbols/a.snxsym");
+    for order in [
+        ["/p/a.snxlib", "/p/b.snxlib"],
+        ["/p/b.snxlib", "/p/a.snxlib"],
+    ] {
+        let state = LibraryState {
+            open_libraries: order.iter().map(|r| bare_library(r)).collect(),
+            ..Default::default()
+        };
+        assert!(
+            state
+                .containing_library_with(file, crate::app::CaseFold::host_default())
+                .is_none(),
+            "{order:?}"
+        );
+    }
+    // A deeper library still wins over an ambiguous pair above it.
+    let state = LibraryState {
+        open_libraries: ["/p/a.snxlib", "/p/b.snxlib", "/p/v/c.snxlib"]
+            .iter()
+            .map(|r| bare_library(r))
+            .collect(),
+        ..Default::default()
+    };
+    let deep = Path::new("/p/v/symbols/a.snxsym");
+    assert_eq!(
+        state
+            .containing_library_with(deep, crate::app::CaseFold::host_default())
+            .map(|l| l.root.clone()),
+        Some(PathBuf::from("/p/v/c.snxlib"))
+    );
+}
+
+#[test]
+fn a_tie_is_broken_like_the_write_lock_whatever_the_mount_order() {
+    use crate::app::CaseFold;
+    let dir = tempfile::tempdir().unwrap();
+    let names = ["Passives.snxlib", "connectors.snxlib"];
+    for name in names {
+        std::fs::write(dir.path().join(name), "").unwrap();
+    }
+    let file = dir.path().join("symbols").join("a.snxsym");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let locked = signex_library::enclosing_library_file(&file).expect("a library file");
+    for order in [names, [names[1], names[0]]] {
+        let state = LibraryState {
+            open_libraries: order
+                .iter()
+                .map(|n| bare_library(dir.path().join(n).to_str().unwrap()))
+                .collect(),
+            ..Default::default()
+        };
+        for fold in [CaseFold::FOLD, CaseFold::PRESERVE] {
+            assert_eq!(
+                state.write_target_library(&file, fold).map(|l| &l.root),
+                Some(&locked),
+                "{order:?} {fold:?}"
+            );
+        }
+        // A tie names no owner, but the folder is still held by a library.
+        assert!(
+            state
+                .containing_library_with(&file, CaseFold::FOLD)
+                .is_none()
+        );
+        assert!(state.is_in_mounted_library(&file, CaseFold::FOLD));
+    }
+}
+
+#[test]
+fn library_holding_requires_the_primitive_folder_of_the_owner() {
+    let state = LibraryState {
+        open_libraries: vec![bare_library("/p/lib.snxlib")],
+        ..Default::default()
+    };
+    use signex_library::PrimitiveKind::{Footprint, Symbol};
+    let holds = |file: &str, kind| {
+        state
+            .library_holding_with(Path::new(file), kind, crate::app::CaseFold::host_default())
+            .is_some()
+    };
+    assert!(holds("/p/symbols/a.snxsym", Symbol));
+    assert!(holds("/p/footprints/a.snxfpt", Footprint));
+    assert!(!holds("/p/drafts/a.snxsym", Symbol));
+    assert!(!holds("/p/vendor/symbols/a.snxsym", Symbol));
+    // A file in another kind's folder is not held as this kind.
+    assert!(!holds("/p/footprints/a.snxsym", Symbol));
+    assert!(!holds("/p/symbols/a.snxfpt", Footprint));
+}

@@ -140,6 +140,29 @@ else
   failures=$((failures + 1))
 fi
 
+# --- jq that ends lines with CRLF (Windows jq.exe) must not trip the gate ---
+
+mkdir -p "$TMP/shim"
+REAL_JQ="$(command -v jq)"
+{
+  echo '#!/usr/bin/env bash'
+  echo "\"$REAL_JQ\" \"\$@\" | sed 's/\$/'\"\$(printf '\r')\"'/'"
+} > "$TMP/shim/jq"
+chmod +x "$TMP/shim/jq"
+# Two edges: the trailing CR of the last line is eaten by $(...), the one
+# before it is what the fix has to strip.
+printf 'signex-net -> signex-types\nsignex-erc -> signex-types\n' > "$TMP/crlf.edges"
+ERC_OK="{\"name\": \"signex-erc\", \"dependencies\": [$(dep signex-types)]}"
+printf '{"packages": [%s, %s, %s]}\n' "$TYPES" "$NET_OK" "$ERC_OK" > "$TMP/crlf.json"
+crlf_out="$(PATH="$TMP/shim:$PATH" ARCH_GUARD_EDGES="$TMP/crlf.edges" \
+  ARCH_GUARD_METADATA="$TMP/crlf.json" bash "$GATE" 2>&1)" || true
+if [[ "$crlf_out" == *"Arch guard: OK"* ]]; then
+  echo "ok    jq_crlf_output_is_tolerated"
+else
+  echo "FAIL  jq_crlf_output_is_tolerated - got: $crlf_out"
+  failures=$((failures + 1))
+fi
+
 # --- and the real tree passes ----------------------------------------------
 
 if bash "$GATE" >/dev/null 2>&1; then

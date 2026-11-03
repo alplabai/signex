@@ -173,6 +173,7 @@ fn start_delete(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         display_name: "child.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
