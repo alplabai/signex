@@ -43,6 +43,42 @@ pub struct ClosedSheetScan {
     pub visited: Vec<String>,
     /// The worker died: nothing was read, `unreadable` says so.
     pub unfinished: bool,
+    /// How each sheet that was read looked just before it was read; stated
+    /// again before an auto-delete to catch a write after the read.
+    pub stamps: Vec<(PathBuf, Option<FileStamp>)>,
+}
+
+/// A file's modified time and length: cheap to compare, enough to see a write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileStamp {
+    modified: Option<std::time::SystemTime>,
+    len: u64,
+}
+
+impl FileStamp {
+    fn of(path: &Path) -> Option<Self> {
+        let meta = std::fs::metadata(path).ok()?;
+        Some(Self {
+            modified: meta.modified().ok(),
+            len: meta.len(),
+        })
+    }
+}
+
+/// Sheets whose file differs now from when the scan read it. Blocking.
+pub fn changed_since_read(stamps: &[(PathBuf, Option<FileStamp>)]) -> Vec<String> {
+    stamps
+        .iter()
+        .filter(|(path, then)| FileStamp::of(path) != *then)
+        .map(|(path, _)| format!("{} changed after it was read", file_name(path)))
+        .collect()
+}
+
+/// The result of [`changed_since_read`], as it travels back to `update`.
+#[derive(Debug, Clone)]
+pub struct ClosedSheetsVerdict {
+    pub serial: u64,
+    pub changed: Vec<String>,
 }
 
 impl ClosedSheetScan {
@@ -53,6 +89,7 @@ impl ClosedSheetScan {
             unreadable: vec![format!("closed sheets ({reason})")],
             visited: Vec::new(),
             unfinished: true,
+            stamps: Vec::new(),
         }
     }
 }
@@ -99,6 +136,7 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
         unreadable: plan.unresolved.clone(),
         visited: Vec::new(),
         unfinished: false,
+        stamps: Vec::new(),
     };
     let mut visited = std::collections::HashSet::new();
     let mut queue: Vec<(PathBuf, CaseFold)> = plan.seeds.clone();
@@ -108,6 +146,7 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
             continue;
         }
         scan.visited.push(k);
+        let stamp = FileStamp::of(&path);
         let sheet = match crate::app::project_sheets::load_sheet_disk(&path) {
             Ok(Some(sheet)) => sheet,
             // Declared but absent: nothing was read, so nothing is known.
@@ -121,6 +160,7 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
                 continue;
             }
         };
+        scan.stamps.push((path.clone(), stamp));
         scan.placed.extend(placed_on_sheets(
             std::iter::once((path.as_path(), &sheet)),
             |id| target.matches(id),

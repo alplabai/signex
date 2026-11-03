@@ -209,7 +209,7 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
     assert_eq!(symbol_count(&app, &path), 1);
     assert!(warning(&app).is_none());
     assert!(logged(
-        "CLEAN-SIB deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
+        "CLEAN-SIB deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked (other projects were not)."
     ));
 }
 
@@ -531,4 +531,50 @@ fn a_child_referenced_only_by_an_open_sheet_is_scanned() {
         .join("\n");
     assert!(text.contains("kid.snxsch: U3"), "{text}");
     assert_eq!(symbol_count(&s.app, &s.path), 2);
+}
+
+#[test]
+fn a_closed_sheet_saved_with_the_symbol_after_the_worker_read_it_stops_the_delete() {
+    use signex_app::library::closed_sheets::{
+        ClosedSheetsReport, ScanPlan, SymbolMatch, scan_closed_sheets,
+    };
+    let mut s = setup(&[("clean.snxsch", None)], &[]);
+    let _task = delete(&mut s.app, 1);
+    let pending = s.app.library.pending_symbol_delete.as_ref().unwrap();
+    let (serial, sibling) = (pending.serial, pending.symbol);
+    let sheet = s._dir.path().join("clean.snxsch");
+    let fold = s.app.document_state.projects[0].case_fold;
+    let plan = ScanPlan {
+        seeds: vec![(sheet.clone(), fold)],
+        open: s.app.document_state.engines.keys().cloned().collect(),
+        unresolved: Vec::new(),
+    };
+    // The worker reads clean.snxsch while it is still clean...
+    let scan = scan_closed_sheets(&plan, SymbolMatch::InLibrary(s.library_id, sibling));
+    // ...then it is opened, the symbol placed, saved and closed (or written externally).
+    write_sheet(&sheet, Some(&sibling_lib_id(&s)), &[]);
+    let task = s.app.update(Message::Library(
+        signex_app::library::LibraryMessage::SymbolDeleteClosedSheetsScanned(Box::new(
+            ClosedSheetsReport { serial, scan, plan },
+        )),
+    ));
+    run(&mut s.app, task);
+    assert_eq!(
+        symbol_count(&s.app, &s.path),
+        2,
+        "a sheet that changed after it was read must not let the delete through"
+    );
+    assert!(warning(&s.app).is_some_and(|w| !w.checking));
+}
+
+#[test]
+fn an_unreadable_closed_sheet_reaches_the_messages_panel() {
+    let Setup { mut app, _dir, .. } = setup(&[], &["broken-1903-log.snxsch"]);
+    let task = delete(&mut app, 1);
+    run(&mut app, task);
+    assert!(warning(&app).is_some());
+    assert!(
+        logged("broken-1903-log.snxsch"),
+        "the failed read is only in the modal"
+    );
 }

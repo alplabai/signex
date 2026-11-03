@@ -229,6 +229,9 @@ impl Signex {
             LibraryMessage::SymbolDeleteClosedSheetsScanned(report) => {
                 self.handle_symbol_delete_closed_sheets_scanned(*report)
             }
+            LibraryMessage::SymbolDeleteClosedSheetsVerified(verdict) => {
+                self.handle_symbol_delete_closed_sheets_verified(*verdict)
+            }
             LibraryMessage::LibraryUpdateSymbolsRead(read) => {
                 self.handle_library_update_symbols_read(*read)
             }

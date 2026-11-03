@@ -6,7 +6,8 @@ use super::*;
 use crate::app::CaseFold;
 use crate::library::LibraryMessage;
 use crate::library::closed_sheets::{
-    ClosedSheetScan, ClosedSheetsReport, ScanPlan, SymbolMatch, scan_closed_sheets,
+    ClosedSheetScan, ClosedSheetsReport, ClosedSheetsVerdict, ScanPlan, SymbolMatch,
+    changed_since_read, scan_closed_sheets,
 };
 use crate::library::symbol_delete::{PendingSymbolDelete, SymbolUsage};
 use crate::panels::SymbolDeleteWarning;
@@ -47,7 +48,7 @@ impl Signex {
                 )
             } else {
                 format!(
-                    "{name} deleted. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
+                    "{name} deleted. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked (other projects were not)."
                 )
             });
             self.delete_symbol_from_container(&path, idx, symbol);
@@ -83,12 +84,22 @@ impl Signex {
         if !checking {
             return Task::none();
         }
+        Self::spawn_closed_scan(serial, plan, target)
+    }
+
+    fn spawn_closed_scan(serial: u64, plan: ScanPlan, target: SymbolMatch) -> Task<Message> {
         let asked = plan.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || scan_closed_sheets(&plan, target))
                     .await
-                    .unwrap_or_else(|e| ClosedSheetScan::unfinished(&e.to_string()))
+                    .unwrap_or_else(|e| {
+                        crate::diagnostics::log_error(
+                            "SCH Library: closed-sheet scan worker failed",
+                            &anyhow::anyhow!("{e}"),
+                        );
+                        ClosedSheetScan::unfinished(&e.to_string())
+                    })
             },
             move |scan| {
                 Message::Library(LibraryMessage::SymbolDeleteClosedSheetsScanned(Box::new(
@@ -116,34 +127,108 @@ impl Signex {
             return Task::none();
         }
         let (path, symbol) = (pending.path.clone(), pending.symbol);
-        let current = self
-            .document_state
-            .symbol_editors
-            .get(&path)
-            .is_some_and(|e| pending.is_current(e));
-        if !current {
-            let name = pending.warning.name.clone();
-            self.library.pending_symbol_delete = None;
-            crate::diagnostics::log_warning(format!(
-                "{name} changed since the warning; press Delete again."
-            ));
-            self.refresh_panel_ctx();
-            return Task::none();
+        if !self.symbol_delete_is_current(&path) {
+            return self.drop_stale_symbol_delete();
         }
         let mut scan = report.scan;
         self.note_unscanned(&mut scan, &report.plan);
+        for line in &scan.unreadable {
+            crate::diagnostics::log_warning(format!(
+                "SCH Library delete: closed sheet not checked: {line}"
+            ));
+        }
         // Rows and open sheets may have changed while the disk was read.
         let (usage, _) = self.symbol_usage_lines(&path, symbol);
         let Some(pending) = self.library.pending_symbol_delete.as_mut() else {
             return Task::none();
         };
         pending.apply_closed_scan(usage, &scan);
+        if pending.warning.lines.is_empty() && !scan.stamps.is_empty() {
+            // Clean so far. A sheet can have been written after the worker
+            // read it, so state the files again on a worker before deleting.
+            pending.warning.checking = true;
+            pending
+                .warning
+                .lines
+                .push("Checking closed sheets of the open projects…".into());
+            let (serial, stamps) = (pending.serial, scan.stamps);
+            self.refresh_panel_ctx();
+            return Task::perform(
+                async move {
+                    let changed = tokio::task::spawn_blocking(move || changed_since_read(&stamps))
+                        .await
+                        .unwrap_or_else(|e| {
+                            vec![format!("closed sheets could not be re-checked ({e})")]
+                        });
+                    ClosedSheetsVerdict { serial, changed }
+                },
+                |verdict| {
+                    Message::Library(LibraryMessage::SymbolDeleteClosedSheetsVerified(Box::new(
+                        verdict,
+                    )))
+                },
+            );
+        }
+        self.finish_closed_check()
+    }
+
+    /// The files a clean scan read were stated again.
+    pub(crate) fn handle_symbol_delete_closed_sheets_verified(
+        &mut self,
+        verdict: ClosedSheetsVerdict,
+    ) -> Task<Message> {
+        let Some(pending) = self.library.pending_symbol_delete.as_ref() else {
+            return Task::none();
+        };
+        if pending.serial != verdict.serial {
+            return Task::none();
+        }
+        let (path, symbol) = (pending.path.clone(), pending.symbol);
+        if !self.symbol_delete_is_current(&path) {
+            return self.drop_stale_symbol_delete();
+        }
+        for line in &verdict.changed {
+            crate::diagnostics::log_warning(format!("SCH Library delete: {line}"));
+        }
+        let scan = ClosedSheetScan {
+            unreadable: verdict.changed,
+            ..Default::default()
+        };
+        let (usage, _) = self.symbol_usage_lines(&path, symbol);
+        if let Some(pending) = self.library.pending_symbol_delete.as_mut() {
+            pending.apply_closed_scan(usage, &scan);
+        }
+        self.finish_closed_check()
+    }
+
+    /// The pending warning still describes the open container at `path`.
+    fn symbol_delete_is_current(&self, path: &std::path::Path) -> bool {
+        let pending = self.library.pending_symbol_delete.as_ref();
+        let editor = self.document_state.symbol_editors.get(path);
+        matches!((pending, editor), (Some(p), Some(e)) if p.is_current(e))
+    }
+
+    fn drop_stale_symbol_delete(&mut self) -> Task<Message> {
+        if let Some(pending) = self.library.pending_symbol_delete.take() {
+            crate::diagnostics::log_warning(format!(
+                "{} changed since the warning; press Delete again.",
+                pending.warning.name
+            ));
+        }
+        self.refresh_panel_ctx();
+        Task::none()
+    }
+
+    /// Run the Delete when the check found nothing and left nothing
+    /// unchecked; otherwise leave the warning for the user.
+    fn finish_closed_check(&mut self) -> Task<Message> {
+        let Some(pending) = self.library.pending_symbol_delete.as_ref() else {
+            return Task::none();
+        };
         if pending.warning.lines.is_empty() {
-            // Nothing uses it and every sheet was read: the Delete the user
-            // asked for goes ahead.
             let pending = self.library.pending_symbol_delete.take().expect("pending");
             crate::diagnostics::log_info(format!(
-                "{} deleted from {}. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked.",
+                "{} deleted from {}. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked (other projects were not).",
                 pending.warning.name,
                 pending.path.file_name().map_or_else(
                     || pending.path.display().to_string(),
@@ -233,7 +318,9 @@ impl Signex {
         } else {
             format!("{} open sheet(s)", pending.sheets)
         };
-        crate::diagnostics::log_warning(if pending.warning.only_unknown {
+        crate::diagnostics::log_warning(if pending.warning.only_unknown && unchecked == 0 {
+            format!("{name} deleted.{skipped}")
+        } else if pending.warning.only_unknown {
             format!(
                 "{name} deleted; {unchecked} table(s), table list(s) or sheet(s) could not be read, so whether anything used it is unknown.{skipped}"
             )
