@@ -355,11 +355,9 @@ impl Signex {
                 // Discarded, not undone: an undo would leave the half run on
                 // the redo stack for Ctrl+Y to bring back.
                 match engine.discard_undo_group_top(group) {
-                    Ok(Some(_)) => {}
-                    // The run is still in the sheet: it must stay dirty.
-                    Ok(None) => {
-                        not_rolled_back.insert(path.clone());
-                    }
+                    // `None`: the run recorded nothing on this sheet (its top
+                    // entry is not the run's), so there is nothing to keep.
+                    Ok(Some(_) | None) => {}
                     Err(error) => {
                         not_rolled_back.insert(path.clone());
                         crate::diagnostics::log_error(

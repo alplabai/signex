@@ -721,11 +721,11 @@ fn reset_duplicates_of_a_closed_sheet_leaves_the_erc_results_stale() {
 }
 
 #[test]
-fn a_rollback_that_could_not_discard_the_run_does_not_mark_the_sheet_clean() {
+fn a_rollback_that_found_no_run_leaves_an_unrelated_edit_dirty() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
     let root = dir.join("a_root.snxsch");
-    // The run's edit sits on the sheet, but the group asked to discard is
-    // not the top entry's, so nothing is rolled back.
+    // An edit sits on the sheet, but the group asked to discard is not the
+    // top entry's: the run recorded nothing here, so the edit is left alone.
     let id = app.document_state.engines[&root].document().symbols[0].uuid;
     let changed = app.apply_engine_command(
         signex_engine::Command::MoveSelection {
@@ -748,22 +748,28 @@ fn a_rollback_that_could_not_discard_the_run_does_not_mark_the_sheet_clean() {
         Some(wrong_group),
         &touched,
         &std::collections::HashSet::new(),
-        &touched,
+        &[],
         "test",
     );
     std::fs::remove_dir_all(&dir).ok();
     assert!(
         app.document_state.is_document_dirty(&root),
-        "the run is still in the sheet"
+        "a rollback that found no run must not clean the sheet"
     );
 }
 
 #[test]
-fn a_rollback_that_could_not_discard_the_run_marks_the_active_sheet_dirty() {
+fn a_rollback_that_recorded_nothing_on_the_active_sheet_leaves_it_clean() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
     let root = dir.join("a_root.snxsch");
-    // The pass has not marked the active sheet dirty yet, and it is in no
-    // `newly_dirty`; the run could not be discarded from it.
+    // Open through a save point, so the history decides dirty and the
+    // sheet reads clean until something is recorded on it.
+    app.document_state
+        .engines
+        .get_mut(&root)
+        .expect("root engine")
+        .mark_saved();
+    app.document_state.sync_history_dirty(&root);
     assert!(!app.document_state.is_document_dirty(&root));
     let touched = [root.clone()];
     let _ = app.roll_back_reprefix(
@@ -775,7 +781,7 @@ fn a_rollback_that_could_not_discard_the_run_marks_the_active_sheet_dirty() {
     );
     std::fs::remove_dir_all(&dir).ok();
     assert!(
-        app.document_state.is_document_dirty(&root),
-        "the message says the sheet stays unsaved, so it must be dirty"
+        !app.document_state.is_document_dirty(&root),
+        "the run recorded nothing on this sheet, so it is not left unsaved"
     );
 }
