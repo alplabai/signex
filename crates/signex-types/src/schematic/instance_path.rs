@@ -11,7 +11,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Symbol;
+use super::{Symbol, SymbolInstance};
 
 /// The `ChildSheet.uuid` chain from the walk root to one occurrence of a sheet.
 /// A root page is the empty chain.
@@ -122,6 +122,61 @@ impl Symbol {
             }
             Some((InstancePath::parse(&e.path)?, reference))
         })
+    }
+
+    /// Give the placement at `path` the designator `reference`: the first
+    /// entry for the path is changed (a blank one becomes valid), else an
+    /// entry is added. `reference` is stored as given; callers trim.
+    pub fn set_instance_designator(&mut self, path: &InstancePath, reference: String) {
+        let at_path =
+            |entry: &SymbolInstance| InstancePath::parse(&entry.path).as_ref() == Some(path);
+        if let Some(entry) = self.instances.iter_mut().find(|e| at_path(e)) {
+            entry.reference = reference;
+            return;
+        }
+        let project = self
+            .instances
+            .first()
+            .map(|e| e.project.clone())
+            .unwrap_or_default();
+        self.instances.push(SymbolInstance {
+            project,
+            path: path.to_string(),
+            reference,
+            unit: self.unit,
+        });
+    }
+
+    /// Write per-placement designators back: `finals[i]` is the designator at
+    /// `places[i]`. `places` is sorted, so the root placement (if any) comes
+    /// first; `reference` takes `finals[0]`, and every non-root placement gets
+    /// an explicit entry, so removing one placement never moves the others.
+    /// When every placement is unannotated (`R?`) the entries are cleared
+    /// instead.
+    pub fn write_placement_designators(&mut self, places: &[InstancePath], finals: &[String]) {
+        let all_unannotated = finals.iter().all(|f| f.trim().ends_with('?'));
+        for (place, designator) in places.iter().zip(finals) {
+            if place.is_root() {
+                continue;
+            }
+            if all_unannotated {
+                self.clear_instance_designator(place);
+            } else {
+                self.set_instance_designator(place, designator.clone());
+            }
+        }
+        if let Some(first) = finals.first() {
+            self.reference.clone_from(first);
+        }
+    }
+
+    /// Drop every entry for the placement at `path`, so it falls back to
+    /// `reference`. Returns whether anything was dropped.
+    pub fn clear_instance_designator(&mut self, path: &InstancePath) -> bool {
+        let before = self.instances.len();
+        self.instances
+            .retain(|entry| InstancePath::parse(&entry.path).as_ref() != Some(path));
+        self.instances.len() != before
     }
 
     fn instance_entry_in(&self, path: &InstancePath) -> Option<&str> {

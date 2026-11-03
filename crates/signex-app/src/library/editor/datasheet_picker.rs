@@ -94,6 +94,7 @@ pub fn view<'a>(
     }
     for (index, doc) in docs.into_iter().enumerate() {
         let error = state.datasheet_errors.get(&index).map(String::as_str);
+        let stored = !is_staged_only(state, &doc.source);
         list = list.push(view_document(
             index,
             count,
@@ -101,7 +102,11 @@ pub fn view<'a>(
             error,
             tokens,
             address.clone(),
-            (read_only, veil),
+            Gate {
+                read_only,
+                veil,
+                stored,
+            },
         ));
     }
 
@@ -143,6 +148,20 @@ fn field_row<'a>(
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
     .into()
+}
+
+/// Whether `source` pins a PDF that is only staged on this editor: picked,
+/// but not written to the library until the row is saved.
+pub(crate) fn is_staged_only(state: &ComponentPreviewState, source: &DatasheetRef) -> bool {
+    matches!(source, DatasheetRef::HashPinned { hash, .. } if state.staged_datasheets.contains_key(hash))
+}
+
+/// What the read-only library and the save state allow on a document card.
+struct Gate {
+    read_only: bool,
+    veil: Color,
+    /// False while the pinned PDF is staged and not yet saved.
+    stored: bool,
 }
 
 /// Role label of the document at `index`: the first one is the primary.
@@ -188,10 +207,15 @@ fn view_document<'a>(
     error: Option<&'a str>,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
-    (read_only, veil): (bool, Color),
+    gate: Gate,
 ) -> Element<'a, LibraryMessage> {
     let mode = DatasheetMode::from_ref(Some(&doc.source));
-    let has_source = !doc.source.is_empty();
+    let Gate {
+        read_only,
+        veil,
+        stored,
+    } = gate;
+    let can_open = !doc.source.is_empty() && stored;
 
     let mode_address = address.clone();
     let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
@@ -216,9 +240,10 @@ fn view_document<'a>(
             tokens,
         ));
     }
+    // Row 1's "up" would repeat "Make primary", so it is disabled there.
     let move_to = |to: usize| Some(event(&address, DatasheetMsg::Move { from: index, to }));
     actions = actions.push(kit::reorder_remove(
-        (index > 0).then(|| move_to(index - 1)).flatten(),
+        (index > 1).then(|| move_to(index - 1)).flatten(),
         (index + 1 < count).then(|| move_to(index + 1)).flatten(),
         event(&address, DatasheetMsg::Remove(index)),
         tokens,
@@ -227,7 +252,7 @@ fn view_document<'a>(
     // Open only reads, so it sits outside the read-only veil.
     let open = kit::secondary_button(
         "Open",
-        has_source.then(|| event(&address, DatasheetMsg::Open(index))),
+        can_open.then(|| event(&address, DatasheetMsg::Open(index))),
         tokens,
     );
     let header = row![

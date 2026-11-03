@@ -128,6 +128,7 @@ fn delete(f: &mut Fixture, name: &str) {
         display_name: name.to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     crate::settle_support::settle(
         &mut f.app,

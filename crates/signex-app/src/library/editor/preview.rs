@@ -10,14 +10,15 @@
 use iced::widget::{Space, column, container, row, scrollable, text};
 use iced::{Element, Length};
 use signex_library::ComponentRow;
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 use super::kit::{self, SP, TS};
 
-const PREVIEW_PANE_HEIGHT: f32 = 220.0;
+/// Height of the Symbol / Footprint panes: twenty body lines.
+const PREVIEW_PANE_HEIGHT: f32 = TS.body * 20.0;
 
 /// Shown in the header for a manufacturer / MPN the row does not carry.
 const NOT_SET: &str = "Not set";
@@ -27,13 +28,23 @@ pub fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &CanvasColors,
+    device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
     let veil = super::read_only_veil(tokens);
     let body = column![
         header_row(&state.row, tokens),
-        render_panes(state, library_state, tokens, &address, read_only),
+        render_panes(
+            state,
+            library_state,
+            tokens,
+            canvas_colors,
+            device_px_per_logical_px,
+            &address,
+            read_only,
+        ),
         super::inert::unless_read_only_veiled(
             read_only,
             veil,
@@ -157,6 +168,8 @@ fn render_panes<'a>(
     state: &'a ComponentPreviewState,
     library_state: &LibraryState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &CanvasColors,
+    device_px_per_logical_px: f32,
     address: &EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
@@ -214,9 +227,11 @@ fn render_panes<'a>(
         .then_some(state.symbol.as_ref())
         .flatten()
         .map(|sym| {
-            signex_widgets::symbol_preview::symbol_preview(
+            crate::panels::components_panel::details::symbol_canvas::symbol_preview(
                 sym.to_lib_symbol(sym.name.clone()),
+                *canvas_colors,
                 PREVIEW_PANE_HEIGHT,
+                device_px_per_logical_px,
             )
             .map(|()| LibraryMessage::Noop)
         });

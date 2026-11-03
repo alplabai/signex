@@ -12,15 +12,12 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use crate::styles::tokens::{self, Overlay};
-use crate::styles::{self, HAIRLINE, Spacing, TypeScale};
+use crate::styles::{self, HAIRLINE, RADIUS, Spacing, TypeScale};
 
 /// Type scale shared by every Component Preview tab.
 pub(crate) const TS: TypeScale = TypeScale::DEFAULT;
 /// Spacing scale shared by every Component Preview tab.
 pub(crate) const SP: Spacing = Spacing::DEFAULT;
-
-pub(crate) const RADIUS: f32 = 3.0;
-const CARD_RADIUS: f32 = 4.0;
 
 // ─── Style functions (pure; unit-tested) ─────────────────────
 
@@ -32,7 +29,7 @@ pub(crate) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::
         background: Some(Background::Color(fill)),
         border: Border {
             width: HAIRLINE,
-            radius: CARD_RADIUS.into(),
+            radius: RADIUS.into(),
             color: border,
         },
         ..container::Style::default()

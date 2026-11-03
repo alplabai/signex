@@ -15,7 +15,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use signex_widgets::tree_view::{TreeIcon, TreeNode};
 
@@ -23,10 +23,6 @@ use crate::app::sheet_hierarchy::CaseFold;
 use crate::app::sheet_hierarchy::{
     SheetHierarchy, SheetNode, SheetNodeKind, normalised_key, sheet_path_key,
 };
-
-/// Two clicks on the same row within this window are a double-click — the same
-/// 500 ms the Projects tree uses.
-const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 
 /// A row identified by what it is rather than where it currently sits: one
 /// `name|file|n` element per level, `n` counting earlier siblings with the
@@ -50,7 +46,7 @@ pub struct NavigatorModel {
     /// Highlighted row (single click).
     pub selected: Option<Vec<usize>>,
     /// Previous click, for double-click detection.
-    pub last_click: Option<(Vec<usize>, Instant)>,
+    pub last_click: crate::double_click::DoubleClick<Vec<usize>>,
 }
 
 impl NavigatorModel {
@@ -81,10 +77,7 @@ impl NavigatorModel {
         let old = self.hierarchy.take();
         let remembered = |path: &[usize]| old.as_ref().and_then(|h| occurrence_key(h, path));
         let selected = self.selected.as_deref().and_then(remembered);
-        let last_click = self
-            .last_click
-            .as_ref()
-            .and_then(|(path, at)| remembered(path).map(|key| (key, *at)));
+        let last_click = self.last_click.key().and_then(|path| remembered(path));
         let collapsed: Vec<OccurrenceKey> = collapsed_paths(&self.tree)
             .iter()
             .filter_map(|path| remembered(path))
@@ -95,7 +88,8 @@ impl NavigatorModel {
         let new = self.hierarchy.as_ref();
         let locate = |key: &OccurrenceKey| new.and_then(|h| resolve_occurrence(h, key));
         self.selected = selected.as_ref().and_then(locate);
-        self.last_click = last_click.and_then(|(key, at)| locate(&key).map(|path| (path, at)));
+        self.last_click
+            .remap(|_| last_click.as_ref().and_then(locate));
         let collapsed_now: Vec<Vec<usize>> = collapsed.iter().filter_map(locate).collect();
         self.rebuild_with(active, open, &collapsed_now);
     }
@@ -136,16 +130,7 @@ impl NavigatorModel {
 
     /// Record a click on `path`; `true` when it completes a double-click.
     pub fn register_click(&mut self, path: &[usize], now: Instant) -> bool {
-        let is_double = matches!(
-            &self.last_click,
-            Some((prev, at)) if prev == path && now.duration_since(*at) <= DOUBLE_CLICK_WINDOW
-        );
-        self.last_click = if is_double {
-            None
-        } else {
-            Some((path.to_vec(), now))
-        };
-        is_double
+        self.last_click.register(path.to_vec(), now)
     }
 }
 
@@ -246,6 +231,7 @@ fn node_mut<'a>(roots: &'a mut [TreeNode], path: &[usize]) -> Option<&'a mut Tre
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     fn node(name: &str, file: &str, children: Vec<SheetNode>) -> SheetNode {
         SheetNode {
@@ -392,7 +378,7 @@ mod tests {
         m.replace_hierarchy(two_children("A", "C"), None, &[]);
 
         assert_eq!(m.selected, None);
-        assert!(m.last_click.is_none());
+        assert!(m.last_click.key().is_none());
     }
 
     #[test]

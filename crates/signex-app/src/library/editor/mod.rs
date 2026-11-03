@@ -36,7 +36,7 @@ pub mod text_extent;
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_library::TemplateViolation;
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
 
 use self::kit::{SP, TS};
@@ -57,12 +57,21 @@ pub fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &CanvasColors,
+    device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
     let header = view_header(state, tokens, address.clone());
     let tabs = view_tabs(state, library_state, tokens, address.clone());
-    let body = view_active_tab(state, library_state, tokens, address.clone());
+    let body = view_active_tab(
+        state,
+        library_state,
+        tokens,
+        canvas_colors,
+        device_px_per_logical_px,
+        address.clone(),
+    );
     let footer = view_footer(state, tokens, address, read_only);
 
     column![header, tabs, body, footer]
@@ -242,6 +251,8 @@ fn view_active_tab<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &CanvasColors,
+    device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     // A read-only library (the stock library) shows every editing tab
@@ -250,7 +261,14 @@ fn view_active_tab<'a>(
     let read_only = library_state.is_read_only(&state.library_path);
     let veil = read_only_veil(tokens);
     let inner: Element<'_, LibraryMessage> = match state.active_tab {
-        PreviewTab::Preview => preview::view(state, library_state, tokens, address),
+        PreviewTab::Preview => preview::view(
+            state,
+            library_state,
+            tokens,
+            canvas_colors,
+            device_px_per_logical_px,
+            address,
+        ),
         PreviewTab::Parameters => inert::unless_read_only_veiled(
             read_only,
             veil,

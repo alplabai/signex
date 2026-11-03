@@ -44,6 +44,12 @@ band adds is created unlocked. A move that would drag a locked wire along (a
 symbol, sheet symbol or sheet pin with a locked wire on its pin, with wires
 following) is refused or skipped.
 
+The lock holds the other way too: a locked part stays put, so a selected wire
+whose end sits on its pin is skipped by move, rotate, mirror and transform, on
+every path (drag, Move Selection dialog, rotate and mirror keys), whether or
+not other items are selected, and the skip is named. Delete does not skip it:
+removing the wire leaves the part alone.
+
 ## Commands the lock leaves open
 
 On purpose, as for symbols:

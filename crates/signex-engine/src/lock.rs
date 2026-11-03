@@ -360,7 +360,19 @@ impl Engine {
     /// names a locked symbol, so this is the caller's choice, never a way
     /// around the lock.
     #[must_use]
-    pub fn without_locked(&self, mut cmd: Command) -> (Option<Command>, Vec<String>) {
+    pub fn without_locked(&self, cmd: Command) -> (Option<Command>, Vec<String>) {
+        self.without_locked_naming(cmd, &str::to_string)
+    }
+
+    /// [`Self::without_locked`] with `pin_hold` turning the reference of a
+    /// locked symbol into the entry for a wire held on its pin, so a caller
+    /// that shows the reasons (the drag ghost) can say what is held.
+    #[must_use]
+    pub(crate) fn without_locked_naming(
+        &self,
+        mut cmd: Command,
+        pin_hold: &dyn Fn(&str) -> String,
+    ) -> (Option<Command>, Vec<String>) {
         let mut skipped = Vec::new();
         // A locked symbol stays put, so a wire ending on one of its pins must
         // not be moved either, or it would drag off the pin. Deleting such a
@@ -391,7 +403,7 @@ impl Engine {
                     pinned.iter().find(|(key, _)| ends.contains(key))
                 });
             if let Some((_, reference)) = on_pin {
-                skipped.push(reference.clone());
+                skipped.push(pin_hold(reference));
             }
             let on_locked_wire = own.is_none() && self.held_by_locked_wire(item, &locked_wire_ends);
             if on_locked_wire {

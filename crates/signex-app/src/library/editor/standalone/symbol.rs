@@ -309,7 +309,7 @@ fn symbol_tool_button_style(
         })),
         border: Border {
             width: crate::styles::HAIRLINE,
-            radius: crate::library::editor::kit::RADIUS.into(),
+            radius: crate::styles::RADIUS.into(),
             color: border,
         },
         ..iced::widget::button::Style::default()

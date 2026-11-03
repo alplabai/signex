@@ -39,6 +39,8 @@ mod browser;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
+#[cfg(test)]
+mod datasheet_open_tests;
 mod datasheet_save;
 mod deferred_close;
 mod document_options;
@@ -515,6 +517,10 @@ impl Signex {
             }
             LibraryMessage::ComponentsPanelSetFilter(value) => {
                 self.library.components_panel.filter = value;
+                Task::none()
+            }
+            LibraryMessage::IdClashNoticesDismissed => {
+                self.library.id_clash_notices.clear();
                 Task::none()
             }
             LibraryMessage::ComponentsPanelAddLibrary(source) => {

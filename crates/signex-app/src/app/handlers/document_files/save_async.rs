@@ -45,8 +45,8 @@ impl Signex {
         let source = save_as_from.clone().unwrap_or_else(|| target.clone());
         // A rename or delete still moving either file would recreate it or
         // lose these bytes (#859).
-        self.refuse_while_path_op(&source, "saved")?;
-        self.refuse_while_path_op(&target, "saved")?;
+        self.refuse_save_while_path_op(&source)?;
+        self.refuse_save_while_path_op(&target)?;
         self.refuse_while_project_moves(&source, "save")?;
         self.refuse_while_project_moves(&target, "save")?;
         let engine = self
@@ -104,7 +104,7 @@ impl Signex {
         path: PathBuf,
         compare_with_disk: bool,
     ) -> Result<Option<Task<Message>>> {
-        self.refuse_while_path_op(&path, "saved")?;
+        self.refuse_save_while_path_op(&path)?;
         self.refuse_while_project_moves(&path, "save")?;
         let tab = self
             .document_state
