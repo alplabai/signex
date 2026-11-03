@@ -158,14 +158,16 @@ pub fn view<'a>(
             );
         }
         let close_x = button(
-            container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE))
-                .width(CLOSE_HIT_SIZE)
-                .height(CLOSE_HIT_SIZE)
-                .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center),
+            container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE).line_height(
+                iced::widget::text::LineHeight::Absolute(CLOSE_HIT_SIZE.into()),
+            ))
+            .width(CLOSE_HIT_SIZE)
+            .height(CLOSE_HIT_SIZE)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center),
         )
         .padding(0)
-        .style(close_button_style(tokens, text_c))
+        .style(styles::subtle_button_with_rest(tokens, text_muted))
         .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
@@ -212,7 +214,7 @@ pub fn view<'a>(
     let baseline_color = styles::ti(tokens.border);
     let baseline = container(iced::widget::Space::new())
         .width(Length::Fill)
-        .height(1)
+        .height(BASELINE_HEIGHT)
         .style(move |_: &iced::Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(baseline_color)),
             ..iced::widget::container::Style::default()
@@ -233,7 +235,7 @@ pub fn view<'a>(
         // strip's fixed height.
         .height(Length::Fill)
         .padding(iced::Padding {
-            top: 2.0,
+            top: STRIP_TOP_PAD,
             right: 6.0,
             bottom: 0.0,
             left: 6.0,
@@ -246,13 +248,18 @@ pub fn view<'a>(
     .into()
 }
 
-/// Height of the document tab strip: two body-text lines for the pill plus
-/// the strip's top padding, 26 px. Both the strip and the empty-window
+/// Height of the document tab strip: the close-x hit box plus the pill's
+/// vertical padding, the strip's top padding and the 1 px baseline. Both
+/// the strip and the empty-window
 /// placeholder take their height from here, so they cannot diverge and the
 /// chrome does not jump when the first tab opens. It is derived from the
 /// default type scale and spacing, the same constants the strip's text and
 /// padding use; the app has no runtime UI scale for it to follow.
-pub const TAB_STRIP_HEIGHT: f32 = TS.body * 2.0 + SP.s;
+pub const TAB_STRIP_HEIGHT: f32 = CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT;
+
+/// Padding above the pills, and the baseline line below them.
+const STRIP_TOP_PAD: f32 = 2.0;
+const BASELINE_HEIGHT: f32 = 1.0;
 
 /// The strip drawn with no document open: same height and background as the
 /// tab strip, nothing in it.
@@ -345,35 +352,6 @@ pub(crate) fn read_only_tab_paths(
 }
 
 /// Round dot in the theme's error colour, shown before a dirty tab's title.
-/// Style of the per-tab close x: transparent at rest with the tab's text
-/// colour; hover and press add the shared overlay fills and brighten the
-/// glyph to the primary text colour.
-fn close_button_style(
-    tokens: &ThemeTokens,
-    rest_text: iced::Color,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    use crate::styles::tokens::{Overlay, overlay};
-    let bright = styles::ti(tokens.text);
-    let hover = overlay(tokens, Overlay::Hover);
-    let pressed = overlay(tokens, Overlay::Pressed);
-    move |_, status| {
-        let fill = match status {
-            button::Status::Hovered => Some(hover),
-            button::Status::Pressed => Some(pressed),
-            _ => None,
-        };
-        button::Style {
-            background: fill.map(iced::Background::Color),
-            text_color: if fill.is_some() { bright } else { rest_text },
-            border: iced::Border {
-                radius: 3.0.into(),
-                ..iced::Border::default()
-            },
-            ..button::Style::default()
-        }
-    }
-}
-
 fn dirty_dot<'a>(tokens: &ThemeTokens) -> Element<'a, TabMessage> {
     let colour = styles::ti(tokens.error);
     let d = dirty_dot_diameter(TAB_FONT_SIZE);
@@ -427,7 +405,8 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
 #[cfg(test)]
 mod tests {
     use super::{
-        READ_ONLY_TOOLTIP, dirty_dot_diameter, dirty_tab_paths, ellipsize_title,
+        BASELINE_HEIGHT, CLOSE_GLYPH_SIZE, CLOSE_HIT_SIZE, READ_ONLY_TOOLTIP, SP, STRIP_TOP_PAD,
+        TAB_STRIP_HEIGHT, dirty_dot_diameter, dirty_tab_paths, ellipsize_title,
         read_only_tab_paths, reveal_active_tab, reveal_offset, tab_is_dirty, tab_tooltip,
     };
     use crate::app::{TabInfo, TabKind};
@@ -441,7 +420,6 @@ mod tests {
         use iced::Length;
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
-        assert_eq!(super::TAB_STRIP_HEIGHT, 26.0);
 
         let placeholder = super::placeholder::<()>(&tokens);
         assert_eq!(placeholder.as_widget().size().height, fixed);
@@ -606,14 +584,15 @@ mod tests {
     }
 
     /// The close x shows hover and pressed feedback in every built-in
-    /// theme (light and dark): the fill and glyph both change from rest.
+    /// theme, on an active and an inactive tab alike: the rest colour is
+    /// `text_secondary`, so hover can brighten the glyph to `text`.
     #[test]
     fn close_button_hover_and_pressed_differ_from_rest() {
         use iced::widget::button::Status;
         for &id in signex_types::theme::ThemeId::BUILTINS {
             let tokens = signex_types::theme::theme_tokens(id);
             let rest_text = crate::styles::ti(tokens.text_secondary);
-            let style = super::close_button_style(&tokens, rest_text);
+            let style = crate::styles::subtle_button_with_rest(&tokens, rest_text);
             let theme = iced::Theme::Dark;
             let active = style(&theme, Status::Active);
             let hovered = style(&theme, Status::Hovered);
@@ -622,6 +601,18 @@ mod tests {
             assert_ne!(hovered.background, active.background, "{id:?}");
             assert_ne!(pressed.background, hovered.background, "{id:?}");
             assert_ne!(hovered.text_color, active.text_color, "{id:?}");
+        }
+    }
+
+    /// The close hit box fits inside the strip with the pill padding,
+    /// top padding and baseline around it, and the glyph fits the box.
+    #[test]
+    fn the_close_hit_box_fits_the_strip() {
+        const {
+            assert!(
+                CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT <= TAB_STRIP_HEIGHT
+            );
+            assert!(CLOSE_GLYPH_SIZE <= CLOSE_HIT_SIZE);
         }
     }
 }

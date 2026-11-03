@@ -246,6 +246,7 @@ where
                     .width(Length::Shrink);
                 // Leading icon column — fixed-width for alignment.
                 if let Some(handle) = icon {
+                    // Tint only via `icon_style` (disabled rows); never always.
                     row_w = row_w.push(
                         svg(handle)
                             .width(20)
