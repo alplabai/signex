@@ -172,6 +172,9 @@ pub(super) fn bake_solution_with(
         state.refresh_pads_from_primitive(footprint);
     }
 
+    state
+        .sketch_solve
+        .set_redundancy_owed(out.redundancy_pending);
     state.last_solve = Some(out);
     Ok(())
 }
@@ -194,6 +197,7 @@ pub(super) fn discard_failed_solve(
     // (no output), so `entity_colours` never runs; without
     // this the stale DoF colours stayed on screen.
     state.last_solve = None;
+    state.sketch_solve.clear_redundancy_owed();
     // `debug!`, not `warn!`: a drag fails on every pointer tick and a
     // warning here would flush the 200-entry Messages ring. The user hears
     // the failure once, from `report_solve_failure`.

@@ -512,8 +512,11 @@ pub(super) fn solve_and_bake(
     // also runs the DOF analysis, which the budget does not bound: 14 ms at
     // n = 254, and for an already-converged sketch 92 ms at n = 574
     // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
-    // A converged sketch is never refused for its size, so it still bakes.
-    match state.sketch_solver.solve(sketch, &resolved) {
+    // The redundancy pass is left out and runs off-thread (#1685). A converged sketch is never refused for its size, so it still bakes.
+    match state
+        .sketch_solver
+        .solve_deferring_redundancy(sketch, &resolved)
+    {
         Ok(out) => bake_solution(state, footprint, &resolved, out)?,
         Err(e) => return Err(discard_failed_solve(state, e)),
     }

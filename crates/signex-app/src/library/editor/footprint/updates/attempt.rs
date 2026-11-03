@@ -33,6 +33,7 @@ fn leaves_owed_solve_alone(msg: &FootprintEditorMsg) -> bool {
         FootprintEditorMsg::SketchMovePoint { .. }
             | FootprintEditorMsg::SketchMoveLine { .. }
             | FootprintEditorMsg::SketchSolved { .. }
+            | FootprintEditorMsg::RedundancyChecked { .. }
             | FootprintEditorMsg::CursorAt { .. }
             | FootprintEditorMsg::ViewScaleChanged { .. }
     )
