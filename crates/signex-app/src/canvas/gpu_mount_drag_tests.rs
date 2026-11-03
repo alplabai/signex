@@ -938,3 +938,88 @@ fn a_drag_held_by_a_lock_says_so_once_per_drag() {
         assert_eq!(notices_since(second), 1, "a new drag says it again");
     });
 }
+
+/// `count` horizontal wires 2.54 mm apart, the first locked, all selected.
+fn locked_first_of(count: usize) -> (CanvasSlot, uuid::Uuid) {
+    let wire = |i: usize| signex_types::schematic::Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: signex_types::schematic::Point::new(5.08, 5.08 + 2.54 * i as f64),
+        end: signex_types::schematic::Point::new(10.08, 5.08 + 2.54 * i as f64),
+        stroke_width: 0.25,
+        unknown_columns: Default::default(),
+        locked: i == 0,
+    };
+    let wires: Vec<_> = (0..count).map(wire).collect();
+    let locked = wires[0].uuid;
+    let selected = wires
+        .iter()
+        .map(|w| SelectedItem::new(w.uuid, SelectedKind::Wire))
+        .collect();
+    let sheet = SchematicSheet {
+        wires,
+        ..Default::default()
+    };
+    let mut slot = slot_with(&sheet);
+    slot.selected = selected;
+    (slot, locked)
+}
+
+/// Drag the selection of [`locked_first_of`] right on a plain shift and
+/// return the locked wire's start x and the last wire's on the moving layer,
+/// and how many notices name the locked wire.
+fn plain_shift_drag(count: usize, keep_wires: bool) -> (f64, f64, usize) {
+    let _ = crate::diagnostics::init_logging();
+    let (slot, locked) = locked_first_of(count);
+    let overrides = Default::default();
+    let filters = Default::default();
+    let mut prefs = test_prefs(&overrides, &filters);
+    prefs.move_keeps_wires = keep_wires;
+    let overlay = SchematicCanvas::new(&slot, prefs).gpu_overlay();
+    let since = crate::diagnostics::recent_entries()
+        .iter()
+        .map(|e| e.id)
+        .max()
+        .unwrap_or(0);
+    let mut state = CanvasState::default();
+    send(
+        &overlay,
+        &mut state,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        at(80.0, 60.64),
+    );
+    drag_to(&overlay, &mut state, 120.0);
+    drag_to(&overlay, &mut state, 125.0);
+    assert!(state.move_dragging, "the fixture starts a drag");
+    let frame = overlay.live_drag().expect("live");
+    let x_of = |id: uuid::Uuid| {
+        frame
+            .moving
+            .wires
+            .iter()
+            .find(|w| w.uuid == id)
+            .expect("on the moving layer")
+            .start
+            .x
+    };
+    let free = slot.selected.last().expect("selected").uuid;
+    let notices = crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.id > since && e.message.contains("wire (5.08, 5.08)"))
+        .count();
+    (x_of(locked), x_of(free), notices)
+}
+
+/// #1918: on both plain-shift paths (keep-wires off; a selection past the
+/// engine-pass cap) the ghost leaves a locked wire in place, moves the free
+/// ones, and names the lock once. One test, since the paths share a log ring
+/// and a notice needle.
+#[test]
+fn a_plain_shift_drag_holds_a_locked_item_and_names_it() {
+    let oversize = drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS + 1;
+    for (count, keep_wires) in [(2, false), (oversize, true)] {
+        let (locked_x, free_x, notices) = plain_shift_drag(count, keep_wires);
+        assert_eq!(locked_x, 5.08, "the locked wire stays put ({count})");
+        assert!(free_x > 5.08, "the free wire follows the cursor ({count})");
+        assert_eq!(notices, 1, "named once per drag ({count})");
+    }
+}

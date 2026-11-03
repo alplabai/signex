@@ -31,7 +31,7 @@ fn app_with_empty_sheet() -> Signex {
 fn place_menu_component_opens_the_picker() {
     let mut app = app_with_empty_sheet();
     assert!(app.library.picker.is_none());
-    let _ = app.update(Message::Menu(MenuMessage::PlaceComponent));
+    let _ = app.update(crate::menu_support::menu_row("open_components_panel"));
     assert!(app.library.picker.is_some());
     assert_eq!(app.interaction_state.current_tool, Tool::Select);
 }

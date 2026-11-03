@@ -632,3 +632,205 @@ fn browsing_a_file_of_an_open_library_is_not_called_unopened() {
     assert_eq!(bound.library_id, f.library_id);
     assert_eq!(bound.uuid, held_uuid);
 }
+
+/// A mounted library nested in another's folder, in a directory that also
+/// holds an unmounted `.snxlib` (so the on-disk layout rule cannot name one).
+#[test]
+fn browsing_a_file_of_a_nested_open_library_binds_from_the_inner_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let nested = tmp.path().join("cells-lib").join("vendor");
+    let snxlib = nested.join("v.snxlib");
+    let id = Uuid::now_v7();
+    {
+        let manifest = SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: id,
+            library: LibrarySection {
+                name: "v".into(),
+                description: None,
+            },
+            mode: LibraryMode::default(),
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+            classes: Vec::new(),
+        };
+        drop(
+            LocalGitAdapter::init(
+                &snxlib,
+                manifest,
+                LibraryInitOptions {
+                    enable_git: false,
+                    use_lfs: false,
+                },
+            )
+            .expect("init"),
+        );
+        drop(LocalGitAdapter::recover_init(&snxlib).expect("recover_init"));
+    }
+    // A second `.snxlib` beside it: the on-disk layout rule names neither.
+    std::fs::write(nested.join("other.snxlib"), "").unwrap();
+    f.app.library.open_library(nested.join("v.snxlib")).unwrap();
+    let held = nested.join("symbols").join("Held.snxsym");
+    std::fs::create_dir_all(held.parent().unwrap()).unwrap();
+    std::fs::write(
+        &held,
+        SymbolFile::from_symbol(Symbol::empty("HELD"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    open_picker(&mut f);
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(held)));
+    assert!(f.app.library.primitive_picker.is_none());
+    let bound = bound_symbol(&f);
+    assert_eq!(bound.library_id, id);
+    assert_ne!(bound.library_id, f.library_id);
+}
+
+fn init_library(snxlib: &Path) -> Uuid {
+    let id = Uuid::now_v7();
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: id,
+        library: LibrarySection {
+            name: "inner".into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    };
+    drop(
+        LocalGitAdapter::init(
+            snxlib,
+            manifest,
+            LibraryInitOptions {
+                enable_git: false,
+                use_lfs: false,
+            },
+        )
+        .expect("init"),
+    );
+    drop(LocalGitAdapter::recover_init(snxlib).expect("recover_init"));
+    id
+}
+
+fn write_symbol(file: &Path) {
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        file,
+        SymbolFile::from_symbol(Symbol::empty("STRAY"))
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+}
+
+fn copy_question(f: &Fixture) -> Option<crate::library::loose_symbols::LooseSymbol> {
+    f.app
+        .library
+        .primitive_picker
+        .as_ref()
+        .and_then(|p| p.copy_confirm.clone())
+}
+
+/// A symbol file under a mounted library's folder but not in its `symbols/`
+/// is not held by it: it is offered as a copy, never bound dangling.
+#[test]
+fn browsing_a_stray_symbol_under_an_open_library_is_offered_as_a_copy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let before = bound_symbol(&f);
+    let stray = tmp
+        .path()
+        .join("cells-lib")
+        .join("drafts")
+        .join("Stray.snxsym");
+    write_symbol(&stray);
+    open_picker(&mut f);
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(stray)));
+    let question = copy_question(&f).expect("copy offered");
+    assert_eq!(question.library, None);
+    assert_eq!(bound_symbol(&f), before);
+}
+
+/// The nearest library is NOT open: the outer open library does not hold the
+/// file, so the question names the inner one instead of binding to the outer.
+#[test]
+fn browsing_a_symbol_of_an_unopened_nested_library_is_not_bound_to_the_outer_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let before = bound_symbol(&f);
+    let inner = tmp.path().join("cells-lib").join("vendor").join("v.snxlib");
+    init_library(&inner);
+    let held = inner.parent().unwrap().join("symbols").join("Held.snxsym");
+    write_symbol(&held);
+    open_picker(&mut f);
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(held)));
+    let question = copy_question(&f).expect("question raised");
+    assert_eq!(question.library, Some(inner));
+    assert_eq!(bound_symbol(&f), before);
+}
+
+fn open_footprint_picker(f: &mut Fixture) {
+    let task = f
+        .app
+        .update(Message::Library(LibraryMessage::OpenPrimitivePicker {
+            kind: PrimitiveKind::Footprint,
+            target: PrimitivePickerTarget::BrowserRow(f.address.clone()),
+        }));
+    settle(&mut f.app, task);
+}
+
+fn bound_footprint(f: &Fixture) -> Option<PrimitiveRef> {
+    f.app
+        .library
+        .set
+        .get(f.library_id)
+        .unwrap()
+        .read_row(TABLE, f.address.row_id)
+        .unwrap()
+        .footprint_ref
+}
+
+#[test]
+fn browsing_a_footprint_file_of_an_open_library_binds_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let wanted = Uuid::now_v7();
+    let file = tmp
+        .path()
+        .join("cells-lib")
+        .join("footprints")
+        .join(format!("{wanted}.snxfpt"));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "").unwrap();
+    open_footprint_picker(&mut f);
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(file)));
+    assert!(f.app.library.primitive_picker.is_none());
+    assert_eq!(
+        bound_footprint(&f),
+        Some(PrimitiveRef::new(f.library_id, wanted))
+    );
+}
+
+#[test]
+fn browsing_a_footprint_file_outside_the_primitive_folders_is_an_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = fixture(tmp.path());
+    let before = bound_footprint(&f);
+    let file = tmp
+        .path()
+        .join("cells-lib")
+        .join("drafts")
+        .join(format!("{}.snxfpt", Uuid::now_v7()));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "").unwrap();
+    open_footprint_picker(&mut f);
+    picker(&mut f.app, PrimitivePickerMsg::BrowseResult(Some(file)));
+    let open = f.app.library.primitive_picker.as_ref().expect("still open");
+    assert!(open.error.is_some());
+    assert_eq!(bound_footprint(&f), before);
+}
