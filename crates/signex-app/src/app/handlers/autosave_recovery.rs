@@ -475,5 +475,14 @@ mod tests {
             result: Ok(RestoredDocument::Pcb(Box::new(board))),
         });
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+        let Some(crate::app::TabDocument::Pcb(restored)) = app
+            .document_state
+            .tabs
+            .last()
+            .and_then(|tab| tab.cached_document.as_ref())
+        else {
+            panic!("pcb tab holds the restored board");
+        };
+        assert!(restored.unknown.load_repairs.is_empty());
     }
 }

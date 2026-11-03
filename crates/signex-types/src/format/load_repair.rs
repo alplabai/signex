@@ -93,7 +93,7 @@ impl SheetLoadRepair {
                 old,
                 new,
                 owner,
-                ..
+                holder,
             } => {
                 let mut text = format!("{} repeated uuid {old}; new uuid {new}", object.label());
                 if let Some(owner) = owner {
@@ -103,6 +103,9 @@ impl SheetLoadRepair {
                         kind::SHEET_SYMBOL
                     };
                     text.push_str(&format!(" on {noun} {owner}"));
+                }
+                if *holder == kind::SHEET {
+                    text.push_str(" (the document's own id)");
                 }
                 if object.kind == kind::SHEET_SYMBOL {
                     text.push_str("; re-annotate its placed designators");

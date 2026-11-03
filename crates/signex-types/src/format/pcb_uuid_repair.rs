@@ -6,9 +6,10 @@
 //! otherwise it keeps its content and gets a deterministic new uuid.
 //!
 //! Two footprints sharing a uuid are refused at parse (their pads are keyed
-//! by it), so only a footprint carrying the board's own id is re-minted. A pad copied onto another footprint with the same id
-//! is never dropped (the other footprint is a different owner), only
-//! re-minted; footprint graphics carry no id.
+//! by it), so only a footprint carrying the board's own id is re-minted. A
+//! pad copied onto another footprint with the same id is never dropped (the
+//! other footprint is a different owner), only re-minted; footprint graphics
+//! carry no id.
 
 use super::load_repair::{SheetLoadRepair, kind};
 use super::uuid_repair::{IdSpace, by_field, no_name};
