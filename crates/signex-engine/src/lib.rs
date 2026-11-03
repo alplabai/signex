@@ -209,27 +209,45 @@ impl MovePreview {
     }
 
     /// The sheet as `MoveEach` would leave it: the same pass the commit runs
-    /// (rubber-banding, junction reconcile and the net guard included), on a
-    /// throwaway engine. Warnings are dropped.
+    /// (rubber-banding, junction reconcile, the net guard, the collinear fold
+    /// and the lock skip included), on a throwaway engine. Warnings are
+    /// dropped.
     #[must_use]
     pub fn moved(&self, moves: &[(SelectedItem, f64, f64)], keep_wires: bool) -> SchematicSheet {
+        self.moved_with(moves, keep_wires, &Default::default()).0
+    }
+
+    /// [`Self::moved`] with the net colours the commit passes the engine (two
+    /// wires of different colours are not folded), and the references of the
+    /// items the lock holds back, sorted: the reason a held item does not move.
+    #[must_use]
+    pub fn moved_with(
+        &self,
+        moves: &[(SelectedItem, f64, f64)],
+        keep_wires: bool,
+        wire_colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    ) -> (SchematicSheet, Vec<String>) {
         let Ok(mut engine) = Engine::new(self.sheet.clone()) else {
-            return self.sheet.clone();
+            return (self.sheet.clone(), Vec::new());
         };
         engine.preset_before = Some(self.before.clone());
+        engine.set_wire_colors(wire_colors.clone());
         // The commit skips locked symbols; the ghost must too, or it shows
         // nothing moving while the free items jump on release.
-        let (command, _) = engine.without_locked(Command::MoveEach {
-            moves: moves.to_vec(),
-            keep_wires,
-        });
+        let (command, held) = engine.without_locked_naming(
+            Command::MoveEach {
+                moves: moves.to_vec(),
+                keep_wires,
+            },
+            &|symbol| format!("a wire on {symbol}'s pin ({symbol} is locked)"),
+        );
         let Some(command) = command else {
-            return self.sheet.clone();
+            return (self.sheet.clone(), held);
         };
         if engine.execute(command).is_err() {
-            return self.sheet.clone();
+            return (self.sheet.clone(), held);
         }
-        engine.document().clone()
+        (engine.document().clone(), held)
     }
 }
 

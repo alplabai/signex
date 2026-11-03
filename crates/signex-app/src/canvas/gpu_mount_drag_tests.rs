@@ -5,7 +5,7 @@
 use iced::keyboard::{self, Key, Modifiers, key::Named};
 use iced::{Event, mouse, window};
 use signex_gfx::scene::Scene;
-use signex_types::schematic::{SchDrawing, SelectedItem, SelectedKind};
+use signex_types::schematic::{SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::gpu_drag::SchematicDragShaderProgram;
 use super::gpu_mount::SchematicShaderProgram;
@@ -816,5 +816,125 @@ fn the_moving_generation_holds_when_nothing_moved_and_changes_when_it_does() {
         drag_to(&p.overlay, &mut state, 170.0);
         let stepped = moving(p).generation.expect("generation");
         assert_ne!(stepped, first, "a cursor step rebuilds and re-keys");
+    });
+}
+
+/// Two collinear wires a drag of the first lines up end to end: the static
+/// layer then loses both (the folded wire is the one moving item). `grid` is
+/// 1.27 mm, so the 5.08 mm slide lands exactly on the second wire's end.
+fn fold_sheet() -> (SchematicSheet, uuid::Uuid) {
+    let wire = |x0: f64, x1: f64| signex_types::schematic::Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: signex_types::schematic::Point::new(x0, 5.08),
+        end: signex_types::schematic::Point::new(x1, 5.08),
+        stroke_width: 0.25,
+        unknown_columns: Default::default(),
+        locked: false,
+    };
+    let (moving, still) = (wire(5.08, 10.08), wire(15.16, 20.0));
+    let id = moving.uuid;
+    let sheet = SchematicSheet {
+        wires: vec![moving, still],
+        ..Default::default()
+    };
+    (sheet, id)
+}
+
+/// Static-layer wire count after dragging the first wire of [`fold_sheet`]
+/// 5 mm right, with that wire `coloured` or not.
+fn static_wires_after_fold_drag(coloured: bool) -> (usize, usize) {
+    let (sheet, id) = fold_sheet();
+    let overrides = if coloured {
+        std::collections::HashMap::from([(id, signex_types::theme::Color::new(0, 255, 0, 255))])
+    } else {
+        Default::default()
+    };
+    let mut slot = slot_with(&sheet);
+    slot.selected = vec![SelectedItem::new(id, SelectedKind::Wire)];
+    rig_with(&slot, &overrides, |p| {
+        let mut state = CanvasState::default();
+        let full = content(p).scene.lines.len();
+        send(
+            &p.overlay,
+            &mut state,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            at(80.0, 60.64),
+        );
+        drag_to(&p.overlay, &mut state, 120.0);
+        assert!(state.move_dragging, "the fixture starts a drag");
+        (full, content(p).scene.lines.len())
+    })
+}
+
+/// #1716: the ghost folds like the commit, and keeps two wires apart when the
+/// commit would (different net colours, which the canvas hands the engine).
+#[test]
+fn the_drag_ghost_folds_wires_unless_their_net_colours_differ() {
+    let (full, folded) = static_wires_after_fold_drag(false);
+    assert_eq!(folded, full - 2, "both wires leave the static layer");
+
+    let (full, kept) = static_wires_after_fold_drag(true);
+    assert_eq!(kept, full - 1, "a coloured wire is not folded");
+}
+
+fn release() -> Event {
+    Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+}
+
+/// #1716: a drag of a locked wire names it in the Messages panel once per
+/// drag, before the drop, and a new press-release-press starts a new notice.
+#[test]
+fn a_drag_held_by_a_lock_says_so_once_per_drag() {
+    let _ = crate::diagnostics::init_logging();
+    let wire = signex_types::schematic::Wire {
+        uuid: uuid::Uuid::now_v7(),
+        start: signex_types::schematic::Point::new(5.08, 6.35),
+        end: signex_types::schematic::Point::new(10.08, 6.35),
+        stroke_width: 0.25,
+        unknown_columns: Default::default(),
+        locked: true,
+    };
+    let selected = SelectedItem::new(wire.uuid, SelectedKind::Wire);
+    let sheet = SchematicSheet {
+        wires: vec![wire],
+        ..Default::default()
+    };
+    let mut slot = slot_with(&sheet);
+    slot.selected = vec![selected];
+    // Entries newer than `since`, so the 200-entry ring shared with parallel
+    // tests cannot evict what an earlier phase counted.
+    let latest = || {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .map(|e| e.id)
+            .max()
+            .unwrap_or(0)
+    };
+    let notices_since = |since: u64| {
+        crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.id > since && e.message.contains("wire (5.08, 6.35)"))
+            .count()
+    };
+    let press = |p: &Programs<'_>, state: &mut CanvasState| {
+        let event = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        send(&p.overlay, state, event, at(80.0, 70.8));
+    };
+    rig(&slot, |p| {
+        let mut state = CanvasState::default();
+        let first = latest();
+        press(p, &mut state);
+        drag_to(&p.overlay, &mut state, 120.0);
+        assert!(state.move_dragging, "the fixture starts a drag");
+        drag_to(&p.overlay, &mut state, 140.0);
+        assert_eq!(notices_since(first), 1, "named once while the drag goes on");
+
+        send(&p.overlay, &mut state, release(), at(140.0, 60.0));
+        // Two quick presses would read as a double-click, not a new drag.
+        state.last_click_time = None;
+        let second = latest();
+        press(p, &mut state);
+        drag_to(&p.overlay, &mut state, 120.0);
+        assert_eq!(notices_since(second), 1, "a new drag says it again");
     });
 }
