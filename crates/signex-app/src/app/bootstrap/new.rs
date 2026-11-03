@@ -631,6 +631,7 @@ impl Signex {
                 pending_port: None,
                 bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
                 hover_symbol_uuid: None,
+                clicked_pin: None,
                 hover_started_at: None,
                 hover_screen_pos: None,
             },

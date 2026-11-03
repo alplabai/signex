@@ -11,6 +11,7 @@ mod label_class_pick;
 mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
+mod pin_focus;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
@@ -208,6 +209,8 @@ impl Signex {
                 .active_canvas_mut()
                 .clear_content_cache();
         }
+        // Read once: a later refresh (box select, edit) shows no pin focus.
+        let clicked_pin = self.interaction_state.clicked_pin.take();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
@@ -247,6 +250,12 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            pin_focus::focus_clicked_pin(
+                &mut self.document_state.panel_ctx.selection_info,
+                engine.document(),
+                details.selected_uuid,
+                clicked_pin,
+            );
             // A tab opened through a placement shows, and edits, that
             // placement's designator (#1151).
             if let Some(designator) = self

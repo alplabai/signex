@@ -491,6 +491,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         c
                     },
                 ));
+
+                col = super::pins::push_pins_section(col, ctx, muted, primary, border_c);
             }
         }
         Some(signex_types::schematic::SelectedKind::SymbolRefField)

@@ -144,6 +144,10 @@ pub struct InteractionState {
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).
     pub hover_symbol_uuid: Option<uuid::Uuid>,
+    /// The pin (its key) a click on a placed symbol landed on, with that
+    /// symbol. Set by the click, read once by the next selection refresh to
+    /// bring the pin forward in Properties.
+    pub clicked_pin: Option<(uuid::Uuid, String)>,
     /// Wall-clock timestamp at which `hover_symbol_uuid` was first set
     /// to its current value. Used by the view to gate the tooltip
     /// behind a 250 ms delay so hovering is a deliberate gesture.

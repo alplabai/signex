@@ -10,6 +10,7 @@ mod lock;
 mod multi_edit;
 mod net_class_table;
 mod paste_edit;
+mod pin_pick;
 mod placement;
 mod power_port;
 mod project_general;
@@ -84,6 +85,7 @@ pub use net_class_table::{
     StepId as NetClassStepId, apply_net_class_command,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
+pub use pin_pick::{PIN_PICK_TOLERANCE_MM, symbol_pin_at};
 pub use placement::PlacementPayload;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{

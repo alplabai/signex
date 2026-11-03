@@ -11,6 +11,13 @@ pub mod info_keys {
     pub const REFERENCE: &str = "Reference";
     /// The text of a text item; on a designator field, the designator.
     pub const TEXT: &str = "Text";
+    /// Prefix of a placed symbol's pin rows: `Pin: <number>` carries
+    /// `name \t electrical type \t hidden (Yes/No)`.
+    pub const PIN_PREFIX: &str = "Pin: ";
+    /// The pin the click that selected the symbol landed on (its key).
+    pub const FOCUSED_PIN: &str = "Focused Pin";
+    /// Prefix of the net a pin sits on, `Pin Net: <number>`; absent when open.
+    pub const PIN_NET_PREFIX: &str = "Pin Net: ";
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +266,26 @@ impl Engine {
                 custom.sort_by(|a, b| a.0.cmp(b.0));
                 for (name, value) in custom {
                     info.push((format!("Param: {name}"), value.clone()));
+                }
+                // One row per pin of the placed unit: `name \t type \t hidden`.
+                if let Some(lib) = self.document.resolve_lib_symbol(symbol) {
+                    for lp in signex_types::schematic::instance_pins(&lib, symbol) {
+                        let pin = &lp.pin;
+                        let key = if pin.number.is_empty() {
+                            &pin.name
+                        } else {
+                            &pin.number
+                        };
+                        info.push((
+                            format!("{}{key}", info_keys::PIN_PREFIX),
+                            format!(
+                                "{}\t{:?}\t{}",
+                                pin.name,
+                                pin.direction,
+                                if pin.visible { "No" } else { "Yes" }
+                            ),
+                        ));
+                    }
                 }
             }
             SelectedKind::Wire => {
