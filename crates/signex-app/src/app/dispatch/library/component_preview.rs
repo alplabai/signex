@@ -319,7 +319,7 @@ impl Signex {
         };
         let prepared = refusal.and_then(|()| Self::row_write_of(state, written_assets));
         if prepared.is_err() {
-            state.saving_row = None;
+            state.abort_save();
         }
         prepared.map(Some)
     }
@@ -367,7 +367,7 @@ impl Signex {
     /// offers "Reload saved version" when the row moved on.
     fn row_write_failed(&mut self, address: &EditorAddress, stale: bool) {
         if let Some(state) = self.library.editors.get_mut(address) {
-            state.saving_row = None;
+            state.abort_save();
             if stale {
                 state.stale_base = true;
             }
@@ -395,9 +395,17 @@ impl Signex {
             // Only the new base revision is taken over, and the pins and
             // version a cascade moved the saved copy to (#1840).
             crate::library::preview_rebase::rebase_onto_cascade(&mut state.row, &row);
+            // Whatever the history says, the row differs from the copy
+            // stored: no undo may read it clean.
+            if !state.history.is_dirty() {
+                state.history.forget();
+            }
+            state.dirty = true;
         } else {
             state.row = row;
-            state.dirty = false;
+            // Clean at the saved position; a position forgotten meanwhile
+            // (an edit the history cannot reproduce) stays dirty.
+            state.sync_dirty();
             state.datasheet_errors.clear();
         }
         // Written and committed: those staged copies are spent (a PDF

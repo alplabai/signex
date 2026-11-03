@@ -326,6 +326,8 @@ impl Signex {
         state.binding_primitive = true;
         // The row changed under any reload still being read.
         state.note_edit();
+        // No snapshot holds the resolved primitive: undo cannot cross a bind.
+        state.restart_history();
         let table = address.table.clone();
         let row_id = address.row_id;
         let msg = bind_message(kind);

@@ -12,7 +12,10 @@
 //!   library manifest) is a path in [`DirtyDocuments`], whether or not a
 //!   tab shows it, so a parked engine stays marked after its tab closed;
 //! - a Component editor keeps its flag in `LibraryState.editors`, keyed by
-//!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`.
+//!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`. The flag
+//!   follows a row undo history with a saved position (`RowHistory`, #1854),
+//!   so Undo back to the saved row reads clean; a half-typed value in an edit
+//!   buffer still counts as unsaved (`has_unsaved_edits`).
 //!
 //! Tabs, the title bar count, the quit and close gates, Save All and the
 //! project tree all ask [`DocumentState::is_document_dirty`] or one of its

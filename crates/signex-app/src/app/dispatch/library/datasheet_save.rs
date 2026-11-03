@@ -175,7 +175,7 @@ impl Signex {
         // the copy saved is the row as it is now.
         crate::library::component_preview::updates::flush_edit_buffers(state)
             .map_err(anyhow::Error::msg)?;
-        state.saving_row = Some(state.row.clone());
+        state.begin_save();
         state.saving_generation = generation;
         state.saving_batch = None;
         self.begin_row_write(address, &[], batch)
@@ -204,7 +204,7 @@ impl Signex {
         };
         crate::library::component_preview::updates::flush_edit_buffers(state)
             .map_err(anyhow::Error::msg)?;
-        state.saving_row = Some(state.row.clone());
+        state.begin_save();
         state.saving_batch = batch;
         let generation = self.document_state.document_saves.mint_generation();
         state.saving_generation = generation;
@@ -280,7 +280,7 @@ impl Signex {
         let stored = result
             .inspect_err(|_| {
                 if let Some(state) = self.library.editors.get_mut(address) {
-                    state.saving_row = None;
+                    state.abort_save();
                 }
             })
             .map_err(anyhow::Error::msg);

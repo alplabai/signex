@@ -10,7 +10,7 @@ disk?" is answered by `DocumentState::is_document_dirty(path)`
 |---|---|---|
 | Symbol or footprint draft | the editor's own `dirty` (private) | Roughly a hundred editor update sites flip it with `&mut editor` and no workspace state. |
 | Schematic sheet, PCB, `.snxprj`, `library.toml` | a path in `DirtyDocuments` (private) | The mark must outlive the tab: a parked engine stays dirty after its tab closed. |
-| Component editor row | `LibraryState.editors[..].dirty` | Keyed by row, not file; the tab dot reads it through `tab_bar::dirty_tab_paths`. |
+| Component editor row | `LibraryState.editors[..].dirty`, derived from its `RowHistory` | Keyed by row, not file; the tab dot reads it through `tab_bar::dirty_tab_paths`. |
 
 Everything else is derived. `TabInfo` has no dirty flag: the tab dot, the
 title-bar "N unsaved", the quit and close-project gates, Save All, the
@@ -163,6 +163,36 @@ own first step off the history.
 
 Undo and Redo own the flag: the symbol canvas's Ctrl+Z / Ctrl+Y
 (`SymbolEditorMsg::Undo`) must not call `mark_dirty` afterwards.
+
+## Component editor row save point (#1854)
+
+A Component editor keeps whole-row snapshots (`library/state/preview_history.rs`,
+depth 100) and the same `SavePoint` as a draft. Ctrl+Z / Ctrl+Y in the tab step
+it (`handlers/component_history.rs`); versions, pins and the base revision stay
+the live row's, only the edits move, and the typed-but-uncommitted buffers are
+dropped. An inline edit that changed the row is one step
+(`begin_edit` / `finish_edit` around `apply_inline_edit` and the save-time buffer
+flush). The flag after Undo, Redo or a landed save is "away from the saved
+position", and a half-typed value in `params_edit_buf` still counts as unsaved
+(`has_unsaved_edits`) whatever the history says.
+
+- The point is set where the save snapshot is taken (`begin_save`, beside
+  `saving_row`). A row with a write in flight stays dirty whatever Undo does;
+  the landing re-derives the flag, and a landed copy that differs from the row
+  on screen (`edited_since_save`) is dirty and forgets the point.
+- A failed or abandoned write (`abort_save`) forgets the point.
+- Forgotten, so the row stays dirty until the next save: an edit after undoing
+  below the point, the saved step evicted at depth 100, and an edit that marks
+  the preview dirty without changing the row (the simulation model, which the
+  snapshots do not hold).
+- A re-bound primitive (an edit that changes a primitive reference, and the
+  bind from the picker) drops every step: a snapshot cannot hold the resolved
+  symbol, footprint or model. The row keeps whatever dirtiness it had.
+- A reload replaces the editor state, so its history is new and the row clean;
+  Close and Discard remove the state with its history. There is no autosave
+  recovery for a row, so no recovered copy starts clean.
+
+The title-bar count still leaves a Component row out (see "Readers that differ").
 
 ## Why a draft can also sit in the set
 
