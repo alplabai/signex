@@ -73,7 +73,7 @@ pub fn pin_text_layout(
     name_offset: f64,
 ) -> PinTextLayout {
     let (rotation, folded) = folded_angle(dir);
-    // Use the snapped direction below too, so positions carry no noise.
+    // Place the texts along the snapped angle, so placement follows it.
     let dir = (rotation.cos(), rotation.sin());
     let dir = if folded { (-dir.0, -dir.1) } else { dir };
     // The text's top, as a screen direction.
