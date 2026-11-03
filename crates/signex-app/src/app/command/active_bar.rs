@@ -32,10 +32,9 @@
 //!   - `ActiveBarAction::NetColorDarkGreen`
 //!   - `ActiveBarAction::NetColorCustom`
 //!
-//! Two more are absent because [`super::bridge`] already maps their ids to
-//! a different message: `select_all` goes through `SelectionRequest` and
-//! `place_net_label` through the tool picker. Listing them here would give
-//! one id two meanings.
+//! One more is absent because [`super::bridge`] already maps its id to a
+//! different message: `select_all` goes through `SelectionRequest`. Listing
+//! it here would give one id two meanings.
 //!
 //! See `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 
@@ -106,6 +105,7 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ),
     ("place_harness_entry", ActiveBarAction::PlaceHarnessEntry),
     ("place_junction", ActiveBarAction::PlaceJunction),
+    ("place_net_label", ActiveBarAction::PlaceNetLabel),
     ("place_no_erc", ActiveBarAction::PlaceNoERC),
     ("place_note", ActiveBarAction::PlaceNote),
     (
@@ -256,8 +256,7 @@ mod tests {
 
     /// Actions whose id maps to a DIFFERENT message in `bridge.rs`, so
     /// they must not appear in this table.
-    const MAPPED_ELSEWHERE: &[ActiveBarAction] =
-        &[ActiveBarAction::PlaceNetLabel, ActiveBarAction::SelectAll];
+    const MAPPED_ELSEWHERE: &[ActiveBarAction] = &[ActiveBarAction::SelectAll];
 
     /// Every id in the table must resolve in the command catalog —
     /// otherwise it is a name the Keyboard Shortcuts pane cannot label and

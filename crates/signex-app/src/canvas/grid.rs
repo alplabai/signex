@@ -59,13 +59,87 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
 /// process global that this function used to read from inside `draw`.
 #[expect(
     clippy::too_many_arguments,
-    reason = "8 arguments: camera + grid metrics + page bounds + colour + glyph style, all per-frame draw inputs"
+    reason = "9 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale, all per-frame draw inputs"
 )]
 pub fn draw_grid(
     frame: &mut canvas::Frame,
     camera: &Camera,
     grid_mm: f32,
     bounds: iced::Rectangle,
+    color: Color,
+    page_w: f32,
+    page_h: f32,
+    style: GridStyle,
+    device_px_per_logical_px: f32,
+) {
+    // #1940 - every glyph is clipped to the paper in this window's device
+    // pixels, so a dot or line straddling the edge never reaches the canvas.
+    let Some(clip) = paper_clip(camera, bounds, page_w, page_h, device_px_per_logical_px) else {
+        return;
+    };
+    frame.with_clip(clip, |frame| {
+        draw_grid_clipped(
+            frame, camera, grid_mm, bounds, clip, color, page_w, page_h, style,
+        );
+    });
+}
+
+/// The paper rectangle in screen px, shrunk inward to whole device pixels
+/// and cut to the canvas, or `None` when nothing of it is visible. Inward
+/// rounding keeps a fractional display scale from re-admitting a half pixel
+/// of grid outside the paper (#1888, #1916).
+pub(crate) fn paper_clip(
+    camera: &Camera,
+    bounds: iced::Rectangle,
+    page_w: f32,
+    page_h: f32,
+    device_px_per_logical_px: f32,
+) -> Option<iced::Rectangle> {
+    let tl = camera.world_to_screen(Point::new(0.0, 0.0), bounds);
+    let br = camera.world_to_screen(Point::new(page_w, page_h), bounds);
+    let k = if device_px_per_logical_px.is_finite() && device_px_per_logical_px > 0.0 {
+        device_px_per_logical_px
+    } else {
+        1.0
+    };
+    let left = (tl.x.max(0.0) * k).ceil() / k;
+    let top = (tl.y.max(0.0) * k).ceil() / k;
+    let right = (br.x.min(bounds.width) * k).floor() / k;
+    let bottom = (br.y.min(bounds.height) * k).floor() / k;
+    (right > left && bottom > top).then(|| {
+        iced::Rectangle::new(
+            Point::new(left, top),
+            iced::Size::new(right - left, bottom - top),
+        )
+    })
+}
+
+/// Grid stops `k * step` inside `[lo, hi]`. Multiplying (not accumulating)
+/// keeps the stops exact, and the range test keeps the last one on the paper
+/// instead of rounding the extent up to the next whole step (#1940).
+pub(crate) fn axis_stops(lo: f32, hi: f32, step: f32) -> impl Iterator<Item = f32> {
+    let eps = 1e-4;
+    let (first, last) = if step > 0.0 {
+        (
+            (lo / step - eps).ceil() as i64,
+            (hi / step + eps).floor() as i64,
+        )
+    } else {
+        (1, 0)
+    };
+    (first..=last).map(move |k| k as f32 * step)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the draw inputs of `draw_grid`, with the device scale already spent on `clip`"
+)]
+fn draw_grid_clipped(
+    frame: &mut canvas::Frame,
+    camera: &Camera,
+    grid_mm: f32,
+    bounds: iced::Rectangle,
+    clip: iced::Rectangle,
     color: Color,
     page_w: f32,
     page_h: f32,
@@ -106,15 +180,15 @@ pub fn draw_grid(
         return;
     }
 
-    let start_x = (wx_min / minor_mm).floor() * minor_mm;
-    let start_y = (wy_min / minor_mm).floor() * minor_mm;
-
     // Safety cap (adaptive step makes this very rare, but keep it).
-    let cols = ((wx_max - start_x) / minor_mm) as i32 + 1;
-    let rows = ((wy_max - start_y) / minor_mm) as i32 + 1;
+    let cols = ((wx_max - wx_min) / minor_mm) as i32 + 2;
+    let rows = ((wy_max - wy_min) / minor_mm) as i32 + 2;
     if (cols as i64) * (rows as i64) > 40_000 {
         return;
     }
+
+    // Half the thin stroke width, so a cross arm's end stays inside the clip.
+    const GLYPH_EDGE_SLACK: f32 = 0.3;
 
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
@@ -128,82 +202,62 @@ pub fn draw_grid(
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
     if matches!(style, GridStyle::Lines) {
-        let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
-        let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
-        let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
-        let page_right = camera.world_to_screen(Point::new(page_w, 0.0), bounds).x;
-        let line_y_top = page_top.max(0.0);
-        let line_y_bot = page_bot.min(bounds.height);
-        let line_x_left = page_left.max(0.0);
-        let line_x_right = page_right.min(bounds.width);
-        let mut wx = start_x;
-        while wx <= wx_max + minor_mm * 0.5 {
-            if wx >= 0.0 {
-                let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
-                if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
-                    let line =
-                        canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
-                    frame.stroke(&line, minor_stroke);
-                }
+        let (line_x_left, line_x_right) = (clip.x, clip.x + clip.width);
+        let (line_y_top, line_y_bot) = (clip.y, clip.y + clip.height);
+        for wx in axis_stops(wx_min, wx_max, minor_mm) {
+            let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
+            if sx >= line_x_left && sx <= line_x_right {
+                let line =
+                    canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
+                frame.stroke(&line, minor_stroke);
             }
-            wx += minor_mm;
         }
-        let mut wy = start_y;
-        while wy <= wy_max + minor_mm * 0.5 {
-            if wy >= 0.0 {
-                let sy = camera.world_to_screen(Point::new(0.0, wy), bounds).y;
-                if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
-                    let line = canvas::Path::line(
-                        Point::new(line_x_left, sy),
-                        Point::new(line_x_right, sy),
-                    );
-                    frame.stroke(&line, minor_stroke);
-                }
+        for wy in axis_stops(wy_min, wy_max, minor_mm) {
+            let sy = camera.world_to_screen(Point::new(0.0, wy), bounds).y;
+            if sy >= line_y_top && sy <= line_y_bot {
+                let line =
+                    canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
+                frame.stroke(&line, minor_stroke);
             }
-            wy += minor_mm;
         }
     } else {
-        let mut wy = start_y;
-        while wy <= wy_max + minor_mm * 0.5 {
-            if wy >= 0.0 {
-                let mut wx = start_x;
-                while wx <= wx_max + minor_mm * 0.5 {
-                    if wx >= 0.0 {
-                        let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
-                        if screen.x >= -dot_radius
-                            && screen.x <= bounds.width + dot_radius
-                            && screen.y >= -dot_radius
-                            && screen.y <= bounds.height + dot_radius
-                        {
-                            match style {
-                                GridStyle::Dots => {
-                                    let dot = canvas::Path::circle(screen, dot_radius);
-                                    frame.fill(&dot, dot_color);
-                                }
-                                GridStyle::SmallCrosses => {
-                                    let h = canvas::Path::line(
-                                        Point::new(screen.x - cross_arm, screen.y),
-                                        Point::new(screen.x + cross_arm, screen.y),
-                                    );
-                                    let v = canvas::Path::line(
-                                        Point::new(screen.x, screen.y - cross_arm),
-                                        Point::new(screen.x, screen.y + cross_arm),
-                                    );
-                                    frame.stroke(&h, minor_stroke);
-                                    frame.stroke(&v, minor_stroke);
-                                }
-                                // SAFETY: `Lines` short-circuits at the `if matches!(style, …Lines)`
-                                // early return at the top of this function (≈ line 150); this match
-                                // arm is structurally unreachable. If a new `GridStyle` variant ever
-                                // lands, it must be handled at BOTH sites.
-                                GridStyle::Lines => unreachable!(),
-                            }
-                        }
+        for wy in axis_stops(wy_min, wy_max, minor_mm) {
+            for wx in axis_stops(wx_min, wx_max, minor_mm) {
+                let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
+                // The whole glyph must sit inside the paper clip, so no
+                // renderer can draw it over the canvas background.
+                let reach = match style {
+                    GridStyle::SmallCrosses => cross_arm,
+                    _ => dot_radius,
+                } + GLYPH_EDGE_SLACK;
+                if screen.x - reach < clip.x
+                    || screen.x + reach > clip.x + clip.width
+                    || screen.y - reach < clip.y
+                    || screen.y + reach > clip.y + clip.height
+                {
+                    continue;
+                }
+                match style {
+                    GridStyle::Dots => {
+                        let dot = canvas::Path::circle(screen, dot_radius);
+                        frame.fill(&dot, dot_color);
                     }
-                    wx += minor_mm;
+                    GridStyle::SmallCrosses => {
+                        let h = canvas::Path::line(
+                            Point::new(screen.x - cross_arm, screen.y),
+                            Point::new(screen.x + cross_arm, screen.y),
+                        );
+                        let v = canvas::Path::line(
+                            Point::new(screen.x, screen.y - cross_arm),
+                            Point::new(screen.x, screen.y + cross_arm),
+                        );
+                        frame.stroke(&h, minor_stroke);
+                        frame.stroke(&v, minor_stroke);
+                    }
+                    // `Lines` took the branch above.
+                    GridStyle::Lines => unreachable!(),
                 }
             }
-            wy += minor_mm;
         }
     }
 
@@ -224,40 +278,80 @@ pub fn draw_grid(
         .with_color(major_color)
         .with_width(0.5);
 
-    let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
-    let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
-    let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
-    let page_right = camera.world_to_screen(Point::new(page_w, 0.0), bounds).x;
-    let line_y_top = page_top.max(0.0);
-    let line_y_bot = page_bot.min(bounds.height);
-    let line_x_left = page_left.max(0.0);
-    let line_x_right = page_right.min(bounds.width);
+    let (line_x_left, line_x_right) = (clip.x, clip.x + clip.width);
+    let (line_y_top, line_y_bot) = (clip.y, clip.y + clip.height);
 
-    let mut mx = (wx_min / major_mm).floor() * major_mm;
-    while mx <= wx_max {
+    for mx in axis_stops(wx_min, wx_max, major_mm) {
         let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
-        if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
+        if sx >= line_x_left && sx <= line_x_right {
             let line = canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
             frame.stroke(&line, stroke);
         }
-        mx += major_mm;
     }
 
-    let mut my = (wy_min / major_mm).floor() * major_mm;
-    while my <= wy_max {
+    for my in axis_stops(wy_min, wy_max, major_mm) {
         let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
-        if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
+        if sy >= line_y_top && sy <= line_y_bot {
             let line =
                 canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
             frame.stroke(&line, stroke);
         }
-        my += major_mm;
     }
 }
 
 #[cfg(test)]
 mod pitch_tests {
-    use super::{adaptive_pitch_mm, pitch_mm_exact};
+    use super::{adaptive_pitch_mm, axis_stops, paper_clip, pitch_mm_exact};
+    use crate::canvas::camera::Camera;
+    use iced::{Point, Rectangle, Size};
+
+    /// #1940 - no grid stop lies outside the sheet, for two sheet sizes.
+    #[test]
+    fn grid_stops_stay_on_the_sheet() {
+        // 297 and 420 are not multiples of 1.27, 2.54 or 5.08, which is
+        // what rounded the extent up past the paper edge.
+        for (w, h) in [(297.0_f32, 210.0_f32), (420.0, 297.0)] {
+            for step in [0.635_f32, 1.27, 2.54, 5.08] {
+                for v in axis_stops(0.0, w, step) {
+                    assert!((0.0..=w).contains(&v), "x {v} outside {w} (step {step})");
+                }
+                for v in axis_stops(0.0, h, step) {
+                    assert!((0.0..=h).contains(&v), "y {v} outside {h} (step {step})");
+                }
+                assert!(axis_stops(0.0, w, step).count() >= 2);
+            }
+        }
+    }
+
+    /// #1940 - the clip stays inside the paper's screen rect at a fractional
+    /// display scale, and lands on whole device pixels.
+    #[test]
+    fn paper_clip_is_inside_the_paper_at_fractional_scale() {
+        let bounds = Rectangle::new(Point::ORIGIN, Size::new(1000.0, 700.0));
+        for dpr in [1.0_f32, 1.25, 1.5, 1.75] {
+            for (w, h) in [(297.0_f32, 210.0_f32), (420.0, 297.0)] {
+                let cam = Camera {
+                    offset: Point::new(13.3, 9.7),
+                    scale: 2.37,
+                };
+                let clip = paper_clip(&cam, bounds, w, h, dpr).expect("visible");
+                let tl = cam.world_to_screen(Point::new(0.0, 0.0), bounds);
+                let br = cam.world_to_screen(Point::new(w, h), bounds);
+                assert!(clip.x >= tl.x.max(0.0) - 1e-3 && clip.y >= tl.y.max(0.0) - 1e-3);
+                assert!(clip.x + clip.width <= br.x.min(bounds.width) + 1e-3);
+                assert!(clip.y + clip.height <= br.y.min(bounds.height) + 1e-3);
+                let on_device = |v: f32| ((v * dpr).round() - v * dpr).abs() < 1e-3;
+                assert!(
+                    on_device(clip.x) && on_device(clip.x + clip.width),
+                    "dpr {dpr}"
+                );
+                assert!(
+                    on_device(clip.y) && on_device(clip.y + clip.height),
+                    "dpr {dpr} (y)"
+                );
+            }
+        }
+    }
 
     #[test]
     fn default_pcb_zoom_draws_a_multiple_of_the_grid() {

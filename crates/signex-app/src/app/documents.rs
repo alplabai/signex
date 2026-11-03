@@ -326,6 +326,11 @@ pub struct SymbolDocument {
     /// recorded; populated by `SymbolUndo` so the user can step
     /// forward again after undoing.
     pub redo_snapshots: Vec<crate::app::SymbolHistorySnapshot>,
+    /// Bumped by every history change: commit, undo, redo and a coalesced
+    /// field edit. Unlike the stack depths it moves at `HISTORY_DEPTH` and
+    /// while typing in one field, so it tells "the document changed". Starts
+    /// at a per-editor base from `DocumentState::next_symbol_history_base`.
+    pub history_generation: u64,
     /// The field the last `record_edit` changed, tagged with the symbol
     /// it belonged to, so a run of keystrokes in one text input shares
     /// one undo step. Cleared by every other history push, undo and redo.
@@ -426,6 +431,7 @@ impl SymbolDocument {
             placement_paused: false,
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
+            history_generation: 0,
             last_edit_key: None,
             mid_drag: false,
             graphic_fill_picker: None,

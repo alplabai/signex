@@ -18,7 +18,7 @@ fn run(p: &mut Project, id: &str) {
 
 fn resolves_to(id: &str) -> NetNavMsg {
     let command = AppCommandId::new(id).expect("a catalog id");
-    match core_to_message(&command) {
+    match core_to_message(&command, &CommandArgs::none()) {
         Some(Message::Ui(UiMsg::NetNav(msg))) => msg,
         other => panic!("'{id}' resolved to {other:?}"),
     }

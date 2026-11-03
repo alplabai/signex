@@ -10,7 +10,8 @@ use crate::panels::PanelKind;
 
 fn run(app: &mut Signex, id: &str) {
     let command = AppCommandId::new(id).unwrap();
-    let message = bridge::core_to_message(&command).expect("the command resolves");
+    let message = bridge::core_to_message(&command, &crate::app::command::CommandArgs::none())
+        .expect("the command resolves");
     let _ = app.update(message);
 }
 
