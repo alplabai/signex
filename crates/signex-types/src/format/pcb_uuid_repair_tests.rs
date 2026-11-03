@@ -188,3 +188,32 @@ fn a_pad_copied_onto_another_footprint_is_kept_with_a_new_id() {
     assert_ne!(loaded.footprints[1].pads[0].uuid, id(30));
     assert_eq!(loaded.footprints[0].pads[0].uuid, id(30));
 }
+
+#[test]
+fn a_reminted_pad_names_its_footprint_not_a_sheet_symbol() {
+    let mut b = board();
+    b.footprints = vec![
+        footprint(20, "R1", vec![pad(30, "1")]),
+        footprint(21, "R2", vec![pad(30, "1")]),
+    ];
+    let mut loaded = reopen(&b);
+    let text = loaded.take_load_repairs()[0].describe();
+    assert!(text.contains("on footprint R2"), "{text}");
+    assert!(!text.contains("sheet symbol"), "{text}");
+}
+
+#[test]
+fn a_footprint_carrying_the_board_id_is_not_silently_kept() {
+    let mut b = board();
+    b.footprints = vec![footprint(1, "R1", vec![pad(30, "1")])];
+    let mut loaded = reopen(&b);
+    assert_ne!(loaded.footprints[0].uuid, loaded.uuid);
+    assert_eq!(loaded.footprints[0].pads.len(), 1);
+    let repairs = loaded.take_load_repairs();
+    assert!(matches!(
+        repairs[..],
+        [SheetLoadRepair::UuidReminted { ref object, .. }] if object.kind == "footprint"
+    ));
+    // The pad stays attached to the footprint across another save and read.
+    assert_eq!(reopen(&loaded).footprints[0].pads.len(), 1);
+}

@@ -192,7 +192,7 @@ pub struct Pad {
 // Footprint graphic
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FpGraphic {
     #[serde(default)]
     pub graphic_type: String,
@@ -223,7 +223,7 @@ pub struct FpGraphic {
 // Footprint
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Footprint {
     pub uuid: Uuid,
     #[serde(default)]
