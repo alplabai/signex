@@ -1631,3 +1631,23 @@ fn an_unlistable_symbols_folder_is_not_reported_as_not_found() {
     ));
     assert!(absent.list_symbols().unwrap().is_empty());
 }
+
+/// #1903 — a `.snxsym` link to a device is never read (a link to a FIFO or
+/// `/dev/zero` would hang or exhaust memory); it is not a symbol file.
+#[cfg(unix)]
+#[test]
+fn a_symbol_link_to_a_device_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Dev", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    std::os::unix::fs::symlink("/dev/null", symbols_dir.join("dev.snxsym")).unwrap();
+
+    adapter.save_symbol(fixture_symbol("A"), "add A").unwrap();
+
+    assert_eq!(adapter.list_symbols().unwrap().len(), 1);
+    assert!(
+        adapter.symbol_file_problems().is_empty(),
+        "the device link was read as a symbol container"
+    );
+}

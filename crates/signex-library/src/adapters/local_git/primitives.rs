@@ -484,18 +484,23 @@ impl LocalGitAdapter {
                     continue;
                 }
             };
-            // The entry type comes from the listing, not a stat, so a symbol
-            // file whose stat would fail still reaches the read below and is
-            // recorded as a problem instead of vanishing from the listing.
-            if entry.file_type().is_dir() {
-                continue;
-            }
             let path = entry.path();
             let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
             if !name.ends_with(&suffix) {
                 continue;
+            }
+            // Only regular files (or links to one) are read: a link to a
+            // device or FIFO must not be read. A stat that fails is a problem,
+            // not a skip, so the listing never reads as complete without it.
+            match fs::metadata(path) {
+                Ok(meta) if meta.is_file() => {}
+                Ok(_) => continue,
+                Err(e) => {
+                    problems.push(SymbolFileProblem::new(path.to_path_buf(), &e.to_string()));
+                    continue;
+                }
             }
             // #690 — a container that cannot be read or parsed affects only
             // itself: skip it, never rewrite it, and record it so it is
@@ -714,13 +719,10 @@ impl LocalGitAdapter {
             .into_iter()
             .filter_map(Result::ok)
         {
-            // The entry type comes from the listing, not a stat, so a symbol
-            // file whose stat would fail still reaches the read below and is
-            // recorded as a problem instead of vanishing from the listing.
-            if entry.file_type().is_dir() {
+            let path = entry.path();
+            if !path.is_file() {
                 continue;
             }
-            let path = entry.path();
             let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
