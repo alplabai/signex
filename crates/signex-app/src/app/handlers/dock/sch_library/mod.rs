@@ -32,6 +32,7 @@ use crate::panels::PanelMsg;
 mod footprint;
 mod numeric_input;
 mod symbol;
+mod symbol_delete;
 
 use footprint::{SilkLineEndpoint, SilkTextField};
 use numeric_input::{
@@ -613,7 +614,10 @@ impl Signex {
             }
             PanelMsg::SchLibrarySelectSymbol(idx) => self.sch_library_select_symbol(*idx),
             PanelMsg::SchLibraryAddSymbol => self.sch_library_add_symbol(),
-            PanelMsg::SchLibraryDeleteSymbol(idx) => self.sch_library_delete_symbol(*idx),
+            PanelMsg::SchLibraryDeleteSymbol(idx) => {
+                follow = self.sch_library_delete_symbol(*idx);
+                true
+            }
             PanelMsg::SchLibraryDeleteConfirmed(idx) => {
                 self.sch_library_confirm_delete_symbol(*idx)
             }

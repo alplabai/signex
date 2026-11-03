@@ -470,6 +470,8 @@ impl Signex {
         }
         let fold = self.identity_fold_for(path);
         self.library.refresh_loaded_previews(path, fold);
+        // Rows bound to a symbol this save removed now read as missing.
+        self.library.sweep_dangling_refs();
         self.library.drift.check_pending = true;
     }
 }
