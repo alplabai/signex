@@ -12,6 +12,12 @@ impl Signex {
                 self.handle_active_bar_action(crate::active_bar::ActiveBarAction::PlacePowerGND),
             );
         }
+        // The same path as the Place Net Label command and the Active Bar.
+        if matches!(msg, MenuMessage::PlaceLabel) {
+            return Some(
+                self.handle_active_bar_action(crate::active_bar::ActiveBarAction::PlaceNetLabel),
+            );
+        }
         // The picker is the one way to choose a part; arming the tool would
         // leave nothing on the cursor (#1767).
         if matches!(msg, MenuMessage::PlaceComponent) {
@@ -20,7 +26,6 @@ impl Signex {
         let tool = match msg {
             MenuMessage::PlaceWire => Tool::Wire,
             MenuMessage::PlaceBus => Tool::Bus,
-            MenuMessage::PlaceLabel => Tool::Label,
             MenuMessage::PlaceText => Tool::Text,
             MenuMessage::PlaceNoConnect => Tool::NoConnect,
             MenuMessage::PlaceJunction => Tool::Junction,
