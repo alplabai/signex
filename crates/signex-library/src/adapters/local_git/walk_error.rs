@@ -8,38 +8,33 @@ use std::path::Path;
 pub(super) enum WalkErrorAction {
     /// The scan fails with a backend error.
     Fail,
-    /// The folder vanished: the scan is empty.
-    Empty,
     /// Record a problem file; lookups stay undetermined, never NotFound.
     Problem,
     /// The entry is gone or irrelevant; keep walking.
     Skip,
 }
 
-/// Only an unreadable root fails the scan. Below it an entry that vanished
-/// is gone, and an unreadable stray (non-symbol) file is ignored. A symbol
-/// file, or an error with no path (a failed readdir that may hide any
-/// symbol), is a problem so the rest of the folder is not silently unlisted.
+/// An error on the root fails the scan, whatever its kind: the caller has
+/// just seen the folder, so even NotFound may be a dropped share. Below the
+/// root, an error with no path (a failed readdir that may hide any symbol)
+/// or on a symbol file is a problem, so the rest of the folder is never
+/// silently unlisted; an entry with a path that vanished is gone, and an
+/// unreadable stray (non-symbol) file is ignored.
 pub(super) fn walk_error_action(
     depth: usize,
     io_kind: Option<ErrorKind>,
     path: Option<&Path>,
     suffix: &str,
 ) -> WalkErrorAction {
-    let vanished = io_kind == Some(ErrorKind::NotFound);
     if depth == 0 {
-        return if vanished {
-            WalkErrorAction::Empty
-        } else {
-            WalkErrorAction::Fail
-        };
-    }
-    if vanished {
-        return WalkErrorAction::Skip;
+        return WalkErrorAction::Fail;
     }
     let Some(path) = path else {
         return WalkErrorAction::Problem;
     };
+    if io_kind == Some(ErrorKind::NotFound) {
+        return WalkErrorAction::Skip;
+    }
     let is_symbol_file = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -58,16 +53,18 @@ mod tests {
     const SFX: &str = ".snxsym";
 
     #[test]
-    fn unreadable_root_fails_and_vanished_root_is_empty() {
+    fn any_error_on_the_root_fails_the_scan() {
         let p = Path::new("/lib/symbols");
         assert_eq!(
             walk_error_action(0, Some(ErrorKind::PermissionDenied), Some(p), SFX),
             WalkErrorAction::Fail
         );
         assert_eq!(walk_error_action(0, None, None, SFX), WalkErrorAction::Fail);
+        // NotFound right after the caller saw the folder: a dropped share,
+        // not an empty library.
         assert_eq!(
             walk_error_action(0, Some(ErrorKind::NotFound), Some(p), SFX),
-            WalkErrorAction::Empty
+            WalkErrorAction::Fail
         );
     }
 
@@ -107,6 +104,11 @@ mod tests {
         );
         assert_eq!(
             walk_error_action(1, None, None, SFX),
+            WalkErrorAction::Problem
+        );
+        // Windows maps a dropped SMB share (ERROR_BAD_NETPATH) to NotFound.
+        assert_eq!(
+            walk_error_action(1, Some(ErrorKind::NotFound), None, SFX),
             WalkErrorAction::Problem
         );
     }

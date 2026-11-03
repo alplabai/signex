@@ -469,7 +469,6 @@ impl LocalGitAdapter {
                 Err(e) => {
                     let kind = e.io_error().map(std::io::Error::kind);
                     match walk_error_action(e.depth(), kind, e.path(), &suffix) {
-                        WalkErrorAction::Empty => return empty(self),
                         WalkErrorAction::Fail => {
                             return Err(LibraryError::Backend(format!(
                                 "list {}: {e}",
@@ -485,10 +484,13 @@ impl LocalGitAdapter {
                     continue;
                 }
             };
-            let path = entry.path();
-            if !path.is_file() {
+            // The entry type comes from the listing, not a stat, so a symbol
+            // file whose stat would fail still reaches the read below and is
+            // recorded as a problem instead of vanishing from the listing.
+            if entry.file_type().is_dir() {
                 continue;
             }
+            let path = entry.path();
             let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
@@ -712,10 +714,13 @@ impl LocalGitAdapter {
             .into_iter()
             .filter_map(Result::ok)
         {
-            let path = entry.path();
-            if !path.is_file() {
+            // The entry type comes from the listing, not a stat, so a symbol
+            // file whose stat would fail still reaches the read below and is
+            // recorded as a problem instead of vanishing from the listing.
+            if entry.file_type().is_dir() {
                 continue;
             }
+            let path = entry.path();
             let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
