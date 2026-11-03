@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use signex_types::net_class::{NetClass, NetClassStyle};
+use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use super::scope::CaseFold;
@@ -67,8 +68,15 @@ struct ProjectEntry {
     seq: u64,
     styles: HashMap<Uuid, NetClassStyle>,
     nets: HashMap<Uuid, String>,
+    placed_styles: PlacedStyles,
+    placed_nets: PlacedNets,
     warnings: Vec<String>,
 }
+
+/// Class styles per sheet placement, then per element.
+pub type PlacedStyles = HashMap<InstancePath, HashMap<Uuid, NetClassStyle>>;
+/// Net names per sheet placement, then per element.
+pub type PlacedNets = HashMap<InstancePath, HashMap<Uuid, String>>;
 
 /// What [`NetClassStyleCache::needs_refresh`] saw last time.
 #[derive(Default)]
@@ -125,6 +133,11 @@ pub struct ResolvedProject {
     /// Net name of every wire and junction, for the label picker. Empty for a
     /// project with no classes.
     pub nets: HashMap<Uuid, String>,
+    /// [`Self::styles`] per placement: a sheet placed twice draws each
+    /// placement's own nets.
+    pub placed_styles: PlacedStyles,
+    /// [`Self::nets`] per placement.
+    pub placed_nets: PlacedNets,
     /// Sheets that would not parse and stitch issues, for the Messages panel.
     pub warnings: Vec<String>,
 }
@@ -169,6 +182,10 @@ pub struct NetClassStyleCache {
     failed: HashMap<ProjectId, ProjectKey>,
     projects: HashMap<ProjectId, ProjectEntry>,
     merged: HashMap<Uuid, NetClassStyle>,
+    /// `merged`, per placement.
+    merged_placed: PlacedStyles,
+    /// What a placement with no styled element reads.
+    no_styles: HashMap<Uuid, NetClassStyle>,
     /// Counts rebuilds of `merged`, so a consumer that caches something drawn
     /// from the map can tell it changed without comparing it entry by entry.
     revision: u64,
@@ -180,6 +197,27 @@ impl NetClassStyleCache {
     #[must_use]
     pub fn styles(&self) -> &HashMap<Uuid, NetClassStyle> {
         &self.merged
+    }
+
+    /// The styles drawn on a sheet shown through `placement`: its own
+    /// placement's nets, so a child placed twice draws each placement's class.
+    /// With no known placement, the flat map ([`Self::styles`]).
+    #[must_use]
+    pub fn styles_in(&self, placement: Option<&InstancePath>) -> &HashMap<Uuid, NetClassStyle> {
+        match placement {
+            None => &self.merged,
+            Some(p) => self.merged_placed.get(p).unwrap_or(&self.no_styles),
+        }
+    }
+
+    /// [`Self::revision`] for what [`Self::styles_in`] returns for
+    /// `placement`: moves when the styles change or the placement does.
+    #[must_use]
+    pub fn revision_in(&self, placement: Option<&InstancePath>) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (self.revision, placement).hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Moves at least whenever [`Self::styles`] changes (it may also move on a
@@ -218,6 +256,27 @@ impl NetClassStyleCache {
         self.projects
             .get(&project)?
             .nets
+            .get(&element)
+            .map(String::as_str)
+    }
+
+    /// [`Self::net_of`] in the sheet placement the canvas shows: the net of
+    /// that placement, so a picker names the net net navigation names. With no
+    /// known placement, the flat answer.
+    #[must_use]
+    pub fn net_in(
+        &self,
+        project: ProjectId,
+        element: Uuid,
+        placement: Option<&InstancePath>,
+    ) -> Option<&str> {
+        let Some(placement) = placement else {
+            return self.net_of(project, element);
+        };
+        self.projects
+            .get(&project)?
+            .placed_nets
+            .get(placement)?
             .get(&element)
             .map(String::as_str)
     }
@@ -354,10 +413,14 @@ impl NetClassStyleCache {
             if !current && !older_connectivity {
                 continue;
             }
-            applied.styles_changed |=
-                previous.map_or(!entry.styles.is_empty(), |old| old.styles != entry.styles);
-            applied.nets_changed |=
-                previous.map_or(!entry.nets.is_empty(), |old| old.nets != entry.nets);
+            applied.styles_changed |= previous.map_or(
+                !entry.styles.is_empty() || !entry.placed_styles.is_empty(),
+                |old| old.styles != entry.styles || old.placed_styles != entry.placed_styles,
+            );
+            applied.nets_changed |= previous.map_or(
+                !entry.nets.is_empty() || !entry.placed_nets.is_empty(),
+                |old| old.nets != entry.nets || old.placed_nets != entry.placed_nets,
+            );
             let old_warnings = previous.map(|old| old.warnings.as_slice()).unwrap_or(&[]);
             applied.warnings.extend(
                 entry
@@ -373,6 +436,8 @@ impl NetClassStyleCache {
                     seq: entry.seq,
                     styles: entry.styles.clone(),
                     nets: entry.nets.clone(),
+                    placed_styles: entry.placed_styles.clone(),
+                    placed_nets: entry.placed_nets.clone(),
                     warnings: entry.warnings.clone(),
                 },
             );
@@ -390,6 +455,17 @@ impl NetClassStyleCache {
             .values()
             .flat_map(|entry| entry.styles.iter().map(|(id, style)| (*id, *style)))
             .collect();
+        // Element uuids are unique across sheets, so two projects' maps for
+        // the same placement path (the root's, say) never collide.
+        self.merged_placed.clear();
+        for entry in self.projects.values() {
+            for (placement, styles) in &entry.placed_styles {
+                self.merged_placed
+                    .entry(placement.clone())
+                    .or_default()
+                    .extend(styles.iter().map(|(id, style)| (*id, *style)));
+            }
+        }
     }
 }
 

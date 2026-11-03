@@ -158,3 +158,65 @@ fn an_answer_for_older_connectivity_is_drawn_until_the_newer_one_lands() {
         "the newer answer replaces it"
     );
 }
+
+#[test]
+fn each_placement_of_a_child_sheet_draws_and_names_its_own_net() {
+    use signex_types::schematic::InstancePath;
+
+    let dir = PathBuf::from("/w/class-placements");
+    let child_path = dir.join("child.snxsch");
+    let mut parent = sheet_with_net("R_TOP", "VCC", &["child.snxsch", "child.snxsch"]);
+    for (n, placed) in parent.child_sheets.iter_mut().enumerate() {
+        placed.uuid = uuid::Uuid::from_u128(500 + n as u128);
+    }
+    let placements: Vec<InstancePath> = parent
+        .child_sheets
+        .iter()
+        .map(|cs| InstancePath::from_chain(vec![cs.uuid]))
+        .collect();
+    let mut child = sheet_with_net("R_CHILD", "LOCAL", &[]);
+    child.labels[0].label_type = LabelType::Net;
+    let (label, wire) = (child.labels[0].uuid, child.wires[0].uuid);
+    let mut app = app_workspace(&dir.to_string_lossy(), &["top.snxsch", "child.snxsch"]);
+    open_with(&mut app.document_state, &dir.join("top.snxsch"), parent);
+    open_with(&mut app.document_state, &child_path, child);
+    app.document_state.active_path = Some(child_path.clone());
+    let stitched = crate::app::stitched_netlist::stitched_for_active_project(&app.document_state);
+    let names: Vec<String> = stitched
+        .netlist
+        .expect("stitched")
+        .nets
+        .iter()
+        .filter(|net| net.wires.contains(&wire))
+        .map(|net| net.name.clone())
+        .collect();
+    app.document_state.projects[0].data.net_classes = vec![power_class(&names[1])];
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(label, SelectedKind::Label)];
+    app.update_selection_info();
+    app.settle_net_class_styles_blocking();
+
+    let mut drawn = 0;
+    for placement in placements {
+        app.document_state
+            .tab_placements
+            .record(&child_path, Some(placement));
+        app.sync_label_class_pick();
+        let styled = app.active_class_styles().contains_key(&wire);
+        let picked = app
+            .document_state
+            .panel_ctx
+            .net_classes
+            .label
+            .as_ref()
+            .map(|pick| pick.net.clone());
+        drawn += usize::from(styled);
+        let expected = if styled { &names[1] } else { &names[0] };
+        assert_eq!(
+            picked.as_ref(),
+            Some(expected),
+            "the picker names the net of the placement the canvas shows"
+        );
+    }
+    assert_eq!(drawn, 1, "only the placement on the styled net draws it");
+}

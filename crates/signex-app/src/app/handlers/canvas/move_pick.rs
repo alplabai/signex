@@ -79,7 +79,7 @@ impl Signex {
                     &self.interaction_state.active_canvas().designators,
                     world_x,
                     world_y,
-                    self.ui_state.net_class_styles.styles(),
+                    self.active_class_styles(),
                 )
                 .filter(|h| crate::app::passes_filter(h, snapshot, filters))
             });

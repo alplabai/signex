@@ -18,7 +18,7 @@ impl Signex {
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
-                self.ui_state.net_class_styles.styles(),
+                self.active_class_styles(),
             )
             && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
         {
@@ -228,7 +228,7 @@ impl Signex {
                 &self.interaction_state.active_canvas().designators,
                 world_x,
                 world_y,
-                self.ui_state.net_class_styles.styles(),
+                self.active_class_styles(),
             )
             && let Some(focus) = self.open_text_edit_on_double_click(hit)
         {

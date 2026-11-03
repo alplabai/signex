@@ -121,6 +121,8 @@ fn resolved(
         seq: 0,
         styles,
         nets,
+        placed_styles: Default::default(),
+        placed_nets: Default::default(),
         warnings: Vec::new(),
     }
 }
@@ -562,4 +564,46 @@ fn the_gate_is_open_only_when_a_sheet_or_a_project_changed() {
         "the volume probe moved the case fold, so the stitch is stale"
     );
     assert!(cache.needs_refresh(8, &[]), "the project was closed");
+}
+
+#[test]
+fn a_sheet_placed_twice_draws_and_names_each_placement_on_its_own() {
+    use signex_types::schematic::InstancePath;
+    let (a, b) = (
+        InstancePath::from_chain(vec![Uuid::from_u128(500)]),
+        InstancePath::from_chain(vec![Uuid::from_u128(501)]),
+    );
+    let shared = Uuid::from_u128(7);
+    let style = NetClassStyle {
+        line: NetLineStyle::Dashed,
+        ..Default::default()
+    };
+    let mut cache = NetClassStyleCache::default();
+    let key = key(1, &[NetClass::named("Fast")]);
+    assert!(cache.want(PROJECT, &key));
+    let mut answer = resolved(PROJECT, key, &Default::default());
+    answer.seq = cache.request_seq(PROJECT);
+    answer.placed_styles = [(b.clone(), [(shared, style)].into())].into();
+    answer.placed_nets = [
+        (a.clone(), [(shared, "/A/SIG".to_string())].into()),
+        (b.clone(), [(shared, "/B/SIG".to_string())].into()),
+    ]
+    .into();
+    let applied = cache.apply(&ResolvedStyles {
+        projects: vec![answer],
+    });
+
+    assert!(applied.styles_changed && applied.nets_changed);
+    assert!(cache.styles_in(Some(&b)).contains_key(&shared));
+    assert!(
+        !cache.styles_in(Some(&a)).contains_key(&shared),
+        "the placement whose net is not styled draws no style"
+    );
+    assert_eq!(cache.net_in(PROJECT, shared, Some(&a)), Some("/A/SIG"));
+    assert_eq!(cache.net_in(PROJECT, shared, Some(&b)), Some("/B/SIG"));
+    assert_ne!(
+        cache.revision_in(Some(&a)),
+        cache.revision_in(Some(&b)),
+        "switching placement must repaint the canvas"
+    );
 }

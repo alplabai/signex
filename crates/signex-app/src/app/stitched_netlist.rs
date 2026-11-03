@@ -81,6 +81,10 @@ pub(crate) type StitchSlot = Arc<OnceLock<Stitched>>;
 /// The slot each project's in-flight jobs share, by the key they resolve.
 /// Holds the slot weakly: it lives as long as a job holds it, so a request
 /// made after both finished stitches again and reads current disk content.
+/// Sharing therefore needs both jobs planned before either finishes: the net
+/// index job is planned on demand (hover, highlight, jump), the style job
+/// after each commit, and a job planned after the other finished stitches
+/// again. Entries whose jobs are gone are dropped on the next claim.
 #[derive(Default)]
 pub struct StitchShare {
     slots: HashMap<ProjectId, (ProjectKey, Weak<OnceLock<Stitched>>)>,
@@ -90,6 +94,7 @@ impl StitchShare {
     /// The slot for `project` at `key`: the live one when a job already holds
     /// it, else a new empty one.
     pub(crate) fn claim(&mut self, project: ProjectId, key: &ProjectKey) -> StitchSlot {
+        self.slots.retain(|_, (_, weak)| weak.strong_count() > 0);
         if let Some((held, weak)) = self.slots.get(&project)
             && held == key
             && let Some(slot) = weak.upgrade()
@@ -183,8 +188,8 @@ fn stitch_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>, want_index: b
     }
 }
 
-/// Test seam: stitch the project of the active document the way the
-/// net-class job plans it (declared root, open tabs live, no extra pages).
+/// Test seam: the netlist of the project of the active document, planned like
+/// the net-class job does (declared root, open tabs live, no extra pages).
 #[cfg(test)]
 pub(crate) fn stitched_for_active_project(document: &super::state::DocumentState) -> Stitched {
     let root = super::project_sheets::resolve_netlist_root(document).expect("an active document");
