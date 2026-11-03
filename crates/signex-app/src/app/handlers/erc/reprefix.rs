@@ -155,6 +155,16 @@ impl Signex {
     /// Confirm: re-plan against the state of now, and apply it unless it no
     /// longer matches what the user was shown.
     pub(crate) fn handle_reprefix_confirmed(&mut self) -> Task<Message> {
+        // A run already going would refuse this one: keep the list open so
+        // Confirm can be pressed again, rather than discarding it.
+        if self.ui_state.reprefix_confirm.is_some() && self.ui_state.annotate_runs.is_running() {
+            self.refuse_run(
+                LABEL,
+                "another Annotate or Reset Duplicate Designators run is still going. \
+                 Press Confirm again once it has finished.",
+            );
+            return Task::none();
+        }
         let Some(confirm) = self.ui_state.reprefix_confirm.take() else {
             return Task::none();
         };

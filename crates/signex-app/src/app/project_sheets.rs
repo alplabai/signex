@@ -80,7 +80,7 @@ pub(crate) fn declared_pages(document_state: &DocumentState) -> Vec<PathBuf> {
 /// cached canvas/ERC netlist and the ERC run (annotate, the duplicate reset and
 /// re-prefix read through a [`ProjectSheetPlan`] on a worker instead). Deriving
 /// the page list and the root here, once, is the point — each of those used to
-/// do it slightly differently and they disagreed (#406). For an explicit
+/// do it slightly differently and they disagreed (#406). Takes an explicit
 /// `source` document rather than the active tab (#852).
 pub(crate) fn assemble_project_sheets_for(
     document_state: &DocumentState,

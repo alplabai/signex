@@ -144,7 +144,6 @@ pub(super) enum Refused {
 
 impl AnnotateRuns {
     /// Is a run reading, numbering or writing right now?
-    #[cfg(test)]
     pub(super) fn is_running(&self) -> bool {
         self.job.is_some()
     }
