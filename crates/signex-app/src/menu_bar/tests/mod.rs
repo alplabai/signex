@@ -428,3 +428,48 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
     app.document_state.active_project = Some(app.document_state.projects[index].id);
     index
 }
+
+/// An app whose active tab is a PCB loaded the way opening a file loads it:
+/// a board with one via, so Fit All has something to fit to.
+pub(super) fn loaded_board_app() -> Signex {
+    let mut app = bare_app();
+    let via = serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::now_v7(),
+        "position": { "x": 10.0, "y": 10.0 },
+        "diameter": 0.6,
+    }))
+    .expect("via");
+    let board = signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: Uuid::now_v7(),
+        version: 1,
+        generator: "signex-test".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![via],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    };
+    let _ = app.update(Message::File(crate::app::FileMsg::PcbOpenFinished {
+        disk: None,
+        path: std::path::PathBuf::from("/w/menu-rows.snxpcb"),
+        title: "board".to_string(),
+        result: Ok(Box::new(board)),
+    }));
+    app.interaction_state
+        .pcb_canvas
+        .set_viewport(iced::Rectangle::new(
+            iced::Point::ORIGIN,
+            iced::Size::new(800.0, 600.0),
+        ));
+    // Opening the board queued its first fit; take it out of the picture.
+    app.interaction_state.pcb_canvas.pending_fit.set(None);
+    assert!(app.has_active_pcb(), "the board is the active tab");
+    app
+}

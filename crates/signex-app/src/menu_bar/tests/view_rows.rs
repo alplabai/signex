@@ -160,3 +160,19 @@ fn zoom_rows_are_greyed_without_a_canvas() {
     assert!(row_is_live(&schematic, "View/Zoom In"));
     assert!(row_is_live(&schematic, "View/Zoom Out"));
 }
+
+/// Fit All on a PCB tab queues a fit to the loaded board.
+#[test]
+fn fit_all_fits_a_loaded_board() {
+    let mut app = loaded_board_app();
+    let before = probe(&app);
+    assert!(!before.pcb_fit_queued);
+    let _ = click(&mut app, "View/Fit All");
+    assert_eq!(
+        probe(&app),
+        Probe {
+            pcb_fit_queued: true,
+            ..before
+        }
+    );
+}
