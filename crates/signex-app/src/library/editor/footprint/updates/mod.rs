@@ -340,6 +340,7 @@ pub(crate) fn apply_footprint_primitive_edit(
     let attempt = attempt::EditAttempt::begin(editor, &msg);
     let generation_before = editor.state.sketch_solve.generation();
     let dirty_before = attempt.dirty_before();
+    let point_before = attempt.point_before();
     route_primitive_edit(editor, msg);
     // A drag tick that left a solve owed also leaves an undo step, the
     // dirty flag and a cleared redo stack; park what a rejection must give
@@ -361,6 +362,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             .sketch_solve
             .note_settled(sketch_solve_task::SettledTick {
                 dirty_before,
+                point_before,
                 deferred: tick_pending,
                 kept,
                 history_len,

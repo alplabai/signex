@@ -162,6 +162,15 @@ fn collapse_batch_history(editor: &mut FootprintDocument, mut batch: UnsolvedEdi
     if editor.history.len() > FootprintDocument::HISTORY_DEPTH {
         editor.history.remove(0);
     }
+    // The rewrite dropped or re-added steps by hand: a save point that sat
+    // on a step it removed cannot be told from here. A batch that never
+    // pushed a step off a full history kept every depth below the drag, so
+    // only that case keeps the point (#1854).
+    if batch.evictions > 0 {
+        editor.save_point.forget();
+    }
+    let (undo, redo) = (editor.history.len(), editor.redo.len());
+    editor.save_point.limit_to(undo, redo);
 }
 
 /// The drag over-constrained the sketch: put it back as it was before the
@@ -197,7 +206,12 @@ fn reject_conflicting_edit(
         editor.redo = redo;
     }
     if let Some(dirty_before) = unsolved.dirty_before {
-        let owes_rows = !editor.cascade_owed.is_empty();
-        editor.set_dirty(dirty_before || owes_rows);
+        // The point is given back only when the rewind restored every step
+        // the ticks pushed off a full history; else it is forgotten.
+        let point = match unsolved.point_before {
+            Some(point) if unsolved.evictions <= unsolved.history_len_before => point,
+            _ => crate::app::SavePoint::unknown(),
+        };
+        editor.give_back_rejected_edit(point, dirty_before);
     }
 }
