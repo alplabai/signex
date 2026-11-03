@@ -518,3 +518,46 @@ fn a_drawing_colliding_with_another_kind_moves_its_placement() {
         "no orphan entry stays behind to be written back"
     );
 }
+
+#[test]
+fn every_wire_re_minted_off_another_kinds_id_keeps_the_colour() {
+    let color = crate::theme::Color {
+        r: 1,
+        g: 2,
+        b: 3,
+        a: 255,
+    };
+    let mut sheet = empty_sheet();
+    let mut symbol = sample_symbol();
+    symbol.uuid = id(7);
+    sheet.symbols = vec![symbol];
+    sheet.wires = vec![wire(7, 5.0), wire(7, 9.0)];
+    sheet.net_colors.insert(id(7), color);
+    let line = |end: f64| SchDrawing::Line {
+        uuid: id(8),
+        start: Point::new(0.0, 0.0),
+        end: Point::new(end, 0.0),
+        width: 0.0,
+        stroke_color: None,
+        locked: false,
+    };
+    sheet.wires.push(wire(8, 3.0));
+    sheet.drawings = vec![line(1.0), line(2.0)];
+    sheet
+        .drawing_placements
+        .insert(id(8), crate::schematic::DrawingPlacement::Above);
+    let loaded = load(&save(&sheet));
+    for w in &loaded.wires[..2] {
+        assert_ne!(w.uuid, id(7));
+        assert_eq!(loaded.net_colors.get(&w.uuid), Some(&color));
+    }
+    assert!(!loaded.net_colors.contains_key(&id(7)));
+    for d in &loaded.drawings {
+        assert_ne!(d.uuid(), id(8));
+        assert_eq!(
+            loaded.drawing_placement(d.uuid()),
+            crate::schematic::DrawingPlacement::Above
+        );
+    }
+    assert!(!loaded.drawing_placements.contains_key(&id(8)));
+}
