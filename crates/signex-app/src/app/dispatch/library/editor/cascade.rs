@@ -177,9 +177,7 @@ impl Signex {
             return None;
         }
         self.library
-            .open_libraries
-            .iter()
-            .find(|lib| lib.root_dir().is_some_and(|d| path.starts_with(d)))
+            .library_containing(path)
             .map(|lib| lib.root.clone())
     }
 }
