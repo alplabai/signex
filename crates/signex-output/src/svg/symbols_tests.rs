@@ -1,5 +1,5 @@
 use super::*;
-use signex_types::schematic::{Graphic, HAlign, LibGraphic, VAlign, lower_symbol};
+use signex_types::schematic::{Graphic, HAlign, LibGraphic, Pin, VAlign, lower_symbol};
 
 fn text_graphic(text: &str, unit_hint: f64) -> Graphic {
     Graphic::Text {
