@@ -166,7 +166,7 @@ fn pill<'a>(
         )
     };
     container(text(label).size(TS.caption).color(fg))
-        .padding([SP.xs / 2.0, SP.s])
+        .padding([SP.xs, SP.s])
         .style(move |_: &Theme| container::Style {
             background: Some(fill.into()),
             border: Border {

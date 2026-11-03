@@ -498,7 +498,7 @@ fn override_editor_row<'a>(
                 .size(TS.body)
                 .color(muted),
             input,
-            Space::new().width(Length::FillPortion(1)),
+            Space::new().width(Length::Fill),
             save,
             cancel,
             remove,

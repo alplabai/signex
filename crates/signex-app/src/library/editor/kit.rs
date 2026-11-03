@@ -5,9 +5,6 @@
 //! the caller's `Message`, takes `&ThemeTokens`, and draws only with
 //! theme tokens ([`Overlay`] steps over `tokens.text`), so it reads on
 //! light and dark themes alike.
-// The tabs adopt the kit in follow-up units of #1957; until then only
-// the Alternate symbols buttons use it.
-#![allow(dead_code)]
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
@@ -241,16 +238,6 @@ pub(crate) fn danger_button<'a, M: Clone + 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     labelled(label, on_press, danger_button_style(tokens))
-}
-
-/// Icon-only button with a tooltip, from `signex-widgets`.
-pub(crate) fn icon_button<'a, M: Clone + 'a>(
-    icon: &str,
-    tooltip: &str,
-    on_press: M,
-    tokens: &ThemeTokens,
-) -> Element<'a, M> {
-    signex_widgets::icon_button::icon_button(icon, tooltip, on_press, false, tokens)
 }
 
 // ─── Empty state ─────────────────────────────────────────────
