@@ -208,9 +208,13 @@ impl Signex {
                     },
                 );
             }
-            CanvasEvent::CursorMoved => {
-                // The sheet background (paper, grid, frame) does not depend on
-                // the cursor, so its cache stays (#1993).
+            CanvasEvent::CursorMoved | CanvasEvent::ViewMoved => {
+                // The sheet background (paper, grid, frame) follows the camera
+                // alone, so a hover keeps its cache; a pan or zoom drops it
+                // (and `draw_background` re-checks the camera, #1993).
+                if matches!(event, CanvasEvent::ViewMoved) {
+                    self.interaction_state.active_canvas_mut().clear_bg_cache();
+                }
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_overlay_cache();

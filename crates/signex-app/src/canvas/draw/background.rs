@@ -12,7 +12,19 @@ impl SchematicCanvas<'_> {
         renderer: &Renderer,
         bounds: Rectangle,
     ) -> canvas::Geometry {
+        // The background follows the camera, and a pure hover must not rebuild
+        // it, so the cache is keyed on the camera as the content layer is.
+        let key = {
+            let cam = self.camera();
+            (cam.offset.x, cam.offset.y, cam.scale)
+        };
+        if self.bg_cache_camera.get() != Some(key) {
+            self.bg_cache.clear();
+            self.bg_cache_camera.set(Some(key));
+        }
         self.bg_cache.draw(renderer, bounds.size(), |frame| {
+            #[cfg(test)]
+            self.bg_tessellations.set(self.bg_tessellations.get() + 1);
             self.paint_background(frame, bounds)
         })
     }

@@ -47,9 +47,25 @@ impl GeometryRenderer for MeshOnly {
 
 /// Solid vertex colours of the background, in draw order.
 fn background_vertex_colors(prefs: CanvasViewPrefs<'_>) -> Vec<[f32; 4]> {
+    background_vertices(prefs, None, Size::new(800.0, 600.0))
+        .into_iter()
+        .map(|(_, color)| color)
+        .collect()
+}
+
+/// Solid vertices (position, colour) of the background at `camera` in a
+/// `size` canvas, in draw order.
+fn background_vertices(
+    prefs: CanvasViewPrefs<'_>,
+    camera: Option<Camera>,
+    size: Size,
+) -> Vec<([f32; 2], [f32; 4])> {
     let slot = CanvasSlot::new();
+    if let Some(camera) = camera {
+        *slot.camera_mut() = camera;
+    }
     let canvas = SchematicCanvas::new(&slot, prefs);
-    let bounds = Rectangle::with_size(Size::new(800.0, 600.0));
+    let bounds = Rectangle::with_size(size);
     let mut frame = canvas::Frame::<MeshOnly>::new(&MeshOnly, bounds.size());
     canvas.paint_background(&mut frame, bounds);
     let Geometry::Live { meshes, .. } = frame.into_geometry() else {
@@ -58,11 +74,11 @@ fn background_vertex_colors(prefs: CanvasViewPrefs<'_>) -> Vec<[f32; 4]> {
     meshes
         .iter()
         .filter_map(|mesh| match mesh {
-            Mesh::Solid { buffers, .. } => Some(buffers.vertices.iter().map(|v| v.color)),
+            Mesh::Solid { buffers, .. } => Some(buffers.vertices.iter()),
             Mesh::Gradient { .. } => None,
         })
         .flatten()
-        .map(|c| c.components())
+        .map(|v| (v.position, v.color.components()))
         .collect()
 }
 
@@ -113,7 +129,74 @@ fn a_hidden_grid_adds_no_vertices_after_the_paper() {
     assert!(shown > hidden + 100, "shown {shown}, hidden {hidden}");
 }
 
-/// Not a gate: `cargo test -p signex-app --lib grid_tessellation_cost -- --ignored --nocapture`
+/// #1940 - with the clip gone, no grid line reaches past the paper edge. The
+/// camera puts the paper edges on whole pixels, so a line on the edge (stop 0)
+/// or a stroke's half width would show as a vertex outside it.
+#[test]
+fn grid_lines_stay_inside_the_paper() {
+    let (overrides, filters) = Default::default();
+    let mut prefs = test_prefs(&overrides, &filters);
+    prefs.grid_style = crate::render_config::GridStyle::Lines;
+    let camera = Camera {
+        offset: iced::Point::new(20.0, 20.0),
+        scale: 8.0,
+    };
+    let (bg, paper, border) = (
+        pack(prefs.theme_bg).components(),
+        pack(prefs.theme_paper).components(),
+        pack(prefs.theme_grid).components(),
+    );
+    // The default sheet is 297 x 210 mm: 2376 x 1680 px at scale 8.
+    let size = Size::new(2600.0, 1900.0);
+    let (left, top, right, bottom) = (20.0, 20.0, 20.0 + 297.0 * 8.0, 20.0 + 210.0 * 8.0);
+
+    let mut lines = 0;
+    for (pos, color) in background_vertices(prefs, Some(camera), size) {
+        if color == bg || color == paper || color == border {
+            continue;
+        }
+        lines += 1;
+        let eps = 1e-3;
+        assert!(
+            pos[0] >= left - eps
+                && pos[0] <= right + eps
+                && pos[1] >= top - eps
+                && pos[1] <= bottom + eps,
+            "grid vertex {pos:?} lies outside the paper ({left}..{right}, {top}..{bottom})"
+        );
+    }
+    assert!(lines > 100, "the line grid is drawn ({lines} vertices)");
+}
+
+/// #1993 - the background re-tessellates when the camera moves and not when
+/// nothing did, whatever event announced the move.
+#[test]
+fn the_background_follows_the_camera_and_ignores_a_hover() {
+    let (overrides, filters) = Default::default();
+    let prefs = test_prefs(&overrides, &filters);
+    let renderer = crate::layout_probe::headless_renderer();
+    let bounds = Rectangle::with_size(Size::new(800.0, 600.0));
+    let slot = CanvasSlot::new();
+    let tessellations = |slot: &CanvasSlot| {
+        SchematicCanvas::new(slot, prefs).draw_background(&renderer, bounds);
+        slot.bg_tessellations.get()
+    };
+
+    assert_eq!(tessellations(&slot), 1, "first draw tessellates");
+    assert_eq!(
+        tessellations(&slot),
+        1,
+        "an unchanged camera reuses the cache"
+    );
+
+    slot.camera_mut().scale *= 1.1;
+    assert_eq!(tessellations(&slot), 2, "a zoom re-tessellates");
+    slot.camera_mut().offset.x += 15.0;
+    assert_eq!(tessellations(&slot), 3, "a pan re-tessellates");
+    assert_eq!(tessellations(&slot), 3, "and then it is cached again");
+}
+
+/// Not a gate:`cargo test -p signex-app --lib grid_tessellation_cost -- --ignored --nocapture`
 /// prints the CPU time of one background tessellation (#1993). Debug builds
 /// run it at opt-level 0, so only the before/after ratio means anything.
 #[test]

@@ -44,6 +44,9 @@ mod close_support;
 #[path = "regression/settle_support.rs"]
 mod settle_support;
 
+#[path = "regression/menu_support.rs"]
+mod menu_support;
+
 #[path = "regression/delete_and_parent_refs_commit.rs"]
 mod delete_and_parent_refs_commit;
 
@@ -373,6 +376,8 @@ mod library_stock_place;
 mod library_symbol_drift;
 #[path = "regression/library_symbol_missing.rs"]
 mod library_symbol_missing;
+#[path = "regression/pin_text_on_sheet.rs"]
+mod pin_text_on_sheet;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.

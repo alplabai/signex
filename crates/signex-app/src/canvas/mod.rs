@@ -108,6 +108,13 @@ pub struct CanvasSlot {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera `bg_cache` was last built at; `draw_background` drops the cache
+    /// when it differs, so the paper and grid follow every camera move whatever
+    /// event announced it (#1993).
+    pub bg_cache_camera: std::cell::Cell<Option<(f32, f32, f32)>>,
+    /// Test-only: how often the background was tessellated.
+    #[cfg(test)]
+    pub bg_tessellations: std::cell::Cell<u32>,
     /// Camera-independent content scene: pan frames replay it through the live
     /// transform instead of rebuilding snapshot + scene (#171 item 6).
     /// Dropped with `content_cache` by [`Self::clear_content_cache`].
@@ -260,6 +267,9 @@ impl CanvasSlot {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            bg_cache_camera: std::cell::Cell::new(None),
+            #[cfg(test)]
+            bg_tessellations: std::cell::Cell::new(0),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
             published_drag: Default::default(),
@@ -864,6 +874,10 @@ pub enum CanvasEvent {
         zoom_pct: f64,
     },
     CursorMoved,
+    /// The user moved the view with the pointer: a wheel zoom or a pan drag.
+    /// Handled like [`Self::CursorMoved`]; a separate event so the app can
+    /// tell a deliberate gesture from a hover or a queued fit landing.
+    ViewMoved,
     FitAll,
     /// Frame the current selection (`zoom_to_selection_area`, #1256).
     FitSelection,
@@ -909,6 +923,24 @@ pub enum CanvasEvent {
     },
 }
 
+impl CanvasEvent {
+    /// Whether the event is the user acting on the canvas with the pointer:
+    /// a click, a box select, a drag-move, a wheel zoom or a pan. A hover,
+    /// and the fit / centre commands a key or the menu sends, are not.
+    pub fn is_user_gesture(&self) -> bool {
+        matches!(
+            self,
+            Self::Clicked { .. }
+                | Self::CtrlClicked { .. }
+                | Self::DoubleClicked { .. }
+                | Self::BoxSelect { .. }
+                | Self::MoveSelected { .. }
+                | Self::MovePicked { .. }
+                | Self::ViewMoved
+        )
+    }
+}
+
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
@@ -919,6 +951,8 @@ mod gpu_mount_tests;
 mod grid_order_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
+#[cfg(test)]
+mod view_gesture_tests;
 
 #[cfg(test)]
 mod tests {

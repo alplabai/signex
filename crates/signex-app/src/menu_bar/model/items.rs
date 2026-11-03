@@ -86,24 +86,38 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> 
     })
 }
 
-/// A keymap-backed row that is always enabled.
-pub(super) fn cmd_item(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
-    command_row(ctx, cmd, cmd_label(cmd.id, cmd.label), live(action, true))
+/// The state of a row that runs `cmd` through `dispatch_command`.
+fn command_state(cmd: Cmd, is_enabled: bool) -> ItemState {
+    AppCommandId::new(cmd.id).map_or(ItemState::Unavailable, |id| {
+        live(MenuMessage::Command(id), is_enabled)
+    })
 }
 
-/// A keymap-backed row enabled exactly when its command is
-/// ([`crate::app::command::is_enabled`]).
-pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd, action: MenuMessage) -> MenuEntry {
+/// A keymap-backed row that is always enabled and runs its command.
+pub(super) fn cmd_item(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
     command_row(
         ctx,
         cmd,
         cmd_label(cmd.id, cmd.label),
-        live(action, enabled(ctx, cmd.id)),
+        command_state(cmd, true),
     )
 }
 
-/// A keymap-backed row with its own enablement rule.
-pub(super) fn cmd_item_if(
+/// A keymap-backed row enabled exactly when its command is
+/// ([`crate::app::command::is_enabled`]); it runs the command.
+pub(super) fn cmd_item_gated(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
+    command_row(
+        ctx,
+        cmd,
+        cmd_label(cmd.id, cmd.label),
+        command_state(cmd, enabled(ctx, cmd.id)),
+    )
+}
+
+/// A row that takes its label and shortcut from a command but whose action
+/// is something else, with its own enablement rule. Only where the command
+/// of that id does not do what the row does (docs/MENU_BAR.md#own-action).
+pub(super) fn cmd_item_own_action(
     ctx: &MenuContext,
     cmd: Cmd,
     action: MenuMessage,

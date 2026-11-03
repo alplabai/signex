@@ -48,6 +48,8 @@ struct InFlightSlot;
 impl InFlightSlot {
     fn take() -> Self {
         IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+        #[cfg(test)]
+        SLOTS_TAKEN_HERE.with(|n| n.set(n.get() + 1));
         Self
     }
 }
@@ -56,6 +58,20 @@ impl Drop for InFlightSlot {
     fn drop(&mut self) {
         IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
     }
+}
+
+// Test hook: how many slots this thread has taken. Per thread, so parallel
+// tests cannot move each other's count the way they move `IN_FLIGHT`.
+#[cfg(test)]
+thread_local! {
+    static SLOTS_TAKEN_HERE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many in-flight slots the current thread has taken, for tests that guard
+/// a path from taking one before its task runs.
+#[cfg(test)]
+pub(crate) fn pref_slots_taken_on_this_thread() -> usize {
+    SLOTS_TAKEN_HERE.with(std::cell::Cell::get)
 }
 
 /// Block until every ordered write started so far has finished, or `limit`
