@@ -47,6 +47,25 @@ impl Signex {
         self.dispatch_command_reporting(command, args, window).1
     }
 
+    /// A menu row's command, from the window `window` (`None`: the main one).
+    /// The row was live, so it normally runs; if it does not, the Messages
+    /// panel says why: a command the window cannot act on is named here, and
+    /// an unknown or unmapped id is logged by the bridge.
+    pub(crate) fn run_menu_command(
+        &mut self,
+        command: &crate::keymap::AppCommandId,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
+        if let CommandOutcome::Disabled { reason } = outcome {
+            crate::diagnostics::log_info(format!(
+                "Menu: {} did nothing: {reason}",
+                command.as_str()
+            ));
+        }
+        task
+    }
+
     /// [`Self::dispatch_command`], reporting what happened (#1928).
     ///
     /// `args` carries what the caller knows that the id does not (see
@@ -302,6 +321,38 @@ mod tests {
 
         assert!(matches!(outcome, CommandOutcome::Disabled { .. }));
         assert_eq!(task.units(), 0);
+    }
+
+    /// #1922: a menu click that does not run says why in the Messages panel.
+    #[test]
+    fn a_menu_click_that_cannot_run_is_logged() {
+        let _ = crate::diagnostics::init_logging();
+        let (mut app, _task) = Signex::new();
+        let click = |app: &mut Signex, id: &str| {
+            let _ = app.update(Message::Menu(crate::menu_bar::MenuMessage::command(id)));
+        };
+        let count = |needle: &str| crate::diagnostics::logged_count(needle);
+
+        let disabled = count("Menu: place_wire did nothing: No schematic is open");
+        click(&mut app, "place_wire");
+        assert_eq!(
+            count("Menu: place_wire did nothing: No schematic is open"),
+            disabled + 1
+        );
+
+        let unmapped = count("command 'center_on_cursor'");
+        click(&mut app, "center_on_cursor");
+        assert!(
+            count("command 'center_on_cursor'") > unmapped,
+            "no bridge arm"
+        );
+
+        let unknown = count("command 'no_such_menu_command'");
+        click(&mut app, "no_such_menu_command");
+        assert!(
+            count("command 'no_such_menu_command'") > unknown,
+            "unknown id"
+        );
     }
 
     /// #103 - `unselect_all` empties the active canvas selection. It used

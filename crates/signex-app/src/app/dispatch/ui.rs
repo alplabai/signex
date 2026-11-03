@@ -14,7 +14,7 @@ impl Signex {
                 let Some(id) = msg.window_command() else {
                     return self.update(Message::Menu(msg));
                 };
-                self.dispatch_command(&id, crate::app::command::CommandArgs::none(), Some(window))
+                self.run_menu_command(&id, Some(window))
             }
             UiMsg::HistoryLoaded {
                 generation,
