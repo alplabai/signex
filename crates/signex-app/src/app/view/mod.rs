@@ -143,6 +143,7 @@ impl Signex {
                             &self.library,
                             tokens,
                             &self.document_state.panel_ctx.canvas_colors,
+                            self.ui_state.device_px_per_logical_px(window_id),
                             address,
                         )
                         .map(Message::Library)
@@ -513,6 +514,7 @@ impl Signex {
                     &self.library,
                     tokens,
                     &self.document_state.panel_ctx.canvas_colors,
+                    self.ui_state.device_px_per_logical_px(window_id),
                     address,
                 )
                 .map(Message::Library)

@@ -481,6 +481,8 @@ impl Signex {
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
                     canvas_colors: signex_types::theme::canvas_colors(ThemeId::Signex),
+                    device_px_per_logical_px:
+                        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,

@@ -1,15 +1,14 @@
-//! The details pane's Symbol preview: the symbol as the schematic canvas
-//! draws it placed on a sheet, through the same lowering, scene and replay,
-//! on the active theme's paper colour.
+//! The Symbol preview: the symbol as the schematic canvas draws it placed on
+//! a sheet, through the same lowering, scene and replay, on the active
+//! theme's paper colour. Shared by the Components panel and the Component
+//! Preview dialog's Symbol pane.
 
 use std::cell::RefCell;
 
 use iced::widget::canvas::{self, Geometry};
 use iced::widget::container;
 use iced::{Element, Length, Rectangle, Size, Theme};
-use signex_types::schematic::{
-    Aabb, LibSymbol, SchematicSheet, Symbol, UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-};
+use signex_types::schematic::{Aabb, LibSymbol, SchematicSheet, Symbol};
 use signex_types::theme::CanvasColors;
 
 use crate::render_config::to_iced;
@@ -40,6 +39,19 @@ struct PreviewState {
 struct SymbolSheetPreview {
     lib: LibSymbol,
     colors: CanvasColors,
+    device_px_per_logical_px: f32,
+}
+
+/// Whether the cached scene is stale for `lib` and `colors`; records them as
+/// shown when it is. A first draw has nothing shown, so it rebuilds.
+fn take_rebuild(shown: &mut Option<Shown>, lib: &LibSymbol, colors: &CanvasColors) -> bool {
+    let current = shown
+        .as_ref()
+        .is_some_and(|(shown_lib, shown_colors)| shown_lib == lib && shown_colors == colors);
+    if !current {
+        *shown = Some((lib.clone(), *colors));
+    }
+    !current
 }
 
 /// A sheet holding `lib` placed once at the origin, unit 1, normal body.
@@ -66,7 +78,7 @@ fn max_scale() -> f32 {
 }
 
 /// The transform that centres `extent` in `size` and scales it to fit.
-fn fit_transform(extent: Aabb, size: Size) -> ScreenTransform {
+fn fit_transform(extent: Aabb, size: Size, device_px_per_logical_px: f32) -> ScreenTransform {
     let width = (extent.max_x - extent.min_x).max(f64::EPSILON) as f32;
     let height = (extent.max_y - extent.min_y).max(f64::EPSILON) as f32;
     let free_w = (size.width - 2.0 * fit_margin(size.width)).max(1.0);
@@ -78,9 +90,7 @@ fn fit_transform(extent: Aabb, size: Size) -> ScreenTransform {
         offset_x: size.width / 2.0 - mid_x * scale,
         offset_y: size.height / 2.0 - mid_y * scale,
         scale,
-        // The panel does not know its window's scale factor, so strokes snap
-        // to the logical pixel grid; a fractional-DPI monitor blurs them.
-        device_px_per_logical_px: UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+        device_px_per_logical_px,
     }
 }
 
@@ -95,15 +105,8 @@ impl canvas::Program<()> for SymbolSheetPreview {
         bounds: Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
-        {
-            let mut shown = state.shown.borrow_mut();
-            let current = shown
-                .as_ref()
-                .is_some_and(|(lib, colors)| *lib == self.lib && *colors == self.colors);
-            if !current {
-                state.cache.clear();
-                *shown = Some((self.lib.clone(), self.colors));
-            }
+        if take_rebuild(&mut state.shown.borrow_mut(), &self.lib, &self.colors) {
+            state.cache.clear();
         }
         let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(
@@ -115,7 +118,11 @@ impl canvas::Program<()> for SymbolSheetPreview {
                 return;
             }
             let (sheet, symbol) = preview_sheet(&self.lib);
-            let transform = fit_transform(symbol_bounds(&sheet, &symbol), bounds.size());
+            let transform = fit_transform(
+                symbol_bounds(&sheet, &symbol),
+                bounds.size(),
+                self.device_px_per_logical_px,
+            );
             if let Some(scene) = build_schematic_scene(
                 &sheet,
                 &transform,
@@ -132,15 +139,17 @@ impl canvas::Program<()> for SymbolSheetPreview {
 }
 
 /// The Symbol preview of `lib`, `height` tall and as wide as its parent,
-/// clipped to its box.
+/// clipped to its box; strokes snap to the window's device pixel grid.
 pub(crate) fn symbol_preview(
-    lib: &LibSymbol,
+    lib: LibSymbol,
     colors: CanvasColors,
     height: f32,
+    device_px_per_logical_px: f32,
 ) -> Element<'static, ()> {
     let canvas = canvas::Canvas::new(SymbolSheetPreview {
-        lib: lib.clone(),
+        lib,
         colors,
+        device_px_per_logical_px,
     })
     .width(Length::Fill)
     .height(height);
@@ -154,7 +163,9 @@ pub(crate) fn symbol_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::{FillType, Graphic, LibGraphic, Point};
+    use signex_types::schematic::{
+        FillType, Graphic, LibGraphic, Point, UNSCALED_DEVICE_PX_PER_LOGICAL_PX as UNSCALED,
+    };
     use signex_types::theme::{ThemeId, canvas_colors};
 
     fn body_symbol() -> LibSymbol {
@@ -177,7 +188,7 @@ mod tests {
     fn the_preview_is_a_placed_symbol_the_canvas_can_draw() {
         let (sheet, symbol) = preview_sheet(&body_symbol());
         let size = Size::new(200.0, 100.0);
-        let transform = fit_transform(symbol_bounds(&sheet, &symbol), size);
+        let transform = fit_transform(symbol_bounds(&sheet, &symbol), size, UNSCALED);
         let scene = build_schematic_scene(
             &sheet,
             &transform,
@@ -194,7 +205,7 @@ mod tests {
         let (sheet, symbol) = preview_sheet(&body_symbol());
         let size = Size::new(200.0, 156.0);
         let extent = symbol_bounds(&sheet, &symbol);
-        let transform = fit_transform(extent, size);
+        let transform = fit_transform(extent, size, UNSCALED);
         let low = transform.world_to_screen((extent.min_x, extent.min_y));
         let high = transform.world_to_screen((extent.max_x, extent.max_y));
         assert!(low.x >= 0.0 && low.y >= 0.0, "{low:?}");
@@ -214,7 +225,7 @@ mod tests {
         let (sheet, symbol) = preview_sheet(&body_symbol());
         let size = Size::new(60.0, 40.0);
         let extent = symbol_bounds(&sheet, &symbol);
-        let transform = fit_transform(extent, size);
+        let transform = fit_transform(extent, size, UNSCALED);
         let low = transform.world_to_screen((extent.min_x, extent.min_y));
         let high = transform.world_to_screen((extent.max_x, extent.max_y));
         let room = SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM;
@@ -226,11 +237,29 @@ mod tests {
     #[test]
     fn a_tiny_symbol_is_not_blown_up_past_the_zoom_cap() {
         let extent = Aabb::new(-1.0, -0.5, 1.0, 0.5);
-        let transform = fit_transform(extent, Size::new(300.0, 156.0));
+        let transform = fit_transform(extent, Size::new(300.0, 156.0), UNSCALED);
         assert!(
             (transform.scale - max_scale()).abs() < 1e-3,
             "{}",
             transform.scale
         );
+    }
+
+    #[test]
+    fn the_first_draw_and_any_change_rebuild_but_the_same_symbol_does_not() {
+        let lib = body_symbol();
+        let colors = canvas_colors(ThemeId::Signex);
+        let mut shown = None;
+        assert!(take_rebuild(&mut shown, &lib, &colors), "first draw");
+        assert!(!take_rebuild(&mut shown, &lib, &colors), "same symbol");
+
+        let mut other = body_symbol();
+        other.id = "L:Other".into();
+        assert!(take_rebuild(&mut shown, &other, &colors), "changed symbol");
+        assert!(!take_rebuild(&mut shown, &other, &colors), "settled again");
+
+        let dark = canvas_colors(ThemeId::SolarizedLight);
+        assert_ne!(colors, dark, "the two themes must differ");
+        assert!(take_rebuild(&mut shown, &other, &dark), "changed colours");
     }
 }

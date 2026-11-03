@@ -115,6 +115,7 @@ pub fn view<'a>(
     panel: &'a ComponentsPanelState,
     tokens: &'a ThemeTokens,
     canvas_colors: &signex_types::theme::CanvasColors,
+    device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let primary = theme_ext::text_primary(tokens);
@@ -171,9 +172,14 @@ pub fn view<'a>(
     col = col.push(section_title("Symbol", primary));
     col = col.push(match &d.symbol {
         Some(symbol) => preview_box(
-            symbol_canvas::symbol_preview(symbol, *canvas_colors, PREVIEW_HEIGHT)
-                // The preview canvas publishes nothing.
-                .map(|()| LibraryMessage::ComponentsPanelRowMenuDismissed),
+            symbol_canvas::symbol_preview(
+                symbol.clone(),
+                *canvas_colors,
+                PREVIEW_HEIGHT,
+                device_px_per_logical_px,
+            )
+            // The preview canvas publishes nothing.
+            .map(|()| LibraryMessage::ComponentsPanelRowMenuDismissed),
             tokens,
         ),
         None => empty("No symbol.", muted),
@@ -238,6 +244,9 @@ fn section_title<'a>(label: &'a str, color: Color) -> Element<'a, LibraryMessage
         .into()
 }
 
+/// Border width of the preview box, px.
+const PREVIEW_BORDER_WIDTH: f32 = 1.0;
+
 /// A bordered panel-coloured box around a preview.
 fn preview_box<'a>(
     inner: Element<'a, LibraryMessage>,
@@ -247,10 +256,13 @@ fn preview_box<'a>(
     let border_c = theme_ext::border_color(tokens);
     container(inner)
         .width(Length::Fill)
+        // Inset by the border so a preview's own fill leaves the stroke and
+        // the rounded corners visible.
+        .padding(PREVIEW_BORDER_WIDTH)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(bg)),
             border: Border {
-                width: 1.0,
+                width: PREVIEW_BORDER_WIDTH,
                 radius: SP.xs.into(),
                 color: border_c,
             },

@@ -31,6 +31,7 @@ pub fn view<'a>(
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     canvas_colors: &CanvasColors,
+    device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let body = column![
@@ -41,6 +42,7 @@ pub fn view<'a>(
             library_state,
             tokens,
             canvas_colors,
+            device_px_per_logical_px,
             &address,
             library_state.is_read_only(&state.library_path),
         ),
@@ -100,6 +102,7 @@ fn render_panes<'a>(
     library_state: &LibraryState,
     tokens: &'a ThemeTokens,
     canvas_colors: &CanvasColors,
+    device_px_per_logical_px: f32,
     address: &EditorAddress,
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
@@ -159,9 +162,10 @@ fn render_panes<'a>(
         .flatten()
         .map(|sym| {
             crate::panels::components_panel::details::symbol_canvas::symbol_preview(
-                &sym.to_lib_symbol(sym.name.clone()),
+                sym.to_lib_symbol(sym.name.clone()),
                 *canvas_colors,
                 PREVIEW_PANE_HEIGHT,
+                device_px_per_logical_px,
             )
             .map(|()| LibraryMessage::Noop)
         });

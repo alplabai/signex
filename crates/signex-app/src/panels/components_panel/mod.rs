@@ -165,7 +165,8 @@ pub fn view<'a>(
         container(details::view(
             &state.components_panel,
             tokens,
-            &ctx.canvas_colors
+            &ctx.canvas_colors,
+            ctx.device_px_per_logical_px,
         ))
         .height(Length::Fill)
         .width(Length::Fill),
