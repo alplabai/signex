@@ -538,6 +538,10 @@ impl Signex {
         .height(Length::Fill);
 
         // ── Footer ──
+        // A run reads, numbers and writes off the UI thread; the buttons that
+        // start another stay off until it ends (#1753).
+        let busy = self.ui_state.annotate_runs.is_running();
+        let idle = |message: Message| (!busy).then_some(message);
         let footer = row![
             secondary_button(
                 "All On",
@@ -553,33 +557,39 @@ impl Signex {
                 border_c,
             ),
             Space::new().width(Length::Fill),
+            text(if busy { "Running…" } else { "" })
+                .size(TS.caption)
+                .color(text_muted),
+            Space::new().width(SP.m),
             secondary_button_maybe(
                 "Re-prefix to standard",
-                (standard.is_some() && !self.ui_state.annotate_preview.loading)
+                (standard.is_some() && !self.ui_state.annotate_preview.loading && !busy)
                     .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed)),
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
-            secondary_button(
+            secondary_button_maybe(
                 "Reset All",
-                Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetOnly)),
+                idle(Message::Annotate(AnnotateMsg::Run(
+                    signex_engine::AnnotateMode::ResetOnly,
+                ))),
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
-            secondary_button(
+            secondary_button_maybe(
                 "Reset & Renumber",
-                Message::Annotate(AnnotateMsg::Run(
+                idle(Message::Annotate(AnnotateMsg::Run(
                     signex_engine::AnnotateMode::ResetAndRenumber,
-                )),
+                ))),
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
             primary_button(
                 "Accept Changes",
-                if changes == 0 || self.ui_state.annotate_preview.loading {
+                if changes == 0 || self.ui_state.annotate_preview.loading || busy {
                     None
                 } else {
                     Some(Message::Annotate(AnnotateMsg::Run(
@@ -705,9 +715,11 @@ impl Signex {
                         Space::new().width(8),
                         primary_button(
                             "Reset & Renumber",
-                            Some(Message::Annotate(AnnotateMsg::Run(
-                                signex_engine::AnnotateMode::ResetAndRenumber,
-                            ))),
+                            (!self.ui_state.annotate_runs.is_running()).then_some(
+                                Message::Annotate(AnnotateMsg::Run(
+                                    signex_engine::AnnotateMode::ResetAndRenumber,
+                                ))
+                            ),
                             border_c,
                         ),
                     ]

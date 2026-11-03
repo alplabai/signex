@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
-use signex_types::schematic::{SchematicSheet, Symbol};
+use signex_types::schematic::{InstancePath, SchematicSheet, Symbol};
+
+use super::annotate_placements::{WalkDocs, multi_placed_files, project_base_dir_of};
 
 use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::{AnnotateMsg, Message, Signex};
@@ -42,16 +44,33 @@ pub struct AnnotatePreviewCache {
     /// is nothing to annotate.
     pub load_failed: bool,
     /// The project's sheets, in the order the action walks them.
-    sheets: Arc<Vec<(String, SchematicSheet)>>,
+    sheets: Arc<PreviewSheets>,
     /// Rows derived from `sheets` and the lock set - what the dialog renders.
     pub entries: Vec<AnnotatePreviewEntry>,
+}
+
+/// One sheet file of the preview walk.
+#[derive(Debug, Clone)]
+struct PreviewSheet {
+    title: String,
+    /// Empty for a never-saved active document.
+    path: PathBuf,
+    sheet: SchematicSheet,
+}
+
+/// The sheets of the walk, in the pass's order, and the files among them that
+/// the project places more than once (#1919).
+#[derive(Debug, Default, Clone)]
+struct PreviewSheets {
+    sheets: Vec<PreviewSheet>,
+    multi: std::collections::HashMap<PathBuf, Vec<InstancePath>>,
 }
 
 /// The sheets (with display titles) a load produced, plus anything that could
 /// not be read.
 #[derive(Debug)]
 pub struct AnnotatePreviewLoad {
-    sheets: Vec<(String, SchematicSheet)>,
+    sheets: PreviewSheets,
     warnings: Vec<String>,
 }
 
@@ -61,6 +80,7 @@ pub(crate) struct AnnotatePreviewInputs {
     pages: Vec<PathBuf>,
     root: Option<PathBuf>,
     fold: crate::app::state::scope::CaseFold,
+    project_dir: Option<PathBuf>,
     active_path: Option<PathBuf>,
     active_doc: Option<SchematicSheet>,
     tab_titles: Vec<(PathBuf, String)>,
@@ -70,25 +90,6 @@ pub(crate) struct AnnotatePreviewInputs {
 /// anchors whose "reference" is the net name.
 fn is_target(sym: &Symbol) -> bool {
     !sym.is_power && !sym.reference.starts_with('#')
-}
-
-/// Highest number already claimed per prefix across `sheets` — the same seed
-/// `handle_annotate`'s pass A builds, from the same sheet set.
-fn seed_counters(sheets: &[(String, SchematicSheet)]) -> std::collections::HashMap<String, u32> {
-    let mut next: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
-    for (_, sheet) in sheets {
-        for sym in sheet.symbols.iter().filter(|s| is_target(s)) {
-            let (prefix, number) = signex_types::designator::split_reference(&sym.reference);
-            if prefix.is_empty() {
-                continue;
-            }
-            if let Some(n) = number {
-                let e = next.entry(prefix.to_owned()).or_insert(0);
-                *e = (*e).max(n);
-            }
-        }
-    }
-    next
 }
 
 /// Display title of a sheet: its tab title when open, its file stem otherwise.
@@ -127,8 +128,10 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
         .collect();
     let active_path = inputs.active_path.as_deref();
     let ordered_paths = project_sheets::ordered_project_sheet_paths(&set, active_path);
+    let base_dir = project_base_dir_of(inputs.project_dir.as_deref(), &set);
+    let multi = multi_placed_files(&set, base_dir.as_deref());
     let mut sheets = set.sheets;
-    let mut out: Vec<(String, SchematicSheet)> = Vec::with_capacity(ordered_paths.len() + 1);
+    let mut out: Vec<PreviewSheet> = Vec::with_capacity(ordered_paths.len() + 1);
     for path in &ordered_paths {
         let sheet = match sheets.remove(path) {
             Some(sheet) => sheet,
@@ -141,7 +144,11 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
             },
             None => continue,
         };
-        out.push((sheet_display_title(&inputs.tab_titles, path), sheet));
+        out.push(PreviewSheet {
+            title: sheet_display_title(&inputs.tab_titles, path),
+            path: path.clone(),
+            sheet,
+        });
     }
     // A never-saved active document has no path at all, so it can't appear in
     // `ordered_paths` either - same unconditional last slot `handle_annotate`
@@ -149,43 +156,86 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
     if active_path.is_none()
         && let Some(doc) = inputs.active_doc
     {
-        out.push(("(untitled)".to_string(), doc));
+        out.push(PreviewSheet {
+            title: "(untitled)".to_string(),
+            path: PathBuf::new(),
+            sheet: doc,
+        });
     }
     AnnotatePreviewLoad {
-        sheets: out,
+        sheets: PreviewSheets { sheets: out, multi },
         warnings,
     }
 }
 
+/// One title per numbering unit: the sheet's own, or `title (placement n of m)`
+/// for a sheet file placed more than once.
+fn unit_titles(
+    sheets: &[PreviewSheet],
+    placements: &[Vec<signex_engine::AnnotatePlacement>],
+) -> Vec<String> {
+    let mut titles = Vec::new();
+    for (sheet, places) in sheets.iter().zip(placements) {
+        if places.is_empty() {
+            titles.push(sheet.title.clone());
+        }
+        for n in 0..places.len() {
+            titles.push(format!(
+                "{} (placement {} of {})",
+                sheet.title,
+                n + 1,
+                places.len()
+            ));
+        }
+    }
+    titles
+}
+
 /// The proposed `(current, new)` reference designators Annotate would hand
-/// out across the project. One row per symbol so the user sees the whole
-/// project; rows where `current == proposed` are "no change". Pure CPU over
-/// already-loaded sheets.
+/// out across the project. One row per symbol per numbering unit, so a sheet
+/// file placed more than once lists its symbols once per placement, as the
+/// pass numbers them (#1919); rows where `current == proposed` are "no
+/// change". Pure CPU over already-loaded sheets.
 fn compute_entries(
-    sheets: &[(String, SchematicSheet)],
+    walked: &PreviewSheets,
     locked: &std::collections::HashSet<uuid::Uuid>,
     order: crate::app::state::AnnotateOrder,
 ) -> Vec<AnnotatePreviewEntry> {
-    let mut next = seed_counters(sheets);
+    let paths: Vec<PathBuf> = walked.sheets.iter().map(|s| s.path.clone()).collect();
+    let symbols_of: std::collections::HashMap<&Path, &[Symbol]> = walked
+        .sheets
+        .iter()
+        .map(|s| (s.path.as_path(), s.sheet.symbols.as_slice()))
+        .collect();
+    // The same units the pass walks: one per file, or per placement.
+    let walk = WalkDocs::new(
+        &paths,
+        |path| symbols_of.get(path).copied().unwrap_or(&[]),
+        &walked.multi,
+    );
+    let titles = unit_titles(&walked.sheets, &walk.placements);
+    let mut next = signex_types::designator::seed_counters(
+        walk.docs
+            .iter()
+            .flat_map(|doc| doc.iter())
+            .filter(|sym| is_target(sym))
+            .map(|sym| sym.reference.as_str()),
+    );
     // The same project-wide grouping the action builds, so the preview
     // promises one designator per multi-unit part, even one split across
     // sheets, and honours locks the way the pass does (#691).
-    let documents: Vec<&[Symbol]> = sheets
-        .iter()
-        .map(|(_, sheet)| sheet.symbols.as_slice())
-        .collect();
-    let parts = signex_types::schematic::ProjectParts::new(&documents, locked, order);
+    let parts = signex_types::schematic::ProjectParts::new(&walk.slices(), locked, order);
     let mut designator_of_part: std::collections::HashMap<usize, String> =
         std::collections::HashMap::new();
     let mut out = Vec::new();
-    for (sheet_ordinal, (title, sheet)) in sheets.iter().enumerate() {
-        for i in signex_types::schematic::annotation_order(&sheet.symbols, parts.order()) {
-            let sym = &sheet.symbols[i];
+    for (unit, doc) in walk.docs.iter().enumerate() {
+        for i in signex_types::schematic::annotation_order(doc, parts.order()) {
+            let sym = &doc[i];
             if sym.reference.is_empty() || !is_target(sym) {
                 continue;
             }
             let prefix = signex_types::designator::alphabetic_prefix(&sym.reference).to_owned();
-            let part = parts.part(sheet_ordinal, i);
+            let part = parts.part(unit, i);
             let pinned = locked.contains(&sym.uuid)
                 || part.is_some_and(|p| parts.locked_designator(p).is_some());
             let proposed = if sym.reference.ends_with('?') && !prefix.is_empty() && !pinned {
@@ -205,7 +255,7 @@ fn compute_entries(
                 sym.reference.clone()
             };
             out.push(AnnotatePreviewEntry {
-                sheet: title.clone(),
+                sheet: titles[unit].clone(),
                 current: sym.reference.clone(),
                 proposed,
                 uuid: sym.uuid,
@@ -244,9 +294,13 @@ fn fingerprint(state: &crate::app::state::DocumentState) -> u64 {
                 sym.position.y.to_bits(),
             )
                 .hash(&mut h);
+            // Per-placement designators (#1919) live here, not in `reference`.
+            for instance in &sym.instances {
+                (&instance.path, &instance.reference).hash(&mut h);
+            }
         }
         for child in &doc.child_sheets {
-            child.filename.hash(&mut h);
+            (child.uuid, &child.filename).hash(&mut h);
         }
     }
     h.finish()
@@ -303,6 +357,9 @@ impl Signex {
                 .clone()
                 .map(|active| project_sheets::resolve_netlist_root(ds).unwrap_or(active)),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
+            project_dir: ds
+                .active_document_project()
+                .map(|project| project.dir().to_path_buf()),
             active_path: ds.active_path.clone(),
             active_doc: ds.active_engine().map(|e| e.document().clone()),
             tab_titles: ds
