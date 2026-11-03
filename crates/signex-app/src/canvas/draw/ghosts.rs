@@ -32,6 +32,7 @@ impl SchematicCanvas<'_> {
                 offset_x: cam.offset.x,
                 offset_y: cam.offset.y,
                 scale: cam.scale,
+                device_px_per_logical_px: self.prefs.device_px_per_logical_px,
             };
             let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
             crate::schematic_runtime::draw_power_port_preview(
@@ -70,6 +71,7 @@ impl SchematicCanvas<'_> {
             offset_x: cam.offset.x,
             offset_y: cam.offset.y,
             scale: cam.scale,
+            device_px_per_logical_px: self.prefs.device_px_per_logical_px,
         };
         ghost.draw(frame, &camera, anchor, &self.prefs.canvas_colors);
     }
@@ -102,6 +104,7 @@ impl SchematicCanvas<'_> {
                 offset_x: cam.offset.x,
                 offset_y: cam.offset.y,
                 scale: cam.scale,
+                device_px_per_logical_px: self.prefs.device_px_per_logical_px,
             };
             let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
             crate::schematic_runtime::text::draw_text_note_preview(
@@ -116,6 +119,27 @@ impl SchematicCanvas<'_> {
         }
     }
 
+    /// The width a placed bus entry draws at: the stroke law at wire weight,
+    /// on this window's device-pixel grid.
+    pub(crate) fn placed_bus_entry_stroke_px(&self, scale: f32) -> f32 {
+        signex_types::schematic::stroke_px(
+            signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
+            scale,
+            self.prefs.device_px_per_logical_px,
+        )
+    }
+
+    /// A placed bus entry (or its ghost) between screen points: the placed
+    /// width and the whole-pixel snap.
+    pub(crate) fn placed_bus_entry_line(
+        &self,
+        from: iced::Point,
+        to: iced::Point,
+        scale: f32,
+    ) -> (iced::Point, iced::Point, f32) {
+        self.snap_screen_line(from, to, self.placed_bus_entry_stroke_px(scale))
+    }
+
     /// Ghost bus entry: the bus end follows the cursor, snapping onto the
     /// nearest bus within one grid step exactly as a click would, and the
     /// other end follows the stored orientation.
@@ -125,15 +149,28 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor_pos: iced::Point,
     ) {
-        use signex_types::schematic::{
-            Point as SchPoint, SCHEMATIC_RENDER_MIN_STROKE_MM, UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-            snap_to_bus, stroke_px,
-        };
-        let Some(size) = self.ghost_bus_entry else {
+        let Some((from, to, width)) = self.ghost_bus_entry_line(bounds, cursor_pos) else {
             return;
         };
+        frame.stroke(
+            &canvas::Path::line(from, to),
+            canvas::Stroke::default()
+                .with_color(Color::from_rgba(0.3, 0.8, 1.0, 0.7))
+                .with_width(width),
+        );
+    }
+
+    /// Screen end points and width the ghost bus entry draws at, or `None`
+    /// when there is no ghost to show.
+    pub(crate) fn ghost_bus_entry_line(
+        &self,
+        bounds: Rectangle,
+        cursor_pos: iced::Point,
+    ) -> Option<(iced::Point, iced::Point, f32)> {
+        use signex_types::schematic::{Point as SchPoint, snap_to_bus};
+        let size = self.ghost_bus_entry?;
         if self.placement_paused {
-            return;
+            return None;
         }
         let cam = self.camera();
         let world = cam.screen_to_world(cursor_pos, bounds);
@@ -153,22 +190,11 @@ impl SchematicCanvas<'_> {
             .unwrap_or(at);
         let to_screen =
             |p: SchPoint| cam.world_to_screen(iced::Point::new(p.x as f32, p.y as f32), bounds);
-        let path = canvas::Path::line(
+        Some(self.placed_bus_entry_line(
             to_screen(start),
             to_screen(SchPoint::new(start.x + size.0, start.y + size.1)),
-        );
-        // The placed entry's width under the same law (wire weight).
-        let width = stroke_px(
-            SCHEMATIC_RENDER_MIN_STROKE_MM as f32,
             cam.scale,
-            UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-        );
-        frame.stroke(
-            &path,
-            canvas::Stroke::default()
-                .with_color(Color::from_rgba(0.3, 0.8, 1.0, 0.7))
-                .with_width(width),
-        );
+        ))
     }
 
     /// Ghost label / port preview following the cursor.
@@ -200,6 +226,7 @@ impl SchematicCanvas<'_> {
                 offset_x: cam.offset.x,
                 offset_y: cam.offset.y,
                 scale: cam.scale,
+                device_px_per_logical_px: self.prefs.device_px_per_logical_px,
             };
             let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
             let ghost_fill = Color::from_rgba(0.3, 0.8, 1.0, 0.15);

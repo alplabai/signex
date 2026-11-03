@@ -39,6 +39,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 display_name: "p".into(),
                 is_outside_project: false,
                 unsaved_prompt: false,
+                is_directory_package: false,
             })
         }
         ModalId::EnableVersionControl => {
@@ -129,6 +130,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                     library_path: "l.snxlib".into(),
                     library_name: "l".into(),
                     dirty_editors: Vec::new(),
+                    dirty_paths: Vec::new(),
                 })
         }
         ModalId::LibraryRecovery => {
@@ -153,6 +155,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 loose: Vec::new(),
                 copy_confirm: None,
                 copying: false,
+                opening_library: None,
             })
         }
         ModalId::LibraryDocumentOptions => {

@@ -141,8 +141,11 @@ pub(super) fn dirty_symbol_in_library(f: &mut Fixture) -> PathBuf {
     path
 }
 
+/// A draft whose container save is running is unsaved until the write lands
+/// (a failed write leaves it dirty), so Close Library asks instead of waiting
+/// (#1900).
 #[test]
-fn a_close_deferred_behind_a_container_save_completes_when_the_save_lands() {
+fn a_close_requested_behind_a_container_save_asks_and_the_save_still_lands() {
     let mut f = fixture();
     let path = dirty_symbol_in_library(&mut f);
     let save = f.app.save_primitive_tab_at(&path).expect("save starts");
@@ -152,12 +155,14 @@ fn a_close_deferred_behind_a_container_save_completes_when_the_save_lands() {
         "the save holds a turn"
     );
     request_close(&mut f);
-    assert!(!closed(&f), "the close waits for the container save");
+    assert!(!closed(&f), "the draft is not saved yet");
+    assert!(f.app.library.close_library_confirm.is_some(), "so it asks");
 
     run_task(&mut f.app, save);
 
     assert!(path.exists(), "the container was written");
-    assert!(closed(&f), "and the close finished with it");
+    assert!(!f.app.document_state.is_document_dirty(&path));
+    assert!(!closed(&f), "the prompt, not the write, decides the close");
 }
 
 /// Review #1728: Cancel in the close prompt also cancels a close that was

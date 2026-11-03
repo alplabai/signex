@@ -54,6 +54,7 @@ impl Default for LibraryState {
         Self {
             datasheet_opener: crate::library::placed_part::opener::open,
             drift: Default::default(),
+            pending_symbol_delete: None,
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
@@ -63,6 +64,9 @@ impl Default for LibraryState {
             picker: None,
             settings,
             panel_search: String::new(),
+            panel_expanded: Default::default(),
+            panel_selected: None,
+            panel_last_click: Default::default(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -72,6 +76,7 @@ impl Default for LibraryState {
             primitive_picker: None,
             document_options: None,
             recovery: None,
+            missing: Default::default(),
             create_options: None,
             library_updates: None,
             queued_library_updates: Vec::new(),
@@ -80,6 +85,9 @@ impl Default for LibraryState {
             global_libraries: Vec::new(),
             stock_library: None,
             stock_library_root: None,
+            stock_editable: false,
+            stock_copies_refused: Vec::new(),
+            id_clash_notices: Vec::new(),
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -95,6 +103,7 @@ impl Default for LibraryState {
             refresh_generation_counter: 0,
             preview_generations: HashMap::new(),
             editor_reload_generations: HashMap::new(),
+            tab_resolve_generations: HashMap::new(),
             row_summary_job: Default::default(),
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
@@ -272,7 +281,17 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, false)
+        self.open_library_marked(root, false, &[])
+    }
+
+    /// [`Self::open_library`] knowing which paths the open projects list,
+    /// so a shared `library_id` is settled by source (#1908).
+    pub fn open_library_among(
+        &mut self,
+        root: PathBuf,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false, project_paths)
     }
 
     /// Mount the library at `root` read-only — the stock library that
@@ -280,7 +299,7 @@ impl LibraryState {
     /// with `LibraryError::ReadOnly` whatever the install directory's
     /// permissions are. Idempotent like [`Self::open_library`].
     pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, true)
+        self.open_library_marked(root, true, &[])
     }
 
     /// True when the library mounted at `root` is read-only.
@@ -319,6 +338,21 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
+    /// A shared handle on the adapter mounted for the library at `root`,
+    /// for a read that leaves the UI thread.
+    pub(crate) fn shared_adapter_at(&self, root: &Path) -> Option<Arc<dyn LibraryAdapter>> {
+        let id = self.library_at(root)?.library_id;
+        self.set.get_shared(id)
+    }
+
+    /// Shared handles on every mounted adapter, by library id.
+    pub(crate) fn shared_adapters(&self) -> Vec<(Uuid, Arc<dyn LibraryAdapter>)> {
+        self.open_libraries
+            .iter()
+            .filter_map(|lib| Some((lib.library_id, self.set.get_shared(lib.library_id)?)))
+            .collect()
+    }
+
     /// Whether `path` is the bundled stock library's file.
     pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
         self.stock_library_root
@@ -326,7 +360,19 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
-    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
+    /// Whether `path` is the stock library and it is locked: mounted
+    /// read-only, with opens of its primitives sent to Copy to Library.
+    /// False only in the maintainer mode of #1892 (`stock_editable`).
+    pub(crate) fn is_locked_stock_root(&self, path: &Path) -> bool {
+        !self.stock_editable && self.is_stock_root(path)
+    }
+
+    fn open_library_marked(
+        &mut self,
+        root: PathBuf,
+        read_only: bool,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             self.cancel_pending_close(&root, "it was opened again");
             return Ok(());
@@ -338,20 +384,10 @@ impl LibraryState {
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
-        // `LibrarySet::mount` keys file-backed adapters by their
-        // `.snxlib` *path*, so the `Conflict` it can return here means
-        // "this same path is already mounted" — not "this library_id is
-        // already taken". Two copies of a library sharing a `library_id`
-        // at different paths both mount fine, by design (see
-        // `adapters/library_set.rs`, "Resolution semantics").
-        //
-        // So this is NOT a guard against the copy-pasted-`.snxlib`-
-        // without-a-regenerated-manifest-UUID case: `set.get(library_id)`
-        // returns the *first* match, and a cross-library `PrimitiveRef`
-        // can still resolve to whichever copy wins. Detecting and
-        // surfacing that collision is the Components Panel's job at
-        // presentation time.
-        let read_only = read_only || self.is_stock_root(&root);
+        self.refuse_stock_copy(&root, library_id)?;
+        self.resolve_id_clash(&root, library_id, project_paths)?;
+        // `LibrarySet::mount` refuses this path if it is already mounted.
+        let read_only = read_only || self.is_locked_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
         } else {
@@ -483,6 +519,12 @@ impl LibraryState {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
 
+    /// Dirty editors whose library path `in_library` accepts; for a caller
+    /// that compares paths by its own case policy.
+    pub fn dirty_editors_matching(&self, in_library: impl Fn(&Path) -> bool) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| in_library(&key.library_path))
+    }
+
     /// Every dirty editor address across all open libraries — the rows
     /// an app-quit prompt has to account for.
     pub fn dirty_editors(&self) -> Vec<EditorAddress> {
@@ -528,11 +570,11 @@ impl LibraryState {
         path: &Path,
         project_paths: &[PathBuf],
     ) -> ComponentsMountSource {
+        if self.is_stock_root(path) {
+            return ComponentsMountSource::Stock;
+        }
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
-        }
-        if self.stock_library.as_deref() == Some(path) {
-            return ComponentsMountSource::Stock;
         }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;
@@ -706,11 +748,19 @@ impl OpenLibrary {
         // Stamp before reading: a write racing the read then costs one
         // extra refresh on the next poll, never a missed one.
         let stamp = signex_library::DiskStamp::of(&self.root).ok();
-        let names = adapter.list_tables()?;
+        let names = match adapter.list_tables() {
+            Ok(names) => names,
+            Err(e) => {
+                self.dangling.tables_not_listed = true;
+                return Err(e);
+            }
+        };
+        self.dangling.tables_not_listed = false;
         let super::table_scan::TableScan {
             tables,
             summaries,
             pricing,
+            unreadable,
         } = super::table_scan::scan_tables(
             adapter,
             names,
@@ -733,6 +783,7 @@ impl OpenLibrary {
             },
         );
         self.tables = tables;
+        self.dangling.unreadable_tables = unreadable;
         self.pricing = pricing;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();

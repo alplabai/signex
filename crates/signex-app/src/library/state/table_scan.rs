@@ -9,6 +9,8 @@ pub(super) struct TableScan {
     pub tables: HashMap<String, Vec<ComponentRow>>,
     pub summaries: Vec<ComponentSummary>,
     pub pricing: HashMap<Uuid, signex_library::RowPricing>,
+    /// Tables whose rows failed to read (cached empty), sorted.
+    pub unreadable: Vec<String>,
 }
 
 /// Read every table in `names`. A failed price read is handed to
@@ -26,6 +28,7 @@ pub(super) fn scan_tables(
         tables: HashMap::new(),
         summaries: Vec::new(),
         pricing: HashMap::new(),
+        unreadable: Vec::new(),
     };
     for name in names {
         match adapter.table_pricing(&name) {
@@ -39,10 +42,12 @@ pub(super) fn scan_tables(
             }
             Err(e) => {
                 on_read_err(&name, &e);
+                scan.unreadable.push(name.clone());
                 scan.tables.insert(name, Vec::new());
             }
         }
     }
+    scan.unreadable.sort();
     scan
 }
 

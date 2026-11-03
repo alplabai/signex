@@ -160,6 +160,12 @@ fn restarted(w: &World) -> Signex {
         let task = app.update(next);
         pending.extend(run(task));
     }
+    // A real restart has one stock library. The boot task mounted the
+    // repo's; swap it for the world's copy, which carries the same id and
+    // would otherwise be refused next to it (#1894).
+    if let Some(repo_stock) = app.library.stock_library.take() {
+        app.library.close_library(&repo_stock);
+    }
     app.library.stock_library_root = Some(w.stock.clone());
     app.library
         .open_library_read_only(w.stock.clone())
@@ -747,4 +753,38 @@ fn a_global_add_while_a_copy_runs_survives_the_copy_finishing() {
         1,
         "no duplicate"
     );
+}
+
+/// The Component Preview's Open Symbol Editor button (#1891): it used to
+/// reach a placeholder that only logged. On a stock symbol it now asks
+/// which library gets the copy, like every other open.
+#[test]
+fn the_preview_open_editor_button_on_a_stock_symbol_asks_which_library() {
+    let mut w = world();
+    let stock_r = w.stock_r();
+
+    w.settle(Message::Library(LibraryMessage::OpenPrimitiveEditor {
+        path: stock_r.clone(),
+    }));
+
+    let dialog = w.app.library.stock_copy.as_ref().expect("the dialog opens");
+    assert_eq!(dialog.source, stock_r);
+    assert!(w.editor_paths().is_empty(), "no editor on the stock file");
+}
+
+/// #1891: on a writable library's symbol the button opens its editor tab.
+#[test]
+fn the_preview_open_editor_button_opens_a_writable_symbol() {
+    let mut w = world();
+    let mine = w.target_dir().join("symbols/R.snxsym");
+    std::fs::create_dir_all(mine.parent().unwrap()).expect("mkdir");
+    std::fs::copy(w.stock_r(), &mine).expect("copy");
+
+    w.settle(Message::Library(LibraryMessage::OpenPrimitiveEditor {
+        path: mine.clone(),
+    }));
+
+    assert_eq!(w.editor_paths(), vec![mine]);
+    assert!(w.app.library.stock_copy.is_none());
+    assert!(w.app.document_state.error_notice.is_none());
 }

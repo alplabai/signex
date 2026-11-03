@@ -49,8 +49,17 @@ use crate::app::library_entry::library_entry_location;
 /// caller: `self.library` is app-global, so re-opening an
 /// already-mounted library lands here.
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
+    open_library_among(state, root, &[])
+}
+
+/// [`open_library`] knowing which paths the open projects list (#1908).
+pub fn open_library_among(
+    state: &mut LibraryState,
+    root: PathBuf,
+    project_paths: &[PathBuf],
+) -> Result<(), LibraryError> {
     let already_open = state.library_at(&root).is_some();
-    state.open_library(root.clone())?;
+    state.open_library_among(root.clone(), project_paths)?;
     if already_open && let Err(e) = state.refresh_components(&root) {
         tracing::warn!(target: "signex::library", path = %root.display(), error = %e, "refresh_components failed; UI starts with empty list");
     }

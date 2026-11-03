@@ -1,4 +1,4 @@
-//! Pixel snapping for axis-aligned hairlines in the CPU scene replay.
+//! Pixel snapping for hairlines and outlines in the CPU scene replay.
 //!
 //! The canvas rasteriser has no anti-aliasing, so a 1.9 px stroke covers one
 //! or two pixel rows depending on where its centre falls, and a horizontal and
@@ -27,18 +27,137 @@ pub(crate) fn snap_hairline(
     width: f32,
     device_px_per_logical_px: f32,
 ) -> (Point, Point, f32) {
-    let dpr = if device_px_per_logical_px.is_finite() && device_px_per_logical_px > 0.0 {
-        device_px_per_logical_px
-    } else {
-        1.0
-    };
+    let dpr = normalised_dpr(device_px_per_logical_px);
     if dpr == 1.0 {
         return snap_device(p0, p1, width);
     }
-    let to_device = |p: Point| Point::new(p.x * dpr, p.y * dpr);
-    let to_logical = |p: Point| Point::new(p.x / dpr, p.y / dpr);
-    let (q0, q1, w) = snap_device(to_device(p0), to_device(p1), width * dpr);
-    (to_logical(q0), to_logical(q1), w / dpr)
+    let (q0, q1, w) = snap_device(to_device(p0, dpr), to_device(p1, dpr), width * dpr);
+    (to_logical(q0, dpr), to_logical(q1, dpr), w / dpr)
+}
+
+/// The width of a ring stroke (circle, arc) snapped to whole device pixels by
+/// the same rule as [`snap_hairline`]. Logical pixels in and out.
+#[must_use]
+pub(crate) fn snap_stroke_width(width: f32, device_px_per_logical_px: f32) -> f32 {
+    let dpr = normalised_dpr(device_px_per_logical_px);
+    snapped_width(width * dpr) / dpr
+}
+
+/// A closed outline snapped like [`snap_hairline`]. A rectilinear outline (a
+/// rectangle, a rectilinear polygon) snaps its width and every edge to whole
+/// device pixel rows, like a wire. An outline with a slanted edge keeps its
+/// exact vertices and width, like a diagonal line does. An outline that would
+/// collapse to a line or a point when snapped (under about one device pixel
+/// across) keeps its exact vertices and snaps only the width. Logical pixels
+/// in and out.
+#[must_use]
+pub(crate) fn snap_outline(
+    ring: &[Point],
+    width: f32,
+    device_px_per_logical_px: f32,
+) -> (Vec<Point>, f32) {
+    let dpr = normalised_dpr(device_px_per_logical_px);
+    let width_device = width * dpr;
+    if width_device >= SNAP_BELOW_PX || !width_device.is_finite() {
+        return (ring.to_vec(), width);
+    }
+    // One rule: rectilinear is decided on the same device ring the snap tests.
+    let device: Vec<Point> = ring.iter().map(|p| to_device(*p, dpr)).collect();
+    if !is_rectilinear(&device) {
+        return (ring.to_vec(), width);
+    }
+    let snapped = snapped_width(width_device);
+    let points = snap_rectilinear_ring(&device, snapped);
+    if collapses(&device, &points) {
+        return (ring.to_vec(), snapped / dpr);
+    }
+    (
+        points.into_iter().map(|p| to_logical(p, dpr)).collect(),
+        snapped / dpr,
+    )
+}
+
+/// Snap each edge's shared coordinate once (a horizontal edge's `y`, a
+/// vertical edge's `x`) and give both its end vertices that value, so two
+/// near-equal coordinates cannot land on different pixel rows. A vertex
+/// between two collinear edges keeps the previous edge's snapped value on
+/// their shared axis and snaps only the other axis.
+fn snap_rectilinear_ring(ring: &[Point], width: f32) -> Vec<Point> {
+    let n = ring.len();
+    let horizontal = |i: usize| (ring[i].y - ring[(i + 1) % n].y).abs() < AXIS_EPS;
+    // Edge `i` joins vertex `i` to vertex `i + 1`.
+    let edge_coord = |i: usize| {
+        let (a, b) = (ring[i], ring[(i + 1) % n]);
+        if horizontal(i) {
+            snap_centre((a.y + b.y) / 2.0, width)
+        } else {
+            snap_centre((a.x + b.x) / 2.0, width)
+        }
+    };
+    (0..n)
+        .map(|i| {
+            let (prev, next) = ((i + n - 1) % n, i);
+            let x = [prev, next]
+                .into_iter()
+                .find(|e| !horizontal(*e))
+                .map_or_else(|| snap_centre(ring[i].x, width), edge_coord);
+            let y = [prev, next]
+                .into_iter()
+                .find(|e| horizontal(*e))
+                .map_or_else(|| snap_centre(ring[i].y, width), edge_coord);
+            Point::new(x, y)
+        })
+        .collect()
+}
+
+/// True when snapping squeezed an axis the exact ring had an extent on down
+/// to under one device pixel.
+fn collapses(exact: &[Point], snapped: &[Point]) -> bool {
+    let extent = |points: &[Point], axis: fn(&Point) -> f32| {
+        let (lo, hi) = points
+            .iter()
+            .map(axis)
+            .fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+        hi - lo
+    };
+    let axes: [fn(&Point) -> f32; 2] = [|p| p.x, |p| p.y];
+    axes.into_iter()
+        .any(|axis| extent(exact, axis) > AXIS_EPS && extent(snapped, axis) < 1.0)
+}
+
+fn normalised_dpr(dpr: f32) -> f32 {
+    if dpr.is_finite() && dpr > 0.0 {
+        dpr
+    } else {
+        1.0
+    }
+}
+
+fn to_device(p: Point, dpr: f32) -> Point {
+    Point::new(p.x * dpr, p.y * dpr)
+}
+
+fn to_logical(p: Point, dpr: f32) -> Point {
+    Point::new(p.x / dpr, p.y / dpr)
+}
+
+/// Whole-pixel width in device px; wide or non-finite widths stay exact.
+fn snapped_width(width: f32) -> f32 {
+    if width >= SNAP_BELOW_PX || !width.is_finite() {
+        width
+    } else {
+        width.round().max(1.0)
+    }
+}
+
+/// True when the ring has at least 3 vertices and every edge, closing edge
+/// included, is horizontal or vertical.
+fn is_rectilinear(ring: &[Point]) -> bool {
+    ring.len() >= 3
+        && ring
+            .iter()
+            .zip(ring.iter().cycle().skip(1))
+            .all(|(a, b)| (a.x - b.x).abs() < AXIS_EPS || (a.y - b.y).abs() < AXIS_EPS)
 }
 
 /// [`snap_hairline`] on the device-pixel grid.
@@ -46,7 +165,7 @@ fn snap_device(p0: Point, p1: Point, width: f32) -> (Point, Point, f32) {
     if width >= SNAP_BELOW_PX || !width.is_finite() {
         return (p0, p1, width);
     }
-    let snapped_width = width.round().max(1.0);
+    let snapped_width = snapped_width(width);
     if (p0.y - p1.y).abs() < AXIS_EPS {
         let y = snap_centre(p0.y, snapped_width);
         // The ends snap like a centre line, so a vertical leg that meets this
@@ -157,5 +276,108 @@ mod tests {
         assert_eq!(snap_hairline(a, b, 1.9, 1.0), (a, b, 1.9));
         let (c, d) = (Point::new(0.0, 5.3), Point::new(9.0, 5.3));
         assert_eq!(snap_hairline(c, d, 6.4, 1.0), (c, d, 6.4));
+    }
+
+    #[test]
+    fn a_ring_and_a_rectangle_outline_snap_to_the_width_a_wire_gets() {
+        let rect = [
+            Point::new(10.3, 20.4),
+            Point::new(50.7, 20.4),
+            Point::new(50.7, 40.1),
+            Point::new(10.3, 40.1),
+        ];
+        for dpr in [1.0, 2.0] {
+            for width in [0.9, 1.5, 2.4, 3.6, 3.9] {
+                let (_, _, wire) =
+                    snap_hairline(Point::new(0.0, 5.3), Point::new(9.0, 5.3), width, dpr);
+                assert_eq!(snap_stroke_width(width, dpr), wire, "ring {width} @{dpr}x");
+                let (_, outline) = snap_outline(&rect, width, dpr);
+                assert_eq!(outline, wire, "outline {width} @{dpr}x");
+            }
+        }
+    }
+
+    #[test]
+    fn a_rectangle_outline_lands_on_whole_pixel_rows() {
+        let rect = [
+            Point::new(10.3, 20.4),
+            Point::new(50.7, 20.4),
+            Point::new(50.7, 40.1),
+            Point::new(10.3, 40.1),
+        ];
+        let (points, width) = snap_outline(&rect, 3.6, 1.0);
+        assert_eq!(width, 4.0);
+        assert!(
+            points
+                .iter()
+                .all(|p| p.x.fract() == 0.0 && p.y.fract() == 0.0)
+        );
+        assert_eq!((points[0].y, points[2].y), (points[1].y, points[3].y));
+        let (points, width) = snap_outline(&rect, 1.4, 2.0);
+        assert_eq!(width, 1.5);
+        assert!(points.iter().all(|p| (p.x * 2.0).fract() == 0.5));
+    }
+
+    #[test]
+    fn a_slanted_outline_keeps_its_vertices_and_width() {
+        let triangle = [
+            Point::new(0.0, 0.0),
+            Point::new(9.3, 0.0),
+            Point::new(4.1, 7.7),
+        ];
+        let (points, width) = snap_outline(&triangle, 3.6, 1.0);
+        assert_eq!(points, triangle);
+        assert_eq!(
+            width, 3.6,
+            "a slanted edge keeps its width, like a diagonal line"
+        );
+        assert_eq!(snap_outline(&triangle, 6.4, 1.0).1, 6.4);
+    }
+
+    fn extent(points: &[Point], axis: fn(&Point) -> f32) -> f32 {
+        let values = points.iter().map(axis);
+        values.clone().fold(f32::MIN, f32::max) - values.fold(f32::MAX, f32::min)
+    }
+
+    #[test]
+    fn a_tiny_rectangle_outline_keeps_an_extent() {
+        // A 0.6 px square at 1x: snapped corner by corner it would be a point.
+        let tiny = [
+            Point::new(10.1, 20.1),
+            Point::new(10.7, 20.1),
+            Point::new(10.7, 20.7),
+            Point::new(10.1, 20.7),
+        ];
+        let (points, width) = snap_outline(&tiny, 1.0, 1.0);
+        assert_eq!(width, 1.0);
+        assert!(extent(&points, |p| p.x) > 0.5, "{points:?}");
+        assert!(extent(&points, |p| p.y) > 0.5, "{points:?}");
+    }
+
+    #[test]
+    fn near_equal_edge_coordinates_snap_to_one_row() {
+        // The top edge's ends sit either side of a pixel-row boundary.
+        let ring = [
+            Point::new(10.0, 20.9996),
+            Point::new(50.0, 21.0004),
+            Point::new(50.0, 40.0),
+            Point::new(10.0, 40.0),
+        ];
+        let (points, _) = snap_outline(&ring, 1.0, 1.0);
+        assert_eq!(points[0].y, points[1].y, "{points:?}");
+    }
+
+    #[test]
+    fn near_axis_edge_is_not_collapsed_at_2x() {
+        // dy is 1.4e-3 device px at 2x: not axis-aligned, so the outline keeps
+        // its exact vertices instead of merging the top edge's ends.
+        let ring = [
+            Point::new(10.0, 20.0),
+            Point::new(50.0, 20.0007),
+            Point::new(50.0, 40.0),
+            Point::new(10.0, 40.0),
+        ];
+        let (points, _) = snap_outline(&ring, 1.0, 2.0);
+        assert_eq!(points, ring.to_vec());
     }
 }

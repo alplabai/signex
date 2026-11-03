@@ -15,7 +15,9 @@
 //! Tabs, the title bar count, the quit and close gates, Save All and the
 //! project tree all ask [`DocumentState::is_document_dirty`] or one of its
 //! siblings, and every write goes through [`DocumentState::mark_document_dirty`],
-//! [`DocumentState::mark_document_clean`] or [`DocumentState::rekey_document_dirty`].
+//! [`DocumentState::mark_history_edit_dirty`], [`DocumentState::sync_history_dirty`],
+//! [`DocumentState::mark_document_clean`], [`DocumentState::clear_document_dirty`]
+//! or [`DocumentState::rekey_document_dirty`].
 //! The set's contents are private to this module, so the compiler keeps it that way. Rationale and the
 //! failures the old three-way mirror caused: docs/DIRTY_STATE.md.
 
@@ -55,15 +57,30 @@ impl DocumentState {
 
     /// Every dirty document's path: the stored set plus the dirty drafts.
     pub fn dirty_document_paths(&self) -> HashSet<PathBuf> {
-        let symbols = self.symbol_editors.iter().filter(|(_, e)| e.is_dirty());
-        let footprints = self.footprint_editors.iter().filter(|(_, e)| e.is_dirty());
         self.dirty_docs
             .paths
             .iter()
             .cloned()
-            .chain(symbols.map(|(path, _)| path.clone()))
-            .chain(footprints.map(|(path, _)| path.clone()))
+            .chain(self.dirty_primitive_paths())
             .collect()
+    }
+
+    /// Paths of the symbol and footprint editors with unsaved edits, plus
+    /// those whose save is in flight (the snapshot reset the editor flag, the
+    /// write has not landed, and a failed write leaves the draft dirty). The
+    /// one collector the quit, Close Project and Close Library prompts share.
+    pub fn dirty_primitive_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
+        let symbols = self.symbol_editors.iter().filter(|(_, e)| e.is_dirty());
+        let footprints = self.footprint_editors.iter().filter(|(_, e)| e.is_dirty());
+        let saving = self.dirty_docs.paths.iter().filter(|path| {
+            self.symbol_editors.contains_key(*path) || self.footprint_editors.contains_key(*path)
+        });
+        let paths: HashSet<PathBuf> = symbols
+            .map(|(path, _)| path.clone())
+            .chain(footprints.map(|(path, _)| path.clone()))
+            .chain(saving.cloned())
+            .collect();
+        paths.into_iter()
     }
 
     /// Record unsaved edits for `path`. A draft open at `path` owns the flag;
@@ -117,6 +134,16 @@ impl DocumentState {
         }
     }
 
+    /// Where a newly opened symbol editor's `history_generation` starts. Each
+    /// editor gets its own 2^32-step range, so a generation never repeats
+    /// across editor instances and a delete warning raised on a closed editor
+    /// reads stale on the reopened one (#1903).
+    pub fn next_symbol_history_base(&mut self) -> u64 {
+        let base = self.symbol_editors_opened << 32;
+        self.symbol_editors_opened += 1;
+        base
+    }
+
     /// A schematic sheet changed: ERC results taken earlier no longer describe it.
     pub fn note_sheet_edit(&mut self) {
         self.sheet_edit_epoch += 1;
@@ -139,16 +166,40 @@ impl DocumentState {
         }
     }
 
-    /// The document at `path` matches the disk (a save landed) or its edits
-    /// were discarded: clear every place that knew it dirty.
+    /// An edit recorded in the engine's history at `path` that no command
+    /// path marked: dirty now, and clean again when undo returns to the save
+    /// point. A path with no engine falls back to a plain dirty mark.
+    pub fn mark_history_edit_dirty(&mut self, path: &Path) {
+        if self.engines.contains_key(path) {
+            // As `mark_dirty_inner` does for a sheet: ERC results taken
+            // earlier no longer describe it.
+            if can_change_erc_results(path) {
+                self.note_sheet_edit();
+            }
+            self.sync_history_dirty(path);
+        } else {
+            self.mark_document_dirty(path);
+        }
+    }
+
+    /// The document at `path` matches the disk (a save landed): clear every
+    /// place that knew it dirty and make the engine's history position the
+    /// point undo and redo return to as clean. A discard uses
+    /// [`Self::clear_document_dirty`] instead: any engine left at `path`
+    /// need not equal the file there.
     pub fn mark_document_clean(&mut self, path: &Path) {
-        self.dirty_docs.paths.remove(path);
-        self.dirty_docs.external.remove(path);
-        // The engine's document is what is (now) on disk: its history
-        // position is the point undo and redo return to as clean.
+        self.clear_document_dirty(path);
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+    }
+
+    /// Clear every stored dirty mark of `path` without touching the engine's
+    /// save point: for a discard, where an engine at `path` is not known to
+    /// equal the file.
+    pub fn clear_document_dirty(&mut self, path: &Path) {
+        self.dirty_docs.paths.remove(path);
+        self.dirty_docs.external.remove(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.set_dirty(false);
         }

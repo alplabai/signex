@@ -34,8 +34,9 @@ use signex_sketch::solver::state::point_xy;
 use signex_types::layer::SignexLayer;
 
 /// Bake every SilkAttr-tagged non-construction entity into an
-/// `FpGraphic` on `silk_f` or `silk_b`. Both Vecs are passed by mut-ref
-/// and appended to (the caller decides whether to clear them first).
+/// `FpGraphic` on `silk_f` or `silk_b`, marked with the entity it came
+/// from (`sketch_entity`). Both Vecs are passed by mut-ref and appended
+/// to; merging into a footprint is [`crate::silk_ownership`]'s job.
 ///
 /// Returns `Ok(())` even when individual entities skip — those are
 /// reported via the `warnings` Vec instead.
@@ -67,14 +68,17 @@ pub fn bake_silk(
             }
         };
 
+        if !entity.bakes_silk_on(attr.layer) {
+            warnings.push(format!(
+                "entity {}: SilkAttr on a Point is meaningless (no renderable primitive); skipping",
+                entity.id
+            ));
+            continue;
+        }
+
         match entity_to_graphic(entity, sketch, solve) {
             Ok(Some(g)) => target.push(g),
-            Ok(None) => {
-                warnings.push(format!(
-                    "entity {}: SilkAttr on a Point is meaningless (no renderable primitive); skipping",
-                    entity.id
-                ));
-            }
+            Ok(None) => {}
             Err(msg) => warnings.push(format!("entity {}: silk bake skipped — {}", entity.id, msg)),
         }
     }
@@ -98,6 +102,7 @@ fn entity_to_graphic(
                 kind: FpGraphicKind::Line { from, to },
                 stroke_width: DEFAULT_SILK_STROKE_MM,
                 filled: false,
+                sketch_entity: Some(entity.id),
             }))
         }
         EntityKind::Circle { center, radius } => {
@@ -106,6 +111,7 @@ fn entity_to_graphic(
                 kind: FpGraphicKind::Circle { center: c, radius },
                 stroke_width: DEFAULT_SILK_STROKE_MM,
                 filled: false,
+                sketch_entity: Some(entity.id),
             }))
         }
         EntityKind::Arc {
@@ -142,6 +148,7 @@ fn entity_to_graphic(
                 },
                 stroke_width: DEFAULT_SILK_STROKE_MM,
                 filled: false,
+                sketch_entity: Some(entity.id),
             }))
         }
     }

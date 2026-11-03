@@ -12,6 +12,7 @@ use crate::library::drift::{
     ApplyInput, SymbolRead, SymbolsRead, VERSION_NOT_STAMPED, apply_input, rebound_row_warning,
     row_binds_lib_id,
 };
+use crate::library::part_sync::PartSync;
 use signex_types::schematic::LibSymbol;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -195,9 +196,13 @@ impl Signex {
                 any_failed = true;
             } else {
                 for (symbol, row) in stale {
+                    // A part that does not hold its row's footprint /
+                    // Manufacturer / MPN yet keeps its old stamp: restamping
+                    // would read as "row unchanged" and hide that drift.
+                    let restamp = !self.has_pending_part_sync(&schematic_path, symbol, row);
                     any_failed |= !self.collect_personal_update(
                         symbol.clone(),
-                        &row.row.version,
+                        restamp.then_some(row.row.version.as_str()),
                         &mut read_cache,
                         &mut personal_apply,
                     );
@@ -212,8 +217,14 @@ impl Signex {
         for (lib_id, (fresh, stamps)) in personal_apply {
             // A late mount can land after the user's first edit, which the
             // unrecorded path refuses, so it becomes one normal undo step.
-            any_failed |=
-                !self.adopt_library_symbol(&schematic_path, &lib_id, fresh, stamps, only.is_some());
+            any_failed |= !self.adopt_library_symbol(
+                &schematic_path,
+                &lib_id,
+                fresh,
+                stamps,
+                Vec::new(),
+                only.is_some(),
+            );
         }
         self.record_scan_outcome(schematic_path, team_entries, any_failed, only.is_some());
     }
@@ -364,12 +375,36 @@ impl Signex {
         })
     }
 
+    /// Whether `symbol` differs from `row` in footprint, Manufacturer or MPN,
+    /// which only "Update from library" may rewrite.
+    fn has_pending_part_sync(
+        &self,
+        sheet: &std::path::Path,
+        symbol: &PlacedLibrarySymbol,
+        row: &InstanceRow,
+    ) -> bool {
+        let Some(engine) = self.document_state.engines.get(sheet) else {
+            return false;
+        };
+        let stamps = crate::library::drift::instance_stamps(
+            engine.document(),
+            &symbol.lib_id,
+            &std::collections::HashMap::new(),
+        );
+        stamps
+            .iter()
+            .find(|w| w.symbol == symbol.uuid)
+            .is_some_and(|w| {
+                crate::library::drift::part_sync_pending(w, &row.row, &self.mounted_libraries())
+            })
+    }
+
     /// Queue `symbol` for the silent Personal-mode update, reading the
     /// library's symbol once per `lib_id`. `false` when it was unreadable.
     fn collect_personal_update(
         &self,
         symbol: PlacedLibrarySymbol,
-        latest_version: &str,
+        latest_version: Option<&str>,
         read_cache: &mut std::collections::HashMap<String, Result<LibSymbol, String>>,
         queue: &mut PersonalUpdates,
     ) -> bool {
@@ -378,11 +413,12 @@ impl Signex {
             .or_insert_with(|| self.read_library_symbol(&symbol.lib_id));
         match read {
             Ok(fresh) => {
-                queue
+                let entry = queue
                     .entry(symbol.lib_id.clone())
-                    .or_insert_with(|| (fresh.clone(), Vec::new()))
-                    .1
-                    .push((symbol.uuid, latest_version.to_string()));
+                    .or_insert_with(|| (fresh.clone(), Vec::new()));
+                if let Some(version) = latest_version {
+                    entry.1.push((symbol.uuid, version.to_string()));
+                }
                 true
             }
             Err(why) => {
@@ -538,8 +574,19 @@ impl Signex {
             }
             match r.symbol {
                 Ok(fresh) => {
-                    all_applied &=
-                        self.adopt_library_symbol(sheet, &r.lib_id, fresh, r.stamps, true);
+                    let lines: Vec<String> = r.part_syncs.iter().map(PartSync::describe).collect();
+                    let landed = self.adopt_library_symbol(
+                        sheet,
+                        &r.lib_id,
+                        fresh,
+                        r.stamps,
+                        r.part_syncs,
+                        true,
+                    );
+                    if landed {
+                        lines.iter().for_each(crate::diagnostics::log_info);
+                    }
+                    all_applied &= landed;
                 }
                 Err(why) => {
                     crate::diagnostics::log_warning(format!(
@@ -568,23 +615,35 @@ impl Signex {
         lib_id: &str,
         fresh: LibSymbol,
         stamps: Vec<(uuid::Uuid, String)>,
+        part_syncs: Vec<PartSync>,
         record_history: bool,
     ) -> bool {
-        let command = signex_engine::Command::ReplaceLibSymbol {
+        // The copy, the version stamps and the parts' footprint / MPN /
+        // manufacturer edits are one undo step (#1867).
+        let mut commands = vec![signex_engine::Command::ReplaceLibSymbol {
             lib_symbol: fresh,
             library_versions: stamps,
-        };
+        }];
+        if record_history {
+            commands.extend(part_syncs.iter().flat_map(PartSync::commands));
+        }
         let refused = if self.document_state.active_path.as_deref() == Some(sheet) {
             // Through the mutation gateway: canvas sync, dirty flag,
             // netlist and panel refresh. A refusal is already in Messages.
-            let (outcome, _) = if record_history {
-                self.apply_engine_command_reporting(command, true, true)
-            } else {
-                self.apply_engine_command_unrecorded(command)
+            let (outcome, _) = match commands.len() {
+                1 => {
+                    let command = commands.remove(0);
+                    if record_history {
+                        self.apply_engine_command_reporting(command, true, true)
+                    } else {
+                        self.apply_engine_command_unrecorded(command)
+                    }
+                }
+                _ => self.apply_engine_commands_reporting(commands, true, true),
             };
             outcome == crate::app::mutation_gateway::CommandOutcome::Failed
         } else {
-            self.replace_on_parked_sheet(sheet, command, record_history)
+            self.replace_on_parked_sheet(sheet, commands, record_history)
         };
         if refused {
             return false;
@@ -602,16 +661,18 @@ impl Signex {
     fn replace_on_parked_sheet(
         &mut self,
         sheet: &std::path::Path,
-        command: signex_engine::Command,
+        mut commands: Vec<signex_engine::Command>,
         record_history: bool,
     ) -> bool {
         let Some(engine) = self.document_state.engines.get_mut(sheet) else {
             return true;
         };
-        let result = if record_history {
-            engine.execute(command)
+        let result = if !record_history {
+            engine.execute_unrecorded(commands.remove(0))
+        } else if commands.len() == 1 {
+            engine.execute(commands.remove(0))
         } else {
-            engine.execute_unrecorded(command)
+            engine.execute_batch(commands)
         };
         match result {
             Ok(result) => {
@@ -620,8 +681,10 @@ impl Signex {
                         // A recorded edit ends the net colour redo branch,
                         // as in the mutation gateway.
                         self.ui_state.net_color_redo.remove(sheet);
+                        self.document_state.mark_history_edit_dirty(sheet);
+                    } else {
+                        self.document_state.mark_document_dirty(sheet);
                     }
-                    self.document_state.mark_document_dirty(sheet);
                     self.refresh_panel_ctx();
                 }
                 false

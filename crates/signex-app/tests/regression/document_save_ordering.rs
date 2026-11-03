@@ -237,6 +237,7 @@ fn deleting_a_file_waits_for_its_in_flight_save_and_it_stays_deleted() {
         display_name: "Power.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     crate::settle_support::settle(
         &mut app,

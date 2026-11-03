@@ -30,6 +30,7 @@ mod pad_stack_check;
 mod redundant;
 mod sections;
 mod selection;
+mod silk;
 mod snap_options;
 mod subforms;
 

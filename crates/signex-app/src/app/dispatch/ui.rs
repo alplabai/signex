@@ -91,8 +91,9 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::DragEnd => {
+                let dropped = self.finish_components_row_drag();
                 self.handle_layout_drag_finished();
-                self.finish_update()
+                Task::batch([dropped, self.finish_update()])
             }
             UiMsg::GridCycle => {
                 let cycled = self.cycle_grid_size(true);

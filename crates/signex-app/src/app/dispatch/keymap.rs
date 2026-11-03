@@ -187,11 +187,11 @@ impl Signex {
                 }
             }
 
-            // An undocked tab carries its own document. `view_center`
-            // gates the footprint / symbol / library-browser surfaces on
-            // `is_main`, so such a window can only ever host a schematic
-            // or PCB canvas — `Footprint` and `Library` are unreachable
-            // there by construction, not by omission.
+            // An undocked tab carries its own document. An undocked symbol,
+            // footprint or Library Browser window draws its editor (#1818),
+            // but the footprint and library commands act on the main
+            // window's active tab, so `Footprint` and `Library` are left out
+            // here until those commands are window-aware.
             InputTarget::UndockedTab => {
                 let has_schematic = window
                     .and_then(|id| self.document_state.engine_for_window(id, &self.ui_state))

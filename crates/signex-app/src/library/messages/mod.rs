@@ -592,6 +592,11 @@ pub enum PrimitiveEdit {
 pub enum PickerMsg {
     /// Left-dock library panel search box edited.
     PanelSearchChanged(String),
+    /// A Library panel library row's ▸ / ▾ was clicked (#1895).
+    PanelLibraryToggled(std::path::PathBuf),
+    /// A component listed under an expanded Library panel row was
+    /// clicked: one click highlights it, a double click opens it.
+    PanelComponentClicked(super::state::ComponentsPanelRowKey),
     FilterChanged(String),
     SelectComponent(uuid::Uuid),
     PlaceSelected,
@@ -689,6 +694,8 @@ pub enum PrimitivePickerMsg {
     PickLoose(crate::library::loose_symbols::LooseSymbol),
     /// "Copy" was answered yes.
     CopyConfirmed,
+    /// "Open library" was answered yes for a symbol of an unmounted `.snxlib`.
+    OpenLibraryConfirmed,
     /// "Copy" was answered no: nothing changes.
     CopyDeclined,
     /// The copy finished on its worker: the reference to bind, or why not,

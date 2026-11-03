@@ -132,6 +132,7 @@ fn properties_panel_silk_edit_is_undoable() {
         },
         stroke_width: 0.1,
         filled: false,
+        sketch_entity: None,
     });
     let (mut app, path) = fixture("silk_undo", fp);
     app.document_state

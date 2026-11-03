@@ -4,8 +4,11 @@
 //! `impl Signex` builders here are called from `view/mod.rs` and its
 //! sibling `overlays` module.
 
+mod components_row;
+mod dock_tab;
 mod items;
 mod menus;
+mod placement;
 mod project_tree;
 mod submenu;
 
@@ -13,5 +16,7 @@ mod submenu;
 mod catalog_agreement_tests;
 #[cfg(test)]
 mod tests;
+
+pub(super) use placement::{EDGE_MARGIN, clamp_menu_origin, menu_height};
 
 use super::*;

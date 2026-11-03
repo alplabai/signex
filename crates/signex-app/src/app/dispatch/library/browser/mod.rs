@@ -574,7 +574,7 @@ impl Signex {
                 self.document_state.active_tab = idx;
                 self.sync_active_tab();
             }
-            return Task::none();
+            return self.resolve_open_preview_tab(&address);
         }
 
         // Pre-load the row from the adapter via `read_row`; if it
@@ -638,7 +638,16 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.document_state.active_path = None;
         self.refresh_panel_ctx();
-        Task::none()
+        self.resolve_open_preview_tab(&address)
+    }
+
+    /// Look up, off the UI thread, what the preview's shown tab needs that
+    /// is not resolved yet, so the panes are filled without a tab switch.
+    fn resolve_open_preview_tab(&mut self, address: &EditorAddress) -> Task<Message> {
+        let Some(tab) = self.library.editors.get(address).map(|e| e.active_tab) else {
+            return Task::none();
+        };
+        crate::library::preview_reads::tab_resolve_task(&mut self.library, address, tab)
     }
 }
 

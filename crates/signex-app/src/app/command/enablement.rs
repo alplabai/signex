@@ -747,7 +747,8 @@ mod tests {
         let resolved: Vec<(AppCommandId, String)> = crate::keymap::all_command_ids()
             .filter_map(|name| {
                 let command = id(name);
-                super::super::bridge::resolve(&command).map(|m| (command, format!("{m:?}")))
+                super::super::bridge::resolve(&command, &CommandArgs::none())
+                    .map(|m| (command, format!("{m:?}")))
             })
             .collect();
         for (a, message_a) in &resolved {

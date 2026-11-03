@@ -1,11 +1,12 @@
-//! #1404 — the X / Y keys, the context-menu Mirror X / Y and the active
+//! #1404 — the X / Y keys, the Mirror X / Y command ids (what the context-menu rows dispatch,
+//! axes pinned in-crate by `row_effects::mirror_rows_flip_the_axes_the_keys_flip`) and the active
 //! bar's Flip Selected Sheet Symbols Along X / Y are three entry points to
 //! one operation, so each pair must flip a placed symbol the same way.
 //! The active bar once crossed the axes the other two agree on.
 
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
 use signex_app::app::{ContextAction, ContextMenuMsg, Message, Signex, TabInfo, TabKind, UiMsg};
-use signex_app::keymap::{KeyStroke, KeyToken, Modifiers};
+use signex_app::keymap::{AppCommandId, KeyStroke, KeyToken, Modifiers};
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use std::path::PathBuf;
 
@@ -75,8 +76,13 @@ fn key(letter: &str) -> Message {
     })
 }
 
-fn context(action: ContextAction) -> Message {
-    Message::ContextMenu(ContextMenuMsg::Action(action))
+/// What dispatching command `id` through the registry sends, as a
+/// context-menu row does. The row itself is not reachable from here.
+fn command_id(id: &str) -> Message {
+    Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+        id: AppCommandId::new(id).expect("a catalog id"),
+        project: None,
+    }))
 }
 
 fn active_bar(action: ActiveBarAction) -> Message {
@@ -84,10 +90,10 @@ fn active_bar(action: ActiveBarAction) -> Message {
 }
 
 #[test]
-fn x_flips_agree_across_key_context_menu_and_active_bar() {
+fn x_flips_agree_across_key_command_id_and_active_bar() {
     let by_key = mirror_after(key("x"));
     assert_ne!(by_key, (false, false), "the X key must flip the symbol");
-    assert_eq!(mirror_after(context(ContextAction::MirrorX)), by_key);
+    assert_eq!(mirror_after(command_id("mirror_x")), by_key);
     assert_eq!(
         mirror_after(active_bar(ActiveBarAction::FlipSelectedX)),
         by_key
@@ -95,10 +101,10 @@ fn x_flips_agree_across_key_context_menu_and_active_bar() {
 }
 
 #[test]
-fn y_flips_agree_across_key_context_menu_and_active_bar() {
+fn y_flips_agree_across_key_command_id_and_active_bar() {
     let by_key = mirror_after(key("y"));
     assert_ne!(by_key, (false, false), "the Y key must flip the symbol");
-    assert_eq!(mirror_after(context(ContextAction::MirrorY)), by_key);
+    assert_eq!(mirror_after(command_id("mirror_y")), by_key);
     assert_eq!(
         mirror_after(active_bar(ActiveBarAction::FlipSelectedY)),
         by_key

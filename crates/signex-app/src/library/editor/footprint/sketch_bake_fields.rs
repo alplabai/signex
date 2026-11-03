@@ -1,8 +1,10 @@
 //! The non-pad fields a sketch bakes into a footprint, and which of them
-//! an empty bake may clear. Ownership rule: `signex_sketch::baked_kinds`.
+//! an empty bake may clear. Ownership rule: `signex_sketch::baked_kinds`,
+//! except silk, which is owned entry by entry (`signex_bake::silk_ownership`).
 
 use std::collections::HashMap;
 
+use signex_bake::SilkRemaps;
 use signex_library::primitive::footprint::{Footprint, FpGraphic, Polygon};
 use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::solver::FullSolveOutput;
@@ -62,9 +64,10 @@ impl BakedFields {
     }
 
     /// The bake of a sketch with no entities: every owned kind, pads
-    /// included, clears. A sketch that never baked owns nothing, so a
-    /// literal-pad footprint entering Sketch mode is untouched.
-    pub(super) fn clear_owned(fp: &mut Footprint, warnings: &mut Vec<String>) {
+    /// included, clears, and so does every baked silk entry. A sketch that
+    /// never baked owns nothing, so a literal-pad footprint entering Sketch
+    /// mode is untouched.
+    pub(super) fn clear_owned(fp: &mut Footprint, warnings: &mut Vec<String>) -> SilkRemaps {
         if let Some(sketch) = fp.sketch.as_mut()
             && sketch.was_baked(BakedKind::Pads)
         {
@@ -74,16 +77,19 @@ impl BakedFields {
             fp.pads.clear();
             sketch.record_baked(BakedKind::Pads, false);
         }
-        Self::default().apply(fp, warnings);
+        Self::default().apply(fp, warnings)
     }
 
     /// Write each kind into `fp`. A non-empty bake replaces the field and
     /// records the kind as baked. An empty bake clears the field only when
-    /// the sketch owns the kind, and says so in `warnings`.
-    pub(super) fn apply(self, fp: &mut Footprint, warnings: &mut Vec<String>) {
+    /// the sketch owns the kind, and says so in `warnings`. Silk is merged
+    /// instead: baked entries are replaced, hand-drawn ones kept. Returns
+    /// where the silk entries moved.
+    pub(super) fn apply(self, fp: &mut Footprint, warnings: &mut Vec<String>) -> SilkRemaps {
+        let remaps = signex_bake::settle_baked_silk(fp, self.silk_f, self.silk_b);
         let Some(mut sketch) = fp.sketch.take() else {
             debug_assert!(false, "apply is only reached with a sketch");
-            return;
+            return remaps;
         };
         macro_rules! settle {
             ($($kind:ident => $field:ident),* $(,)?) => {$(
@@ -91,12 +97,13 @@ impl BakedFields {
             )*};
         }
         settle! {
-            SilkF => silk_f, SilkB => silk_b, Courtyard => courtyard,
+            Courtyard => courtyard,
             MaskOpenings => mask_openings, MaskExcludes => mask_excludes,
             PasteApertures => paste_apertures, Pours => pours, Keepouts => keepouts,
             Cutouts => cutouts, VScores => v_scores,
         }
         fp.sketch = Some(sketch);
+        remaps
     }
 }
 
