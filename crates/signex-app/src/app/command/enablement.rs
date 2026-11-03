@@ -707,6 +707,45 @@ mod tests {
         }
     }
 
+    /// #1922: the alias pairs run one message and share one gate, so the
+    /// second id of a pair cannot arm a tool the first refuses.
+    #[test]
+    fn alias_pairs_have_one_route_and_one_gate() {
+        let pairs = [
+            ("place_wire", "draw_wire"),
+            ("place_bus", "draw_bus"),
+            ("place_text", "place_text_string"),
+            ("draw_graphic_line", "draw_line"),
+            ("draw_hierarchical_sheet", "place_sheet_symbol"),
+        ];
+        let without = CommandContext::default();
+        let with = CommandContext {
+            has_schematic: true,
+            ..without
+        };
+        for (a, b) in pairs {
+            let message = |name: &str| {
+                format!(
+                    "{:?}",
+                    super::super::bridge::resolve(&id(name), &CommandArgs::none())
+                )
+            };
+            assert_eq!(message(a), message(b), "{a} / {b} resolve differently");
+            for ctx in [&without, &with] {
+                assert_eq!(
+                    is_enabled(&id(a), ctx),
+                    is_enabled(&id(b), ctx),
+                    "{a} / {b}"
+                );
+            }
+        }
+        // The two wiring pairs need a schematic, both ids of each.
+        for name in ["place_wire", "draw_wire", "place_bus", "draw_bus"] {
+            assert!(!is_enabled(&id(name), &without), "{name}");
+            assert!(is_enabled(&id(name), &with), "{name}");
+        }
+    }
+
     /// A command is enabled exactly when it has no reason to be disabled,
     /// for every catalog id (#1928).
     #[test]
