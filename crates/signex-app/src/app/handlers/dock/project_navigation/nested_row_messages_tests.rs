@@ -64,6 +64,7 @@ fn a_library_directory_is_deleted_although_other_projects_are_unread() {
         display_name: "parts.snxlib".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     assert!(
         app.remove_blockers(app.ui_state.remove_dialog.as_ref().expect("set"))

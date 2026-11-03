@@ -163,6 +163,10 @@ mod dirty_paths_gateway;
 #[path = "regression/single_dirty_source.rs"]
 mod single_dirty_source;
 
+// #1716 — the drag ghost and the drop agree on what a lock holds back.
+#[path = "regression/drag_ghost_lock_parity.rs"]
+mod drag_ghost_lock_parity;
+
 // #1250 — a locked symbol refuses delete and move, with a Messages note.
 #[path = "regression/symbol_locked_enforced.rs"]
 mod symbol_locked_enforced;
@@ -304,6 +308,8 @@ mod library_dangling_refs;
 mod library_delete_undo;
 #[path = "regression/managed_gitignore.rs"]
 mod managed_gitignore;
+#[path = "regression/new_project_fit.rs"]
+mod new_project_fit;
 #[path = "regression/new_project_folder.rs"]
 mod new_project_folder;
 #[path = "regression/newer_minor_read_only.rs"]
@@ -341,6 +347,8 @@ mod library_browser_row_delete;
 mod library_components_panel_details;
 #[path = "regression/library_named_symbol_file.rs"]
 mod library_named_symbol_file;
+#[path = "regression/library_part_follows_row.rs"]
+mod library_part_follows_row;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
 #[path = "regression/library_place_footprint.rs"]
@@ -351,6 +359,8 @@ mod library_place_symbol;
 mod library_place_ui;
 #[path = "regression/library_stock_copy.rs"]
 mod library_stock_copy;
+#[path = "regression/library_stock_editable.rs"]
+mod library_stock_editable;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]

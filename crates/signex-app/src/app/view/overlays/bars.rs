@@ -350,22 +350,17 @@ impl Signex {
             },
         );
         let card_msg = card.map(Message::Library);
-        let (ww, wh) = self.ui_state.window_size;
-        // Conservative footprint estimate so the card stays on screen
-        // near right / bottom edges.
-        let est_menu_w: f32 = 220.0;
-        let est_menu_h: f32 = 320.0;
-        let edge_margin: f32 = 4.0;
-        let x = if menu_state.x + est_menu_w + edge_margin > ww {
-            (ww - est_menu_w - edge_margin).max(0.0)
-        } else {
-            menu_state.x
-        };
-        let y = if menu_state.y + est_menu_h + edge_margin > wh {
-            (menu_state.y - est_menu_h).max(0.0)
-        } else {
-            menu_state.y
-        };
+        // Conservative footprint so the card stays on screen near the
+        // right / bottom edges.
+        const FOOTPRINT_MENU_ROWS: usize = 12;
+        let (x, y) = super::super::context_menu::clamp_menu_origin(
+            (menu_state.x, menu_state.y),
+            (
+                Self::CONTEXT_MENU_WIDTH,
+                super::super::context_menu::menu_height(FOOTPRINT_MENU_ROWS),
+            ),
+            self.ui_state.window_size,
+        );
         vec![
             Self::dismiss_layer(close_msg),
             super::super::translate::Translate::new(card_msg, (x, y)).into(),
@@ -538,40 +533,26 @@ impl Signex {
         window: (f32, f32),
         place_submenu_open: bool,
     ) -> (f32, f32) {
-        let (mx, my) = requested;
-        let (ww, wh) = window;
         let est_menu_w: f32 = crate::library::editor::symbol::context_menu::MENU_WIDTH;
-        // Real card height = row count × one row's box + the panel's own
-        // 4px top/bottom padding (`container(col).padding(SP.s)`). One row is
-        // a 13pt label in [5, 12] button padding, no icon at this level ≈
-        // 28 px — see signex_widgets::active_bar::dropdown::view. The
-        // collapsed menu is the stable 6-row top-level set (Place ▸, Join,
-        // Delete, Select All, Deselect All, Fit — locked by
+        // The collapsed menu is the stable 6-row top-level set (Place ▸,
+        // Join, Delete, Select All, Deselect All, Fit; locked by
         // rows::tests::top_level_ids_are_stable); an expanded Place ▸ adds
-        // its rows in place (accordion, not a flyout). A tight estimate
-        // matters: the bottom-edge flip below lifts the card by exactly
-        // est_menu_h, so an over-estimate leaves a visible gap between the
-        // card's bottom and the cursor.
-        const ROW_HEIGHT_PX: f32 = 28.0;
-        const CARD_V_PADDING_PX: f32 = 8.0;
-        const TOP_LEVEL_ROWS: f32 = 6.0;
+        // its rows in place (accordion, not a flyout). The estimate must be
+        // tight: the bottom-edge flip lifts the card by exactly its height.
+        const TOP_LEVEL_ROWS: usize = 6;
         let expanded_rows = if place_submenu_open {
-            crate::library::editor::symbol::context_menu::PLACE_TOOLS.len() as f32
+            crate::library::editor::symbol::context_menu::PLACE_TOOLS.len()
         } else {
-            0.0
+            0
         };
-        let est_menu_h: f32 = (TOP_LEVEL_ROWS + expanded_rows) * ROW_HEIGHT_PX + CARD_V_PADDING_PX;
-        let edge_margin: f32 = 4.0;
-        let x = if mx + est_menu_w + edge_margin > ww {
-            (ww - est_menu_w - edge_margin).max(0.0)
-        } else {
-            mx
-        };
-        let y = if my + est_menu_h + edge_margin > wh {
-            (my - est_menu_h).max(0.0)
-        } else {
-            my
-        };
+        let (x, y) = super::super::context_menu::clamp_menu_origin(
+            requested,
+            (
+                est_menu_w,
+                super::super::context_menu::menu_height(TOP_LEVEL_ROWS + expanded_rows),
+            ),
+            window,
+        );
         (x, y)
     }
 

@@ -1,9 +1,9 @@
 //! Off-thread read behind the details section: the row, its symbol and its
 //! footprint. Pure IO, no app state, so it runs in `spawn_blocking`.
 
-use std::path::PathBuf;
+use std::sync::Arc;
 
-use signex_library::LibraryAdapter as _;
+use signex_library::LibraryAdapter;
 use signex_library::RowId;
 use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
@@ -11,30 +11,29 @@ use uuid::Uuid;
 use super::ComponentDetails;
 use crate::library::state::ComponentsPanelRowKey;
 
-/// Path of the open library a reference points into, from the
-/// `(library id, root)` map the caller built from the mounted libraries.
-fn owner_of(libraries: &[(Uuid, PathBuf)], reference: &PrimitiveRef) -> Result<PathBuf, String> {
+/// The mounted adapters, shared out of the library set by library id.
+pub type MountedAdapters = Vec<(Uuid, Arc<dyn LibraryAdapter>)>;
+
+/// The adapter of the open library a reference points into.
+fn owner_of<'a>(
+    libraries: &'a MountedAdapters,
+    reference: &PrimitiveRef,
+) -> Result<&'a dyn LibraryAdapter, String> {
     libraries
         .iter()
         .find(|(id, _)| *id == reference.library_id)
-        .map(|(_, path)| path.clone())
+        .map(|(_, adapter)| adapter.as_ref())
         .ok_or_else(|| format!("its library {} is not open", reference.library_id))
 }
 
-fn open(
-    path: &std::path::Path,
-) -> Result<signex_library::adapters::local_git::LocalGitAdapter, String> {
-    signex_library::adapters::local_git::LocalGitAdapter::open(path)
-        .map_err(|e| format!("Could not open {}: {e}", path.display()))
-}
-
-/// Read what the details section shows for `key`. The row must read; a
-/// symbol or footprint that cannot is reported in `notes` and left out.
+/// Read what the details section shows for `key` through the mounted
+/// adapters (no re-open per click). The row must read; a symbol or
+/// footprint that cannot is reported in `notes` and left out.
 pub fn load_details(
     key: &ComponentsPanelRowKey,
-    libraries: &[(Uuid, PathBuf)],
+    own: &dyn LibraryAdapter,
+    libraries: &MountedAdapters,
 ) -> Result<ComponentDetails, String> {
-    let own = open(&key.library_path)?;
     let row_id: RowId = key.row_id;
     let row = own
         .read_row(&key.table, row_id)
@@ -46,7 +45,6 @@ pub fn load_details(
         own.get_symbol(reference.uuid).map_err(|e| e.to_string())
     } else {
         owner_of(libraries, &reference)
-            .and_then(|p| open(&p))
             .and_then(|a| a.get_symbol(reference.uuid).map_err(|e| e.to_string()))
     };
     let symbol = match read {
@@ -61,7 +59,6 @@ pub fn load_details(
             own.get_footprint(reference.uuid).map_err(|e| e.to_string())
         } else {
             owner_of(libraries, &reference)
-                .and_then(|p| open(&p))
                 .and_then(|a| a.get_footprint(reference.uuid).map_err(|e| e.to_string()))
         };
         match read {

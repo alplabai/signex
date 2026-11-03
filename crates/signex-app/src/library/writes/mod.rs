@@ -5,6 +5,7 @@
 //! `docs/architecture/library-writes.md`.
 
 pub mod gate;
+mod part_version;
 #[cfg(test)]
 pub(crate) mod test_support;
 
@@ -215,6 +216,7 @@ pub fn row_edit_task(
             message,
         } = edit;
         let own_revision = own.of(row_id);
+        let before = adapter.read_row(&table, row_id).ok();
         let hash = |row: &mut ComponentRow| -> Result<(), LibraryError> {
             row.content_hash = signex_library::hash_row_content(row)
                 .map_err(|e| LibraryError::Backend(format!("hash row content: {e}")))?;
@@ -269,6 +271,10 @@ pub fn row_edit_task(
                 stored
             }
         };
+        let mut to_write = to_write;
+        if let Some(before) = &before {
+            part_version::bump_on_part_change(before, &mut to_write);
+        }
         let revision =
             adapter.update_row_with_assets(&table, to_write.clone(), message, &assets)?;
         own.record(row_id, revision);

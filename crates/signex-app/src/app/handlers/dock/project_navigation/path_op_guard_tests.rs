@@ -31,6 +31,7 @@ fn remove_dialog_for(fx: &Fixture) -> RemoveDialogState {
         display_name: "main.snxsch".to_string(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     }
 }
 

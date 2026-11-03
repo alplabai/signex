@@ -65,14 +65,22 @@ impl DocumentState {
             .collect()
     }
 
-    /// Paths of the symbol and footprint editors with unsaved edits. The one
-    /// collector the quit, Close Project and Close Library prompts share.
+    /// Paths of the symbol and footprint editors with unsaved edits, plus
+    /// those whose save is in flight (the snapshot reset the editor flag, the
+    /// write has not landed, and a failed write leaves the draft dirty). The
+    /// one collector the quit, Close Project and Close Library prompts share.
     pub fn dirty_primitive_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
         let symbols = self.symbol_editors.iter().filter(|(_, e)| e.is_dirty());
         let footprints = self.footprint_editors.iter().filter(|(_, e)| e.is_dirty());
-        symbols
+        let saving = self.dirty_docs.paths.iter().filter(|path| {
+            self.symbol_editors.contains_key(*path) || self.footprint_editors.contains_key(*path)
+        });
+        let paths: HashSet<PathBuf> = symbols
             .map(|(path, _)| path.clone())
             .chain(footprints.map(|(path, _)| path.clone()))
+            .chain(saving.cloned())
+            .collect();
+        paths.into_iter()
     }
 
     /// Record unsaved edits for `path`. A draft open at `path` owns the flag;
@@ -124,6 +132,16 @@ impl DocumentState {
         } else {
             self.dirty_docs.paths.insert(path.to_path_buf());
         }
+    }
+
+    /// Where a newly opened symbol editor's `history_generation` starts. Each
+    /// editor gets its own 2^32-step range, so a generation never repeats
+    /// across editor instances and a delete warning raised on a closed editor
+    /// reads stale on the reopened one (#1903).
+    pub fn next_symbol_history_base(&mut self) -> u64 {
+        let base = self.symbol_editors_opened << 32;
+        self.symbol_editors_opened += 1;
+        base
     }
 
     /// A schematic sheet changed: ERC results taken earlier no longer describe it.

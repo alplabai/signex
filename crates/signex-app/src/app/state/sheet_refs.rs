@@ -614,6 +614,7 @@ impl DocumentState {
         closing: usize,
         rows: &[EditorAddress],
         libraries: &[PathBuf],
+        draft_folds: &HashMap<PathBuf, CaseFold>,
     ) -> CloseScan {
         let Some(project) = self.projects.get(closing) else {
             return CloseScan::default();
@@ -628,7 +629,7 @@ impl DocumentState {
             // A symbol or footprint draft is placed by its library, not by the
             // sheet walk, like a Component Preview row below.
             if primitives.contains(path)
-                && self.primitive_is_closing_projects(closing, path, libraries)
+                && self.primitive_is_closing_projects(closing, path, libraries, draft_folds)
             {
                 scan.mine.push(path.clone());
                 continue;
@@ -674,28 +675,34 @@ impl DocumentState {
     }
 
     /// Does the symbol / footprint draft at `path` belong to `projects[closing]`
-    /// alone? Its owning library ([`scope::owning_library`] over `libraries`)
-    /// must be a project-local library of the closing project, listed by no
-    /// other open project and not inside another open project's directory,
-    /// and the draft itself must not sit in a project nested in the closing
-    /// one's folder. A shared or global library outlives the project, so its
-    /// drafts are not the project's to save or discard.
+    /// alone? Every library that could own it ([`scope::owning_libraries`]
+    /// over `libraries`, a tie in one folder having several) must be a
+    /// project-local library of the closing project, listed by no other open
+    /// project and not inside the folder of another open project that is not
+    /// an outer one of the closing project, and the draft itself must not sit
+    /// in a project nested in the closing one's folder. A shared or global
+    /// library outlives the project, so its drafts are not the project's to
+    /// save or discard. `draft_folds` is the case rule the Close Library
+    /// prompt decides this draft's owner by; a draft it lacks uses the
+    /// project's.
     fn primitive_is_closing_projects(
         &self,
         closing: usize,
         path: &Path,
         libraries: &[PathBuf],
+        draft_folds: &HashMap<PathBuf, CaseFold>,
     ) -> bool {
         use signex_types::project::LibraryEntryKind;
         let Some(project) = self.projects.get(closing) else {
             return false;
         };
-        let fold = project.case_fold;
-        let Some(owner) = scope::owning_library(path, libraries, fold) else {
+        let fold = draft_folds.get(path).copied().unwrap_or(project.case_fold);
+        let owners = scope::owning_libraries(path, libraries, fold);
+        if owners.is_empty() {
             return false;
-        };
-        let owner_key = path_key_with(owner, fold);
-        let lists = |p: &LoadedProject, local_only: bool| {
+        }
+        let lists = |p: &LoadedProject, owner: &Path, local_only: bool| {
+            let owner_key = path_key_with(owner, fold);
             p.data.libraries.iter().any(|entry| {
                 (!local_only || entry.kind == LibraryEntryKind::ProjectLocal)
                     && path_key_with(&p.data.resolve_library_path(entry), fold) == owner_key
@@ -708,16 +715,27 @@ impl DocumentState {
                 .filter(move |(i, _)| *i != closing)
                 .map(|(_, p)| p)
         };
+        // A folder inside the closing project's own folder is the closing
+        // project's, even when an outer project's folder holds it too.
+        let is_inner_of = |inner: &LoadedProject, outer: &LoadedProject| {
+            scope::path_is_under(inner.dir(), outer.dir(), outer.case_fold)
+                && !scope::path_is_under(outer.dir(), inner.dir(), inner.case_fold)
+        };
         // A draft inside a project nested in the closing one's folder is that
         // project's, even when the closing project's library is its owner.
         let in_nested_project = |p: &LoadedProject| {
             scope::path_is_under(path, p.dir(), p.case_fold)
                 && !scope::path_is_under(project.dir(), p.dir(), p.case_fold)
         };
-        lists(project, true)
-            && !others().any(|p| lists(p, false))
-            && !others().any(|p| scope::path_is_under(owner, p.dir(), p.case_fold))
-            && !others().any(in_nested_project)
+        owners.into_iter().all(|owner| {
+            lists(project, owner, true)
+                && !others().any(|p| lists(p, owner, false))
+                && !others().any(|p| {
+                    scope::path_is_under(owner, p.dir(), p.case_fold)
+                        && !(is_inner_of(project, p)
+                            && scope::path_is_under(owner, project.dir(), project.case_fold))
+                })
+        }) && !others().any(in_nested_project)
     }
 
     /// File-identity keys of the library files `projects[idx]` mounts.
@@ -1019,7 +1037,7 @@ mod tests {
         docs.mark_document_dirty(&shared);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| true);
-        let scan = docs.close_scan(&refs, 0, &[], &[]);
+        let scan = docs.close_scan(&refs, 0, &[], &[], &HashMap::new());
 
         assert!(scan.mine.is_empty(), "{:?}", scan.mine);
         assert_eq!(scan.kept, vec![shared]);
@@ -1046,7 +1064,7 @@ mod tests {
         docs.mark_document_dirty(&dirty);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
-        let scan = docs.close_scan(&refs, 0, &[], &[]);
+        let scan = docs.close_scan(&refs, 0, &[], &[], &HashMap::new());
 
         assert!(
             scan.mine.is_empty(),
@@ -1085,7 +1103,7 @@ mod tests {
         docs.mark_document_dirty(&unsaved);
 
         let refs = docs.sheet_ref_inputs().resolve(|_| false);
-        let scan = docs.close_scan(&refs, 0, &[], &[]);
+        let scan = docs.close_scan(&refs, 0, &[], &[], &HashMap::new());
 
         assert!(
             !scan.mine.contains(&unsaved),
@@ -1109,7 +1127,7 @@ mod tests {
         docs.mark_document_dirty(&a_dir.join("N.snxsch"));
 
         let refs = docs.sheet_ref_inputs().resolve(ignores_case);
-        docs.close_scan(&refs, 0, &[], &[])
+        docs.close_scan(&refs, 0, &[], &[], &HashMap::new())
     }
 
     #[test]

@@ -29,6 +29,13 @@ pub struct PanelContext {
     /// `refresh_panel_ctx` reuses them while it still matches (#1383).
     pub symbol_lists_key: Option<(u64, u64)>,
     pub tokens: ThemeTokens,
+    /// Schematic canvas colours of the same theme; the Components panel
+    /// draws its Symbol preview with them.
+    pub canvas_colors: signex_types::theme::CanvasColors,
+    /// Device pixels per logical pixel of the main window; the Components
+    /// panel sizes its Symbol preview strokes by it. Per-window scales do not
+    /// fit a shared context, so a panel in another window uses this value.
+    pub device_px_per_logical_px: f32,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
     pub theme_id: signex_types::theme::ThemeId,

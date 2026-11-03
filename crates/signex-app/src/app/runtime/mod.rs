@@ -449,6 +449,7 @@ impl Signex {
         let (tokens, theme_id) = self.panel_theme();
         self.document_state.panel_ctx.tokens = tokens;
         self.document_state.panel_ctx.theme_id = theme_id;
+        self.document_state.panel_ctx.canvas_colors = self.canvas_colors_for(theme_id);
     }
 
     /// Settings the schematic canvas renders with, read fresh from app

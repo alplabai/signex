@@ -13,6 +13,8 @@ use signex_types::theme::{ThemeId, theme_tokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 use signex_widgets::tree_view::TreeIcon;
 
+mod row_effects;
+
 const TID: ThemeId = ThemeId::CatppuccinMocha;
 
 fn labels(entries: &[DropdownEntry<Message>]) -> Vec<String> {
@@ -130,15 +132,15 @@ fn dd_disabled_row_is_passive() {
 fn dd_msg_row_carries_message_and_optional_shortcut() {
     let with_sc = dd_msg(
         None,
-        "Cut",
+        "Open Child Sheet",
         "Ctrl+X",
-        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Cut)),
+        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::OpenChildSheet)),
     );
     let no_sc = dd_msg(
         None,
         "Refresh",
         "",
-        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Cut)),
+        Message::ContextMenu(ContextMenuMsg::Action(ContextAction::OpenChildSheet)),
     );
     match with_sc {
         DropdownEntry::Item(it) => {
@@ -181,10 +183,10 @@ fn find_similar_row_is_enabled_and_routes_to_its_action() {
             .unwrap();
         assert_eq!(item.shortcut.as_deref(), Some("Shift+F"));
         assert!(matches!(
-            item.on_press,
+            &item.on_press,
             Some(Message::ContextMenu(ContextMenuMsg::Action(
-                ContextAction::FindSimilar
-            )))
+                ContextAction::Command { id, project: None }
+            ))) if id.as_str() == "find_similar_objects"
         ));
     }
 }
@@ -259,9 +261,9 @@ fn canvas_project_options_opens_the_active_project_options() {
     assert!(!row.disabled);
     assert!(matches!(
         &row.on_press,
-        Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            crate::app::ProjectTreeAction::OpenProjectOptions(path)
-        ))) if path.as_slice() == ["7".to_string()]
+        Some(Message::ContextMenu(ContextMenuMsg::Action(
+            ContextAction::Command { id, project: Some(project) }
+        ))) if id.as_str() == "open_project_options" && project == "7"
     ));
 }
 
@@ -715,7 +717,6 @@ fn canvas_menu_offers_arrange_only_for_a_drawing_selection() {
 /// its own action.
 #[test]
 fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
-    use crate::library::PlacedPartAction as A;
     let tokens = theme_tokens(TID);
     let sc = shortcuts();
     let part = CanvasSelection {
@@ -725,10 +726,10 @@ fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
     let with = canvas_menu_entries(TID, &tokens, part, None, None, &sc);
     let without = canvas_menu_entries(TID, &tokens, selected(), None, None, &sc);
 
-    for (label, action) in [
-        ("Open Datasheet", A::OpenDatasheet),
-        ("Edit Symbol", A::EditSymbol),
-        ("Change Component\u{2026}", A::ChangeComponent),
+    for (label, command) in [
+        ("Open Datasheet", "open_datasheet"),
+        ("Edit Symbol", "edit_selected_symbol_in_symbol_editor"),
+        ("Change Component\u{2026}", "change_component"),
     ] {
         assert!(!has_row(&without, label), "{label} without a placed part");
         let message = with
@@ -740,8 +741,8 @@ fn canvas_menu_offers_the_placed_part_actions_for_a_placed_part_only() {
             .unwrap_or_else(|| panic!("missing or inert row {label:?}"));
         assert!(
             matches!(
-                message,
-                Message::ContextMenu(ContextMenuMsg::Action(ContextAction::PlacedPart(a))) if a == action
+                &message,
+                Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, project: None })) if id.as_str() == command
             ),
             "{label} sent the wrong message"
         );
