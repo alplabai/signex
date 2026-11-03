@@ -34,7 +34,7 @@ pub mod text_extent;
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
 
 use super::messages::{EditorMsg, LibraryMessage};
@@ -52,12 +52,13 @@ pub fn view<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &CanvasColors,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
     let header = view_header(state, tokens, address.clone());
     let tabs = view_tabs(state.active_tab, tokens, address.clone());
-    let body = view_active_tab(state, library_state, tokens, address.clone());
+    let body = view_active_tab(state, library_state, tokens, canvas_colors, address.clone());
     let footer = view_footer(state, tokens, address, read_only);
 
     column![header, tabs, body, footer]
@@ -161,6 +162,7 @@ fn view_active_tab<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
+    canvas_colors: &CanvasColors,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     // A read-only library (the stock library) shows every editing tab
@@ -168,7 +170,7 @@ fn view_active_tab<'a>(
     // because its Open Editor buttons must stay live.
     let read_only = library_state.is_read_only(&state.library_path);
     let inner: Element<'_, LibraryMessage> = match state.active_tab {
-        PreviewTab::Preview => preview::view(state, library_state, tokens, address),
+        PreviewTab::Preview => preview::view(state, library_state, tokens, canvas_colors, address),
         PreviewTab::Parameters => inert::unless_read_only(
             read_only,
             params::view(state, library_state, tokens, address),

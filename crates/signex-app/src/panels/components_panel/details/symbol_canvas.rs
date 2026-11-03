@@ -2,22 +2,43 @@
 //! draws it placed on a sheet, through the same lowering, scene and replay,
 //! on the active theme's paper colour.
 
+use std::cell::RefCell;
+
 use iced::widget::canvas::{self, Geometry};
+use iced::widget::container;
 use iced::{Element, Length, Rectangle, Size, Theme};
-use signex_types::schematic::{Aabb, LibSymbol, SchematicSheet, Symbol};
+use signex_types::schematic::{
+    Aabb, LibSymbol, SchematicSheet, Symbol, UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+};
 use signex_types::theme::CanvasColors;
 
 use crate::render_config::to_iced;
 use crate::schematic_runtime::{
-    SceneOverrides, ScreenTransform, build_schematic_scene, draw_built_scene, symbol_bounds,
+    SCHEMATIC_TEXT_SIZE, SceneOverrides, ScreenTransform, build_schematic_scene, draw_built_scene,
+    symbol_bounds,
 };
 
 /// Share of the box the symbol's extent fills; the rest is margin.
 const FILL_RATIO: f32 = 0.8;
+/// Pin and field text is drawn outside the extent; the margin is at least
+/// this many times the minimum text size so it stays inside the box.
+const TEXT_MARGIN_EM: f32 = 2.0;
+/// Default schematic text height, mm; sets the largest sheet-like zoom.
+const TEXT_HEIGHT_MM: f32 = 1.27;
+/// The most a small part is magnified, in text heights at the max text size.
+const MAX_SCALE_TEXT_HEIGHTS: f32 = 4.0;
+
+/// What the cached scene was built from; a change drops the cache.
+type Shown = (LibSymbol, CanvasColors);
+
+#[derive(Default)]
+struct PreviewState {
+    cache: canvas::Cache,
+    shown: RefCell<Option<Shown>>,
+}
 
 struct SymbolSheetPreview {
-    sheet: SchematicSheet,
-    symbol: Symbol,
+    lib: LibSymbol,
     colors: CanvasColors,
 }
 
@@ -34,70 +55,100 @@ fn preview_sheet(lib: &LibSymbol) -> (SchematicSheet, Symbol) {
     (sheet, symbol)
 }
 
+/// The margin kept free on each side of the extent along one axis, px.
+fn fit_margin(side: f32) -> f32 {
+    (side * (1.0 - FILL_RATIO) / 2.0).max(SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM)
+}
+
+/// The largest scale, px per mm, a preview zooms to.
+fn max_scale() -> f32 {
+    SCHEMATIC_TEXT_SIZE.max_px / (TEXT_HEIGHT_MM * MAX_SCALE_TEXT_HEIGHTS)
+}
+
 /// The transform that centres `extent` in `size` and scales it to fit.
 fn fit_transform(extent: Aabb, size: Size) -> ScreenTransform {
     let width = (extent.max_x - extent.min_x).max(f64::EPSILON) as f32;
     let height = (extent.max_y - extent.min_y).max(f64::EPSILON) as f32;
-    let scale = (size.width / width).min(size.height / height) * FILL_RATIO;
+    let free_w = (size.width - 2.0 * fit_margin(size.width)).max(1.0);
+    let free_h = (size.height - 2.0 * fit_margin(size.height)).max(1.0);
+    let scale = (free_w / width).min(free_h / height).min(max_scale());
     let mid_x = ((extent.min_x + extent.max_x) / 2.0) as f32;
     let mid_y = ((extent.min_y + extent.max_y) / 2.0) as f32;
     ScreenTransform {
         offset_x: size.width / 2.0 - mid_x * scale,
         offset_y: size.height / 2.0 - mid_y * scale,
         scale,
-        device_px_per_logical_px: 1.0,
+        // The panel does not know its window's scale factor, so strokes snap
+        // to the logical pixel grid; a fractional-DPI monitor blurs them.
+        device_px_per_logical_px: UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
     }
 }
 
 impl canvas::Program<()> for SymbolSheetPreview {
-    type State = ();
+    type State = PreviewState;
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         renderer: &iced::Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: iced::mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        frame.fill_rectangle(
-            iced::Point::ORIGIN,
-            bounds.size(),
-            to_iced(&self.colors.paper),
-        );
-        if bounds.width > 0.0 && bounds.height > 0.0 {
-            let transform = fit_transform(symbol_bounds(&self.sheet, &self.symbol), bounds.size());
+        {
+            let mut shown = state.shown.borrow_mut();
+            let current = shown
+                .as_ref()
+                .is_some_and(|(lib, colors)| *lib == self.lib && *colors == self.colors);
+            if !current {
+                state.cache.clear();
+                *shown = Some((self.lib.clone(), self.colors));
+            }
+        }
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            frame.fill_rectangle(
+                iced::Point::ORIGIN,
+                bounds.size(),
+                to_iced(&self.colors.paper),
+            );
+            if bounds.width <= 0.0 || bounds.height <= 0.0 {
+                return;
+            }
+            let (sheet, symbol) = preview_sheet(&self.lib);
+            let transform = fit_transform(symbol_bounds(&sheet, &symbol), bounds.size());
             if let Some(scene) = build_schematic_scene(
-                &self.sheet,
+                &sheet,
                 &transform,
                 &self.colors,
                 Rectangle::with_size(bounds.size()),
                 None,
                 SceneOverrides::default(),
             ) {
-                draw_built_scene(&mut frame, &scene, &transform);
+                draw_built_scene(frame, &scene, &transform);
             }
-        }
-        vec![frame.into_geometry()]
+        });
+        vec![geometry]
     }
 }
 
-/// The Symbol preview of `lib`, `height` tall and as wide as its parent.
-pub(super) fn symbol_preview(
+/// The Symbol preview of `lib`, `height` tall and as wide as its parent,
+/// clipped to its box.
+pub(crate) fn symbol_preview(
     lib: &LibSymbol,
     colors: CanvasColors,
     height: f32,
 ) -> Element<'static, ()> {
-    let (sheet, symbol) = preview_sheet(lib);
-    canvas::Canvas::new(SymbolSheetPreview {
-        sheet,
-        symbol,
+    let canvas = canvas::Canvas::new(SymbolSheetPreview {
+        lib: lib.clone(),
         colors,
     })
     .width(Length::Fill)
-    .height(height)
-    .into()
+    .height(height);
+    container(canvas)
+        .width(Length::Fill)
+        .height(height)
+        .clip(true)
+        .into()
 }
 
 #[cfg(test)]
@@ -141,7 +192,7 @@ mod tests {
     #[test]
     fn the_symbol_is_centred_and_fits_inside_the_box() {
         let (sheet, symbol) = preview_sheet(&body_symbol());
-        let size = Size::new(200.0, 100.0);
+        let size = Size::new(200.0, 156.0);
         let extent = symbol_bounds(&sheet, &symbol);
         let transform = fit_transform(extent, size);
         let low = transform.world_to_screen((extent.min_x, extent.min_y));
@@ -156,7 +207,30 @@ mod tests {
             (low.y + high.y - size.height).abs() < 1e-3,
             "{low:?} {high:?}"
         );
-        // The 20 mm tall body is the limiting side.
-        assert!((high.y - low.y - size.height * FILL_RATIO).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_small_box_keeps_a_pixel_margin_for_pin_text() {
+        let (sheet, symbol) = preview_sheet(&body_symbol());
+        let size = Size::new(60.0, 40.0);
+        let extent = symbol_bounds(&sheet, &symbol);
+        let transform = fit_transform(extent, size);
+        let low = transform.world_to_screen((extent.min_x, extent.min_y));
+        let high = transform.world_to_screen((extent.max_x, extent.max_y));
+        let room = SCHEMATIC_TEXT_SIZE.min_px * TEXT_MARGIN_EM;
+        assert!(low.x >= room - 1e-3 && low.y >= room - 1e-3, "{low:?}");
+        assert!(high.x <= size.width - room + 1e-3, "{high:?}");
+        assert!(high.y <= size.height - room + 1e-3, "{high:?}");
+    }
+
+    #[test]
+    fn a_tiny_symbol_is_not_blown_up_past_the_zoom_cap() {
+        let extent = Aabb::new(-1.0, -0.5, 1.0, 0.5);
+        let transform = fit_transform(extent, Size::new(300.0, 156.0));
+        assert!(
+            (transform.scale - max_scale()).abs() < 1e-3,
+            "{}",
+            transform.scale
+        );
     }
 }

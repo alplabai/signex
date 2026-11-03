@@ -5,7 +5,7 @@
 
 pub(crate) mod footprint_canvas;
 pub mod load;
-mod symbol_canvas;
+pub(crate) mod symbol_canvas;
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
