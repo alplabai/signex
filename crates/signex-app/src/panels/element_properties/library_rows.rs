@@ -2,6 +2,7 @@
 //! Properties views (#912).
 
 use super::super::*;
+use iced::Widget as _;
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -11,11 +12,11 @@ const SP: Spacing = Spacing::DEFAULT;
 /// The "Symbol" pick list of a placed symbol whose library row offers
 /// alternate drawings (#1230). Nothing when there is only the default.
 pub(super) fn push_symbol_choice_row<'a>(
-    c: Column<'a, PanelMsg>,
+    c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     choices: &[SymbolChoiceItem],
     muted: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let Some(current) = choices.iter().find(|i| i.selected) else {
         return c;
     };
@@ -52,14 +53,14 @@ pub(super) struct LibraryStatus {
 /// Update replaces the sheet's shared copy, so it affects every instance of
 /// the part on the sheet - the tooltip says so.
 pub(super) fn push_library_rows<'a>(
-    mut c: Column<'a, PanelMsg>,
+    mut c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     library_name: &str,
     status: LibraryStatus,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     if !library_name.is_empty() {
         c = c.push(form_input_row(
             "Library",
@@ -74,7 +75,8 @@ pub(super) fn push_library_rows<'a>(
         c = c.push(
             iced::widget::text("Library: symbol missing (sheet keeps its embedded copy)")
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
     if drifted {
@@ -95,7 +97,8 @@ pub(super) fn push_library_rows<'a>(
             ]
             .spacing(SP.m)
             .padding([SP.xs, SP.m])
-            .align_y(iced::Alignment::Center),
+            .align_y(iced::Alignment::Center)
+            .boxed(),
         );
     }
     c
@@ -116,15 +119,15 @@ fn part_action_buttons() -> Vec<(&'static str, PanelMsg)> {
 
 /// A row of buttons for the actions that lead from the selected placed
 /// part into its library (#1301, #1262, #1260).
-pub(super) fn push_part_actions<'a>(c: Column<'a, PanelMsg>) -> Column<'a, PanelMsg> {
+pub(super) fn push_part_actions<'a>(c: Column<Element<'a, PanelMsg>>) -> Column<Element<'a, PanelMsg>> {
     // Wrapping row: at a narrow dock width the last button drops to the
     // next line instead of being clipped (#1747).
     let buttons = iced::widget::Row::with_children(part_action_buttons().into_iter().map(
-        |(label, message)| {
+        |(label, message)| -> Element<'a, PanelMsg> {
             iced::widget::button(iced::widget::text(label).size(TS.body))
                 .padding([SP.xs, SP.m])
                 .on_press(message)
-                .into()
+                .boxed()
         },
     ))
     .spacing(SP.m)
@@ -133,7 +136,8 @@ pub(super) fn push_part_actions<'a>(c: Column<'a, PanelMsg>) -> Column<'a, Panel
     c.push(
         iced::widget::container(buttons)
             .padding([SP.xs, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     )
 }
 

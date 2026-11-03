@@ -8,8 +8,8 @@ pub use crate::style::{
 };
 
 use iced_core::{
-    Border, Clipboard, Color, Element, Event, Layout, Point, Shell, Size, keyboard,
-    layout::{Limits, Node},
+    Border, Color, Element, Event, Layout, Point, Rectangle, Shell, Size, Widget, keyboard,
+    layout::Limits,
     mouse::{self, Cursor},
     overlay, renderer, touch,
     widget::Tree,
@@ -32,6 +32,10 @@ pub struct ContextMenuOverlay<
 {
     // The position of the element
     position: Point,
+    /// The bounds of the window the overlay is displayed in.
+    window: Rectangle,
+    /// The layout of the content, computed on creation.
+    layout: Layout,
     /// The state of the [`ContextMenuOverlay`].
     tree: &'a mut Tree,
     /// The content of the [`ContextMenuOverlay`].
@@ -50,8 +54,12 @@ where
     'b: 'a,
 {
     /// Creates a new [`ContextMenuOverlay`].
+    ///
+    /// The content is laid out right away, inside the given `window` size.
     pub(crate) fn new<C>(
         position: Point,
+        window: Size,
+        renderer: &Renderer,
         tree: &'a mut Tree,
         content: C,
         class: &'a <Theme as Catalog>::Class<'b>,
@@ -60,10 +68,30 @@ where
     where
         C: Into<Element<'a, Message, Theme, Renderer>>,
     {
+        let mut content = content.into();
+
+        let limits = Limits::new(Size::ZERO, window);
+        content.layout(tree, renderer, &limits);
+
+        let content_size = tree.size;
+
+        // Try to stay inside borders
+        let mut content_position = position;
+        if content_position.x + content_size.width > window.width {
+            content_position.x = f32::max(0.0, content_position.x - content_size.width);
+        }
+        if content_position.y + content_size.height > window.height {
+            content_position.y = f32::max(0.0, content_position.y - content_size.height);
+        }
+
+        let layout = Layout::new(content_size).move_to(content_position);
+
         ContextMenuOverlay {
             position,
+            window: Rectangle::new(Point::ORIGIN, window),
+            layout,
             tree,
-            content: content.into(),
+            content,
             class,
             state,
         }
@@ -84,86 +112,55 @@ where
     Theme: 'a + Catalog,
     'b: 'a,
 {
-    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
-        let limits = Limits::new(Size::ZERO, bounds);
-        let max_size = limits.max();
-
-        let mut content = self
-            .content
-            .as_widget_mut()
-            .layout(self.tree, renderer, &limits);
-
-        // Try to stay inside borders
-        let mut position = self.position;
-        if position.x + content.size().width > bounds.width {
-            position.x = f32::max(0.0, position.x - content.size().width);
-        }
-        if position.y + content.size().height > bounds.height {
-            position.y = f32::max(0.0, position.y - content.size().height);
-        }
-
-        content.move_to_mut(position);
-
-        Node::with_children(max_size, vec![content])
-    }
-
     fn draw(
         &self,
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
         cursor: Cursor,
     ) {
-        let bounds = layout.bounds();
+        let bounds = self.window;
 
         let style_sheet = theme.style(self.class, status::Status::Active);
 
         // Background
 
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds,
-                border: Border {
-                    radius: (0.0).into(),
-                    width: 0.0,
-                    color: Color::TRANSPARENT,
+        renderer.with_layer(bounds, |renderer| {
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds,
+                    border: Border {
+                        radius: (0.0).into(),
+                        width: 0.0,
+                        color: Color::TRANSPARENT,
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 },
-                ..Default::default()
-            },
-            style_sheet.background,
-        );
+                style_sheet.background,
+            );
 
-        let content_layout = layout
-            .children()
-            .next()
-            .expect("widget: Layout should have a content layout.");
-
-        // Modal
-        self.content.as_widget().draw(
-            self.tree,
-            renderer,
-            theme,
-            style,
-            content_layout,
-            cursor,
-            &bounds,
-        );
+            // Modal
+            self.content.draw(
+                self.tree,
+                renderer,
+                theme,
+                style,
+                self.layout,
+                cursor,
+                &bounds,
+            );
+        });
     }
 
     fn update(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: iced_core::mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
-        let layout_children = layout
-            .children()
-            .next()
-            .expect("widget: Layout should have a content layout.");
+        let layout_children = self.layout;
 
         let mut forward_event_to_children = true;
         let mut capture_event = false;
@@ -207,15 +204,14 @@ where
         }
 
         if forward_event_to_children {
-            self.content.as_widget_mut().update(
+            self.content.update(
                 self.tree,
                 event,
                 layout_children,
                 cursor,
                 renderer,
-                clipboard,
                 shell,
-                &layout.bounds(),
+                &self.window,
             );
         }
         if capture_event {
@@ -223,39 +219,17 @@ where
         }
     }
 
-    fn operate(
-        &mut self,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn iced_core::widget::Operation,
-    ) {
-        let content_layout = layout
-            .children()
-            .next()
-            .expect("widget: Layout should have a content layout.");
-
+    fn operate(&mut self, renderer: &Renderer, operation: &mut dyn iced_core::widget::Operation) {
         self.content
-            .as_widget_mut()
-            .operate(self.tree, content_layout, renderer, operation);
+            .operate(self.tree, self.layout, &self.window, renderer, operation);
     }
 
-    fn mouse_interaction(
-        &self,
-        layout: Layout<'_>,
-
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        let bounds = layout.bounds();
-
-        self.content.as_widget().mouse_interaction(
+    fn mouse_interaction(&self, cursor: mouse::Cursor, renderer: &Renderer) -> mouse::Interaction {
+        self.content.mouse_interaction(
             self.tree,
-            layout
-                .children()
-                .next()
-                .expect("widget: Layout should have a content layout."),
+            self.layout,
             cursor,
-            &bounds,
+            &self.window,
             renderer,
         )
     }
@@ -267,6 +241,8 @@ mod tests {
     use iced_core::Point;
     use iced_widget::text::Text;
 
+    const WINDOW: Size = Size::new(1920.0, 1080.0);
+
     #[derive(Clone)]
     enum TestMessage {}
 
@@ -275,7 +251,7 @@ mod tests {
     }
 
     fn create_test_content()
-    -> Element<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> {
+    -> Element<'static, TestMessage, iced_widget::Theme, ()> {
         Text::new("Test content").into()
     }
 
@@ -292,7 +268,7 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(100.0, 100.0);
 
-        let overlay = ContextMenuOverlay::new(position, &mut tree, content, class, &mut state);
+        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
         assert_eq!(overlay.position, position);
     }
@@ -312,9 +288,11 @@ mod tests {
         let mut state3 = create_test_state();
 
         let overlay1 =
-            ContextMenuOverlay::new(Point::ORIGIN, &mut tree1, content1, class, &mut state1);
+            ContextMenuOverlay::new(Point::ORIGIN, WINDOW, &(), &mut tree1, content1, class, &mut state1);
         let overlay2 = ContextMenuOverlay::new(
             Point::new(500.0, 300.0),
+            WINDOW,
+            &(),
             &mut tree2,
             content2,
             class,
@@ -322,6 +300,8 @@ mod tests {
         );
         let overlay3 = ContextMenuOverlay::new(
             Point::new(1000.0, 800.0),
+            WINDOW,
+            &(),
             &mut tree3,
             content3,
             class,
@@ -342,7 +322,7 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(100.0, 100.0);
 
-        let overlay = ContextMenuOverlay::new(position, &mut tree, content, class, &mut state);
+        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
         let _overlay_element = overlay.overlay();
 
         // If we get here without panic, the conversion worked
@@ -411,7 +391,7 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(-50.0, -100.0);
 
-        let overlay = ContextMenuOverlay::new(position, &mut tree, content, class, &mut state);
+        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
         assert_eq!(overlay.position.x, -50.0);
         assert_eq!(overlay.position.y, -100.0);
@@ -426,7 +406,7 @@ mod tests {
         let mut state = create_test_state();
         let position = Point::new(123.456, 789.012);
 
-        let overlay = ContextMenuOverlay::new(position, &mut tree, content, class, &mut state);
+        let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
         assert_eq!(overlay.position.x, 123.456);
         assert_eq!(overlay.position.y, 789.012);

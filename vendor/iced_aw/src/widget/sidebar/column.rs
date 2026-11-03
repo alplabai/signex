@@ -7,12 +7,14 @@
 //! alignments.
 
 use iced_core::{
-    Alignment, Clipboard, Element, Layout, Length, Padding, Pixels, Point, Rectangle, Shell, Size,
-    Vector, Widget, alignment,
+    Alignment, Element, Layout, Length, Padding, Pixels, Rectangle, Shell, Size, Vector, Widget,
+    alignment,
     event::Event,
-    layout::{self, Node},
-    mouse, overlay, renderer,
-    widget::{Operation, tree::Tree},
+    layout, mouse, overlay, renderer,
+    widget::{
+        Meta, Operation,
+        tree::{self, Tree},
+    },
 };
 use iced_widget::Row;
 
@@ -26,7 +28,7 @@ pub struct FlushColumn<'a, Message, Theme = iced_widget::Theme, Renderer = iced_
     max_width: f32,
     align: Alignment,
     clip: bool,
-    children: Vec<Element<'a, Message, Theme, Renderer>>,
+    children: Vec<Row<Element<'a, Message, Theme, Renderer>>>,
     flush: bool,
 }
 
@@ -49,7 +51,7 @@ where
     /// Creates a [`FlushColumn`] with the given elements.
     #[must_use]
     pub fn with_children(
-        children: impl IntoIterator<Item = Row<'a, Message, Theme, Renderer>>,
+        children: impl IntoIterator<Item = Row<Element<'a, Message, Theme, Renderer>>>,
     ) -> Self {
         let iterator = children.into_iter();
         Self::with_capacity(iterator.size_hint().0).extend(iterator)
@@ -63,16 +65,12 @@ where
     /// If any of the children have a [`Length::Fill`] strategy, you will need to
     /// call [`FlushColumn::width`] or [`FlushColumn::height`] accordingly.
     #[must_use]
-    pub fn from_vec(children: Vec<Row<'a, Message, Theme, Renderer>>) -> Self {
-        let children = children
-            .into_iter()
-            .map(|x| Element::into(x.into()))
-            .collect();
+    pub fn from_vec(children: Vec<Row<Element<'a, Message, Theme, Renderer>>>) -> Self {
         Self {
             spacing: Pixels::ZERO,
             padding: Padding::ZERO,
-            width: Length::Shrink,
-            height: Length::Shrink,
+            width: Length::Fit,
+            height: Length::Fit,
             max_width: f32::INFINITY,
             align: Alignment::Start,
             clip: false,
@@ -146,18 +144,18 @@ where
 
     /// Adds an element to the [`FlushColumn`].
     #[must_use]
-    pub fn push(mut self, child: impl Into<Row<'a, Message, Theme, Renderer>>) -> Self {
-        let child = child.into();
-        let child_size = child.size_hint();
-        self.width = self.width.enclose(child_size.width);
-        self.height = self.height.enclose(child_size.height);
+    pub fn push(mut self, child: impl Into<Row<Element<'a, Message, Theme, Renderer>>>) -> Self {
+        // Sizing is enclosed from the children during `diff`.
         self.children.push(child.into());
         self
     }
 
     /// Adds an element to the [`FlushColumn`], if `Some`.
     #[must_use]
-    pub fn push_maybe(self, child: Option<impl Into<Row<'a, Message, Theme, Renderer>>>) -> Self {
+    pub fn push_maybe(
+        self,
+        child: Option<impl Into<Row<Element<'a, Message, Theme, Renderer>>>>,
+    ) -> Self {
         if let Some(child) = child {
             self.push(child)
         } else {
@@ -169,7 +167,7 @@ where
     #[must_use]
     pub fn extend(
         self,
-        children: impl IntoIterator<Item = Row<'a, Message, Theme, Renderer>>,
+        children: impl IntoIterator<Item = Row<Element<'a, Message, Theme, Renderer>>>,
     ) -> Self {
         children.into_iter().fold(self, Self::push)
     }
@@ -186,24 +184,42 @@ where
 }
 
 impl<'a, Message: 'a, Theme: 'a, Renderer: iced_core::Renderer + 'a>
-    FromIterator<Row<'a, Message, Theme, Renderer>> for FlushColumn<'a, Message, Theme, Renderer>
+    FromIterator<Row<Element<'a, Message, Theme, Renderer>>>
+    for FlushColumn<'a, Message, Theme, Renderer>
 {
-    fn from_iter<T: IntoIterator<Item = Row<'a, Message, Theme, Renderer>>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = Row<Element<'a, Message, Theme, Renderer>>>>(
+        iter: T,
+    ) -> Self {
         Self::with_children(iter)
     }
 }
+
+impl<Message, Theme, Renderer> Meta for FlushColumn<'_, Message, Theme, Renderer> {}
 
 impl<'a, Message: 'a, Theme: 'a, Renderer> Widget<Message, Theme, Renderer>
     for FlushColumn<'a, Message, Theme, Renderer>
 where
     Renderer: iced_core::Renderer,
 {
-    fn children(&self) -> Vec<Tree> {
-        self.children.iter().map(Tree::new).collect()
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<layout::flex::Cache>()
     }
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.children);
+    fn state(&self) -> tree::State {
+        tree::State::new(layout::flex::Cache::default())
+    }
+
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(&mut self.children);
+
+        if self.width.is_fit() || self.height.is_fit() {
+            for child in &self.children {
+                let size = child.size();
+
+                self.width = self.width.cross(size.width);
+                self.height = self.height.stack(size.height);
+            }
+        }
     }
 
     fn size(&self) -> Size<Length> {
@@ -213,14 +229,16 @@ where
         }
     }
 
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        let limits = limits.max_width(self.max_width);
-        let node = layout::flex::resolve(
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) {
+        let mut limits = *limits;
+        if self.max_width.is_finite() {
+            limits.max.width = limits.max.width.min(self.max_width).max(limits.min.width);
+            limits.infinite.width = false;
+        }
+
+        let cache = tree.state.downcast_mut::<layout::flex::Cache>();
+
+        let size = layout::flex::resolve(
             layout::flex::Axis::Vertical,
             renderer,
             &limits,
@@ -229,91 +247,66 @@ where
             self.padding,
             self.spacing.0,
             self.align,
-            &mut self.children,
             &mut tree.children,
+            &mut self.children,
+            cache,
         );
+
         let mut container_x = f32::MAX;
         let mut container_width = 0.0f32;
-        for row in node.children() {
-            if row.size().width > container_width {
-                container_width = row.size().width;
+        for row in &tree.children {
+            if row.size.width > container_width {
+                container_width = row.size.width;
             }
-            if row.bounds().x < container_x {
-                container_x = row.bounds().x;
+            if row.translation.x < container_x {
+                container_x = row.translation.x;
             }
         }
-        let mut children = Vec::<Node>::new();
-        for row in node.children() {
-            let mut row_children = Vec::<Node>::new();
-            let bounds = row.bounds();
-            let width_diff = container_width - bounds.width;
-            if !row.children().is_empty() {
-                for element in row.children() {
-                    let bounds = element.bounds();
-                    let x = bounds.x
-                        + match self.align {
-                            Alignment::Start => 0.0,
-                            Alignment::Center => width_diff / 2.0,
-                            Alignment::End => width_diff,
-                        };
-                    let mut element_node =
-                        Node::with_children(element.size(), element.children().to_owned());
-                    element_node.move_to_mut(Point::new(x, bounds.y));
-                    row_children.push(element_node);
+        for row in &mut tree.children {
+            let width_diff = container_width - row.size.width;
+            if !row.children.is_empty() {
+                for element in &mut row.children {
+                    element.translation.x += match self.align {
+                        Alignment::Start => 0.0,
+                        Alignment::Center => width_diff / 2.0,
+                        Alignment::End => width_diff,
+                    };
                 }
-                if row_children.len() > 1 {
+                if row.children.len() > 1 {
                     match self.align {
                         Alignment::Start => {
-                            let element = row_children.last().expect("Always exists.");
-                            let bounds = element.bounds();
-                            let mut position = bounds.position();
-                            let mut element_node =
-                                Node::with_children(bounds.size(), element.children().to_owned());
-                            position.x += width_diff;
-                            element_node.move_to_mut(position);
-                            let node = row_children.last_mut().expect("Always exists.");
-                            *node = element_node;
+                            let element = row.children.last_mut().expect("Always exists.");
+                            element.translation.x += width_diff;
                         }
                         Alignment::Center => {}
                         Alignment::End => {
-                            let element = row_children.first().expect("Always exists.");
-                            let bounds = element.bounds();
-                            let mut position = bounds.position();
-                            let mut element_node =
-                                Node::with_children(bounds.size(), element.children().to_owned());
-                            position.x -= width_diff;
-                            element_node.move_to_mut(position);
-                            let node = row_children.first_mut().expect("Always exists.");
-                            *node = element_node;
+                            let element = row.children.first_mut().expect("Always exists.");
+                            element.translation.x -= width_diff;
                         }
                     }
                 }
             }
-            let mut row_node =
-                Node::with_children(Size::new(container_width, row.size().height), row_children);
-            row_node.move_to_mut(Point::new(container_x, bounds.y));
-            children.push(row_node);
+            row.size.width = container_width;
+            row.translation.x = container_x;
         }
-        Node::with_children(node.size(), children)
+        tree.size = size;
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
         operation.traverse(&mut |operation| {
             self.children
                 .iter_mut()
-                .zip(&mut tree.children)
-                .zip(layout.children())
-                .for_each(|((child, state), layout)| {
-                    child
-                        .as_widget_mut()
-                        .operate(state, layout, renderer, operation);
+                .zip(layout.iter_mut(&mut tree.children))
+                .for_each(|(child, (layout, state))| {
+                    child.operate(state, layout, viewport, renderer, operation);
                 });
         });
     }
@@ -322,41 +315,34 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        for ((child, state), layout) in self
+        for (child, (layout, state)) in self
             .children
             .iter_mut()
-            .zip(&mut tree.children)
-            .zip(layout.children())
+            .zip(layout.iter_mut(&mut tree.children))
         {
-            child.as_widget_mut().update(
-                state, event, layout, cursor, renderer, clipboard, shell, viewport,
-            );
+            child.update(state, event, layout, cursor, renderer, shell, viewport);
         }
     }
 
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
         self.children
             .iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .map(|((child, state), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(state, layout, cursor, viewport, renderer)
+            .zip(layout.iter(&tree.children))
+            .map(|(child, (layout, state))| {
+                child.mouse_interaction(state, layout, cursor, viewport, renderer)
             })
             .max()
             .unwrap_or_default()
@@ -368,18 +354,13 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
         if let Some(clipped_viewport) = layout.bounds().intersection(viewport) {
-            for ((child, state), layout) in self
-                .children
-                .iter()
-                .zip(&tree.children)
-                .zip(layout.children())
-            {
-                child.as_widget().draw(
+            for (child, (layout, state)) in self.children.iter().zip(layout.iter(&tree.children)) {
+                child.draw(
                     state,
                     renderer,
                     theme,
@@ -399,11 +380,12 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         overlay::from_children(
             &mut self.children,
             tree,
@@ -411,6 +393,7 @@ where
             renderer,
             viewport,
             translation,
+            window,
         )
     }
 }
@@ -423,6 +406,6 @@ where
     Renderer: iced_core::Renderer + 'a,
 {
     fn from(column: FlushColumn<'a, Message, Theme, Renderer>) -> Self {
-        Self::new(column)
+        Widget::_boxed(column)
     }
 }

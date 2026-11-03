@@ -7,7 +7,7 @@
 
 use super::*;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
@@ -31,7 +31,7 @@ impl Signex {
 
     pub(in crate::app::view) fn view_remove_dialog_body(&self) -> Element<'_, Message> {
         let Some(ref st) = self.ui_state.remove_dialog else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -57,7 +57,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RemoveDialog,
@@ -98,12 +98,13 @@ impl Signex {
                             width: 1.0,
                             radius: 4.0.into(),
                             color: border_c,
+                            ..Border::default()
                         },
                         text_color: text_c,
                         ..button::Style::default()
                     }
                 })
-                .into()
+                .boxed()
             };
 
         let exclude_card = option_card(
@@ -145,7 +146,7 @@ impl Signex {
         if !blockers.unlisted {
             remove_options = remove_options.push(exclude_card);
         }
-        let remove_options: Element<'_, Message> = remove_options.into();
+        let remove_options: Element<'_, Message> = remove_options.boxed();
 
         let mut prompt = column![
             text(format!(
@@ -163,7 +164,8 @@ impl Signex {
                     blockers.parent_names()
                 ))
                 .size(TS.caption)
-                .color(text_muted),
+                .color(text_muted)
+                .boxed(),
             );
         }
         if let Some(why) = blockers.unknown.as_deref().filter(|_| !is_library) {
@@ -173,7 +175,8 @@ impl Signex {
                      known yet ({why}). You can exclude it from the project."
                 ))
                 .size(TS.caption)
-                .color(text_muted),
+                .color(text_muted)
+                .boxed(),
             );
         }
         // Delete is only offered when no other sheet places the file
@@ -190,7 +193,8 @@ impl Signex {
                     PlacingSymbol::describe_all(&blockers.symbols)
                 ))
                 .size(TS.caption)
-                .color(text_muted),
+                .color(text_muted)
+                .boxed(),
             );
         }
         if blockers.placed && !blockers.unlisted {
@@ -201,14 +205,16 @@ impl Signex {
                     PlacingSymbol::describe_all(&blockers.symbols)
                 ))
                 .size(TS.caption)
-                .color(text_muted),
+                .color(text_muted)
+                .boxed(),
             );
         }
         if blockers.unlisted {
             prompt = prompt.push(
                 text("It is not a page of this project, so there is nothing to exclude.")
                     .size(TS.caption)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
             );
         }
         // Library names can repeat across folders; the full path says which
@@ -217,10 +223,11 @@ impl Signex {
             prompt = prompt.push(
                 text(st.target_path.display().to_string())
                     .size(TS.caption)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
             );
             if let Some(line) = self.library_usage_line(st) {
-                prompt = prompt.push(text(line).size(TS.caption).color(text_muted));
+                prompt = prompt.push(text(line).size(TS.caption).color(text_muted).boxed());
             }
         }
 
@@ -244,7 +251,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 
     /// Unsaved-edits stage of the Remove modal (#738): Save / Discard / Cancel.
@@ -270,7 +277,7 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Center);
         if can_discard {
-            buttons = buttons.push(Space::new().width(8)).push(secondary_button(
+            buttons = buttons.push(Space::new().width(8).boxed()).push(secondary_button(
                 "Discard",
                 Message::Remove(RemoveMsg::ExcludeDirty(
                     crate::app::ExcludeDirtyChoice::Discard,
@@ -279,7 +286,7 @@ impl Signex {
                 border_c,
             ));
         }
-        buttons = buttons.push(Space::new().width(8)).push(primary_button(
+        buttons = buttons.push(Space::new().width(8).boxed()).push(primary_button(
             "Save",
             Some(Message::Remove(RemoveMsg::ExcludeDirty(
                 crate::app::ExcludeDirtyChoice::Save,
@@ -296,7 +303,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true)
-        .into()
+        .boxed()
     }
 
     pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {
@@ -312,7 +319,7 @@ impl Signex {
     pub(in crate::app::view) fn view_project_close_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.project_close_confirm else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -338,7 +345,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::ProjectCloseConfirm,
@@ -358,11 +365,11 @@ impl Signex {
         let discard_note: Element<'_, Message> = match &discard_blocked {
             Some(reason) => container(text(reason.clone()).size(TS.body).color(text_muted))
                 .padding([10, 14])
-                .into(),
-            None => Space::new().height(0).into(),
+                .boxed(),
+            None => Space::new().height(0).boxed(),
         };
         let discard_button: Element<'_, Message> = if discard_blocked.is_some() {
-            Space::new().width(0).into()
+            Space::new().width(0).boxed()
         } else {
             secondary_button(
                 "Discard All",
@@ -372,14 +379,14 @@ impl Signex {
             )
         };
         let discard_gap: Element<'_, Message> = if discard_blocked.is_some() {
-            Space::new().width(0).into()
+            Space::new().width(0).boxed()
         } else {
-            Space::new().width(8).into()
+            Space::new().width(8).boxed()
         };
 
         // Kept documents stay open and are never discarded; say so, by name.
         let kept_note: Element<'_, Message> = if st.kept_paths.is_empty() {
-            Space::new().height(0).into()
+            Space::new().height(0).boxed()
         } else {
             let names: Vec<String> = st
                 .kept_paths
@@ -395,7 +402,7 @@ impl Signex {
                 .color(text_muted),
             )
             .padding([10, 14])
-            .into()
+            .boxed()
         };
 
         let dialog = container(
@@ -412,7 +419,7 @@ impl Signex {
                 )
                 .padding([14, 14]),
                 container(file_list)
-                    .max_height(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT)
+                    .height(Length::Fit.max(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT))
                     .padding([0, 14]),
                 kept_note,
                 discard_note,
@@ -447,7 +454,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 
     pub(in crate::app::view) fn view_app_quit_confirm(&self) -> Element<'_, Message> {
@@ -487,7 +494,7 @@ impl Signex {
             .map(|name| {
                 container(text(name).size(TS.body).color(text_c))
                     .padding([SP.s, SP.m])
-                    .into()
+                    .boxed()
             })
             .collect()
     }
@@ -495,7 +502,7 @@ impl Signex {
     pub(in crate::app::view) fn view_app_quit_confirm_body(&self) -> Element<'_, Message> {
         use crate::app::ProjectCloseChoice;
         let Some(ref st) = self.ui_state.app_quit_confirm else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -524,7 +531,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::AppQuitConfirm,
@@ -545,9 +552,9 @@ impl Signex {
                     .color(iced::Color::from_rgb(0.90, 0.35, 0.30)),
             )
             .padding([10, 14])
-            .into()
+            .boxed()
         } else {
-            Space::new().height(0).into()
+            Space::new().height(0).boxed()
         };
         let dialog = container(
             column![
@@ -568,7 +575,7 @@ impl Signex {
                 )
                 .padding([14, 14]),
                 container(file_list)
-                    .max_height(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT)
+                    .height(Length::Fit.max(crate::app::handlers::modal_sizing::LIST_MAX_HEIGHT))
                     .padding([0, 14]),
                 container(
                     row![
@@ -607,7 +614,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }
 

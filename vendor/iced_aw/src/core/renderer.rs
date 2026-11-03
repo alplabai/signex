@@ -8,7 +8,7 @@ pub struct DrawEnvironment<'a, Defaults, Style, Focus> {
     /// The defaults of the renderer.
     pub defaults: &'a Defaults,
     /// The layout of the widget.
-    pub layout: Layout<'a>,
+    pub layout: Layout,
     /// The position of the cursor.
     pub cursor_position: Point,
     /// The style of the widget.

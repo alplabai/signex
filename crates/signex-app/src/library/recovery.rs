@@ -42,7 +42,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Padding, Theme, Widget};
 use signex_library::PrimitiveKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -209,7 +209,7 @@ fn library_missing_view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 fn git_missing_view<'a>(
@@ -255,21 +255,27 @@ fn git_missing_view<'a>(
     .spacing(SP.xs);
 
     if let Some(url) = remote {
-        summary_lines = summary_lines.push(Space::new().height(4));
+        summary_lines = summary_lines.push(Space::new().height(4).boxed());
         summary_lines =
-            summary_lines.push(text(format!("Remote: {}", url)).size(TS.body).color(muted));
+            summary_lines.push(
+                text(format!("Remote: {}", url))
+                    .size(TS.body)
+                    .color(muted)
+                    .boxed(),
+            );
     }
 
     if let Some(reason) = error {
-        summary_lines = summary_lines.push(Space::new().height(8));
+        summary_lines = summary_lines.push(Space::new().height(8).boxed());
         summary_lines = summary_lines.push(
             text(format!("Re-init failed: {reason}"))
                 .size(TS.body)
-                .color(iced::Color::from_rgb(0.86, 0.40, 0.36)),
+                .color(iced::Color::from_rgb(0.86, 0.40, 0.36))
+                .boxed(),
         );
     }
 
-    summary_lines = summary_lines.push(Space::new().height(10));
+    summary_lines = summary_lines.push(Space::new().height(10).boxed());
     summary_lines = summary_lines.push(
         text(
             "Re-init creates a fresh repository at the parent \
@@ -277,7 +283,8 @@ fn git_missing_view<'a>(
              from this point forward.",
         )
         .size(TS.body)
-        .color(iced::Color::from_rgb(0.86, 0.40, 0.36)),
+        .color(iced::Color::from_rgb(0.86, 0.40, 0.36))
+        .boxed(),
     );
 
     let restore_button: Element<'a, LibraryMessage> = if remote.is_some() {
@@ -327,7 +334,7 @@ fn git_missing_view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 fn broken_binding_view<'a>(
@@ -418,7 +425,7 @@ fn broken_binding_view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 /// Destructive button — used for *Re-init (lose history)*. Painted
@@ -427,7 +434,7 @@ fn broken_binding_view<'a>(
 fn destructive_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, LibraryMessage> {
     let bg = iced::Color::from_rgb(0.74, 0.25, 0.22);
     let fg = iced::Color::WHITE;
-    button(container(text(label.to_string()).size(TS.body).color(fg)).padding([SP.s, 14.0]))
+    button(container(text(label.to_string()).size(TS.body).color(fg)).padding(Padding::from([SP.s, 14.0])))
         .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(bg)),
@@ -439,7 +446,7 @@ fn destructive_btn<'a>(label: &'a str, message: LibraryMessage) -> Element<'a, L
             },
             ..iced::widget::button::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn disabled_btn<'a>(
@@ -451,7 +458,7 @@ fn disabled_btn<'a>(
         a: text_color.a * 0.5,
         ..text_color
     };
-    container(container(text(label.to_string()).size(TS.body).color(muted)).padding([SP.s, 14.0]))
+    container(container(text(label.to_string()).size(TS.body).color(muted)).padding(Padding::from([SP.s, 14.0])))
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
                 1.0, 1.0, 1.0, 0.02,
@@ -463,10 +470,11 @@ fn disabled_btn<'a>(
                     a: border.a * 0.5,
                     ..border
                 },
+                ..Border::default()
             },
             ..Default::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

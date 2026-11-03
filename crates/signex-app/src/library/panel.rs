@@ -23,7 +23,7 @@
 //! which routes through the same handler the project-tree double-click
 //! uses.
 
-use iced::widget::{Column, Space, button, column, container, row, text, text_input};
+use iced::widget::{Column, Space, Widget, button, column, container, row, text, text_input};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -53,10 +53,10 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
         .padding(LIB_PANEL_ROW_PADDING)
         .size(LIB_PANEL_TEXT_SIZE);
 
-    let mut col: Column<'a, LibraryMessage> = column![]
+    let mut col: Column<Element<'a, LibraryMessage>> = column![]
         .spacing(SP.xs)
         .width(Length::Fill)
-        .push(container(search).padding([SP.s, SP.s]));
+        .push(container(search).padding([SP.s, SP.s]).boxed());
 
     if state.open_libraries.is_empty() {
         col = col.push(
@@ -65,7 +65,8 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([SP.l, SP.m]),
+            .padding([SP.l, SP.m])
+            .boxed(),
         );
     } else {
         for lib in state.open_libraries.iter() {
@@ -74,7 +75,11 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
                 continue;
             }
             let expanded = state.panel_expanded.contains(&lib.root);
-            col = col.push(container(library_row(lib, expanded, tokens)).padding([SP.xs, SP.s]));
+            col = col.push(
+                container(library_row(lib, expanded, tokens))
+                    .padding([SP.xs, SP.s])
+                    .boxed(),
+            );
             if expanded {
                 col = col.push(component_rows(lib, state, tokens));
             }
@@ -93,7 +98,8 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
         ]
         .spacing(SP.s),
     )
-    .padding([6.0, SP.s]);
+    .padding([6.0, SP.s])
+    .boxed();
 
     let body = container(col).style(move |_: &Theme| iced::widget::container::Style {
         background: None,
@@ -106,14 +112,14 @@ pub fn view<'a>(state: &'a LibraryState, tokens: &'a ThemeTokens) -> Element<'a,
     });
 
     column![
-        crate::panels::panel_scrollable(body).height(Length::Fill),
+        crate::panels::panel_scrollable(body.boxed()).height(Length::Fill),
         Space::new().height(2),
         footer
     ]
     .spacing(0)
     .width(Length::Fill)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// One library row: the ▸ / ▾ toggle, the name and row count, and Open.
@@ -156,7 +162,7 @@ fn library_row<'a>(
     row![toggle, open]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
 }
 
 /// The components of an expanded library, one indented row each, tables
@@ -169,7 +175,7 @@ fn component_rows<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let mut tables: Vec<&String> = lib.tables.keys().collect();
     tables.sort();
-    let mut list: Column<'a, LibraryMessage> = column![].spacing(0).width(Length::Fill);
+    let mut list: Column<Element<'a, LibraryMessage>> = column![].spacing(0).width(Length::Fill);
     let mut any = false;
     for table in tables {
         // Stored order, as the Library Browser shows it: no per-frame sort.
@@ -192,7 +198,8 @@ fn component_rows<'a>(
                 .on_press(LibraryMessage::Picker(PickerMsg::PanelComponentClicked(
                     key,
                 )))
-                .style(crate::styles::hover_row(tokens, selected)),
+                .style(crate::styles::hover_row(tokens, selected))
+                .boxed(),
             );
         }
     }
@@ -203,8 +210,9 @@ fn component_rows<'a>(
                     .size(LIB_PANEL_TEXT_SIZE)
                     .color(muted),
             )
-            .padding([SP.xs, SP.xl * 2.0]),
+            .padding([SP.xs, SP.xl * 2.0])
+            .boxed(),
         );
     }
-    list.into()
+    list.boxed()
 }

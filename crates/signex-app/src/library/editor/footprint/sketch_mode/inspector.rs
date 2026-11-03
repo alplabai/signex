@@ -18,7 +18,7 @@
 //! same patch as Task 6.3's tool palette.
 
 use iced::{
-    Border, Color, Element, Length, Theme,
+    Border, Color, Element, Length, Theme, Widget,
     widget::{Space, column, container, pick_list, row, scrollable, text, text_input},
 };
 use signex_types::theme::ThemeTokens;
@@ -41,10 +41,7 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     if editor.state.mode != EditorMode::Sketch {
-        return Space::new()
-            .width(Length::Shrink)
-            .height(Length::Shrink)
-            .into();
+        return Space::new().boxed();
     }
 
     let text_c = theme_ext::text_primary(tokens);
@@ -87,10 +84,11 @@ pub fn view<'a>(
             width: 0.0,
             radius: 0.0.into(),
             color: Color::TRANSPARENT,
+            ..Border::default()
         },
         ..iced::widget::container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 fn view_dof<'a>(
@@ -119,7 +117,7 @@ fn view_dof<'a>(
             .color(muted),
     ]
     .spacing(SP.xs)
-    .into()
+    .boxed()
 }
 
 fn view_params<'a>(
@@ -138,7 +136,8 @@ fn view_params<'a>(
             col = col.push(
                 text("(no parameters yet — add via Inspector v0.13.2)")
                     .size(TS.caption)
-                    .color(muted),
+                    .color(muted)
+                    .boxed(),
             );
         } else {
             for (name, src) in sketch.parameters.iter() {
@@ -158,8 +157,8 @@ fn view_params<'a>(
                                 width: 1.0,
                                 radius: 2.0.into(),
                                 color: border,
+                                ..Border::default()
                             },
-                            icon: iced::Color::TRANSPARENT,
                             placeholder: muted,
                             value: text_c,
                             selection,
@@ -176,18 +175,19 @@ fn view_params<'a>(
                 ]
                 .spacing(6)
                 .align_y(iced::Alignment::Center);
-                col = col.push(row);
+                col = col.push(row.boxed());
             }
         }
     } else {
         col = col.push(
             text("(no sketch — switch to Sketch mode)")
                 .size(TS.caption)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
 
-    scrollable(col).height(Length::Fixed(80.0)).into()
+    scrollable(col).height(Length::Fixed(80.0)).boxed()
 }
 
 fn view_warnings<'a>(
@@ -197,20 +197,21 @@ fn view_warnings<'a>(
 ) -> Element<'a, LibraryMessage> {
     let mut col = column![text("Solve warnings").size(TS.body).color(text_c)].spacing(SP.xs);
     if editor.state.solve_warnings.is_empty() {
-        col = col.push(text("(none)").size(TS.caption).color(muted));
+        col = col.push(text("(none)").size(TS.caption).color(muted).boxed());
     } else {
         for w in editor.state.solve_warnings.iter().take(8) {
-            col = col.push(text(w).size(9).color(muted));
+            col = col.push(text(w).size(9.0).color(muted).boxed());
         }
         if editor.state.solve_warnings.len() > 8 {
             col = col.push(
                 text(format!("… +{} more", editor.state.solve_warnings.len() - 8))
-                    .size(9)
-                    .color(muted),
+                    .size(9.0)
+                    .color(muted)
+                    .boxed(),
             );
         }
     }
-    scrollable(col).height(Length::Fixed(80.0)).into()
+    scrollable(col).height(Length::Fixed(80.0)).boxed()
 }
 
 /// v0.16.2 — Role-assignment dropdown. Visible only when a sketch
@@ -248,9 +249,10 @@ fn view_role<'a>(
             col = col.push(
                 text("(select a sketch entity in Sketch mode)")
                     .size(TS.caption)
-                    .color(muted),
+                    .color(muted)
+                    .boxed(),
             );
-            return col.into();
+            return col.boxed();
         }
     };
 
@@ -267,28 +269,33 @@ fn view_role<'a>(
     col = col.push(
         text(format!("Selection: {kind_label}"))
             .size(TS.caption)
-            .color(muted),
+            .color(muted)
+            .boxed(),
     );
 
-    let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
-        LibraryMessage::PrimitiveEditorEvent {
+    let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+        .on_select(move |new_role| LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetRole { id, role: new_role }),
-        }
-    })
-    .text_size(11)
+        })
+    .text_size(11.0)
     .padding([3.0, SP.m])
     .width(Length::Fill);
 
-    col = col.push(dropdown);
+    col = col.push(dropdown.boxed());
 
     // Inline hint: Pad role only valid on Points; flag the silent
     // no-op path so the user knows why "Pad" doesn't take effect on
     // a Line or Arc selection.
     let is_point = matches!(entity.kind, EntityKind::Point { .. });
     if !is_point {
-        col = col.push(text("Pad role applies to Points only").size(9).color(muted));
+        col = col.push(
+            text("Pad role applies to Points only")
+                .size(9.0)
+                .color(muted)
+                .boxed(),
+        );
     }
 
-    col.into()
+    col.boxed()
 }

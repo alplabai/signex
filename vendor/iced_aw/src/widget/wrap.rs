@@ -2,12 +2,12 @@
 //!
 //! *This API requires the following crate features to be activated: `wrap`*
 use iced_core::{
-    Alignment, Clipboard, Element, Event, Layout, Length, Padding, Pixels, Point, Rectangle, Shell,
-    Size, Vector, Widget,
-    layout::{Limits, Node},
+    Alignment, Element, Event, Layout, Length, Padding, Pixels, Rectangle, Shell, Size, Vector,
+    Widget,
+    layout::Limits,
     mouse::{self, Cursor},
     overlay, renderer,
-    widget::{Operation, Tree},
+    widget::{Meta, Operation, Tree},
 };
 use std::marker::PhantomData;
 
@@ -152,12 +152,16 @@ impl<'a, Message, Renderer, Direction, Theme> Wrap<'a, Message, Direction, Theme
     #[must_use]
     pub fn push<E>(mut self, element: E) -> Self
     where
-        E: Into<Element<'a, Message, Theme, Renderer>>,
+        E: Widget<Message, Theme, Renderer> + 'a,
     {
-        self.elements.push(element.into());
+        if !element.is_void() {
+            self.elements.push(Widget::_boxed(element));
+        }
         self
     }
 }
+
+impl<Message, Renderer, Direction, Theme> Meta for Wrap<'_, Message, Direction, Theme, Renderer> {}
 
 impl<Message, Renderer, Direction, Theme> Widget<Message, Theme, Renderer>
     for Wrap<'_, Message, Direction, Theme, Renderer>
@@ -165,79 +169,69 @@ where
     Self: WrapLayout<Renderer>,
     Renderer: renderer::Renderer,
 {
-    fn children(&self) -> Vec<Tree> {
-        self.elements.iter().map(Tree::new).collect()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.elements);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(&mut self.elements);
     }
 
     fn size(&self) -> Size<Length> {
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        self.inner_layout(tree, renderer, limits)
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        self.inner_layout(tree, renderer, limits);
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
         self.elements
             .iter_mut()
-            .zip(&mut state.children)
-            .zip(layout.children())
-            .for_each(|((child, state), layout)| {
-                child.as_widget_mut().update(
-                    state, event, layout, cursor, renderer, clipboard, shell, viewport,
-                );
+            .zip(layout.iter_mut(&mut state.children))
+            .for_each(|(child, (layout, state))| {
+                child.update(state, event, layout, cursor, renderer, shell, viewport);
             });
     }
 
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        self.elements
-            .iter_mut()
-            .zip(&mut tree.children)
-            .zip(layout.children())
-            .find_map(|((child, state), layout)| {
-                child
-                    .as_widget_mut()
-                    .overlay(state, layout, renderer, viewport, translation)
-            })
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
+        overlay::from_children(
+            &mut self.elements,
+            tree,
+            layout,
+            renderer,
+            viewport,
+            translation,
+            window,
+        )
     }
 
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
         self.elements
             .iter()
-            .zip(&state.children)
-            .zip(layout.children())
-            .map(|((child, state), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(state, layout, cursor, viewport, renderer)
+            .zip(layout.iter(&state.children))
+            .map(|(child, (layout, state))| {
+                child.mouse_interaction(state, layout, cursor, viewport, renderer)
             })
             .max()
             .unwrap_or_default()
@@ -249,39 +243,32 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        for ((child, state), layout) in self
-            .elements
-            .iter()
-            .zip(&state.children)
-            .zip(layout.children())
-        {
-            child
-                .as_widget()
-                .draw(state, renderer, theme, style, layout, cursor, viewport);
+        for (child, (layout, state)) in self.elements.iter().zip(layout.iter(&state.children)) {
+            child.draw(state, renderer, theme, style, layout, cursor, viewport);
         }
     }
 
     fn operate(
         &mut self,
         state: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        for ((element, state), layout) in self
-            .elements
-            .iter_mut()
-            .zip(&mut state.children)
-            .zip(layout.children())
-        {
-            element
-                .as_widget_mut()
-                .operate(state, layout, renderer, operation);
-        }
+        operation.traverse(&mut |operation| {
+            for (element, (layout, state)) in self
+                .elements
+                .iter_mut()
+                .zip(layout.iter_mut(&mut state.children))
+            {
+                element.operate(state, layout, viewport, renderer, operation);
+            }
+        });
     }
 }
 
@@ -293,7 +280,7 @@ where
     Theme: 'a,
 {
     fn from(wrap: Wrap<'a, Message, direction::Vertical, Theme, Renderer>) -> Self {
-        Element::new(wrap)
+        Widget::_boxed(wrap)
     }
 }
 
@@ -305,7 +292,7 @@ where
     Theme: 'a,
 {
     fn from(wrap: Wrap<'a, Message, direction::Horizontal, Theme, Renderer>) -> Self {
-        Element::new(wrap)
+        Widget::_boxed(wrap)
     }
 }
 
@@ -333,8 +320,36 @@ pub trait WrapLayout<Renderer>
 where
     Renderer: renderer::Renderer,
 {
-    /// A inner layout of the [`Wrap`].
-    fn inner_layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node;
+    /// A inner layout of the [`Wrap`]. The resulting size and the translation of
+    /// every child are stored in the given [`Tree`].
+    fn inner_layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits);
+}
+
+/// Applies the [`Wrap`] width/height/padding/max constraints to the given limits.
+fn wrap_limits<Message, Direction, Theme, Renderer>(
+    wrap: &Wrap<'_, Message, Direction, Theme, Renderer>,
+    limits: &Limits,
+) -> Limits {
+    let mut limits = limits
+        .shrink(wrap.padding)
+        .width(wrap.width)
+        .height(wrap.height);
+
+    limits.max.width = limits.max.width.min(wrap.max_width);
+    limits.min.width = limits.min.width.min(limits.max.width);
+    limits.max.height = limits.max.height.min(wrap.max_height);
+    limits.min.height = limits.min.height.min(limits.max.height);
+
+    limits
+}
+
+/// The fraction of the free space to skip for the given [`Alignment`].
+fn alignment_factor(alignment: Alignment) -> f32 {
+    match alignment {
+        Alignment::Start => 0.0,
+        Alignment::Center => 0.5,
+        Alignment::End => 1.0,
+    }
 }
 
 impl<'a, Message, Theme, Renderer> WrapLayout<Renderer>
@@ -344,21 +359,15 @@ where
 {
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn inner_layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn inner_layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         let padding = self.padding;
         let spacing = self.spacing;
         let line_spacing = self.line_spacing;
         #[allow(clippy::cast_precision_loss)] // TODO: possible precision loss
         let line_minimal_length = self.line_minimal_length;
-        let limits = limits
-            .shrink(padding)
-            .width(self.width)
-            .height(self.height)
-            .max_width(self.max_width)
-            .max_height(self.max_height);
-        let max_width = limits.max().width;
+        let limits = wrap_limits(self, limits);
+        let max_width = limits.bounds().width;
 
-        let mut children = tree.children.iter_mut();
         let mut curse = padding.left;
         let mut deep_curse = padding.left;
         let mut current_line_height = line_minimal_length;
@@ -366,53 +375,44 @@ where
         let mut align = vec![];
         let mut start = 0;
         let mut end = 0;
-        let mut nodes: Vec<Node> = self
-            .elements
-            .iter_mut()
-            .map(|elem| {
-                let node_limit = Limits::new(
-                    Size::new(limits.min().width, line_minimal_length),
-                    limits.max(),
-                );
-                let mut node = elem.as_widget_mut().layout(
-                    children.next().expect("wrap missing expected child"),
-                    renderer,
-                    &node_limit,
-                );
+        for (elem, child) in self.elements.iter_mut().zip(&mut tree.children) {
+            let node_limit = Limits::with_flags(
+                Size::new(limits.min.width, line_minimal_length),
+                limits.max,
+                limits.compression,
+                limits.infinite,
+            );
+            elem.layout(child, renderer, &node_limit);
 
-                let size = node.size();
+            let size = child.size;
 
-                let offset_init = size.width + spacing.0;
-                let offset = curse + offset_init;
+            let offset_init = size.width + spacing.0;
+            let offset = curse + offset_init;
 
-                if offset > max_width {
-                    deep_curse += current_line_height + line_spacing.0;
-                    align.push((start..end, current_line_height));
-                    start = end;
-                    end += 1;
-                    current_line_height = line_minimal_length;
-                    node.move_to_mut(Point::new(padding.left, deep_curse));
-                    curse = offset_init + padding.left;
-                } else {
-                    node.move_to_mut(Point::new(curse, deep_curse));
-                    curse = offset;
-                    end += 1;
-                }
-                current_line_height = current_line_height.max(size.height);
-                max_main = max_main.max(curse);
-
-                node
-            })
-            .collect();
+            if offset > max_width {
+                deep_curse += current_line_height + line_spacing.0;
+                align.push((start..end, current_line_height));
+                start = end;
+                end += 1;
+                current_line_height = line_minimal_length;
+                child.translation = Vector::new(padding.left, deep_curse);
+                curse = offset_init + padding.left;
+            } else {
+                child.translation = Vector::new(curse, deep_curse);
+                curse = offset;
+                end += 1;
+            }
+            current_line_height = current_line_height.max(size.height);
+            max_main = max_main.max(curse);
+        }
         if end != start {
             align.push((start..end, current_line_height));
         }
+        let factor = alignment_factor(self.alignment);
         for (range, max_length) in align {
-            nodes[range].iter_mut().for_each(|node| {
-                let size = node.size();
-                let space = Size::new(size.width, max_length);
-                node.align_mut(Alignment::Start, self.alignment, space);
-            });
+            for child in &mut tree.children[range] {
+                child.translation.y += (max_length - child.size.height) * factor;
+            }
         }
         let (width, height) = (
             max_main - padding.left,
@@ -420,7 +420,7 @@ where
         );
         let size = limits.resolve(self.width, self.height, Size::new(width, height));
 
-        Node::with_children(size.expand(padding), nodes)
+        tree.size = size.expand(padding);
     }
 }
 
@@ -431,21 +431,15 @@ where
 {
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn inner_layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn inner_layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         let padding = self.padding;
         let spacing = self.spacing;
         let line_spacing = self.line_spacing;
         #[allow(clippy::cast_precision_loss)] // TODO: possible precision loss
         let line_minimal_length = self.line_minimal_length;
-        let limits = limits
-            .shrink(padding)
-            .width(self.width)
-            .height(self.height)
-            .max_width(self.max_width)
-            .max_height(self.max_height);
-        let max_height = limits.max().height;
+        let limits = wrap_limits(self, limits);
+        let max_height = limits.bounds().height;
 
-        let mut children = tree.children.iter_mut();
         let mut curse = padding.left;
         let mut wide_curse = padding.left;
         let mut current_line_width = line_minimal_length;
@@ -453,54 +447,45 @@ where
         let mut align = vec![];
         let mut start = 0;
         let mut end = 0;
-        let mut nodes: Vec<Node> = self
-            .elements
-            .iter_mut()
-            .map(|elem| {
-                let node_limit = Limits::new(
-                    Size::new(line_minimal_length, limits.min().height),
-                    limits.max(),
-                );
-                let mut node = elem.as_widget_mut().layout(
-                    children.next().expect("wrap missing expected child"),
-                    renderer,
-                    &node_limit,
-                );
+        for (elem, child) in self.elements.iter_mut().zip(&mut tree.children) {
+            let node_limit = Limits::with_flags(
+                Size::new(line_minimal_length, limits.min.height),
+                limits.max,
+                limits.compression,
+                limits.infinite,
+            );
+            elem.layout(child, renderer, &node_limit);
 
-                let size = node.size();
+            let size = child.size;
 
-                let offset_init = size.height + spacing.0;
-                let offset = curse + offset_init;
+            let offset_init = size.height + spacing.0;
+            let offset = curse + offset_init;
 
-                if offset > max_height {
-                    wide_curse += current_line_width + line_spacing.0;
-                    align.push((start..end, current_line_width));
-                    start = end;
-                    end += 1;
-                    current_line_width = line_minimal_length;
-                    node = node.move_to(Point::new(wide_curse, padding.left));
-                    curse = offset_init + padding.left;
-                } else {
-                    node = node.move_to(Point::new(wide_curse, curse));
-                    end += 1;
-                    curse = offset;
-                }
-                current_line_width = current_line_width.max(size.width);
-                max_main = max_main.max(curse);
-
-                node
-            })
-            .collect();
+            if offset > max_height {
+                wide_curse += current_line_width + line_spacing.0;
+                align.push((start..end, current_line_width));
+                start = end;
+                end += 1;
+                current_line_width = line_minimal_length;
+                child.translation = Vector::new(wide_curse, padding.left);
+                curse = offset_init + padding.left;
+            } else {
+                child.translation = Vector::new(wide_curse, curse);
+                end += 1;
+                curse = offset;
+            }
+            current_line_width = current_line_width.max(size.width);
+            max_main = max_main.max(curse);
+        }
         if end != start {
             align.push((start..end, current_line_width));
         }
 
+        let factor = alignment_factor(self.alignment);
         for (range, max_length) in align {
-            nodes[range].iter_mut().for_each(|node| {
-                let size = node.size();
-                let space = Size::new(max_length, size.height);
-                node.align_mut(self.alignment, Alignment::Start, space);
-            });
+            for child in &mut tree.children[range] {
+                child.translation.x += (max_length - child.size.width) * factor;
+            }
         }
 
         let (width, height) = (
@@ -509,7 +494,7 @@ where
         );
         let size = limits.resolve(self.width, self.height, Size::new(width, height));
 
-        Node::with_children(size.expand(padding), nodes)
+        tree.size = size.expand(padding);
     }
 }
 
@@ -565,7 +550,7 @@ mod tests {
     #[test]
     fn wrap_horizontal_with_elements_creates_wrap_with_elements() {
         let elements: Vec<Element<TestMessage, iced_widget::Theme, iced_widget::Renderer>> =
-            vec![iced_widget::text::Text::new("Test").into()];
+            vec![Widget::_boxed(iced_widget::text::Text::new("Test"))];
         let wrap = TestWrapHorizontal::with_elements(elements);
         assert_eq!(wrap.elements.len(), 1);
     }
@@ -606,7 +591,7 @@ mod tests {
     #[test]
     fn wrap_vertical_with_elements_creates_wrap_with_elements() {
         let elements: Vec<Element<TestMessage, iced_widget::Theme, iced_widget::Renderer>> =
-            vec![iced_widget::text::Text::new("Test").into()];
+            vec![Widget::_boxed(iced_widget::text::Text::new("Test"))];
         let wrap = TestWrapVertical::with_elements_vertical(elements);
         assert_eq!(wrap.elements.len(), 1);
     }

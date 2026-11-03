@@ -3,15 +3,16 @@
 use crate::selection_list::Catalog;
 
 use iced_core::{
-    Border, Clipboard, Color, Element, Event, Layout, Length, Padding, Pixels, Point, Rectangle,
-    Shell, Size, Widget,
+    Border, Color, Element, Event, Font, Layout, Length, Padding, Pixels, Point, Rectangle, Shell,
+    Size, Widget,
     alignment::Vertical,
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
     renderer, touch,
     widget::text::{LineHeight, Wrapping},
     widget::{
         Tree,
+        Meta,
         tree::{State, Tag},
     },
 };
@@ -28,14 +29,14 @@ pub struct List<'a, T: 'a, Message, Theme, Renderer>
 where
     T: Clone + Display + Eq + Hash,
     [T]: ToOwned<Owned = Vec<T>>,
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog,
 {
     /// Options pointer to hold all rendered strings
     pub options: &'a [T],
     /// Hovered Item Pointer
     /// Label Font
-    pub font: Renderer::Font,
+    pub font: Font,
     /// Style for Font colors and Box hover colors.
     pub class: <Theme as Catalog>::Class<'a>,
     /// Function Pointer On Select to call on Mouse button press.
@@ -61,11 +62,19 @@ pub struct ListState {
     //pub options: Vec<String>,
 }
 
+impl<T, Message, Theme, Renderer> Meta for List<'_, T, Message, Theme, Renderer>
+where
+    T: Clone + Display + Eq + Hash,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog + iced_widget::text::Catalog,
+{
+}
+
 impl<T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for List<'_, T, Message, Theme, Renderer>
 where
     T: Clone + Display + Eq + Hash,
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + iced_widget::text::Catalog,
 {
     fn tag(&self) -> Tag {
@@ -76,7 +85,7 @@ where
         State::new(ListState::default())
     }
 
-    fn diff(&self, state: &mut Tree) {
+    fn diff(&mut self, state: &mut Tree) {
         let list_state = state.state.downcast_mut::<ListState>();
 
         if let Some(id) = self.selected {
@@ -108,28 +117,27 @@ where
         Size::new(Length::Fill, Length::Shrink)
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &Limits) {
         use std::f32;
         let limits = limits.height(Length::Fill).width(Length::Fill);
 
         #[allow(clippy::cast_precision_loss)]
         let intrinsic = Size::new(
-            limits.max().width,
+            limits.max.width,
             (self.text_size + self.padding.y()) * self.options.len() as f32,
         );
 
-        Node::new(intrinsic)
+        tree.size = intrinsic;
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
@@ -179,7 +187,7 @@ where
     fn mouse_interaction(
         &self,
         _state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
@@ -199,7 +207,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: Cursor,
         viewport: &Rectangle,
     ) {
@@ -231,6 +239,7 @@ where
                             radius: (0.0).into(),
                             width: 0.0,
                             color: Color::TRANSPARENT,
+                            ..Border::default()
                         },
                         ..renderer::Quad::default()
                     },
@@ -270,6 +279,8 @@ where
                     line_height: LineHeight::default(),
                     shaping: iced_widget::text::Shaping::Advanced,
                     wrapping: Wrapping::default(),
+                    ellipsis: iced_widget::text::Ellipsis::default(),
+                    hint_factor: renderer.hint_factor(),
                 },
                 Point::new(bounds.x, bounds.center_y()),
                 text_color,
@@ -281,12 +292,11 @@ where
     fn operate(
         &mut self,
         _state: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn iced_core::widget::Operation<()>,
+        operation: &mut dyn iced_core::widget::Operation,
     ) {
-        use iced_core::layout::Node;
-        use iced_core::{Size, Vector};
 
         // Expose all option text for testing by creating virtual Text widgets
         // Create a layout for each text option
@@ -294,22 +304,24 @@ where
         let option_height = self.text_size + self.padding.y();
 
         for (i, option) in self.options.iter().enumerate() {
-            let text_widget = iced_widget::Text::new(option.to_string())
-                .size(self.text_size)
-                .font(self.font);
+            let mut text_widget: iced_widget::Text<'_, Theme> =
+                iced_widget::Text::new(option.to_string())
+                    .size(self.text_size)
+                    .font(self.font);
 
-            // Create a node with just the size (no absolute position)
-            let text_node = Node::new(Size::new(bounds.width, option_height));
+            // Create a layout with the option size and the correct offset
+            let text_layout = Layout::new(Size::new(bounds.width, option_height))
+                .move_to(Point::new(0.0, option_height * i as f32));
 
-            // Create a layout with the correct offset for this option
-            let text_layout =
-                Layout::with_offset(Vector::new(0.0, option_height * i as f32), &text_node);
-
-            let mut element: Element<(), Theme, Renderer> = Element::new(text_widget);
-            let mut text_tree = Tree::new(element.as_widget());
-            element
-                .as_widget_mut()
-                .operate(&mut text_tree, text_layout, renderer, operation);
+            let mut text_tree = Tree::new::<(), Theme, Renderer>(&text_widget);
+            Widget::<(), Theme, Renderer>::operate(
+                &mut text_widget,
+                &mut text_tree,
+                text_layout,
+                viewport,
+                renderer,
+                operation,
+            );
         }
     }
 }
@@ -319,10 +331,10 @@ impl<'a, T, Message, Theme, Renderer> From<List<'a, T, Message, Theme, Renderer>
 where
     T: Clone + Display + Eq + Hash,
     Message: 'a,
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a + Catalog + iced_widget::text::Catalog,
 {
     fn from(list: List<'a, T, Message, Theme, Renderer>) -> Self {
-        Element::new(list)
+        Widget::_boxed(list)
     }
 }

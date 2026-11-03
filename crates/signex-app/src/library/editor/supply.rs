@@ -24,7 +24,7 @@
 use iced::widget::{
     Space, button, column, container, pick_list, row, scrollable, text, text_input,
 };
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -53,35 +53,20 @@ const DISTRIBUTOR_OPTS: [DistributorSource; 7] = [
     DistributorSource::Other,
 ];
 
-/// Wrapper so the pick_list `Display` impl prints a friendly label
-/// instead of the bare debug variant name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct StatusPick(AlternateStatus);
-
-impl std::fmt::Display for StatusPick {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self.0 {
-            AlternateStatus::Primary => "Primary",
-            AlternateStatus::Approved => "Approved",
-            AlternateStatus::Conditional => "Conditional",
-            AlternateStatus::Disqualified => "Disqualified",
-            // `AlternateStatus` is `#[non_exhaustive]` — fall back to debug
-            // for any future variants rather than failing to compile.
-            other => return write!(f, "{other:?}"),
-        };
-        f.write_str(s)
+fn status_label(s: &AlternateStatus) -> String {
+    match s {
+        AlternateStatus::Primary => "Primary".to_string(),
+        AlternateStatus::Approved => "Approved".to_string(),
+        AlternateStatus::Conditional => "Conditional".to_string(),
+        AlternateStatus::Disqualified => "Disqualified".to_string(),
+        // `AlternateStatus` is `#[non_exhaustive]` — fall back to debug
+        // for any future variants rather than failing to compile.
+        other => format!("{other:?}"),
     }
 }
 
-/// Wrapper so the pick_list `Display` impl prints a friendly label
-/// instead of the bare debug variant name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct DistributorPick(DistributorSource);
-
-impl std::fmt::Display for DistributorPick {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(distributor_label(self.0))
-    }
+fn distributor_pick_label(s: &DistributorSource) -> String {
+    distributor_label(*s).to_string()
 }
 
 fn distributor_label(s: DistributorSource) -> &'static str {
@@ -144,12 +129,12 @@ pub fn view<'a>(
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn section_header<'a>(label: &'a str, tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
-    text(label).size(TS.body).color(muted).into()
+    text(label).size(TS.body).color(muted).boxed()
 }
 
 // ─────────────────────────── Primary MPN form ──────────────────────────
@@ -183,22 +168,19 @@ fn primary_form<'a>(
     let lib_path = address.library_path.clone();
     let table = address.table.clone();
     let row_id = address.row_id;
-    let status_picker = pick_list(
-        STATUS_OPTS.map(StatusPick),
-        Some(StatusPick(primary.status)),
-        move |StatusPick(s)| LibraryMessage::EditorEvent {
+    let status_picker = pick_list(Some(primary.status), STATUS_OPTS, status_label)
+        .on_select(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path.clone(),
             table: table.clone(),
             row_id,
             msg: EditorMsg::SupplyPrimarySetStatus(s),
-        },
-    )
-    .text_size(12)
+        })
+        .text_size(12.0)
     .padding([SP.s, SP.m]);
     let status_block: Element<'a, LibraryMessage> =
         column![text("Status").size(TS.caption).color(muted), status_picker,]
             .spacing(SP.s)
-            .into();
+            .boxed();
 
     let notes_field = labelled_input(
         "Notes",
@@ -220,7 +202,7 @@ fn primary_form<'a>(
     ]
     .spacing(0)
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 // ────────────────────────── Alternates section ─────────────────────────
@@ -231,12 +213,13 @@ fn alternates_section<'a>(
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
-    let mut col = column![].spacing(6);
+    let mut col: iced::widget::Column<Element<'a, LibraryMessage>> = column![].spacing(6);
     if state.row.alternates.is_empty() {
         col = col.push(
             text("No alternates yet — click \u{2009}+ Add Alternate\u{2009} to start.")
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     } else {
         for (idx, alt) in state.row.alternates.iter().enumerate() {
@@ -244,14 +227,14 @@ fn alternates_section<'a>(
         }
     }
 
-    col = col.push(Space::new().height(2));
+    col = col.push(Space::new().height(2).boxed());
     col = col.push(add_button(
         "+ Add Alternate",
         EditorMsg::SupplyAlternateAdd,
         tokens,
         address,
     ));
-    col.into()
+    col.boxed()
 }
 
 fn alternate_row<'a>(
@@ -292,24 +275,21 @@ fn alternate_row<'a>(
 
     let lib_path_for_status = address.library_path.clone();
     let table_for_status = address.table.clone();
-    let status_picker = pick_list(
-        STATUS_OPTS.map(StatusPick),
-        Some(StatusPick(alt.status)),
-        move |StatusPick(s)| LibraryMessage::EditorEvent {
+    let status_picker = pick_list(Some(alt.status), STATUS_OPTS, status_label)
+        .on_select(move |s| LibraryMessage::EditorEvent {
             library_path: lib_path_for_status.clone(),
             table: table_for_status.clone(),
             row_id,
             msg: EditorMsg::SupplyAlternateSetStatus { idx, value: s },
-        },
-    )
-    .text_size(12)
-    .padding([SP.s, SP.m])
-    .width(Length::Fixed(140.0));
+        })
+        .text_size(12.0)
+        .padding([SP.s, SP.m])
+        .width(Length::Fixed(140.0));
 
     let lib_path_for_notes = address.library_path.clone();
     let table_for_notes = address.table.clone();
     let notes_value = alt.notes.clone().unwrap_or_default();
-    let notes_input = text_input("notes", &notes_value)
+    let notes_input = text_input("notes", notes_value)
         .padding([SP.s, SP.m])
         .size(TS.label)
         .width(Length::FillPortion(4))
@@ -350,10 +330,11 @@ fn alternate_row<'a>(
             width: 1.0,
             radius: 2.0.into(),
             color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+            ..Default::default()
         },
         ..Default::default()
     })
-    .into()
+    .boxed()
 }
 
 // ──────────────────────── Distributor listings ─────────────────────────
@@ -391,7 +372,8 @@ fn listings_section<'a>(
         rows = rows.push(
             text("No distributor listings yet.")
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     } else {
         for (idx, listing) in state.row.supply.iter().enumerate() {
@@ -414,6 +396,7 @@ fn listings_section<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Default::default()
             },
             ..Default::default()
         });
@@ -429,14 +412,14 @@ fn listings_section<'a>(
         ),
     ]
     .spacing(0)
-    .into()
+    .boxed()
 }
 
 fn listing_row<'a>(
     idx: usize,
     distributor_str: &str,
-    sku: &str,
-    url: &str,
+    sku: &'a str,
+    url: &'a str,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -447,16 +430,17 @@ fn listing_row<'a>(
     let table_for_dist = address.table.clone();
     let row_id = address.row_id;
     let distributor_picker = pick_list(
-        DISTRIBUTOR_OPTS.map(DistributorPick),
-        Some(DistributorPick(distributor_from_label(distributor_str))),
-        move |DistributorPick(s)| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_dist.clone(),
-            table: table_for_dist.clone(),
-            row_id,
-            msg: EditorMsg::SupplyListingSetDistributor { idx, value: s },
-        },
+        Some(distributor_from_label(distributor_str)),
+        DISTRIBUTOR_OPTS,
+        distributor_pick_label,
     )
-    .text_size(12)
+    .on_select(move |s| LibraryMessage::EditorEvent {
+        library_path: lib_path_for_dist.clone(),
+        table: table_for_dist.clone(),
+        row_id,
+        msg: EditorMsg::SupplyListingSetDistributor { idx, value: s },
+    })
+    .text_size(12.0)
     .padding([SP.s, SP.m])
     .width(Length::Fixed(160.0));
 
@@ -504,7 +488,7 @@ fn listing_row<'a>(
     ]
     .align_y(iced::Alignment::Center)
     .padding([SP.xs, SP.s])
-    .into()
+    .boxed()
 }
 
 // ─────────────────────────── Shared widgets ────────────────────────────
@@ -523,7 +507,7 @@ fn labelled_input<'a>(
     let row_id = address.row_id;
     column![
         text(label).size(TS.caption).color(muted),
-        text_input(placeholder, &value)
+        text_input(placeholder, value)
             .on_input(move |s| LibraryMessage::EditorEvent {
                 library_path: lib_path.clone(),
                 table: table.clone(),
@@ -535,7 +519,7 @@ fn labelled_input<'a>(
     ]
     .spacing(SP.s)
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 fn add_button<'a>(
@@ -569,11 +553,12 @@ fn add_button<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Default::default()
                 },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
 }
 
 fn remove_button<'a>(
@@ -607,9 +592,10 @@ fn remove_button<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Default::default()
             },
             ..iced::widget::button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }

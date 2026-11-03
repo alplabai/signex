@@ -4,6 +4,7 @@
 //! single-file `element_properties` module.
 
 use super::super::*;
+use iced::Widget;
 use super::drawing_preview::DrawingPreview;
 use crate::styles::{Spacing, TypeScale};
 
@@ -72,17 +73,18 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         } else {
             text(elem_type.clone())
                 .size(TS.body)
                 .color(Color::from_rgb(0.90, 0.90, 0.92))
-                .into()
+                .boxed()
         };
     col = col.push(
         container(header_row)
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -100,7 +102,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         let canvas_w: Element<'a, PanelMsg> = iced::widget::canvas(preview)
             .width(Length::Fill)
             .height(Length::Fixed(160.0))
-            .into();
+            .boxed();
         col = col.push(
             container(canvas_w)
                 .padding([SP.m, SP.l])
@@ -111,9 +113,11 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                         width: 1.0,
                         color: border_c,
                         radius: 0.0.into(),
+                        ..Border::default()
                     },
                     ..container::Style::default()
-                }),
+                })
+                .boxed(),
         );
     }
 
@@ -167,7 +171,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     ));
                     c
                 },
-            ));
+            ).boxed());
         }
         "Rectangle" => {
             let (px, py) = parse_pair(&get("Position"));
@@ -221,7 +225,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     }
                     c
                 },
-            ));
+            ).boxed());
         }
         "Circle" => {
             let (cx, cy) = parse_pair(&get("Center"));
@@ -267,7 +271,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     }
                     c
                 },
-            ));
+            ).boxed());
         }
         "Arc" => {
             let (cx, cy) = parse_pair(&get("Center"));
@@ -326,7 +330,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     ));
                     c
                 },
-            ));
+            ).boxed());
         }
         "Polygon" => {
             let vert_count = parse_f64(&get("Vertices")) as i32;
@@ -356,7 +360,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
                     }
                     c
                 },
-            ));
+            ).boxed());
         }
         _ => {
             for (key, value) in &ctx.selection_info {
@@ -388,7 +392,7 @@ pub(in crate::panels) fn view_drawing_properties<'a>(
         col = col.push(drawing_stroke_color_row(current_color, muted));
         col = col.push(drawing_placement_row(ctx.selected_drawing_placement, muted));
     }
-    col.into()
+    col.boxed()
 }
 
 /// Buffer-backed numeric row — survives empty / partial input so the
@@ -420,7 +424,7 @@ fn drawing_num_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// Altium-style stroke colour swatch row. A small preset palette
@@ -453,11 +457,12 @@ fn drawing_stroke_color_row<'a>(
                     } else {
                         Color::from_rgb(0.28, 0.28, 0.32)
                     },
+                    ..Border::default()
                 },
                 text_color: Color::WHITE,
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     let is_active = |c: Option<StrokeColor>| -> bool {
         match (current, c) {
@@ -516,7 +521,7 @@ fn drawing_stroke_color_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// Behind / Above the circuit. Drawings default to behind, so a highlight or
@@ -542,6 +547,7 @@ fn drawing_placement_row<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: Color::from_rgb(0.28, 0.28, 0.32),
+                    ..Border::default()
                 },
                 text_color: if active {
                     Color::from_rgb(1.0, 1.0, 1.0)
@@ -550,7 +556,7 @@ fn drawing_placement_row<'a>(
                 },
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     row![
         text("Placement")
@@ -567,7 +573,7 @@ fn drawing_placement_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn drawing_fill_row<'a>(
@@ -591,6 +597,7 @@ fn drawing_fill_row<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: Color::from_rgb(0.28, 0.28, 0.32),
+                    ..Border::default()
                 },
                 text_color: if active {
                     Color::from_rgb(1.0, 1.0, 1.0)
@@ -599,7 +606,7 @@ fn drawing_fill_row<'a>(
                 },
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     row![
         text("Fill")
@@ -621,5 +628,5 @@ fn drawing_fill_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }

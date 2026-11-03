@@ -6,6 +6,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -41,11 +42,11 @@ pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
             background: Some(Background::Color(border_c)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Section header: bold label + separator line.
-pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Column<'a, M> {
+pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Element<'a, M> {
     column![
         container(text(title.to_string()).size(TS.label).color(text_c))
             .padding([6.0, SP.m])
@@ -59,6 +60,7 @@ pub fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Co
             }),
     ]
     .spacing(0)
+    .boxed()
 }
 
 /// Form row: label | styled input-like value display.
@@ -99,7 +101,7 @@ pub fn form_input_row<'a, M: 'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// A typed mm value clamped to 1..=MAX_PAGE_EDGE_MM. Refused or half-typed
@@ -158,7 +160,6 @@ pub fn form_mm_edit_row<'a>(
                         radius: 2.0.into(),
                         color: input_border,
                     },
-                    icon: Color::TRANSPARENT,
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
                     value: text_on(input_bg),
                     selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
@@ -169,7 +170,7 @@ pub fn form_mm_edit_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Form row: label | pick_list (dropdown).
@@ -186,7 +187,8 @@ where
     container(
         row![
             property_label(label.to_string(), label_c),
-            iced::widget::pick_list(options, Some(selected), on_change)
+            iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
+                .on_select(on_change)
                 .text_size(11)
                 .padding([SP.xs, 6.0])
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
@@ -196,7 +198,7 @@ where
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Checkbox form row. `surface` is the colour the row is drawn on (the
@@ -228,7 +230,7 @@ pub fn form_check_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
@@ -262,7 +264,8 @@ pub fn form_grid_row(
         .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
         .map(|(_, lbl)| *lbl);
 
-    let pick = iced::widget::pick_list(labels, selected, move |lbl: &'static str| {
+    let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
+        .on_select(move |lbl: &'static str| {
         // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
         let mm = GRID_SIZE_LABELS
             .iter()
@@ -272,7 +275,7 @@ pub fn form_grid_row(
             .map(|(_, v)| *v)
             .unwrap_or(2.54);
         on_size(mm)
-    })
+        })
     .text_size(11)
     .width(Length::Fill);
 
@@ -290,7 +293,7 @@ pub fn form_grid_row(
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     } else {
         // Visible Grid row: no checkbox
         row![
@@ -299,13 +302,13 @@ pub fn form_grid_row(
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     };
 
     container(content)
         .padding([2, PROPERTY_ROW_PAD_X])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Form row: checkbox with a keyboard shortcut hint on the right.
@@ -344,7 +347,7 @@ pub fn form_check_row_shortcut<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .clip(true)
-    .into()
+    .boxed()
 }
 
 pub fn form_font_link_row<'a>(
@@ -390,7 +393,7 @@ pub fn form_font_link_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 pub fn canvas_font_popup<'a>(
@@ -404,10 +407,11 @@ pub fn canvas_font_popup<'a>(
 ) -> Element<'a, PanelMsg> {
     let families = crate::fonts::system_font_families();
     let family_pick = iced::widget::pick_list(
-        families.as_slice(),
         Some(current_family.to_string()),
-        PanelMsg::SetCanvasFont,
+        families.as_slice(),
+        |f: &String| f.clone(),
     )
+    .on_select(PanelMsg::SetCanvasFont)
     .text_size(11)
     .width(Length::Fill);
 
@@ -478,7 +482,7 @@ pub fn canvas_font_popup<'a>(
         ..Default::default()
     })
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Form row: label | editable text_input that emits a PanelMsg on input.
@@ -502,7 +506,7 @@ pub fn form_edit_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Standalone label row (no value, used before segmented controls).
@@ -510,7 +514,7 @@ pub fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
     container(text(label.to_string()).size(TS.body).color(label_c))
         .padding([SP.s, SP.m])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.
@@ -551,7 +555,7 @@ pub fn font_style_row<'a>(
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
     };
     container(
         row![
@@ -565,7 +569,7 @@ pub fn font_style_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 //! The parameters table of the Edit Component Details modal.
 
 use iced::widget::{Column, Space, button, column, container, row, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{
     ParamKind, ParamSlot, ParamValue, ParameterTemplate, slot_problem, slot_unit,
 };
@@ -45,13 +45,14 @@ pub(super) fn view<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         }),
     ]
     .align_y(iced::Alignment::Center);
 
-    let mut col: Column<'a, LibraryMessage> = column![header, Space::new().height(SP.s)].spacing(0);
+    let mut col: Column<Element<'a, LibraryMessage>> = column![header, Space::new().height(SP.s)].spacing(0);
 
     let header_row = container(
         row![
@@ -79,10 +80,11 @@ pub(super) fn view<'a>(
             width: 0.0,
             radius: 2.0.into(),
             color: border,
+            ..Border::default()
         },
         ..Default::default()
     });
-    col = col.push(header_row);
+    col = col.push(header_row.boxed());
 
     // Stage 18: `tags` has its own dedicated input above this section,
     // so we hide it from the parameters table to avoid a duplicate row.
@@ -94,7 +96,9 @@ pub(super) fn view<'a>(
         .collect();
     if visible_params.is_empty() {
         col = col.push(
-            container(text("No parameters yet.").size(TS.body).color(muted)).padding([SP.m, 6.0]),
+            container(text("No parameters yet.").size(TS.body).color(muted))
+                .padding([SP.m, 6.0])
+                .boxed(),
         );
     }
     // BTreeMap key order keeps the layout stable.
@@ -111,10 +115,11 @@ pub(super) fn view<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..Default::default()
         })
-        .into()
+        .boxed()
 }
 
 /// One parameter row: key, number field with its prefix picker, unit,
@@ -150,7 +155,7 @@ fn param_row<'a>(
     let key_for_v = key_owned.clone();
     let send_c = send.clone();
     let key_c = key_owned.clone();
-    let val_input = text_input("value", &cur_value)
+    let val_input = text_input("value", cur_value)
         .on_input(move |s| {
             send_v(BrowserEditMsg::SetParamValue {
                 key: key_for_v.clone(),
@@ -179,8 +184,8 @@ fn param_row<'a>(
         Some(pick) => row![val_input, pick]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center)
-            .into(),
-        None => val_input.into(),
+            .boxed(),
+        None => val_input.boxed(),
     };
     // A stored value that already breaks its slot stays as it is until it
     // is edited; say so next to it.
@@ -193,7 +198,7 @@ fn param_row<'a>(
                 .color(theme_ext::error_color(tokens))
         ]
         .spacing(SP.xs)
-        .into(),
+        .boxed(),
         None => field,
     };
 
@@ -203,7 +208,7 @@ fn param_row<'a>(
         (Some(u), _) => text(u.glyph().to_string())
             .size(TS.body)
             .color(muted)
-            .into(),
+            .boxed(),
         (None, Ok(selected)) => {
             let send_u = send.clone();
             let key_for_u = key_owned.clone();
@@ -214,7 +219,7 @@ fn param_row<'a>(
                 })
             })
         }
-        (None, Err(raw)) => text(raw.to_string()).size(TS.body).color(muted).into(),
+        (None, Err(raw)) => text(raw.to_string()).size(TS.body).color(muted).boxed(),
     };
 
     let send_del = send.clone();
@@ -234,6 +239,7 @@ fn param_row<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -253,5 +259,5 @@ fn param_row<'a>(
             .width(Length::Fixed(40.0)),
     ]
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }

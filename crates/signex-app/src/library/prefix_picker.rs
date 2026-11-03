@@ -5,7 +5,7 @@
 //! ([`SiPrefix::all_for`]) and is hidden for units that take none
 //! (`%`, `ppm/C`, `V/us`, `AWG`).
 
-use iced::Element;
+use iced::{Element, Widget as _};
 use iced::widget::pick_list;
 use signex_types::quantity::{SiPrefix, Unit};
 
@@ -64,12 +64,11 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
     }
     let current = choice(effective_prefix(unit, selected), unit);
     Some(
-        pick_list(choices, Some(current), move |c: PrefixChoice| {
-            on_pick(c.prefix)
-        })
-        .text_size(text_size)
-        .padding([3, 6])
-        .into(),
+        pick_list(Some(current), choices, |c: &PrefixChoice| c.to_string())
+            .on_select(move |c: PrefixChoice| on_pick(c.prefix))
+            .text_size(text_size)
+            .padding([3, 6])
+            .boxed(),
     )
 }
 

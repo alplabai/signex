@@ -58,7 +58,7 @@ impl Signex {
     fn focus_text_edit() -> Task<Message> {
         Task::batch([
             operation::focus(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
-            operation::select_all(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
+            operation::text_input::select_all(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone()),
         ])
     }
 

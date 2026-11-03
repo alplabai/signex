@@ -1,24 +1,28 @@
 //! A container widget that allows you to specify the layout of its children.
 
-use iced_core::{Length, Rectangle, Widget};
+use iced_core::{Length, Rectangle, Widget, widget::Meta};
 
 #[allow(unused_imports)]
 pub use iced_core::{
     Renderer,
-    layout::{Limits, Node},
+    layout::Limits,
     widget::Tree,
 };
 
 type LayoutFn<'a, Message, Theme, Renderer> = Box<
     dyn Fn(
         &mut Vec<iced_core::Element<'a, Message, Theme, Renderer>>,
-        &mut Vec<Tree>,
+        &mut Tree,
         &Renderer,
         &Limits,
-    ) -> Node,
+    ),
 >;
 
 /// A container widget that allows you to specify the layout of its children.
+///
+/// The layout function is responsible for laying out the children and storing
+/// the resulting size of the widget in `tree.size`, as well as the size and
+/// translation of each child in `tree.children`.
 pub struct CustomLayout<'a, Message, Theme, Renderer> {
     elements: Vec<iced_core::Element<'a, Message, Theme, Renderer>>,
     width: Length,
@@ -32,10 +36,10 @@ impl<'b, Message, Theme, Renderer: iced_core::Renderer> CustomLayout<'b, Message
         elements: Vec<iced_core::Element<'b, Message, Theme, Renderer>>,
         layout: impl Fn(
             &mut Vec<iced_core::Element<'b, Message, Theme, Renderer>>,
-            &mut Vec<Tree>,
+            &mut Tree,
             &Renderer,
             &Limits,
-        ) -> Node
+        )
         + 'static,
     ) -> Self {
         Self {
@@ -61,6 +65,8 @@ impl<'b, Message, Theme, Renderer: iced_core::Renderer> CustomLayout<'b, Message
     }
 }
 
+impl<Message, Theme, Renderer> Meta for CustomLayout<'_, Message, Theme, Renderer> {}
+
 impl<Message, Theme, Renderer: iced_core::Renderer> Widget<Message, Theme, Renderer>
     for CustomLayout<'_, Message, Theme, Renderer>
 {
@@ -68,8 +74,12 @@ impl<Message, Theme, Renderer: iced_core::Renderer> Widget<Message, Theme, Rende
         iced_core::Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        (self.layout)(&mut self.elements, &mut tree.children, renderer, limits)
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(&mut self.elements);
+    }
+
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        (self.layout)(&mut self.elements, tree, renderer, limits);
     }
 
     fn draw(
@@ -78,112 +88,90 @@ impl<Message, Theme, Renderer: iced_core::Renderer> Widget<Message, Theme, Rende
         renderer: &mut Renderer,
         theme: &Theme,
         style: &iced_core::renderer::Style,
-        layout: iced_core::Layout<'_>,
+        layout: iced_core::Layout,
         cursor: iced_core::mouse::Cursor,
         viewport: &iced_core::Rectangle,
     ) {
-        tree.children
+        self.elements
             .iter()
-            .zip(layout.children())
-            .zip(self.elements.iter())
-            .for_each(|((state, layout), element)| {
+            .zip(layout.iter(&tree.children))
+            .for_each(|(element, (layout, state))| {
                 element
-                    .as_widget()
                     .draw(state, renderer, theme, style, layout, cursor, viewport);
             });
     }
 
-    fn children(&self) -> Vec<Tree> {
-        self.elements.iter().map(|x| Tree::new(x)).collect()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&self.elements);
-    }
-
     fn operate(
         &mut self,
-        state: &mut Tree,
-        layout: iced_core::Layout<'_>,
+        tree: &mut Tree,
+        layout: iced_core::Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn iced_core::widget::Operation,
     ) {
-        state
-            .children
+        self.elements
             .iter_mut()
-            .zip(layout.children())
-            .zip(self.elements.iter_mut())
-            .for_each(|((state, layout), element)| {
-                operation.container(None, layout.bounds());
+            .zip(layout.iter_mut(&mut tree.children))
+            .for_each(|(element, (layout, state))| {
+                operation.container(None, layout.bounds(), viewport);
                 operation.traverse(&mut |operation| {
-                    element
-                        .as_widget_mut()
-                        .operate(state, layout, renderer, operation);
+                    element.operate(state, layout, viewport, renderer, operation);
                 });
             });
     }
 
     fn update(
         &mut self,
-        state: &mut Tree,
+        tree: &mut Tree,
         event: &iced_core::Event,
-        layout: iced_core::Layout<'_>,
+        layout: iced_core::Layout,
         cursor: iced_core::mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn iced_core::Clipboard,
         shell: &mut iced_core::Shell<'_, Message>,
         viewport: &iced_core::Rectangle,
     ) {
-        for ((state, layout), element) in state
-            .children
+        for (element, (layout, state)) in self
+            .elements
             .iter_mut()
-            .zip(layout.children())
-            .zip(self.elements.iter_mut())
+            .zip(layout.iter_mut(&mut tree.children))
         {
-            element.as_widget_mut().update(
-                state, event, layout, cursor, renderer, clipboard, shell, viewport,
-            );
+            element.update(state, event, layout, cursor, renderer, shell, viewport);
         }
-    }
-
-    fn size_hint(&self) -> iced_core::Size<Length> {
-        self.size()
     }
 
     fn overlay<'a>(
         &'a mut self,
-        state: &'a mut Tree,
-        layout: iced_core::Layout<'a>,
+        tree: &'a mut Tree,
+        layout: iced_core::Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: iced_core::Vector,
-    ) -> Option<iced_core::overlay::Element<'a, Message, Theme, Renderer>> {
+        window: iced_core::Size,
+    ) -> Vec<iced_core::overlay::Element<'a, Message, Theme, Renderer>> {
         iced_core::overlay::from_children(
             &mut self.elements,
-            state,
+            tree,
             layout,
             renderer,
             viewport,
             translation,
+            window,
         )
     }
 
     fn mouse_interaction(
         &self,
-        state: &Tree,
-        layout: iced_core::Layout<'_>,
+        tree: &Tree,
+        layout: iced_core::Layout,
         cursor: iced_core::mouse::Cursor,
         viewport: &iced_core::Rectangle,
         renderer: &Renderer,
     ) -> iced_core::mouse::Interaction {
         self.elements
             .iter()
-            .zip(&state.children)
-            .zip(layout.children())
-            .map(|((child, state), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(state, layout, cursor, viewport, renderer)
+            .zip(layout.iter(&tree.children))
+            .map(|(child, (layout, state))| {
+                child.mouse_interaction(state, layout, cursor, viewport, renderer)
             })
             .max()
             .unwrap_or_default()
@@ -195,14 +183,14 @@ impl<'b, Message: 'b, Theme: 'b, Renderer: iced_core::Renderer + 'b>
     for iced_core::Element<'b, Message, Theme, Renderer>
 {
     fn from(value: CustomLayout<'b, Message, Theme, Renderer>) -> Self {
-        iced_core::Element::new(value)
+        Widget::_boxed(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced_core::{Size, layout::Node};
+    use iced_core::Size;
 
     #[derive(Clone)]
     enum TestMessage {}
@@ -214,11 +202,11 @@ mod tests {
         _elements: &mut Vec<
             iced_core::Element<'_, TestMessage, iced_widget::Theme, iced_widget::Renderer>,
         >,
-        _trees: &mut Vec<Tree>,
+        tree: &mut Tree,
         _renderer: &iced_widget::Renderer,
         limits: &Limits,
-    ) -> Node {
-        Node::new(limits.resolve(Length::Shrink, Length::Shrink, Size::ZERO))
+    ) {
+        tree.size = limits.resolve(Length::Shrink, Length::Shrink, Size::ZERO);
     }
 
     #[test]
@@ -293,20 +281,26 @@ mod tests {
             iced_widget::text::Text::new("Element 2").into(),
             iced_widget::text::Text::new("Element 3").into(),
         ];
-        let layout = TestCustomLayout::new(elements, simple_layout_fn);
+        let mut layout = TestCustomLayout::new(elements, simple_layout_fn);
 
-        let children =
-            Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(&layout);
-        assert_eq!(children.len(), 3);
+        let mut tree = Tree::empty();
+        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
+            &mut layout,
+            &mut tree,
+        );
+        assert_eq!(tree.children.len(), 3);
     }
 
     #[test]
     fn custom_layout_empty_elements() {
-        let layout = TestCustomLayout::new(vec![], simple_layout_fn);
+        let mut layout = TestCustomLayout::new(vec![], simple_layout_fn);
 
-        let children =
-            Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(&layout);
-        assert_eq!(children.len(), 0);
+        let mut tree = Tree::empty();
+        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
+            &mut layout,
+            &mut tree,
+        );
+        assert_eq!(tree.children.len(), 0);
     }
 
     #[test]
@@ -317,19 +311,5 @@ mod tests {
 
         assert_eq!(layout.width, Length::FillPortion(2));
         assert_eq!(layout.height, Length::FillPortion(3));
-    }
-
-    #[test]
-    fn custom_layout_size_hint_equals_size() {
-        let layout = TestCustomLayout::new(vec![], simple_layout_fn)
-            .width(100)
-            .height(50);
-
-        let size = Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::size(&layout);
-        let size_hint =
-            Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::size_hint(&layout);
-
-        assert_eq!(size.width, size_hint.width);
-        assert_eq!(size.height, size_hint.height);
     }
 }

@@ -47,13 +47,13 @@ impl fmt::Display for BodyChoice {
 /// Append the Body row for the panel's `Body Style` state (empty = not a
 /// library symbol, no row).
 pub(super) fn push_body_row<'a>(
-    c: Column<'a, PanelMsg>,
+    c: Column<Element<'a, PanelMsg>>,
     id: uuid::Uuid,
     state: &str,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let pick = move |choice: BodyChoice| PanelMsg::SymbolBodyStylePicked(id, choice.style());
     match state {
         BODY_NORMAL_CAN_SWITCH => c.push(form_pick_row(
@@ -78,11 +78,16 @@ pub(super) fn push_body_row<'a>(
             pick,
             muted,
         )),
-        BODY_NORMAL => c.push(iced::widget::tooltip(
-            form_input_row("Body", "Normal", muted, input_bg, input_bdr),
-            iced::widget::text("This library symbol has no alternate (De Morgan) body").size(11),
-            iced::widget::tooltip::Position::Bottom,
-        )),
+        BODY_NORMAL => c.push(
+            iced::widget::Widget::boxed(iced::widget::tooltip::<_, _, iced::Theme>(
+                form_input_row("Body", "Normal", muted, input_bg, input_bdr),
+                iced::widget::text::<iced::Theme>(
+                    "This library symbol has no alternate (De Morgan) body",
+                )
+                .size(11),
+                iced::widget::tooltip::Position::Bottom,
+            )),
+        ),
         _ => c,
     }
 }

@@ -2,7 +2,7 @@
 //! the read-only file facts. Pure: reads the project, emits `ProjectTabMsg`s.
 //! Sizes come from the shared type and spacing scales.
 
-use iced::widget::{button, column, container, row, text, text_input};
+use iced::widget::{Widget, button, column, container, row, text, text_input};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 
@@ -23,7 +23,7 @@ pub(in crate::app::project_tab) fn tab_message(msg: ProjectTabMsg) -> Message {
 
 pub(in crate::app::project_tab) fn labelled<'a>(
     label: &'a str,
-    field: impl Into<Element<'a, Message>>,
+    field: impl Widget<Message> + 'a,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let (ts, sp) = (TypeScale::default(), Spacing::default());
@@ -34,11 +34,11 @@ pub(in crate::app::project_tab) fn labelled<'a>(
                 .color(crate::styles::ti(tokens.text_secondary))
         )
         .width(Length::Fixed(ts.body * LABEL_COLUMN_EMS)),
-        field.into(),
+        field.boxed(),
     ]
     .spacing(sp.m)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn read_only<'a>(label: &'a str, value: String, tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -103,6 +103,6 @@ pub(in crate::app::project_tab) fn view<'a>(
         read_only("Libraries", facts.library_count.to_string(), tokens),
     ]
     .spacing(sp.l)
-    .max_width(ts.body * SECTION_MAX_EMS);
-    container(body).padding([sp.xl, sp.xl]).into()
+    .width(Length::Fill.max(ts.body * SECTION_MAX_EMS));
+    container(body).padding([sp.xl, sp.xl]).boxed()
 }

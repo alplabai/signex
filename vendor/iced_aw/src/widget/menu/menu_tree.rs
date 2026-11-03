@@ -13,10 +13,10 @@
 use super::common::*;
 use super::flex;
 use iced_core::{
-    Clipboard, Element, Event, Length, Padding, Pixels, Point, Rectangle, Shell, Size, Vector,
+    Element, Event, Length, Padding, Pixels, Point, Rectangle, Shell, Size, Vector, Widget,
     alignment,
-    layout::{Layout, Limits, Node},
-    mouse, renderer,
+    layout::{Layout, Limits},
+    mouse, renderer, shell,
     time::Instant,
     widget::Operation,
     widget::tree::{self, Tree},
@@ -66,18 +66,20 @@ pub(super) struct MenuState {
     pub(super) scroll_offset: f32,
     pub(super) active: Index,
     pub(super) slice: MenuSlice,
+    /// Bounds of the gap between the menu and its parent (absolute, set by `Menu::layout`)
+    pub(super) offset_bounds: Rectangle,
 }
 impl MenuState {
     /// item_tree: Tree{item state, [Tree{widget state}, Tree{menu state, [...]}]}
     pub(super) fn open_new_menu<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
         &mut self,
         active_index: usize,
-        item: &Item<'a, Message, Theme, Renderer>,
+        item: &mut Item<'a, Message, Theme, Renderer>,
         item_tree: &mut Tree,
     ) {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuState::open_new_menu", "");
-        let Some(menu) = item.menu.as_ref() else {
+        let Some(menu) = item.menu.as_mut() else {
             #[cfg(feature = "debug_log")]
             debug!(target:"menu::MenuState::open_new_menu", "item.menu is None");
             return;
@@ -86,7 +88,9 @@ impl MenuState {
         self.active = Some(active_index);
 
         // build the state tree for the new menu
-        let menu_tree = menu.tree();
+        let mut menu_tree = menu.tree();
+        // trees are shallow now, reconcile them so every widget has its children
+        menu.diff(&mut menu_tree);
 
         #[cfg(feature = "debug_log")]
         {
@@ -117,6 +121,7 @@ impl Default for MenuState {
                 lower_bound_rel: 0.0,
                 upper_bound_rel: f32::MAX,
             },
+            offset_bounds: Rectangle::default(),
         }
     }
 }
@@ -207,6 +212,8 @@ where
         Tree {
             tag: self.tag(),
             state: self.state(),
+            translation: Vector::ZERO,
+            size: Size::ZERO,
             children: self.children(),
         }
     }
@@ -230,13 +237,13 @@ where
     }
 
     /// tree: Tree{menu_state, \[item_tree...]}
-    pub(super) fn diff(&self, tree: &mut Tree) {
-        tree.diff_children_custom(&self.items, |tree, item| item.diff(tree), Item::tree);
+    pub(super) fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children_custom(&mut self.items, |tree, item| item.diff(tree), Item::tree);
     }
 
     /// tree: Tree{ menu_state, \[item_tree...] }
     ///
-    /// out: Node{inf, \[ slice_node, items_bounds, offset_bounds]}
+    /// out: absolute Layout of the items area, the (clipped, scrolled) items are its children
     pub(super) fn layout(
         &mut self,
         tree: &mut Tree,
@@ -245,12 +252,16 @@ where
         parent_bounds: Rectangle,
         parent_direction: (Direction, Direction),
         viewport: &Rectangle,
-    ) -> (Node, (Direction, Direction)) {
+    ) -> (Layout, (Direction, Direction)) {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::Menu::layout", "");
-        let limits = limits.max_width(self.max_width);
+        // `Limits::max_width` no longer exists
+        let mut limits = *limits;
+        limits.max.width = limits.max.width.min(self.max_width);
+        limits.min.width = limits.min.width.min(limits.max.width);
 
-        let items_node = flex::resolve(
+        // sizes and (parent relative) translations of the item widgets are stored in their trees
+        let items_size = flex::resolve(
             flex::Axis::Vertical,
             renderer,
             &limits,
@@ -271,6 +282,15 @@ where
                 .collect::<Vec<_>>(),
         );
 
+        // Hoist the widget layout into the item trees, so the layout of an
+        // item is also the layout of its widget.
+        for item_tree in &mut tree.children {
+            let widget = &mut item_tree.children[0];
+            item_tree.size = widget.size;
+            item_tree.translation = widget.translation;
+            widget.translation = Vector::ZERO;
+        }
+
         let aod = Aod::new(
             self.axis,
             viewport.size(),
@@ -279,7 +299,7 @@ where
             self.offset,
         );
 
-        let children_size = items_node.bounds().size();
+        let children_size = items_size;
         let (children_position, offset_position, child_direction) =
             aod.resolve(parent_bounds, children_size, viewport.size());
 
@@ -293,77 +313,53 @@ where
 
         let offset_bounds = Rectangle::new(offset_position, offset_size);
 
-        let menu_state = tree.state.downcast_mut::<MenuState>();
+        let scroll_offset = tree.state.downcast_ref::<MenuState>().scroll_offset;
 
         // calc slice
         let (lower_bound_rel, upper_bound_rel) = cal_bounds_rel_menu(
-            &items_node,
+            items_size,
             children_position - Point::ORIGIN,
             viewport.size(),
-            menu_state.scroll_offset,
+            scroll_offset,
         );
-        let slice =
-            MenuSlice::from_bounds_rel(lower_bound_rel, upper_bound_rel, &items_node, |n| {
-                n.bounds().y
-            });
-        menu_state.slice = slice;
+        let slice = MenuSlice::from_bounds_rel(lower_bound_rel, upper_bound_rel, tree, |t| {
+            t.translation.y
+        });
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::Menu::layout", "slice: {:?}", slice);
 
-        let slice_node = if slice.start_index == slice.end_index {
-            let node = &items_node.children()[slice.start_index];
-            let bounds = node.bounds();
-            let start_offset = slice.lower_bound_rel - bounds.y;
+        if slice.start_index == slice.end_index {
+            let item = &mut tree.children[slice.start_index];
+            let start_offset = slice.lower_bound_rel - item.translation.y;
             let height = slice.upper_bound_rel - slice.lower_bound_rel;
-
-            Node::with_children(
-                Size::new(items_node.bounds().width, height),
-                once(clip_node_y(node, height, start_offset)).collect(),
-            )
+            clip_item_y(item, height, start_offset);
         } else {
-            let start_node = {
-                let node = &items_node.children()[slice.start_index];
-                let bounds = node.bounds();
-                let start_offset = slice.lower_bound_rel - bounds.y;
-                let height = bounds.height - start_offset;
-                clip_node_y(node, height, start_offset)
-            };
+            {
+                let item = &mut tree.children[slice.start_index];
+                let start_offset = slice.lower_bound_rel - item.translation.y;
+                let height = item.size.height - start_offset;
+                clip_item_y(item, height, start_offset);
+            }
+            {
+                let item = &mut tree.children[slice.end_index];
+                let height = slice.upper_bound_rel - item.translation.y;
+                clip_item_y(item, height, 0.0);
+            }
+        }
 
-            let end_node = {
-                let node = &items_node.children()[slice.end_index];
-                let bounds = node.bounds();
-                let height = slice.upper_bound_rel - bounds.y;
-                clip_node_y(node, height, 0.0)
-            };
+        // The items are translated by the scroll offset
+        for item in &mut tree.children {
+            item.translation.y += scroll_offset;
+        }
 
-            Node::with_children(
-                Size::new(
-                    items_node.bounds().width,
-                    slice.upper_bound_rel - slice.lower_bound_rel,
-                ),
-                once(start_node)
-                    .chain(
-                        items_node.children()[slice.start_index + 1..slice.end_index]
-                            .iter()
-                            .map(Clone::clone),
-                    )
-                    .chain(once(end_node))
-                    .collect(),
-            )
-        };
+        tree.size = items_size;
+        let menu_state = tree.state.downcast_mut::<MenuState>();
+        menu_state.slice = slice;
+        menu_state.offset_bounds = offset_bounds;
 
         (
-            Node::with_children(
-                Size::INFINITE,
-                [
-                    slice_node
-                        .move_to(children_position)
-                        .translate([0.0, menu_state.scroll_offset]), // slice_layout
-                    Node::new(children_size).move_to(children_position), // items_bounds
-                    Node::new(offset_bounds.size()).move_to(offset_bounds.position()), // offset_bounds
-                ]
-                .into(),
-            ),
+            // absolute layout of the items area, items are its children
+            Layout::new(children_size).move_to(children_position),
             child_direction,
         )
     }
@@ -378,20 +374,21 @@ where
         rec_event: RecEvent,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
         parent_bounds: Rectangle,
         prev_bounds_list: &[Rectangle],
         prev_active: &mut Index,
     ) -> RecEvent {
-        let mut lc = layout.children();
-        let slice_layout = lc.next().unwrap();
-        let items_bounds = lc.next().unwrap().bounds();
-        let offset_bounds = lc.next().unwrap().bounds();
+        let items_bounds = layout.bounds();
+        let (slice, offset_bounds) = {
+            let menu_state = tree.state.downcast_ref::<MenuState>();
+            (menu_state.slice, menu_state.offset_bounds)
+        };
+        let slice_layouts = slice_layouts(layout, &tree.children, slice);
         let background_bounds = pad_rectangle(items_bounds, self.padding);
         let safe_bounds = pad_rectangle(
             background_bounds,
@@ -420,12 +417,10 @@ where
                         menu_state.slice,
                         self.items;iter_mut,
                         item_trees;iter_mut,
-                        slice_layout.children()
+                        slice_layouts.iter().copied()
                     )
                     .for_each(|((item, tree), layout)| {
-                        item.update(
-                            tree, event, layout, cursor, renderer, clipboard, shell, viewport,
-                        );
+                        item.update(tree, event, layout, cursor, renderer, shell, viewport);
                     });
                 }
                 Op::RedrawUpdate => {
@@ -433,9 +428,8 @@ where
                         match &global_parameters.draw_path {
                             DrawPath::FakeHovering => {
                                 let active_in_slice = active - menu_state.slice.start_index;
-                                let center = slice_layout
-                                    .children()
-                                    .nth(active_in_slice)
+                                let center = slice_layouts
+                                    .get(active_in_slice)
                                     .expect(
                                         "Index (in slice space) is not within the slice layout. \
                                         This should not happen, please report this issue",
@@ -450,8 +444,8 @@ where
                         cursor
                     };
 
-                    let mut temp_messages = vec![];
-                    let mut temp_shell = Shell::new(&mut temp_messages);
+                    let mut temp_messages = shell::Bus::new();
+                    let mut temp_shell = shell.local(&mut temp_messages);
 
                     let redraw_event =
                         Event::Window(window::Event::RedrawRequested(Instant::now()));
@@ -460,7 +454,7 @@ where
                         menu_state.slice,
                         self.items;iter_mut,
                         item_trees;iter_mut,
-                        slice_layout.children()
+                        slice_layouts.iter().copied()
                     )
                     .for_each(|((item, tree), layout)| {
                         item.update(
@@ -469,7 +463,6 @@ where
                             layout,
                             cursor,
                             renderer,
-                            clipboard,
                             &mut temp_shell,
                             viewport,
                         );
@@ -486,7 +479,7 @@ where
                             global_parameters,
                             menu_state.slice,
                             &mut self.items,
-                            slice_layout.children(),
+                            slice_layouts.iter().copied(),
                             cursor,
                             self.close_on_item_click,
                             self.close_on_background_click,
@@ -530,7 +523,7 @@ where
                             &mut self.items,
                             menu_state,
                             item_trees,
-                            slice_layout.children(),
+                            slice_layouts.iter().copied(),
                             cursor,
                             shell,
                         );
@@ -621,21 +614,20 @@ where
     pub(super) fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        let mut lc = layout.children();
-        let slice_layout = lc.next().unwrap();
-
         let menu_state = tree.state.downcast_mut::<MenuState>();
         let slice = menu_state.slice;
+        let slice_layouts = slice_layouts(layout, &tree.children, slice);
+        let viewport = layout.bounds();
 
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), &viewport);
         operation.traverse(&mut |operation| {
-            itl_iter_slice!(slice, self.items;iter_mut, tree.children;iter_mut, slice_layout.children())
+            itl_iter_slice!(slice, self.items;iter_mut, tree.children;iter_mut, slice_layouts.iter().copied())
                 .for_each(|((child, state), layout)| {
-                    child.operate(state, layout, renderer, operation);
+                    child.operate(state, layout, &viewport, renderer, operation);
                 });
         });
     }
@@ -646,17 +638,15 @@ where
     pub(super) fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        let mut lc = layout.children();
-        let slice_layout = lc.next().unwrap();
-
         let menu_state = tree.state.downcast_ref::<MenuState>();
         let slice = menu_state.slice;
+        let slice_layouts = slice_layouts(layout, &tree.children, slice);
 
-        itl_iter_slice!(slice, self.items;iter, tree.children;iter, slice_layout.children())
+        itl_iter_slice!(slice, self.items;iter, tree.children;iter, slice_layouts.iter().copied())
             .map(|((item, tree), layout)| item.mouse_interaction(tree, layout, cursor, renderer))
             .max()
             .unwrap_or_default()
@@ -673,16 +663,15 @@ where
         theme: &Theme,
         style: &renderer::Style,
         theme_style: &Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let mut lc = layout.children();
-        let slice_layout = lc.next().unwrap();
-        let items_bounds = lc.next().unwrap().bounds();
+        let items_bounds = layout.bounds();
 
         let menu_state = tree.state.downcast_ref::<MenuState>();
         let slice = menu_state.slice;
+        let slice_layouts = slice_layouts(layout, &tree.children, slice);
 
         // draw background
         let pad_rectangle = pad_rectangle(items_bounds, self.padding);
@@ -700,9 +689,8 @@ where
 
         if let (DrawPath::Backdrop, Some(active)) = (draw_path, menu_state.active) {
             let active_in_slice = active - menu_state.slice.start_index;
-            let active_bounds = slice_layout
-                .children()
-                .nth(active_in_slice)
+            let active_bounds = slice_layouts
+                .get(active_in_slice)
                 .expect(
                     "Index (in slice space) is not within the slice layout. \
                     This should not happen, please report this issue",
@@ -720,7 +708,7 @@ where
         }
 
         renderer.with_layer(items_bounds, |r| {
-            itl_iter_slice!(slice, self.items;iter, tree.children;iter, slice_layout.children())
+            itl_iter_slice!(slice, self.items;iter, tree.children;iter, slice_layouts.iter().copied())
                 .for_each(|((item, tree), layout)| {
                     item.draw(tree, r, theme, style, layout, cursor, viewport);
                 });
@@ -776,6 +764,8 @@ where
         Tree {
             tag: self.tag(),
             state: self.state(),
+            translation: Vector::ZERO,
+            size: Size::ZERO,
             children: self.children(),
         }
     }
@@ -808,18 +798,19 @@ where
 
     /// tree: Tree{stateless, \[widget_tree, menu_tree]}
     #[allow(clippy::option_if_let_else)]
-    pub(super) fn diff(&self, tree: &mut Tree) {
+    pub(super) fn diff(&mut self, tree: &mut Tree) {
         if let Some(t0) = tree.children.get_mut(0) {
-            t0.diff(&self.item);
-            if let Some(m) = self.menu.as_ref() {
+            t0.diff(&mut self.item);
+            if let Some(m) = self.menu.as_mut() {
                 if let Some(t1) = tree.children.get_mut(1) {
                     m.diff(t1);
                 } else {
-                    *tree = self.tree();
+                    // the menu is closed, nothing to reconcile
                 }
             }
         } else {
             *tree = self.tree();
+            tree.children[0].diff(&mut self.item);
         }
     }
 
@@ -829,22 +820,20 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
         #[cfg(feature = "debug_log")]
         debug!(target:"Item::update", "");
-        self.item.as_widget_mut().update(
+        self.item.update(
             &mut tree.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         )
@@ -855,11 +844,11 @@ where
     pub(super) fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.item.as_widget().mouse_interaction(
+        self.item.mouse_interaction(
             &tree.children[0],
             layout,
             cursor,
@@ -876,11 +865,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.item.as_widget().draw(
+        self.item.draw(
             &tree.children[0],
             renderer,
             theme,
@@ -894,13 +883,13 @@ where
     pub(super) fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         self.item
-            .as_widget_mut()
-            .operate(&mut tree.children[0], layout, renderer, operation);
+            .operate(&mut tree.children[0], layout, viewport, renderer, operation);
     }
 }
 
@@ -1101,12 +1090,12 @@ impl Aod {
 }
 
 fn cal_bounds_rel_menu(
-    items_node: &Node,
+    items_size: Size,
     translation: Vector,
     viewport: Size,
     scroll_offset: f32,
 ) -> (f32, f32) {
-    let items_bounds = items_node.bounds() + translation; // viewport space
+    let items_bounds = Rectangle::new(Point::ORIGIN, items_size) + translation; // viewport space
 
     // viewport space absolute bounds
     let lower_bound = items_bounds.y.max(0.0);
@@ -1117,4 +1106,28 @@ fn cal_bounds_rel_menu(
     let upper_bound_rel = upper_bound - (items_bounds.y + scroll_offset);
 
     (lower_bound_rel, upper_bound_rel)
+}
+
+/// Clips the height of an item in place.
+///
+/// The widget is clipped (as a layout node used to be), and the resulting
+/// size and translation are hoisted into the item tree, so the layout of the
+/// item is also the layout of its widget.
+fn clip_item_y(item: &mut Tree, height: f32, offset: f32) {
+    clip_node_y(&mut item.children[0], height, offset);
+
+    let widget = &mut item.children[0];
+    item.size = widget.size;
+    item.translation = item.translation + widget.translation;
+    widget.translation = Vector::ZERO;
+}
+
+/// The layouts of the items in the visible `slice` (inclusive).
+fn slice_layouts(layout: Layout, item_trees: &[Tree], slice: MenuSlice) -> Vec<Layout> {
+    layout
+        .iter(item_trees)
+        .skip(slice.start_index)
+        .take(slice.end_index + 1 - slice.start_index)
+        .map(|(layout, _)| layout)
+        .collect()
 }

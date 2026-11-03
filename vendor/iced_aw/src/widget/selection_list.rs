@@ -6,18 +6,18 @@ use crate::style::{
 };
 
 use iced_core::{
-    Border, Clipboard, Element, Event, Font, Layout, Length, Padding, Pixels, Rectangle, Shell,
-    Size, Widget,
+    Border, Element, Event, Font, Layout, Length, Padding, Pixels, Rectangle, Shell, Size, Vector,
+    Widget,
     alignment::Vertical,
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
     renderer,
     text::{Paragraph, Text, paragraph},
-    widget::{Tree, tree},
+    widget::{Meta, Operation, Tree, tree},
 };
 use iced_widget::{
     Container, Scrollable, container, scrollable,
-    text::{self, LineHeight, Wrapping},
+    text::{self, Ellipsis, LineHeight, Wrapping},
 };
 use std::{fmt::Display, hash::Hash, marker::PhantomData};
 
@@ -33,17 +33,21 @@ pub struct SelectionList<
     Theme = iced_widget::Theme,
     Renderer = iced_widget::Renderer,
 > where
-    T: Clone + ToString + Eq + Hash,
+    T: Clone + Display + Eq + Hash,
     [T]: ToOwned<Owned = Vec<T>>,
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
-    Theme: Catalog + container::Catalog,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog + container::Catalog + scrollable::Catalog,
 {
     /// Container for Rendering List.
-    container: Container<'a, Message, Theme, Renderer>,
+    container: Container<
+        'a,
+        Scrollable<'a, Message, List<'a, T, Message, Theme, Renderer>, Theme>,
+        Theme,
+    >,
     /// List of Elements to Render.
     options: &'a [T],
     /// Label Font
-    font: Renderer::Font,
+    font: Font,
     /// The Containers Width
     width: Length,
     /// The Containers height
@@ -60,7 +64,7 @@ pub struct SelectionList<
 impl<'a, T, Message, Theme, Renderer> SelectionList<'a, T, Message, Theme, Renderer>
 where
     Message: 'a + Clone,
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a + Catalog + container::Catalog + scrollable::Catalog + iced_widget::text::Catalog,
     T: Clone + Display + Eq + Hash,
     [T]: ToOwned<Owned = Vec<T>>,
@@ -172,20 +176,26 @@ where
     }
 }
 
+impl<T, Message, Theme, Renderer> Meta for SelectionList<'_, T, Message, Theme, Renderer>
+where
+    T: Clone + Display + Eq + Hash,
+    [T]: ToOwned<Owned = Vec<T>>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog + container::Catalog + scrollable::Catalog,
+{
+}
+
 impl<'a, T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for SelectionList<'a, T, Message, Theme, Renderer>
 where
-    T: 'a + Clone + ToString + Eq + Hash + Display,
+    T: 'a + Clone + Eq + Hash + Display,
+    [T]: ToOwned<Owned = Vec<T>>,
     Message: 'static,
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font> + 'a,
-    Theme: Catalog + container::Catalog,
+    Renderer: renderer::Renderer + iced_core::text::Renderer + 'a,
+    Theme: Catalog + container::Catalog + scrollable::Catalog + iced_widget::text::Catalog,
 {
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.container as &dyn Widget<_, _, _>)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.container as &dyn Widget<_, _, _>]);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children::<Message, Theme, Renderer>(std::slice::from_mut(&mut self.container));
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
         state.values = self
@@ -207,7 +217,7 @@ where
         tree::State::new(State::<Renderer::Paragraph>::new(self.options))
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         use std::f32;
 
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
@@ -231,6 +241,8 @@ where
                         align_y: Vertical::Top,
                         shaping: text::Shaping::Advanced,
                         wrapping: Wrapping::default(),
+                        ellipsis: Ellipsis::None,
+                        hint_factor: renderer.hint_factor(),
                     };
 
                     let _ = state.values[id].update(text);
@@ -238,39 +250,49 @@ where
                 })
                 .max()
                 .unwrap_or(100),
-            _ => limits.max().width as u32,
+            _ => limits.max.width as u32,
         };
 
-        let limits = limits.max_width(max_width as f32 + self.padding.x());
+        let max_width = (max_width as f32 + self.padding.x()).min(limits.max.width);
+        let limits = Limits {
+            min: Size::new(limits.min.width.min(max_width), limits.min.height),
+            max: Size::new(max_width, limits.max.height),
+            ..limits
+        };
 
-        let content = self
-            .container
-            .layout(&mut tree.children[0], renderer, &limits);
-        let size = limits.resolve(self.width, self.height, content.size());
-        Node::with_children(size, vec![content])
+        Widget::<Message, Theme, Renderer>::layout(
+            &mut self.container,
+            &mut tree.children[0],
+            renderer,
+            &limits,
+        );
+        let content_size = tree.children[0].size;
+        tree.children[0].translation = Vector::ZERO;
+        tree.size = limits.resolve(self.width, self.height, content_size);
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.container.update(
-            &mut state.children[0],
+        let (layout, child) = layout
+            .iter_mut(&mut state.children)
+            .next()
+            .expect("Scrollable Child Missing in Selection List");
+
+        Widget::<Message, Theme, Renderer>::update(
+            &mut self.container,
+            child,
             event,
-            layout
-                .children()
-                .next()
-                .expect("Scrollable Child Missing in Selection List"),
+            layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -279,13 +301,24 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.container
-            .mouse_interaction(&state.children[0], layout, cursor, viewport, renderer)
+        let (layout, child) = layout
+            .iter(&state.children)
+            .next()
+            .expect("Scrollable Child Missing in Selection List");
+
+        Widget::<Message, Theme, Renderer>::mouse_interaction(
+            &self.container,
+            child,
+            layout,
+            cursor,
+            viewport,
+            renderer,
+        )
     }
 
     fn draw(
@@ -294,7 +327,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
@@ -309,21 +342,25 @@ where
                         radius: (0.0).into(),
                         width: style_sheet.border_width,
                         color: style_sheet.border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
                 style_sheet.background,
             );
 
-            self.container.draw(
-                &state.children[0],
+            let (layout, child) = layout
+                .iter(&state.children)
+                .next()
+                .expect("Scrollable Child Missing in Selection List");
+
+            Widget::<Message, Theme, Renderer>::draw(
+                &self.container,
+                child,
                 renderer,
                 theme,
                 style,
-                layout
-                    .children()
-                    .next()
-                    .expect("Scrollable Child Missing in Selection List"),
+                layout,
                 cursor,
                 &clipped_viewport,
             );
@@ -333,17 +370,21 @@ where
     fn operate(
         &mut self,
         state: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn iced_core::widget::Operation<()>,
+        operation: &mut dyn Operation,
     ) {
+        let (layout, child) = layout
+            .iter_mut(&mut state.children)
+            .next()
+            .expect("Scrollable Child Missing in Selection List");
+
         Widget::<Message, Theme, Renderer>::operate(
             &mut self.container,
-            &mut state.children[0],
-            layout
-                .children()
-                .next()
-                .expect("Scrollable Child Missing in Selection List"),
+            child,
+            layout,
+            viewport,
             renderer,
             operation,
         );
@@ -353,13 +394,14 @@ where
 impl<'a, T, Message, Theme, Renderer> From<SelectionList<'a, T, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    T: Clone + ToString + Eq + Hash + Display,
+    T: Clone + Eq + Hash + Display,
+    [T]: ToOwned<Owned = Vec<T>>,
     Message: 'static,
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
-    Theme: 'a + Catalog + container::Catalog,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
+    Theme: 'a + Catalog + container::Catalog + scrollable::Catalog + iced_widget::text::Catalog,
 {
     fn from(selection_list: SelectionList<'a, T, Message, Theme, Renderer>) -> Self {
-        Element::new(selection_list)
+        Widget::<Message, Theme, Renderer>::_boxed(selection_list)
     }
 }
 
@@ -465,10 +507,15 @@ mod tests {
 
         let selection_list = TestSelectionList::new(&options, TestMessage::Selected);
 
-        let children = Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(
+        let mut selection_list = selection_list;
+        let mut tree = Tree::new::<TestMessage, iced_widget::Theme, iced_widget::Renderer>(
             &selection_list,
         );
-        assert_eq!(children.len(), 1);
+        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
+            &mut selection_list,
+            &mut tree,
+        );
+        assert_eq!(tree.children.len(), 1);
     }
 
     #[test]

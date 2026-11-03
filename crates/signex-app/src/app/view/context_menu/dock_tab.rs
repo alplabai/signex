@@ -3,6 +3,7 @@
 
 use super::*;
 
+use iced::Widget as _;
 use super::items::dd_msg;
 use crate::dock::{DockMessage, DockTabAction, PanelPosition};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -37,7 +38,7 @@ impl Signex {
     /// The open dock tab menu, or an empty element when none is open.
     pub(in crate::app::view) fn view_dock_tab_context_menu(&self) -> Element<'_, Message> {
         let Some(menu) = self.document_state.dock.tab_menu else {
-            return container(iced::widget::Space::new()).into();
+            return iced::widget::Space::new().boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         signex_widgets::active_bar_dropdown::view(

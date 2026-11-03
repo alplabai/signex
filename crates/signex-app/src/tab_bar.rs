@@ -51,7 +51,11 @@ fn reveal_offset(active: usize, count: usize) -> RelativeOffset {
 
 /// Task scrolling the tab strip so tab `active` (of `count`) is visible.
 pub fn reveal_active_tab<M: Send + 'static>(active: usize, count: usize) -> iced::Task<M> {
-    iced::widget::operation::snap_to(TAB_STRIP_ID, reveal_offset(active, count))
+    iced::widget::operation::scrollable::snap_to(
+        TAB_STRIP_ID,
+        reveal_offset(active, count),
+        iced::widget::operation::Animation::Instant,
+    )
 }
 
 /// The hover text of a tab, or `None` when tooltips are off. They are off

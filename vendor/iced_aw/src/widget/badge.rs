@@ -3,12 +3,12 @@
 //! *This API requires the following crate features to be activated: badge*
 
 use iced_core::{
-    Alignment, Border, Clipboard, Color, Element, Event, Layout, Length, Padding, Point, Rectangle,
-    Shadow, Shell, Size, Widget,
-    layout::{Limits, Node},
+    Alignment, Border, Color, Element, Event, Layout, Length, Padding, Rectangle, Shadow, Shell,
+    Size, Vector, Widget,
+    layout::Limits,
     mouse::{self, Cursor},
     renderer,
-    widget::{Operation, Tree},
+    widget::{Meta, Operation, Tree},
     window,
 };
 
@@ -135,6 +135,13 @@ where
     }
 }
 
+impl<Message, Theme, Renderer> Meta for Badge<'_, Message, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+    Theme: Catalog,
+{
+}
+
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Badge<'a, Message, Theme, Renderer>
 where
@@ -142,12 +149,8 @@ where
     Renderer: 'a + renderer::Renderer,
     Theme: Catalog,
 {
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_mut(&mut self.content));
     }
 
     fn size(&self) -> Size<Length> {
@@ -157,7 +160,7 @@ where
         }
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         let padding: Padding = self.padding.into();
         let limits = limits
             .loose()
@@ -165,40 +168,39 @@ where
             .height(self.height)
             .shrink(padding);
 
-        let mut content =
-            self.content
-                .as_widget_mut()
-                .layout(&mut tree.children[0], renderer, &limits.loose());
-        let size = limits.resolve(self.width, self.height, content.size());
+        let child = &mut tree.children[0];
+        self.content
+            .layout(child, renderer, &limits.loose());
+        let content_size = child.size;
+        let size = limits.resolve(self.width, self.height, content_size);
 
-        content = content
-            .move_to(Point::new(padding.left, padding.top))
-            .align(self.horizontal_alignment, self.vertical_alignment, size);
+        child.translation = Vector::new(padding.left, padding.top)
+            + content_size.align(size, self.horizontal_alignment, self.vertical_alignment);
 
-        Node::with_children(size.expand(padding), vec![content])
+        tree.size = size.expand(padding);
     }
 
     fn update(
         &mut self,
-        state: &mut Tree,
+        tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.content.as_widget_mut().update(
-            &mut state.children[0],
+        let (child_layout, child_tree) = layout
+            .iter_mut(&mut tree.children)
+            .next()
+            .expect("widget: Layout should have a children layout for a badge.");
+
+        self.content.update(
+            child_tree,
             event,
-            layout
-                .children()
-                .next()
-                .expect("widget: Layout should have a children layout for a badge."),
+            child_layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -219,14 +221,19 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &state.children[0],
-            layout,
+        let (child_layout, child_tree) = layout
+            .iter(&state.children)
+            .next()
+            .expect("widget: Layout should have a children layout for a badge.");
+
+        self.content.mouse_interaction(
+            child_tree,
+            child_layout,
             cursor,
             viewport,
             renderer,
@@ -239,12 +246,15 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let mut children = layout.children();
+        let (child_layout, child_tree) = layout
+            .iter(&tree.children)
+            .next()
+            .expect("Graphics: Layout should have a children layout for Badge");
 
         let style_sheet = theme.style(&self.class, self.status.unwrap_or(Status::Active));
 
@@ -260,6 +270,7 @@ where
                         radius: border_radius.into(),
                         width: style_sheet.border_width,
                         color: style_sheet.border_color.unwrap_or(Color::BLACK),
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     ..renderer::Quad::default()
@@ -268,16 +279,14 @@ where
             );
         }
 
-        self.content.as_widget().draw(
-            &tree.children[0],
+        self.content.draw(
+            child_tree,
             renderer,
             theme,
             &renderer::Style {
                 text_color: style_sheet.text_color,
             },
-            children
-                .next()
-                .expect("Graphics: Layout should have a children layout for Badge"),
+            child_layout,
             cursor,
             viewport,
         );
@@ -286,21 +295,20 @@ where
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
         operation.traverse(&mut |operation| {
-            self.content.as_widget_mut().operate(
-                &mut tree.children[0],
-                layout
-                    .children()
-                    .next()
-                    .expect("Badge layout should have a content child"),
-                renderer,
-                operation,
-            );
+            let (child_layout, child_tree) = layout
+                .iter_mut(&mut tree.children)
+                .next()
+                .expect("Badge layout should have a content child");
+
+            self.content
+                .operate(child_tree, child_layout, viewport, renderer, operation);
         });
     }
 }
@@ -313,7 +321,7 @@ where
     Theme: 'a + Catalog,
 {
     fn from(badge: Badge<'a, Message, Theme, Renderer>) -> Self {
-        Self::new(badge)
+        badge._boxed()
     }
 }
 
@@ -466,31 +474,15 @@ mod tests {
     }
 
     #[test]
-    fn badge_children_returns_single_content_tree() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test"));
-        let children =
-            Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(&badge);
+    fn badge_diff_creates_content_tree() {
+        let mut badge = TestBadge::new(iced_widget::text::Text::new("Original"));
+        let mut tree = Tree::empty();
 
-        // Badge should have exactly one child (the content element)
-        assert_eq!(children.len(), 1);
-    }
-
-    #[test]
-    fn badge_diff_updates_content_tree() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Original"));
-        let content = Element::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::from(
-            iced_widget::text::Text::new("Original"),
+        // Diffing an empty tree should create exactly one child (the content)
+        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
+            &mut badge, &mut tree,
         );
-        let mut tree = Tree {
-            tag: iced_core::widget::tree::Tag::stateless(),
-            state: iced_core::widget::tree::State::None,
-            children: vec![Tree::new(&content)],
-        };
 
-        // Verify diff doesn't panic and properly handles the tree
-        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(&badge, &mut tree);
-
-        // Tree should still have one child after diff
         assert_eq!(tree.children.len(), 1);
     }
 }

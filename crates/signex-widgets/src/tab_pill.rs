@@ -23,10 +23,10 @@
 //! zero spacing and still read as discrete tabs (the bg + side
 //! borders provide the divider).
 
-use iced::advanced::layout::{Limits, Node};
+use iced::advanced::layout::{Layout, Limits};
 use iced::advanced::renderer::Quad;
 use iced::advanced::widget::{self, Tree, Widget};
-use iced::advanced::{Clipboard, Layout, Shell, overlay, renderer};
+use iced::advanced::{Shell, overlay, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Background, Border, Color, Element, Event, Length, Rectangle, Size, Vector};
 
@@ -103,107 +103,84 @@ where
     }
 }
 
+impl<Message, Theme, Renderer> widget::Meta for TabPill<'_, Message, Theme, Renderer> where
+    Renderer: iced::advanced::Renderer
+{
+}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for TabPill<'_, Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer,
 {
     fn tag(&self) -> widget::tree::Tag {
-        self.content.as_widget().tag()
+        self.content.tag()
     }
 
     fn state(&self) -> widget::tree::State {
-        self.content.as_widget().state()
+        self.content.state()
     }
 
-    fn children(&self) -> Vec<Tree> {
-        self.content.as_widget().children()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        self.content.as_widget().diff(tree);
+    fn diff(&mut self, tree: &mut Tree) {
+        self.content.diff(tree);
     }
 
     fn size(&self) -> Size<Length> {
-        let child = self.content.as_widget().size();
+        let child = self.content.size();
         Size {
             width: child.width,
             height: child.height,
         }
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         // Pass parent limits through to the child unchanged. The
         // accent strip overlays the bottom 2 px IN PLACE — it's a
         // visual element on top of the bg fill, not a separate
         // layout band. Inactive tabs and active tabs occupy the
         // exact same footprint; the only difference is whether
-        // the borders + accent are drawn.
-        let child = self.content.as_widget_mut().layout(tree, renderer, limits);
-        let total_size = child.size();
-        Node::with_children(total_size, vec![child])
+        // the borders + accent are drawn. The pill shares the
+        // child's tree (see `tag`/`diff`), so the child's laid-out
+        // size is already the pill's size.
+        self.content.layout(tree, renderer, limits);
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
-        if let Some(child_layout) = layout.children().next() {
-            self.content
-                .as_widget_mut()
-                .operate(tree, child_layout, renderer, operation);
-        }
+        self.content
+            .operate(tree, layout, viewport, renderer, operation);
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if let Some(child_layout) = layout.children().next() {
-            self.content.as_widget_mut().update(
-                tree,
-                event,
-                child_layout,
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
-        }
+        self.content
+            .update(tree, event, layout, cursor, renderer, shell, viewport);
     }
 
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        layout
-            .children()
-            .next()
-            .map(|child_layout| {
-                self.content.as_widget().mouse_interaction(
-                    tree,
-                    child_layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                )
-            })
-            .unwrap_or_default()
+        self.content
+            .mouse_interaction(tree, layout, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -212,7 +189,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
@@ -239,6 +216,7 @@ where
                     width: BORDER_WIDTH,
                     radius,
                     color: self.style.border,
+                    ..Border::default()
                 },
                 ..Quad::default()
             },
@@ -271,44 +249,21 @@ where
 
         // Child content draws last so any text / icons paint over the
         // bg fill we just laid down.
-        if let Some(child_layout) = layout.children().next() {
-            self.content.as_widget().draw(
-                tree,
-                renderer,
-                theme,
-                style,
-                child_layout,
-                cursor,
-                viewport,
-            );
-        }
+        self.content
+            .draw(tree, renderer, theme, style, layout, cursor, viewport);
     }
 
     fn overlay<'a>(
         &'a mut self,
         tree: &'a mut Tree,
-        layout: Layout<'a>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        let mut children = layout.children();
-        let child_layout = children.next()?;
+        window: Size,
+    ) -> Vec<overlay::Element<'a, Message, Theme, Renderer>> {
         self.content
-            .as_widget_mut()
-            .overlay(tree, child_layout, renderer, viewport, translation)
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<TabPill<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: 'a,
-    Renderer: iced::advanced::Renderer + 'a,
-{
-    fn from(w: TabPill<'a, Message, Theme, Renderer>) -> Self {
-        Self::new(w)
+            .overlay(tree, layout, renderer, viewport, translation, window)
     }
 }
 

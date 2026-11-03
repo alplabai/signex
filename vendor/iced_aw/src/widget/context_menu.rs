@@ -1,11 +1,11 @@
 //! A context menu for showing actions on right click.
 //!
 use iced_core::{
-    Clipboard, Element, Event, Layout, Length, Point, Rectangle, Shell, Vector, Widget,
-    layout::{Limits, Node},
+    Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
+    layout::Limits,
     mouse::{self, Button, Cursor},
     overlay, renderer,
-    widget::{Operation, Tree, tree},
+    widget::{Meta, Operation, Tree, tree},
 };
 
 pub use crate::style::{
@@ -72,10 +72,10 @@ where
     /// `overlay`: The content of [`ContextMenuOverlay`] which will be displayed when `underlay` is clicked.
     pub fn new<U>(underlay: U, overlay: Overlay) -> Self
     where
-        U: Into<Element<'a, Message, Theme, Renderer>>,
+        U: Widget<Message, Theme, Renderer> + 'a,
     {
         ContextMenu {
-            underlay: underlay.into(),
+            underlay: underlay._boxed(),
             overlay,
             class: Theme::default(),
             force_open: None,
@@ -109,6 +109,16 @@ where
     }
 }
 
+impl<'a, Content, Message, Theme, Renderer> Meta
+    for ContextMenu<'a, Content, Message, Theme, Renderer>
+where
+    Content: 'a + Fn() -> Element<'a, Message, Theme, Renderer>,
+    Message: 'a + Clone,
+    Renderer: 'a + renderer::Renderer,
+    Theme: Catalog,
+{
+}
+
 impl<'a, Content, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for ContextMenu<'a, Content, Message, Theme, Renderer>
 where
@@ -118,13 +128,14 @@ where
     Theme: Catalog,
 {
     fn size(&self) -> iced_core::Size<Length> {
-        self.underlay.as_widget().size()
+        self.underlay.size()
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         self.underlay
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+            .layout(&mut tree.children[0], renderer, limits);
+
+        tree.size = tree.children[0].size;
     }
 
     fn draw(
@@ -133,11 +144,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget().draw(
+        self.underlay.draw(
             &state.children[0],
             renderer,
             theme,
@@ -156,35 +167,38 @@ where
         tree::State::new(State::new())
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.underlay), Tree::new((self.overlay)())]
+    fn diff(&mut self, tree: &mut Tree) {
+        let mut overlay = (self.overlay)();
+
+        if tree.children.len() != 2 {
+            tree.children = vec![Tree::new(&self.underlay), Tree::new(&overlay)];
+        }
+
+        tree.children[0].diff(&mut self.underlay);
+        tree.children[1].diff(&mut overlay);
     }
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.underlay, &(self.overlay)()]);
-    }
-
-    fn operate<'b>(
-        &'b mut self,
-        state: &'b mut Tree,
-        layout: Layout<'_>,
+    fn operate(
+        &mut self,
+        state: &mut Tree,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         let s: &mut State = state.state.downcast_mut();
         let show = self.force_open.unwrap_or(s.show);
 
         if show {
             let mut content = (self.overlay)();
-            content.as_widget_mut().diff(&mut state.children[1]);
+            state.children[1].diff(&mut content);
 
-            content
-                .as_widget_mut()
-                .operate(&mut state.children[1], layout, renderer, operation);
+            content.operate(&mut state.children[1], layout, viewport, renderer, operation);
         } else {
-            self.underlay.as_widget_mut().operate(
+            self.underlay.operate(
                 &mut state.children[0],
                 layout,
+                viewport,
                 renderer,
                 operation,
             );
@@ -195,10 +209,9 @@ where
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
@@ -213,13 +226,12 @@ where
             }
         }
 
-        self.underlay.as_widget_mut().update(
+        self.underlay.update(
             &mut state.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -228,12 +240,12 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.as_widget().mouse_interaction(
+        self.underlay.mouse_interaction(
             &state.children[0],
             layout,
             cursor,
@@ -245,50 +257,41 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let s: &mut State = tree.state.downcast_mut();
         let show = self.force_open.unwrap_or(s.show);
 
         if !show {
-            return self.underlay.as_widget_mut().overlay(
+            return self.underlay.overlay(
                 &mut tree.children[0],
                 layout,
                 renderer,
                 viewport,
                 translation,
+                window,
             );
         }
 
         let position = s.cursor_position;
         let mut content = (self.overlay)();
-        content.as_widget_mut().diff(&mut tree.children[1]);
-        Some(
+        tree.children[1].diff(&mut content);
+        vec![
             ContextMenuOverlay::new(
                 position + translation,
+                window,
+                renderer,
                 &mut tree.children[1],
                 content,
                 &self.class,
                 s,
             )
             .overlay(),
-        )
-    }
-}
-
-impl<'a, Content, Message, Theme, Renderer> From<ContextMenu<'a, Content, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Content: 'a + Fn() -> Self,
-    Message: 'a + Clone,
-    Renderer: 'a + renderer::Renderer,
-    Theme: 'a + Catalog,
-{
-    fn from(modal: ContextMenu<'a, Content, Message, Theme, Renderer>) -> Self {
-        Element::new(modal)
+        ]
     }
 }
 
@@ -328,7 +331,7 @@ mod tests {
 
     fn create_overlay() -> Element<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer>
     {
-        iced_widget::text::Text::new("Overlay").into()
+        iced_widget::text::Text::new("Overlay")._boxed()
     }
 
     #[test]
@@ -371,9 +374,13 @@ mod tests {
         let underlay = iced_widget::text::Text::new("Underlay");
         let context_menu = TestContextMenu::new(underlay, create_overlay);
 
-        let children = Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(
-            &context_menu,
+        let mut context_menu = context_menu;
+        let mut tree = Tree::new(&context_menu);
+        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
+            &mut context_menu,
+            &mut tree,
         );
+        let children = &tree.children;
         assert_eq!(children.len(), 2);
     }
 
@@ -451,9 +458,13 @@ mod tests {
         let underlay = iced_widget::text::Text::new("Underlay");
         let context_menu = TestContextMenu::new(underlay, create_overlay);
 
-        let children = Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(
-            &context_menu,
+        let mut context_menu = context_menu;
+        let mut tree = Tree::new(&context_menu);
+        Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::diff(
+            &mut context_menu,
+            &mut tree,
         );
+        let children = &tree.children;
 
         // Should have 2 children: underlay and overlay
         assert_eq!(children.len(), 2);

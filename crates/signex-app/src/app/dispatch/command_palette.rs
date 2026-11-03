@@ -53,7 +53,7 @@ impl Signex {
         // over without the user clearing the previous query manually.
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
-            operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            operation::text_input::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
             // The project-wide rows come from an index built off-thread.
             self.start_palette_index(),
         ])

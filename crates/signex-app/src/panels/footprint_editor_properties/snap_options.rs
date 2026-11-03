@@ -2,7 +2,7 @@
 //! (All Layers / Current Layer / Off).
 
 use iced::widget::{Column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -17,12 +17,12 @@ const SP: Spacing = Spacing::DEFAULT;
 /// enforcement; `Off` short-circuits every snap priority in
 /// `snap::snap_cursor` so the cursor returns the raw click.
 pub(super) fn render_snapping_mode_row<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     primary: Color,
     muted: Color,
     _border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     use crate::library::editor::footprint::state::SnappingMode as M;
     let current = fp.snapping_mode;
     // v0.13 — Match the Grids/Guides/Axes pill chrome above. Mutex
@@ -62,12 +62,13 @@ pub(super) fn render_snapping_mode_row<'a>(
                     ..iced::widget::button::Style::default()
                 }
             })
-            .into()
+            ._boxed()
         };
     col = col.push(
         container(text("Snap layers").size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            ._boxed(),
     );
     col = col.push(
         container(
@@ -77,10 +78,11 @@ pub(super) fn render_snapping_mode_row<'a>(
                 mk_pill("Off", M::Off, current == M::Off),
             ]
             .spacing(SP.s)
-            .align_y(iced::Alignment::Center),
+            .align_y(iced::alignment::Vertical::Center),
         )
         .padding([SP.xs, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        ._boxed(),
     );
     col
 }

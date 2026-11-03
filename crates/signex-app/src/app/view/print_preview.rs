@@ -5,6 +5,7 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
+use iced::widget::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -18,7 +19,7 @@ impl Signex {
     pub(super) fn view_error_notice(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, row, text};
         let Some(notice) = self.document_state.error_notice.as_ref() else {
-            return iced::widget::Space::new().into();
+            return iced::widget::Space::new().boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -55,23 +56,23 @@ impl Signex {
             container(iced::widget::scrollable(
                 text(notice.detail.clone()).size(TS.label).color(text_c)
             ))
-            .max_height(200),
+            .height(Length::Fit.max(200.0)),
             iced::widget::Space::new().height(12),
             row![iced::widget::Space::new().width(Length::Fill)]
                 .extend(choices)
-                .push(ok_btn)
+                .push(ok_btn.boxed())
                 .spacing(8),
         ]
         .padding(20);
 
         let card = container(body)
-            .max_width(
+            .width(Length::Fit.max(
                 if self.modal_detached(crate::app::state::ModalId::ErrorNotice) {
-                    f32::INFINITY
+                    f32::MAX
                 } else {
                     480.0
                 },
-            )
+            ))
             .style(move |theme: &iced::Theme| {
                 if crate::styles::is_dialog_window(theme) {
                     // Flat in its own window: no second frame.
@@ -86,6 +87,7 @@ impl Signex {
                         color: border_c,
                         width: 1.0,
                         radius: iced::border::Radius::from(8.0),
+                        ..iced::Border::default()
                     },
                     shadow: iced::Shadow {
                         color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
@@ -112,7 +114,7 @@ impl Signex {
                     container::Style::default()
                 }
             })
-            .into()
+            .boxed()
     }
 
     /// #431 — netlist-incomplete "Export anyway (incomplete)?" prompt.
@@ -126,7 +128,7 @@ impl Signex {
     pub(super) fn view_netlist_incomplete_prompt(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, row, text};
         let Some(prompt) = self.document_state.netlist_incomplete_prompt.as_ref() else {
-            return iced::widget::Space::new().into();
+            return iced::widget::Space::new().boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -170,6 +172,7 @@ impl Signex {
                         color: border_c,
                         width: 1.0,
                         radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 },
@@ -200,7 +203,7 @@ impl Signex {
             container(iced::widget::scrollable(
                 text(detail).size(TS.body).color(text_muted)
             ))
-            .max_height(120),
+            .height(Length::Fit.max(120.0)),
             iced::widget::Space::new().height(14),
             row![
                 iced::widget::Space::new().width(Length::Fill),
@@ -213,13 +216,13 @@ impl Signex {
         .padding(20);
 
         let card = container(body)
-            .max_width(
+            .width(Length::Fit.max(
                 if self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt) {
-                    f32::INFINITY
+                    f32::MAX
                 } else {
                     520.0
                 },
-            )
+            ))
             .style(move |theme: &iced::Theme| {
                 if crate::styles::is_dialog_window(theme) {
                     // Flat in its own window: no second frame.
@@ -234,6 +237,7 @@ impl Signex {
                         color: border_c,
                         width: 1.0,
                         radius: iced::border::Radius::from(8.0),
+                        ..iced::Border::default()
                     },
                     shadow: iced::Shadow {
                         color: iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35),
@@ -260,7 +264,7 @@ impl Signex {
                     container::Style::default()
                 }
             })
-            .into()
+            .boxed()
     }
 
     /// Print Preview overlay. Shows thumbnails of every rendered page on
@@ -313,7 +317,7 @@ impl Signex {
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
-            None => return iced::widget::Space::new().into(),
+            None => return iced::widget::Space::new().boxed(),
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -339,7 +343,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -404,7 +408,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }
 
@@ -434,7 +438,7 @@ fn notice_choice_buttons<'a>(
                     ..iced::widget::button::Style::default()
                 },
             )
-            .into()
+            .boxed()
     };
     match drift {
         DiskDrift::Changed => vec![

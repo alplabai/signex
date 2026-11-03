@@ -23,7 +23,7 @@
 //! from any "real" tab type.
 
 use chrono::{DateTime, Duration, Utc};
-use iced::widget::{Column, Space, column, container, text};
+use iced::widget::{Column, Space, Widget, column, container, text};
 use iced::{Border, Element, Length};
 use signex_types::theme::ThemeTokens;
 
@@ -86,7 +86,7 @@ where
     let border = theme_ext::border_color(tokens);
     let panel = theme_ext::panel_bg(tokens);
 
-    let mut col: Column<'a, M> = column![].spacing(6);
+    let mut col: Column<Element<'a, M>> = column![].spacing(6);
 
     for entry in entries {
         let header = iced::widget::row![
@@ -110,17 +110,16 @@ where
             .style(move |_theme: &iced::Theme| container::Style {
                 background: bg,
                 text_color: Some(primary),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
+                border: Border::default()
+                    .width(1.0)
+                    .rounded(3.0)
+                    .color(border),
                 ..container::Style::default()
             });
-        col = col.push(card);
+        col = col.push(card.boxed());
     }
 
-    col.into()
+    col.boxed()
 }
 
 fn empty_pane<'a, M>(tokens: &ThemeTokens) -> Element<'a, M>
@@ -136,14 +135,13 @@ where
         .style(move |_theme: &iced::Theme| container::Style {
             background: bg,
             text_color: Some(muted),
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
+            border: Border::default()
+                .width(1.0)
+                .rounded(3.0)
+                .color(border),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Trim a SHA to the seven-char shorthand `git log --oneline` uses.

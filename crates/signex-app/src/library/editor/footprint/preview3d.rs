@@ -10,7 +10,7 @@
 //! + STEP geometry triangulation + lighting model).
 
 use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
+use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget, mouse};
 use signex_library::{BodyShape, Footprint};
 
 use crate::library::messages::LibraryMessage;
@@ -21,7 +21,7 @@ pub fn view<'a>(fp: &'a Footprint) -> Element<'a, LibraryMessage> {
     iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 struct Preview3D<'a> {

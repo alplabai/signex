@@ -43,6 +43,7 @@ pub(super) fn view_empty_state<'a>(
             width: 0.0,
             radius: 3.0.into(),
             color: iced::Color::TRANSPARENT,
+            ..Border::default()
         },
         ..iced::widget::button::Style::default()
     });
@@ -51,13 +52,15 @@ pub(super) fn view_empty_state<'a>(
         column![
             text(format!("{}.snxlib", lib.display_name))
                 .size(15)
-                .color(text_c),
-            Space::new().height(4),
+                .color(text_c)
+                .boxed(),
+            Space::new().height(4).boxed(),
             text("No components — Add Component to begin")
                 .size(TS.label)
-                .color(muted),
-            Space::new().height(14),
-            add_btn,
+                .color(muted)
+                .boxed(),
+            Space::new().height(14).boxed(),
+            add_btn.boxed(),
         ]
         .spacing(0)
         .align_x(iced::Alignment::Center),
@@ -71,13 +74,15 @@ pub(super) fn view_empty_state<'a>(
             width: 1.0,
             radius: 6.0.into(),
             color: border,
+            ..Border::default()
         },
         ..Default::default()
-    });
+    })
+    .boxed();
 
     container(card)
         .padding(32)
         .center(Length::Fill)
         .style(crate::styles::modal_card(tokens))
-        .into()
+        .boxed()
 }

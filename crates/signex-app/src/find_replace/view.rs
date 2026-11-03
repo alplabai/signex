@@ -1,6 +1,6 @@
 use super::{FindReplaceMsg, FindReplaceState, FindScope};
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Background, Border, Element, Length, Theme};
+use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -88,7 +88,7 @@ fn build<'a>(
     let mut form = column![query_row, scope_row].spacing(10);
     if state.replace_mode {
         form = form.push(
-            row![
+            Widget::boxed(row![
                 text("Replace")
                     .size(TS.body)
                     .color(text_secondary)
@@ -100,7 +100,7 @@ fn build<'a>(
                     .width(Length::Fill),
             ]
             .align_y(iced::Alignment::Center)
-            .spacing(10),
+            .spacing(10)),
         );
     }
     let count = if state.replace_job.is_some() {
@@ -110,10 +110,18 @@ fn build<'a>(
     } else {
         format!("{} match(es)", state.matches.len())
     };
-    form = form
-        .push(container(text(count).size(TS.caption).color(text_secondary)).padding([SP.xs, 0.0]));
+    form = form.push(
+        container(text(count).size(TS.caption).color(text_secondary))
+            .padding([SP.xs, 0.0])
+            .boxed(),
+    );
     if let Some(note) = &state.skipped_note {
-        form = form.push(text(note.clone()).size(TS.caption).color(text_secondary));
+        form = form.push(
+            text(note.clone())
+                .size(TS.caption)
+                .color(text_secondary)
+                .boxed(),
+        );
     }
 
     let results: Vec<Element<'a, FindReplaceMsg>> = if state.matches.is_empty() {
@@ -121,7 +129,7 @@ fn build<'a>(
             container(text("No matches").size(TS.body).color(text_secondary))
                 .padding([10.0, SP.l])
                 .width(Length::Fill)
-                .into(),
+                .boxed(),
         ]
     } else {
         let result_row = |idx: usize, hit: &'a super::FindMatch| -> Element<'a, FindReplaceMsg> {
@@ -161,12 +169,13 @@ fn build<'a>(
                         width: if is_active { 1.0 } else { 0.0 },
                         radius: 4.0.into(),
                         color: if is_active { accent } else { border },
+                        ..Border::default()
                     },
                     text_color: text_primary,
                     ..button::Style::default()
                 }
             })
-            .into()
+            .boxed()
         };
         let mut rows: Vec<Element<'a, FindReplaceMsg>> = Vec::new();
         let mut current_sheet: Option<&std::path::Path> = None;
@@ -179,7 +188,7 @@ fn build<'a>(
                 rows.push(
                     container(text(name).size(TS.body).color(accent))
                         .padding([6.0, SP.s])
-                        .into(),
+                        .boxed(),
                 );
             }
             rows.push(result_row(idx, hit));
@@ -192,11 +201,11 @@ fn build<'a>(
             button(text("Replace Current").size(TS.body).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceCurrent)
                 .style(crate::styles::menu_item(tokens))
-                .into()
+                .boxed()
         } else {
             container(text("Replace Current").size(TS.body).color(text_secondary))
                 .padding([6, 10])
-                .into()
+                .boxed()
         };
 
     let replace_all: Element<'a, FindReplaceMsg> =
@@ -204,11 +213,11 @@ fn build<'a>(
             button(text("Replace All").size(TS.body).color(text_primary))
                 .on_press(FindReplaceMsg::ReplaceAll)
                 .style(crate::styles::menu_item(tokens))
-                .into()
+                .boxed()
         } else {
             container(text("Replace All").size(TS.body).color(text_secondary))
                 .padding([6, 10])
-                .into()
+                .boxed()
         };
 
     let footer = row![
@@ -225,9 +234,9 @@ fn build<'a>(
     .spacing(SP.m);
 
     let header: Element<'a, FindReplaceMsg> = if windowed {
-        Space::new().height(0).into()
+        Space::new().height(0).boxed()
     } else {
-        header.into()
+        header.boxed()
     };
     let (dialog_w, dialog_h) = if windowed {
         (Length::Fill, Length::Fill)
@@ -247,7 +256,7 @@ fn build<'a>(
     )
     .style(crate::styles::context_menu(tokens));
     if windowed {
-        return dialog.into();
+        return dialog.boxed();
     }
 
     container(
@@ -269,5 +278,5 @@ fn build<'a>(
         background: Some(Background::Color(crate::styles::tokens::scrim(0.5))),
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }

@@ -9,9 +9,9 @@
 //! child and only translates the resulting layout node. Negative offsets are
 //! allowed; no clipping is applied inside the widget.
 
-use iced::advanced::layout::{Limits, Node};
+use iced::advanced::layout::{Layout, Limits};
 use iced::advanced::widget::{self, Tree, Widget};
-use iced::advanced::{Clipboard, Layout, Shell, overlay, renderer};
+use iced::advanced::{Shell, overlay, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 
@@ -38,25 +38,26 @@ where
     }
 }
 
+impl<Message, Theme, Renderer> widget::Meta for Translate<'_, Message, Theme, Renderer> where
+    Renderer: iced::advanced::Renderer
+{
+}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Translate<'_, Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer,
 {
     fn tag(&self) -> widget::tree::Tag {
-        self.content.as_widget().tag()
+        self.content.tag()
     }
 
     fn state(&self) -> widget::tree::State {
-        self.content.as_widget().state()
+        self.content.state()
     }
 
-    fn children(&self) -> Vec<Tree> {
-        self.content.as_widget().children()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        self.content.as_widget().diff(tree);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(std::slice::from_mut(&mut self.content));
     }
 
     fn size(&self) -> Size<Length> {
@@ -66,29 +67,32 @@ where
         }
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         // Child gets the full parent limits — no shrinkage like Pin does.
-        let child = self
-            .content
-            .as_widget_mut()
-            .layout(tree, renderer, limits)
-            .translate(self.offset);
+        self.content
+            
+            .layout(&mut tree.children[0], renderer, limits);
 
-        let size = limits.resolve(Length::Fill, Length::Fill, child.size());
-        Node::with_children(size, vec![child])
+        tree.children[0].translation = self.offset;
+        tree.size = limits.resolve(Length::Fill, Length::Fill, tree.children[0].size);
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
-        if let Some(child_layout) = layout.children().next() {
-            self.content
-                .as_widget_mut()
-                .operate(tree, child_layout, renderer, operation);
+        if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
+            self.content.operate(
+                child_tree,
+                child_layout,
+                viewport,
+                renderer,
+                operation,
+            );
         }
     }
 
@@ -96,21 +100,19 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if let Some(child_layout) = layout.children().next() {
-            self.content.as_widget_mut().update(
-                tree,
+        if let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() {
+            self.content.update(
+                child_tree,
                 event,
                 child_layout,
                 cursor,
                 renderer,
-                clipboard,
                 shell,
                 viewport,
             );
@@ -120,17 +122,17 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
         layout
-            .children()
+            .iter(&tree.children)
             .next()
-            .map(|child_layout| {
-                self.content.as_widget().mouse_interaction(
-                    tree,
+            .map(|(child_layout, child_tree)| {
+                self.content.mouse_interaction(
+                    child_tree,
                     child_layout,
                     cursor,
                     viewport,
@@ -146,16 +148,16 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
         // Pass the outer viewport straight through so the child can render
         // anywhere inside the window, including outside the Translate's own
         // bounds (otherwise we'd clip off-screen portions twice).
-        if let Some(child_layout) = layout.children().next() {
-            self.content.as_widget().draw(
-                tree,
+        if let Some((child_layout, child_tree)) = layout.iter(&tree.children).next() {
+            self.content.draw(
+                child_tree,
                 renderer,
                 theme,
                 style,
@@ -169,16 +171,23 @@ where
     fn overlay<'a>(
         &'a mut self,
         tree: &'a mut Tree,
-        layout: Layout<'a>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        let mut children = layout.children();
-        let child_layout = children.next()?;
-        self.content
-            .as_widget_mut()
-            .overlay(tree, child_layout, renderer, viewport, translation)
+        window: Size,
+    ) -> Vec<overlay::Element<'a, Message, Theme, Renderer>> {
+        let Some((child_layout, child_tree)) = layout.iter_mut(&mut tree.children).next() else {
+            return Vec::new();
+        };
+        self.content.overlay(
+            child_tree,
+            child_layout,
+            renderer,
+            viewport,
+            translation,
+            window,
+        )
     }
 }
 
@@ -190,7 +199,7 @@ where
     Renderer: iced::advanced::Renderer + 'a,
 {
     fn from(w: Translate<'a, Message, Theme, Renderer>) -> Self {
-        Self::new(w)
+        iced::advanced::Widget::_boxed(w)
     }
 }
 

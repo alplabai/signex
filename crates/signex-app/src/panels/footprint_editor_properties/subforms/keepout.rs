@@ -1,7 +1,7 @@
 //! Keepout role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, text};
-use iced::{Color, Length};
+use iced::{Color, Element, Length};
 
 use super::super::super::{FootprintEditorPanelContext, KeepoutKindFlag, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -13,14 +13,14 @@ const SP: Spacing = Spacing::DEFAULT;
 /// v0.16.4 — Keepout role sub-form. Renders the 6 kind flags as a
 /// vertical checklist when the entity's `keepout` attr is set.
 pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     id: signex_sketch::id::SketchEntityId,
     muted: Color,
     primary: Color,
     _border_c: Color,
     panel_bg: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let Some(k) = fp.selected_keepout.as_ref() else {
         return col;
     };

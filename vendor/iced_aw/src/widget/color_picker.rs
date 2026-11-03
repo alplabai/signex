@@ -9,12 +9,13 @@ use super::overlay::color_picker::{
 };
 
 use iced_core::{
-    Clipboard, Color, Element, Event, Layout, Length, Point, Rectangle, Shell, Vector, Widget,
-    layout::{Limits, Node},
+    Color, Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
+    layout::Limits,
     mouse::{self, Cursor},
     overlay, renderer,
     widget::{
         Operation,
+        Meta,
         tree::{self, Tag, Tree},
     },
 };
@@ -181,6 +182,13 @@ impl State {
     }
 }
 
+impl<'a, Message, Theme> Meta for ColorPicker<'a, Message, Theme>
+where
+    Message: Clone,
+    Theme: style::color_picker::Catalog + iced_widget::button::Catalog,
+{
+}
+
 impl<'a, Message, Theme> Widget<Message, Theme, Renderer> for ColorPicker<'a, Message, Theme>
 where
     Message: 'static + Clone,
@@ -197,46 +205,40 @@ where
         tree::State::new(State::new(self.color))
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.underlay), Tree::new(&self.overlay_state)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&mut self, tree: &mut Tree) {
         let color_picker_state = tree.state.downcast_mut::<State>();
 
         color_picker_state.synchronize(self.show_picker, self.color);
 
-        tree.diff_children(&[&self.underlay, &self.overlay_state]);
+        tree.diff_children(&mut [&mut self.underlay, &mut self.overlay_state]);
     }
 
-    fn size(&self) -> iced_core::Size<Length> {
-        self.underlay.as_widget().size()
+    fn size(&self) -> Size<Length> {
+        self.underlay.size()
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        self.underlay
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        self.underlay.layout(&mut tree.children[0], renderer, limits);
+
+        tree.size = tree.children[0].size;
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget_mut().update(
+        self.underlay.update(
             &mut state.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -245,18 +247,13 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.as_widget().mouse_interaction(
-            &state.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.underlay
+            .mouse_interaction(&state.children[0], layout, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -265,11 +262,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget().draw(
+        self.underlay.draw(
             &state.children[0],
             renderer,
             theme,
@@ -280,42 +277,44 @@ where
         );
     }
 
-    fn operate<'b>(
-        &'b mut self,
-        state: &'b mut Tree,
-        layout: Layout<'_>,
+    fn operate(
+        &mut self,
+        state: &mut Tree,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         self.underlay
-            .as_widget_mut()
-            .operate(&mut state.children[0], layout, renderer, operation);
+            .operate(&mut state.children[0], layout, viewport, renderer, operation);
     }
 
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let picker_state: &mut State = tree.state.downcast_mut();
 
         if !self.show_picker {
-            return self.underlay.as_widget_mut().overlay(
+            return self.underlay.overlay(
                 &mut tree.children[0],
                 layout,
                 renderer,
                 viewport,
                 translation,
+                window,
             );
         }
 
         let bounds = layout.bounds();
         let position = Point::new(bounds.center_x(), bounds.center_y());
 
-        Some(
+        vec![
             ColorPickerOverlay::new(
                 picker_state,
                 self.on_cancel.clone(),
@@ -325,9 +324,11 @@ where
                 &self.class,
                 &mut tree.children[1],
                 *viewport,
+                renderer,
+                window,
             )
             .overlay(),
-        )
+        ]
     }
 }
 
@@ -341,7 +342,7 @@ where
         + iced_widget::text::Catalog,
 {
     fn from(color_picker: ColorPicker<'a, Message, Theme>) -> Self {
-        Element::new(color_picker)
+        Widget::<Message, Theme, Renderer>::_boxed(color_picker)
     }
 }
 

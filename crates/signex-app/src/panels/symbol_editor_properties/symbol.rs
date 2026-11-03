@@ -53,12 +53,12 @@ fn local_color_field<'a>(
 /// Symbol-level default Properties (nothing selected): identity,
 /// graphical toggles, and local-colour overrides.
 pub(super) fn view_symbol_selection<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     sym: &'a SymbolEditorPanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     // The .snxsym editor is a SYMBOL editor — symbol-level
     // visual / geometric properties only. Component metadata
     // (Designator / Comment / Description / Type / Parameters)

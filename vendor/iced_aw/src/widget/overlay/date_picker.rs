@@ -13,21 +13,18 @@ use crate::{
 };
 use chrono::{Datelike, Local, NaiveDate};
 use iced_core::{
-    Alignment, Border, Clipboard, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels,
-    Point, Rectangle, Renderer as _, Shadow, Shell, Size, Widget,
+    Border, Color, Element, Event, Font, Layout, Length, Overlay, Padding, Pixels, Point,
+    Rectangle, Renderer as _, Shadow, Shell, Size, Vector, Widget,
     alignment::{Horizontal, Vertical},
     event, keyboard,
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
-    overlay, renderer,
-    text::Renderer as _,
+    overlay, renderer, shell,
+    text::{self, Renderer as _},
     touch,
-    widget::{self, tree::Tree},
+    widget::{self, Meta, tree::Tree},
 };
-use iced_widget::{
-    Button, Column, Container, Renderer, Row, Text,
-    text::{self, Wrapping},
-};
+use iced_widget::{Button, Column, Container, Renderer, Row};
 use std::collections::HashMap;
 
 /// The padding around the elements.
@@ -44,15 +41,18 @@ const BUTTON_SPACING: Pixels = Pixels(5.0);
 pub struct DatePickerOverlay<'a, 'b, Message, Theme>
 where
     Message: Clone,
-    Theme: crate::style::date_picker::Catalog + iced_widget::button::Catalog,
+    Theme: 'a
+        + crate::style::date_picker::Catalog
+        + iced_widget::button::Catalog
+        + iced_widget::text::Catalog,
     'b: 'a,
 {
     /// The state of the [`DatePickerOverlay`].
     state: &'a mut State,
     /// The cancel button of the [`DatePickerOverlay`].
-    cancel_button: Button<'a, Message, Theme, Renderer>,
+    cancel_button: Button<'a, Message, widget::Text<'a, Theme>, Theme>,
     /// The submit button of the [`DatePickerOverlay`].
-    submit_button: Button<'a, Message, Theme, Renderer>,
+    submit_button: Button<'a, Message, widget::Text<'a, Theme>, Theme>,
     /// The function that produces a message when the submit button of the [`DatePickerOverlay`] is pressed.
     on_submit: &'a dyn Fn(Date) -> Message,
     /// The position of the [`DatePickerOverlay`].
@@ -60,10 +60,49 @@ where
     /// The style of the [`DatePickerOverlay`].
     class: &'a <Theme as crate::style::date_picker::Catalog>::Class<'b>,
     /// The reference to the tree holding the state of this overlay.
+    ///
+    /// The computed size of the overlay and the sizes and translations of its
+    /// children (cancel button, submit button and calendar) are stored in it.
     tree: &'a mut Tree,
     /// The font size of text and icons in the [`DatePickerOverlay`]
     font_size: Pixels,
     viewport: Rectangle,
+}
+
+/// The absolute bounds of a month or year selector (left arrow, text, right arrow).
+#[derive(Debug, Clone, Copy, Default)]
+struct Selector {
+    /// The bounds of the whole selector.
+    whole: Rectangle,
+    /// The bounds of the left arrow.
+    left: Rectangle,
+    /// The bounds of the center text.
+    center: Rectangle,
+    /// The bounds of the right arrow.
+    right: Rectangle,
+}
+
+/// The absolute bounds of all the elements of the [`DatePickerOverlay`].
+#[derive(Debug, Clone)]
+struct Geometry {
+    /// The bounds of the whole overlay.
+    overlay: Rectangle,
+    /// The layout of the calendar column.
+    col: Layout,
+    /// The month selector.
+    month: Selector,
+    /// The year selector.
+    year: Selector,
+    /// The bounds of the days table.
+    days: Rectangle,
+    /// The bounds of the day labels.
+    labels: Vec<Rectangle>,
+    /// The bounds of the day cells, row by row.
+    cells: Vec<Vec<Rectangle>>,
+    /// The layout of the cancel button.
+    cancel: Layout,
+    /// The layout of the submit button.
+    submit: Layout,
 }
 
 impl<'a, 'b, Message, Theme> DatePickerOverlay<'a, 'b, Message, Theme>
@@ -96,7 +135,7 @@ where
         DatePickerOverlay {
             state: overlay_state,
             cancel_button: Button::new(
-                text::Text::new(cancel_content)
+                widget::Text::new(cancel_content)
                     .font(cancel_font)
                     .size(font_size)
                     .align_x(Horizontal::Center)
@@ -105,7 +144,7 @@ where
             .width(Length::Fill)
             .on_press(on_cancel.clone()),
             submit_button: Button::new(
-                text::Text::new(submit_content)
+                widget::Text::new(submit_content)
                     .font(submit_font)
                     .size(font_size)
                     .align_x(Horizontal::Center)
@@ -133,57 +172,170 @@ where
         crate::core::date::date_as_string(self.state.date)
     }
 
+    /// Returns whether the sizes stored in the tree have been computed.
+    fn is_laid_out(&self) -> bool {
+        self.tree.children.len() >= 3 && self.tree.size.width > 0.0 && self.tree.size.height > 0.0
+    }
+
+    /// Lays out the [`DatePickerOverlay`].
+    ///
+    /// The `Overlay` trait has no `layout` method anymore, so the sizes of the
+    /// children are computed here and stored in the tree. The absolute position
+    /// of the overlay is derived from them by [`Self::geometry`].
+    #[allow(clippy::too_many_lines)]
+    pub fn layout(&mut self, renderer: &Renderer) {
+        let limits = Limits::new(Size::ZERO, self.viewport.size())
+            .shrink(PADDING)
+            .width(Length::Fit)
+            .height(Length::Fit);
+
+        sync_child(self.tree, 0, &mut self.cancel_button);
+        sync_child(self.tree, 1, &mut self.submit_button);
+
+        // Pre-Buttons TODO: get rid of it
+        self.cancel_button
+            .layout(&mut self.tree.children[0], renderer, &limits);
+        let pre_cancel_height = self.tree.children[0].size.height;
+
+        let limits = limits.shrink(Size::new(0.0, pre_cancel_height + SPACING.0));
+
+        // Month/Year and days, measured with the widest possible content
+        let mut col = calendar::<Message, Theme>(self.font_size, "September", "9999", |_x, _y| {
+            "31".to_owned()
+        });
+
+        sync_child(self.tree, 2, &mut col);
+        col.layout(&mut self.tree.children[2], renderer, &limits);
+
+        let col_size = self.tree.children[2].size;
+        self.tree.children[2].translation = Vector::new(PADDING.left, PADDING.top);
+
+        // Buttons
+        let mut button_limits = limits;
+        button_limits.max.width = limits
+            .max
+            .width
+            .min(((col_size.width / 2.0) - BUTTON_SPACING.0).max(0.0));
+        button_limits.min.width = limits.min.width.min(button_limits.max.width);
+
+        self.cancel_button
+            .layout(&mut self.tree.children[0], renderer, &button_limits);
+        self.submit_button
+            .layout(&mut self.tree.children[1], renderer, &button_limits);
+
+        let cancel_size = self.tree.children[0].size;
+        let submit_size = self.tree.children[1].size;
+
+        let buttons_y = col_size.height + PADDING.top + SPACING.0;
+
+        self.tree.children[0].translation = Vector::new(PADDING.left, buttons_y);
+        self.tree.children[1].translation =
+            Vector::new(col_size.width - submit_size.width + PADDING.left, buttons_y);
+
+        self.tree.size = Size::new(
+            col_size.width + PADDING.x(),
+            col_size.height + cancel_size.height + PADDING.y() + SPACING.0,
+        );
+    }
+
+    /// Computes the absolute geometry of the [`DatePickerOverlay`] from the
+    /// sizes stored in the tree by [`Self::layout`].
+    ///
+    /// Returns `None` if the overlay has not been laid out yet.
+    fn geometry(&self) -> Option<Geometry> {
+        let size = self.tree.size;
+
+        if self.tree.children.len() < 3 || size.width <= 0.0 || size.height <= 0.0 {
+            return None;
+        }
+
+        let mut overlay = Layout::new(size);
+        overlay.center_and_bounce(self.position, self.viewport.size());
+
+        let mut children = overlay.iter(&self.tree.children);
+        let (cancel, _) = children.next()?;
+        let (submit, _) = children.next()?;
+        let (col, col_tree) = children.next()?;
+
+        let mut col_children = col.iter(&col_tree.children);
+        let (month_year, month_year_tree) = col_children.next()?;
+        let (days_parent, days_parent_tree) = col_children.next()?;
+
+        let selector = |layout: Layout, tree: &Tree| -> Option<Selector> {
+            let mut children = layout.iter(&tree.children);
+
+            Some(Selector {
+                whole: layout.bounds(),
+                left: children.next()?.0.bounds(),
+                center: children.next()?.0.bounds(),
+                right: children.next()?.0.bounds(),
+            })
+        };
+
+        let mut selectors = month_year.iter(&month_year_tree.children);
+        let (month_layout, month_tree) = selectors.next()?;
+        let (year_layout, year_tree) = selectors.next()?;
+
+        let (days, days_tree) = days_parent.iter(&days_parent_tree.children).next()?;
+
+        let mut rows = days.iter(&days_tree.children);
+        let (labels_layout, labels_tree) = rows.next()?;
+
+        Some(Geometry {
+            overlay: overlay.bounds(),
+            col,
+            month: selector(month_layout, month_tree)?,
+            year: selector(year_layout, year_tree)?,
+            days: days.bounds(),
+            labels: labels_layout
+                .iter(&labels_tree.children)
+                .map(|(layout, _)| layout.bounds())
+                .collect(),
+            cells: rows
+                .map(|(row, tree)| {
+                    row.iter(&tree.children)
+                        .map(|(layout, _)| layout.bounds())
+                        .collect()
+                })
+                .collect(),
+            cancel,
+            submit,
+        })
+    }
+
     /// The event handling for the month / year bar.
     fn on_event_month_year(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
+        geometry: &Geometry,
         cursor: Cursor,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
-        let mut children = layout.children();
-
         // ----------- Month ----------------------
-        let month_layout = children
-            .next()
-            .expect("widget: Layout should have a month layout");
-        let mut month_children = month_layout.children();
-
-        let left_bounds = month_children
-            .next()
-            .expect("widget: Layout should have a left month arrow layout")
-            .bounds();
-        let _center_bounds = month_children
-            .next()
-            .expect("widget: Layout should have a center month layout")
-            .bounds();
-        let right_bounds = month_children
-            .next()
-            .expect("widget: Layout should have a right month arrow layout")
-            .bounds();
+        let month = geometry.month;
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                if cursor.is_over(month_layout.bounds()) {
+                if cursor.is_over(month.whole) {
                     self.state.focus = Focus::Month;
                     shell.request_redraw();
                 }
 
-                if cursor.is_over(left_bounds) {
+                if cursor.is_over(month.left) {
                     self.state.date = crate::core::date::pred_month(self.state.date);
                     shell.capture_event();
                     shell.request_redraw();
-                } else if cursor.is_over(right_bounds) {
+                } else if cursor.is_over(month.right) {
                     self.state.date = crate::core::date::succ_month(self.state.date);
                     shell.capture_event();
                     shell.request_redraw();
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                if month_layout.bounds().contains(*position)
-                    || left_bounds.contains(*position)
-                    || right_bounds.contains(*position)
+                if month.whole.contains(*position)
+                    || month.left.contains(*position)
+                    || month.right.contains(*position)
                 {
                     self.state.day_mouse_over = None;
                     shell.request_redraw();
@@ -193,46 +345,30 @@ where
         }
 
         // ----------- Year -----------------------
-        let year_layout = children
-            .next()
-            .expect("widget: Layout should have a year layout");
-        let mut year_children = year_layout.children();
-
-        let left_bounds = year_children
-            .next()
-            .expect("widget: Layout should have a left year arrow layout")
-            .bounds();
-        let _center_bounds = year_children
-            .next()
-            .expect("widget: Layout should have a center year layout")
-            .bounds();
-        let right_bounds = year_children
-            .next()
-            .expect("widget: Layout should have a right year arrow layout")
-            .bounds();
+        let year = geometry.year;
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                if cursor.is_over(year_layout.bounds()) {
+                if cursor.is_over(year.whole) {
                     self.state.focus = Focus::Year;
                     shell.request_redraw();
                 }
 
-                if cursor.is_over(left_bounds) {
+                if cursor.is_over(year.left) {
                     self.state.date = crate::core::date::pred_year(self.state.date);
                     shell.capture_event();
                     shell.request_redraw();
-                } else if cursor.is_over(right_bounds) {
+                } else if cursor.is_over(year.right) {
                     self.state.date = crate::core::date::succ_year(self.state.date);
                     shell.capture_event();
                     shell.request_redraw();
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                if year_layout.bounds().contains(*position)
-                    || left_bounds.contains(*position)
-                    || right_bounds.contains(*position)
+                if year.whole.contains(*position)
+                    || year.left.contains(*position)
+                    || year.right.contains(*position)
                 {
                     self.state.day_mouse_over = None;
                     shell.request_redraw();
@@ -246,28 +382,21 @@ where
     fn on_event_days(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
+        geometry: &Geometry,
         cursor: Cursor,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
-        let mut children = layout.children();
-
-        let _day_labels_layout = children
-            .next()
-            .expect("widget: Layout should have a day label layout");
-
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                if cursor.is_over(layout.bounds()) {
+                if cursor.is_over(geometry.days) {
                     self.state.focus = Focus::Day;
                     shell.request_redraw();
                 }
 
-                'outer: for (y, row) in children.enumerate() {
-                    for (x, label) in row.children().enumerate() {
-                        let bounds = label.bounds();
-                        if cursor.is_over(bounds) {
+                'outer: for (y, row) in geometry.cells.iter().enumerate() {
+                    for (x, bounds) in row.iter().enumerate() {
+                        if cursor.is_over(*bounds) {
                             let (day, is_in_month) = crate::core::date::position_to_day(
                                 x,
                                 y,
@@ -299,17 +428,15 @@ where
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                if cursor.is_over(layout.bounds()) {
+                if cursor.is_over(geometry.days) {
                     self.state.focus = Focus::Day;
                     shell.request_redraw();
                 }
 
                 self.state.day_mouse_over = None;
 
-                'outer: for (y, row) in children.enumerate() {
-                    for (x, label) in row.children().enumerate() {
-                        let bounds = label.bounds();
-
+                'outer: for (y, row) in geometry.cells.iter().enumerate() {
+                    for (x, bounds) in row.iter().enumerate() {
                         if bounds.contains(*position) {
                             self.state.day_mouse_over = Some((y, x));
                             shell.capture_event();
@@ -408,254 +535,71 @@ where
         + iced_widget::container::Catalog,
     'b: 'a,
 {
-    #[allow(clippy::too_many_lines)]
-    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
-        let limits = Limits::new(Size::ZERO, bounds)
-            .shrink(PADDING)
-            .width(Length::Shrink)
-            .height(Length::Shrink);
-
-        // Pre-Buttons TODO: get rid of it
-        let cancel_limits = limits;
-        let cancel_button =
-            self.cancel_button
-                .layout(&mut self.tree.children[0], renderer, &cancel_limits);
-
-        let limits = limits.shrink(Size::new(0.0, cancel_button.bounds().height + SPACING.0));
-
-        // Month/Year
-        let font_size = self.font_size;
-
-        let (left_content, left_font, _left_shaping) = left_open();
-        let (right_content, right_font, _right_shaping) = right_open();
-
-        let month_year = Row::<Message, Theme, Renderer>::new()
-            .width(Length::Shrink)
-            .spacing(SPACING)
-            .push(
-                Row::new()
-                    .width(Length::Shrink)
-                    .spacing(SPACING)
-                    .align_y(Alignment::Center)
-                    .push(
-                        // Left Month arrow
-                        Container::new(
-                            Text::new(&left_content)
-                                .size(font_size.0 + 1.0)
-                                .font(left_font),
-                        )
-                        .height(Length::Shrink)
-                        .width(Length::Shrink),
-                    )
-                    .push(
-                        // Month
-                        Text::new("September").size(font_size).width(Length::Shrink),
-                    )
-                    .push(
-                        // Right Month arrow
-                        Container::new(
-                            Text::new(&right_content)
-                                .size(font_size.0 + 1.0)
-                                .font(right_font),
-                        )
-                        .height(Length::Shrink)
-                        .width(Length::Shrink),
-                    ),
-            )
-            .push(
-                Row::new()
-                    .width(Length::Shrink)
-                    .spacing(SPACING)
-                    .align_y(Alignment::Center)
-                    .push(
-                        // Left Year arrow
-                        Container::new(
-                            Text::new(&left_content)
-                                .size(font_size.0 + 1.0)
-                                .font(left_font),
-                        )
-                        .height(Length::Shrink)
-                        .width(Length::Shrink),
-                    )
-                    .push(
-                        // Year
-                        Text::new("9999").size(font_size).width(Length::Shrink),
-                    )
-                    .push(
-                        // Right Year arrow
-                        Container::new(
-                            Text::new(&right_content)
-                                .size(font_size.0 + 1.0)
-                                .font(right_font),
-                        )
-                        .height(Length::Shrink)
-                        .width(Length::Shrink),
-                    ),
-            );
-
-        let days = Container::<Message, Theme, Renderer>::new((0..7).fold(
-            Column::new().width(Length::Shrink).height(Length::Shrink),
-            |column, _y| {
-                column.push(
-                    (0..7).fold(
-                        Row::new()
-                            .height(Length::Shrink)
-                            .width(Length::Shrink)
-                            .spacing(SPACING),
-                        |row, _x| {
-                            row.push(
-                                Container::new(Row::new().push(Text::new("31").size(font_size)))
-                                    .width(Length::Shrink)
-                                    .height(Length::Shrink)
-                                    .padding(DAY_CELL_PADDING),
-                            )
-                        },
-                    ),
-                )
-            },
-        ))
-        .width(Length::Shrink)
-        .height(Length::Shrink)
-        .center_y(Length::Shrink);
-
-        let col = Column::<Message, Theme, Renderer>::new()
-            .spacing(SPACING)
-            .align_x(Alignment::Center)
-            .push(month_year)
-            .push(days);
-
-        let mut element: Element<Message, Theme, Renderer> = Element::new(col);
-        let col_tree = if let Some(child_tree) = self.tree.children.get_mut(2) {
-            child_tree.diff(element.as_widget_mut());
-            child_tree
-        } else {
-            let child_tree = Tree::new(element.as_widget());
-            self.tree.children.insert(2, child_tree);
-            &mut self.tree.children[2]
-        };
-
-        let mut col = element.as_widget_mut().layout(col_tree, renderer, &limits);
-        let col_bounds = col.bounds();
-        col = col.move_to(Point::new(
-            col_bounds.x + PADDING.left,
-            col_bounds.y + PADDING.top,
-        ));
-
-        // Buttons
-        let cancel_limits =
-            limits.max_width(((col.bounds().width / 2.0) - BUTTON_SPACING.0).max(0.0));
-
-        let mut cancel_button =
-            self.cancel_button
-                .layout(&mut self.tree.children[0], renderer, &cancel_limits);
-
-        let submit_limits =
-            limits.max_width(((col.bounds().width / 2.0) - BUTTON_SPACING.0).max(0.0));
-
-        let mut submit_button =
-            self.submit_button
-                .layout(&mut self.tree.children[1], renderer, &submit_limits);
-
-        let cancel_bounds = cancel_button.bounds();
-        cancel_button = cancel_button.move_to(Point {
-            x: cancel_bounds.x + PADDING.left,
-            y: cancel_bounds.y + col.bounds().height + PADDING.top + SPACING.0,
-        });
-
-        let submit_bounds = submit_button.bounds();
-        submit_button = submit_button.move_to(Point {
-            x: submit_bounds.x + col.bounds().width - submit_bounds.width + PADDING.left,
-            y: submit_bounds.y + col.bounds().height + PADDING.top + SPACING.0,
-        });
-
-        let mut node = Node::with_children(
-            Size::new(
-                col.bounds().width + PADDING.x(),
-                col.bounds().height + cancel_button.bounds().height + PADDING.y() + SPACING.0,
-            ),
-            vec![col, cancel_button, submit_button],
-        );
-        node.center_and_bounce(self.position, bounds);
-        node
-    }
-
     fn update(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
+        // Laying out is expensive: it is only done when needed, or on window events
+        // (redraws, resizes) so that changes of the font size are picked up.
+        if !self.is_laid_out() || matches!(event, Event::Window(_)) {
+            self.layout(renderer);
+        }
+
         if event::Status::Captured == self.on_event_keyboard(event) {
             shell.capture_event();
             shell.request_redraw();
             return;
         }
 
-        let mut children = layout.children();
-
-        let mut date_children = children
-            .next()
-            .expect("widget: Layout should have date children")
-            .children();
+        let Some(geometry) = self.geometry() else {
+            return;
+        };
 
         // ----------- Year/Month----------------------
-        let month_year_layout = date_children
-            .next()
-            .expect("widget: Layout should have a month/year layout");
-        self.on_event_month_year(event, month_year_layout, cursor, shell);
+        self.on_event_month_year(event, &geometry, cursor, shell);
 
         // ----------- Days ----------------------
-        let days_layout = date_children
-            .next()
-            .expect("widget: Layout should have a days table parent")
-            .children()
-            .next()
-            .expect("widget: Layout should have a days table layout");
-        self.on_event_days(event, days_layout, cursor, shell);
+        self.on_event_days(event, &geometry, cursor, shell);
 
         // ----------- Buttons ------------------------
-        let cancel_button_layout = children
-            .next()
-            .expect("widget: Layout should have a cancel button layout for a DatePicker");
+        let viewport = geometry.overlay;
 
-        if cursor.is_over(cancel_button_layout.bounds()) {
+        if cursor.is_over(geometry.cancel.bounds()) {
             self.state.day_mouse_over = None;
         }
 
         self.cancel_button.update(
             &mut self.tree.children[0],
             event,
-            cancel_button_layout,
+            geometry.cancel,
             cursor,
             renderer,
-            clipboard,
             shell,
-            &layout.bounds(),
+            &viewport,
         );
 
-        let submit_button_layout = children
-            .next()
-            .expect("widget: Layout should have a submit button layout for a DatePicker");
-
-        if cursor.is_over(submit_button_layout.bounds()) {
+        if cursor.is_over(geometry.submit.bounds()) {
             self.state.day_mouse_over = None;
         }
 
-        let mut fake_messages: Vec<Message> = Vec::new();
+        let mut fake_messages: shell::Bus<Message> = shell::Bus::new();
 
-        self.submit_button.update(
-            &mut self.tree.children[1],
-            event,
-            submit_button_layout,
-            cursor,
-            renderer,
-            clipboard,
-            &mut Shell::new(&mut fake_messages),
-            &layout.bounds(),
-        );
+        {
+            let mut fake_shell = shell.local(&mut fake_messages);
+
+            self.submit_button.update(
+                &mut self.tree.children[1],
+                event,
+                geometry.submit,
+                cursor,
+                renderer,
+                &mut fake_shell,
+                &viewport,
+            );
+        }
 
         if !fake_messages.is_empty() {
             shell.publish((self.on_submit)(self.state.date.into()));
@@ -664,76 +608,31 @@ where
         }
     }
 
-    fn mouse_interaction(
-        &self,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
+    fn mouse_interaction(&self, cursor: mouse::Cursor, renderer: &Renderer) -> mouse::Interaction {
         let mouse_interaction = mouse::Interaction::default();
 
-        let mut children = layout.children();
-        let mut date_children = children
-            .next()
-            .expect("Graphics: Layout should have a date layout")
-            .children();
+        let Some(geometry) = self.geometry() else {
+            return mouse_interaction;
+        };
 
         // Month and year mouse interaction
-        let month_year_layout = date_children
-            .next()
-            .expect("Graphics: Layout should have a month/year layout");
-        let mut month_year_children = month_year_layout.children();
-        let month_layout = month_year_children
-            .next()
-            .expect("Graphics: Layout should have a month layout");
-        let year_layout = month_year_children
-            .next()
-            .expect("Graphics: Layout should have a year layout");
-
-        let f = |layout: Layout<'_>| {
-            let mut children = layout.children();
-
-            let left_bounds = children
-                .next()
-                .expect("Graphics: Layout should have a left arrow layout")
-                .bounds();
-            let _center = children.next();
-            let right_bounds = children
-                .next()
-                .expect("Graphics: Layout should have a right arrow layout")
-                .bounds();
-
-            let left_arrow_hovered = cursor.is_over(left_bounds);
-            let right_arrow_hovered = cursor.is_over(right_bounds);
-
-            if left_arrow_hovered || right_arrow_hovered {
+        let f = |selector: &Selector| {
+            if cursor.is_over(selector.left) || cursor.is_over(selector.right) {
                 mouse::Interaction::Pointer
             } else {
                 mouse::Interaction::default()
             }
         };
 
-        let month_mouse_interaction = f(month_layout);
-        let year_mouse_interaction = f(year_layout);
+        let month_mouse_interaction = f(&geometry.month);
+        let year_mouse_interaction = f(&geometry.year);
 
         // Days
-        let days_layout = date_children
-            .next()
-            .expect("Graphics: Layout should have a days layout parent")
-            .children()
-            .next()
-            .expect("Graphics: Layout should have a days layout");
-        let mut days_children = days_layout.children();
-        let _day_labels_layout = days_children.next();
-
         let mut table_mouse_interaction = mouse::Interaction::default();
 
-        for row in days_children {
-            for label in row.children() {
-                let bounds = label.bounds();
-
-                let mouse_over = cursor.is_over(bounds);
-                if mouse_over {
+        for row in &geometry.cells {
+            for bounds in row {
+                if cursor.is_over(*bounds) {
                     table_mouse_interaction =
                         table_mouse_interaction.max(mouse::Interaction::Pointer);
                 }
@@ -741,25 +640,17 @@ where
         }
 
         // Buttons
-        let cancel_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a cancel button layout for a DatePicker");
-
         let cancel_button_mouse_interaction = self.cancel_button.mouse_interaction(
             &self.tree.children[0],
-            cancel_button_layout,
+            geometry.cancel,
             cursor,
             &self.viewport,
             renderer,
         );
 
-        let submit_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a submit button layout for a DatePicker");
-
         let submit_button_mouse_interaction = self.submit_button.mouse_interaction(
             &self.tree.children[1],
-            submit_button_layout,
+            geometry.submit,
             cursor,
             &self.viewport,
             renderer,
@@ -778,293 +669,184 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
         cursor: Cursor,
     ) {
-        let bounds = layout.bounds();
-        let mut children = layout.children();
-        let mut date_children = children
-            .next()
-            .expect("Graphics: Layout should have a date layout")
-            .children();
-        let cursor_position = cursor.position().unwrap_or_default();
-        let mut style_sheet: HashMap<StyleState, Style> = HashMap::new();
-        let _ = style_sheet.insert(
-            StyleState::Active,
-            crate::style::date_picker::Catalog::style(theme, self.class, Status::Active),
-        );
-        let _ = style_sheet.insert(
-            StyleState::Selected,
-            crate::style::date_picker::Catalog::style(theme, self.class, Status::Selected),
-        );
-        let _ = style_sheet.insert(
-            StyleState::Hovered,
-            crate::style::date_picker::Catalog::style(theme, self.class, Status::Hovered),
-        );
-        let _ = style_sheet.insert(
-            StyleState::Focused,
-            crate::style::date_picker::Catalog::style(theme, self.class, Status::Focused),
-        );
-
-        let style_state = if self.state.focus == Focus::Overlay {
-            StyleState::Focused
-        } else if cursor.is_over(bounds) {
-            StyleState::Hovered
-        } else {
-            StyleState::Active
+        let Some(geometry) = self.geometry() else {
+            return;
         };
 
-        // Background
-        if (bounds.width > 0.) && (bounds.height > 0.) {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds,
-                    border: Border {
-                        radius: style_sheet[&style_state].border_radius.into(),
-                        width: style_sheet[&style_state].border_width,
-                        color: style_sheet[&style_state].border_color,
+        let bounds = geometry.overlay;
+
+        renderer.with_layer(bounds, |renderer| {
+            let cursor_position = cursor.position().unwrap_or_default();
+            let mut style_sheet: HashMap<StyleState, Style> = HashMap::new();
+            let _ = style_sheet.insert(
+                StyleState::Active,
+                crate::style::date_picker::Catalog::style(theme, self.class, Status::Active),
+            );
+            let _ = style_sheet.insert(
+                StyleState::Selected,
+                crate::style::date_picker::Catalog::style(theme, self.class, Status::Selected),
+            );
+            let _ = style_sheet.insert(
+                StyleState::Hovered,
+                crate::style::date_picker::Catalog::style(theme, self.class, Status::Hovered),
+            );
+            let _ = style_sheet.insert(
+                StyleState::Focused,
+                crate::style::date_picker::Catalog::style(theme, self.class, Status::Focused),
+            );
+
+            let style_state = if self.state.focus == Focus::Overlay {
+                StyleState::Focused
+            } else if cursor.is_over(bounds) {
+                StyleState::Hovered
+            } else {
+                StyleState::Active
+            };
+
+            // Background
+            if (bounds.width > 0.) && (bounds.height > 0.) {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds,
+                        border: Border {
+                            radius: style_sheet[&style_state].border_radius.into(),
+                            width: style_sheet[&style_state].border_width,
+                            color: style_sheet[&style_state].border_color,
+                            ..Border::default()
+                        },
+                        ..renderer::Quad::default()
                     },
-                    ..renderer::Quad::default()
-                },
-                style_sheet[&style_state].background,
+                    style_sheet[&style_state].background,
+                );
+            }
+
+            // ----------- Year/Month----------------------
+            month_year(
+                renderer,
+                &geometry,
+                &self.date_as_string(),
+                cursor_position,
+                &style_sheet,
+                self.state.focus,
+                self.font_size,
             );
-        }
 
-        // ----------- Year/Month----------------------
-        let month_year_layout = date_children
-            .next()
-            .expect("Graphics: Layout should have a month/year layout");
-
-        month_year(
-            renderer,
-            month_year_layout,
-            &self.date_as_string(),
-            cursor_position,
-            &style_sheet,
-            self.state.focus,
-            self.font_size,
-        );
-
-        // ----------- Days ---------------------------
-        let days_layout = date_children
-            .next()
-            .expect("Graphics: Layout should have a days layout parent")
-            .children()
-            .next()
-            .expect("Graphics: Layout should have a days layout");
-
-        days(
-            renderer,
-            days_layout,
-            self.state.date,
-            &style_sheet,
-            self.state.focus,
-            self.font_size,
-            self.state.day_mouse_over,
-        );
-
-        // ----------- Buttons ------------------------
-        let cancel_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a cancel button layout for a DatePicker");
-
-        self.cancel_button.draw(
-            &self.tree.children[0],
-            renderer,
-            theme,
-            style,
-            cancel_button_layout,
-            cursor,
-            &bounds,
-        );
-
-        let submit_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a submit button layout for a DatePicker");
-
-        self.submit_button.draw(
-            &self.tree.children[1],
-            renderer,
-            theme,
-            style,
-            submit_button_layout,
-            cursor,
-            &bounds,
-        );
-
-        let border = Border {
-            radius: style_sheet[&StyleState::Focused].border_radius.into(),
-            width: style_sheet[&StyleState::Focused].border_width,
-            color: style_sheet[&StyleState::Focused].border_color,
-        };
-
-        // Buttons are not focusable right now...
-        if self.state.focus == Focus::Cancel {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: cancel_button_layout.bounds(),
-                    border,
-                    ..renderer::Quad::default()
-                },
-                Color::TRANSPARENT,
+            // ----------- Days ---------------------------
+            days(
+                renderer,
+                &geometry,
+                self.state.date,
+                &style_sheet,
+                self.state.focus,
+                self.font_size,
+                self.state.day_mouse_over,
             );
-        }
 
-        if self.state.focus == Focus::Submit {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: submit_button_layout.bounds(),
-                    border,
-                    ..renderer::Quad::default()
-                },
-                Color::TRANSPARENT,
+            // ----------- Buttons ------------------------
+            self.cancel_button.draw(
+                &self.tree.children[0],
+                renderer,
+                theme,
+                style,
+                geometry.cancel,
+                cursor,
+                &bounds,
             );
-        }
+
+            self.submit_button.draw(
+                &self.tree.children[1],
+                renderer,
+                theme,
+                style,
+                geometry.submit,
+                cursor,
+                &bounds,
+            );
+
+            let border = Border {
+                radius: style_sheet[&StyleState::Focused].border_radius.into(),
+                width: style_sheet[&StyleState::Focused].border_width,
+                color: style_sheet[&StyleState::Focused].border_color,
+                ..Border::default()
+            };
+
+            // Buttons are not focusable right now...
+            if self.state.focus == Focus::Cancel {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: geometry.cancel.bounds(),
+                        border,
+                        ..renderer::Quad::default()
+                    },
+                    Color::TRANSPARENT,
+                );
+            }
+
+            if self.state.focus == Focus::Submit {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds: geometry.submit.bounds(),
+                        border,
+                        ..renderer::Quad::default()
+                    },
+                    Color::TRANSPARENT,
+                );
+            }
+        });
     }
 
-    fn operate(
-        &mut self,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn widget::Operation,
-    ) {
-        let mut children = layout.children();
-
-        // Get the calendar column layout (contains month/year + days)
-        if let Some(col_layout) = children.next() {
-            // Operate on the calendar column element stored in tree.children[2]
-            // This recursively exposes all text: month, year, arrows, day labels, day numbers
-            if let Some(col_tree) = self.tree.children.get_mut(2) {
-                // Need to recreate the element to call operate on it
-                // This is the same Column structure created in layout()
-                let (left_content, left_font, _left_shaping) = left_open();
-                let (right_content, right_font, _right_shaping) = right_open();
-                let font_size = self.font_size;
-                let date_string = crate::core::date::date_as_string(self.state.date);
-                let (year, month) = date_string.split_once(' ').unwrap_or(("", ""));
-
-                let month_year = Row::<Message, Theme, Renderer>::new()
-                    .width(Length::Shrink)
-                    .spacing(SPACING)
-                    .push(
-                        Row::new()
-                            .width(Length::Shrink)
-                            .spacing(SPACING)
-                            .align_y(Alignment::Center)
-                            .push(
-                                Container::new(
-                                    Text::new(&left_content)
-                                        .size(font_size.0 + 1.0)
-                                        .font(left_font),
-                                )
-                                .height(Length::Shrink)
-                                .width(Length::Shrink),
-                            )
-                            .push(Text::new(month).size(font_size).width(Length::Shrink))
-                            .push(
-                                Container::new(
-                                    Text::new(&right_content)
-                                        .size(font_size.0 + 1.0)
-                                        .font(right_font),
-                                )
-                                .height(Length::Shrink)
-                                .width(Length::Shrink),
-                            ),
-                    )
-                    .push(
-                        Row::new()
-                            .width(Length::Shrink)
-                            .spacing(SPACING)
-                            .align_y(Alignment::Center)
-                            .push(
-                                Container::new(
-                                    Text::new(&left_content)
-                                        .size(font_size.0 + 1.0)
-                                        .font(left_font),
-                                )
-                                .height(Length::Shrink)
-                                .width(Length::Shrink),
-                            )
-                            .push(Text::new(year).size(font_size).width(Length::Shrink))
-                            .push(
-                                Container::new(
-                                    Text::new(&right_content)
-                                        .size(font_size.0 + 1.0)
-                                        .font(right_font),
-                                )
-                                .height(Length::Shrink)
-                                .width(Length::Shrink),
-                            ),
-                    );
-
-                let days =
-                    Container::<Message, Theme, Renderer>::new((0..7).fold(
-                        Column::new().width(Length::Shrink).height(Length::Shrink),
-                        |column, y| {
-                            column.push(
-                                (0..7).fold(
-                                    Row::new()
-                                        .height(Length::Shrink)
-                                        .width(Length::Shrink)
-                                        .spacing(SPACING),
-                                    |row, x| {
-                                        let (day, _) = crate::core::date::position_to_day(
-                                            x,
-                                            y,
-                                            self.state.date.year(),
-                                            self.state.date.month(),
-                                        );
-                                        row.push(
-                                            Container::new(Row::new().push(
-                                                Text::new(format!("{day:02}")).size(font_size),
-                                            ))
-                                            .width(Length::Shrink)
-                                            .height(Length::Shrink)
-                                            .padding(DAY_CELL_PADDING),
-                                        )
-                                    },
-                                ),
-                            )
-                        },
-                    ))
-                    .width(Length::Shrink)
-                    .height(Length::Shrink)
-                    .center_y(Length::Shrink);
-
-                let col = Column::<Message, Theme, Renderer>::new()
-                    .spacing(SPACING)
-                    .align_x(Alignment::Center)
-                    .push(month_year)
-                    .push(days);
-
-                let mut element: Element<Message, Theme, Renderer> = Element::new(col);
-                element
-                    .as_widget_mut()
-                    .operate(col_tree, col_layout, renderer, operation);
-            }
+    fn operate(&mut self, renderer: &Renderer, operation: &mut dyn widget::Operation) {
+        if !self.is_laid_out() {
+            self.layout(renderer);
         }
+
+        let Some(geometry) = self.geometry() else {
+            return;
+        };
+
+        // Operate on the calendar column element stored in tree.children[2].
+        // This recursively exposes all text: month, year, arrows, day labels, day numbers.
+        // The element is recreated here with the same structure than the one
+        // created in `layout()`, but with the actual content.
+        let date_string = crate::core::date::date_as_string(self.state.date);
+        let (year, month) = date_string.split_once(' ').unwrap_or(("", ""));
+        let date = self.state.date;
+
+        let mut col = calendar::<Message, Theme>(self.font_size, month, year, |x, y| {
+            let (day, _) = crate::core::date::position_to_day(x, y, date.year(), date.month());
+
+            format!("{day:02}")
+        });
+
+        col.operate(
+            &mut self.tree.children[2],
+            geometry.col,
+            &self.viewport,
+            renderer,
+            operation,
+        );
 
         // Operate on cancel button
-        if let Some(cancel_layout) = children.next() {
-            Widget::operate(
-                &mut self.cancel_button,
-                &mut self.tree.children[0],
-                cancel_layout,
-                renderer,
-                operation,
-            );
-        }
+        Widget::operate(
+            &mut self.cancel_button,
+            &mut self.tree.children[0],
+            geometry.cancel,
+            &self.viewport,
+            renderer,
+            operation,
+        );
 
         // Operate on submit button
-        if let Some(submit_layout) = children.next() {
-            Widget::operate(
-                &mut self.submit_button,
-                &mut self.tree.children[1],
-                submit_layout,
-                renderer,
-                operation,
-            );
-        }
+        Widget::operate(
+            &mut self.submit_button,
+            &mut self.tree.children[1],
+            geometry.submit,
+            &self.viewport,
+            renderer,
+            operation,
+        );
     }
 }
 
@@ -1130,22 +912,27 @@ where
         let (submit_content, submit_font, _submit_shaping) = ok();
 
         Self {
-            cancel_button: Button::new(
-                text::Text::new(cancel_content)
+            cancel_button: boxed(Button::new(
+                widget::Text::new(cancel_content)
                     .font(cancel_font)
                     .align_x(Horizontal::Center)
                     .width(Length::Fill),
-            )
-            .into(),
-            submit_button: Button::new(
-                text::Text::new(submit_content)
+            )),
+            submit_button: boxed(Button::new(
+                widget::Text::new(submit_content)
                     .font(submit_font)
                     .align_x(Horizontal::Center)
                     .width(Length::Fill),
-            )
-            .into(),
+            )),
         }
     }
+}
+
+impl<Message, Theme> Meta for DatePickerOverlayButtons<'_, Message, Theme>
+where
+    Message: Clone,
+    Theme: crate::style::date_picker::Catalog + iced_widget::button::Catalog,
+{
 }
 
 #[allow(clippy::unimplemented)]
@@ -1157,22 +944,19 @@ where
         + iced_widget::button::Catalog
         + iced_widget::container::Catalog,
 {
-    fn children(&self) -> Vec<Tree> {
-        vec![
-            Tree::new(&self.cancel_button),
-            Tree::new(&self.submit_button),
-        ]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.cancel_button, &self.submit_button]);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children_custom(
+            &mut [&mut self.cancel_button, &mut self.submit_button],
+            |tree, element| tree.diff(&mut **element),
+            |element| Tree::new(&**element),
+        );
     }
 
     fn size(&self) -> Size<Length> {
         unimplemented!("This should never be reached!")
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) {
         unimplemented!("This should never be reached!")
     }
 
@@ -1182,7 +966,7 @@ where
         _renderer: &mut Renderer,
         _theme: &Theme,
         _style: &renderer::Style,
-        _layout: Layout<'_>,
+        _layout: Layout,
         _cursor: Cursor,
         _viewport: &Rectangle,
     ) {
@@ -1200,8 +984,128 @@ where
         + iced_widget::container::Catalog,
 {
     fn from(overlay: DatePickerOverlayButtons<'a, Message, Theme>) -> Self {
-        Self::new(overlay)
+        boxed(overlay)
     }
+}
+
+/// Wraps a [`Widget`] into an [`Element`].
+fn boxed<'a, Message, Theme>(
+    widget: impl Widget<Message, Theme, Renderer> + 'a,
+) -> Element<'a, Message, Theme, Renderer> {
+    Widget::<Message, Theme, Renderer>::_boxed(widget)
+}
+
+/// Reconciles the child tree at the given index with the given widget.
+fn sync_child<Message, Theme>(
+    tree: &mut Tree,
+    index: usize,
+    widget: &mut impl Widget<Message, Theme, Renderer>,
+) {
+    if let Some(child) = tree.children.get_mut(index) {
+        child.diff(widget);
+    } else {
+        let mut child = Tree::new(&*widget);
+        child.diff(widget);
+        tree.children.push(child);
+    }
+}
+
+/// Builds the calendar column: the month/year selectors and the table of days.
+///
+/// `day` produces the content of the day cell at the given `(x, y)` position.
+fn calendar<'a, Message, Theme>(
+    font_size: Pixels,
+    month: &str,
+    year: &str,
+    day: impl Fn(usize, usize) -> String,
+) -> Element<'a, Message, Theme, Renderer>
+where
+    Message: 'a,
+    Theme: 'a + iced_widget::text::Catalog + iced_widget::container::Catalog,
+{
+    let (left_content, left_font, _left_shaping) = left_open();
+    let (right_content, right_font, _right_shaping) = right_open();
+
+    let arrow = |content: &str, font: Font| -> Element<'a, Message, Theme, Renderer> {
+        boxed(
+            Container::new(
+                widget::Text::new(content.to_owned())
+                    .size(font_size.0 + 1.0)
+                    .font(font),
+            )
+            .height(Length::Fit)
+            .width(Length::Fit),
+        )
+    };
+
+    let selector = |text: &str| -> Element<'a, Message, Theme, Renderer> {
+        boxed(
+            Row::<Element<'a, Message, Theme, Renderer>>::new()
+                .width(Length::Fit)
+                .spacing(SPACING)
+                .align_y(Vertical::Center)
+                // Left arrow
+                .push(arrow(&left_content, left_font))
+                // Text
+                .push(boxed(
+                    widget::Text::new(text.to_owned())
+                        .size(font_size)
+                        .width(Length::Fit),
+                ))
+                // Right arrow
+                .push(arrow(&right_content, right_font)),
+        )
+    };
+
+    let month_year = boxed(
+        Row::<Element<'a, Message, Theme, Renderer>>::new()
+            .width(Length::Fit)
+            .spacing(SPACING)
+            .push(selector(month))
+            .push(selector(year)),
+    );
+
+    let days = (0..7).fold(
+        Column::<Element<'a, Message, Theme, Renderer>>::new()
+            .width(Length::Fit)
+            .height(Length::Fit),
+        |column, y| {
+            column.push(boxed(
+                (0..7).fold(
+                    Row::<Element<'a, Message, Theme, Renderer>>::new()
+                        .height(Length::Fit)
+                        .width(Length::Fit)
+                        .spacing(SPACING),
+                    |row, x| {
+                        row.push(boxed(
+                            Container::new(
+                                Row::<Element<'a, Message, Theme, Renderer>>::new()
+                                    .push(boxed(widget::Text::new(day(x, y)).size(font_size))),
+                            )
+                            .width(Length::Fit)
+                            .height(Length::Fit)
+                            .padding(DAY_CELL_PADDING),
+                        ))
+                    },
+                ),
+            ))
+        },
+    );
+
+    let days = boxed(
+        Container::new(days)
+            .width(Length::Fit)
+            .height(Length::Fit)
+            .center_y(Length::Fit),
+    );
+
+    boxed(
+        Column::<Element<'a, Message, Theme, Renderer>>::new()
+            .spacing(SPACING)
+            .align_x(Horizontal::Center)
+            .push(month_year)
+            .push(days),
+    )
 }
 
 /// An enumeration of all focusable elements of the [`DatePickerOverlay`].
@@ -1259,10 +1163,42 @@ impl Focus {
     }
 }
 
+/// Fills the given text centered in the given bounds
+fn fill_centered_text(
+    renderer: &mut Renderer,
+    content: String,
+    bounds: Rectangle,
+    size: Pixels,
+    font: Font,
+    shaping: text::Shaping,
+    color: Color,
+) {
+    let hint_factor = renderer.hint_factor();
+
+    renderer.fill_text(
+        iced_core::Text {
+            content,
+            bounds: bounds.size(),
+            size,
+            line_height: text::LineHeight::Relative(1.3),
+            font,
+            align_x: text::Alignment::Center,
+            align_y: Vertical::Center,
+            shaping,
+            wrapping: text::Wrapping::default(),
+            ellipsis: text::Ellipsis::None,
+            hint_factor,
+        },
+        Point::new(bounds.center_x(), bounds.center_y()),
+        color,
+        bounds,
+    );
+}
+
 /// Draws the month/year row
 fn month_year(
     renderer: &mut Renderer,
-    layout: Layout<'_>,
+    geometry: &Geometry,
     date: &str,
     cursor: Point,
     //style: &Style,
@@ -1270,41 +1206,21 @@ fn month_year(
     focus: Focus,
     font_size: Pixels,
 ) {
-    let mut children = layout.children();
-
-    let month_layout = children
-        .next()
-        .expect("Graphics: Layout should have a month layout");
-    let year_layout = children
-        .next()
-        .expect("Graphics: Layout should have a year layout");
-
-    let mut f = |layout: Layout<'_>, text: &str, target: Focus, font_size: Pixels| {
+    let mut f = |selector: &Selector, text: &str, target: Focus, font_size: Pixels| {
         let style_state = if focus == target {
             StyleState::Focused
         } else {
             StyleState::Active
         };
 
-        let mut children = layout.children();
-
-        let left_bounds = children
-            .next()
-            .expect("Graphics: Layout should have a left arrow layout")
-            .bounds();
-        let center_bounds = children
-            .next()
-            .expect("Graphics: Layout should have a center layout")
-            .bounds();
-        let right_bounds = children
-            .next()
-            .expect("Graphics: Layout should have a right arrow layout")
-            .bounds();
+        let left_bounds = selector.left;
+        let center_bounds = selector.center;
+        let right_bounds = selector.right;
 
         let left_arrow_hovered = left_bounds.contains(cursor);
         let right_arrow_hovered = right_bounds.contains(cursor);
 
-        let bounds = layout.bounds();
+        let bounds = selector.whole;
         if (style_state == StyleState::Focused) && (bounds.width > 0.) && (bounds.height > 0.) {
             renderer.fill_quad(
                 renderer::Quad {
@@ -1323,6 +1239,7 @@ fn month_year(
                             .get(&style_state)
                             .expect("Style Sheet not found.")
                             .border_color,
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     snap: false,
@@ -1334,103 +1251,75 @@ fn month_year(
             );
         }
 
+        let text_color = style
+            .get(&style_state)
+            .expect("Style Sheet not found.")
+            .text_color;
+
         let (left_content, left_font, _left_shaping) = left_open();
         let (right_content, right_font, _right_shaping) = right_open();
 
         // Left caret
-        renderer.fill_text(
-            iced_core::Text {
-                content: left_content,
-                bounds: Size::new(left_bounds.width, left_bounds.height),
-                size: Pixels(font_size.0 + if left_arrow_hovered { 1.0 } else { 0.0 }),
-                font: left_font,
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Advanced,
-                wrapping: Wrapping::default(),
-            },
-            Point::new(left_bounds.center_x(), left_bounds.center_y()),
-            style
-                .get(&style_state)
-                .expect("Style Sheet not found.")
-                .text_color,
+        fill_centered_text(
+            renderer,
+            left_content,
             left_bounds,
+            Pixels(font_size.0 + if left_arrow_hovered { 1.0 } else { 0.0 }),
+            left_font,
+            text::Shaping::Advanced,
+            text_color,
         );
 
         // Text
-        renderer.fill_text(
-            iced_core::Text {
-                content: text.to_owned(),
-                bounds: Size::new(center_bounds.width, center_bounds.height),
-                size: font_size,
-                font: renderer.default_font(),
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Basic,
-                wrapping: Wrapping::default(),
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-            },
-            Point::new(center_bounds.center_x(), center_bounds.center_y()),
-            style
-                .get(&style_state)
-                .expect("Style Sheet not found.")
-                .text_color,
+        let default_font = renderer.font();
+
+        fill_centered_text(
+            renderer,
+            text.to_owned(),
             center_bounds,
+            font_size,
+            default_font,
+            text::Shaping::Basic,
+            text_color,
         );
 
         // Right caret
-        renderer.fill_text(
-            iced_core::Text {
-                content: right_content,
-                bounds: Size::new(right_bounds.width, right_bounds.height),
-                size: Pixels(font_size.0 + if right_arrow_hovered { 1.0 } else { 0.0 }),
-                font: right_font,
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Advanced,
-                wrapping: Wrapping::default(),
-            },
-            Point::new(right_bounds.center_x(), right_bounds.center_y()),
-            style
-                .get(&style_state)
-                .expect("Style Sheet not found.")
-                .text_color,
+        fill_centered_text(
+            renderer,
+            right_content,
             right_bounds,
+            Pixels(font_size.0 + if right_arrow_hovered { 1.0 } else { 0.0 }),
+            right_font,
+            text::Shaping::Advanced,
+            text_color,
         );
     };
 
     let (year, month) = date.split_once(' ').expect("Date must contain space");
 
     // Draw month
-    f(month_layout, month, Focus::Month, font_size);
+    f(&geometry.month, month, Focus::Month, font_size);
 
     // Draw year
-    f(year_layout, year, Focus::Year, font_size);
+    f(&geometry.year, year, Focus::Year, font_size);
 }
 
 /// Draws the days
 #[allow(clippy::too_many_arguments)]
 fn days(
     renderer: &mut Renderer,
-    layout: Layout<'_>,
+    geometry: &Geometry,
     date: chrono::NaiveDate,
     style: &HashMap<StyleState, Style>,
     focus: Focus,
     font_size: Pixels,
     mouse_over: Option<(usize, usize)>,
 ) {
-    let mut children = layout.children();
-
-    let day_labels_layout = children
-        .next()
-        .expect("Graphics: Layout should have a day labels layout");
-    day_labels(renderer, day_labels_layout, style, focus, font_size);
+    day_labels(renderer, &geometry.labels, style, focus, font_size);
 
     day_table(
         renderer,
-        &mut children,
+        &geometry.cells,
         date,
         style,
         focus,
@@ -1442,32 +1331,25 @@ fn days(
 /// Draws the day labels
 fn day_labels(
     renderer: &mut Renderer,
-    layout: Layout<'_>,
+    labels: &[Rectangle],
     style: &HashMap<StyleState, Style>,
     _focus: Focus,
     font_size: Pixels,
 ) {
-    for (i, label) in layout.children().enumerate() {
-        let bounds = label.bounds();
+    for (i, bounds) in labels.iter().enumerate() {
+        let default_font = renderer.font();
 
-        renderer.fill_text(
-            iced_core::Text {
-                content: crate::core::date::WEEKDAY_LABELS[i].clone(),
-                bounds: Size::new(bounds.width, bounds.height),
-                size: font_size,
-                font: renderer.default_font(),
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Basic,
-                wrapping: Wrapping::default(),
-            },
-            Point::new(bounds.center_x(), bounds.center_y()),
+        fill_centered_text(
+            renderer,
+            crate::core::date::WEEKDAY_LABELS[i].clone(),
+            *bounds,
+            font_size,
+            default_font,
+            text::Shaping::Basic,
             style
                 .get(&StyleState::Active)
                 .expect("Style Sheet not found.")
                 .text_color,
-            bounds,
         );
     }
 }
@@ -1476,16 +1358,16 @@ fn day_labels(
 /// Draws the day table
 fn day_table(
     renderer: &mut Renderer,
-    children: &mut dyn Iterator<Item = Layout<'_>>,
+    rows: &[Vec<Rectangle>],
     date: chrono::NaiveDate,
     style: &HashMap<StyleState, Style>,
     focus: Focus,
     font_size: Pixels,
     day_mouse_over: Option<(usize, usize)>,
 ) {
-    for (y, row) in children.enumerate() {
-        for (x, label) in row.children().enumerate() {
-            let bounds = label.bounds();
+    for (y, row) in rows.iter().enumerate() {
+        for (x, bounds) in row.iter().enumerate() {
+            let bounds = *bounds;
             let (number, is_in_month) =
                 crate::core::date::position_to_day(x, y, date.year(), date.month());
 
@@ -1512,6 +1394,7 @@ fn day_table(
                         radius: (bounds.height / 2.0).into(),
                         width: 0.0,
                         color: Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     snap: false,
@@ -1540,6 +1423,7 @@ fn day_table(
                                 .get(&StyleState::Focused)
                                 .expect("Style Sheet not found.")
                                 .border_color,
+                            ..Border::default()
                         },
                         shadow: Shadow::default(),
                         snap: false,
@@ -1548,19 +1432,15 @@ fn day_table(
                 );
             }
 
-            renderer.fill_text(
-                iced_core::Text {
-                    content: format!("{number:02}"), // Todo: is there some way of static format as this has a fixed size?
-                    bounds: Size::new(bounds.width, bounds.height),
-                    size: font_size,
-                    font: renderer.default_font(),
-                    align_x: text::Alignment::Center,
-                    align_y: Vertical::Center,
-                    line_height: text::LineHeight::Relative(1.3),
-                    shaping: text::Shaping::Basic,
-                    wrapping: Wrapping::default(),
-                },
-                Point::new(bounds.center_x(), bounds.center_y()),
+            let default_font = renderer.font();
+
+            fill_centered_text(
+                renderer,
+                format!("{number:02}"), // Todo: is there some way of static format as this has a fixed size?
+                bounds,
+                font_size,
+                default_font,
+                text::Shaping::Basic,
                 if is_in_month == IsInMonth::Same {
                     style
                         .get(&style_state)
@@ -1572,7 +1452,6 @@ fn day_table(
                         .expect("Style Sheet not found.")
                         .text_attenuated_color
                 },
-                bounds,
             );
         }
     }

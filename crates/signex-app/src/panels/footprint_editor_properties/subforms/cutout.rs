@@ -1,7 +1,7 @@
 //! BoardCutout role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, row, text, text_input};
-use iced::{Color, Length, Theme};
+use iced::{Color, Element, Length, Theme};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -13,21 +13,22 @@ const SP: Spacing = Spacing::DEFAULT;
 /// v0.16.4 — BoardCutout role sub-form. Edge-radius expression input
 /// + through-vs-partial-depth toggle.
 pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     id: signex_sketch::id::SketchEntityId,
     muted: Color,
     primary: Color,
     border_c: Color,
     panel_bg: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let Some(c) = fp.selected_cutout.as_ref() else {
         return col;
     };
     col = col.push(
         container(text("Cutout properties").size(TS.caption).color(primary))
             .padding([SP.s, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .into(),
     );
 
     let radius_buf = c.edge_radius_expr.clone().unwrap_or_default();
@@ -50,7 +51,6 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
                             radius: 2.0.into(),
                             color: border_c,
                         },
-                        icon: iced::Color::TRANSPARENT,
                         placeholder: muted,
                         value: primary,
                         selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
@@ -61,7 +61,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
             .align_y(iced::Alignment::Center),
         )
         .padding([SP.xs, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .into(),
     );
 
     col = col.push(super::super::super::form_check_row(

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -49,7 +50,7 @@ pub fn collapsible_section_header<'a>(
     collapsed: &CollapsedSections,
     header_color: Color,
     border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let is_collapsed = collapsed.contains(key);
     let chevron_handle = if is_collapsed {
         chevron_right()
@@ -58,10 +59,10 @@ pub fn collapsible_section_header<'a>(
     };
     let key_owned = key.to_string();
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(
-        iced::widget::button(
+        Widget::boxed(iced::widget::button(
             container(
                 row![
                     svg(chevron_handle)
@@ -91,7 +92,7 @@ pub fn collapsible_section_header<'a>(
                 border: Border::default(),
                 ..iced::widget::button::Style::default()
             }
-        }),
+        })),
     );
     col = col.push(thin_sep(border_c));
     col
@@ -108,8 +109,8 @@ pub fn collapsible_section<'a>(
     collapsed: &CollapsedSections,
     header_color: Color,
     border_c: Color,
-    content: impl FnOnce() -> Column<'a, PanelMsg>,
-) -> Column<'a, PanelMsg> {
+    content: impl FnOnce() -> Column<Element<'a, PanelMsg>>,
+) -> Column<Element<'a, PanelMsg>> {
     let is_collapsed = collapsed.contains(key);
     let mut col = collapsible_section_header(key, title, collapsed, header_color, border_c);
     if !is_collapsed {
@@ -137,7 +138,7 @@ pub fn prop_kv_row<'a>(
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 pub fn section_title<'a>(title: &str, tokens: &ThemeTokens) -> iced::widget::Text<'a> {
@@ -168,7 +169,7 @@ pub fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a,
         .padding(6),
     )
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Render one indented part row inside the SCH Library tree-expander.
@@ -218,7 +219,7 @@ pub fn part_tree_row<'a>(
             ..iced::widget::button::Style::default()
         },
     )
-    .into()
+    .boxed()
 }
 
 /// Property-row label: wraps at spaces inside its fill-portion column, so a
@@ -247,7 +248,7 @@ fn property_label_sized<'a, M: 'a>(
     )
     .width(Length::FillPortion(portion))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 /// Numeric edit row used by the shape pre-placement form. The typed text
@@ -268,7 +269,7 @@ pub fn form_edit_row_f64<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 pub fn shape_fill_row<'a>(
@@ -300,7 +301,7 @@ pub fn shape_fill_row<'a>(
                 },
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     row![
         text("Fill")
@@ -322,5 +323,5 @@ pub fn shape_fill_row<'a>(
     .padding([4, PROPERTY_ROW_PAD_X])
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }

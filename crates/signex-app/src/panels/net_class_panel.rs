@@ -171,7 +171,7 @@ pub fn net_class_choices(classes: &[NetClass]) -> Vec<NetClassChoice> {
 pub fn view_net_classes_section<'a>(
     ctx: &'a PanelContext,
     palette: PanelPalette,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,

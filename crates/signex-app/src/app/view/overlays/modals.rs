@@ -10,6 +10,7 @@
 //! `collect_overlays` assembler.
 
 use super::*;
+use iced::Widget;
 use iced::widget::container;
 
 impl Signex {
@@ -63,7 +64,8 @@ impl Signex {
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
             theme_id: ui.effective_theme_id(),
         })
-        .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
+        .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
+        .boxed();
         Some(pref_view)
     }
 
@@ -75,7 +77,8 @@ impl Signex {
         }
         Some(
             crate::find_replace::view(&ui.find_replace, &self.document_state.panel_ctx.tokens)
-                .map(Message::FindReplaceMsg),
+                .map(Message::FindReplaceMsg)
+                .boxed(),
         )
     }
 
@@ -84,11 +87,13 @@ impl Signex {
     pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
         let state = self.ui_state.find_similar.as_ref()?;
         Some(
-            crate::find_similar::view(state, &self.document_state.panel_ctx.tokens).map(|msg| {
-                Message::Selection(
-                    crate::app::selection_request::SelectionRequest::FindSimilar(msg),
-                )
-            }),
+            crate::find_similar::view(state, &self.document_state.panel_ctx.tokens)
+                .map(|msg| {
+                    Message::Selection(
+                        crate::app::selection_request::SelectionRequest::FindSimilar(msg),
+                    )
+                })
+                .boxed(),
         )
     }
 
@@ -97,7 +102,8 @@ impl Signex {
         let state = self.ui_state.paste_array.as_ref()?;
         Some(
             crate::paste_array::view(state, &self.document_state.panel_ctx.tokens)
-                .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg))),
+                .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg)))
+                .boxed(),
         )
     }
 
@@ -119,11 +125,14 @@ impl Signex {
                 built.as_slice()
             }
         };
-        Some(iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
-            &self.document_state.panel_ctx.tokens,
-            ui.effective_theme_id(),
-            sections,
-        )))
+        Some(
+            iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
+                &self.document_state.panel_ctx.tokens,
+                ui.effective_theme_id(),
+                sections,
+            ))
+            .boxed(),
+        )
     }
 
     /// The shortcuts sheet as the content of its own OS window.
@@ -150,10 +159,13 @@ impl Signex {
         if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
             return None;
         }
-        Some(iced::widget::opaque(crate::about_modal::view(
-            &self.document_state.panel_ctx.tokens,
-            ui.effective_theme_id(),
-        )))
+        Some(
+            iced::widget::opaque(crate::about_modal::view(
+                &self.document_state.panel_ctx.tokens,
+                ui.effective_theme_id(),
+            ))
+            .boxed(),
+        )
     }
 
     /// Tools > Passive Network Calculator modal.
@@ -323,7 +335,7 @@ impl Signex {
                 ))),
                 ..Default::default()
             })
-            .into()
+            .boxed()
     }
 
     /// The card of a library dialog, shared by the in-window overlay (on a
@@ -344,6 +356,7 @@ impl Signex {
             ModalId::LibraryPicker => {
                 crate::library::picker::view(lib.picker.as_ref()?, tokens, windowed)
                     .map(Message::Library)
+                    .boxed()
             }
             ModalId::LibraryPrimitivePicker => crate::library::primitive_picker::view(
                 lib,
@@ -351,20 +364,24 @@ impl Signex {
                 tokens,
                 windowed,
             )
-            .map(Message::Library),
+            .map(Message::Library)
+                    .boxed(),
             ModalId::LibraryDocumentOptions => crate::library::document_options::view(
                 lib.document_options.as_ref()?,
                 tokens,
                 windowed,
             )
-            .map(Message::Library),
+            .map(Message::Library)
+                    .boxed(),
             ModalId::LibraryCreateOptions => {
                 crate::library::create_options::view(lib.create_options.as_ref()?, tokens, windowed)
                     .map(Message::Library)
+                    .boxed()
             }
             ModalId::LibraryStockCopy => {
                 crate::library::stock_copy::view(lib, lib.stock_copy.as_ref()?, tokens, windowed)
                     .map(Message::Library)
+                    .boxed()
             }
             ModalId::LibraryCloseConfirm => crate::library::close_prompt::view(
                 lib,
@@ -372,17 +389,20 @@ impl Signex {
                 tokens,
                 windowed,
             )
-            .map(Message::Library),
+            .map(Message::Library)
+                    .boxed(),
             ModalId::LibraryRecovery => {
                 crate::library::recovery::view(lib.recovery.as_ref()?, tokens, windowed)
                     .map(Message::Library)
+                    .boxed()
             }
             ModalId::LibraryUpdates => crate::library::updates_dialog::view(
                 lib.library_updates.as_ref()?,
                 tokens,
                 windowed,
             )
-            .map(Message::Library),
+            .map(Message::Library)
+                    .boxed(),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
                 let classes = self.row_classes_for(path);
@@ -391,11 +411,13 @@ impl Signex {
                     path, edit, tokens, windowed, classes, template,
                 )
                 .map(Message::Library)
+                    .boxed()
             }
             ModalId::LibraryDeleteConfirm => {
                 let (path, confirm) = self.browser_modal(owner, |b| b.delete_confirm.as_ref())?;
                 crate::library::edit_row_modal::view_delete_confirm(path, confirm, tokens, windowed)
                     .map(Message::Library)
+                    .boxed()
             }
             ModalId::NetColorCustom => {
                 if !self.ui_state.net_color_custom.show {

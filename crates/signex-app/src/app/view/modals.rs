@@ -17,7 +17,7 @@ impl Signex {
     /// OK / Cancel. No header on the body: the dialog opens in its own
     /// OS window, whose native title bar carries the title and close.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, button, column, container, row, text, text_input};
+        use iced::widget::{Space, Widget, button, column, container, row, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -97,6 +97,7 @@ impl Signex {
                             width: 1.0,
                             radius: 3.0.into(),
                             color: border_c,
+                            ..iced::Border::default()
                         },
                         text_color: text_c,
                         ..iced::widget::button::Style::default()
@@ -115,12 +116,12 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true)
-        .into()
+        .boxed()
     }
 
     /// Compact X close button shared by the detached-modal bodies.
     fn view_close_x(&self, message: Message) -> Element<'_, Message> {
-        use iced::widget::{button, container, text};
+        use iced::widget::{Widget, button, container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text_secondary);
         let border = crate::styles::ti(tokens.border);
@@ -144,20 +145,21 @@ impl Signex {
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border,
+                        ..iced::Border::default()
                     },
                     text_color: text_c,
                     ..iced::widget::button::Style::default()
                 }
             },
         )
-        .into()
+        .boxed()
     }
 
     /// Altium F5 Net Color palette — list of net labels with a per-net
     /// color picker. Ships with a 10-swatch palette; a full ColorPicker
     /// widget can replace it later without changing the message contract.
     pub(super) fn view_net_color_palette_body(&self) -> Element<'_, Message> {
-        use iced::widget::{Space, button, column, container, row, scrollable, text};
+        use iced::widget::{Space, Widget, button, column, container, row, scrollable, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -205,7 +207,8 @@ impl Signex {
             rows_col = rows_col.push(
                 text("No net labels on the active sheet.")
                     .size(TS.body)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
             );
         } else {
             for net in nets {
@@ -228,6 +231,7 @@ impl Signex {
                                         width: border_w,
                                         radius: 2.0.into(),
                                         color: text_c,
+                                        ..iced::Border::default()
                                     },
                                     ..container::Style::default()
                                 },
@@ -245,7 +249,8 @@ impl Signex {
                                 background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
                                 border: iced::Border::default(),
                                 ..iced::widget::button::Style::default()
-                            }),
+                            })
+                            .boxed(),
                         );
                 }
                 // Clear-override button
@@ -264,10 +269,12 @@ impl Signex {
                                 width: 1.0,
                                 radius: 2.0.into(),
                                 color: border_c,
+                                ..iced::Border::default()
                             },
                             text_color: text_c,
                             ..iced::widget::button::Style::default()
-                        }),
+                        })
+                        .boxed(),
                 );
 
                 rows_col = rows_col.push(
@@ -279,7 +286,8 @@ impl Signex {
                         swatches,
                     ]
                     .align_y(iced::Alignment::Center)
-                    .padding([SP.xs, SP.m]),
+                    .padding([SP.xs, SP.m])
+                    .boxed(),
                 );
             }
         }
@@ -295,7 +303,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true)
-        .into()
+        .boxed()
     }
 
     /// Custom net-colour picker modal. Grid of quick-pick swatches on
@@ -305,7 +313,7 @@ impl Signex {
     /// EDA-specific diagnostic colours.
     pub(super) fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
         use super::contracts::Channel;
-        use iced::widget::{Space, button, column, container, row, text, text_input};
+        use iced::widget::{Space, Widget, button, column, container, row, text, text_input};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -396,6 +404,7 @@ impl Signex {
                             width: border_w,
                             radius: 3.0.into(),
                             color: border_col,
+                            ..iced::Border::default()
                         },
                         ..container::Style::default()
                     },
@@ -407,7 +416,7 @@ impl Signex {
                     border: iced::Border::default(),
                     ..iced::widget::button::Style::default()
                 })
-                .into()
+                .boxed()
             };
 
         // Build the 6 × 4 palette grid row by row.
@@ -417,7 +426,7 @@ impl Signex {
             for (r, g, b) in chunk {
                 r_el = r_el.push(swatch_btn(*r, *g, *b));
             }
-            palette_col = palette_col.push(r_el);
+            palette_col = palette_col.push(r_el.boxed());
         }
 
         // RGB inputs — parse as u8, clamp on submit. Uses the
@@ -439,7 +448,7 @@ impl Signex {
                 ]
                 .align_y(iced::Alignment::Center)
                 .spacing(6)
-                .into()
+                .boxed()
             };
 
         let preview_hex = format!(
@@ -455,6 +464,7 @@ impl Signex {
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border_c,
+                    ..iced::Border::default()
                 },
                 ..container::Style::default()
             },
@@ -498,6 +508,7 @@ impl Signex {
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border_c,
+                        ..iced::Border::default()
                     },
                     text_color: text_c,
                     ..iced::widget::button::Style::default()
@@ -555,7 +566,7 @@ impl Signex {
         // card are captured and DON'T fall through to the dismiss
         // layer sitting beneath. Without this, clicking on the card's
         // background / between swatches closes the picker.
-        let card_capturing = iced::widget::mouse_area(card).on_press(Message::noop());
+        let card_capturing = iced::widget::mouse_area(card).on_press(Message::noop()).boxed();
         super::view::translate::Translate::new(card_capturing, (x, y)).into()
     }
 }

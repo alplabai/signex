@@ -1,7 +1,7 @@
 //! Bill-of-materials modal catalog slice.
 
 use iced::widget::{Column, Space, column, container, row, svg, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::catalog::Message;
@@ -62,6 +62,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             width: 0.0,
             radius: iced::border::Radius::default().top_left(8.0).top_right(8.0),
             color: Color::TRANSPARENT,
+            ..Border::default()
         },
         ..container::Style::default()
     });
@@ -151,6 +152,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             width: 1.0,
             radius: 8.0.into(),
             color: border,
+            ..Border::default()
         },
         shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
@@ -160,7 +162,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         ..container::Style::default()
     })
     .clip(true)
-    .into()
+    .boxed()
 }
 
 fn dropdown<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -184,10 +186,11 @@ fn dropdown<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
             width: 1.0,
             radius: 3.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 fn secondary_button<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -201,10 +204,11 @@ fn secondary_button<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Messag
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn primary_button<'a>(label: &str, accent: Color, text_color: Color) -> Element<'a, Message> {
@@ -216,10 +220,11 @@ fn primary_button<'a>(label: &str, accent: Color, text_color: Color) -> Element<
                 width: 0.0,
                 radius: 3.0.into(),
                 color: Color::TRANSPARENT,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn info_icon<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -235,10 +240,11 @@ fn info_icon<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
                 width: 0.0,
                 radius: 10.0.into(),
                 color: Color::TRANSPARENT,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -249,7 +255,7 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         container(text(label).size(11).color(text_color))
             .width(Length::Fixed(width))
             .padding([4, 8])
-            .into()
+            .boxed()
     };
     let header = container(
         row![
@@ -361,7 +367,7 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             "16",
         ),
     ];
-    let mut body: Column<'a, Message> = Column::new();
+    let mut body: Column<Element<'a, Message>> = Column::new();
     for (index, values) in rows.iter().enumerate() {
         let background = if index % 2 == 0 {
             Color::TRANSPARENT
@@ -372,7 +378,7 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             container(text(value.to_string()).size(10).color(text_color))
                 .width(Length::Fixed(width))
                 .padding([3, 8])
-                .into()
+                .boxed()
         };
         body = body.push(
             container(
@@ -394,10 +400,11 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(background)),
                 ..container::Style::default()
-            }),
+            })
+            .boxed(),
         );
     }
-    column![header, body].into()
+    column![header, body].boxed()
 }
 
 fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -423,10 +430,11 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
     };
     let tabs = row![
         tab("General", true),
@@ -454,6 +462,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
                         width: 1.0,
                         radius: 2.0.into(),
                         color: border,
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 }),
@@ -461,7 +470,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             text(label).size(11).color(text_color),
         ]
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     };
 
     let field = |label: &'static str, value: &'static str| -> Element<'a, Message> {
@@ -483,13 +492,14 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..container::Style::default()
             }),
         ]
         .align_y(iced::Alignment::Center)
         .spacing(8)
-        .into()
+        .boxed()
     };
 
     let section = |title: &'static str, body: Element<'a, Message>| -> Element<'a, Message> {
@@ -507,7 +517,7 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
             background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
             ..container::Style::default()
         });
-        column![header, container(body).padding([8, 12])].into()
+        column![header, container(body).padding([8, 12])].boxed()
     };
 
     let bom_items = column![
@@ -529,9 +539,9 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         sidebar_title,
         tabs,
         Space::new().height(8),
-        section("BOM Items", bom_items.into()),
+        section("BOM Items", bom_items.boxed()),
         Space::new().height(4),
-        section("Export Options", export_options.into()),
+        section("Export Options", export_options.boxed()),
     ]
-    .into()
+    .boxed()
 }

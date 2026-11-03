@@ -9,7 +9,7 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 
 use super::widgets::{
     close_x_button, draggable_header, os_title_bar_slot, primary_button_themed, wrap_modal,
@@ -54,7 +54,7 @@ impl Signex {
     }
     fn view_bom_preview_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let Some(ref preview) = self.document_state.bom_preview else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -79,7 +79,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -114,7 +114,7 @@ impl Signex {
             text(format!("Variant: {}", active_variant_label))
                 .size(TS.body)
                 .color(text_muted)
-                .into()
+                .boxed()
         } else {
             container(
                 row![
@@ -138,10 +138,11 @@ impl Signex {
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border_c,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::container::Style::default()
             })
-            .into()
+            .boxed()
         };
         let info_badge: Element<'_, Message> =
             container(text("i").size(TS.body).color(iced::Color::WHITE))
@@ -158,10 +159,11 @@ impl Signex {
                         width: 0.0,
                         radius: 10.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..iced::Border::default()
                     },
                     ..iced::widget::container::Style::default()
                 })
-                .into();
+                .boxed();
         let toolbar_strip = container(
             row![
                 variant_dropdown,
@@ -213,12 +215,12 @@ impl Signex {
                     text(label)
                         .size(TS.caption)
                         .color(rules::severity_color(severity, text_muted))
-                        .into()
+                        .boxed()
                 }
                 None => text("No BOM issues")
                     .size(TS.caption)
                     .color(text_muted)
-                    .into(),
+                    .boxed(),
             };
         let footer = container(
             row![
@@ -267,7 +269,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }
 

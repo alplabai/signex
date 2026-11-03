@@ -169,6 +169,7 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         line_pipeline.draw(&mut pass, camera_gpu.bind_group());
@@ -390,6 +391,7 @@ async fn run_readback_smoke_pass(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         // Only the uploaded pipeline has anything to draw; the other is empty.
         line_pipeline.draw(&mut pass, camera_gpu.bind_group());
@@ -531,6 +533,7 @@ async fn run_arc_smoke_pass_with(scale_px_per_mm: f32, arcs: &[Arc]) -> Result<u
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         arc_pipeline.draw(&mut pass, camera_gpu.bind_group());
@@ -625,6 +628,7 @@ async fn run_polygon_smoke_pass_with(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         polygon_pipeline.draw(&mut pass, camera_gpu.bind_group());
@@ -711,6 +715,7 @@ async fn run_grid_smoke_pass_with(scale_px_per_mm: f32) -> Result<GridSmokeRepor
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         grid_pipeline.draw(&mut pass, camera_gpu.bind_group());
@@ -815,6 +820,7 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         text_pipeline

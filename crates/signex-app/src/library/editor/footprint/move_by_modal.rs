@@ -18,7 +18,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{button, column, container, row, text, text_input};
-use iced::{Background, Border, Color, Element, Length};
+use iced::{Background, Border, Color, Element, Length, Widget as _};
 
 use signex_types::theme::ThemeTokens;
 
@@ -79,6 +79,7 @@ pub fn view_move_by_modal<'a>(
                 .top_left(crate::styles::MODAL_CORNER_RADIUS)
                 .top_right(crate::styles::MODAL_CORNER_RADIUS),
             color: border_c,
+            ..Border::default()
         },
         ..container::Style::default()
     });
@@ -99,8 +100,8 @@ pub fn view_move_by_modal<'a>(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: border_c,
+                    ..Border::default()
                 },
-                icon: Color::TRANSPARENT,
                 placeholder: text_muted,
                 value: text_c,
                 selection,
@@ -119,7 +120,7 @@ pub fn view_move_by_modal<'a>(
         ]
         .spacing(sp.s)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     };
 
     let body = column![
@@ -171,7 +172,7 @@ pub fn view_move_by_modal<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true);
 
-    Some(card.into())
+    Some(card.boxed())
 }
 
 fn close_x<'a>(
@@ -185,7 +186,7 @@ fn close_x<'a>(
         .padding(sp.xs)
         .on_press(message)
         .style(crate::styles::subtle_button(tokens))
-        .into()
+        .boxed()
 }
 
 fn secondary_button<'a>(
@@ -201,7 +202,7 @@ fn secondary_button<'a>(
     )
     .on_press(message)
     .style(crate::styles::outline_button(tokens))
-    .into()
+    .boxed()
 }
 
 fn primary_button<'a>(
@@ -221,5 +222,5 @@ fn primary_button<'a>(
     )
     .on_press(message)
     .style(crate::styles::accent_button(tokens))
-    .into()
+    .boxed()
 }

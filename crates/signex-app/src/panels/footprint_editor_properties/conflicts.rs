@@ -4,7 +4,7 @@
 //! row's focus entity; hovering isolates the constraint's glyph on the canvas.
 
 use iced::widget::{button, container, mouse_area, text};
-use iced::{Background, Element, Length, Theme};
+use iced::{Background, Element, Length, Theme, Widget};
 
 use super::super::{OverConstraintSummary, PanelMsg, RejectedConflictSummary};
 use crate::styles::{Spacing, TypeScale};
@@ -57,7 +57,8 @@ fn danger_text(label: String) -> iced::widget::Text<'static, Theme> {
     text(label)
         .size(TS.caption)
         .style(|theme: &Theme| iced::widget::text::Style {
-            color: Some(theme.palette().danger),
+            color: Some(theme.palette().danger.base.color),
+            selection: None,
         })
 }
 
@@ -69,14 +70,14 @@ pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
             .width(Length::Fill)
             .on_press(PanelMsg::FpEditorSelectSketchEntity { id })
             .style(|theme: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(theme.palette().danger.scale_alpha(0.06))),
+                background: Some(Background::Color(theme.palette().danger.base.color.scale_alpha(0.06))),
                 ..iced::widget::button::Style::default()
             })
-            .into(),
+            .boxed(),
         None => container(danger_text(row.label.clone()))
             .padding([SP.xs, SP.m])
             .width(Length::Fill)
-            .into(),
+            .boxed(),
     };
     let constraint = row.constraint;
     mouse_area(inner)
@@ -84,7 +85,7 @@ pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
             constraint: Some(constraint),
         })
         .on_exit(PanelMsg::FpEditorHoverOverConstraint { constraint: None })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

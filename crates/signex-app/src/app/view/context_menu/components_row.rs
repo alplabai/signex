@@ -3,6 +3,8 @@
 
 use super::*;
 
+use iced::Widget as _;
+
 use super::items::dd_msg;
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsRowAction;
@@ -55,7 +57,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         ]
     }
 }
@@ -104,7 +106,7 @@ impl Signex {
                 iced::widget::Space::new().height(y + SP.l),
                 row![iced::widget::Space::new().width(x + SP.l), label],
             ]
-            .into(),
+            .boxed(),
         ]
     }
 }

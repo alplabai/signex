@@ -17,11 +17,11 @@ const SP: Spacing = Spacing::DEFAULT;
 const LISTED_PADS: usize = 12;
 
 pub(super) fn view_pad_stack_check<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     if fp.legacy_pad_stack_offer.is_none() && fp.paste_disabled_smd_pads.is_empty() {
         return col;
     }

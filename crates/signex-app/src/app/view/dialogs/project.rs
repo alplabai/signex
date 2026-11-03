@@ -8,6 +8,7 @@
 use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Color, Element, Length};
+use iced::Widget as _;
 
 use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
@@ -40,7 +41,7 @@ impl Signex {
         use iced::widget::text_input;
 
         let Some(ref st) = self.ui_state.rename_dialog else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -66,7 +67,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::RenameDialog,
@@ -96,7 +97,7 @@ impl Signex {
             format!("Rename \"{}\"", current_label)
         };
 
-        let mut body: iced::widget::Column<'_, Message> = column![
+        let mut body: iced::widget::Column<Element<'_, Message>> = column![
             text(prompt).size(TS.body).color(text_muted),
             text_input(placeholder, &st.buffer)
                 .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
@@ -108,7 +109,7 @@ impl Signex {
         .spacing(SP.m);
 
         if let Some(ref err) = st.error {
-            body = body.push(text(err.clone()).size(TS.body).color(error_c));
+            body = body.push(text(err.clone()).size(TS.body).color(error_c).boxed());
         }
 
         let dialog = container(
@@ -139,7 +140,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 
     pub(in crate::app::view) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
@@ -158,7 +159,7 @@ impl Signex {
     ) -> Element<'_, Message> {
         use iced::widget::checkbox;
         let Some(ref st) = self.ui_state.enable_version_control else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let theme_id = self.ui_state.effective_theme_id();
@@ -183,7 +184,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::EnableVersionControl,
@@ -204,12 +205,13 @@ impl Signex {
         // the modal sizing stays predictable.
         let items_text_c = text_c;
         let items_text_muted = text_muted;
-        let mut items_col = column![].spacing(SP.s);
+        let mut items_col: iced::widget::Column<Element<'_, Message>> = column![].spacing(SP.s);
         if !st.items.is_empty() {
             items_col = items_col.push(
                 text("Track in repository")
                     .size(TS.body)
-                    .color(items_text_muted),
+                    .color(items_text_muted)
+                    .boxed(),
             );
             for (idx, item) in st.items.iter().enumerate() {
                 let cb: Element<'_, Message> = checkbox(item.tracked)
@@ -217,7 +219,7 @@ impl Signex {
                     .on_toggle(move |_| {
                         Message::EnableVersionControl(EnableVersionControlMsg::ToggleItem(idx))
                     })
-                    .into();
+                    .boxed();
                 let row_widget = row![
                     cb,
                     Space::new().width(8),
@@ -230,14 +232,14 @@ impl Signex {
                         .color(items_text_muted),
                 ]
                 .align_y(iced::Alignment::Center);
-                items_col = items_col.push(row_widget);
+                items_col = items_col.push(row_widget.boxed());
             }
         }
 
         let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
             .size(TS.heading)
             .on_toggle(|_| Message::EnableVersionControl(EnableVersionControlMsg::ToggleLfs))
-            .into();
+            .boxed();
         let lfs_row = row![
             lfs_check,
             Space::new().width(8),
@@ -253,25 +255,27 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Start);
 
-        let mut body_col = column![summary, intro].spacing(10);
+        let mut body_col: iced::widget::Column<Element<'_, Message>> = column![summary, intro].spacing(10);
         if !st.items.is_empty() {
-            body_col = body_col.push(Space::new().height(2));
-            body_col = body_col.push(items_col);
+            body_col = body_col.push(Space::new().height(2).boxed());
+            body_col = body_col.push(items_col.boxed());
         }
-        body_col = body_col.push(Space::new().height(6));
-        body_col = body_col.push(lfs_row);
+        body_col = body_col.push(Space::new().height(6).boxed());
+        body_col = body_col.push(lfs_row.boxed());
         if st.scanning {
             body_col = body_col.push(
                 text("Reading the project folder…")
                     .size(TS.caption)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
             );
         }
         if let Some(err) = st.error.as_ref() {
             body_col = body_col.push(
                 text(err.clone())
                     .size(TS.body)
-                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3))
+                    .boxed(),
             );
         }
 
@@ -308,7 +312,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 
     /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a footprint
@@ -331,7 +335,7 @@ impl Signex {
         use iced::widget::text_input;
 
         let Some(ref st) = self.ui_state.grid_properties else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let theme_id = self.ui_state.effective_theme_id();
@@ -356,7 +360,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::GridProperties,
@@ -372,7 +376,7 @@ impl Signex {
                 .width(Length::Fixed(140.0))
                 .on_input(on_input)
                 .on_submit(Message::GridProperties(GridPropertiesMsg::Apply))
-                .into()
+                .boxed()
         };
 
         // Display style + multiplier rows.
@@ -395,10 +399,11 @@ impl Signex {
                                     width: 1.0,
                                     radius: 3.0.into(),
                                     color: border_c,
+                                    ..iced::Border::default()
                                 },
                                 ..iced::widget::button::Style::default()
                             })
-                            .into()
+                            .boxed()
                     };
                 row![
                     container(text(label).size(TS.body).color(text_muted))
@@ -409,7 +414,7 @@ impl Signex {
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center)
-                .into()
+                .boxed()
             };
         let mk_mult_row = |current: u32| -> Element<'_, Message> {
             let seg =
@@ -430,10 +435,11 @@ impl Signex {
                                 width: 1.0,
                                 radius: 3.0.into(),
                                 color: border_c,
+                                ..iced::Border::default()
                             },
                             ..iced::widget::button::Style::default()
                         })
-                        .into()
+                        .boxed()
                 };
             row![
                 container(text("Multiplier").size(TS.body).color(text_muted))
@@ -445,7 +451,7 @@ impl Signex {
             ]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         };
 
         let body = column![
@@ -503,7 +509,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 
     /// v0.18.14.1 — Custom Selection Filter modal. 8 rows of
@@ -525,7 +531,7 @@ impl Signex {
         use crate::library::editor::footprint::state::SelectionFilterKind as K;
 
         let Some(ref st) = self.ui_state.selection_filter_custom else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let theme_id = self.ui_state.effective_theme_id();
@@ -550,7 +556,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::SelectionFilterCustom,
@@ -583,10 +589,11 @@ impl Signex {
                     width: 0.0,
                     radius: 0.0.into(),
                     color: iced::Color::TRANSPARENT,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
         };
 
         let body = column![
@@ -639,6 +646,6 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }

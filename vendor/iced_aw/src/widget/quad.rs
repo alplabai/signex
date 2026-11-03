@@ -5,10 +5,10 @@
 use crate::widget::InnerBounds;
 use iced_core::{
     Background, Border, Color, Element, Layout, Length, Rectangle, Shadow, Size, Widget,
-    layout::{Limits, Node},
+    layout::{self, Limits},
     mouse::Cursor,
     renderer,
-    widget::Tree,
+    widget::{Meta, Tree},
 };
 
 /// A dummy widget that draws a quad
@@ -48,6 +48,7 @@ impl Default for Quad {
                 color: Color::TRANSPARENT,
                 width: 0.0,
                 radius: 0.0.into(),
+                ..Border::default()
             },
             quad_shadow: Shadow::default(),
 
@@ -56,11 +57,14 @@ impl Default for Quad {
                 color: Color::TRANSPARENT,
                 width: 0.0,
                 radius: 0.0.into(),
+                ..Border::default()
             },
             bg_shadow: Shadow::default(),
         }
     }
 }
+
+impl Meta for Quad {}
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Quad
 where
@@ -70,9 +74,8 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        let limits = limits.width(self.width).height(self.height);
-        Node::new(limits.max())
+    fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &Limits) {
+        tree.size = layout::atomic(limits, self.width, self.height);
     }
 
     fn draw(
@@ -81,7 +84,7 @@ where
         renderer: &mut Renderer,
         _theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: Cursor,
         viewport: &Rectangle,
     ) {
@@ -117,6 +120,6 @@ where
     Theme: 'a,
 {
     fn from(value: Quad) -> Self {
-        Self::new(value)
+        Widget::<Message, Theme, Renderer>::_boxed(value)
     }
 }

@@ -151,11 +151,12 @@ where
 ///
 /// [`Card`]: crate::Card
 pub fn card<'a, Message, Theme, Renderer>(
-    head: impl Into<Element<'a, Message, Theme, Renderer>>,
-    body: impl Into<Element<'a, Message, Theme, Renderer>>,
+    head: impl iced_core::Widget<Message, Theme, Renderer> + 'a,
+    body: impl iced_core::Widget<Message, Theme, Renderer> + 'a,
 ) -> crate::Card<'a, Message, Theme, Renderer>
 where
-    Renderer: renderer::Renderer,
+    Message: 'a,
+    Renderer: 'a + renderer::Renderer,
     Theme: crate::style::card::Catalog,
 {
     crate::Card::new(head, body)
@@ -294,7 +295,7 @@ pub fn number_input<'a, T, Message, Theme, Renderer, F>(
 ) -> crate::NumberInput<'a, T, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
-    Renderer: iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: iced_core::text::Renderer,
     Theme: crate::style::number_input::ExtendedCatalog,
     F: 'static + Fn(T) -> Message + Copy,
     T: 'static
@@ -320,7 +321,7 @@ pub fn typed_input<'a, T, Message, Theme, Renderer, F>(
 ) -> crate::TypedInput<'a, T, Message, Theme, Renderer>
 where
     Message: Clone,
-    Renderer: iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: iced_core::text::Renderer,
     Theme: iced_widget::text_input::Catalog,
     F: 'static + Fn(T) -> Message + Copy,
     T: 'static + std::fmt::Display + std::str::FromStr + Clone,
@@ -344,7 +345,7 @@ pub fn selection_list_with<'a, T, Message, Theme, Renderer>(
 ) -> crate::SelectionList<'a, T, Message, Theme, Renderer>
 where
     Message: 'a + Clone,
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a
         + crate::style::selection_list::Catalog
         + iced_widget::container::Catalog
@@ -377,7 +378,7 @@ pub fn selection_list<'a, T, Message, Theme, Renderer>(
 ) -> crate::SelectionList<'a, T, Message, Theme, Renderer>
 where
     Message: 'a + Clone,
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a
         + crate::style::selection_list::Catalog
         + iced_widget::container::Catalog

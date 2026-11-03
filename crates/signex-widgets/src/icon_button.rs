@@ -1,10 +1,10 @@
 //! Icon buttons for toolbar strips.
 //!
 //! Themed icon buttons with tooltip, active/inactive state, separators,
-//! and grouping — all built on stock Iced 0.14 primitives.
+//! and grouping — all built on stock Iced 0.15 primitives.
 
 use iced::widget::{Row, button, container, text, tooltip};
-use iced::{Border, Element, Length};
+use iced::{Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
@@ -46,12 +46,13 @@ pub fn icon_button<'a, M: Clone + 'a>(
                     width: 0.0,
                     radius: 2.0.into(),
                     color: iced::Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
     } else {
-        btn.style(button::text).into()
+        btn.style(button::text).boxed()
     };
 
     let tip_text = tooltip_text.to_owned();
@@ -61,7 +62,7 @@ pub fn icon_button<'a, M: Clone + 'a>(
         tooltip::Position::Bottom,
     )
     .gap(4)
-    .into()
+    .boxed()
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +82,7 @@ pub fn toolbar_separator<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
             }),
     )
     .padding([0, 3])
-    .into()
+    .boxed()
 }
 
 // ---------------------------------------------------------------------------
@@ -90,9 +91,9 @@ pub fn toolbar_separator<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
 
 /// Group multiple button elements into a horizontal row with no spacing.
 pub fn button_group<'a, M: 'a>(buttons: Vec<Element<'a, M>>) -> Element<'a, M> {
-    let mut r: Row<'a, M> = Row::new().spacing(0).align_y(iced::Alignment::Center);
+    let mut r: Row<Element<'a, M>> = Row::new().spacing(0).align_y(iced::Alignment::Center);
     for btn in buttons {
         r = r.push(btn);
     }
-    r.into()
+    r.boxed()
 }

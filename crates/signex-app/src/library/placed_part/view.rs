@@ -3,7 +3,7 @@
 //! shown are built by [`preview_lines`] from the engine's preview.
 
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_engine::ComponentChangePreview;
 use signex_types::schematic::PinMatchedBy;
 use signex_types::theme::ThemeTokens;
@@ -149,7 +149,7 @@ fn card<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 fn flat_button<'a>(
@@ -165,8 +165,12 @@ fn flat_button<'a>(
     } else {
         (iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04), text_c)
     };
-    button(container(text(label.to_string()).size(TS.body).color(fg)).padding([SP.s, 14.0]))
-        .on_press(message)
+    button(
+        container(text(label.to_string()).size(TS.body).color(fg))
+            .padding([SP.s, 14.0])
+            .boxed(),
+    )
+    .on_press(message)
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(bg)),
             text_color: fg,
@@ -174,6 +178,7 @@ fn flat_button<'a>(
                 width: if primary { 0.0 } else { 1.0 },
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         })
@@ -203,7 +208,7 @@ pub fn change_preview_view<'a>(
             LineKind::Info => muted,
             LineKind::Warning => warning,
         };
-        lines = lines.push(text(line.text).size(TS.body).color(color));
+        lines = lines.push(text(line.text).size(TS.body).color(color).boxed());
     }
     let footer = row![
         Space::new().width(Length::Fill),
@@ -226,8 +231,8 @@ pub fn change_preview_view<'a>(
     .align_y(iced::Alignment::Center);
     card(
         "Change Component",
-        scrollable(lines).width(Length::Fill).into(),
-        footer.into(),
+        scrollable(lines).width(Length::Fill).boxed(),
+        footer.boxed(),
         tokens,
         windowed,
     )
@@ -258,7 +263,8 @@ pub fn datasheet_choice_view<'a>(
                 false,
                 LibraryMessage::PlacedPart(PlacedPartMsg::DatasheetPicked(index)),
             )
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
     let footer = row![
@@ -267,8 +273,8 @@ pub fn datasheet_choice_view<'a>(
     ];
     card(
         "Open Datasheet",
-        scrollable(list).width(Length::Fill).into(),
-        footer.into(),
+        scrollable(list).width(Length::Fill).boxed(),
+        footer.boxed(),
         tokens,
         windowed,
     )

@@ -1,26 +1,26 @@
 //! Helper functions for overlays
 
-use iced_core::{Point, Size, layout};
+use iced_core::{Layout, Point, Size};
 
 /// Trait containing functions for positioning of nodes.
 pub trait Position {
-    /// Centers this node around the given position. If the node is over the
+    /// Centers this layout around the given position. If the node is over the
     /// specified bounds it's bouncing back to be fully visible on screen.
     fn center_and_bounce(&mut self, position: Point, bounds: Size);
 }
 
-impl Position for layout::Node {
+impl Position for Layout {
     fn center_and_bounce(&mut self, position: Point, bounds: Size) {
         let size = self.size();
 
-        self.move_to_mut(Point::new(
+        *self = self.move_to(Point::new(
             (position.x - (size.width / 2.0)).max(0.0),
             (position.y - (size.height / 2.0)).max(0.0),
         ));
 
         let new_self_bounds = self.bounds();
 
-        self.move_to_mut(Point::new(
+        *self = self.move_to(Point::new(
             if new_self_bounds.x + new_self_bounds.width > bounds.width {
                 (new_self_bounds.x - (new_self_bounds.width - (bounds.width - new_self_bounds.x)))
                     .max(0.0)
@@ -40,7 +40,7 @@ impl Position for layout::Node {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced_core::layout::Node;
+    use iced_core::Layout as Node;
 
     #[test]
     fn center_within_bounds() {

@@ -3,12 +3,12 @@
 //! *This API requires the following crate features to be activated: `drop_down`*
 
 use iced_core::{
-    Clipboard, Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
+    Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
     keyboard::{self, key::Named},
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
     overlay, renderer, touch,
-    widget::{self, Operation, Tree},
+    widget::{self, Meta, Operation, Tree},
 };
 
 pub use crate::core::{alignment::Alignment, offset::Offset};
@@ -88,6 +88,13 @@ where
     }
 }
 
+impl<Message, Theme, Renderer> Meta for DropDown<'_, Message, Theme, Renderer>
+where
+    Message: Clone,
+    Renderer: renderer::Renderer,
+{
+}
+
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for DropDown<'a, Message, Theme, Renderer>
 where
@@ -95,13 +102,14 @@ where
     Renderer: 'a + renderer::Renderer,
 {
     fn size(&self) -> Size<Length> {
-        self.underlay.as_widget().size()
+        self.underlay.size()
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         self.underlay
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+            .layout(&mut tree.children[0], renderer, limits);
+
+        tree.size = tree.children[0].size;
     }
 
     fn draw(
@@ -110,11 +118,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget().draw(
+        self.underlay.draw(
             &state.children[0],
             renderer,
             theme,
@@ -125,44 +133,48 @@ where
         );
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.underlay), Tree::new(&self.overlay)]
+    fn diff(&mut self, tree: &mut Tree) {
+        if tree.children.len() != 2 {
+            tree.children = vec![Tree::new(&self.underlay), Tree::new(&self.overlay)];
+        }
+
+        tree.children[0].diff(&mut self.underlay);
+        tree.children[1].diff(&mut self.overlay);
     }
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.underlay, &self.overlay]);
-    }
-
-    fn operate<'b>(
-        &'b mut self,
-        state: &'b mut Tree,
-        layout: Layout<'_>,
+    fn operate(
+        &mut self,
+        state: &mut Tree,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        self.underlay
-            .as_widget_mut()
-            .operate(&mut state.children[0], layout, renderer, operation);
+        self.underlay.operate(
+            &mut state.children[0],
+            layout,
+            viewport,
+            renderer,
+            operation,
+        );
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget_mut().update(
+        self.underlay.update(
             &mut state.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -171,12 +183,12 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.as_widget().mouse_interaction(
+        self.underlay.mouse_interaction(
             &state.children[0],
             layout,
             cursor,
@@ -188,22 +200,24 @@ where
     fn overlay<'b>(
         &'b mut self,
         state: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         if !self.expanded {
-            return self.underlay.as_widget_mut().overlay(
+            return self.underlay.overlay(
                 &mut state.children[0],
                 layout,
                 renderer,
                 viewport,
                 translation,
+                window,
             );
         }
 
-        Some(overlay::Element::new(Box::new(DropDownOverlay::new(
+        let mut overlay = DropDownOverlay::new(
             &mut state.children[1],
             &mut self.overlay,
             self.on_dismiss.as_ref(),
@@ -214,7 +228,11 @@ where
             layout.bounds(),
             layout.position() + translation,
             *viewport,
-        ))))
+        );
+
+        overlay.layout = overlay.compute_layout(renderer, window);
+
+        vec![overlay::Element::new(Box::new(overlay))]
     }
 }
 
@@ -225,7 +243,7 @@ where
     Renderer: 'a + renderer::Renderer,
 {
     fn from(drop_down: DropDown<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(drop_down)
+        drop_down._boxed()
     }
 }
 
@@ -248,6 +266,7 @@ struct DropDownOverlay<
     underlay_bounds: Rectangle,
     position: Point,
     viewport: Rectangle,
+    layout: Layout,
 }
 
 impl<'a, 'b, Message, Theme, Renderer> DropDownOverlay<'a, 'b, Message, Theme, Renderer>
@@ -279,17 +298,23 @@ where
             underlay_bounds,
             position,
             viewport,
+            layout: Layout::new(Size::ZERO),
         }
     }
 }
 
-impl<Message, Theme, Renderer> overlay::Overlay<Message, Theme, Renderer>
-    for DropDownOverlay<'_, '_, Message, Theme, Renderer>
+fn with_max_height(mut limits: Limits, max_height: f32) -> Limits {
+    limits.max.height = limits.max.height.min(max_height);
+    limits.min.height = limits.min.height.min(limits.max.height);
+    limits
+}
+
+impl<Message, Theme, Renderer> DropDownOverlay<'_, '_, Message, Theme, Renderer>
 where
     Message: Clone,
     Renderer: renderer::Renderer,
 {
-    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
+    fn compute_layout(&mut self, renderer: &Renderer, bounds: Size) -> Layout {
         let limits = Limits::new(Size::ZERO, bounds)
             .width(
                 *self
@@ -299,7 +324,7 @@ where
             .height(*self.height);
 
         let previous_position = self.position;
-        let max = limits.max();
+        let max = limits.max;
 
         let height_above = (previous_position.y - self.offset.y).max(0.0);
         let height_below =
@@ -310,102 +335,110 @@ where
         let max_height_symmetric = (ref_center_y.min(max.height - ref_center_y) * 2.0).max(0.0);
 
         let limits = match self.alignment {
-            Alignment::Top => limits.max_height(height_above),
+            Alignment::Top => with_max_height(limits, height_above),
             Alignment::TopStart | Alignment::TopEnd => {
-                limits.max_height((height_above + self.underlay_bounds.height).max(0.0))
+                with_max_height(limits, (height_above + self.underlay_bounds.height).max(0.0))
             }
-            Alignment::Bottom => limits.max_height(height_below),
+            Alignment::Bottom => with_max_height(limits, height_below),
             Alignment::BottomEnd | Alignment::BottomStart => {
-                limits.max_height((height_below + self.underlay_bounds.height).max(0.0))
+                with_max_height(limits, (height_below + self.underlay_bounds.height).max(0.0))
             }
-            Alignment::Start | Alignment::End => limits.max_height(max_height_symmetric),
+            Alignment::Start | Alignment::End => with_max_height(limits, max_height_symmetric),
         };
 
-        let node = self
-            .element
-            .as_widget_mut()
-            .layout(self.state, renderer, &limits);
+        self.element.layout(self.state, renderer, &limits);
+
+        let size = self.state.size;
 
         let mut new_position = match self.alignment {
             Alignment::TopStart => Point::new(
-                previous_position.x - node.bounds().width - self.offset.x,
-                previous_position.y - node.bounds().height + self.underlay_bounds.height
-                    - self.offset.y,
+                previous_position.x - size.width - self.offset.x,
+                previous_position.y - size.height + self.underlay_bounds.height - self.offset.y,
             ),
             Alignment::Top => Point::new(
-                previous_position.x + self.underlay_bounds.width / 2.0 - node.bounds().width / 2.0,
-                previous_position.y - node.bounds().height - self.offset.y,
+                previous_position.x + self.underlay_bounds.width / 2.0 - size.width / 2.0,
+                previous_position.y - size.height - self.offset.y,
             ),
             Alignment::TopEnd => Point::new(
                 previous_position.x + self.underlay_bounds.width + self.offset.x,
-                previous_position.y - node.bounds().height + self.underlay_bounds.height
-                    - self.offset.y,
+                previous_position.y - size.height + self.underlay_bounds.height - self.offset.y,
             ),
             Alignment::End => Point::new(
                 previous_position.x + self.underlay_bounds.width + self.offset.x,
-                previous_position.y + self.underlay_bounds.height / 2.0
-                    - node.bounds().height / 2.0,
+                previous_position.y + self.underlay_bounds.height / 2.0 - size.height / 2.0,
             ),
             Alignment::BottomEnd => Point::new(
                 previous_position.x + self.underlay_bounds.width + self.offset.x,
                 previous_position.y + self.offset.y,
             ),
             Alignment::Bottom => Point::new(
-                previous_position.x + self.underlay_bounds.width / 2.0 - node.bounds().width / 2.0,
+                previous_position.x + self.underlay_bounds.width / 2.0 - size.width / 2.0,
                 previous_position.y + self.underlay_bounds.height + self.offset.y,
             ),
             Alignment::BottomStart => Point::new(
-                previous_position.x - node.bounds().width - self.offset.x,
+                previous_position.x - size.width - self.offset.x,
                 previous_position.y + self.offset.y,
             ),
             Alignment::Start => Point::new(
-                previous_position.x - node.bounds().width - self.offset.x,
-                previous_position.y + self.underlay_bounds.height / 2.0
-                    - node.bounds().height / 2.0,
+                previous_position.x - size.width - self.offset.x,
+                previous_position.y + self.underlay_bounds.height / 2.0 - size.height / 2.0,
             ),
         };
 
-        if new_position.x + node.bounds().width > self.viewport.width {
-            new_position.x -= node.bounds().width;
+        if new_position.x + size.width > self.viewport.width {
+            new_position.x -= size.width;
         }
 
         if new_position.x < 0.0 {
             new_position.x = 0.0;
         }
 
-        if new_position.y + node.bounds().height > self.viewport.height {
-            new_position.y -= node.bounds().height;
+        if new_position.y + size.height > self.viewport.height {
+            new_position.y -= size.height;
         }
         if new_position.y < 0.0 {
             new_position.y = 0.0;
         }
 
-        node.move_to(new_position)
+        Layout::new(size).move_to(new_position)
     }
+}
 
+impl<Message, Theme, Renderer> overlay::Overlay<Message, Theme, Renderer>
+    for DropDownOverlay<'_, '_, Message, Theme, Renderer>
+where
+    Message: Clone,
+    Renderer: renderer::Renderer,
+{
     fn draw(
         &self,
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
         cursor: Cursor,
     ) {
-        let bounds = layout.bounds();
-        self.element
-            .as_widget()
-            .draw(self.state, renderer, theme, style, layout, cursor, &bounds);
+        let bounds = self.layout.bounds();
+        renderer.with_layer(bounds, |renderer| {
+            self.element.draw(
+                self.state,
+                renderer,
+                theme,
+                style,
+                self.layout,
+                cursor,
+                &bounds,
+            );
+        });
     }
 
     fn update(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
+        let layout = self.layout;
         self.underlay_bounds = Rectangle {
             x: self.position.x,
             y: self.position.y,
@@ -434,43 +467,36 @@ where
             }
         }
 
-        self.element.as_widget_mut().update(
+        self.element.update(
             self.state,
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             &layout.bounds(),
         );
     }
 
-    fn mouse_interaction(
-        &self,
-        layout: Layout<'_>,
-        cursor: Cursor,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        self.element.as_widget().mouse_interaction(
+    fn mouse_interaction(&self, cursor: Cursor, renderer: &Renderer) -> mouse::Interaction {
+        self.element.mouse_interaction(
             self.state,
-            layout,
+            self.layout,
             cursor,
             &self.viewport,
             renderer,
         )
     }
 
-    fn operate(
-        &mut self,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn widget::Operation,
-    ) {
+    fn operate(&mut self, renderer: &Renderer, operation: &mut dyn widget::Operation) {
         // Operate on the overlay element to expose its children for testing
-        self.element
-            .as_widget_mut()
-            .operate(self.state, layout, renderer, operation);
+        self.element.operate(
+            self.state,
+            self.layout,
+            &self.viewport,
+            renderer,
+            operation,
+        );
     }
 }
 
@@ -704,12 +730,12 @@ mod tests {
         let underlay = Text::new("Click me");
         let overlay = Text::new("Dropdown content");
 
-        let dropdown = TestDropDown::new(underlay, overlay, false);
+        let mut dropdown = TestDropDown::new(underlay, overlay, false);
 
-        let children =
-            Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::children(&dropdown);
+        let mut tree = Tree::new(&dropdown);
+        tree.diff(&mut dropdown);
         assert_eq!(
-            children.len(),
+            tree.children.len(),
             2,
             "DropDown should have 2 children (underlay and overlay)"
         );

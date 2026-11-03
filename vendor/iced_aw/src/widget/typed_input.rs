@@ -2,18 +2,18 @@
 //!
 //! *This API requires the following crate features to be activated: `typed_input`*
 
-use iced_core::layout::{Layout, Limits, Node};
+use iced_core::layout::{Layout, Limits};
 use iced_core::mouse::{self, Cursor};
+use iced_core::shell::Bus;
 use iced_core::widget::{
-    Operation, Tree, Widget,
+    Meta, Operation, Tree, Widget,
     tree::{State, Tag},
 };
-use iced_core::{Clipboard, Shell, widget};
-use iced_core::{Element, Length, Padding, Pixels, Rectangle};
-use iced_core::{Event, Size};
+use iced_core::{Element, Font, Length, Padding, Pixels, Rectangle};
+use iced_core::{Event, Shell, Size, widget};
 use iced_widget::text_input::{self, TextInput};
 
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 /// The default padding
 const DEFAULT_PADDING: Padding = Padding::new(5.0);
@@ -44,7 +44,7 @@ where
     /// The current value of the [`TypedInput`].
     value: T,
     /// The underlying element of the [`TypedInput`].
-    text_input: text_input::TextInput<'a, InternalMessage, Theme, Renderer>,
+    text_input: text_input::TextInput<'a, InternalMessage, Theme>,
     text: String,
     /// The ``on_change`` event of the [`TypedInput`].
     on_change: Option<Box<dyn 'a + Fn(T) -> Message>>,
@@ -53,6 +53,8 @@ where
     on_submit: Option<Box<dyn 'a + Fn(Result<T, String>) -> Message>>,
     /// The ``on_paste`` event of the [`TypedInput`]
     on_paste: Option<Box<dyn 'a + Fn(T) -> Message>>,
+    /// The renderer used to render the [`TypedInput`].
+    _renderer: PhantomData<fn() -> Renderer>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,7 +78,7 @@ where
     /// - the current value
     /// - a function that produces a message when the [`TypedInput`] changes
     #[must_use]
-    pub fn new(placeholder: &str, value: &T) -> Self
+    pub fn new(placeholder: &'a str, value: &T) -> Self
     where
         T: 'a + Clone,
     {
@@ -84,7 +86,7 @@ where
 
         Self {
             value: value.clone(),
-            text_input: text_input::TextInput::new(placeholder, format!("{value}").as_str())
+            text_input: text_input::TextInput::new(placeholder, value.to_string())
                 .padding(padding)
                 .width(Length::Fixed(127.0))
                 .class(<Theme as text_input::Catalog>::default()),
@@ -92,6 +94,7 @@ where
             on_change: None,
             on_submit: None,
             on_paste: None,
+            _renderer: PhantomData,
         }
     }
 
@@ -227,17 +230,10 @@ where
         self
     }
 
-    /// Sets the [Font](iced_core::text::Renderer::Font) of the [`TypedInput`].
+    /// Sets the [`Font`] of the [`TypedInput`].
     #[must_use]
-    pub fn font(mut self, font: Renderer::Font) -> Self {
-        self.text_input = self.text_input.font(font);
-        self
-    }
-
-    /// Sets the [Icon](iced_widget::text_input::Icon) of the [`TypedInput`]
-    #[must_use]
-    pub fn icon(mut self, icon: iced_widget::text_input::Icon<Renderer::Font>) -> Self {
-        self.text_input = self.text_input.icon(icon);
+    pub fn font(mut self, font: impl Into<Font>) -> Self {
+        self.text_input = self.text_input.font(font.into());
         self
     }
 
@@ -271,7 +267,7 @@ where
 
     /// Sets the horizontal alignment of the [`TypedInput`].
     #[must_use]
-    pub fn align_x(mut self, alignment: impl Into<iced_core::alignment::Horizontal>) -> Self {
+    pub fn align_x(mut self, alignment: impl Into<iced_core::text::Alignment>) -> Self {
         self.text_input = self.text_input.align_x(alignment);
         self
     }
@@ -302,55 +298,59 @@ where
     }
 }
 
+impl<T, Message, Theme, Renderer> Meta for TypedInput<'_, T, Message, Theme, Renderer>
+where
+    Renderer: iced_core::text::Renderer,
+    Theme: text_input::Catalog,
+{
+}
+
 impl<'a, T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for TypedInput<'a, T, Message, Theme, Renderer>
 where
     T: Display + FromStr + Clone + PartialEq,
     Message: 'a + Clone,
-    Renderer: 'a + iced_core::text::Renderer,
+    Renderer: 'static + iced_core::text::Renderer,
     Theme: text_input::Catalog,
 {
     fn tag(&self) -> Tag {
-        <TextInput<_, _, _> as Widget<_, _, _>>::tag(&self.text_input)
+        Widget::<InternalMessage, Theme, Renderer>::tag(&self.text_input)
     }
+
     fn state(&self) -> State {
-        <TextInput<_, _, _> as Widget<_, _, _>>::state(&self.text_input)
+        Widget::<InternalMessage, Theme, Renderer>::state(&self.text_input)
     }
 
-    fn children(&self) -> Vec<Tree> {
-        <TextInput<_, _, _> as Widget<_, _, _>>::children(&self.text_input)
-    }
-
-    fn diff(&self, state: &mut Tree) {
-        <TextInput<_, _, _> as Widget<_, _, _>>::diff(&self.text_input, state);
+    fn diff(&mut self, tree: &mut Tree) {
+        Widget::<InternalMessage, Theme, Renderer>::diff(&mut self.text_input, tree);
     }
 
     fn size(&self) -> Size<Length> {
-        <TextInput<_, _, _> as Widget<_, _, _>>::size(&self.text_input)
+        Widget::<InternalMessage, Theme, Renderer>::size(&self.text_input)
     }
 
-    fn layout(&mut self, state: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        <TextInput<_, _, _> as Widget<_, _, _>>::layout(
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        Widget::<InternalMessage, Theme, Renderer>::layout(
             &mut self.text_input,
-            state,
+            tree,
             renderer,
             limits,
-        )
+        );
     }
 
     fn draw(
         &self,
-        state: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         style: &iced_core::renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        <TextInput<_, _, _> as Widget<_, _, _>>::draw(
+        Widget::<InternalMessage, Theme, Renderer>::draw(
             &self.text_input,
-            state,
+            tree,
             renderer,
             theme,
             style,
@@ -362,15 +362,15 @@ where
 
     fn mouse_interaction(
         &self,
-        state: &Tree,
-        layout: Layout<'_>,
+        tree: &Tree,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        <TextInput<_, _, _> as Widget<_, _, _>>::mouse_interaction(
+        Widget::<InternalMessage, Theme, Renderer>::mouse_interaction(
             &self.text_input,
-            state,
+            tree,
             layout,
             cursor,
             viewport,
@@ -380,15 +380,17 @@ where
 
     fn operate(
         &mut self,
-        state: &mut Tree,
-        layout: Layout<'_>,
+        tree: &mut Tree,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        <TextInput<_, _, _> as Widget<_, _, _>>::operate(
+        Widget::<InternalMessage, Theme, Renderer>::operate(
             &mut self.text_input,
-            state,
+            tree,
             layout,
+            viewport,
             renderer,
             operation,
         );
@@ -397,36 +399,41 @@ where
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn update(
         &mut self,
-        state: &mut Tree,
+        tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let mut messages = Vec::new();
-        let mut sub_shell = Shell::new(&mut messages);
-        self.text_input.update(
-            state,
-            event,
-            layout,
-            cursor,
-            renderer,
-            clipboard,
-            &mut sub_shell,
-            viewport,
-        );
+        let mut bus: Bus<InternalMessage> = Bus::new();
 
-        shell.request_redraw_at(sub_shell.redraw_request());
+        {
+            let mut sub_shell = shell.local(&mut bus);
 
-        if sub_shell.is_layout_invalid() {
-            shell.invalidate_layout();
+            Widget::<InternalMessage, Theme, Renderer>::update(
+                &mut self.text_input,
+                tree,
+                event,
+                layout,
+                cursor,
+                renderer,
+                &mut sub_shell,
+                viewport,
+            );
+
+            if sub_shell.is_event_captured() {
+                shell.capture_event();
+            }
+
+            shell.request_redraw_at(sub_shell.redraw_request());
+            shell.request_input_method(sub_shell.input_method());
+            shell.clipboard_mut().merge(sub_shell.clipboard_mut());
+            shell.invalidate(sub_shell.invalidation());
         }
-        if sub_shell.are_widgets_invalid() {
-            shell.invalidate_widgets();
-        }
+
+        let messages: Vec<InternalMessage> = bus.drain().map(|(message, _)| message).collect();
 
         for message in messages {
             match message {
@@ -479,11 +486,11 @@ impl<'a, T, Message, Theme, Renderer> From<TypedInput<'a, T, Message, Theme, Ren
 where
     T: 'a + Display + FromStr + Clone + PartialEq,
     Message: 'a + Clone,
-    Renderer: 'a + iced_core::text::Renderer,
+    Renderer: 'static + iced_core::text::Renderer,
     Theme: 'a + text_input::Catalog,
 {
     fn from(typed_input: TypedInput<'a, T, Message, Theme, Renderer>) -> Self {
-        Element::new(typed_input)
+        Widget::<Message, Theme, Renderer>::_boxed(typed_input)
     }
 }
 
@@ -653,18 +660,8 @@ mod tests {
 
         let tag = Widget::<TestMessage, iced_widget::Theme, Renderer>::tag(&input);
         // The tag should be the same as the underlying TextInput's tag
-        let text_input_tag = <TextInput<_, _, _> as Widget<_, _, _>>::tag(&input.text_input);
+        let text_input_tag =
+            Widget::<InternalMessage, iced_widget::Theme, Renderer>::tag(&input.text_input);
         assert_eq!(tag, text_input_tag);
-    }
-
-    #[test]
-    fn typed_input_children_delegates_to_text_input() {
-        let value = 42u32;
-        let input = TestTypedInput::new("Enter a number", &value);
-
-        let children = Widget::<TestMessage, iced_widget::Theme, Renderer>::children(&input);
-        let text_input_children =
-            <TextInput<_, _, _> as Widget<_, _, _>>::children(&input.text_input);
-        assert_eq!(children.len(), text_input_children.len());
     }
 }

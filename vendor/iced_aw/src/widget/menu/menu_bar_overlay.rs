@@ -7,9 +7,9 @@
 #![allow(clippy::similar_names)]
 
 use iced_core::{
-    Clipboard, Event, Layout, Point, Rectangle, Shell, Size, Vector,
-    layout::{Limits, Node},
-    mouse, overlay, renderer,
+    Event, Layout, Rectangle, Shell, Size, Vector, Widget,
+    layout::Limits,
+    mouse, overlay, renderer, shell,
     time::Instant,
     widget::{Operation, Tree},
     window,
@@ -27,76 +27,82 @@ where
     Renderer: renderer::Renderer,
 {
     pub(super) menu_bar: &'b mut MenuBar<'a, Message, Theme, Renderer>,
-    pub(super) layout: Layout<'b>,
+    /// Layout of the menu bar itself (without `translation` applied)
+    pub(super) layout: Layout,
     pub(super) translation: Vector,
     /// Tree{ bar, [item_tree...] }
     pub(super) tree: &'b mut Tree,
 }
-impl<'b, Message, Theme, Renderer> MenuBarOverlay<'_, 'b, Message, Theme, Renderer>
+impl<'a, 'b, Message, Theme, Renderer> MenuBarOverlay<'a, 'b, Message, Theme, Renderer>
 where
     Theme: Catalog,
     Renderer: renderer::Renderer,
 {
-    pub(super) fn overlay_element(self) -> overlay::Element<'b, Message, Theme, Renderer> {
-        overlay::Element::new(Box::new(self))
+    /// Lays out the menus and turns this into an overlay element.
+    ///
+    /// Overlays no longer have a separate layout step: the layout has to be
+    /// computed up front, when the overlay is created (`Widget::overlay`).
+    pub(super) fn overlay_element(
+        mut self,
+        renderer: &Renderer,
+        window: Size,
+    ) -> overlay::Element<'b, Message, Theme, Renderer>
+    where
+        'a: 'b,
+        Message: 'b,
+        Theme: 'b,
+        Renderer: 'b,
+    {
+        let menu_layouts = self.layout_menus(renderer, window);
+        overlay::Element::new(Box::new(LaidOutMenuBarOverlay {
+            inner: self,
+            menu_layouts,
+            window,
+        }))
     }
-}
-impl<Message, Theme, Renderer> overlay::Overlay<Message, Theme, Renderer>
-    for MenuBarOverlay<'_, '_, Message, Theme, Renderer>
-where
-    Theme: Catalog,
-    Renderer: renderer::Renderer,
-{
-    /// out: Node{inf, [ bar_node, roots_node, menu_nodes_node{0, [ menu_node,...]} ]}
-    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
+
+    /// Absolute layouts of the root items of the bar (translation applied),
+    /// indexed by absolute item index.
+    fn root_layouts(&self) -> Vec<Layout> {
+        let translation = self.translation;
+        self.layout
+            .iter(&self.tree.children)
+            .map(|(l, _)| l.move_to(l.position() + translation))
+            .collect()
+    }
+
+    /// out: [ menu_layout, ...] one absolute layout per open menu, outermost first
+    fn layout_menus(&mut self, renderer: &Renderer, bounds: Size) -> Vec<Layout> {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::layout", "");
-        let translation = self.translation;
 
-        let bar_bounds = self.layout.bounds();
-        let slice_layout = self.layout.children().next().unwrap();
+        let mut menu_layouts = vec![];
 
-        let root_bounds = slice_layout
-            .children()
-            .map(|l| l.bounds())
-            .collect::<Vec<_>>();
+        let root_layouts = self.root_layouts();
 
         let bar = self.tree.state.downcast_ref::<MenuBarState>();
         let MenuBarState {
             global_state,
             menu_state: bar_menu_state,
         } = bar;
-        let slice = bar_menu_state.slice;
-
-        let bar_node = Node::with_children(bar_bounds.size(), [].into())
-            .move_to(bar_bounds.position() + translation);
-
-        let roots_node = Node::with_children(
-            Size::ZERO,
-            root_bounds
-                .iter()
-                .map(|r| Node::new(r.size()).move_to(r.position()))
-                .collect(),
-        )
-        .translate(translation);
 
         if !global_state.open {
-            return Node::with_children(bounds, [bar_node, roots_node].into());
+            return menu_layouts;
         }
 
         let Some(active) = bar_menu_state.active else {
-            return Node::with_children(bounds, [bar_node, roots_node].into());
+            return menu_layouts;
         };
 
         let active_root = &mut self.menu_bar.roots[active];
         let active_tree = &mut self.tree.children[active]; // item_tree: Tree{ stateless, [ widget_tree, menu_tree ] }
-        let parent_bounds = root_bounds[active - slice.start_index] + translation;
+        let parent_bounds = root_layouts[active].bounds();
 
         fn rec<Message, Theme: Catalog, Renderer: renderer::Renderer>(
             renderer: &Renderer,
             item: &mut Item<'_, Message, Theme, Renderer>,
             tree: &mut Tree,
-            menu_nodes: &mut Vec<Node>,
+            menu_layouts: &mut Vec<Layout>,
             parent_bounds: Rectangle,
             parent_direction: (Direction, Direction),
             viewport: &Rectangle,
@@ -104,33 +110,34 @@ where
             if let Some(menu) = item.menu.as_mut() {
                 let menu_tree = &mut tree.children[1];
 
-                let (menu_node, direction) = menu.layout(
+                // The menu stores the sizes/translations of its items in `menu_tree`
+                // and returns its own absolute layout.
+                let (menu_layout, direction) = menu.layout(
                     menu_tree,
                     renderer,
-                    &Limits::NONE,
+                    &Limits::new(Size::ZERO, Size::INFINITE),
                     parent_bounds,
                     parent_direction,
                     viewport,
                 );
-                // Node{inf, [ slice_node, items_bounds, offset_bounds]}
-                menu_nodes.push(menu_node);
+                menu_layouts.push(menu_layout);
 
                 let menu_state = menu_tree.state.downcast_ref::<MenuState>();
 
                 if let Some(active) = menu_state.active {
                     let next_item = &mut menu.items[active];
+                    let next_parent_bounds = menu_layout
+                        .iter(&menu_tree.children)
+                        .nth(active)
+                        .unwrap()
+                        .0
+                        .bounds();
                     let next_tree = &mut menu_tree.children[active];
-                    let next_parent_bounds = {
-                        let slice_node = &menu_nodes.last().unwrap().children()[0];
-                        let active_in_slice = active - menu_state.slice.start_index;
-                        let node = &slice_node.children()[active_in_slice];
-                        node.bounds() + (slice_node.bounds().position() - Point::ORIGIN)
-                    };
                     rec(
                         renderer,
                         next_item,
                         next_tree,
-                        menu_nodes,
+                        menu_layouts,
                         next_parent_bounds,
                         direction,
                         viewport,
@@ -138,8 +145,6 @@ where
                 }
             }
         }
-
-        let mut menu_nodes = vec![];
 
         let parent_direction = {
             let hcenter = bounds.width / 2.0;
@@ -166,37 +171,51 @@ where
             renderer,
             active_root,
             active_tree,
-            &mut menu_nodes,
+            &mut menu_layouts,
             parent_bounds,
             parent_direction,
-            &Rectangle::new(Point::ORIGIN, bounds),
+            &Rectangle::with_size(bounds),
         );
 
-        Node::with_children(
-            bounds,
-            [
-                bar_node,
-                roots_node,
-                Node::with_children(Size::ZERO, menu_nodes),
-            ]
-            .into(),
-        )
+        menu_layouts
     }
+}
 
+/// A [`MenuBarOverlay`] whose menus have been laid out.
+pub(super) struct LaidOutMenuBarOverlay<'a, 'b, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+    Renderer: renderer::Renderer,
+{
+    inner: MenuBarOverlay<'a, 'b, Message, Theme, Renderer>,
+    /// Absolute layouts of the open menus, outermost first
+    menu_layouts: Vec<Layout>,
+    window: Size,
+}
+
+impl<Message, Theme, Renderer> overlay::Overlay<Message, Theme, Renderer>
+    for LaidOutMenuBarOverlay<'_, '_, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+    Renderer: renderer::Renderer,
+{
     #[allow(unused_results)]
     fn update(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::update", "");
 
-        let bar = self.tree.state.downcast_mut::<MenuBarState>();
+        let root_layouts = self.inner.root_layouts();
+        let translation = self.inner.translation;
+        let viewport = Rectangle::with_size(self.window);
+        let bar_bounds = self.inner.layout.bounds() + translation;
+
+        let bar = self.inner.tree.state.downcast_mut::<MenuBarState>();
         let MenuBarState {
             global_state,
             menu_state: bar_menu_state,
@@ -211,21 +230,11 @@ where
             return;
         };
 
-        let viewport = layout.bounds();
-        let mut lc = layout.children();
-        let bar_bounds = lc.next().unwrap().bounds();
-        let roots_layout = lc.next().unwrap();
+        let parent_bounds = root_layouts[active].bounds();
+        let mut menu_layouts = self.menu_layouts.iter().copied(); // [menu_layout...]
 
-        let parent_bounds = roots_layout
-            .children()
-            .nth(active - slice.start_index)
-            .unwrap()
-            .bounds();
-        let menu_layouts_layout = lc.next().unwrap(); // Node{0, [menu_node...]}
-        let mut menu_layouts = menu_layouts_layout.children(); // [menu_node...]
-
-        let active_root = &mut self.menu_bar.roots[active];
-        let active_tree = &mut self.tree.children[active];
+        let active_root = &mut self.inner.menu_bar.roots[active];
+        let active_tree = &mut self.inner.tree.children[active];
         let mut prev_bounds_list = vec![bar_bounds];
 
         match event {
@@ -237,23 +246,22 @@ where
                 shell.request_redraw();
             }
             Event::Window(window::Event::Resized { .. }) => {
-                bar.close(self.tree.children.as_mut_slice(), shell);
+                bar.close(self.inner.tree.children.as_mut_slice(), shell);
                 return;
             }
             _ => {}
         }
 
         #[rustfmt::skip]
-        fn rec<'a, 'b, Message, Theme: Catalog, Renderer: renderer::Renderer>(
+        fn rec<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
             global_state: &mut GlobalState,
             global_parameters: &GlobalParameters<'a, Theme>,
             tree: &mut Tree,
             item: &mut Item<'a, Message, Theme, Renderer>,
             event: &Event,
-            layout_iter: &mut impl Iterator<Item = Layout<'b>>,
+            layout_iter: &mut impl Iterator<Item = Layout>,
             cursor: mouse::Cursor,
             renderer: &Renderer,
-            clipboard: &mut dyn Clipboard,
             shell: &mut Shell<'_, Message>,
             parent_bounds: Rectangle,
             viewport: &Rectangle,
@@ -272,9 +280,9 @@ where
                 return RecEvent::Close;
             }; // menu_node: Node{inf, [ slice_node, items_bounds, offset_bounds]}
 
-            let mut mc = menu_layout.children();
-            let slice_layout = mc.next().unwrap(); // slice_node
-            let items_bounds = mc.next().unwrap().bounds();
+            // menu_layout: absolute layout of the menu items area; the items'
+            // sizes/translations are stored in `menu_tree.children`
+            let items_bounds = menu_layout.bounds();
             let background_bounds = pad_rectangle(items_bounds, menu.padding);
 
             prev_bounds_list.push(background_bounds);
@@ -282,17 +290,17 @@ where
             let menu_state = menu_tree.state.downcast_mut::<MenuState>();
 
             let rec_event = if let Some(active) = menu_state.active {
-                let next_tree = &mut menu_tree.children[active];
-                let next_item = &mut menu.items[active];
-                let active_in_slice = active - menu_state.slice.start_index;
-                let next_parent_bounds = slice_layout
-                    .children()
-                    .nth(active_in_slice)
+                let next_parent_bounds = menu_layout
+                    .iter(&menu_tree.children)
+                    .nth(active)
+                    .map(|(layout, _)| layout)
                     .expect(
                         "Index (in slice space) is not within the slice layout. \
                         This should not happen, please report this issue"
                     )
                     .bounds();
+                let next_tree = &mut menu_tree.children[active];
+                let next_item = &mut menu.items[active];
 
                 rec(
                     global_state,
@@ -303,7 +311,6 @@ where
                     layout_iter,
                     cursor,
                     renderer,
-                    clipboard,
                     shell,
                     next_parent_bounds,
                     viewport,
@@ -341,7 +348,6 @@ where
                 menu_layout,
                 cursor,
                 renderer,
-                clipboard,
                 shell,
                 viewport,
                 parent_bounds,
@@ -352,14 +358,13 @@ where
 
         let re = rec(
             global_state,
-            &self.menu_bar.global_parameters,
+            &self.inner.menu_bar.global_parameters,
             active_tree,
             active_root,
             event,
             &mut menu_layouts,
             cursor,
             renderer,
-            clipboard,
             shell,
             parent_bounds,
             &viewport,
@@ -375,39 +380,40 @@ where
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
         ) && matches!(global_state.task(), Some(MenuBarTask::CloseOnClick))
         {
-            bar.close(self.tree.children.as_mut_slice(), shell);
+            bar.close(self.inner.tree.children.as_mut_slice(), shell);
             return;
         }
 
         match re {
             RecEvent::Event => {
                 let redraw_event = Event::Window(window::Event::RedrawRequested(Instant::now()));
-                let mut fake_messages = vec![];
-                let mut fake_shell = Shell::new(&mut fake_messages);
+                let mut fake_messages = shell::Bus::new();
+                let mut fake_shell = shell.local(&mut fake_messages);
 
-                let Self {
+                let MenuBarOverlay {
                     menu_bar,
                     layout,
                     tree,
                     ..
-                } = self;
+                } = &mut self.inner;
                 let draw_path = menu_bar.global_parameters.draw_path;
                 let cursor = match draw_path {
                     DrawPath::FakeHovering => {
                         let center = parent_bounds.center();
-                        mouse::Cursor::Available(center - self.translation)
+                        mouse::Cursor::Available(center - translation)
                     }
                     DrawPath::Backdrop => mouse::Cursor::Unavailable,
                 };
 
                 #[cfg(feature = "debug_log")]
                 debug!(target:"menu::MenuBarOverlay::update", "calling update_items() on MenuBar");
-                let slice_layout = layout.children().next().unwrap();
+                let item_layouts: Vec<Layout> =
+                    layout.iter(&tree.children).map(|(l, _)| l).collect();
                 itl_iter_slice!(
                     slice,
                     menu_bar.roots;iter_mut,
                     tree.children;iter_mut,
-                    slice_layout.children()
+                    item_layouts[slice.start_index..=slice.end_index].iter().copied()
                 )
                 .for_each(|((item, tree), layout)| {
                     item.update(
@@ -416,7 +422,6 @@ where
                         layout,
                         cursor,
                         renderer,
-                        clipboard,
                         &mut fake_shell,
                         &viewport,
                     );
@@ -424,7 +429,7 @@ where
             }
             RecEvent::Close => {
                 if !cursor.is_over(bar_bounds) {
-                    bar.close(self.tree.children.as_mut_slice(), shell);
+                    bar.close(self.inner.tree.children.as_mut_slice(), shell);
                 }
 
                 #[cfg(feature = "debug_log")]
@@ -454,14 +459,13 @@ where
 
     fn mouse_interaction(
         &self,
-        layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
     ) -> mouse::Interaction {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::mouse_interaction", "");
 
-        let bar = self.tree.state.downcast_ref::<MenuBarState>();
+        let bar = self.inner.tree.state.downcast_ref::<MenuBarState>();
         let MenuBarState {
             global_state,
             menu_state: bar_menu_state,
@@ -475,22 +479,15 @@ where
             return mouse::Interaction::default();
         };
 
-        // let viewport = layout.bounds();
-        let mut lc = layout.children();
-        let _bar_bounds = lc.next().unwrap().bounds();
-        let _roots_layout = lc.next().unwrap();
+        let mut menu_layouts = self.menu_layouts.iter().copied(); // [menu_layout...]
 
-        // let parent_bounds = roots_layout.children().nth(active).unwrap().bounds();
-        let menu_layouts_layout = lc.next().unwrap(); // Node{0, [menu_node...]}
-        let mut menu_layouts = menu_layouts_layout.children(); // [menu_node...]
+        let active_root = &self.inner.menu_bar.roots[active];
+        let active_tree = &self.inner.tree.children[active];
 
-        let active_root = &self.menu_bar.roots[active];
-        let active_tree = &self.tree.children[active];
-
-        fn rec<'a, 'b, Message, Theme: Catalog, Renderer: renderer::Renderer>(
+        fn rec<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
             tree: &Tree,
             item: &Item<'a, Message, Theme, Renderer>,
-            layout_iter: &mut impl Iterator<Item = Layout<'b>>,
+            layout_iter: &mut impl Iterator<Item = Layout>,
             cursor: mouse::Cursor,
             renderer: &Renderer,
         ) -> mouse::Interaction {
@@ -527,14 +524,15 @@ where
 
     fn operate(
         &mut self,
-        layout: Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::operate", "");
 
-        let bar = self.tree.state.downcast_ref::<MenuBarState>();
+        let viewport = Rectangle::with_size(self.window);
+
+        let bar = self.inner.tree.state.downcast_ref::<MenuBarState>();
         let MenuBarState {
             global_state,
             menu_state: bar_menu_state,
@@ -548,24 +546,18 @@ where
             return;
         };
 
-        // let viewport = layout.bounds();
-        let mut lc = layout.children();
-        let _bar_bounds = lc.next().unwrap().bounds();
-        let _roots_layout = lc.next().unwrap();
+        let mut menu_layouts = self.menu_layouts.iter().copied(); // [menu_layout...]
 
-        // let parent_bounds = roots_layout.children().nth(active).unwrap().bounds();
-        let menu_layouts_layout = lc.next().unwrap(); // Node{0, [menu_node...]}
-        let mut menu_layouts = menu_layouts_layout.children(); // [menu_node...]
+        let active_root = &mut self.inner.menu_bar.roots[active];
+        let active_tree = &mut self.inner.tree.children[active];
 
-        let active_root = &mut self.menu_bar.roots[active];
-        let active_tree = &mut self.tree.children[active];
-
-        fn rec<'a, 'b, Message, Theme: Catalog, Renderer: renderer::Renderer>(
+        fn rec<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
             tree: &mut Tree,
             item: &mut Item<'a, Message, Theme, Renderer>,
-            layout_iter: &mut impl Iterator<Item = Layout<'b>>,
+            layout_iter: &mut impl Iterator<Item = Layout>,
             renderer: &Renderer,
-            operation: &mut dyn Operation<()>,
+            operation: &mut dyn Operation,
+            viewport: &Rectangle,
         ) {
             let Some(menu) = item.menu.as_mut() else {
                 return;
@@ -581,13 +573,13 @@ where
 
             menu.operate(menu_tree, menu_layout, renderer, operation);
 
-            operation.container(None, menu_layout.bounds());
+            operation.container(None, menu_layout.bounds(), viewport);
             operation.traverse(&mut |operation| {
                 menu.items
                     .iter_mut() // [Item...]
                     .zip(menu_tree.children.iter_mut()) // [item_tree...] // [widget_node...]
                     .for_each(|(child, state)| {
-                        rec(state, child, layout_iter, renderer, operation);
+                        rec(state, child, layout_iter, renderer, operation, viewport);
                     });
             });
         }
@@ -598,22 +590,32 @@ where
             &mut menu_layouts,
             renderer,
             operation,
+            &viewport,
         );
     }
 
     fn overlay<'c>(
         &'c mut self,
-        layout: Layout<'c>,
         renderer: &Renderer,
-    ) -> Option<overlay::Element<'c, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'c, Message, Theme, Renderer>> {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::overlay", "");
+
+        let window = self.window;
+        let viewport = Rectangle::with_size(window);
+        let translation = self.inner.translation;
+        let root_layouts_raw: Vec<Layout> = self
+            .inner
+            .layout
+            .iter(&self.inner.tree.children)
+            .map(|(l, _)| l)
+            .collect();
 
         let Tree {
             state,
             children: item_trees,
             ..
-        } = self.tree;
+        } = &mut *self.inner.tree;
         let bar = state.downcast_ref::<MenuBarState>();
         let MenuBarState {
             global_state,
@@ -622,37 +624,35 @@ where
         let slice = bar_menu_state.slice;
 
         if !global_state.open {
-            return None;
+            return Vec::new();
         }
 
-        let active = bar_menu_state.active?;
+        let Some(active) = bar_menu_state.active else {
+            return Vec::new();
+        };
 
-        let mut lc = layout.children();
-        let viewport = layout.bounds();
-        let _bar_bounds = lc.next()?.bounds();
-        let _roots_layout = lc.next()?;
-        let menu_layouts_layout = lc.next()?; // Node{0, [menu_node...]}
-        let mut menu_layouts = menu_layouts_layout.children(); // [menu_node...]
+        let mut menu_layouts = self.menu_layouts.iter().copied(); // [menu_layout...]
 
         fn rec<'a, 'b, Message, Theme: Catalog, Renderer: renderer::Renderer>(
             items: &'b mut [Item<'a, Message, Theme, Renderer>],
             menu_tree: &'b mut Tree, // Tree{ menu_state, [item_tree...] }
-            menu_layouts: &mut impl Iterator<Item = Layout<'b>>, // [menu_node...]
+            menu_layouts: &mut impl Iterator<Item = Layout>, // [menu_layout...]
             overlays: &mut Vec<overlay::Element<'b, Message, Theme, Renderer>>,
             renderer: &Renderer,
             viewport: &Rectangle,
+            window: Size,
         ) {
             #[cfg(feature = "debug_log")]
             debug!(target:"menu::MenuBarOverlay::overlay", "rec");
 
             let menu_state = menu_tree.state.downcast_mut::<MenuState>();
-            let menu_layout = menu_layouts.next().unwrap(); // menu_node: Node{inf, [ slice_node, items_bounds, offset_bounds]}
-            let mut mlc = menu_layout.children();
-            let slice_layout = mlc.next().unwrap(); // slice_node: Node{inf, [item_node...]}
-            #[cfg(feature = "debug_log")]
-            debug!(target:"menu::MenuBarOverlay::overlay", "rec | slice_layout.children : {}", slice_layout.children().count());
-
+            let menu_layout = menu_layouts.next().unwrap();
             let slice = menu_state.slice;
+            let item_layouts: Vec<Layout> = menu_layout
+                .iter(&menu_tree.children)
+                .map(|(l, _)| l)
+                .collect();
+            let item_layouts = &item_layouts[slice.start_index..=slice.end_index];
 
             if let Some(active) = menu_state.active {
                 #[cfg(feature = "debug_log")]
@@ -664,7 +664,7 @@ where
                     slice,
                     items;iter_mut,
                     menu_tree.children;iter_mut,
-                    slice_layout.children()
+                    item_layouts.iter().copied()
                 ) {
                     #[cfg(feature = "debug_log")]
                     trace!(target:"menu::MenuBarOverlay::overlay", "rec | i: {i}");
@@ -690,17 +690,17 @@ where
                         &mut item_tree.children.as_mut_slice()[0]
                     };
 
-                    if let Some(overlay) = item_widget.as_widget_mut().overlay(
+                    let item_overlays = item_widget.overlay(
                         item_widget_tree,
                         item_layout,
                         renderer,
                         viewport,
                         Vector::ZERO,
-                    ) {
-                        #[cfg(feature = "debug_log")]
-                        debug!(target:"menu::MenuBarOverlay::overlay", "rec | active | i: {i} | Some overlay");
-                        overlays.push(overlay);
-                    }
+                        window,
+                    );
+                    #[cfg(feature = "debug_log")]
+                    debug!(target:"menu::MenuBarOverlay::overlay", "rec | active | i: {i} | {} overlays", item_overlays.len());
+                    overlays.extend(item_overlays);
                 }
 
                 if let Some((next_menu, next_menu_tree)) = next {
@@ -713,6 +713,7 @@ where
                         overlays,
                         renderer,
                         viewport,
+                        window,
                     );
                 }
             } else {
@@ -726,7 +727,7 @@ where
                     slice,
                     items;iter_mut,
                     menu_tree.children;iter_mut,
-                    slice_layout.children()
+                    item_layouts.iter().copied()
                 ) {
                     #[cfg(feature = "debug_log")]
                     trace!(target:"menu::MenuBarOverlay::overlay", "rec | i: {count}");
@@ -735,17 +736,17 @@ where
                         item: item_widget, ..
                     } = item;
 
-                    if let Some(overlay) = item_widget.as_widget_mut().overlay(
+                    let item_overlays = item_widget.overlay(
                         &mut item_tree.children[0],
                         item_layout,
                         renderer,
                         viewport,
                         Vector::ZERO,
-                    ) {
-                        #[cfg(feature = "debug_log")]
-                        debug!(target:"menu::MenuBarOverlay::overlay", "rec | no active | i: {count} | Some overlay");
-                        overlays.push(overlay);
-                    }
+                        window,
+                    );
+                    #[cfg(feature = "debug_log")]
+                    debug!(target:"menu::MenuBarOverlay::overlay", "rec | no active | i: {count} | {} overlays", item_overlays.len());
+                    overlays.extend(item_overlays);
 
                     #[cfg(feature = "debug_log")]
                     {
@@ -758,13 +759,11 @@ where
         let mut overlays = vec![];
         let mut next = None;
 
-        let slice_layout = self.layout.children().next()?;
-
         for (i, ((item, item_tree), item_layout)) in itl_iter_slice_enum!(
             slice,
-            self.menu_bar.roots;iter_mut,
+            self.inner.menu_bar.roots;iter_mut,
             item_trees;iter_mut,
-            slice_layout.children()
+            root_layouts_raw[slice.start_index..=slice.end_index].iter().copied()
         ) {
             #[cfg(feature = "debug_log")]
             trace!(target:"menu::MenuBarOverlay::overlay", "root | i: {i}");
@@ -783,17 +782,17 @@ where
             {
                 next = Some((menu, item_menu_tree));
             }
-            if let Some(overlay) = item_widget.as_widget_mut().overlay(
+            let item_overlays = item_widget.overlay(
                 item_widget_tree,
                 item_layout,
                 renderer,
                 &viewport,
-                self.translation,
-            ) {
-                #[cfg(feature = "debug_log")]
-                debug!(target:"menu::MenuBarOverlay::overlay", "root | i: {i} | Some overlay");
-                overlays.push(overlay);
-            }
+                translation,
+                window,
+            );
+            #[cfg(feature = "debug_log")]
+            debug!(target:"menu::MenuBarOverlay::overlay", "root | i: {i} | {} overlays", item_overlays.len());
+            overlays.extend(item_overlays);
         }
 
         if let Some((next_menu, next_menu_tree)) = next {
@@ -804,18 +803,13 @@ where
                 &mut overlays,
                 renderer,
                 &viewport,
+                window,
             );
         }
 
-        if overlays.is_empty() {
-            #[cfg(feature = "debug_log")]
-            debug!(target:"menu::MenuBarOverlay::overlay", "return | None");
-            None
-        } else {
-            #[cfg(feature = "debug_log")]
-            debug!(target:"menu::MenuBarOverlay::overlay", "return | Some");
-            Some(overlay::Group::with_children(overlays).overlay())
-        }
+        #[cfg(feature = "debug_log")]
+        debug!(target:"menu::MenuBarOverlay::overlay", "return | {} overlays", overlays.len());
+        overlays
     }
 
     fn draw(
@@ -823,13 +817,12 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
         cursor: mouse::Cursor,
     ) {
         #[cfg(feature = "debug_log")]
         debug!(target:"menu::MenuBarOverlay::draw", "");
 
-        let bar = self.tree.state.downcast_ref::<MenuBarState>();
+        let bar = self.inner.tree.state.downcast_ref::<MenuBarState>();
         let MenuBarState {
             global_state,
             menu_state: bar_menu_state,
@@ -843,23 +836,17 @@ where
             return;
         };
 
-        let viewport = layout.bounds();
-        let mut lc = layout.children();
-        let _bar_bounds = lc.next().unwrap().bounds();
-        let _roots_layout = lc.next().unwrap();
+        let viewport = Rectangle::with_size(self.window);
+        let mut menu_layouts = self.menu_layouts.iter().copied(); // [menu_layout...]
 
-        // let parent_bounds = roots_layout.children().nth(active).unwrap().bounds();
-        let menu_layouts_layout = lc.next().unwrap(); // Node{0, [menu_node...]}
-        let mut menu_layouts = menu_layouts_layout.children(); // [menu_node...]
+        let active_root = &self.inner.menu_bar.roots[active];
+        let active_tree = &self.inner.tree.children[active];
 
-        let active_root = &self.menu_bar.roots[active];
-        let active_tree = &self.tree.children[active];
-
-        fn rec<'a, 'b, Message, Theme: Catalog, Renderer: renderer::Renderer>(
+        fn rec<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
             global_parameters: &GlobalParameters<'a, Theme>,
             tree: &Tree,
             item: &Item<'a, Message, Theme, Renderer>,
-            layout_iter: &mut impl Iterator<Item = Layout<'b>>,
+            layout_iter: &mut impl Iterator<Item = Layout>,
             cursor: mouse::Cursor,
             renderer: &mut Renderer,
             theme: &Theme,
@@ -914,10 +901,10 @@ where
             }
         }
 
-        let theme_style = theme.style(&self.menu_bar.global_parameters.class, Status::Active);
+        let theme_style = theme.style(&self.inner.menu_bar.global_parameters.class, Status::Active);
 
         rec(
-            &self.menu_bar.global_parameters,
+            &self.inner.menu_bar.global_parameters,
             active_tree,
             active_root,
             &mut menu_layouts,

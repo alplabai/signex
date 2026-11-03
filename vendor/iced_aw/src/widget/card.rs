@@ -8,12 +8,12 @@ pub use crate::style::{
     status::{Status, StyleFn},
 };
 use iced_core::{
-    Alignment, Border, Clipboard, Color, Element, Event, Layout, Length, Padding, Point, Rectangle,
-    Shadow, Shell, Size, Vector, Widget,
-    layout::{Limits, Node},
+    Alignment, Border, Color, Element, Event, Layout, Length, Padding, Rectangle, Shadow, Shell,
+    Size, Vector, Widget,
+    layout::Limits,
     mouse::{self, Cursor},
     overlay, renderer,
-    widget::{Operation, Tree},
+    widget::{Meta, Operation, Tree, tree},
 };
 use iced_widget::button;
 
@@ -94,8 +94,8 @@ where
     ///     * the body [`Element`] to display at the middle of the [`Card`].
     pub fn new<H, B>(head: H, body: B) -> Self
     where
-        H: Into<Element<'a, Message, Theme, Renderer>>,
-        B: Into<Element<'a, Message, Theme, Renderer>>,
+        H: Widget<Message, Theme, Renderer> + 'a,
+        B: Widget<Message, Theme, Renderer> + 'a,
     {
         Card {
             width: Length::Fill,
@@ -107,8 +107,8 @@ where
             padding_foot: DEFAULT_PADDING,
             close_size: None,
             on_close: None,
-            head: head.into(),
-            body: body.into(),
+            head: Widget::_boxed(head),
+            body: Widget::_boxed(body),
             foot: None,
             close_button: None,
             class: Theme::default(),
@@ -119,9 +119,9 @@ where
     #[must_use]
     pub fn foot<F>(mut self, foot: F) -> Self
     where
-        F: Into<Element<'a, Message, Theme, Renderer>>,
+        F: Widget<Message, Theme, Renderer> + 'a,
     {
-        self.foot = Some(foot.into());
+        self.foot = Some(Widget::_boxed(foot));
         self
     }
 
@@ -161,7 +161,7 @@ where
     pub fn on_close(mut self, msg: Message) -> Self
     where
         Message: Clone + 'a,
-        Renderer: iced_core::text::Renderer<Font = iced_core::Font> + 'a,
+        Renderer: iced_core::text::Renderer + 'a,
         Theme: iced_widget::text::Catalog + iced_widget::button::Catalog + 'a,
         <Theme as iced_widget::button::Catalog>::Class<'a>:
             From<iced_widget::button::StyleFn<'a, Theme>>,
@@ -175,7 +175,7 @@ where
     fn create_close_button(&self, msg: Message) -> Element<'a, Message, Theme, Renderer>
     where
         Message: Clone + 'a,
-        Renderer: iced_core::text::Renderer<Font = iced_core::Font> + 'a,
+        Renderer: iced_core::text::Renderer + 'a,
         Theme: iced_widget::text::Catalog + iced_widget::button::Catalog + 'a,
         <Theme as iced_widget::button::Catalog>::Class<'a>:
             From<iced_widget::button::StyleFn<'a, Theme>>,
@@ -188,7 +188,7 @@ where
             .size(size)
             .shaping(shaping);
 
-        button(text_widget)
+        let button = button(text_widget)
             .padding(0)
             .style(|theme: &Theme, _status| {
                 let card_style = <Theme as Catalog>::style(
@@ -204,8 +204,9 @@ where
                     snap: false,
                 }
             })
-            .on_press(msg)
-            .into()
+            .on_press(msg);
+
+        Widget::_boxed(button)
     }
 
     /// Sets the padding of the [`Card`].
@@ -266,42 +267,76 @@ where
     }
 }
 
+/// The measured sizes of the sections of a [`Card`], stored in its widget
+/// state. Sizes include the padding of each section.
+#[derive(Debug, Clone, Copy, Default)]
+struct Sections {
+    head: Size,
+    body: Size,
+    foot: Size,
+}
+
+/// The result of laying out a section: its size (padding included) and the
+/// translation of its content relative to the origin of the section.
+#[derive(Debug, Clone, Copy, Default)]
+struct Section {
+    size: Size,
+    content: Vector,
+}
+
+/// Applies a maximum width and height to the given [`Limits`].
+fn bounded(limits: &Limits, max_width: f32, max_height: f32) -> Limits {
+    let max = Size::new(
+        limits.max.width.min(max_width),
+        limits.max.height.min(max_height),
+    );
+    let min = Size::new(
+        limits.min.width.min(max.width),
+        limits.min.height.min(max.height),
+    );
+
+    Limits::with_flags(min, max, limits.compression, limits.infinite)
+}
+
+impl<'a, Message, Theme, Renderer> Meta for Card<'a, Message, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+    Theme: Catalog,
+{
+}
+
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Card<'a, Message, Theme, Renderer>
 where
     Message: 'a + Clone,
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog,
 {
-    fn children(&self) -> Vec<Tree> {
-        let mut children = vec![Tree::new(&self.head), Tree::new(&self.body)];
-
-        if let Some(foot) = &self.foot {
-            children.push(Tree::new(foot));
-        }
-
-        if let Some(close_button) = &self.close_button {
-            children.push(Tree::new(close_button));
-        }
-
-        children
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<Sections>()
     }
 
-    fn diff(&self, tree: &mut Tree) {
-        match (&self.foot, &self.close_button) {
-            (Some(foot), Some(close_button)) => {
-                tree.diff_children(&[&self.head, &self.body, foot, close_button]);
-            }
-            (Some(foot), None) => {
-                tree.diff_children(&[&self.head, &self.body, foot]);
-            }
-            (None, Some(close_button)) => {
-                tree.diff_children(&[&self.head, &self.body, close_button]);
-            }
-            (None, None) => {
-                tree.diff_children(&[&self.head, &self.body]);
-            }
+    fn state(&self) -> tree::State {
+        tree::State::new(Sections::default())
+    }
+
+    fn diff(&mut self, tree: &mut Tree) {
+        let mut children: Vec<&mut Element<'a, Message, Theme, Renderer>> =
+            vec![&mut self.head, &mut self.body];
+
+        if let Some(foot) = &mut self.foot {
+            children.push(foot);
         }
+
+        if let Some(close_button) = &mut self.close_button {
+            children.push(close_button);
+        }
+
+        tree.diff_children_custom(
+            &mut children,
+            |tree, child| tree.diff(&mut **child),
+            |child| Tree::new(&**child),
+        );
     }
 
     fn size(&self) -> Size<Length> {
@@ -311,12 +346,12 @@ where
         }
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let limits = limits.max_width(self.max_width).max_height(self.max_height);
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        let limits = bounded(limits, self.max_width, self.max_height);
 
         let close_button_tree_index = 2 + usize::from(self.foot.is_some());
 
-        let head_node = head_node(
+        let head = head_node(
             renderer,
             &limits,
             &mut self.head,
@@ -328,13 +363,13 @@ where
             close_button_tree_index,
         );
 
-        let limits = limits.shrink(Size::new(0.0, head_node.size().height));
+        let limits = limits.shrink(Size::new(0.0, head.section.size.height));
 
-        let mut foot_node = self.foot.as_mut().map_or_else(Node::default, |foot| {
+        let foot = self.foot.as_mut().map_or_else(Section::default, |foot| {
             foot_node(renderer, &limits, foot, self.padding_foot, self.width, tree)
         });
-        let limits = limits.shrink(Size::new(0.0, foot_node.size().height));
-        let mut body_node = body_node(
+        let limits = limits.shrink(Size::new(0.0, foot.size.height));
+        let body = body_node(
             renderer,
             &limits,
             &mut self.body,
@@ -342,138 +377,84 @@ where
             self.width,
             tree,
         );
-        let body_bounds = body_node.bounds();
-        body_node = body_node.move_to(Point::new(
-            body_bounds.x,
-            body_bounds.y + head_node.bounds().height,
-        ));
 
-        let foot_bounds = foot_node.bounds();
+        let body_y = head.section.size.height;
+        let foot_y = body_y + body.size.height;
 
-        foot_node = foot_node.move_to(Point::new(
-            foot_bounds.x,
-            foot_bounds.y + head_node.bounds().height + body_node.bounds().height,
-        ));
+        tree.children[0].translation = head.section.content;
+        if let Some(close) = head.close {
+            tree.children[close_button_tree_index].translation = close;
+        }
+        tree.children[1].translation = Vector::new(0.0, body_y) + body.content;
+        if self.foot.is_some() {
+            tree.children[2].translation = Vector::new(0.0, foot_y) + foot.content;
+        }
 
-        Node::with_children(
-            Size::new(
-                body_node.size().width,
-                head_node.size().height + body_node.size().height + foot_node.size().height,
-            ),
-            vec![head_node, body_node, foot_node],
-        )
+        tree.size = Size::new(
+            body.size.width,
+            head.section.size.height + body.size.height + foot.size.height,
+        );
+        *tree.state.downcast_mut::<Sections>() = Sections {
+            head: head.section.size,
+            body: body.size,
+            foot: foot.size,
+        };
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let head_layout = children
-            .next()
-            .expect("widget: Layout should have a head layout");
-        let mut head_children = head_layout.children();
+        let close_button_tree_index = 2 + usize::from(self.foot.is_some());
+        let mut children: Vec<_> = layout.iter_mut(&mut state.children).collect();
 
-        self.head.as_widget_mut().update(
-            &mut state.children[0],
-            event,
-            head_children
-                .next()
-                .expect("widget: Layout should have a head content layout"),
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        );
-
-        // Update close button if present
-        if let Some((close_layout, close_button)) =
-            head_children.next().zip(self.close_button.as_mut())
         {
-            let close_button_tree_index = 2 + usize::from(self.foot.is_some());
-            close_button.as_widget_mut().update(
-                &mut state.children[close_button_tree_index],
-                event,
-                close_layout,
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
+            let (layout, tree) = &mut children[0];
+            self.head
+                .update(tree, event, *layout, cursor, renderer, shell, viewport);
         }
 
-        let body_layout = children
-            .next()
-            .expect("widget: Layout should have a body layout");
+        // Update close button if present
+        if let Some(close_button) = self.close_button.as_mut() {
+            let (layout, tree) = &mut children[close_button_tree_index];
+            close_button.update(tree, event, *layout, cursor, renderer, shell, viewport);
+        }
 
-        self.body.as_widget_mut().update(
-            &mut state.children[1],
-            event,
-            body_layout
-                .children()
-                .next()
-                .expect("widget: Layout should have a body content layout"),
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        );
-
-        let foot_layout = children
-            .next()
-            .expect("widget: Layout should have a foot layout");
+        {
+            let (layout, tree) = &mut children[1];
+            self.body
+                .update(tree, event, *layout, cursor, renderer, shell, viewport);
+        }
 
         if let Some(foot) = self.foot.as_mut() {
-            foot.as_widget_mut().update(
-                &mut state.children[2],
-                event,
-                foot_layout
-                    .children()
-                    .next()
-                    .expect("widget: Layout should have a foot content layout"),
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
+            let (layout, tree) = &mut children[2];
+            foot.update(tree, event, *layout, cursor, renderer, shell, viewport);
         }
     }
 
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        let mut children = layout.children();
+        let close_button_tree_index = 2 + usize::from(self.foot.is_some());
+        let children: Vec<_> = layout.iter(&state.children).collect();
 
-        let head_layout = children
-            .next()
-            .expect("widget: Layout should have a head layout");
-        let mut head_children = head_layout.children();
-
-        let head = head_children
-            .next()
-            .expect("widget: Layout should have a head layout");
-        let close_layout = head_children.next();
-
-        let is_mouse_over_close = close_layout.is_some_and(|layout| {
-            let bounds = layout.bounds();
-            bounds.contains(cursor.position().unwrap_or_default())
-        });
+        let is_mouse_over_close = self.close_button.is_some()
+            && children.get(close_button_tree_index).is_some_and(|(layout, _)| {
+                layout
+                    .bounds()
+                    .contains(cursor.position().unwrap_or_default())
+            });
 
         let mouse_interaction = if is_mouse_over_close {
             mouse::Interaction::Pointer
@@ -481,109 +462,73 @@ where
             mouse::Interaction::default()
         };
 
-        let body_layout = children
-            .next()
-            .expect("widget: Layout should have a body layout");
-        let mut body_children = body_layout.children();
-
-        let foot_layout = children
-            .next()
-            .expect("widget: Layout should have a foot layout");
-        let mut foot_children = foot_layout.children();
+        let (head_layout, head_tree) = &children[0];
+        let (body_layout, body_tree) = &children[1];
 
         mouse_interaction
-            .max(self.head.as_widget().mouse_interaction(
-                &state.children[0],
-                head,
+            .max(self.head.mouse_interaction(
+                head_tree,
+                *head_layout,
+                cursor,
+                viewport,
+                renderer,
+            ))
+            .max(self.body.mouse_interaction(
+                body_tree,
+                *body_layout,
                 cursor,
                 viewport,
                 renderer,
             ))
             .max(
-                self.body.as_widget().mouse_interaction(
-                    &state.children[1],
-                    body_children
-                        .next()
-                        .expect("widget: Layout should have a body content layout"),
-                    cursor,
-                    viewport,
-                    renderer,
-                ),
-            )
-            .max(
                 self.foot
                     .as_ref()
                     .map_or_else(mouse::Interaction::default, |foot| {
-                        foot.as_widget().mouse_interaction(
-                            &state.children[2],
-                            foot_children
-                                .next()
-                                .expect("widget: Layout should have a foot content layout"),
-                            cursor,
-                            viewport,
-                            renderer,
-                        )
+                        let (foot_layout, foot_tree) = &children[2];
+                        foot.mouse_interaction(foot_tree, *foot_layout, cursor, viewport, renderer)
                     }),
             )
     }
 
-    fn operate<'b>(
-        &'b mut self,
-        state: &'b mut Tree,
-        layout: Layout<'_>,
+    fn operate(
+        &mut self,
+        state: &mut Tree,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        let mut children = layout.children();
-        let head_layout = children.next().expect("Missing Head Layout");
-        let body_layout = children.next().expect("Missing Body Layout");
-        let foot_layout = children.next().expect("Missing Footer Layout");
-
-        // Operate on head and close button
-        let mut head_children = head_layout.children();
-        if let Some(head_content_layout) = head_children.next() {
-            self.head.as_widget_mut().operate(
-                &mut state.children[0],
-                head_content_layout,
-                renderer,
-                operation,
-            );
-        }
-
-        // Operate on close button if present (second child of head_layout)
-        if let Some((close_layout, close_button)) =
-            head_children.next().zip(self.close_button.as_mut())
-        {
+        operation.container(None, layout.bounds(), viewport);
+        operation.traverse(&mut |operation| {
             let close_button_tree_index = 2 + usize::from(self.foot.is_some());
-            close_button.as_widget_mut().operate(
-                &mut state.children[close_button_tree_index],
-                close_layout,
-                renderer,
-                operation,
-            );
-        }
+            let mut children: Vec<_> = layout.iter_mut(&mut state.children).collect();
 
-        // Operate on body (body_layout contains a child with the actual body content)
-        if let Some(body_content_layout) = body_layout.children().next() {
-            self.body.as_widget_mut().operate(
-                &mut state.children[1],
-                body_content_layout,
-                renderer,
-                operation,
-            );
-        }
+            // Operate on head
+            {
+                let (layout, tree) = &mut children[0];
+                self.head
+                    .operate(tree, *layout, viewport, renderer, operation);
+            }
 
-        // Operate on footer if present (foot_layout contains a child with the actual foot content)
-        if let Some((footer, foot_content_layout)) =
-            self.foot.as_mut().zip(foot_layout.children().next())
-        {
-            footer.as_widget_mut().operate(
-                &mut state.children[2],
-                foot_content_layout,
-                renderer,
-                operation,
-            );
-        }
+            // Operate on close button if present
+            if let Some(close_button) = self.close_button.as_mut() {
+                let (layout, tree) = &mut children[close_button_tree_index];
+                close_button.operate(tree, *layout, viewport, renderer, operation);
+            }
+
+            // Operate on body
+            {
+                let (layout, tree) = &mut children[1];
+                self.body
+                    .operate(tree, *layout, viewport, renderer, operation);
+            }
+
+            // Operate on footer if present
+            if let Some(footer) = self.foot.as_mut() {
+                let (layout, tree) = &mut children[2];
+                footer.operate(tree, *layout, viewport, renderer, operation);
+            }
+        });
     }
 
     fn draw(
@@ -592,13 +537,14 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let mut children = layout.children();
         let style_sheet = theme.style(&self.class, Status::Active);
+        let sections = *state.state.downcast_ref::<Sections>();
+        let children: Vec<_> = layout.iter(&state.children).collect();
 
         if bounds.intersects(viewport) {
             // Background
@@ -609,6 +555,7 @@ where
                         radius: style_sheet.border_radius.into(),
                         width: style_sheet.border_width,
                         color: style_sheet.border_color,
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     snap: false,
@@ -625,6 +572,7 @@ where
                         radius: style_sheet.border_radius.into(),
                         width: style_sheet.border_width,
                         color: style_sheet.border_color,
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     snap: false,
@@ -633,33 +581,39 @@ where
             );
         }
 
+        let origin = bounds.position();
+        let head_bounds = Rectangle::new(origin, sections.head);
+        let body_bounds = Rectangle::new(
+            origin + Vector::new(0.0, sections.head.height),
+            sections.body,
+        );
+        let foot_bounds = Rectangle::new(
+            origin + Vector::new(0.0, sections.head.height + sections.body.height),
+            sections.foot,
+        );
+
         // ----------- Head ----------------------
-        let head_layout = children
-            .next()
-            .expect("Graphics: Layout should have a head layout");
         let close_button_tree_index = 2 + usize::from(self.foot.is_some());
         draw_head(
-            &state.children[0],
             renderer,
+            head_bounds,
             &self.head,
-            head_layout,
+            children[0],
             cursor,
             viewport,
             theme,
             &style_sheet,
-            self.close_button.as_ref(),
-            state.children.get(close_button_tree_index),
+            self.close_button
+                .as_ref()
+                .zip(children.get(close_button_tree_index).copied()),
         );
 
         // ----------- Body ----------------------
-        let body_layout = children
-            .next()
-            .expect("Graphics: Layout should have a body layout");
         draw_body(
-            &state.children[1],
             renderer,
+            body_bounds,
             &self.body,
-            body_layout,
+            children[1],
             cursor,
             viewport,
             theme,
@@ -667,14 +621,10 @@ where
         );
 
         // ----------- Foot ----------------------
-        let foot_layout = children
-            .next()
-            .expect("Graphics: Layout should have a foot layout");
         draw_foot(
-            state.children.get(2),
             renderer,
-            self.foot.as_ref(),
-            foot_layout,
+            foot_bounds,
+            self.foot.as_ref().zip(children.get(2).copied()),
             cursor,
             viewport,
             theme,
@@ -685,38 +635,32 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<iced_core::overlay::Element<'b, Message, Theme, Renderer>> {
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let mut children = vec![&mut self.head, &mut self.body];
         if let Some(foot) = &mut self.foot {
             children.push(foot);
         }
-        let children = children
-            .into_iter()
-            .zip(&mut tree.children)
-            .zip(layout.children())
-            .filter_map(|((child, state), layout)| {
-                layout.children().next().and_then(|child_layout| {
-                    child.as_widget_mut().overlay(
-                        state,
-                        child_layout,
-                        renderer,
-                        viewport,
-                        translation,
-                    )
-                })
-            })
-            .collect::<Vec<_>>();
 
-        if children.is_empty() {
-            None
-        } else {
-            Some(overlay::Group::with_children(children).overlay())
-        }
+        children
+            .into_iter()
+            .zip(layout.iter_mut(&mut tree.children))
+            .flat_map(|(child, (layout, state))| {
+                child.overlay(state, layout, renderer, viewport, translation, window)
+            })
+            .collect()
     }
+}
+
+/// The layout of the head: the head section and, if present, the translation
+/// of the close button relative to the origin of the card.
+struct HeadLayout {
+    section: Section,
+    close: Option<Vector>,
 }
 
 /// Calculates the layout of the head.
@@ -731,11 +675,11 @@ fn head_node<Message, Theme, Renderer>(
     close_size: Option<f32>,
     tree: &mut Tree,
     close_button_tree_index: usize,
-) -> Node
+) -> HeadLayout
 where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
 {
-    let header_size = head.as_widget().size();
+    let header_size = head.size();
 
     let mut limits = limits
         .loose()
@@ -743,20 +687,15 @@ where
         .height(header_size.height)
         .shrink(padding);
 
-    let close_size = close_size.unwrap_or_else(|| renderer.default_size().0);
+    let close_size = close_size.unwrap_or_else(|| renderer.text_size().0);
 
     if close_button.is_some() {
         limits = limits.shrink(Size::new(close_size, 0.0));
     }
 
-    let mut head = head
-        .as_widget_mut()
-        .layout(&mut tree.children[0], renderer, &limits);
-    let mut size = limits.resolve(width, header_size.height, head.size());
-
-    head = head.move_to(Point::new(padding.left, padding.top));
-    let head_size = head.size();
-    head = head.align(Alignment::Start, Alignment::Center, head_size);
+    head.layout(&mut tree.children[0], renderer, &limits);
+    let head_content_size = tree.children[0].size;
+    let mut size = limits.resolve(width, header_size.height, head_content_size);
 
     let close = if let Some(close_btn) = close_button {
         let button_size = close_size + CLOSE_BUTTON_SPACING;
@@ -764,31 +703,26 @@ where
             .loose()
             .width(Length::Fixed(button_size))
             .height(Length::Fixed(button_size));
-        let mut close_node = close_btn.as_widget_mut().layout(
+        close_btn.layout(
             &mut tree.children[close_button_tree_index],
             renderer,
             &button_limits,
         );
-        let node_size = close_node.size();
 
         size = Size::new(size.width + close_size, size.height);
 
-        close_node = close_node
-            .move_to(Point::new(size.width - padding.right, padding.top))
-            .align(Alignment::End, Alignment::Center, node_size);
-
-        Some(close_node)
+        Some(Vector::new(size.width - padding.right, padding.top))
     } else {
         None
     };
 
-    Node::with_children(
-        size.expand(padding),
-        match close {
-            Some(node) => vec![head, node],
-            None => vec![head],
+    HeadLayout {
+        section: Section {
+            size: size.expand(padding),
+            content: Vector::new(padding.left, padding.top),
         },
-    )
+        close,
+    }
 }
 
 /// Calculates the layout of the body.
@@ -799,11 +733,11 @@ fn body_node<Message, Theme, Renderer>(
     padding: Padding,
     width: Length,
     tree: &mut Tree,
-) -> Node
+) -> Section
 where
     Renderer: renderer::Renderer,
 {
-    let body_size = body.as_widget().size();
+    let body_size = body.size();
 
     let limits = limits
         .loose()
@@ -811,18 +745,13 @@ where
         .height(body_size.height)
         .shrink(padding);
 
-    let mut body = body
-        .as_widget_mut()
-        .layout(&mut tree.children[1], renderer, &limits);
-    let size = limits.resolve(width, body_size.height, body.size());
+    body.layout(&mut tree.children[1], renderer, &limits);
+    let size = limits.resolve(width, body_size.height, tree.children[1].size);
 
-    body = body.move_to(Point::new(padding.left, padding.top)).align(
-        Alignment::Start,
-        Alignment::Start,
-        size,
-    );
-
-    Node::with_children(size.expand(padding), vec![body])
+    Section {
+        size: size.expand(padding),
+        content: Vector::new(padding.left, padding.top),
+    }
 }
 
 /// Calculates the layout of the foot.
@@ -833,11 +762,11 @@ fn foot_node<Message, Theme, Renderer>(
     padding: Padding,
     width: Length,
     tree: &mut Tree,
-) -> Node
+) -> Section
 where
     Renderer: renderer::Renderer,
 {
-    let foot_size = foot.as_widget().size();
+    let foot_size = foot.size();
 
     let limits = limits
         .loose()
@@ -845,39 +774,32 @@ where
         .height(foot_size.height)
         .shrink(padding);
 
-    let mut foot = foot
-        .as_widget_mut()
-        .layout(&mut tree.children[2], renderer, &limits);
-    let size = limits.resolve(width, foot_size.height, foot.size());
+    foot.layout(&mut tree.children[2], renderer, &limits);
+    let content_size = tree.children[2].size;
+    let size = limits.resolve(width, foot_size.height, content_size);
 
-    foot = foot.move_to(Point::new(padding.left, padding.right)).align(
-        Alignment::Start,
-        Alignment::Center,
-        size,
-    );
-
-    Node::with_children(size.expand(padding), vec![foot])
+    Section {
+        size: size.expand(padding),
+        content: Vector::new(padding.left, padding.right)
+            + content_size.align(size, Alignment::Start, Alignment::Center),
+    }
 }
 
 /// Draws the head of the card.
 #[allow(clippy::too_many_arguments)]
 fn draw_head<Message, Theme, Renderer>(
-    state: &Tree,
     renderer: &mut Renderer,
+    bounds: Rectangle,
     head: &Element<'_, Message, Theme, Renderer>,
-    layout: Layout<'_>,
+    (head_layout, head_state): (Layout, &Tree),
     cursor: Cursor,
     viewport: &Rectangle,
     theme: &Theme,
     style: &Style,
-    close_button: Option<&Element<'_, Message, Theme, Renderer>>,
-    close_button_state: Option<&Tree>,
+    close_button: Option<(&Element<'_, Message, Theme, Renderer>, (Layout, &Tree))>,
 ) where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
-    Theme: Catalog,
+    Renderer: renderer::Renderer,
 {
-    let mut head_children = layout.children();
-    let bounds = layout.bounds();
     let border_radius = style.border_radius;
 
     // Head background
@@ -889,6 +811,7 @@ fn draw_head<Message, Theme, Renderer>(
                     radius: border_radius.into(),
                     width: 0.0,
                     color: Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 shadow: Shadow::default(),
                 snap: false,
@@ -912,6 +835,7 @@ fn draw_head<Message, Theme, Renderer>(
                     radius: (0.0).into(),
                     width: 0.0,
                     color: Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 shadow: Shadow::default(),
                 snap: false,
@@ -920,26 +844,21 @@ fn draw_head<Message, Theme, Renderer>(
         );
     }
 
-    head.as_widget().draw(
-        state,
+    head.draw(
+        head_state,
         renderer,
         theme,
         &renderer::Style {
             text_color: style.head_text_color,
         },
-        head_children
-            .next()
-            .expect("Graphics: Layout should have a head content layout"),
+        head_layout,
         cursor,
         viewport,
     );
 
     // Draw close button if present
-    if let Some((close_layout, (close_btn, close_state))) = head_children
-        .next()
-        .zip(close_button.zip(close_button_state))
-    {
-        close_btn.as_widget().draw(
+    if let Some((close_btn, (close_layout, close_state))) = close_button {
+        close_btn.draw(
             close_state,
             renderer,
             theme,
@@ -956,21 +875,17 @@ fn draw_head<Message, Theme, Renderer>(
 /// Draws the body of the card.
 #[allow(clippy::too_many_arguments)]
 fn draw_body<Message, Theme, Renderer>(
-    state: &Tree,
     renderer: &mut Renderer,
+    bounds: Rectangle,
     body: &Element<'_, Message, Theme, Renderer>,
-    layout: Layout<'_>,
+    (body_layout, body_state): (Layout, &Tree),
     cursor: Cursor,
     viewport: &Rectangle,
     theme: &Theme,
     style: &Style,
 ) where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
-    Theme: Catalog,
+    Renderer: renderer::Renderer,
 {
-    let mut body_children = layout.children();
-    let bounds = layout.bounds();
-
     // Body background
     if bounds.intersects(viewport) {
         renderer.fill_quad(
@@ -980,6 +895,7 @@ fn draw_body<Message, Theme, Renderer>(
                     radius: (0.0).into(),
                     width: 0.0,
                     color: Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 shadow: Shadow::default(),
                 snap: false,
@@ -988,39 +904,31 @@ fn draw_body<Message, Theme, Renderer>(
         );
     }
 
-    body.as_widget().draw(
-        state,
+    body.draw(
+        body_state,
         renderer,
         theme,
         &renderer::Style {
             text_color: style.body_text_color,
         },
-        body_children
-            .next()
-            .expect("Graphics: Layout should have a body content layout"),
+        body_layout,
         cursor,
         viewport,
     );
 }
 
 /// Draws the foot of the card.
-#[allow(clippy::too_many_arguments)]
 fn draw_foot<Message, Theme, Renderer>(
-    state: Option<&Tree>,
     renderer: &mut Renderer,
-    foot: Option<&Element<'_, Message, Theme, Renderer>>,
-    layout: Layout<'_>,
+    bounds: Rectangle,
+    foot: Option<(&Element<'_, Message, Theme, Renderer>, (Layout, &Tree))>,
     cursor: Cursor,
     viewport: &Rectangle,
     theme: &Theme,
     style: &Style,
 ) where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
-    Theme: Catalog,
+    Renderer: renderer::Renderer,
 {
-    let mut foot_children = layout.children();
-    let bounds = layout.bounds();
-
     // Foot background
     if bounds.intersects(viewport) {
         renderer.fill_quad(
@@ -1030,6 +938,7 @@ fn draw_foot<Message, Theme, Renderer>(
                     radius: style.border_radius.into(),
                     width: 0.0,
                     color: Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 shadow: Shadow::default(),
                 snap: false,
@@ -1038,17 +947,15 @@ fn draw_foot<Message, Theme, Renderer>(
         );
     }
 
-    if let Some((foot, state)) = foot.as_ref().zip(state) {
-        foot.as_widget().draw(
-            state,
+    if let Some((foot, (foot_layout, foot_state))) = foot {
+        foot.draw(
+            foot_state,
             renderer,
             theme,
             &renderer::Style {
                 text_color: style.foot_text_color,
             },
-            foot_children
-                .next()
-                .expect("Graphics: Layout should have a foot content layout"),
+            foot_layout,
             cursor,
             viewport,
         );
@@ -1058,12 +965,12 @@ fn draw_foot<Message, Theme, Renderer>(
 impl<'a, Message, Theme, Renderer> From<Card<'a, Message, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a + Catalog,
     Message: Clone + 'a,
 {
     fn from(card: Card<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(card)
+        Widget::_boxed(card)
     }
 }
 

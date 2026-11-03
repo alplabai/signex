@@ -16,13 +16,13 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Per-shape numeric Properties rows for a placed graphic (corners /
 /// endpoints / centre + radius / arc angles / text + stroke).
 pub(super) fn view_graphic_selection<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     g: &'a GraphicSummary,
     draft: Option<&NumericDraft>,
     muted: Color,
     border_c: Color,
     fill_picker: Option<crate::app::GraphicFillPicker>,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let g_idx = g.idx;
     // Per-shape numeric fields.
     let num_field =

@@ -3,13 +3,13 @@
 //! *This API requires the following crate features to be activated: `quad`*
 
 use iced_core::{
-    Border, Clipboard, Color, Element, Event, Layout, Length, Point, Rectangle, Shadow, Shell,
+    Border, Color, Element, Event, Layout, Length, Point, Rectangle, Shadow, Shell,
     Size, Widget,
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
     renderer, touch,
     widget::{
-        Operation,
+        Meta, Operation,
         tree::{self, Tree},
     },
 };
@@ -130,6 +130,8 @@ where
     }
 }
 
+impl<T, Message> Meta for SlideBar<'_, T, Message> where Message: Clone {}
+
 impl<T, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for SlideBar<'_, T, Message>
 where
     T: Copy + Into<f64> + num_traits::FromPrimitive,
@@ -151,28 +153,21 @@ where
         }
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        let limits = limits
-            .width(self.width)
-            .height(self.height.unwrap_or(Length::Fixed(DEFAULT_HEIGHT)));
-
-        let size = limits.resolve(
+    fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &Limits) {
+        tree.size = iced_core::layout::atomic(
+            limits,
             self.width,
             self.height.unwrap_or(Length::Fixed(DEFAULT_HEIGHT)),
-            Size::ZERO,
         );
-
-        Node::new(size)
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -193,12 +188,13 @@ where
     fn operate(
         &mut self,
         _tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         _renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         // Register the widget's bounds for testing
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
     }
 
     fn draw(
@@ -207,7 +203,7 @@ where
         renderer: &mut Renderer,
         _theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: Cursor,
         viewport: &Rectangle,
     ) {
@@ -220,7 +216,7 @@ where
 #[allow(clippy::too_many_arguments)]
 pub fn update<Message, T>(
     event: &Event,
-    layout: Layout<'_>,
+    layout: Layout,
     cursor: mouse::Cursor,
     shell: &mut Shell<'_, Message>,
     state: &mut State,
@@ -301,9 +297,9 @@ pub fn update<Message, T>(
 /// Draws a [`SlideBar`].
 pub fn draw<T, R, Message>(
     renderer: &mut R,
-    layout: Layout<'_>,
+    layout: Layout,
     viewport: &Rectangle,
-    slider: &SlideBar<T, Message>,
+    slider: &SlideBar<'_, T, Message>,
 ) where
     T: Into<f64> + Copy,
     Message: Clone,
@@ -339,6 +335,7 @@ pub fn draw<T, R, Message>(
                     radius: slider.border_radius.into(),
                     width: slider.border_width,
                     color: slider.border_color,
+                    ..Border::default()
                 },
                 shadow: Shadow::default(),
                 ..Default::default()
@@ -355,6 +352,7 @@ pub fn draw<T, R, Message>(
                     radius: slider.border_radius.into(),
                     width: 0.0,
                     color: Color::TRANSPARENT,
+                    ..Border::default()
                 },
                 shadow: Shadow::default(),
                 ..Default::default()
@@ -373,7 +371,7 @@ where
     Theme: 'a,
 {
     fn from(value: SlideBar<'a, T, Message>) -> Self {
-        Self::new(value)
+        Widget::<Message, Theme, Renderer>::_boxed(value)
     }
 }
 

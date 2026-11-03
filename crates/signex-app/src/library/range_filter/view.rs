@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use iced::widget::{button, column, container, pick_list, row, text, text_input};
+use iced::widget::{
+    Widget, button, column, container, pick_list, row, text, text_input,
+};
 use iced::{Element, Length};
 use signex_library::RangeOp;
 use signex_types::quantity::{SiPrefix, Unit};
@@ -66,18 +68,20 @@ pub(crate) fn range_filter_bar<'a, M: Clone + 'a>(
     if !free.is_empty() {
         let w = Rc::clone(&wrap);
         bar = bar.push(
-            pick_list(free, None::<FilterColumn>, move |c: FilterColumn| {
-                w(RangeFilterMsg::ColumnPicked {
-                    key: c.key,
-                    unit: c.unit,
+            pick_list(None::<FilterColumn>, free, |c: &FilterColumn| c.to_string())
+                .on_select(move |c: FilterColumn| {
+                    w(RangeFilterMsg::ColumnPicked {
+                        key: c.key,
+                        unit: c.unit,
+                    })
                 })
-            })
-            .placeholder("Add range filter…")
-            .padding(SP.s)
-            .text_size(TS.body),
+                .placeholder("Add range filter…")
+                .padding(SP.s)
+                .text_size(TS.body)
+                .boxed(),
         );
     }
-    Some(bar.into())
+    Some(bar.boxed())
 }
 
 fn filter_row<'a, M: Clone + 'a>(
@@ -94,7 +98,10 @@ fn filter_row<'a, M: Clone + 'a>(
 
     let op = {
         let (w, key) = (Rc::clone(wrap), key.to_string());
-        pick_list(RangeOp::ALL.to_vec(), Some(draft.op), move |op| {
+        pick_list(Some(draft.op), RangeOp::ALL.to_vec(), |op: &RangeOp| {
+            op.to_string()
+        })
+        .on_select(move |op: RangeOp| {
             w(RangeFilterMsg::OperatorPicked {
                 key: key.clone(),
                 op,
@@ -113,7 +120,7 @@ fn filter_row<'a, M: Clone + 'a>(
     .align_y(iced::Alignment::Center);
     if draft.op.is_between() {
         line = line
-            .push(text("and").size(TS.body).color(muted))
+            .push(text("and").size(TS.body).color(muted).boxed())
             .push(bound(
                 key,
                 RangeBound::High,
@@ -130,7 +137,7 @@ fn filter_row<'a, M: Clone + 'a>(
             .style(button::text)
             .on_press(w(RangeFilterMsg::Cleared { key }))
     };
-    line = line.push(clear);
+    line = line.push(clear.boxed());
 
     let status: Option<(String, iced::Color)> = [&draft.low, &draft.high]
         .into_iter()
@@ -149,9 +156,9 @@ fn filter_row<'a, M: Clone + 'a>(
         });
     let mut out = column![line].spacing(2);
     if let Some((msg, color)) = status {
-        out = out.push(text(msg).size(TS.caption).color(color));
+        out = out.push(text(msg).size(TS.caption).color(color).boxed());
     }
-    container(out).width(Length::Shrink).into()
+    container(out).width(Length::Shrink).boxed()
 }
 
 /// A number field with its prefix picker, or the plain unit for a unit
@@ -191,10 +198,10 @@ fn bound<'a, M: Clone + 'a>(
             text(unit.glyph().to_string())
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
-                .into()
+                .boxed()
         });
     row![number, unit_part]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
 }

@@ -6,7 +6,7 @@
 //! problems that save would refuse.
 
 use iced::widget::{Space, button, column, container, row, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -36,7 +36,8 @@ pub fn view<'a>(
         col = col.push(
             text("No alternate drawings; the row uses its default symbol only.")
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
     let count = state.row.alternate_symbols.len();
@@ -44,7 +45,7 @@ pub fn view<'a>(
         col = col.push(alternate_row(idx, count, alt, tokens, address));
     }
 
-    col = col.push(Space::new().height(6)).push(small_btn(
+    col = col.push(Space::new().height(6).boxed()).push(small_btn(
         "Add alternate symbol…",
         Some(LibraryMessage::OpenPrimitivePicker {
             kind: signex_library::PrimitiveKind::Symbol,
@@ -59,9 +60,9 @@ pub fn view<'a>(
         .collect();
     let problems = state.alternate_error.iter().chain(issues.iter());
     for problem in problems {
-        col = col.push(text(problem.clone()).size(TS.body).color(warning));
+        col = col.push(text(problem.clone()).size(TS.body).color(warning).boxed());
     }
-    col.into()
+    col.boxed()
 }
 
 fn alternate_row<'a>(
@@ -119,7 +120,7 @@ fn alternate_row<'a>(
     ]
     .align_y(iced::Alignment::Center)
     .padding([SP.xs, 0.0])
-    .into()
+    .boxed()
 }
 
 fn small_btn<'a>(
@@ -152,9 +153,10 @@ fn small_btn<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
 }

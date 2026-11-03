@@ -1,6 +1,6 @@
 //! This module provides a [`LabeledFrame`] widget which allows you to draw a border with a title around some content.
 
-use iced_core::{Length, Pixels, Rectangle};
+use iced_core::{Length, Pixels, Rectangle, Widget};
 
 /// The style of a [`LabeledFrame`]
 pub struct Style {
@@ -28,7 +28,7 @@ impl Catalog for iced_widget::Theme {
 
     fn default<'a>() -> Self::Class<'a> {
         Box::new(|theme| Style {
-            color: iced_core::Background::Color(theme.extended_palette().secondary.weak.color),
+            color: iced_core::Background::Color(theme.palette().secondary.weak.color),
             radius: iced_core::border::Radius::default(),
         })
     }
@@ -144,82 +144,51 @@ where
         tree: &mut iced_core::widget::Tree,
         renderer: &Renderer,
         limits: &iced_core::layout::Limits,
-    ) -> iced_core::layout::Node {
+    ) {
         let limits = (*limits).height(self.height).width(self.width).loose();
-        let title_layout = self
-            .title
-            .as_widget_mut()
-            .layout(
-                &mut tree.children[0],
-                renderer,
-                &limits.shrink(
-                    iced_core::Padding::default()
-                        .left(
-                            (self.outset + self.inset + self.stroke_width) * 2.0
-                                + self.horizontal_title_padding,
-                        )
-                        .right(
-                            (self.outset + self.inset + self.stroke_width) * 2.0
-                                + self.horizontal_title_padding,
-                        ),
-                ),
-            )
-            .translate([
-                (self.outset + self.inset + self.stroke_width) * 2.0
-                    + self.horizontal_title_padding,
-                0.0,
-            ]);
-        let content_layout = self
-            .content
-            .as_widget_mut()
-            .layout(
-                &mut tree.children[1],
-                renderer,
-                &limits.shrink(
-                    iced_core::Padding::default()
-                        .left(self.outset + self.inset + self.stroke_width)
-                        .right(self.outset + self.inset + self.stroke_width)
-                        .bottom(self.outset + self.inset + self.stroke_width)
-                        .top(
-                            (self.outset + self.inset + self.stroke_width)
-                                .max(title_layout.size().height),
-                        ),
-                ),
-            )
-            .translate([
-                self.outset + self.inset + self.stroke_width,
-                (self.outset + self.inset + self.stroke_width).max(title_layout.bounds().height),
-            ]);
+        let border = self.outset + self.inset + self.stroke_width;
+        let title_x = border * 2.0 + self.horizontal_title_padding;
 
-        iced_core::layout::Node::with_children(
-            limits.resolve(
-                self.width,
-                self.height,
-                iced_core::Size::new(
-                    (content_layout.size().width
-                        + (self.outset + self.inset + self.stroke_width) * 2.0)
-                        .max(
-                            title_layout.size().width
-                                + (self.outset + self.inset + self.stroke_width) * 4.0,
-                        ),
-                    content_layout.bounds().y
-                        + content_layout.size().height
-                        + (self.outset + self.inset + self.stroke_width),
-                ),
+        self.title.layout(
+            &mut tree.children[0],
+            renderer,
+            &limits.shrink(
+                iced_core::Padding::default()
+                    .left(title_x)
+                    .right(title_x),
             ),
-            vec![title_layout, content_layout],
-        )
+        );
+        let title_size = tree.children[0].size;
+        tree.children[0].translation = iced_core::Vector::new(title_x, 0.0);
+
+        let content_y = border.max(title_size.height);
+        self.content.layout(
+            &mut tree.children[1],
+            renderer,
+            &limits.shrink(
+                iced_core::Padding::default()
+                    .left(border)
+                    .right(border)
+                    .bottom(border)
+                    .top(content_y),
+            ),
+        );
+        let content_size = tree.children[1].size;
+        tree.children[1].translation = iced_core::Vector::new(border, content_y);
+
+        tree.size = limits.resolve(
+            self.width,
+            self.height,
+            iced_core::Size::new(
+                (content_size.width + border * 2.0)
+                    .max(title_size.width + border * 4.0),
+                content_y + content_size.height + border,
+            ),
+        );
     }
 
-    fn children(&self) -> Vec<iced_core::widget::Tree> {
-        vec![
-            iced_core::widget::Tree::new(&self.title),
-            iced_core::widget::Tree::new(&self.content),
-        ]
-    }
-
-    fn diff(&self, tree: &mut iced_core::widget::Tree) {
-        tree.diff_children(&[&self.title, &self.content]);
+    fn diff(&mut self, tree: &mut iced_core::widget::Tree) {
+        tree.diff_children(&mut [&mut self.title, &mut self.content]);
     }
 
     fn draw(
@@ -228,21 +197,22 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &iced_core::renderer::Style,
-        layout: iced_core::Layout<'_>,
+        layout: iced_core::Layout,
         cursor: iced_core::mouse::Cursor,
         viewport: &iced_core::Rectangle,
     ) {
         [&self.title, &self.content]
             .iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .for_each(|((child, state), layout)| {
-                child
-                    .as_widget()
-                    .draw(state, renderer, theme, style, layout, cursor, viewport);
+            .zip(layout.iter(&tree.children))
+            .for_each(|(child, (layout, state))| {
+                child.draw(state, renderer, theme, style, layout, cursor, viewport);
             });
         let style = theme.style(&self.class);
-        let title_layout = layout.children().next().expect("missing title layout");
+        let title_layout = layout
+            .iter(&tree.children)
+            .next()
+            .expect("missing title layout")
+            .0;
         let top_line_y =
             title_layout.position().y + (title_layout.bounds().height - self.stroke_width) / 2.0;
         // left line
@@ -360,19 +330,16 @@ where
     fn mouse_interaction(
         &self,
         state: &iced_core::widget::Tree,
-        layout: iced_core::Layout<'_>,
+        layout: iced_core::Layout,
         cursor: iced_core::mouse::Cursor,
         viewport: &iced_core::Rectangle,
         renderer: &Renderer,
     ) -> iced_core::mouse::Interaction {
         [&self.title, &self.content]
             .iter()
-            .zip(&state.children)
-            .zip(layout.children())
-            .map(|((child, state), layout)| {
-                child
-                    .as_widget()
-                    .mouse_interaction(state, layout, cursor, viewport, renderer)
+            .zip(layout.iter(&state.children))
+            .map(|(child, (layout, state))| {
+                child.mouse_interaction(state, layout, cursor, viewport, renderer)
             })
             .max()
             .unwrap_or_default()
@@ -382,41 +349,35 @@ where
         &mut self,
         state: &mut iced_core::widget::Tree,
         event: &iced_core::Event,
-        layout: iced_core::Layout<'_>,
+        layout: iced_core::Layout,
         cursor: iced_core::mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn iced_core::Clipboard,
         shell: &mut iced_core::Shell<'_, Message>,
         viewport: &iced_core::Rectangle,
     ) {
-        for ((child, state), layout) in [&mut self.title, &mut self.content]
-            .iter_mut()
-            .zip(&mut state.children)
-            .zip(layout.children())
+        for (child, (layout, state)) in [&mut self.title, &mut self.content]
+            .into_iter()
+            .zip(layout.iter_mut(&mut state.children))
         {
-            child.as_widget_mut().update(
-                state, event, layout, cursor, renderer, clipboard, shell, viewport,
-            );
+            child.update(state, event, layout, cursor, renderer, shell, viewport);
         }
     }
 
     fn operate(
         &mut self,
         state: &mut iced_core::widget::Tree,
-        layout: iced_core::Layout<'_>,
+        layout: iced_core::Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn iced_core::widget::Operation,
     ) {
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
         operation.traverse(&mut |operation| {
             [&mut self.title, &mut self.content]
-                .iter_mut()
-                .zip(&mut state.children)
-                .zip(layout.children())
-                .for_each(|((child, state), layout)| {
-                    child
-                        .as_widget_mut()
-                        .operate(state, layout, renderer, operation);
+                .into_iter()
+                .zip(layout.iter_mut(&mut state.children))
+                .for_each(|(child, (layout, state))| {
+                    child.operate(state, layout, viewport, renderer, operation);
                 });
         });
     }
@@ -424,28 +385,27 @@ where
     fn overlay<'b>(
         &'b mut self,
         state: &'b mut iced_core::widget::Tree,
-        layout: iced_core::Layout<'b>,
+        layout: iced_core::Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: iced_core::Vector,
-    ) -> Option<iced_core::overlay::Element<'b, Message, Theme, Renderer>> {
-        let children = vec![&mut self.title, &mut self.content]
+        window: iced_core::Size,
+    ) -> Vec<iced_core::overlay::Element<'b, Message, Theme, Renderer>> {
+        [&mut self.title, &mut self.content]
             .into_iter()
-            .zip(&mut state.children)
-            .zip(layout.children())
-            .filter_map(|((child, state), layout)| {
-                child
-                    .as_widget_mut()
-                    .overlay(state, layout, renderer, viewport, translation)
+            .zip(layout.iter_mut(&mut state.children))
+            .flat_map(|(child, (layout, state))| {
+                child.overlay(state, layout, renderer, viewport, translation, window)
             })
-            .collect::<Vec<_>>();
-
-        (!children.is_empty()).then(|| iced_core::overlay::Group::with_children(children).overlay())
+            .collect()
     }
+}
 
-    fn size_hint(&self) -> iced_core::Size<Length> {
-        self.size()
-    }
+impl<Message, Theme, Renderer> iced_core::widget::Meta
+    for LabeledFrame<'_, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+{
 }
 
 impl<'a, Message, Theme, Renderer> From<LabeledFrame<'a, Message, Theme, Renderer>>
@@ -456,6 +416,6 @@ where
     Renderer: iced_core::Renderer + 'a,
 {
     fn from(value: LabeledFrame<'a, Message, Theme, Renderer>) -> Self {
-        iced_core::Element::new(value)
+        iced_core::Widget::_boxed(value)
     }
 }

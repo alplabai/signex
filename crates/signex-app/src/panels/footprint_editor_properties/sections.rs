@@ -16,12 +16,12 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 pub(super) fn view_sections<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
@@ -50,7 +50,7 @@ pub(super) fn view_sections<'a>(
         collapsed_sections,
         primary,
         border_c,
-    ));
+    ).into());
     let snap_open = !fp_is_collapsed("fp_snap_options", collapsed_sections);
     let opts = fp.snap_options;
     if snap_open {
@@ -60,7 +60,7 @@ pub(super) fn view_sections<'a>(
         col = col.push(
             container(text("Snap targets").size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill).into(),
         );
         let snap_pill =
             |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
@@ -106,7 +106,7 @@ pub(super) fn view_sections<'a>(
                 .align_y(iced::Alignment::Center),
             )
             .padding([SP.xs, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill).into(),
         );
 
         // v0.18.14.3 — "Snapping" mode (All Layers / Current Layer /
@@ -120,7 +120,7 @@ pub(super) fn view_sections<'a>(
         col = col.push(
             container(text("Objects for snapping").size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill).into(),
         );
         let header = row![
             text("On/Off")
@@ -134,8 +134,8 @@ pub(super) fn view_sections<'a>(
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
-        col = col.push(container(header).padding([SP.xs, SP.m]).width(Length::Fill));
-        col = col.push(super::super::thin_sep(border_c));
+        col = col.push(container(header).padding([SP.xs, SP.m]).width(Length::Fill).into());
+        col = col.push(super::super::thin_sep(border_c).into());
         let snap_rows: &[(&str, SnapOptionFlag, bool)] = &[
             (
                 "Track Vertices",
@@ -204,7 +204,7 @@ pub(super) fn view_sections<'a>(
             ]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center);
-            col = col.push(container(row_w).padding([SP.xs, SP.m]).width(Length::Fill));
+            col = col.push(container(row_w).padding([SP.xs, SP.m]).width(Length::Fill).into());
         }
 
         // Snap Distance + Axis Snap Range numeric rows.
@@ -273,7 +273,7 @@ pub(super) fn view_sections<'a>(
             collapsed_sections,
             primary,
             border_c,
-        ));
+        ).into());
         if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
             col = render_grid_manager(col, fp, primary, muted, border_c);
         }
@@ -286,7 +286,7 @@ pub(super) fn view_sections<'a>(
             collapsed_sections,
             primary,
             border_c,
-        ));
+        ).into());
         if !fp_is_collapsed("fp_other", collapsed_sections) {
             col = render_other_section(col, fp, palette, unit);
         }
@@ -305,7 +305,7 @@ pub(super) fn view_sections<'a>(
             collapsed_sections,
             primary,
             border_c,
-        ));
+        ).into());
         if !fp_is_collapsed("fp_parameters", collapsed_sections) {
             if fp.sketch_parameters.is_empty() {
                 col = col.push(
@@ -315,7 +315,7 @@ pub(super) fn view_sections<'a>(
                             .color(muted),
                     )
                     .padding([SP.xs, SP.m])
-                    .width(Length::Fill),
+                    .width(Length::Fill).into(),
                 );
             } else {
                 for (name, expr) in &fp.sketch_parameters {
@@ -349,7 +349,7 @@ pub(super) fn view_sections<'a>(
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center);
-                    col = col.push(container(row).padding([SP.xs, SP.m]).width(Length::Fill));
+                    col = col.push(container(row).padding([SP.xs, SP.m]).width(Length::Fill).into());
                 }
             }
         } // end if !fp_parameters collapsed
@@ -361,7 +361,7 @@ pub(super) fn view_sections<'a>(
             collapsed_sections,
             primary,
             border_c,
-        ));
+        ).into());
         if !fp_is_collapsed("fp_dof", collapsed_sections) {
             col = props_kv_row(
                 col,
@@ -417,7 +417,7 @@ pub(super) fn view_sections<'a>(
                 col = col.push(
                     container(text("(no solve yet)").size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill).into(),
                 );
             }
 
@@ -437,7 +437,7 @@ pub(super) fn view_sections<'a>(
                             .color(muted),
                     )
                     .padding([SP.s, SP.m])
-                    .width(Length::Fill),
+                    .width(Length::Fill).into(),
                 );
                 for row in conflicts.iter().take(conflicts::MAX_ROWS) {
                     col = col.push(conflicts::conflict_row(row));
@@ -450,7 +450,7 @@ pub(super) fn view_sections<'a>(
                                 .color(muted),
                         )
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill).into(),
                     );
                 }
             }
@@ -463,20 +463,20 @@ pub(super) fn view_sections<'a>(
             collapsed_sections,
             primary,
             border_c,
-        ));
+        ).into());
         if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
             if fp.solve_warnings.is_empty() {
                 col = col.push(
                     container(text("(none)").size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill).into(),
                 );
             } else {
                 for w in fp.solve_warnings.iter().take(8) {
                     col = col.push(
                         container(text(w).size(9).color(muted))
                             .padding([SP.xs, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill).into(),
                     );
                 }
                 if fp.solve_warnings.len() > 8 {
@@ -487,7 +487,7 @@ pub(super) fn view_sections<'a>(
                                 .color(muted),
                         )
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill).into(),
                     );
                 }
             }

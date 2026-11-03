@@ -168,10 +168,62 @@ mod platform {
 pub use platform::*;
 
 use iced_core::Font;
-use iced_fonts::generate_icon_functions;
 
 /// Embedded font file. There a handfull of glyphs so no need to worry.
 pub const ICED_AW_FONT_BYTES: &[u8] = include_bytes!("../font.ttf");
 /// Font type to use in text widgets.
-pub const ICED_AW_FONT: Font = Font::with_name("iced_aw");
-generate_icon_functions!("font.ttf", iced_aw_font, ICED_AW_FONT);
+pub const ICED_AW_FONT: Font = Font::new("iced_aw");
+
+/// Icon helpers for the embedded font (hand written; the former
+/// `generate_icon_functions!` macro reads files relative to the workspace root
+/// and emits code relying on the removed `Renderer::Font` associated type).
+pub mod iced_aw_font {
+    /// Lower level icon helpers returning `(content, font, shaping)`.
+    pub mod advanced_text {
+        use crate::ICED_AW_FONT;
+        use iced_core::Font;
+        use iced_core::text::Shaping;
+
+        /// Defines a function returning the icon as `(String, Font, Shaping)`.
+        macro_rules! icon {
+            ($(#[$doc:meta])* $name:ident, $c:expr) => {
+                $(#[$doc])*
+                #[must_use]
+                pub fn $name() -> (String, Font, Shaping) {
+                    ($c.to_string(), ICED_AW_FONT, Shaping::Basic)
+                }
+            };
+        }
+
+        icon!(
+            /// The cancel icon.
+            cancel,
+            '\u{e800}'
+        );
+        icon!(
+            /// The down-open icon.
+            down_open,
+            '\u{e801}'
+        );
+        icon!(
+            /// The left-open icon.
+            left_open,
+            '\u{e802}'
+        );
+        icon!(
+            /// The right-open icon.
+            right_open,
+            '\u{e803}'
+        );
+        icon!(
+            /// The up-open icon.
+            up_open,
+            '\u{e804}'
+        );
+        icon!(
+            /// The ok icon.
+            ok,
+            '\u{e805}'
+        );
+    }
+}

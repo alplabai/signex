@@ -5,7 +5,7 @@
 
 use super::super::*;
 use iced::widget::{Column, Space, button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_output::{BomIssueSeverity, BomRule};
 
 use super::super::widgets::section_header;
@@ -18,7 +18,7 @@ impl Signex {
     /// Build the Rules tab pane for the active preview.
     pub(super) fn bom_rules_pane(&self) -> Element<'_, Message> {
         let Some(ref preview) = self.document_state.bom_preview else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -26,16 +26,16 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
         let accent_c = crate::styles::ti(tokens.accent);
 
-        let mut rule_list: Column<'_, Message> = Column::new().spacing(0);
+        let mut rule_list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for rule in BomRule::ALL {
             let on = preview.options.rule_options.is_enabled(rule);
             rule_list = rule_list.push(rule_row(rule, on, text_c, border_c, accent_c));
         }
 
-        let mut issues: Column<'_, Message> = Column::new().spacing(SP.xs);
+        let mut issues: Column<Element<'_, Message>> = Column::new().spacing(SP.xs);
         let report = &preview.validation_report;
         if report.issues.is_empty() {
-            issues = issues.push(text("No issues found.").size(TS.body).color(text_muted));
+            issues = issues.push(text("No issues found.").size(TS.body).color(text_muted).boxed());
         }
         for (severity, heading) in [
             (BomIssueSeverity::Error, "Errors"),
@@ -53,7 +53,8 @@ impl Signex {
             issues = issues.push(
                 text(format!("{heading} ({})", of_severity.len()))
                     .size(TS.body)
-                    .color(severity_color(severity, text_c)),
+                    .color(severity_color(severity, text_c))
+                    .boxed(),
             );
             for issue in of_severity {
                 issues = issues.push(
@@ -64,10 +65,11 @@ impl Signex {
                             .color(text_muted),
                     ]
                     .spacing(1)
-                    .padding([SP.xs, SP.m]),
+                    .padding([SP.xs, SP.m])
+                    .boxed(),
                 );
             }
-            issues = issues.push(Space::new().height(6));
+            issues = issues.push(Space::new().height(6).boxed());
         }
 
         column![
@@ -78,7 +80,7 @@ impl Signex {
             container(issues).padding([SP.m, SP.l]),
         ]
         .spacing(0)
-        .into()
+        .boxed()
     }
 }
 
@@ -124,6 +126,7 @@ fn rule_row<'a>(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border_c,
+                ..Border::default()
             },
             ..container::Style::default()
         });
@@ -153,5 +156,5 @@ fn rule_row<'a>(
             ..button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }

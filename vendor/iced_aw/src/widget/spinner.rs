@@ -1,13 +1,12 @@
 //! A spinner to suggest something is loading.
 use iced_core::{
-    Border, Clipboard, Color, Element, Event, Layout, Length, Rectangle, Shell, Size, Vector,
-    Widget,
-    layout::{Limits, Node},
+    Border, Color, Event, Layout, Length, Rectangle, Shell, Size, Vector, Widget,
+    layout::Limits,
     mouse::Cursor,
     renderer,
     time::{Duration, Instant},
     widget::{
-        Tree,
+        self, Tree,
         tree::{State, Tag},
     },
     window,
@@ -94,6 +93,7 @@ fn fill_circle(
                     radius: radius.into(),
                     width: 0.0,
                     color: Color::TRANSPARENT,
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -101,6 +101,8 @@ fn fill_circle(
         );
     }
 }
+
+impl widget::Meta for Spinner {}
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Spinner
 where
@@ -110,12 +112,12 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
-        Node::new(limits.width(self.width).height(self.height).resolve(
+    fn layout(&mut self, tree: &mut Tree, _renderer: &Renderer, limits: &Limits) {
+        tree.size = limits.width(self.width).height(self.height).resolve(
             self.width,
             self.height,
             Size::new(f32::INFINITY, f32::INFINITY),
-        ))
+        );
     }
 
     fn draw(
@@ -124,7 +126,7 @@ where
         renderer: &mut Renderer,
         _theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: Cursor,
         _viewport: &Rectangle,
     ) {
@@ -166,10 +168,9 @@ where
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -199,14 +200,5 @@ where
             ));
             state.last_update = *now;
         }
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<Spinner> for Element<'a, Message, Theme, Renderer>
-where
-    Renderer: renderer::Renderer + 'a,
-{
-    fn from(spinner: Spinner) -> Self {
-        Self::new(spinner)
     }
 }

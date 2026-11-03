@@ -1,5 +1,5 @@
 use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
-use iced::{Alignment, Background, Border, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::component_card::{ComponentCard, ComponentCardMessage};
@@ -233,7 +233,7 @@ impl CalculatorControl {
             ]
             .spacing(14)
             .padding(12);
-            return scrollable(content).height(Length::Fill).into();
+            return scrollable(content).height(Length::Fill).boxed();
         }
 
         let state = self.active_state();
@@ -250,10 +250,11 @@ impl CalculatorControl {
             labeled(
                 "Unit",
                 pick_list(
-                    SiPrefix::for_kind(self.kind),
                     Some(state.prefix),
-                    CalculatorMessage::PrefixChanged,
+                    SiPrefix::for_kind(self.kind),
+                    SiPrefix::to_string,
                 )
+                .on_select(CalculatorMessage::PrefixChanged)
                 .text_size(11)
                 .padding([4, 6])
                 .width(UNIT_PICK_W),
@@ -263,11 +264,8 @@ impl CalculatorControl {
                 .color(token_color(tokens.text_secondary)),
             labeled(
                 "Preferred series",
-                pick_list(
-                    ESeries::ALL,
-                    Some(state.series),
-                    CalculatorMessage::SeriesChanged,
-                )
+                pick_list(Some(state.series), ESeries::ALL, ESeries::to_string)
+                    .on_select(CalculatorMessage::SeriesChanged)
                 .text_size(11)
                 .padding([4, 6])
                 .width(SERIES_PICK_W),
@@ -275,10 +273,11 @@ impl CalculatorControl {
             labeled(
                 "Maximum parts",
                 pick_list(
-                    MAX_COMPONENT_OPTIONS,
                     Some(state.max_components),
-                    CalculatorMessage::MaxComponentsChanged,
+                    MAX_COMPONENT_OPTIONS,
+                    usize::to_string,
                 )
+                .on_select(CalculatorMessage::MaxComponentsChanged)
                 .text_size(11)
                 .padding([4, 6])
                 .width(MAX_PARTS_PICK_W),
@@ -307,7 +306,8 @@ impl CalculatorControl {
             content = content.push(
                 text(error)
                     .size(11)
-                    .color(crate::theme_ext::error_color(tokens)),
+                    .color(crate::theme_ext::error_color(tokens))
+                    .boxed(),
             );
         }
 
@@ -321,11 +321,12 @@ impl CalculatorControl {
                 )
                 .padding(12)
                 .width(Length::Fill)
-                .style(move |_theme| panel_style(tokens)),
+                .style(move |_theme| panel_style(tokens))
+                .boxed(),
             );
         }
 
-        scrollable(content).height(Length::Fill).into()
+        scrollable(content).height(Length::Fill).boxed()
     }
 
     fn result_view<'a>(
@@ -379,14 +380,16 @@ impl CalculatorControl {
             component_cards = component_cards.push(
                 text("No discrete component is required.")
                     .size(11)
-                    .color(token_color(tokens.text_secondary)),
+                    .color(token_color(tokens.text_secondary))
+                    .boxed(),
             );
         }
         for (index, (component, tolerance)) in components.into_iter().enumerate() {
             component_cards = component_cards.push(
                 ComponentCard::new(index, self.kind, component, tolerance, tokens)
                     .view()
-                    .map(CalculatorMessage::from),
+                    .map(CalculatorMessage::from)
+                    .boxed(),
             );
         }
 
@@ -394,7 +397,7 @@ impl CalculatorControl {
             .padding(12)
             .width(Length::Fill)
             .style(move |_theme| panel_style(tokens))
-            .into()
+            .boxed()
     }
 }
 
@@ -436,11 +439,12 @@ fn tab_button<'a>(
                     width: 1.0,
                     radius: 4.0.into(),
                     color: token_color(tokens.border),
+                    ..Border::default()
                 },
                 ..button::Style::default()
             }
         })
-        .into()
+        .boxed()
 }
 
 fn default_tolerance(series: ESeries) -> Tolerance {
@@ -455,10 +459,8 @@ fn default_tolerance(series: ESeries) -> Tolerance {
     }
 }
 
-fn labeled<'a, M: 'a>(label: &'a str, control: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    column![text(label).size(11), control.into()]
-        .spacing(4)
-        .into()
+fn labeled<'a, M: 'a>(label: &'a str, control: impl Widget<M> + 'a) -> Element<'a, M> {
+    column![text(label).size(11), control].spacing(4).boxed()
 }
 
 fn metric<'a>(
@@ -473,7 +475,7 @@ fn metric<'a>(
         text(value).size(11).color(token_color(tokens.text)),
     ]
     .spacing(2)
-    .into()
+    .boxed()
 }
 
 /// GH #599 — what a target-dependent metric reads when the target
@@ -527,6 +529,7 @@ fn panel_style(tokens: &ThemeTokens) -> container::Style {
             width: 1.0,
             radius: 6.0.into(),
             color: token_color(tokens.border),
+            ..Border::default()
         },
         ..container::Style::default()
     }

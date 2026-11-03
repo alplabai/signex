@@ -2,23 +2,22 @@
 //!
 //! A [`NumberInput`] has some local [`State`].
 use iced_core::{
-    Alignment, Background, Border, Clipboard, Color, Element, Event, Layout, Length, Padding,
-    Point, Rectangle, Shadow, Shell, Size, Widget,
+    Background, Border, Color, Element, Event, Layout, Length, Padding, Point, Rectangle, Shadow,
+    Shell, Size, Vector, Widget,
     alignment::Vertical,
-    keyboard,
-    layout::{Limits, Node},
+    clipboard, keyboard,
+    layout::Limits,
     mouse::{self, Cursor},
     renderer,
+    shell::Bus,
+    text::{LineHeight, Wrapping},
     widget::{
         self, Operation, Tree,
+        operation::Focusable,
         tree::{State, Tag},
     },
 };
-use iced_widget::{
-    Column, Container, Row, Text,
-    text::{LineHeight, Wrapping},
-    text_input::{self, Value, cursor},
-};
+use iced_widget::{Column, Container, Row, Text, text_input};
 use num_traits::{Num, NumAssignOps, bounds::Bounded};
 use std::{
     fmt::Display,
@@ -61,7 +60,7 @@ const DEFAULT_PADDING: Padding = Padding::new(5.0);
 #[allow(missing_debug_implementations)]
 pub struct NumberInput<'a, T, Message, Theme = iced_widget::Theme, Renderer = iced_widget::Renderer>
 where
-    Renderer: iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: iced_core::text::Renderer,
     Theme: number_input::ExtendedCatalog,
 {
     /// The current value of the [`NumberInput`].
@@ -88,7 +87,9 @@ where
     /// The style of the [`NumberInput`].
     class: <Theme as style::number_input::Catalog>::Class<'a>,
     /// The font text of the [`NumberInput`].
-    font: Renderer::Font,
+    font: iced_core::Font,
+    /// The renderer used by the [`NumberInput`].
+    _renderer: std::marker::PhantomData<fn() -> Renderer>,
     // /// The Width to use for the ``NumberBox`` Default is ``Length::Fill``
     // width: Length,
     /// Ignore mouse scroll events for the [`NumberInput`] Default is ``false``.
@@ -109,7 +110,7 @@ impl<'a, T, Message, Theme, Renderer> NumberInput<'a, T, Message, Theme, Rendere
 where
     T: Num + NumAssignOps + PartialOrd + Display + FromStr + Clone + Bounded + 'a,
     Message: Clone + 'a,
-    Renderer: iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: iced_core::text::Renderer,
     Theme: number_input::ExtendedCatalog,
 {
     /// Creates a new [`NumberInput`].
@@ -141,7 +142,8 @@ where
             on_submit: None,
             on_paste: None,
             class: <Theme as style::number_input::Catalog>::default(),
-            font: Renderer::Font::default(),
+            font: iced_core::Font::default(),
+            _renderer: std::marker::PhantomData,
             // width: Length::Shrink,
             ignore_scroll_events: false,
             ignore_buttons: false,
@@ -265,16 +267,9 @@ where
     /// [`Text`]: iced_widget::Text
     #[allow(clippy::needless_pass_by_value)]
     #[must_use]
-    pub fn font(mut self, font: Renderer::Font) -> Self {
+    pub fn font(mut self, font: iced_core::Font) -> Self {
         self.font = font;
         self.content = self.content.font(font);
-        self
-    }
-
-    /// Sets the [Icon](iced_widget::text_input::Icon) of the [`NumberInput`]
-    #[must_use]
-    pub fn icon(mut self, icon: iced_widget::text_input::Icon<Renderer::Font>) -> Self {
-        self.content = self.content.icon(icon);
         self
     }
 
@@ -310,16 +305,16 @@ where
         self
     }
 
-    /// Sets the [`text::LineHeight`](iced_widget::text::LineHeight) of the [`NumberInput`].
+    /// Sets the [`text::LineHeight`](iced_core::text::LineHeight) of the [`NumberInput`].
     #[must_use]
-    pub fn line_height(mut self, line_height: impl Into<iced_widget::text::LineHeight>) -> Self {
+    pub fn line_height(mut self, line_height: impl Into<LineHeight>) -> Self {
         self.content = self.content.line_height(line_height);
         self
     }
 
     /// Sets the horizontal alignment of the [`NumberInput`].
     #[must_use]
-    pub fn align_x(mut self, alignment: impl Into<iced_core::alignment::Horizontal>) -> Self {
+    pub fn align_x(mut self, alignment: impl Into<iced_core::text::Alignment>) -> Self {
         self.content = self.content.align_x(alignment);
         self
     }
@@ -392,6 +387,30 @@ where
     pub fn ignore_scroll(mut self, ignore: bool) -> Self {
         self.ignore_scroll_events = ignore;
         self
+    }
+
+    /// Checks whether every character of the given text could be part of a number
+    /// of the type of the [`NumberInput`].
+    fn accepts(&self, text: &str, allow_control: bool) -> bool {
+        let supports_negative = self.min() < T::zero();
+
+        text.chars().all(|c| {
+            if c.is_control() {
+                allow_control
+            } else if c.is_ascii_digit() {
+                true
+            } else if c == '-' {
+                supports_negative
+            } else {
+                let probe = if c == '+' {
+                    "+1".to_owned()
+                } else {
+                    format!("1{c}1")
+                };
+
+                T::from_str(&probe).is_ok()
+            }
+        })
     }
 
     /// Decrease current value by step of the [`NumberInput`].
@@ -485,12 +504,35 @@ where
     }
 }
 
+/// Probes whether the text input inside a [`NumberInput`] is focused.
+#[derive(Default)]
+struct FocusProbe {
+    focused: bool,
+}
+
+impl Operation for FocusProbe {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn focusable(&mut self, _id: Option<&widget::Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+        self.focused = state.is_focused();
+    }
+}
+
+impl<'a, T, Message, Theme, Renderer> widget::Meta for NumberInput<'a, T, Message, Theme, Renderer>
+where
+    Renderer: iced_core::text::Renderer,
+    Theme: number_input::ExtendedCatalog,
+{
+}
+
 impl<'a, T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for NumberInput<'a, T, Message, Theme, Renderer>
 where
     T: Num + NumAssignOps + PartialOrd + Display + FromStr + ToString + Clone + Bounded + 'a,
     Message: 'a + Clone,
-    Renderer: 'a + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'static + iced_core::text::Renderer,
     Theme: number_input::ExtendedCatalog,
 {
     fn tag(&self) -> Tag {
@@ -500,190 +542,203 @@ where
         State::new(ModifierState::default())
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree {
-            tag: self.content.tag(),
-            state: self.content.state(),
-            children: self.content.children(),
-        }]
-    }
+    fn diff(&mut self, tree: &mut Tree) {
+        // Child 0 is the underlying input; child 1 (the modifier buttons) is
+        // created and reconciled during layout.
+        tree.children.truncate(2);
 
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children_custom(
-            &[&self.content],
-            |state, content| content.diff(state),
-            |content| Tree {
-                tag: content.tag(),
-                state: content.state(),
-                children: content.children(),
-            },
-        );
+        if let Some(content) = tree.children.get_mut(0) {
+            content.diff::<InternalMessage<T>, Theme, Renderer>(&mut self.content);
+        } else {
+            let mut content = Tree::new::<InternalMessage<T>, Theme, Renderer>(&self.content);
+            content.diff::<InternalMessage<T>, Theme, Renderer>(&mut self.content);
+            tree.children.push(content);
+        }
     }
 
     fn size(&self) -> Size<Length> {
-        Widget::size(&self.content)
+        <TypedInput<'a, T, InternalMessage<T>, Theme, Renderer> as Widget<
+            InternalMessage<T>,
+            Theme,
+            Renderer,
+        >>::size(&self.content)
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        let num_size = self.size();
-        let limits = limits.width(num_size.width).height(Length::Shrink);
-        let content = self
-            .content
-            .layout(&mut tree.children[0], renderer, &limits);
-        let limits2 = Limits::new(Size::new(0.0, 0.0), content.size());
-        let txt_size = self.size.unwrap_or_else(|| renderer.default_size());
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        let num_size = Widget::<Message, Theme, Renderer>::size(self);
+        let limits = limits.width(num_size.width).height(Length::Fit);
+        Widget::<InternalMessage<T>, Theme, Renderer>::layout(
+            &mut self.content,
+            &mut tree.children[0],
+            renderer,
+            &limits,
+        );
+        let content_size = tree.children[0].size;
+        let limits2 = Limits::new(Size::ZERO, content_size);
+        let txt_size = self.size.unwrap_or_else(|| renderer.text_size());
 
         let icon_size = txt_size * 2.5 / 4.0;
         let btn_mod = |c| {
-            Container::<Message, Theme, Renderer>::new(Text::new(format!(" {c} ")).size(icon_size))
-                .center_y(Length::Shrink)
-                .center_x(Length::Shrink)
+            Container::<Text<'_, Theme>, Theme>::new(Text::new(format!(" {c} ")).size(icon_size))
+                .center_y(Length::Fit)
+                .center_x(Length::Fit)
         };
 
         let default_padding = DEFAULT_PADDING;
 
-        let mut element = if self.padding.top < default_padding.top
+        let mut element: Element<'_, Message, Theme, Renderer> = if self.padding.top
+            < default_padding.top
             || self.padding.bottom < default_padding.bottom
             || self.padding.right < default_padding.right
         {
-            Element::new(
-                Row::<Message, Theme, Renderer>::new()
-                    .spacing(1)
-                    .width(Length::Shrink)
+            Widget::<Message, Theme, Renderer>::_boxed(
+                Row::new()
+                    .spacing(1.0)
+                    .width(Length::Fit)
                     .push(btn_mod('+'))
                     .push(btn_mod('-')),
             )
         } else {
-            Element::new(
-                Column::<Message, Theme, Renderer>::new()
-                    .spacing(1)
-                    .width(Length::Shrink)
+            Widget::<Message, Theme, Renderer>::_boxed(
+                Column::new()
+                    .spacing(1.0)
+                    .width(Length::Fit)
                     .push(btn_mod('▲'))
                     .push(btn_mod('▼')),
             )
         };
 
-        let input_tree = if let Some(child_tree) = tree.children.get_mut(1) {
-            child_tree.diff(element.as_widget_mut());
-            child_tree
-        } else {
-            let child_tree = Tree::new(element.as_widget());
-            tree.children.insert(1, child_tree);
-            &mut tree.children[1]
-        };
+        {
+            let modifier_tree = if let Some(child_tree) = tree.children.get_mut(1) {
+                child_tree.diff(&mut element);
+                child_tree
+            } else {
+                let child_tree = Tree::new(&element);
+                tree.children.insert(1, child_tree);
+                &mut tree.children[1]
+            };
 
-        let mut modifier = element
-            .as_widget_mut()
-            .layout(input_tree, renderer, &limits2.loose());
+            element.layout(modifier_tree, renderer, &limits2.loose());
+        }
+
+        let modifier_size = tree.children[1].size;
         let intrinsic = Size::new(
-            content.size().width - 1.0,
-            content.size().height.max(modifier.size().height),
+            content_size.width - 1.0,
+            content_size.height.max(modifier_size.height),
         );
-        modifier = modifier.align(Alignment::End, Alignment::Center, intrinsic);
 
-        let size = limits.resolve(num_size.width, Length::Shrink, intrinsic);
-        Node::with_children(size, vec![content, modifier])
+        // The modifier buttons are aligned to the end (right) and centered vertically.
+        tree.children[0].translation = Vector::ZERO;
+        tree.children[1].translation = Vector::new(
+            intrinsic.width - modifier_size.width,
+            (intrinsic.height - modifier_size.height) / 2.0,
+        );
+
+        tree.size = limits.resolve(num_size.width, Length::Fit, intrinsic);
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
 
-        let mut children = layout.children();
+        operation.traverse(&mut |operation| {
+            let mut children = layout.iter_mut(&mut tree.children);
 
-        // Operate on the text input (first child)
-        if let Some(content_layout) = children.next() {
-            self.content
-                .operate(&mut tree.children[0], content_layout, renderer, operation);
-        }
+            // Operate on the text input (first child)
+            if let Some((content_layout, content_tree)) = children.next() {
+                Widget::<InternalMessage<T>, Theme, Renderer>::operate(
+                    &mut self.content,
+                    content_tree,
+                    content_layout,
+                    viewport,
+                    renderer,
+                    operation,
+                );
+            }
 
-        // Operate on the modifier buttons (second child) to expose them for testing
-        // The buttons are rendered as text elements, so we need to recreate their structure
-        if let Some(modifier_layout) = children.next()
-            && !self.ignore_buttons
-        {
-            let txt_size = self.size.unwrap_or_else(|| renderer.default_size());
-            let icon_size = txt_size * 2.5 / 4.0;
-
-            let btn_mod = |c| {
-                Container::<Message, Theme, Renderer>::new(
-                    Text::new(format!(" {c} ")).size(icon_size),
-                )
-                .center_y(Length::Shrink)
-                .center_x(Length::Shrink)
-            };
-
-            let default_padding = DEFAULT_PADDING;
-
-            // Recreate the modifier element structure to operate on it
-            let mut element = if self.padding.top < default_padding.top
-                || self.padding.bottom < default_padding.bottom
-                || self.padding.right < default_padding.right
+            // Operate on the modifier buttons (second child) to expose them for testing
+            // The buttons are rendered as text elements, so we need to recreate their structure
+            if let Some((modifier_layout, modifier_tree)) = children.next()
+                && !self.ignore_buttons
             {
-                Element::new(
-                    Row::<Message, Theme, Renderer>::new()
-                        .spacing(1)
-                        .width(Length::Shrink)
-                        .push(btn_mod('+'))
-                        .push(btn_mod('-')),
-                )
-            } else {
-                Element::new(
-                    Column::<Message, Theme, Renderer>::new()
-                        .spacing(1)
-                        .width(Length::Shrink)
-                        .push(btn_mod('▲'))
-                        .push(btn_mod('▼')),
-                )
-            };
+                let txt_size = self.size.unwrap_or_else(|| renderer.text_size());
+                let icon_size = txt_size * 2.5 / 4.0;
 
-            // Get or create the tree for the modifier element
-            let modifier_tree = if let Some(child_tree) = tree.children.get_mut(1) {
-                child_tree.diff(element.as_widget_mut());
-                child_tree
-            } else {
-                let child_tree = Tree::new(element.as_widget());
-                tree.children.insert(1, child_tree);
-                &mut tree.children[1]
-            };
+                let btn_mod = |c| {
+                    Container::<Text<'_, Theme>, Theme>::new(
+                        Text::new(format!(" {c} ")).size(icon_size),
+                    )
+                    .center_y(Length::Fit)
+                    .center_x(Length::Fit)
+                };
 
-            // Operate on the modifier element to expose button text
-            element
-                .as_widget_mut()
-                .operate(modifier_tree, modifier_layout, renderer, operation);
-        }
+                let default_padding = DEFAULT_PADDING;
+
+                // Recreate the modifier element structure to operate on it
+                let mut element: Element<'_, Message, Theme, Renderer> = if self.padding.top
+                    < default_padding.top
+                    || self.padding.bottom < default_padding.bottom
+                    || self.padding.right < default_padding.right
+                {
+                    Widget::<Message, Theme, Renderer>::_boxed(
+                        Row::new()
+                            .spacing(1.0)
+                            .width(Length::Fit)
+                            .push(btn_mod('+'))
+                            .push(btn_mod('-')),
+                    )
+                } else {
+                    Widget::<Message, Theme, Renderer>::_boxed(
+                        Column::new()
+                            .spacing(1.0)
+                            .width(Length::Fit)
+                            .push(btn_mod('▲'))
+                            .push(btn_mod('▼')),
+                    )
+                };
+
+                // Operate on the modifier element to expose button text
+                element.operate(modifier_tree, modifier_layout, viewport, renderer, operation);
+            }
+        });
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn update(
         &mut self,
-        state: &mut Tree,
+        tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let content = children.next().expect("fail to get content layout");
-        let mut mod_children = children
-            .next()
-            .expect("fail to get modifiers layout")
-            .children();
+        let Tree {
+            state, children, ..
+        } = tree;
+
+        let mut layouts = layout.iter_mut(children);
+        let (content_layout, content_tree) =
+            layouts.next().expect("fail to get content layout");
+        let (modifier_layout, modifier_tree) =
+            layouts.next().expect("fail to get modifiers layout");
+        let mut mod_children = modifier_layout.iter(&modifier_tree.children);
         let inc_bounds = mod_children
             .next()
             .expect("fail to get increase mod layout")
+            .0
             .bounds();
         let dec_bounds = mod_children
             .next()
             .expect("fail to get decrease mod layout")
+            .0
             .bounds();
 
         if self.disabled() {
@@ -698,53 +753,29 @@ where
         let mouse_over_dec = dec_bounds.contains(cursor_position);
         let mouse_over_button = mouse_over_inc || mouse_over_dec;
 
-        let modifiers = state.state.downcast_mut::<ModifierState>();
-        let mut value = self.content.text().to_owned();
+        let mod_state = state.downcast_mut::<ModifierState>();
 
-        let child = state.children.get_mut(0).expect("fail to get child");
-        let text_input = child
-            .state
-            .downcast_mut::<text_input::State<Renderer::Paragraph>>();
+        // Whether the event must be forwarded to the underlying [`TypedInput`]
+        let mut forward = false;
 
-        // We use a secondary shell to select handle the event of the underlying [`TypedInput`]
-        let mut messages = Vec::new();
-        let mut sub_shell = Shell::new(&mut messages);
-
-        // Function to forward the event to the underlying [`TypedInput`]
-        let mut forward_to_text = |widget: &mut Self, child, clipboard| {
-            widget.content.update(
-                child,
-                &event.clone(),
-                content,
-                cursor,
-                renderer,
-                clipboard,
-                &mut sub_shell,
-                viewport,
-            );
-        };
-
-        // Check if the value that would result from the input is valid and within bound
-        let supports_negative = self.min() < T::zero();
-        let mut check_value = |value: &str| {
-            if let Ok(value) = T::from_str(value) {
-                self.valid(&value)
-            } else if value.is_empty() || value == "-" && supports_negative {
-                self.value = T::zero();
-                true
-            } else {
-                false
-            }
-        };
-
-        match &event {
+        match event {
             Event::Keyboard(key) => {
-                if !text_input.is_focused() {
+                let mut probe = FocusProbe::default();
+                Widget::<InternalMessage<T>, Theme, Renderer>::operate(
+                    &mut self.content,
+                    content_tree,
+                    content_layout,
+                    viewport,
+                    renderer,
+                    &mut probe,
+                );
+
+                if !probe.focused {
                     return;
                 }
 
                 match key {
-                    keyboard::Event::ModifiersChanged(_) => forward_to_text(self, child, clipboard),
+                    keyboard::Event::ModifiersChanged(_) => forward = true,
                     keyboard::Event::KeyReleased { .. } => return,
                     keyboard::Event::KeyPressed {
                         key,
@@ -752,8 +783,6 @@ where
                         modifiers,
                         ..
                     } => {
-                        let cursor = text_input.cursor();
-
                         // If true, ignore Arrow/Home/End keys - they are coming from numpad and are just
                         // mislabeled. See the core PR:
                         // https://github.com/iced-rs/iced/pull/2278
@@ -763,119 +792,6 @@ where
                                 .is_some_and(|t| t.chars().any(|c| !c.is_control()));
 
                         match key.as_ref() {
-                            // Enter
-                            keyboard::Key::Named(keyboard::key::Named::Enter) => {
-                                forward_to_text(self, child, clipboard);
-                            }
-                            // Copy and selecting all
-                            keyboard::Key::Character("c" | "a") if modifiers.command() => {
-                                forward_to_text(self, child, clipboard);
-                            }
-                            // Cut
-                            keyboard::Key::Character("x") if modifiers.command() => {
-                                // We need a selection to cut
-                                if let Some((start, end)) = cursor.selection(&Value::new(&value)) {
-                                    let _ = value.drain(start..end);
-                                    // We check that once this part is cut, it's still a number
-                                    if check_value(&value) {
-                                        forward_to_text(self, child, clipboard);
-                                    } else {
-                                        return;
-                                    }
-                                } else {
-                                    return;
-                                }
-                            }
-                            // Paste
-                            keyboard::Key::Character("v") if modifiers.command() => {
-                                // We need something to paste
-                                let Some(paste) =
-                                    clipboard.read(iced_core::clipboard::Kind::Standard)
-                                else {
-                                    return;
-                                };
-                                // We replace the selection or paste the text at the cursor
-                                match cursor.state(&Value::new(&value)) {
-                                    cursor::State::Index(idx) => {
-                                        value.insert_str(idx, &paste);
-                                    }
-                                    cursor::State::Selection { start, end } => {
-                                        value.replace_range(sorted_range(start, end), &paste);
-                                    }
-                                }
-
-                                shell.capture_event();
-
-                                // We check if it's now a valid number
-                                if check_value(&value) {
-                                    forward_to_text(self, child, clipboard);
-                                } else {
-                                    return;
-                                }
-                            }
-                            // Backspace
-                            keyboard::Key::Named(keyboard::key::Named::Backspace) => {
-                                // We remove either the selection or the character before the cursor
-                                match cursor.state(&Value::new(&value)) {
-                                    cursor::State::Selection { start, end } => {
-                                        let _ = value.drain(sorted_range(start, end));
-                                    }
-                                    // We need the cursor not at the start
-                                    cursor::State::Index(idx) if idx > 0 => {
-                                        if modifiers.command() {
-                                            // ctrl+backspace erases to the left,
-                                            // including decimal separator but not including
-                                            // minus sign.
-                                            let _ =
-                                                value.drain((value.starts_with('-').into())..idx);
-                                        } else {
-                                            let _ = value.remove(idx - 1);
-                                        }
-                                    }
-                                    cursor::State::Index(_) => return,
-                                }
-
-                                shell.capture_event();
-
-                                // We check if it's now a valid number
-                                if check_value(&value) {
-                                    forward_to_text(self, child, clipboard);
-                                } else {
-                                    return;
-                                }
-                            }
-                            // Delete
-                            keyboard::Key::Named(keyboard::key::Named::Delete) => {
-                                // We remove either the selection or the character after the cursor
-                                match cursor.state(&Value::new(&value)) {
-                                    cursor::State::Selection { start, end } => {
-                                        let _ = value.drain(sorted_range(start, end));
-                                    }
-                                    // We need the cursor not at the end
-                                    cursor::State::Index(idx) if idx < value.len() => {
-                                        if idx == 0 && value.starts_with('-') {
-                                            let _ = value.remove(0);
-                                        } else if modifiers.command() {
-                                            // ctrl+del erases to the right,
-                                            // including decimal separator but not including
-                                            // minus sign.
-                                            let _ = value.drain(idx..);
-                                        } else {
-                                            let _ = value.remove(idx);
-                                        }
-                                    }
-                                    cursor::State::Index(_) => return,
-                                }
-
-                                shell.capture_event();
-
-                                // We check if it's now a valid number
-                                if check_value(&value) {
-                                    forward_to_text(self, child, clipboard);
-                                } else {
-                                    return;
-                                }
-                            }
                             // Arrow Down, decrease by step
                             keyboard::Key::Named(keyboard::key::Named::ArrowDown)
                                 if can_decrease && !has_value =>
@@ -893,43 +809,45 @@ where
 
                                 self.increase_value(shell);
                             }
-                            // Movement of the cursor
-                            keyboard::Key::Named(
-                                keyboard::key::Named::ArrowLeft
-                                | keyboard::key::Named::ArrowRight
-                                | keyboard::key::Named::Home
-                                | keyboard::key::Named::End,
-                            ) if !has_value => forward_to_text(self, child, clipboard),
-                            // Everything else
-                            _ => match text {
-                                // If we are trying to input text
-                                Some(text) => {
-                                    // We replace the selection or insert the text at the cursor
-                                    match cursor.state(&Value::new(&value)) {
-                                        cursor::State::Index(idx) => {
-                                            value.insert_str(idx, text);
-                                        }
-                                        cursor::State::Selection { start, end } => {
-                                            value.replace_range(sorted_range(start, end), text);
-                                        }
-                                    }
-
+                            // Everything else is handled by the underlying input, as long as
+                            // the text it would insert can be part of a number.
+                            _ => {
+                                if !modifiers.command()
+                                    && let Some(text) = text
+                                    && !self.accepts(text, true)
+                                {
                                     shell.capture_event();
-                                    shell.request_redraw();
-
-                                    // We check if it's now a valid number
-                                    if check_value(&value) {
-                                        forward_to_text(self, child, clipboard);
-                                    } else {
-                                        return;
-                                    }
+                                    return;
                                 }
-                                // If we are not trying to input text
-                                None => return,
-                            },
+
+                                forward = true;
+                            }
                         }
                     }
                 }
+            }
+            // Pasted text coming from the clipboard
+            Event::Clipboard(clipboard::Event::Read(result)) => {
+                let mut probe = FocusProbe::default();
+                Widget::<InternalMessage<T>, Theme, Renderer>::operate(
+                    &mut self.content,
+                    content_tree,
+                    content_layout,
+                    viewport,
+                    renderer,
+                    &mut probe,
+                );
+
+                if probe.focused
+                    && let Ok(content) = result
+                    && let clipboard::Content::Text(text) = content.as_ref()
+                    && !self.accepts(text, false)
+                {
+                    shell.capture_event();
+                    return;
+                }
+
+                forward = true;
             }
             // Mouse scroll event
             Event::Mouse(mouse::Event::WheelScrolled { delta })
@@ -952,10 +870,10 @@ where
                 if mouse_over_button && !self.ignore_buttons =>
             {
                 if mouse_over_dec {
-                    modifiers.decrease_pressed = true;
+                    mod_state.decrease_pressed = true;
                     self.decrease_value(shell);
                 } else {
-                    modifiers.increase_pressed = true;
+                    mod_state.increase_pressed = true;
                     self.increase_value(shell);
                 }
                 shell.capture_event();
@@ -966,34 +884,71 @@ where
                 if mouse_over_button =>
             {
                 if mouse_over_dec {
-                    modifiers.decrease_pressed = false;
+                    mod_state.decrease_pressed = false;
                 } else {
-                    modifiers.increase_pressed = false;
+                    mod_state.increase_pressed = false;
                 }
                 shell.capture_event();
                 shell.request_redraw();
             }
             // Any other event are just forwarded
-            _ => forward_to_text(self, child, clipboard),
+            _ => forward = true,
         }
+
+        if !forward {
+            return;
+        }
+
+        // We use a secondary shell to handle the event of the underlying [`TypedInput`]
+        let mut bus = Bus::new();
+        let mut sub_shell = shell.local(&mut bus);
+
+        Widget::<InternalMessage<T>, Theme, Renderer>::update(
+            &mut self.content,
+            content_tree,
+            event,
+            content_layout,
+            cursor,
+            renderer,
+            &mut sub_shell,
+            viewport,
+        );
 
         // We forward the shell of the [`TypedInput`] to the application
         shell.request_redraw_at(sub_shell.redraw_request());
+        shell.invalidate(sub_shell.invalidation());
+        shell.request_input_method(sub_shell.input_method());
 
-        if sub_shell.is_layout_invalid() {
-            shell.invalidate_layout();
-        }
-        if sub_shell.are_widgets_invalid() {
-            shell.invalidate_widgets();
+        if sub_shell.is_event_captured() {
+            shell.capture_event();
         }
 
-        for message in messages {
+        let mut sub_clipboard = std::mem::take(sub_shell.clipboard_mut());
+        shell.clipboard_mut().merge(&mut sub_clipboard);
+
+        // An emptied input (or a lone minus sign) resets the value to zero
+        if matches!(event, Event::Keyboard(_) | Event::Clipboard(_)) {
+            let text = self.content.text();
+
+            if text.is_empty() || (text == "-" && self.min() < T::zero()) {
+                self.value = T::zero();
+            }
+        }
+
+        for (message, receipt) in bus.drain() {
             match message {
                 InternalMessage::OnChange(value) => {
+                    // Values out of bounds are discarded and the widgets rebuilt,
+                    // which restores the text of the input.
+                    if !self.valid(&value) {
+                        shell.invalidate_widgets();
+                        continue;
+                    }
+
                     if self.value != value || self.value.is_zero() {
                         self.value = value.clone();
                         if let Some(on_change) = &self.on_change {
-                            shell.publish(on_change(value));
+                            shell.forward(on_change(value), receipt);
                         }
                     }
                     shell.invalidate_layout();
@@ -1006,15 +961,20 @@ where
                         );
                     }
                     if let Some(on_submit) = &self.on_submit {
-                        shell.publish(on_submit.clone());
+                        shell.forward(on_submit.clone(), receipt);
                     }
                     shell.invalidate_layout();
                 }
                 InternalMessage::OnPaste(value) => {
+                    if !self.valid(&value) {
+                        shell.invalidate_widgets();
+                        continue;
+                    }
+
                     if self.value != value {
                         self.value = value.clone();
                         if let Some(on_paste) = &self.on_paste {
-                            shell.publish(on_paste(value));
+                            shell.forward(on_paste(value), receipt);
                         }
                     }
                     shell.invalidate_layout();
@@ -1025,26 +985,27 @@ where
 
     fn mouse_interaction(
         &self,
-        _state: &Tree,
-        layout: Layout<'_>,
+        tree: &Tree,
+        layout: Layout,
         cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
-        let mut children = layout.children();
+        let mut children = layout.iter(&tree.children);
         let _content_layout = children.next().expect("fail to get content layout");
-        let mut mod_children = children
-            .next()
-            .expect("fail to get modifiers layout")
-            .children();
+        let (modifier_layout, modifier_tree) =
+            children.next().expect("fail to get modifiers layout");
+        let mut mod_children = modifier_layout.iter(&modifier_tree.children);
         let inc_bounds = mod_children
             .next()
             .expect("fail to get increase mod layout")
+            .0
             .bounds();
         let dec_bounds = mod_children
             .next()
             .expect("fail to get decrease mod layout")
+            .0
             .bounds();
         let is_mouse_over = bounds.contains(cursor.position().unwrap_or_default());
         let is_decrease_disabled = !self.can_decrease();
@@ -1066,30 +1027,32 @@ where
 
     fn draw(
         &self,
-        state: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let content_layout = children.next().expect("fail to get content layout");
-        let mut mod_children = children
-            .next()
-            .expect("fail to get modifiers layout")
-            .children();
+        let mut children = layout.iter(&tree.children);
+        let (content_layout, content_tree) = children.next().expect("fail to get content layout");
+        let (modifier_layout, modifier_tree) =
+            children.next().expect("fail to get modifiers layout");
+        let mut mod_children = modifier_layout.iter(&modifier_tree.children);
         let inc_bounds = mod_children
             .next()
             .expect("fail to get increase mod layout")
+            .0
             .bounds();
         let dec_bounds = mod_children
             .next()
             .expect("fail to get decrease mod layout")
+            .0
             .bounds();
-        self.content.draw(
-            &state.children[0],
+        Widget::<InternalMessage<T>, Theme, Renderer>::draw(
+            &self.content,
+            content_tree,
             renderer,
             theme,
             style,
@@ -1102,7 +1065,7 @@ where
 
         let decrease_btn_style = if is_decrease_disabled {
             style::number_input::Catalog::style(theme, &self.class, Status::Disabled)
-        } else if state.state.downcast_ref::<ModifierState>().decrease_pressed {
+        } else if tree.state.downcast_ref::<ModifierState>().decrease_pressed {
             style::number_input::Catalog::style(theme, &self.class, Status::Pressed)
         } else {
             style::number_input::Catalog::style(theme, &self.class, Status::Active)
@@ -1110,13 +1073,13 @@ where
 
         let increase_btn_style = if is_increase_disabled {
             style::number_input::Catalog::style(theme, &self.class, Status::Disabled)
-        } else if state.state.downcast_ref::<ModifierState>().increase_pressed {
+        } else if tree.state.downcast_ref::<ModifierState>().increase_pressed {
             style::number_input::Catalog::style(theme, &self.class, Status::Pressed)
         } else {
             style::number_input::Catalog::style(theme, &self.class, Status::Active)
         };
 
-        let txt_size = self.size.unwrap_or_else(|| renderer.default_size());
+        let txt_size = self.size.unwrap_or_else(|| renderer.text_size());
 
         let icon_size = txt_size * 2.5 / 4.0;
 
@@ -1132,6 +1095,7 @@ where
                         radius: (3.0).into(),
                         width: 0.0,
                         color: Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     snap: false,
@@ -1152,8 +1116,10 @@ where
                 line_height: LineHeight::Relative(1.3),
                 shaping,
                 wrapping: Wrapping::default(),
-                align_x: Alignment::Center.into(),
+                align_x: iced_core::text::Alignment::Center,
                 align_y: Vertical::Center,
+                ellipsis: iced_core::text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
             },
             Point::new(dec_bounds.center_x(), dec_bounds.center_y()),
             decrease_btn_style.icon_color,
@@ -1169,6 +1135,7 @@ where
                         radius: (3.0).into(),
                         width: 0.0,
                         color: Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     shadow: Shadow::default(),
                     snap: false,
@@ -1189,8 +1156,10 @@ where
                 line_height: LineHeight::Relative(1.3),
                 shaping,
                 wrapping: Wrapping::default(),
-                align_x: Alignment::Center.into(),
+                align_x: iced_core::text::Alignment::Center,
                 align_y: Vertical::Center,
+                ellipsis: iced_core::text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
             },
             Point::new(inc_bounds.center_x(), inc_bounds.center_y()),
             increase_btn_style.icon_color,
@@ -1213,16 +1182,12 @@ impl<'a, T, Message, Theme, Renderer> From<NumberInput<'a, T, Message, Theme, Re
 where
     T: 'a + Num + NumAssignOps + PartialOrd + Display + FromStr + Clone + Bounded,
     Message: 'a + Clone,
-    Renderer: 'a + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'static + iced_core::text::Renderer,
     Theme: 'a + number_input::ExtendedCatalog,
 {
     fn from(num_input: NumberInput<'a, T, Message, Theme, Renderer>) -> Self {
-        Element::new(num_input)
+        Widget::<Message, Theme, Renderer>::_boxed(num_input)
     }
-}
-
-fn sorted_range<T: PartialOrd>(a: T, b: T) -> std::ops::Range<T> {
-    if a >= b { b..a } else { a..b }
 }
 
 #[cfg(test)]
@@ -1372,10 +1337,11 @@ mod tests {
     #[test]
     fn number_input_has_one_child() {
         let value = 10u32;
-        let input = TestNumberInput::new(&value, 0..=100, TestMessage::Changed);
+        let mut input = TestNumberInput::new(&value, 0..=100, TestMessage::Changed);
 
-        let children = Widget::<TestMessage, iced_widget::Theme, Renderer>::children(&input);
-        assert_eq!(children.len(), 1); // Only the content (TypedInput) is a child initially
+        let mut tree = Tree::new::<TestMessage, iced_widget::Theme, Renderer>(&input);
+        Widget::<TestMessage, iced_widget::Theme, Renderer>::diff(&mut input, &mut tree);
+        assert_eq!(tree.children.len(), 1); // Only the content (TypedInput) is a child initially
     }
 
     #[test]
@@ -1430,26 +1396,5 @@ mod tests {
 
         // We can't easily verify the width was set since it's stored in the content widget
         // This test just ensures the method doesn't panic
-    }
-
-    #[test]
-    fn sorted_range_ascending() {
-        let range = sorted_range(1, 10);
-        assert_eq!(range.start, 1);
-        assert_eq!(range.end, 10);
-    }
-
-    #[test]
-    fn sorted_range_descending() {
-        let range = sorted_range(10, 1);
-        assert_eq!(range.start, 1);
-        assert_eq!(range.end, 10);
-    }
-
-    #[test]
-    fn sorted_range_equal() {
-        let range = sorted_range(5, 5);
-        assert_eq!(range.start, 5);
-        assert_eq!(range.end, 5);
     }
 }

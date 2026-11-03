@@ -18,17 +18,13 @@ use crate::{
 };
 
 use iced_core::{
-    Clipboard, Element, Event, Font, Layout, Length, Padding, Pixels, Point, Rectangle, Shell,
-    Size, Vector, Widget,
-    layout::{Limits, Node},
+    Element, Event, Font, Layout, Length, Padding, Pixels, Rectangle, Shell, Size, Vector, Widget,
+    layout,
     mouse::{self, Cursor},
     overlay, renderer,
-    widget::{
-        Operation, Tree,
-        tree::{State, Tag},
-    },
+    widget::{Meta, Operation, Tree},
 };
-use iced_widget::{Row, text};
+use iced_widget::text;
 
 pub use tab_bar_position::TabBarPosition;
 
@@ -84,7 +80,7 @@ where
 
 impl<'a, Message, TabId, Theme, Renderer> Tabs<'a, Message, TabId, Theme, Renderer>
 where
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + text::Catalog,
     TabId: Eq + Clone,
 {
@@ -298,155 +294,109 @@ where
     }
 }
 
+impl<Message, TabId, Theme, Renderer> Meta for Tabs<'_, Message, TabId, Theme, Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog,
+    TabId: Eq + Clone,
+{
+}
+
 impl<Message, TabId, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Tabs<'_, Message, TabId, Theme, Renderer>
 where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + text::Catalog,
     TabId: Eq + Clone,
 {
-    fn children(&self) -> Vec<Tree> {
-        let tabs = Tree {
-            tag: Tag::stateless(),
-            state: State::None,
-            children: self.children.iter().map(Tree::new).collect(),
-        };
-
-        let bar = Tree {
-            tag: self.tab_bar.tag(),
-            state: self.tab_bar.state(),
-            children: self.tab_bar.children(),
-        };
-
-        vec![bar, tabs]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        // we expect 2 elements to at least exist here if not lets try to reload them.
+    fn diff(&mut self, tree: &mut Tree) {
+        // Child 0 is the tab bar tree, child 1 holds one tree per tab content.
         if tree.children.len() != 2 {
-            tree.children = self.children();
+            tree.children = vec![Tree::new(&self.tab_bar), Tree::empty()];
         }
 
-        if let Some(tabs) = tree.children.get_mut(1) {
-            tabs.diff_children(&self.children);
-        }
+        tree.children[0].diff(&mut self.tab_bar);
+        tree.children[1].diff_children(&mut self.children);
     }
 
     fn size(&self) -> Size<Length> {
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) {
         let tab_bar_limits = limits.width(self.width).height(Length::Fill);
-        let mut tab_bar_node =
-            self.tab_bar
-                .layout(&mut tree.children[0], renderer, &tab_bar_limits);
+        self.tab_bar
+            .layout(&mut tree.children[0], renderer, &tab_bar_limits);
+        let tab_bar_size = tree.children[0].size;
 
         let tab_content_limits = limits
             .width(self.width)
             .height(self.height)
-            .shrink([0.0, tab_bar_node.size().height]);
+            .shrink([0.0, tab_bar_size.height]);
 
-        let mut tab_content_node = if let (Some(element), Some(child)) = (
-            self.children.get_mut(self.tab_bar.get_active_tab_idx()),
-            tree.children.get_mut(1),
+        let idx = self.tab_bar.get_active_tab_idx();
+        let tab_content_size = if let (Some(element), Some(child)) = (
+            self.children.get_mut(idx),
+            tree.children[1].children.get_mut(idx),
         ) {
-            element.as_widget_mut().layout(
-                &mut child.children[self.tab_bar.get_active_tab_idx()],
-                renderer,
-                &tab_content_limits,
-            )
+            element.layout(child, renderer, &tab_content_limits);
+            child.translation = Vector::ZERO;
+            child.size
         } else {
-            Row::<Message, Theme, Renderer>::new()
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .layout(tree, renderer, &tab_content_limits)
+            layout::atomic(&tab_content_limits, Length::Fill, Length::Fill)
         };
 
-        let tab_bar_bounds = tab_bar_node.bounds();
-        tab_bar_node = tab_bar_node.move_to(Point::new(
-            tab_bar_bounds.x,
-            tab_bar_bounds.y
-                + match self.tab_bar_position {
-                    TabBarPosition::Top => 0.0,
-                    TabBarPosition::Bottom => tab_content_node.bounds().height,
-                },
-        ));
+        let (bar_y, content_y) = match self.tab_bar_position {
+            TabBarPosition::Top => (0.0, tab_bar_size.height),
+            TabBarPosition::Bottom => (tab_content_size.height, 0.0),
+        };
 
-        let tab_content_bounds = tab_content_node.bounds();
-        tab_content_node = tab_content_node.move_to(Point::new(
-            tab_content_bounds.x,
-            tab_content_bounds.y
-                + match self.tab_bar_position {
-                    TabBarPosition::Top => tab_bar_node.bounds().height,
-                    TabBarPosition::Bottom => 0.0,
-                },
-        ));
+        tree.children[0].translation = Vector::new(0.0, bar_y);
+        tree.children[1].translation = Vector::new(0.0, content_y);
+        tree.children[1].size = tab_content_size;
 
-        Node::with_children(
-            Size::new(
-                tab_content_node.size().width,
-                tab_bar_node.size().height + tab_content_node.size().height,
-            ),
-            match self.tab_bar_position {
-                TabBarPosition::Top => vec![tab_bar_node, tab_content_node],
-                TabBarPosition::Bottom => vec![tab_content_node, tab_bar_node],
-            },
-        )
+        tree.size = Size::new(
+            tab_content_size.width,
+            tab_bar_size.height + tab_content_size.height,
+        );
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let (tab_bar_layout, tab_content_layout) = match self.tab_bar_position {
-            TabBarPosition::Top => {
-                let tab_bar_layout = children
-                    .next()
-                    .expect("widget: Layout should have a TabBar layout at top position");
-                let tab_content_layout = children
-                    .next()
-                    .expect("widget: Layout should have a tab content layout at top position");
-                (tab_bar_layout, tab_content_layout)
-            }
-            TabBarPosition::Bottom => {
-                let tab_content_layout = children
-                    .next()
-                    .expect("widget: Layout should have a tab content layout at bottom position");
-                let tab_bar_layout = children
-                    .next()
-                    .expect("widget: Layout should have a TabBar layout at bottom position");
-                (tab_bar_layout, tab_content_layout)
-            }
+        let mut children = layout.iter_mut(&mut state.children);
+        let (Some((tab_bar_layout, bar_tree)), Some((tab_content_layout, content_tree))) =
+            (children.next(), children.next())
+        else {
+            return;
         };
 
         self.tab_bar.update(
-            &mut Tree::empty(),
+            bar_tree,
             event,
             tab_bar_layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
         let idx = self.tab_bar.get_active_tab_idx();
-        if let Some(element) = self.children.get_mut(idx) {
-            element.as_widget_mut().update(
-                &mut state.children[1].children[idx],
+        if let Some(element) = self.children.get_mut(idx)
+            && let Some(child_tree) = content_tree.children.get_mut(idx)
+        {
+            element.update(
+                child_tree,
                 event,
                 tab_content_layout,
                 cursor,
                 renderer,
-                clipboard,
                 shell,
                 viewport,
             );
@@ -456,25 +406,22 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        // Tab bar
-        let mut children = layout.children();
-        let tab_bar_layout = match self.tab_bar_position {
-            TabBarPosition::Top => children
-                .next()
-                .expect("widget: There should be a TabBar at the top position"),
-            TabBarPosition::Bottom => children
-                .last()
-                .expect("widget: There should be a TabBar at the bottom position"),
+        let mut children = layout.iter(&state.children);
+        let (Some((tab_bar_layout, bar_tree)), Some((tab_content_layout, content_tree))) =
+            (children.next(), children.next())
+        else {
+            return mouse::Interaction::default();
         };
 
+        // Tab bar
         let mut mouse_interaction = mouse::Interaction::default();
         let new_mouse_interaction = self.tab_bar.mouse_interaction(
-            &Tree::empty(),
+            bar_tree,
             tab_bar_layout,
             cursor,
             viewport,
@@ -486,19 +433,12 @@ where
         }
 
         // Tab content
-        let mut children = layout.children();
-        let tab_content_layout = match self.tab_bar_position {
-            TabBarPosition::Top => children
-                .last()
-                .expect("Graphics: There should be a TabBar at the top position"),
-            TabBarPosition::Bottom => children
-                .next()
-                .expect("Graphics: There should be a TabBar at the bottom position"),
-        };
         let idx = self.tab_bar.get_active_tab_idx();
-        if let Some(element) = self.children.get(idx) {
-            let new_mouse_interaction = element.as_widget().mouse_interaction(
-                &state.children[1].children[idx],
+        if let Some(element) = self.children.get(idx)
+            && let Some(child_tree) = content_tree.children.get(idx)
+        {
+            let new_mouse_interaction = element.mouse_interaction(
+                child_tree,
                 tab_content_layout,
                 cursor,
                 viewport,
@@ -519,22 +459,19 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let tab_bar_layout = match self.tab_bar_position {
-            TabBarPosition::Top => children
-                .next()
-                .expect("widget: There should be a TabBar at the top position"),
-            TabBarPosition::Bottom => children
-                .last()
-                .expect("widget: There should be a TabBar at the bottom position"),
+        let mut children = layout.iter(&state.children);
+        let (Some((tab_bar_layout, bar_tree)), Some((tab_content_layout, content_tree))) =
+            (children.next(), children.next())
+        else {
+            return;
         };
 
         self.tab_bar.draw(
-            &Tree::empty(),
+            bar_tree,
             renderer,
             theme,
             style,
@@ -543,21 +480,12 @@ where
             viewport,
         );
 
-        let mut children = layout.children();
-
-        let tab_content_layout = match self.tab_bar_position {
-            TabBarPosition::Top => children
-                .last()
-                .expect("Graphics: There should be a TabBar at the top position"),
-            TabBarPosition::Bottom => children
-                .next()
-                .expect("Graphics: There should be a TabBar at the bottom position"),
-        };
-
         let idx = self.tab_bar.get_active_tab_idx();
-        if let Some(element) = self.children.get(idx) {
-            element.as_widget().draw(
-                &state.children[1].children[idx],
+        if let Some(element) = self.children.get(idx)
+            && let Some(child_tree) = content_tree.children.get(idx)
+        {
+            element.draw(
+                child_tree,
                 renderer,
                 theme,
                 style,
@@ -571,52 +499,59 @@ where
     fn overlay<'b>(
         &'b mut self,
         state: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        let layout = match self.tab_bar_position {
-            TabBarPosition::Top => layout.children().nth(1),
-            TabBarPosition::Bottom => layout.children().next(),
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
+        let idx = self.tab_bar.get_active_tab_idx();
+
+        let mut children = layout.iter_mut(&mut state.children);
+        let _ = children.next();
+        let Some((content_layout, content_tree)) = children.next() else {
+            return Vec::new();
         };
 
-        layout.and_then(|layout| {
-            let idx = self.tab_bar.get_active_tab_idx();
-            self.children
-                .get_mut(idx)
-                .map(Element::as_widget_mut)
-                .and_then(|w| {
-                    w.overlay(
-                        &mut state.children[1].children[idx],
-                        layout,
-                        renderer,
-                        viewport,
-                        translation,
-                    )
-                })
-        })
+        match (
+            self.children.get_mut(idx),
+            content_tree.children.get_mut(idx),
+        ) {
+            (Some(element), Some(child_tree)) => element.overlay(
+                child_tree,
+                content_layout,
+                renderer,
+                viewport,
+                translation,
+                window,
+            ),
+            _ => Vec::new(),
+        }
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         let active_tab = self.tab_bar.get_active_tab_idx();
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
         operation.traverse(&mut |operation| {
-            self.children[active_tab].as_widget_mut().operate(
-                &mut tree.children[1].children[active_tab],
-                layout
-                    .children()
-                    .nth(1)
-                    .expect("TabBar is 0th child, contents are 1st node"),
-                renderer,
-                operation,
-            );
+            let mut children = layout.iter_mut(&mut tree.children);
+            let _ = children.next();
+            let Some((content_layout, content_tree)) = children.next() else {
+                return;
+            };
+
+            if let (Some(element), Some(child_tree)) = (
+                self.children.get_mut(active_tab),
+                content_tree.children.get_mut(active_tab),
+            ) {
+                element.operate(child_tree, content_layout, viewport, renderer, operation);
+            }
         });
     }
 }
@@ -624,12 +559,12 @@ where
 impl<'a, Message, TabId, Theme, Renderer> From<Tabs<'a, Message, TabId, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a + Catalog + text::Catalog,
     Message: 'a,
     TabId: 'a + Eq + Clone,
 {
     fn from(tabs: Tabs<'a, Message, TabId, Theme, Renderer>) -> Self {
-        Element::new(tabs)
+        Widget::_boxed(tabs)
     }
 }

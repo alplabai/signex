@@ -13,22 +13,21 @@ use crate::{
 
 use crate::iced_aw_font::advanced_text::{cancel, ok};
 use iced_core::{
-    Alignment, Border, Clipboard, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels,
-    Point, Rectangle, Renderer as _, Shell, Size, Text, Vector, Widget,
+    Border, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels, Point, Rectangle,
+    Renderer as _, Shell, Size, Text, Vector, Widget,
     alignment::{Horizontal, Vertical},
     event, keyboard,
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
-    overlay, renderer,
-    text::Renderer as _,
+    overlay, renderer, shell,
+    text::{self, Renderer as _, Wrapping},
     touch,
-    widget::{self, tree::Tree},
+    widget::{self, Meta, tree::Tree},
 };
 use iced_widget::{
     Button, Column, Renderer, Row,
     canvas::{self, LineCap, Path, Stroke},
     graphics::geometry::Renderer as _,
-    text::{self, Wrapping},
 };
 use std::collections::HashMap;
 
@@ -51,26 +50,63 @@ const RGBA_STEP: i16 = 1;
 pub struct ColorPickerOverlay<'a, 'b, Message, Theme>
 where
     Message: Clone,
-    Theme: style::color_picker::Catalog + iced_widget::button::Catalog,
+    Theme: style::color_picker::Catalog
+        + iced_widget::button::Catalog
+        + iced_widget::text::Catalog,
     'b: 'a,
 {
     /// The state of the [`ColorPickerOverlay`].
     state: &'a mut State,
     /// The cancel button of the [`ColorPickerOverlay`].
-    cancel_button: Button<'a, Message, Theme, Renderer>,
+    cancel_button: Button<'a, Message, widget::Text<'a, Theme>, Theme>,
     /// The submit button of the [`ColorPickerOverlay`].
-    submit_button: Button<'a, Message, Theme, Renderer>,
+    submit_button: Button<'a, Message, widget::Text<'a, Theme>, Theme>,
     /// The function that produces a message when the submit button of the [`ColorPickerOverlay`].
     on_submit: &'a dyn Fn(Color) -> Message,
     /// Optional function that produces a message when the color changes during selection (real-time updates).
     on_color_change: Option<&'a dyn Fn(Color) -> Message>,
-    /// The position of the [`ColorPickerOverlay`].
-    position: Point,
     /// The style of the [`ColorPickerOverlay`].
     class: &'a <Theme as style::color_picker::Catalog>::Class<'b>,
     /// The reference to the tree holding the state of this overlay.
     tree: &'a mut Tree,
+    /// The viewport of the [`ColorPickerOverlay`].
     viewport: Rectangle,
+    /// The size of the window the overlay is displayed in.
+    window: Size,
+    /// The computed layout of all the elements of the [`ColorPickerOverlay`].
+    geometry: Geometry,
+}
+
+/// The layout of a single row (label, bar and value) of the RGBA area.
+#[derive(Debug, Clone, Copy, Default)]
+struct RgbaRowGeometry {
+    /// The bounds of the whole row.
+    row: Rectangle,
+    /// The bounds of the label.
+    label: Rectangle,
+    /// The bounds of the color bar.
+    bar: Rectangle,
+    /// The bounds of the value text.
+    value: Rectangle,
+}
+
+/// The absolute layout of all the elements of the [`ColorPickerOverlay`].
+#[derive(Debug, Clone, Copy)]
+struct Geometry {
+    /// The layout of the whole overlay.
+    overlay: Layout,
+    /// The bounds of the saturation/value area.
+    sat_value: Rectangle,
+    /// The bounds of the hue area.
+    hue: Rectangle,
+    /// The red, green, blue and alpha rows.
+    rgba: [RgbaRowGeometry; 4],
+    /// The bounds of the hex text.
+    hex: Rectangle,
+    /// The layout of the cancel button.
+    cancel: Layout,
+    /// The layout of the submit button.
+    submit: Layout,
 }
 
 impl<'a, 'b, Message, Theme> ColorPickerOverlay<'a, 'b, Message, Theme>
@@ -93,36 +129,53 @@ where
         class: &'a <Theme as style::color_picker::Catalog>::Class<'b>,
         tree: &'a mut Tree,
         viewport: Rectangle,
+        renderer: &Renderer,
+        window: Size,
     ) -> Self {
         let color_picker::State { overlay_state, .. } = state;
 
         let (cancel_content, cancel_font, _cancel_shaping) = cancel();
         let (submit_content, submit_font, _submit_shaping) = ok();
 
+        let mut cancel_button = Button::new(
+            widget::Text::new(cancel_content)
+                .align_x(Horizontal::Center)
+                .width(Length::Fill)
+                .font(cancel_font),
+        )
+        .width(Length::Fill)
+        .on_press(on_cancel.clone());
+        let mut submit_button = Button::new(
+            widget::Text::new(submit_content)
+                .align_x(Horizontal::Center)
+                .width(Length::Fill)
+                .font(submit_font),
+        )
+        .width(Length::Fill)
+        .on_press(on_cancel); // Sending a fake message
+
+        // The layout is not part of the `Overlay` trait anymore, so it is
+        // computed once, when the overlay is created.
+        let geometry = compute_geometry(
+            &mut cancel_button,
+            &mut submit_button,
+            tree,
+            position,
+            renderer,
+            window,
+        );
+
         ColorPickerOverlay {
             state: overlay_state,
-            cancel_button: Button::new(
-                iced_widget::Text::new(cancel_content)
-                    .align_x(Horizontal::Center)
-                    .width(Length::Fill)
-                    .font(cancel_font),
-            )
-            .width(Length::Fill)
-            .on_press(on_cancel.clone()),
-            submit_button: Button::new(
-                iced_widget::Text::new(submit_content)
-                    .align_x(Horizontal::Center)
-                    .width(Length::Fill)
-                    .font(submit_font),
-            )
-            .width(Length::Fill)
-            .on_press(on_cancel), // Sending a fake message
+            cancel_button,
+            submit_button,
             on_submit,
             on_color_change,
-            position,
             class,
             tree,
             viewport,
+            window,
+            geometry,
         }
     }
 
@@ -141,23 +194,14 @@ where
     fn on_event_hsv_color(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: Cursor,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
-        let mut hsv_color_children = layout.children();
-
         let hsv_color: Hsv = self.state.color.into();
         let mut color_changed = false;
 
-        let sat_value_bounds = hsv_color_children
-            .next()
-            .expect("widget: Layout should have a sat/value layout")
-            .bounds();
-        let hue_bounds = hsv_color_children
-            .next()
-            .expect("widget: Layout should have a hue layout")
-            .bounds();
+        let sat_value_bounds = self.geometry.sat_value;
+        let hue_bounds = self.geometry.hue;
 
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => match delta {
@@ -259,52 +303,15 @@ where
     fn on_event_rgba_color(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: Cursor,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) -> event::Status {
-        let mut rgba_color_children = layout.children();
         let mut color_changed = false;
 
-        let mut red_row_children = rgba_color_children
-            .next()
-            .expect("widget: Layout should have a red row layout")
-            .children();
-        let _ = red_row_children.next();
-        let red_bar_bounds = red_row_children
-            .next()
-            .expect("widget: Layout should have a red bar layout")
-            .bounds();
-
-        let mut green_row_children = rgba_color_children
-            .next()
-            .expect("widget: Layout should have a green row layout")
-            .children();
-        let _ = green_row_children.next();
-        let green_bar_bounds = green_row_children
-            .next()
-            .expect("widget: Layout should have a green bar layout")
-            .bounds();
-
-        let mut blue_row_children = rgba_color_children
-            .next()
-            .expect("widget: Layout should have a blue row layout")
-            .children();
-        let _ = blue_row_children.next();
-        let blue_bar_bounds = blue_row_children
-            .next()
-            .expect("widget: Layout should have a blue bar layout")
-            .bounds();
-
-        let mut alpha_row_children = rgba_color_children
-            .next()
-            .expect("widget: Layout should have an alpha row layout")
-            .children();
-        let _ = alpha_row_children.next();
-        let alpha_bar_bounds = alpha_row_children
-            .next()
-            .expect("widget: Layout should have an alpha bar layout")
-            .bounds();
+        let red_bar_bounds = self.geometry.rgba[0].bar;
+        let green_bar_bounds = self.geometry.rgba[1].bar;
+        let blue_bar_bounds = self.geometry.rgba[2].bar;
+        let alpha_bar_bounds = self.geometry.rgba[3].bar;
 
         match event {
             Event::Mouse(mouse::Event::WheelScrolled { delta }) => match delta {
@@ -429,7 +436,11 @@ where
     }
 
     /// The even handling for the keyboard input.
-    fn on_event_keyboard(&mut self, event: &Event, shell: &mut Shell<Message>) -> event::Status {
+    fn on_event_keyboard(
+        &mut self,
+        event: &Event,
+        shell: &mut Shell<'_, Message>,
+    ) -> event::Status {
         if self.state.focus == Focus::None {
             return event::Status::Ignored;
         }
@@ -573,78 +584,12 @@ where
         + iced_widget::button::Catalog
         + iced_widget::text::Catalog,
 {
-    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
-        let (max_width, max_height) = if bounds.width > bounds.height {
-            (600.0, 300.0)
-        } else {
-            (300.0, 600.0)
-        };
-
-        let limits = Limits::new(Size::ZERO, bounds)
-            .shrink(PADDING)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .max_width(max_width)
-            .max_height(max_height);
-
-        let divider = if bounds.width > bounds.height {
-            Row::<(), Theme, Renderer>::new()
-                .spacing(SPACING)
-                .push(Row::new().width(Length::Fill).height(Length::Fill))
-                .push(Row::new().width(Length::Fill).height(Length::Fill))
-                .layout(self.tree, renderer, &limits)
-        } else {
-            Column::<(), Theme, Renderer>::new()
-                .spacing(SPACING)
-                .push(Row::new().width(Length::Fill).height(Length::Fill))
-                .push(Row::new().width(Length::Fill).height(Length::Fill))
-                .layout(self.tree, renderer, &limits)
-        };
-
-        let mut divider_children = divider.children().iter();
-
-        let block1_bounds = divider_children
-            .next()
-            .expect("Divider should have a first child")
-            .bounds();
-        let block2_bounds = divider_children
-            .next()
-            .expect("Divider should have a second child")
-            .bounds();
-
-        // ----------- Block 1 ----------------------
-        let block1_node = block1_layout(self, renderer, block1_bounds);
-
-        // ----------- Block 2 ----------------------
-        let block2_node = block2_layout(self, renderer, block2_bounds);
-
-        let (width, height) = if bounds.width > bounds.height {
-            (
-                block1_node.size().width + block2_node.size().width + SPACING.0, // + (2.0 * PADDING as f32),
-                block2_node.size().height,
-            )
-        } else {
-            (
-                block2_node.size().width,
-                block1_node.size().height + block2_node.size().height + SPACING.0,
-            )
-        };
-
-        let mut node =
-            Node::with_children(Size::new(width, height), vec![block1_node, block2_node]);
-
-        node.center_and_bounce(self.position, bounds);
-        node
-    }
-
     fn update(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
         if event::Status::Captured == self.on_event_keyboard(event, shell) {
             self.clear_cache();
@@ -653,61 +598,44 @@ where
             return;
         }
 
-        let mut children = layout.children();
         // ----------- Block 1 ----------------------
-        let block1_layout = children
-            .next()
-            .expect("widget: Layout should have a 1. block layout");
-        let hsv_color_status = self.on_event_hsv_color(event, block1_layout, cursor, shell);
+        let hsv_color_status = self.on_event_hsv_color(event, cursor, shell);
         // ----------- Block 1 end ------------------
 
         // ----------- Block 2 ----------------------
-        let mut block2_children = children
-            .next()
-            .expect("widget: Layout should have a 2. block layout")
-            .children();
-
         // ----------- RGB Color -----------------------
-        let rgba_color_layout = block2_children
-            .next()
-            .expect("widget: Layout should have a RGBA color layout");
-        let rgba_color_status = self.on_event_rgba_color(event, rgba_color_layout, cursor, shell);
-
-        let mut fake_messages: Vec<Message> = Vec::new();
+        let rgba_color_status = self.on_event_rgba_color(event, cursor, shell);
 
         // ----------- Text input ----------------------
-        let _text_input_layout = block2_children
-            .next()
-            .expect("widget: Layout should have a hex text layout");
+        // (nothing to handle for the hex text)
 
         // ----------- Buttons -------------------------
-        let cancel_button_layout = block2_children
-            .next()
-            .expect("widget: Layout should have a cancel button layout for a ColorPicker");
+        let viewport = self.geometry.overlay.bounds();
+
         self.cancel_button.update(
             &mut self.tree.children[0],
             event,
-            cancel_button_layout,
+            self.geometry.cancel,
             cursor,
             renderer,
-            clipboard,
             shell,
-            &layout.bounds(),
+            &viewport,
         );
 
-        let submit_button_layout = block2_children
-            .next()
-            .expect("widget: Layout should have a submit button layout for a ColorPicker");
-        self.submit_button.update(
-            &mut self.tree.children[1],
-            event,
-            submit_button_layout,
-            cursor,
-            renderer,
-            clipboard,
-            &mut Shell::new(&mut fake_messages),
-            &layout.bounds(),
-        );
+        let mut fake_messages: shell::Bus<Message> = shell::Bus::new();
+        {
+            let mut fake_shell = shell.local(&mut fake_messages);
+
+            self.submit_button.update(
+                &mut self.tree.children[1],
+                event,
+                self.geometry.submit,
+                cursor,
+                renderer,
+                &mut fake_shell,
+                &viewport,
+            );
+        }
 
         if !fake_messages.is_empty() {
             shell.publish((self.on_submit)(self.state.color));
@@ -725,99 +653,41 @@ where
         }
     }
 
-    fn mouse_interaction(
-        &self,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        let mut children = layout.children();
-
+    fn mouse_interaction(&self, cursor: mouse::Cursor, renderer: &Renderer) -> mouse::Interaction {
         let mouse_interaction = mouse::Interaction::default();
 
         // Block 1
-        let block1_layout = children
-            .next()
-            .expect("Graphics: Layout should have a 1. block layout");
         let mut block1_mouse_interaction = mouse::Interaction::default();
         // HSV color
-        let mut hsv_color_children = block1_layout.children();
-        let sat_value_layout = hsv_color_children
-            .next()
-            .expect("Graphics: Layout should have a sat/value layout");
-        if cursor.is_over(sat_value_layout.bounds()) {
+        if cursor.is_over(self.geometry.sat_value) {
             block1_mouse_interaction = block1_mouse_interaction.max(mouse::Interaction::Pointer);
         }
-        let hue_layout = hsv_color_children
-            .next()
-            .expect("Graphics: Layout should have a hue layout");
-        if cursor.is_over(hue_layout.bounds()) {
+        if cursor.is_over(self.geometry.hue) {
             block1_mouse_interaction = block1_mouse_interaction.max(mouse::Interaction::Pointer);
         }
 
         // Block 2
-        let block2_layout = children
-            .next()
-            .expect("Graphics: Layout should have a 2. block layout");
         let mut block2_mouse_interaction = mouse::Interaction::default();
-        let mut block2_children = block2_layout.children();
         // RGBA color
-        let rgba_color_layout = block2_children
-            .next()
-            .expect("Graphics: Layout should have a RGBA color layout");
-        let mut rgba_color_children = rgba_color_layout.children();
-
-        let f = |layout: Layout<'_>, cursor: Cursor| {
-            let mut children = layout.children();
-
-            let _label_layout = children.next();
-            let bar_layout = children
-                .next()
-                .expect("Graphics: Layout should have a bar layout");
-
-            if cursor.is_over(bar_layout.bounds()) {
-                mouse::Interaction::ResizingHorizontally
-            } else {
-                mouse::Interaction::default()
+        for row in &self.geometry.rgba {
+            if cursor.is_over(row.bar) {
+                block2_mouse_interaction =
+                    block2_mouse_interaction.max(mouse::Interaction::ResizingHorizontally);
             }
-        };
-        let red_row_layout = rgba_color_children
-            .next()
-            .expect("Graphics: Layout should have a red row layout");
-        block2_mouse_interaction = block2_mouse_interaction.max(f(red_row_layout, cursor));
-        let green_row_layout = rgba_color_children
-            .next()
-            .expect("Graphics: Layout should have a green row layout");
-        block2_mouse_interaction = block2_mouse_interaction.max(f(green_row_layout, cursor));
-        let blue_row_layout = rgba_color_children
-            .next()
-            .expect("Graphics: Layout should have a blue row layout");
-        block2_mouse_interaction = block2_mouse_interaction.max(f(blue_row_layout, cursor));
-        let alpha_row_layout = rgba_color_children
-            .next()
-            .expect("Graphics: Layout should have an alpha row layout");
-        block2_mouse_interaction = block2_mouse_interaction.max(f(alpha_row_layout, cursor));
-
-        let _hex_text_layout = block2_children.next();
+        }
 
         // Buttons
-        let cancel_button_layout = block2_children
-            .next()
-            .expect("Graphics: Layout should have a cancel button layout for a ColorPicker");
         let cancel_mouse_interaction = self.cancel_button.mouse_interaction(
-            &self.tree.children[1],
-            cancel_button_layout,
+            &self.tree.children[0],
+            self.geometry.cancel,
             cursor,
             &self.viewport,
             renderer,
         );
 
-        let submit_button_layout = block2_children
-            .next()
-            .expect("Graphics: Layout should have a submit button layout for a ColorPicker");
         let submit_mouse_interaction = self.submit_button.mouse_interaction(
             &self.tree.children[1],
-            submit_button_layout,
+            self.geometry.submit,
             cursor,
             &self.viewport,
             renderer,
@@ -830,47 +700,26 @@ where
             .max(submit_mouse_interaction)
     }
 
-    fn operate(
-        &mut self,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn widget::Operation,
-    ) {
-        let mut children = layout.children();
+    fn operate(&mut self, renderer: &Renderer, operation: &mut dyn widget::Operation) {
+        // Operate on cancel button
+        Widget::operate(
+            &mut self.cancel_button,
+            &mut self.tree.children[0],
+            self.geometry.cancel,
+            &self.viewport,
+            renderer,
+            operation,
+        );
 
-        // Skip block 1 (HSV color area)
-        let _block1_layout = children.next();
-
-        // Block 2 contains the buttons
-        if let Some(block2_layout) = children.next() {
-            let mut block2_children = block2_layout.children();
-
-            // Skip rgba_colors, hex_text
-            let _rgba_layout = block2_children.next();
-            let _hex_text_layout = block2_children.next();
-
-            // Operate on cancel button
-            if let Some(cancel_layout) = block2_children.next() {
-                Widget::operate(
-                    &mut self.cancel_button,
-                    &mut self.tree.children[0],
-                    cancel_layout,
-                    renderer,
-                    operation,
-                );
-            }
-
-            // Operate on submit button
-            if let Some(submit_layout) = block2_children.next() {
-                Widget::operate(
-                    &mut self.submit_button,
-                    &mut self.tree.children[1],
-                    submit_layout,
-                    renderer,
-                    operation,
-                );
-            }
-        }
+        // Operate on submit button
+        Widget::operate(
+            &mut self.submit_button,
+            &mut self.tree.children[1],
+            self.geometry.submit,
+            &self.viewport,
+            renderer,
+            operation,
+        );
     }
 
     fn draw(
@@ -878,11 +727,9 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
         cursor: Cursor,
     ) {
-        let bounds = layout.bounds();
-        let mut children = layout.children();
+        let bounds = self.geometry.overlay.bounds();
 
         let mut style_sheet: HashMap<StyleState, Style> = HashMap::new();
         let _ = style_sheet.insert(
@@ -910,223 +757,307 @@ where
             style_state = style_state.max(StyleState::Hovered);
         }
 
-        if (bounds.width > 0.) && (bounds.height > 0.) {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds,
-                    border: Border {
-                        radius: style_sheet[&style_state].border_radius.into(),
-                        width: style_sheet[&style_state].border_width,
-                        color: style_sheet[&style_state].border_color,
+        renderer.with_layer(Rectangle::with_size(self.window), |renderer| {
+            if (bounds.width > 0.) && (bounds.height > 0.) {
+                renderer.fill_quad(
+                    renderer::Quad {
+                        bounds,
+                        border: Border {
+                            radius: style_sheet[&style_state].border_radius.into(),
+                            width: style_sheet[&style_state].border_width,
+                            color: style_sheet[&style_state].border_color,
+                            ..Border::default()
+                        },
+                        ..renderer::Quad::default()
                     },
-                    ..renderer::Quad::default()
-                },
-                style_sheet[&style_state].background,
-            );
-        }
+                    style_sheet[&style_state].background,
+                );
+            }
 
-        // ----------- Block 1 ----------------------
-        let block1_layout = children
-            .next()
-            .expect("Graphics: Layout should have a 1. block layout");
-        block1(renderer, self, block1_layout, cursor, &style_sheet);
+            // ----------- Block 1 ----------------------
+            block1(renderer, self, cursor, &style_sheet);
 
-        // ----------- Block 2 ----------------------
-        let block2_layout = children
-            .next()
-            .expect("Graphics: Layout should have a 2. block layout");
-        block2(
-            renderer,
-            self,
-            block2_layout,
-            cursor,
-            theme,
-            style,
-            &bounds,
-            &style_sheet,
-        );
+            // ----------- Block 2 ----------------------
+            block2(renderer, self, cursor, theme, style, &bounds, &style_sheet);
+        });
     }
 }
 
-/// Defines the layout of the 1. block of the color picker containing the HSV part.
-fn block1_layout<'a, Message, Theme>(
-    color_picker: &mut ColorPickerOverlay<'_, '_, Message, Theme>,
-    renderer: &Renderer,
-    bounds: Rectangle,
-) -> Node
-where
-    Message: 'static + Clone,
-    Theme: 'a
-        + style::color_picker::Catalog
-        + iced_widget::button::Catalog
-        + iced_widget::text::Catalog,
-{
-    let block1_limits = Limits::new(Size::ZERO, bounds.size())
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-    let block1_node = Column::<(), Theme, Renderer>::new()
-        .spacing(PADDING.y() / 2.) // Average vertical padding
-        .push(
-            Row::new()
-                .width(Length::Fill)
-                .height(Length::FillPortion(7)),
-        )
-        .push(
-            Row::new()
-                .width(Length::Fill)
-                .height(Length::FillPortion(1)),
-        )
-        .layout(color_picker.tree, renderer, &block1_limits);
-
-    block1_node.move_to(Point::new(bounds.x + PADDING.left, bounds.y + PADDING.top))
+/// Wraps a [`Widget`] into an [`Element`].
+fn boxed<'a, Message, Theme>(
+    widget: impl Widget<Message, Theme, Renderer> + 'a,
+) -> Element<'a, Message, Theme, Renderer> {
+    Widget::<Message, Theme, Renderer>::_boxed(widget)
 }
 
-/// Defines the layout of the 2. block of the color picker containing the RGBA part, Hex and buttons.
-fn block2_layout<'a, Message, Theme>(
-    color_picker: &mut ColorPickerOverlay<'_, '_, Message, Theme>,
+/// Reconciles the child tree at the given index with the given widget.
+fn sync_child<Message, Theme>(
+    tree: &mut Tree,
+    index: usize,
+    widget: &mut impl Widget<Message, Theme, Renderer>,
+) {
+    if let Some(child) = tree.children.get_mut(index) {
+        child.diff(widget);
+    } else {
+        let mut child = Tree::new(&*widget);
+        child.diff(widget);
+        tree.children.push(child);
+    }
+}
+
+/// Moves the given [`Rectangle`] by the given [`Vector`].
+fn translate(rectangle: Rectangle, offset: Vector) -> Rectangle {
+    Rectangle {
+        x: rectangle.x + offset.x,
+        y: rectangle.y + offset.y,
+        ..rectangle
+    }
+}
+
+/// Moves the given [`Layout`] by the given [`Vector`].
+fn translate_layout(layout: Layout, offset: Vector) -> Layout {
+    layout.move_to(layout.position() + offset)
+}
+
+/// Computes the layout of the whole color picker overlay.
+///
+/// The layout is made of two blocks: the first one contains the HSV part, the
+/// second one the RGBA part, the hex text and the buttons.
+#[allow(clippy::too_many_lines)]
+fn compute_geometry<'a, Message, Theme>(
+    cancel_button: &mut Button<'a, Message, widget::Text<'a, Theme>, Theme>,
+    submit_button: &mut Button<'a, Message, widget::Text<'a, Theme>, Theme>,
+    tree: &mut Tree,
+    position: Point,
     renderer: &Renderer,
-    bounds: Rectangle,
-) -> Node
+    window: Size,
+) -> Geometry
 where
     Message: 'static + Clone,
-    Theme: 'a
-        + style::color_picker::Catalog
-        + iced_widget::button::Catalog
-        + iced_widget::text::Catalog,
+    Theme: 'a + iced_widget::button::Catalog + iced_widget::text::Catalog,
 {
-    let block2_limits = Limits::new(Size::ZERO, bounds.size())
-        .width(Length::Fill)
-        .height(Length::Fill);
+    let landscape = window.width > window.height;
 
-    // Pre-Buttons TODO: get rid of it
-    let cancel_limits = block2_limits;
-    let cancel_button = color_picker.cancel_button.layout(
-        &mut color_picker.tree.children[0],
-        renderer,
-        &cancel_limits,
+    let (max_width, max_height) = if landscape {
+        (600.0, 300.0)
+    } else {
+        (300.0, 600.0)
+    };
+
+    // The space available for the two blocks
+    let available = Size::new(
+        (window.width - PADDING.x()).max(0.0).min(max_width),
+        (window.height - PADDING.y()).max(0.0).min(max_height),
     );
 
-    let hex_text_limits = block2_limits;
+    // Divide the available space in two equally sized parts
+    let (block1_bounds, block2_bounds) = if landscape {
+        let width = ((available.width - SPACING.0) / 2.0).max(0.0);
 
-    let mut hex_text_layout = Row::<Message, Theme, Renderer>::new()
-        .width(Length::Fill)
-        .height(Length::Fixed(renderer.default_size().0 + PADDING.y()))
-        .layout(color_picker.tree, renderer, &hex_text_limits);
+        (
+            Rectangle::new(Point::ORIGIN, Size::new(width, available.height)),
+            Rectangle::new(
+                Point::new(width + SPACING.0, 0.0),
+                Size::new(width, available.height),
+            ),
+        )
+    } else {
+        let height = ((available.height - SPACING.0) / 2.0).max(0.0);
+
+        (
+            Rectangle::new(Point::ORIGIN, Size::new(available.width, height)),
+            Rectangle::new(
+                Point::new(0.0, height + SPACING.0),
+                Size::new(available.width, height),
+            ),
+        )
+    };
+
+    // ----------- Block 1 ----------------------
+    let block1_size = block1_bounds.size();
+    let block1_spacing = PADDING.y() / 2.0; // Average vertical padding
+    let block1_free_height = (block1_size.height - block1_spacing).max(0.0);
+    let sat_value_height = block1_free_height * 7.0 / 8.0;
+    let hue_height = block1_free_height / 8.0;
+
+    let block1_origin = Point::new(
+        block1_bounds.x + PADDING.left,
+        block1_bounds.y + PADDING.top,
+    );
+
+    let sat_value = Rectangle::new(
+        block1_origin,
+        Size::new(block1_size.width, sat_value_height),
+    );
+    let hue = Rectangle::new(
+        Point::new(
+            block1_origin.x,
+            block1_origin.y + sat_value_height + block1_spacing,
+        ),
+        Size::new(block1_size.width, hue_height),
+    );
+
+    // ----------- Block 2 ----------------------
+    sync_child(tree, 0, cancel_button);
+    sync_child(tree, 1, submit_button);
+
+    let block2_limits = Limits::new(Size::ZERO, block2_bounds.size());
+
+    // Pre-Buttons TODO: get rid of it
+    cancel_button.layout(&mut tree.children[0], renderer, &block2_limits);
+    let pre_cancel_height = tree.children[0].size.height;
+
+    let hex_height = (renderer.text_size().0 + PADDING.y()).min(block2_bounds.height);
+    let hex_width = block2_bounds.width;
 
     let block2_limits = block2_limits.shrink(Size::new(
         0.0,
-        cancel_button.bounds().height + hex_text_layout.bounds().height + 2.0 * SPACING.0,
+        pre_cancel_height + hex_height + 2.0 * SPACING.0,
     ));
 
     // RGBA Colors
-    let mut rgba_colors: Column<'_, Message, Theme, Renderer> =
-        Column::<Message, Theme, Renderer>::new();
+    let mut rgba_colors: Column<Element<'_, Message, Theme, Renderer>> = Column::new();
 
     for _ in 0..4 {
-        rgba_colors = rgba_colors.push(
-            Row::new()
-                .align_y(Alignment::Center)
-                .spacing(SPACING)
-                .padding(PADDING)
-                .height(Length::Fill)
-                .push(
-                    widget::Text::new("X:")
-                        .align_x(Horizontal::Center)
-                        .align_y(Vertical::Center),
-                )
-                .push(
-                    Row::new()
-                        .width(Length::FillPortion(5))
-                        .height(Length::Fill),
-                )
-                .push(
-                    widget::Text::new("XXX")
-                        .align_x(Horizontal::Center)
-                        .align_y(Vertical::Center),
-                ),
-        );
+        let row: Row<Element<'_, Message, Theme, Renderer>> = Row::new()
+            .align_y(Vertical::Center)
+            .spacing(SPACING)
+            .padding(PADDING)
+            .height(Length::Fill)
+            .push(boxed(
+                widget::Text::new("X:")
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Center),
+            ))
+            .push(boxed(
+                Row::<Element<'_, Message, Theme, Renderer>>::new()
+                    .width(Length::FillPortion(5))
+                    .height(Length::Fill),
+            ))
+            .push(boxed(
+                widget::Text::new("XXX")
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Center),
+            ));
+
+        rgba_colors = rgba_colors.push(boxed(row));
     }
-    let mut element: Element<Message, Theme, Renderer> = Element::new(rgba_colors);
-    let rgba_tree = if let Some(child_tree) = color_picker.tree.children.get_mut(2) {
-        child_tree.diff(element.as_widget_mut());
-        child_tree
-    } else {
-        let child_tree = Tree::new(element.as_widget());
-        color_picker.tree.children.insert(2, child_tree);
-        &mut color_picker.tree.children[2]
-    };
 
-    let mut rgba_colors = element
-        .as_widget_mut()
-        .layout(rgba_tree, renderer, &block2_limits);
+    sync_child(tree, 2, &mut rgba_colors);
+    let rgba_tree = &mut tree.children[2];
+    rgba_colors.layout(rgba_tree, renderer, &block2_limits);
 
-    let rgba_bounds = rgba_colors.bounds();
-    rgba_colors = rgba_colors.move_to(Point::new(
-        rgba_bounds.x + PADDING.left,
-        rgba_bounds.y + PADDING.top,
-    ));
-    let rgba_bounds = rgba_colors.bounds();
-
-    // Hex text
-    let hex_bounds = hex_text_layout.bounds();
-    hex_text_layout = hex_text_layout.move_to(Point::new(
-        hex_bounds.x + PADDING.left,
-        hex_bounds.y + rgba_bounds.height + PADDING.top + SPACING.0,
-    ));
-    let hex_bounds = hex_text_layout.bounds();
+    let rgba_size = rgba_tree.size;
 
     // Buttons
-    let cancel_limits =
-        block2_limits.max_width(((rgba_bounds.width / 2.0) - BUTTON_SPACING.0).max(0.0));
+    let button_limits = {
+        let mut limits = block2_limits;
+        limits.max.width = ((rgba_size.width / 2.0) - BUTTON_SPACING.0)
+            .max(0.0)
+            .min(limits.max.width)
+            .max(limits.min.width);
+        limits
+    };
 
-    let mut cancel_button = color_picker.cancel_button.layout(
-        &mut color_picker.tree.children[0],
-        renderer,
-        &cancel_limits,
-    );
+    cancel_button.layout(&mut tree.children[0], renderer, &button_limits);
+    let cancel_size = tree.children[0].size;
 
-    let submit_limits =
-        block2_limits.max_width(((rgba_bounds.width / 2.0) - BUTTON_SPACING.0).max(0.0));
+    submit_button.layout(&mut tree.children[1], renderer, &button_limits);
+    let submit_size = tree.children[1].size;
 
-    let mut submit_button = color_picker.submit_button.layout(
-        &mut color_picker.tree.children[1],
-        renderer,
-        &submit_limits,
-    );
+    let block2_origin = block2_bounds.position();
 
-    let cancel_bounds = cancel_button.bounds();
-    cancel_button = cancel_button.move_to(Point::new(
-        cancel_bounds.x + PADDING.left,
-        cancel_bounds.y + rgba_bounds.height + hex_bounds.height + PADDING.top + 2.0 * SPACING.0,
-    ));
-    let cancel_bounds = cancel_button.bounds();
-
-    let submit_bounds = submit_button.bounds();
-    submit_button = submit_button.move_to(Point::new(
-        submit_bounds.x + rgba_colors.bounds().width - submit_bounds.width + PADDING.left,
-        submit_bounds.y + rgba_bounds.height + hex_bounds.height + PADDING.top + 2.0 * SPACING.0,
+    // RGBA rows
+    let rgba_layout = Layout::new(rgba_size).move_to(Point::new(
+        block2_origin.x + PADDING.left,
+        block2_origin.y + PADDING.top,
     ));
 
-    Node::with_children(
-        Size::new(
-            rgba_bounds.width + PADDING.x(),
-            rgba_bounds.height
-                + hex_bounds.height
-                + cancel_bounds.height
-                + PADDING.y()
-                + (2.0 * SPACING.0),
+    let mut rgba = [RgbaRowGeometry::default(); 4];
+
+    for (geometry, (row_layout, row_tree)) in rgba
+        .iter_mut()
+        .zip(rgba_layout.iter(&tree.children[2].children))
+    {
+        let mut cells = row_layout.iter(&row_tree.children);
+
+        let mut next_bounds = || cells.next().map(|(layout, _)| layout.bounds());
+
+        *geometry = RgbaRowGeometry {
+            row: row_layout.bounds(),
+            label: next_bounds().unwrap_or_default(),
+            bar: next_bounds().unwrap_or_default(),
+            value: next_bounds().unwrap_or_default(),
+        };
+    }
+
+    // Hex text
+    let hex = Rectangle::new(
+        Point::new(
+            block2_origin.x + PADDING.left,
+            block2_origin.y + rgba_size.height + PADDING.top + SPACING.0,
         ),
-        vec![rgba_colors, hex_text_layout, cancel_button, submit_button],
-    )
-    .move_to(Point::new(bounds.x, bounds.y))
+        Size::new(hex_width, hex_height),
+    );
+
+    // Buttons
+    let buttons_y = block2_origin.y + rgba_size.height + hex_height + PADDING.top + 2.0 * SPACING.0;
+
+    let cancel = Layout::new(cancel_size).move_to(Point::new(
+        block2_origin.x + PADDING.left,
+        buttons_y,
+    ));
+    let submit = Layout::new(submit_size).move_to(Point::new(
+        block2_origin.x + rgba_size.width - submit_size.width + PADDING.left,
+        buttons_y,
+    ));
+
+    let block2_size = Size::new(
+        rgba_size.width + PADDING.x(),
+        rgba_size.height + hex_height + cancel_size.height + PADDING.y() + (2.0 * SPACING.0),
+    );
+
+    // ----------- The whole overlay ------------
+    let size = if landscape {
+        Size::new(
+            block1_size.width + block2_size.width + SPACING.0,
+            block2_size.height,
+        )
+    } else {
+        Size::new(
+            block2_size.width,
+            block1_size.height + block2_size.height + SPACING.0,
+        )
+    };
+
+    let mut overlay = Layout::new(size);
+    overlay.center_and_bounce(position, window);
+
+    // Everything above is relative to the overlay, make it absolute
+    let offset = Vector::new(overlay.position().x, overlay.position().y);
+
+    for row in &mut rgba {
+        row.row = translate(row.row, offset);
+        row.label = translate(row.label, offset);
+        row.bar = translate(row.bar, offset);
+        row.value = translate(row.value, offset);
+    }
+
+    Geometry {
+        overlay,
+        sat_value: translate(sat_value, offset),
+        hue: translate(hue, offset),
+        rgba,
+        hex: translate(hex, offset),
+        cancel: translate_layout(cancel, offset),
+        submit: translate_layout(submit, offset),
+    }
 }
 
 /// Draws the 1. block of the color picker containing the HSV part.
 fn block1<Message, Theme>(
     renderer: &mut Renderer,
     color_picker: &ColorPickerOverlay<'_, '_, Message, Theme>,
-    layout: Layout<'_>,
     cursor: Cursor,
     style_sheet: &HashMap<StyleState, Style>,
 ) where
@@ -1134,16 +1065,8 @@ fn block1<Message, Theme>(
     Theme: style::color_picker::Catalog + iced_widget::button::Catalog + iced_widget::text::Catalog,
 {
     // ----------- Block 1 ----------------------
-    let hsv_color_layout = layout;
-
     // ----------- HSV Color ----------------------
-    hsv_color(
-        renderer,
-        color_picker,
-        hsv_color_layout,
-        cursor,
-        style_sheet,
-    );
+    hsv_color(renderer, color_picker, cursor, style_sheet);
 
     // ----------- Block 1 end ------------------
 }
@@ -1153,7 +1076,6 @@ fn block1<Message, Theme>(
 fn block2<Message, Theme>(
     renderer: &mut Renderer,
     color_picker: &ColorPickerOverlay<'_, '_, Message, Theme>,
-    layout: Layout<'_>,
     cursor: Cursor,
     theme: &Theme,
     style: &renderer::Style,
@@ -1164,15 +1086,10 @@ fn block2<Message, Theme>(
     Theme: style::color_picker::Catalog + iced_widget::button::Catalog + iced_widget::text::Catalog,
 {
     // ----------- Block 2 ----------------------
-    let mut block2_children = layout.children();
-
     // ----------- RGBA Color ----------------------
-    let rgba_color_layout = block2_children
-        .next()
-        .expect("Graphics: Layout should have a RGBA color layout");
     rgba_color(
         renderer,
-        rgba_color_layout,
+        &color_picker.geometry.rgba,
         &color_picker.state.color,
         cursor,
         style,
@@ -1181,12 +1098,9 @@ fn block2<Message, Theme>(
     );
 
     // ----------- Hex text ----------------------
-    let hex_text_layout = block2_children
-        .next()
-        .expect("Graphics: Layout should have a hex text layout");
     hex_text(
         renderer,
-        hex_text_layout,
+        color_picker.geometry.hex,
         &color_picker.state.color,
         cursor,
         style,
@@ -1195,9 +1109,7 @@ fn block2<Message, Theme>(
     );
 
     // ----------- Buttons -------------------------
-    let cancel_button_layout = block2_children
-        .next()
-        .expect("Graphics: Layout should have a cancel button layout for a ColorPicker");
+    let cancel_button_layout = color_picker.geometry.cancel;
 
     color_picker.cancel_button.draw(
         &color_picker.tree.children[0],
@@ -1209,9 +1121,7 @@ fn block2<Message, Theme>(
         viewport,
     );
 
-    let submit_button_layout = block2_children
-        .next()
-        .expect("Graphics: Layout should have a submit button layout for a ColorPicker");
+    let submit_button_layout = color_picker.geometry.submit;
 
     color_picker.submit_button.draw(
         &color_picker.tree.children[1],
@@ -1234,6 +1144,7 @@ fn block2<Message, Theme>(
                         radius: style_sheet[&StyleState::Focused].border_radius.into(),
                         width: style_sheet[&StyleState::Focused].border_width,
                         color: style_sheet[&StyleState::Focused].border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -1252,6 +1163,7 @@ fn block2<Message, Theme>(
                         radius: style_sheet[&StyleState::Focused].border_radius.into(),
                         width: style_sheet[&StyleState::Focused].border_width,
                         color: style_sheet[&StyleState::Focused].border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -1267,30 +1179,26 @@ fn block2<Message, Theme>(
 fn hsv_color<Message, Theme>(
     renderer: &mut Renderer,
     color_picker: &ColorPickerOverlay<'_, '_, Message, Theme>,
-    layout: Layout<'_>,
     cursor: Cursor,
     style_sheet: &HashMap<StyleState, Style>,
 ) where
     Message: Clone,
     Theme: style::color_picker::Catalog + iced_widget::button::Catalog + iced_widget::text::Catalog,
 {
-    let mut hsv_color_children = layout.children();
     let hsv_color: Hsv = color_picker.state.color.into();
 
-    let sat_value_layout = hsv_color_children
-        .next()
-        .expect("Graphics: Layout should have a sat/value layout");
+    let sat_value_bounds = color_picker.geometry.sat_value;
     let mut sat_value_style_state = StyleState::Active;
     if color_picker.state.focus == Focus::SatValue {
         sat_value_style_state = sat_value_style_state.max(StyleState::Focused);
     }
-    if cursor.is_over(sat_value_layout.bounds()) {
+    if cursor.is_over(sat_value_bounds) {
         sat_value_style_state = sat_value_style_state.max(StyleState::Hovered);
     }
 
     let geometry = color_picker.state.sat_value_canvas_cache.draw(
         renderer,
-        sat_value_layout.bounds().size(),
+        sat_value_bounds.size(),
         |frame| {
             let column_count = frame.width() as u16;
             let row_count = frame.height() as u16;
@@ -1360,19 +1268,17 @@ fn hsv_color<Message, Theme>(
         },
     );
 
-    let translation = Vector::new(sat_value_layout.bounds().x, sat_value_layout.bounds().y);
+    let translation = Vector::new(sat_value_bounds.x, sat_value_bounds.y);
     renderer.with_translation(translation, |renderer| {
         renderer.draw_geometry(geometry);
     });
 
-    let hue_layout = hsv_color_children
-        .next()
-        .expect("Graphics: Layout should have a hue layout");
+    let hue_bounds = color_picker.geometry.hue;
     let mut hue_style_state = StyleState::Active;
     if color_picker.state.focus == Focus::Hue {
         hue_style_state = hue_style_state.max(StyleState::Focused);
     }
-    if cursor.is_over(hue_layout.bounds()) {
+    if cursor.is_over(hue_bounds) {
         hue_style_state = hue_style_state.max(StyleState::Hovered);
     }
 
@@ -1380,7 +1286,7 @@ fn hsv_color<Message, Theme>(
         color_picker
             .state
             .hue_canvas_cache
-            .draw(renderer, hue_layout.bounds().size(), |frame| {
+            .draw(renderer, hue_bounds.size(), |frame| {
                 let column_count = frame.width() as u16;
 
                 for column in 0..column_count {
@@ -1438,7 +1344,7 @@ fn hsv_color<Message, Theme>(
                 );
             });
 
-    let translation = Vector::new(hue_layout.bounds().x, hue_layout.bounds().y);
+    let translation = Vector::new(hue_bounds.x, hue_bounds.y);
     renderer.with_translation(translation, |renderer| {
         renderer.draw_geometry(geometry);
     });
@@ -1448,56 +1354,47 @@ fn hsv_color<Message, Theme>(
 #[allow(clippy::too_many_lines)]
 fn rgba_color(
     renderer: &mut Renderer,
-    layout: Layout<'_>,
+    rows: &[RgbaRowGeometry; 4],
     color: &Color,
     cursor: Cursor,
     style: &renderer::Style,
     style_sheet: &HashMap<StyleState, Style>,
     focus: Focus,
 ) {
-    let mut rgba_color_children = layout.children();
-
     let f = |renderer: &mut Renderer,
-             layout: Layout,
+             row: &RgbaRowGeometry,
              label: &str,
              color: Color,
              value: f32,
              cursor: Cursor,
              target: Focus| {
-        let mut children = layout.children();
-
-        let label_layout = children
-            .next()
-            .expect("Graphics: Layout should have a label layout");
-        let bar_layout = children
-            .next()
-            .expect("Graphics: Layout should have a bar layout");
-        let value_layout = children
-            .next()
-            .expect("Graphics: Layout should have a value layout");
+        let label_bounds = row.label;
+        let value_bounds = row.value;
 
         // Label
         renderer.fill_text(
             Text {
                 content: label.to_owned(),
-                bounds: Size::new(label_layout.bounds().width, label_layout.bounds().height),
-                size: renderer.default_size(),
-                font: renderer.default_font(),
+                bounds: Size::new(label_bounds.width, label_bounds.height),
+                size: renderer.text_size(),
+                font: renderer.font(),
                 align_x: text::Alignment::Center,
                 align_y: Vertical::Center,
                 line_height: text::LineHeight::Relative(1.3),
                 shaping: text::Shaping::Basic,
                 wrapping: Wrapping::None,
+                ellipsis: text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
             },
             Point::new(
-                label_layout.bounds().center_x(),
-                label_layout.bounds().center_y(),
+                label_bounds.center_x(),
+                label_bounds.center_y(),
             ),
             style.text_color,
-            label_layout.bounds(),
+            label_bounds,
         );
 
-        let bar_bounds = bar_layout.bounds();
+        let bar_bounds = row.bar;
 
         let bar_style_state = if cursor.is_over(bar_bounds) {
             StyleState::Hovered
@@ -1527,6 +1424,7 @@ fn rgba_color(
                             .expect("Style Sheet not found.")
                             .bar_border_width,
                         color: Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -1553,6 +1451,7 @@ fn rgba_color(
                             .get(&bar_style_state)
                             .expect("Style Sheet not found.")
                             .bar_border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -1564,24 +1463,26 @@ fn rgba_color(
         renderer.fill_text(
             Text {
                 content: format!("{}", (255.0 * value) as u8),
-                bounds: Size::new(value_layout.bounds().width, value_layout.bounds().height),
-                size: renderer.default_size(),
-                font: renderer.default_font(),
+                bounds: Size::new(value_bounds.width, value_bounds.height),
+                size: renderer.text_size(),
+                font: renderer.font(),
                 align_x: text::Alignment::Center,
                 align_y: Vertical::Center,
-                line_height: iced_widget::text::LineHeight::Relative(1.3),
-                shaping: iced_widget::text::Shaping::Basic,
+                line_height: text::LineHeight::Relative(1.3),
+                shaping: text::Shaping::Basic,
                 wrapping: Wrapping::None,
+                ellipsis: text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
             },
             Point::new(
-                value_layout.bounds().center_x(),
-                value_layout.bounds().center_y(),
+                value_bounds.center_x(),
+                value_bounds.center_y(),
             ),
             style.text_color,
-            value_layout.bounds(),
+            value_bounds,
         );
 
-        let bounds = layout.bounds();
+        let bounds = row.row;
         if (focus == target) && (bounds.width > 0.) && (bounds.height > 0.) {
             renderer.fill_quad(
                 renderer::Quad {
@@ -1600,6 +1501,7 @@ fn rgba_color(
                             .get(&StyleState::Focused)
                             .expect("Style Sheet not found.")
                             .border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -1609,13 +1511,10 @@ fn rgba_color(
     };
 
     // Red
-    let red_row_layout = rgba_color_children
-        .next()
-        .expect("Graphics: Layout should have a red row layout");
 
     f(
         renderer,
-        red_row_layout,
+        &rows[0],
         "R",
         Color::from_rgb(color.r, 0.0, 0.0),
         color.r,
@@ -1624,13 +1523,10 @@ fn rgba_color(
     );
 
     // Green
-    let green_row_layout = rgba_color_children
-        .next()
-        .expect("Graphics: Layout should have a green row layout");
 
     f(
         renderer,
-        green_row_layout,
+        &rows[1],
         "G",
         Color::from_rgb(0.0, color.g, 0.0),
         color.g,
@@ -1639,13 +1535,10 @@ fn rgba_color(
     );
 
     // Blue
-    let blue_row_layout = rgba_color_children
-        .next()
-        .expect("Graphics: Layout should have a blue row layout");
 
     f(
         renderer,
-        blue_row_layout,
+        &rows[2],
         "B",
         Color::from_rgb(0.0, 0.0, color.b),
         color.b,
@@ -1654,13 +1547,10 @@ fn rgba_color(
     );
 
     // Alpha
-    let alpha_row_layout = rgba_color_children
-        .next()
-        .expect("Graphics: Layout should have an alpha row layout");
 
     f(
         renderer,
-        alpha_row_layout,
+        &rows[3],
         "A",
         Color::from_rgba(0.0, 0.0, 0.0, color.a),
         color.a,
@@ -1672,7 +1562,7 @@ fn rgba_color(
 /// Draws the hex text representation of the color.
 fn hex_text(
     renderer: &mut Renderer,
-    layout: Layout<'_>,
+    bounds: Rectangle,
     color: &Color,
     cursor: Cursor,
     _style: &renderer::Style,
@@ -1681,13 +1571,12 @@ fn hex_text(
 ) {
     let hsv: Hsv = (*color).into();
 
-    let hex_text_style_state = if cursor.is_over(layout.bounds()) {
+    let hex_text_style_state = if cursor.is_over(bounds) {
         StyleState::Hovered
     } else {
         StyleState::Active
     };
 
-    let bounds = layout.bounds();
     if (bounds.width > 0.) && (bounds.height > 0.) {
         renderer.fill_quad(
             renderer::Quad {
@@ -1696,6 +1585,7 @@ fn hex_text(
                     radius: style_sheet[&hex_text_style_state].bar_border_radius.into(),
                     width: style_sheet[&hex_text_style_state].bar_border_width,
                     color: style_sheet[&hex_text_style_state].bar_border_color,
+                    ..Border::default()
                 },
                 ..renderer::Quad::default()
             },
@@ -1707,13 +1597,15 @@ fn hex_text(
         Text {
             content: color.as_hex_string(),
             bounds: Size::new(bounds.width, bounds.height),
-            size: renderer.default_size(),
-            font: renderer.default_font(),
+            size: renderer.text_size(),
+            font: renderer.font(),
             align_x: text::Alignment::Center,
             align_y: Vertical::Center,
             line_height: text::LineHeight::Relative(1.3),
             shaping: text::Shaping::Basic,
             wrapping: Wrapping::default(),
+            ellipsis: text::Ellipsis::None,
+            hint_factor: renderer.hint_factor(),
         },
         Point::new(bounds.center_x(), bounds.center_y()),
         Color {
@@ -1817,10 +1709,21 @@ where
         let (submit_content, submit_font, _submit_shaping) = ok();
 
         Self {
-            cancel_button: Button::new(widget::Text::new(cancel_content).font(cancel_font)).into(),
-            submit_button: Button::new(widget::Text::new(submit_content).font(submit_font)).into(),
+            cancel_button: boxed(Button::new(
+                widget::Text::new(cancel_content).font(cancel_font),
+            )),
+            submit_button: boxed(Button::new(
+                widget::Text::new(submit_content).font(submit_font),
+            )),
         }
     }
+}
+
+impl<Message, Theme> Meta for ColorPickerOverlayButtons<'_, Message, Theme>
+where
+    Message: Clone,
+    Theme: style::color_picker::Catalog + iced_widget::button::Catalog,
+{
 }
 
 #[allow(clippy::unimplemented)]
@@ -1830,22 +1733,15 @@ where
     Message: Clone,
     Theme: style::color_picker::Catalog + iced_widget::button::Catalog + iced_widget::text::Catalog,
 {
-    fn children(&self) -> Vec<Tree> {
-        vec![
-            Tree::new(&self.cancel_button),
-            Tree::new(&self.submit_button),
-        ]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.cancel_button, &self.submit_button]);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(&mut [&mut self.cancel_button, &mut self.submit_button]);
     }
 
     fn size(&self) -> Size<Length> {
         unimplemented!("This should never be reached!")
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) {
         unimplemented!("This should never be reached!")
     }
 
@@ -1855,7 +1751,7 @@ where
         _renderer: &mut Renderer,
         _theme: &Theme,
         _style: &renderer::Style,
-        _layout: Layout<'_>,
+        _layout: Layout,
         _cursor: Cursor,
         _viewport: &Rectangle,
     ) {
@@ -1873,7 +1769,7 @@ where
         + iced_widget::text::Catalog,
 {
     fn from(overlay: ColorPickerOverlayButtons<'a, Message, Theme>) -> Self {
-        Self::new(overlay)
+        boxed(overlay)
     }
 }
 

@@ -16,16 +16,13 @@ use crate::{
     },
 };
 use iced_core::{
-    Alignment, Background, Border, Clipboard, Color, Element, Event, Font, Layout, Length, Padding,
-    Pixels, Point, Rectangle, Shadow, Shell, Size, Vector, Widget,
+    Alignment, Background, Border, Color, Element, Event, Font, Layout, Length, Padding, Pixels,
+    Point, Rectangle, Shadow, Shell, Size, Vector, Widget,
     alignment::{self, Vertical},
-    layout::{Limits, Node},
+    layout::{self, Limits},
     mouse::{self, Cursor},
     overlay, renderer, touch,
-    widget::{
-        Operation, Tree,
-        tree::{State, Tag},
-    },
+    widget::{Meta, Operation, Tree},
 };
 use iced_widget::{
     Row, Text,
@@ -153,7 +150,7 @@ where
 
 impl<'a, Message, TabId, Theme, Renderer> Sidebar<'a, Message, TabId, Theme, Renderer>
 where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog,
     TabId: Eq + Clone,
 {
@@ -381,10 +378,18 @@ where
     }
 }
 
+impl<Message, TabId, Theme, Renderer> Meta for Sidebar<'_, Message, TabId, Theme, Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog,
+    TabId: Eq + Clone,
+{
+}
+
 impl<Message, TabId, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Sidebar<'_, Message, TabId, Theme, Renderer>
 where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + text::Catalog,
     TabId: Eq + Clone,
 {
@@ -392,43 +397,52 @@ where
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        fn layout_icon<Theme, Renderer>(
+    fn diff(&mut self, _tree: &mut Tree) {
+        // The child tree (the column of tabs) is reconciled in `layout`
+        // and `operate`, where the column is rebuilt from the tab labels.
+    }
+
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        fn layout_icon<'a, Message, Theme, Renderer>(
             icon: &char,
             size: f32,
             font: Option<Font>,
-        ) -> Text<'_, Theme, Renderer>
+        ) -> Element<'a, Message, Theme, Renderer>
         where
-            Renderer: iced_core::text::Renderer,
-            Renderer::Font: From<Font>,
-            Theme: iced_widget::text::Catalog,
+            Message: 'a,
+            Renderer: iced_core::text::Renderer + 'a,
+            Theme: iced_widget::text::Catalog + 'a,
         {
-            Text::<Theme, Renderer>::new(icon.to_string())
-                .size(size)
-                .font(font.unwrap_or_default())
-                .align_x(alignment::Horizontal::Center)
-                .align_y(alignment::Vertical::Center)
-                .shaping(iced_core::text::Shaping::Advanced)
-                .width(Length::Shrink)
+            Widget::_boxed(
+                Text::<Theme>::new(icon.to_string())
+                    .size(size)
+                    .font(font.unwrap_or_default())
+                    .align_x(alignment::Horizontal::Center)
+                    .align_y(alignment::Vertical::Center)
+                    .shaping(iced_core::text::Shaping::Advanced)
+                    .width(Length::Shrink),
+            )
         }
 
-        fn layout_text<Theme, Renderer>(
-            text: &str,
+        fn layout_text<'a, Message, Theme, Renderer>(
+            text: &'a str,
             size: f32,
             font: Option<Font>,
-        ) -> Text<'_, Theme, Renderer>
+        ) -> Element<'a, Message, Theme, Renderer>
         where
-            Renderer: iced_core::text::Renderer,
-            Renderer::Font: From<Font>,
-            Theme: iced_widget::text::Catalog,
+            Message: 'a,
+            Renderer: iced_core::text::Renderer + 'a,
+            Theme: iced_widget::text::Catalog + 'a,
         {
-            Text::<Theme, Renderer>::new(text)
-                .size(size)
-                .font(font.unwrap_or_default())
-                .align_x(alignment::Horizontal::Center)
-                .align_y(alignment::Vertical::Center)
-                .shaping(text::Shaping::Advanced)
-                .width(Length::Shrink)
+            Widget::_boxed(
+                Text::<Theme>::new(text)
+                    .size(size)
+                    .font(font.unwrap_or_default())
+                    .align_x(alignment::Horizontal::Center)
+                    .align_y(alignment::Vertical::Center)
+                    .shaping(text::Shaping::Advanced)
+                    .width(Length::Shrink),
+            )
         }
 
         let column = self
@@ -437,7 +451,7 @@ where
             .fold(
                 FlushColumn::<Message, Theme, Renderer>::new(),
                 |column, tab_label| {
-                    let label = match tab_label {
+                    let label: Row<Element<'_, Message, Theme, Renderer>> = match tab_label {
                         TabLabel::Icon(icon) => Row::new()
                             .align_y(Alignment::Center)
                             .push(layout_icon(icon, self.icon_size + 1.0, self.font)),
@@ -470,12 +484,14 @@ where
                             row
                         }
                     };
-                    let mut tab = Row::new();
+                    let label = Widget::_boxed(label);
+                    let mut tab: Row<Element<'_, Message, Theme, Renderer>> = Row::new();
                     if self.on_close.is_some() {
-                        let close = Row::new()
+                        let close: Row<Element<'_, Message, Theme, Renderer>> = Row::new()
                             .width(Length::Fixed(self.close_size * 1.3 + 1.0))
                             .height(Length::Fixed(self.close_size * 1.3 + 1.0))
                             .align_y(Alignment::Center);
+                        let close = Widget::_boxed(close);
                         match self.close_position {
                             Position::Start => tab = tab.push(close).push(label),
                             Position::End => tab = tab.push(label).push(close),
@@ -495,28 +511,23 @@ where
             .height(self.height)
             .spacing(self.spacing)
             .align_x(self.align_tabs);
-        let mut element: Element<Message, Theme, Renderer> = Element::new(column);
-        let tab_tree = if let Some(child_tree) = tree.children.get_mut(0) {
-            child_tree.diff(element.as_widget_mut());
-            child_tree
-        } else {
-            let child_tree = Tree::new(element.as_widget());
-            tree.children.insert(0, child_tree);
-            &mut tree.children[0]
-        };
-        element
-            .as_widget_mut()
-            .layout(tab_tree, renderer, &limits.loose())
+        let mut column = column;
+        if tree.children.is_empty() {
+            tree.children.push(Tree::new(&column));
+        }
+        tree.children[0].diff(&mut column);
+        column.layout(&mut tree.children[0], renderer, &limits.loose());
+        tree.children[0].translation = Vector::ZERO;
+        tree.size = tree.children[0].size;
     }
 
     fn update(
         &mut self,
-        _state: &mut Tree,
+        tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
     ) {
@@ -528,9 +539,12 @@ where
             .position()
             .is_some_and(|pos| layout.bounds().contains(pos))
         {
-            let tabs_map: Vec<bool> = layout
-                .children()
-                .map(|layout| {
+            let Some((column_layout, column_tree)) = layout.iter(&tree.children).next() else {
+                return;
+            };
+            let tabs_map: Vec<bool> = column_layout
+                .iter(&column_tree.children)
+                .map(|(layout, _)| {
                     cursor
                         .position()
                         .is_some_and(|pos| layout.bounds().contains(pos))
@@ -542,11 +556,12 @@ where
                     self.on_close
                         .as_ref()
                         .filter(|_on_close| {
-                            let tab_layout = layout.children().nth(new_selected).expect(
-                                "widget: Layout should have a tab layout at the selected index",
-                            );
-                            let cross_layout = tab_layout
-                                .children()
+                            let (tab_layout, tab_tree) = column_layout
+                                .iter(&column_tree.children)
+                                .nth(new_selected)
+                                .expect("widget: Layout should have a tab layout at the selected index");
+                            let (cross_layout, _) = tab_layout
+                                .iter(&tab_tree.children)
                                 .nth(1)
                                 .expect("widget: Layout should have a close layout");
 
@@ -566,15 +581,17 @@ where
 
     fn mouse_interaction(
         &self,
-        _state: &Tree,
-        layout: Layout<'_>,
+        tree: &Tree,
+        layout: Layout,
         cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> mouse::Interaction {
-        let children = layout.children();
         let mut mouse_interaction = mouse::Interaction::default();
-        for layout in children {
+        let Some((column_layout, column_tree)) = layout.iter(&tree.children).next() else {
+            return mouse_interaction;
+        };
+        for (layout, _) in column_layout.iter(&column_tree.children) {
             let is_mouse_over = cursor
                 .position()
                 .is_some_and(|pos| layout.bounds().contains(pos));
@@ -592,16 +609,15 @@ where
 
     fn draw(
         &self,
-        _state: &Tree,
+        tree: &Tree,
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let children = layout.children();
         let is_mouse_over = cursor.position().is_some_and(|pos| bounds.contains(pos));
         let style_sheet = if is_mouse_over {
             sidebar::Catalog::style(theme, &self.class, Status::Hovered)
@@ -616,6 +632,7 @@ where
                         radius: (0.0).into(),
                         width: style_sheet.border_width,
                         color: style_sheet.border_color.unwrap_or(Color::TRANSPARENT),
+                        ..Default::default()
                     },
                     shadow: Shadow::default(),
                     ..Default::default()
@@ -625,11 +642,20 @@ where
                     .unwrap_or_else(|| Color::TRANSPARENT.into()),
             );
         }
-        for ((i, tab), layout) in self.tab_labels.iter().enumerate().zip(children) {
+        let Some((column_layout, column_tree)) = layout.iter(&tree.children).next() else {
+            return;
+        };
+        for ((i, tab), (layout, tab_tree)) in self
+            .tab_labels
+            .iter()
+            .enumerate()
+            .zip(column_layout.iter(&column_tree.children))
+        {
             draw_tab(
                 renderer,
                 tab,
                 layout,
+                tab_tree,
                 self.position,
                 theme,
                 &self.class,
@@ -648,47 +674,52 @@ where
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         // Recreate the column element structure to expose tab labels for testing
-        fn layout_icon<Theme, Renderer>(
+        fn layout_icon<'a, Message, Theme, Renderer>(
             icon: &char,
             size: f32,
             font: Option<Font>,
-        ) -> Text<'_, Theme, Renderer>
+        ) -> Element<'a, Message, Theme, Renderer>
         where
-            Renderer: iced_core::text::Renderer,
-            Renderer::Font: From<Font>,
-            Theme: iced_widget::text::Catalog,
+            Message: 'a,
+            Renderer: iced_core::text::Renderer + 'a,
+            Theme: iced_widget::text::Catalog + 'a,
         {
-            Text::<Theme, Renderer>::new(icon.to_string())
-                .size(size)
-                .font(font.unwrap_or_default())
-                .align_x(alignment::Horizontal::Center)
-                .align_y(alignment::Vertical::Center)
-                .shaping(iced_core::text::Shaping::Advanced)
-                .width(Length::Shrink)
+            Widget::_boxed(
+                Text::<Theme>::new(icon.to_string())
+                    .size(size)
+                    .font(font.unwrap_or_default())
+                    .align_x(alignment::Horizontal::Center)
+                    .align_y(alignment::Vertical::Center)
+                    .shaping(iced_core::text::Shaping::Advanced)
+                    .width(Length::Shrink),
+            )
         }
 
-        fn layout_text<Theme, Renderer>(
-            text: &str,
+        fn layout_text<'a, Message, Theme, Renderer>(
+            text: &'a str,
             size: f32,
             font: Option<Font>,
-        ) -> Text<'_, Theme, Renderer>
+        ) -> Element<'a, Message, Theme, Renderer>
         where
-            Renderer: iced_core::text::Renderer,
-            Renderer::Font: From<Font>,
-            Theme: iced_widget::text::Catalog,
+            Message: 'a,
+            Renderer: iced_core::text::Renderer + 'a,
+            Theme: iced_widget::text::Catalog + 'a,
         {
-            Text::<Theme, Renderer>::new(text)
-                .size(size)
-                .font(font.unwrap_or_default())
-                .align_x(alignment::Horizontal::Center)
-                .align_y(alignment::Vertical::Center)
-                .shaping(text::Shaping::Advanced)
-                .width(Length::Shrink)
+            Widget::_boxed(
+                Text::<Theme>::new(text)
+                    .size(size)
+                    .font(font.unwrap_or_default())
+                    .align_x(alignment::Horizontal::Center)
+                    .align_y(alignment::Vertical::Center)
+                    .shaping(text::Shaping::Advanced)
+                    .width(Length::Shrink),
+            )
         }
 
         // Get the close icon content once before the fold
@@ -705,7 +736,7 @@ where
             .fold(
                 FlushColumn::<Message, Theme, Renderer>::new(),
                 |column, tab_label| {
-                    let label = match tab_label {
+                    let label: Row<Element<'_, Message, Theme, Renderer>> = match tab_label {
                         TabLabel::Icon(icon) => Row::new()
                             .align_y(Alignment::Center)
                             .push(layout_icon(icon, self.icon_size + 1.0, self.font)),
@@ -738,21 +769,23 @@ where
                             row
                         }
                     };
-                    let mut tab = Row::new();
+                    let label = Widget::_boxed(label);
+                    let mut tab: Row<Element<'_, Message, Theme, Renderer>> = Row::new();
                     if let Some((ref close_content, close_font)) = close_icon_data {
-                        let close = Row::new()
+                        let close: Row<Element<'_, Message, Theme, Renderer>> = Row::new()
                             .width(Length::Fixed(self.close_size * 1.3 + 1.0))
                             .height(Length::Fixed(self.close_size * 1.3 + 1.0))
                             .align_y(Alignment::Center)
-                            .push(
-                                Text::<Theme, Renderer>::new(close_content.as_str())
+                            .push(Widget::_boxed(
+                                Text::<Theme>::new(close_content.as_str())
                                     .size(self.close_size + 1.0)
                                     .font(close_font)
                                     .align_x(alignment::Horizontal::Center)
                                     .align_y(alignment::Vertical::Center)
                                     .shaping(text::Shaping::Advanced)
                                     .width(Length::Shrink),
-                            );
+                            ));
+                        let close = Widget::_boxed(close);
                         match self.close_position {
                             Position::Start => tab = tab.push(close).push(label),
                             Position::End => tab = tab.push(label).push(close),
@@ -773,22 +806,18 @@ where
             .spacing(self.spacing)
             .align_x(self.align_tabs);
 
-        let mut element: Element<Message, Theme, Renderer> = Element::new(column);
+        let mut column = column;
 
         // Get or create the tree for the column
-        let tab_tree = if let Some(child_tree) = tree.children.get_mut(0) {
-            child_tree.diff(element.as_widget_mut());
-            child_tree
-        } else {
-            let child_tree = Tree::new(element.as_widget());
-            tree.children.insert(0, child_tree);
-            &mut tree.children[0]
-        };
+        if tree.children.is_empty() {
+            tree.children.push(Tree::new(&column));
+        }
+        tree.children[0].diff(&mut column);
 
-        // Recursively operate on the column element to expose all tab labels
-        element
-            .as_widget_mut()
-            .operate(tab_tree, layout, renderer, operation);
+        // Recursively operate on the column to expose all tab labels
+        if let Some((column_layout, column_tree)) = layout.iter_mut(&mut tree.children).next() {
+            column.operate(column_tree, column_layout, viewport, renderer, operation);
+        }
     }
 }
 
@@ -801,7 +830,8 @@ where
 fn draw_tab<Theme, Renderer>(
     renderer: &mut Renderer,
     tab: &TabLabel,
-    layout: Layout<'_>,
+    layout: Layout,
+    tree: &Tree,
     position: Position,
     theme: &Theme,
     class: &<Theme as Catalog>::Class<'_>,
@@ -814,15 +844,15 @@ fn draw_tab<Theme, Renderer>(
     on_close: bool,
     close_position: &Position,
 ) where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + text::Catalog,
 {
-    fn icon_bound_rectangle(item: Option<Layout<'_>>) -> Rectangle {
+    fn icon_bound_rectangle(item: Option<Layout>) -> Rectangle {
         item.expect("Graphics: Layout should have an icons layout for an IconText")
             .bounds()
     }
 
-    fn text_bound_rectangle(item: Option<Layout<'_>>) -> Rectangle {
+    fn text_bound_rectangle(item: Option<Layout>) -> Rectangle {
         item.expect("Graphics: Layout should have an texts layout for an IconText")
             .bounds()
     }
@@ -831,14 +861,15 @@ fn draw_tab<Theme, Renderer>(
         renderer: &mut Renderer,
         tab: &TabLabel,
         label_layout: Layout,
+        label_tree: &Tree,
         icon_data: (Font, f32),
         text_data: (Font, f32),
         style: &Style,
         position: Position,
     ) where
-        Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+        Renderer: renderer::Renderer + iced_core::text::Renderer,
     {
-        let mut label_layout_children = label_layout.children();
+        let mut label_layout_children = label_layout.iter(&label_tree.children).map(|(l, _)| l);
         match tab {
             TabLabel::Icon(icon) => {
                 let icon_bounds = icon_bound_rectangle(label_layout_children.next());
@@ -853,6 +884,8 @@ fn draw_tab<Theme, Renderer>(
                         line_height: LineHeight::Relative(1.3),
                         shaping: iced_core::text::Shaping::Advanced,
                         wrapping: Wrapping::default(),
+                        ellipsis: text::Ellipsis::default(),
+                        hint_factor: None,
                     },
                     Point::new(icon_bounds.center_x(), icon_bounds.center_y()),
                     style.icon_color,
@@ -872,6 +905,8 @@ fn draw_tab<Theme, Renderer>(
                         line_height: LineHeight::Relative(1.3),
                         shaping: iced_core::text::Shaping::Advanced,
                         wrapping: Wrapping::default(),
+                        ellipsis: text::Ellipsis::default(),
+                        hint_factor: None,
                     },
                     Point::new(text_bounds.center_x(), text_bounds.center_y()),
                     style.text_color,
@@ -902,6 +937,8 @@ fn draw_tab<Theme, Renderer>(
                         line_height: LineHeight::Relative(1.3),
                         shaping: iced_core::text::Shaping::Advanced,
                         wrapping: Wrapping::default(),
+                        ellipsis: text::Ellipsis::default(),
+                        hint_factor: None,
                     },
                     Point::new(icon_bounds.center_x(), icon_bounds.center_y()),
                     style.icon_color,
@@ -918,6 +955,8 @@ fn draw_tab<Theme, Renderer>(
                         line_height: LineHeight::Relative(1.3),
                         shaping: iced_core::text::Shaping::Advanced,
                         wrapping: Wrapping::default(),
+                        ellipsis: text::Ellipsis::default(),
+                        hint_factor: None,
                     },
                     Point::new(text_bounds.center_x(), text_bounds.center_y()),
                     style.text_color,
@@ -935,7 +974,7 @@ fn draw_tab<Theme, Renderer>(
         close_size: f32,
         viewport: &Rectangle,
     ) where
-        Renderer: renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+        Renderer: renderer::Renderer + iced_core::text::Renderer,
     {
         let cross_bounds = cross_layout.bounds();
         let is_mouse_over_cross = cursor.is_over(cross_bounds);
@@ -951,6 +990,8 @@ fn draw_tab<Theme, Renderer>(
                 line_height: LineHeight::Relative(1.3),
                 shaping,
                 wrapping: Wrapping::default(),
+                ellipsis: text::Ellipsis::default(),
+                hint_factor: None,
             },
             Point::new(cross_bounds.center_x(), cross_bounds.center_y()),
             style.text_color,
@@ -964,6 +1005,7 @@ fn draw_tab<Theme, Renderer>(
                         radius: style.icon_border_radius,
                         width: style.border_width,
                         color: style.border_color.unwrap_or(Color::TRANSPARENT),
+                        ..Default::default()
                     },
                     shadow: Shadow::default(),
                     ..Default::default()
@@ -992,6 +1034,7 @@ fn draw_tab<Theme, Renderer>(
                     radius: (0.0).into(),
                     width: style.tab_label_border_width,
                     color: style.tab_label_border_color,
+                    ..Default::default()
                 },
                 shadow: Shadow::default(),
                 ..Default::default()
@@ -999,21 +1042,22 @@ fn draw_tab<Theme, Renderer>(
             style.tab_label_background,
         );
     }
-    let mut children = layout.children();
+    let mut children = layout.iter(&tree.children);
     if on_close {
         match close_position {
             Position::Start => {
-                let cross_layout = children
+                let (cross_layout, _) = children
                     .next()
                     .expect("Graphics: Expected close icon layout.");
                 render_close(renderer, &style, cross_layout, cursor, close_size, viewport);
-                let label_layout = children
+                let (label_layout, label_tree) = children
                     .next()
                     .expect("Graphics: Layout should have a label layout");
                 render_icon_text(
                     renderer,
                     tab,
                     label_layout,
+                    label_tree,
                     icon_data,
                     text_data,
                     &style,
@@ -1021,32 +1065,34 @@ fn draw_tab<Theme, Renderer>(
                 );
             }
             Position::End => {
-                let label_layout = children
+                let (label_layout, label_tree) = children
                     .next()
                     .expect("Graphics: Layout should have a label layout");
                 render_icon_text(
                     renderer,
                     tab,
                     label_layout,
+                    label_tree,
                     icon_data,
                     text_data,
                     &style,
                     position,
                 );
-                let cross_layout = children
+                let (cross_layout, _) = children
                     .next()
                     .expect("Graphics: Expected close icon layout.");
                 render_close(renderer, &style, cross_layout, cursor, close_size, viewport);
             }
         }
     } else {
-        let label_layout = children
+        let (label_layout, label_tree) = children
             .next()
             .expect("Graphics: Layout should have a label layout");
         render_icon_text(
             renderer,
             tab,
             label_layout,
+            label_tree,
             icon_data,
             text_data,
             &style,
@@ -1058,13 +1104,13 @@ fn draw_tab<Theme, Renderer>(
 impl<'a, Message, TabId, Theme, Renderer> From<Sidebar<'a, Message, TabId, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = iced_core::Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a + Catalog + text::Catalog,
     Message: 'a,
     TabId: 'a + Eq + Clone,
 {
     fn from(sidebar: Sidebar<'a, Message, TabId, Theme, Renderer>) -> Self {
-        Element::new(sidebar)
+        Widget::_boxed(sidebar)
     }
 }
 
@@ -1140,7 +1186,7 @@ pub struct SidebarWithContent<
 
 impl<'a, Message, TabId, Theme, Renderer> SidebarWithContent<'a, Message, TabId, Theme, Renderer>
 where
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + text::Catalog,
     TabId: Eq + Clone,
 {
@@ -1353,202 +1399,148 @@ where
     }
 }
 
+impl<Message, TabId, Theme, Renderer> Meta
+    for SidebarWithContent<'_, Message, TabId, Theme, Renderer>
+where
+    Renderer: iced_core::text::Renderer,
+    Theme: Catalog,
+    TabId: Eq + Clone,
+{
+}
+
 impl<Message, TabId, Theme, Renderer> Widget<Message, Theme, Renderer>
     for SidebarWithContent<'_, Message, TabId, Theme, Renderer>
 where
-    Renderer: renderer::Renderer + iced_core::text::Renderer<Font = Font>,
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
     Theme: Catalog + text::Catalog,
     TabId: Eq + Clone,
 {
-    fn children(&self) -> Vec<Tree> {
-        let tabs = Tree {
-            tag: Tag::stateless(),
-            state: State::None,
-            children: self.tabs.iter().map(Tree::new).collect(),
-        };
-        let bar = Tree {
-            tag: self.sidebar.tag(),
-            state: self.sidebar.state(),
-            children: self.sidebar.children(),
-        };
-        vec![bar, tabs]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&mut self, tree: &mut Tree) {
         // should be 2 elements in the list always if not lets reload them.
         if tree.children.len() != 2 {
-            tree.children = self.children();
+            tree.children = vec![Tree::new(&self.sidebar), Tree::empty()];
         }
 
-        if let Some(tabs) = tree.children.get_mut(1) {
-            tabs.diff_children(&self.tabs);
-        }
+        // The sidebar manages its own child tree in `layout`/`operate`.
+        self.sidebar.diff(&mut tree.children[0]);
+        tree.children[1].diff_children(&mut self.tabs);
     }
 
     fn size(&self) -> Size<Length> {
         Size::new(self.width, self.height)
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        let idx = self.sidebar.get_active_tab_idx();
+
         let sidebar_limits = limits.width(Length::Shrink).height(self.height);
-        let mut sidebar_node =
-            self.sidebar
-                .layout(&mut tree.children[0], renderer, &sidebar_limits);
+        self.sidebar
+            .layout(&mut tree.children[0], renderer, &sidebar_limits);
+        let sidebar_size = tree.children[0].size;
+
         let tab_content_limits = limits
             .width(self.width)
             .height(self.height)
-            .shrink([sidebar_node.size().width, 0.0]);
-        let mut tab_content_node = if let (Some(element), Some(child)) = (
-            self.tabs.get_mut(self.sidebar.get_active_tab_idx()),
-            tree.children.get_mut(1),
+            .shrink([sidebar_size.width, 0.0]);
+
+        let tab_content_size = if let (Some(element), Some(child)) = (
+            self.tabs.get_mut(idx),
+            tree.children[1].children.get_mut(idx),
         ) {
-            element.as_widget_mut().layout(
-                &mut child.children[self.sidebar.get_active_tab_idx()],
-                renderer,
-                &tab_content_limits,
-            )
+            element.layout(child, renderer, &tab_content_limits);
+            child.translation = Vector::ZERO;
+            child.size
         } else {
-            Row::<Message, Theme, Renderer>::new()
-                .width(Length::Fill)
-                .height(Length::Shrink)
-                .layout(tree, renderer, &tab_content_limits)
+            layout::atomic(&tab_content_limits, Length::Fill, Length::Shrink)
         };
-        let sidebar_bounds = sidebar_node.bounds();
-        sidebar_node = sidebar_node.move_to(Point::new(
-            sidebar_bounds.x
-                + match self.sidebar_position {
-                    SidebarPosition::Start => 0.0,
-                    SidebarPosition::End => tab_content_node.bounds().width,
-                },
-            sidebar_bounds.y,
-        ));
-        let tab_content_bounds = tab_content_node.bounds();
-        tab_content_node = tab_content_node.move_to(Point::new(
-            tab_content_bounds.x
-                + match self.sidebar_position {
-                    SidebarPosition::Start => sidebar_node.bounds().width,
-                    SidebarPosition::End => 0.0,
-                },
-            tab_content_bounds.y,
-        ));
-        Node::with_children(
-            Size::new(
-                sidebar_node.size().width + tab_content_node.size().width,
-                tab_content_node.size().height,
-            ),
-            match self.sidebar_position {
-                SidebarPosition::Start => vec![sidebar_node, tab_content_node],
-                SidebarPosition::End => vec![tab_content_node, sidebar_node],
-            },
-        )
+
+        let (sidebar_x, content_x) = match self.sidebar_position {
+            SidebarPosition::Start => (0.0, sidebar_size.width),
+            SidebarPosition::End => (tab_content_size.width, 0.0),
+        };
+
+        tree.children[0].translation = Vector::new(sidebar_x, 0.0);
+        tree.children[1].translation = Vector::new(content_x, 0.0);
+        tree.children[1].size = tab_content_size;
+
+        tree.size = Size::new(
+            sidebar_size.width + tab_content_size.width,
+            tab_content_size.height,
+        );
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let (sidebar_layout, tab_content_layout) = match self.sidebar_position {
-            SidebarPosition::Start => {
-                let sidebar_layout = children
-                    .next()
-                    .expect("Native: Layout should have a Sidebar layout at line start position");
-                let tab_content_layout = children.next().expect(
-                    "Native: Layout should have a tab content layout at line start position",
-                );
-                (sidebar_layout, tab_content_layout)
-            }
-            SidebarPosition::End => {
-                let tab_content_layout = children
-                    .next()
-                    .expect("Native: Layout should have a tab content layout at line end position");
-                let sidebar_layout = children
-                    .next()
-                    .expect("Native: Layout should have a Sidebar layout at line end position");
-                (sidebar_layout, tab_content_layout)
-            }
-        };
+        let idx = self.sidebar.get_active_tab_idx();
+        let mut children = layout.iter_mut(&mut state.children);
+        let (sidebar_layout, sidebar_tree) = children
+            .next()
+            .expect("Native: Layout should have a Sidebar layout");
+        let (tab_content_layout, tab_content_tree) = children
+            .next()
+            .expect("Native: Layout should have a tab content layout");
+
         self.sidebar.update(
-            &mut Tree::empty(),
+            sidebar_tree,
             event,
             sidebar_layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
-        let idx = self.sidebar.get_active_tab_idx();
-        if let Some(element) = self.tabs.get_mut(idx) {
-            element.as_widget_mut().update(
-                &mut state.children[1].children[idx],
-                event,
-                tab_content_layout,
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
+
+        if let Some(element) = self.tabs.get_mut(idx)
+            && let Some((layout, tree)) = tab_content_layout
+                .iter_mut(&mut tab_content_tree.children)
+                .nth(idx)
+        {
+            element.update(tree, event, layout, cursor, renderer, shell, viewport);
         }
     }
 
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
+        let idx = self.sidebar.get_active_tab_idx();
+        let mut children = layout.iter(&state.children);
+        let (sidebar_layout, sidebar_tree) = children
+            .next()
+            .expect("Native: There should be a Sidebar layout");
+        let (tab_content_layout, tab_content_tree) = children
+            .next()
+            .expect("Native: There should be a tab content layout");
+
         // Sidebar
-        let mut children = layout.children();
-        let sidebar_layout = match self.sidebar_position {
-            SidebarPosition::Start => children
-                .next()
-                .expect("Native: There should be a Sidebar at the line start position"),
-            SidebarPosition::End => children
-                .last()
-                .expect("Native: There should be a Sidebar at the line end position"),
-        };
         let mut mouse_interaction = mouse::Interaction::default();
-        let new_mouse_interaction = self.sidebar.mouse_interaction(
-            &Tree::empty(),
-            sidebar_layout,
-            cursor,
-            viewport,
-            renderer,
-        );
+        let new_mouse_interaction =
+            self.sidebar
+                .mouse_interaction(sidebar_tree, sidebar_layout, cursor, viewport, renderer);
         if new_mouse_interaction > mouse_interaction {
             mouse_interaction = new_mouse_interaction;
         }
 
         // Tab content
-        let mut children = layout.children();
-        let tab_content_layout = match self.sidebar_position {
-            SidebarPosition::Start => children
-                .last()
-                .expect("Graphics: There should be a Sidebar at the line start position"),
-            SidebarPosition::End => children
-                .next()
-                .expect("Graphics: There should be a Sidebar at the line end position"),
-        };
-        let idx = self.sidebar.get_active_tab_idx();
-        if let Some(element) = self.tabs.get(idx) {
-            let new_mouse_interaction = element.as_widget().mouse_interaction(
-                &state.children[1].children[idx],
-                tab_content_layout,
-                cursor,
-                viewport,
-                renderer,
-            );
+        if let Some(element) = self.tabs.get(idx)
+            && let Some((layout, tree)) = tab_content_layout
+                .iter(&tab_content_tree.children)
+                .nth(idx)
+        {
+            let new_mouse_interaction =
+                element.mouse_interaction(tree, layout, cursor, viewport, renderer);
 
             if new_mouse_interaction > mouse_interaction {
                 mouse_interaction = new_mouse_interaction;
@@ -1563,21 +1555,21 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        let mut children = layout.children();
-        let sidebar_layout = match self.sidebar_position {
-            SidebarPosition::Start => children
-                .next()
-                .expect("Native: There should be a Sidebar at the line start position"),
-            SidebarPosition::End => children
-                .last()
-                .expect("Native: There should be a Sidebar at the line end position"),
-        };
+        let idx = self.sidebar.get_active_tab_idx();
+        let mut children = layout.iter(&state.children);
+        let (sidebar_layout, sidebar_tree) = children
+            .next()
+            .expect("Native: There should be a Sidebar layout");
+        let (tab_content_layout, tab_content_tree) = children
+            .next()
+            .expect("Native: There should be a tab content layout");
+
         self.sidebar.draw(
-            &Tree::empty(),
+            sidebar_tree,
             renderer,
             theme,
             style,
@@ -1585,103 +1577,73 @@ where
             cursor,
             viewport,
         );
-        let mut children = layout.children();
-        let tab_content_layout = match self.sidebar_position {
-            SidebarPosition::Start => children
-                .last()
-                .expect("Graphics: There should be a Sidebar at the line start position"),
-            SidebarPosition::End => children
-                .next()
-                .expect("Graphics: There should be a Sidebar at the line end position"),
-        };
-        let idx = self.sidebar.get_active_tab_idx();
-        if let Some(element) = self.tabs.get(idx) {
-            element.as_widget().draw(
-                &state.children[1].children[idx],
-                renderer,
-                theme,
-                style,
-                tab_content_layout,
-                cursor,
-                viewport,
-            );
+
+        if let Some(element) = self.tabs.get(idx)
+            && let Some((layout, tree)) = tab_content_layout
+                .iter(&tab_content_tree.children)
+                .nth(idx)
+        {
+            element.draw(tree, renderer, theme, style, layout, cursor, viewport);
         }
     }
 
     fn overlay<'b>(
         &'b mut self,
         state: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        let layout = match self.sidebar_position {
-            SidebarPosition::Start => layout.children().nth(1),
-            SidebarPosition::End => layout.children().next(),
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
+        let idx = self.sidebar.get_active_tab_idx();
+
+        let Some(element) = self.tabs.get_mut(idx) else {
+            return Vec::new();
         };
-        layout.and_then(|layout| {
-            let idx = self.sidebar.get_active_tab_idx();
-            self.tabs
-                .get_mut(idx)
-                .map(Element::as_widget_mut)
-                .and_then(|w| {
-                    w.overlay(
-                        &mut state.children[1].children[idx],
-                        layout,
-                        renderer,
-                        viewport,
-                        translation,
-                    )
-                })
-        })
+        let Some((tab_content_layout, tab_content_tree)) = layout.iter_mut(&mut state.children).nth(1)
+        else {
+            return Vec::new();
+        };
+        let Some((layout, tree)) = tab_content_layout
+            .iter_mut(&mut tab_content_tree.children)
+            .nth(idx)
+        else {
+            return Vec::new();
+        };
+
+        element.overlay(tree, layout, renderer, viewport, translation, window)
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn Operation<()>,
+        operation: &mut dyn Operation,
     ) {
         let active_tab = self.sidebar.get_active_tab_idx();
-        let mut children = layout.children();
 
-        // Get sidebar and tab content layouts based on position
-        let (sidebar_layout, tab_content_layout) = match self.sidebar_position {
-            SidebarPosition::Start => {
-                let sidebar_layout = children
-                    .next()
-                    .expect("Layout should have a sidebar layout at start position");
-                let tab_content_layout = children
-                    .next()
-                    .expect("Layout should have a tab content layout at start position");
-                (sidebar_layout, tab_content_layout)
-            }
-            SidebarPosition::End => {
-                let tab_content_layout = children
-                    .next()
-                    .expect("Layout should have a tab content layout at end position");
-                let sidebar_layout = children
-                    .next()
-                    .expect("Layout should have a sidebar layout at end position");
-                (sidebar_layout, tab_content_layout)
-            }
-        };
-
-        operation.container(None, layout.bounds());
+        operation.container(None, layout.bounds(), viewport);
         operation.traverse(&mut |operation| {
+            let mut children = layout.iter_mut(&mut tree.children);
+
             // Operate on the sidebar to expose tab labels
-            self.sidebar
-                .operate(&mut tree.children[0], sidebar_layout, renderer, operation);
+            if let Some((sidebar_layout, sidebar_tree)) = children.next() {
+                self.sidebar
+                    .operate(sidebar_tree, sidebar_layout, viewport, renderer, operation);
+            }
 
             // Operate on the active tab content
-            self.tabs[active_tab].as_widget_mut().operate(
-                &mut tree.children[1].children[active_tab],
-                tab_content_layout,
-                renderer,
-                operation,
-            );
+            if let Some((tab_content_layout, tab_content_tree)) = children.next()
+                && let Some(element) = self.tabs.get_mut(active_tab)
+                && let Some((layout, tree)) = tab_content_layout
+                    .iter_mut(&mut tab_content_tree.children)
+                    .nth(active_tab)
+            {
+                element.operate(tree, layout, viewport, renderer, operation);
+            }
         });
     }
 }
@@ -1690,13 +1652,13 @@ impl<'a, Message, TabId, Theme, Renderer>
     From<SidebarWithContent<'a, Message, TabId, Theme, Renderer>>
     for Element<'a, Message, Theme, Renderer>
 where
-    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer<Font = Font>,
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
     Theme: 'a + Catalog + text::Catalog,
     Message: 'a,
     TabId: 'a + Eq + Clone,
 {
     fn from(content: SidebarWithContent<'a, Message, TabId, Theme, Renderer>) -> Self {
-        Element::new(content)
+        Widget::_boxed(content)
     }
 }
 

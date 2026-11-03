@@ -6,8 +6,8 @@ use super::overlay::time_picker::{self, TimePickerOverlay, TimePickerOverlayButt
 
 use chrono::Local;
 use iced_core::{
-    Clipboard, Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
-    layout::{Limits, Node},
+    Element, Event, Layout, Length, Point, Rectangle, Shell, Size, Vector, Widget,
+    layout::Limits,
     mouse::{self, Cursor},
     overlay, renderer,
     widget::{
@@ -177,6 +177,13 @@ impl State {
     }
 }
 
+impl<Message, Theme> widget::Meta for TimePicker<'_, Message, Theme>
+where
+    Message: Clone,
+    Theme: Catalog + button::Catalog,
+{
+}
+
 impl<Message, Theme> Widget<Message, Theme, Renderer> for TimePicker<'_, Message, Theme>
 where
     Message: 'static + Clone,
@@ -190,42 +197,42 @@ where
         tree::State::new(State::new(self.time, self.use_24h, self.show_seconds))
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.underlay), Tree::new(&self.overlay_state)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.underlay, &self.overlay_state]);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children_custom(
+            &mut [&mut self.underlay, &mut self.overlay_state],
+            |tree, element| tree.diff(element),
+            |element| Tree::new(element),
+        );
     }
 
     fn size(&self) -> Size<Length> {
-        self.underlay.as_widget().size()
+        self.underlay.size()
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
         self.underlay
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+            
+            .layout(&mut tree.children[0], renderer, limits);
+
+        tree.size = tree.children[0].size;
     }
 
     fn update(
         &mut self,
         state: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget_mut().update(
+        self.underlay.update(
             &mut state.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -234,12 +241,12 @@ where
     fn mouse_interaction(
         &self,
         state: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.underlay.as_widget().mouse_interaction(
+        self.underlay.mouse_interaction(
             &state.children[0],
             layout,
             cursor,
@@ -251,13 +258,18 @@ where
     fn operate(
         &mut self,
         state: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
-        operation: &mut dyn widget::Operation<()>,
+        operation: &mut dyn widget::Operation,
     ) {
-        self.underlay
-            .as_widget_mut()
-            .operate(&mut state.children[0], layout, renderer, operation);
+        self.underlay.operate(
+            &mut state.children[0],
+            layout,
+            viewport,
+            renderer,
+            operation,
+        );
     }
 
     fn draw(
@@ -266,11 +278,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         viewport: &Rectangle,
     ) {
-        self.underlay.as_widget().draw(
+        self.underlay.draw(
             &tree.children[0],
             renderer,
             theme,
@@ -284,27 +296,29 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let picker_state: &mut State = tree.state.downcast_mut();
 
         if !self.show_picker {
-            return self.underlay.as_widget_mut().overlay(
+            return self.underlay.overlay(
                 &mut tree.children[0],
                 layout,
                 renderer,
                 viewport,
                 translation,
+                window,
             );
         }
 
         let bounds = layout.bounds();
         let position = Point::new(bounds.center_x(), bounds.center_y());
 
-        Some(
+        vec![
             TimePickerOverlay::new(
                 picker_state,
                 self.on_cancel.clone(),
@@ -313,9 +327,11 @@ where
                 &self.class,
                 &mut tree.children[1],
                 *viewport,
+                renderer,
+                window,
             )
             .overlay(),
-        )
+        ]
     }
 }
 
@@ -326,7 +342,7 @@ where
     Theme: 'a + Catalog + button::Catalog + text::Catalog + container::Catalog,
 {
     fn from(time_picker: TimePicker<'a, Message, Theme>) -> Self {
-        Element::new(time_picker)
+        time_picker._boxed()
     }
 }
 
@@ -562,7 +578,7 @@ mod tests {
             period: Period::H24,
         };
 
-        let time_picker = TestTimePicker::new(
+        let mut time_picker = TestTimePicker::new(
             false,
             time,
             underlay,
@@ -570,8 +586,9 @@ mod tests {
             TestMessage::Submit,
         );
 
-        let children = Widget::<TestMessage, iced_widget::Theme, Renderer>::children(&time_picker);
-        assert_eq!(children.len(), 2);
+        let mut tree = Tree::empty();
+        Widget::<TestMessage, iced_widget::Theme, Renderer>::diff(&mut time_picker, &mut tree);
+        assert_eq!(tree.children.len(), 2);
     }
 
     #[test]

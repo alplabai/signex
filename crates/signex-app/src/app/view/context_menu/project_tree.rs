@@ -7,6 +7,7 @@
 
 use super::*;
 
+use iced::Widget as _;
 use super::items::{dd_command, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
@@ -109,7 +110,7 @@ impl Signex {
         // renders an empty placeholder so the overlay layer above has
         // something to render into.
         let Some(v) = self.project_tree_entries(ctx) else {
-            return container(iced::widget::Space::new()).into();
+            return container(iced::widget::Space::new()).boxed();
         };
         signex_widgets::active_bar_dropdown::view(v, tokens, Some(Self::CONTEXT_MENU_WIDTH))
     }

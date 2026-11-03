@@ -67,7 +67,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
         FootprintModeKind::View3d => "3D View",
     };
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     // v0.27 — multi-select indicator. With > 1 pad selected, show a
     // "(N pads selected)" tag next to the mode label so the user
@@ -230,13 +230,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
 /// v0.20 — common Settings + Hint footer. Always renders the
 /// Auto-fit Courtyard toggle and a mode-specific hint string.
 fn render_fp_settings_and_hint<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     col = col.push(props_section_header(
         "Settings",
         "fp_settings",
@@ -289,7 +289,7 @@ pub(super) fn props_section_header<'a>(
     collapsed: &super::CollapsedSections,
     primary: Color,
     border_c: Color,
-) -> iced::widget::Column<'a, PanelMsg> {
+) -> iced::widget::Column<Element<'a, PanelMsg>> {
     super::collapsible_section_header(key, label, collapsed, primary, border_c)
 }
 
@@ -305,13 +305,13 @@ pub(super) fn fp_is_collapsed(key: &str, collapsed: &super::CollapsedSections) -
 /// Returns the updated Column to keep the chained-update call style
 /// the rest of this module uses.
 fn props_kv_row<'a>(
-    col: Column<'a, PanelMsg>,
+    col: Column<Element<'a, PanelMsg>>,
     label_c: Color,
     input_bg: Color,
     input_bdr: Color,
     key: &str,
     value: String,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     col.push(super::form_input_row(
         key, &value, label_c, input_bg, input_bdr,
     ))

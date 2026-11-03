@@ -6,8 +6,8 @@
 //! library profile). It is generic over the message type, so each caller maps
 //! a click to its own message and none of them forks the layout (#1608).
 
-use iced::widget::{Space, button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use signex_erc::{PinAxis, RuleKind, Severity};
 
@@ -40,7 +40,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     let border_c = crate::styles::ti(tokens.border);
 
     // Per-rule severity grid: one row per built-in rule x 4 severities.
-    let mut rule_rows = column![
+    let mut rule_rows: Column<Element<'static, M>> = column![
         row![
             text("Rule")
                 .size(10)
@@ -51,7 +51,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
         ]
-        .padding([4, 8]),
+        .padding([4.0, 8.0]),
     ]
     .spacing(0);
     for rule in &RuleKind::ALL {
@@ -73,7 +73,8 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
                 severity_segmented(*rule, current, border_c, text_muted, editable, on_severity),
             ]
             .align_y(iced::Alignment::Center)
-            .padding([2, 8]),
+            .padding([2.0, 8.0])
+            .boxed(),
         );
     }
 
@@ -82,6 +83,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
             width: 1.0,
             radius: 3.0.into(),
             color: border_c,
+            ..Border::default()
         },
         ..container::Style::default()
     };
@@ -90,7 +92,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
         text("Click a cell to change.").size(10).color(text_muted),
         Space::new().height(8),
         container(rule_rows)
-            .padding(4)
+            .padding(4.0)
             .width(Length::Fill)
             .style(framed),
     ]
@@ -104,7 +106,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
             .color(text_muted),
         Space::new().height(8),
         container(pin_matrix_view(tokens, pin_matrix, editable, on_pin_cell))
-            .padding(8)
+            .padding(8.0)
             .width(Length::Fill)
             .style(framed),
     ]
@@ -113,7 +115,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
 
     row![rules_pane, Space::new().width(16), matrix_pane]
         .align_y(iced::Alignment::Start)
-        .into()
+        .boxed()
 }
 
 fn severity_segmented<M: Clone + 'static>(
@@ -136,7 +138,7 @@ fn severity_segmented<M: Clone + 'static>(
             Color::from_rgba(1.0, 1.0, 1.0, 0.03)
         };
         let fg = if selected { Color::WHITE } else { text_muted };
-        button(container(text(label.to_string()).size(10).color(fg)).padding([3, 8]))
+        button(container(text(label.to_string()).size(10).color(fg)).padding([3.0, 8.0]))
             .on_press_maybe(editable.then(|| on_severity(rule, value)))
             .style(move |_: &Theme, _| button::Style {
                 background: Some(Background::Color(bg)),
@@ -144,11 +146,12 @@ fn severity_segmented<M: Clone + 'static>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 text_color: fg,
                 ..button::Style::default()
             })
-            .into()
+            .boxed()
     };
     let off = seg("Off", Severity::Off, Color::from_rgb(0.35, 0.36, 0.42));
     if rule.is_on_off_only() {
@@ -162,7 +165,7 @@ fn severity_segmented<M: Clone + 'static>(
             off
         ]
         .spacing(2)
-        .into();
+        .boxed();
     }
     row![
         seg("E", Severity::Error, Color::from_rgb(0.85, 0.25, 0.25)),
@@ -171,7 +174,7 @@ fn severity_segmented<M: Clone + 'static>(
         off,
     ]
     .spacing(2)
-    .into()
+    .boxed()
 }
 
 /// Pin-connection matrix. Click a cell to cycle Error -> Warning -> Info ->
@@ -212,11 +215,12 @@ fn pin_matrix_view<M: Clone + 'static>(
                 width: 1.0,
                 radius: 0.0.into(),
                 color: border,
+                ..Border::default()
             },
             text_color: text_c,
             ..button::Style::default()
         })
-        .into()
+        .boxed()
     };
 
     let header_label = |label: &str| -> Element<'static, M> {
@@ -225,8 +229,8 @@ fn pin_matrix_view<M: Clone + 'static>(
             .height(30)
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Center)
-            .padding([0, 6])
-            .into()
+            .padding([0.0, 6.0])
+            .boxed()
     };
     let col_label = |label: &str| -> Element<'static, M> {
         container(text(label.to_string()).size(10).color(text_muted))
@@ -234,17 +238,18 @@ fn pin_matrix_view<M: Clone + 'static>(
             .height(24)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
-            .into()
+            .boxed()
     };
 
-    let mut header = row![container(Space::new().width(80)).width(80)].spacing(0);
+    let mut header: iced::widget::Row<Element<'static, M>> = row![container(Space::new().width(80)).width(80)].spacing(0);
     for axis in PinAxis::ALL {
         header = header.push(col_label(axis.label()));
     }
 
-    let mut body = column![header].spacing(0);
+    let mut body: Column<Element<'static, M>> = column![header].spacing(0);
     for (r, row_axis) in PinAxis::ALL.iter().enumerate() {
-        let mut rr = row![header_label(row_axis.label())].spacing(0);
+        let mut rr: iced::widget::Row<Element<'static, M>> =
+            row![header_label(row_axis.label())].spacing(0);
         for c in 0..PinAxis::ALL.len() {
             let sev = overrides
                 .get(&(r as u8, c as u8))
@@ -252,8 +257,8 @@ fn pin_matrix_view<M: Clone + 'static>(
                 .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(r as u8, c as u8));
             rr = rr.push(cell(r as u8, c as u8, sev));
         }
-        body = body.push(rr);
+        body = body.push(rr.boxed());
     }
 
-    container(body).into()
+    container(body).boxed()
 }

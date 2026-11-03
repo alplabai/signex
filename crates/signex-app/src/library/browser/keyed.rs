@@ -10,30 +10,27 @@
 //! state rather than inheriting a stranger's.
 
 use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::{Operation, Tree, tree};
-use iced::advanced::{Clipboard, Shell, Widget, mouse, overlay, renderer};
-use iced::{Element, Event, Length, Rectangle, Size, Vector};
+use iced::advanced::widget::{self, Operation, Tree, tree};
+use iced::advanced::{Shell, Widget, mouse, overlay, renderer};
+use iced::{Event, Length, Rectangle, Size, Vector};
 
 /// Content whose widget state is valid only for `key`.
-pub(super) struct Keyed<'a, Key, Message, Theme, Renderer> {
+pub(super) struct Keyed<Key, Content> {
     key: Key,
-    content: Element<'a, Message, Theme, Renderer>,
+    content: Content,
 }
 
-pub(super) fn keyed<'a, Key, Message, Theme, Renderer>(
-    key: Key,
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> Keyed<'a, Key, Message, Theme, Renderer> {
-    Keyed {
-        key,
-        content: content.into(),
-    }
+pub(super) fn keyed<Key, Content>(key: Key, content: Content) -> Keyed<Key, Content> {
+    Keyed { key, content }
 }
 
-impl<Key, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for Keyed<'_, Key, Message, Theme, Renderer>
+impl<Key, Content> widget::Meta for Keyed<Key, Content> {}
+
+impl<Key, Content, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for Keyed<Key, Content>
 where
     Key: Copy + PartialEq + 'static,
+    Content: Widget<Message, Theme, Renderer>,
     Renderer: renderer::Renderer,
 {
     fn tag(&self) -> tree::Tag {
@@ -44,65 +41,55 @@ where
         tree::State::new(self.key)
     }
 
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        let same_key = tree.state.downcast_ref::<Key>() == &self.key;
-        if same_key {
-            tree.diff_children(std::slice::from_ref(&self.content));
-        } else {
+    fn diff(&mut self, tree: &mut Tree) {
+        let same_key = *tree.state.downcast_ref::<Key>() == self.key;
+        if !same_key {
+            // Drop the stranger's state, including the whole child subtree,
+            // so the content starts fresh.
             tree.state = tree::State::new(self.key);
-            tree.children = vec![Tree::new(&self.content)];
+            tree.children.clear();
         }
+        tree.diff_children(std::slice::from_mut(&mut self.content));
     }
 
     fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
+        self.content.size()
     }
 
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &layout::Limits) {
+        self.content.layout(&mut tree.children[0], renderer, limits);
+
+        tree.size = tree.children[0].size;
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         self.content
-            .as_widget_mut()
-            .operate(&mut tree.children[0], layout, renderer, operation);
+            .operate(&mut tree.children[0], layout, viewport, renderer, operation);
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        self.content.as_widget_mut().update(
+        self.content.update(
             &mut tree.children[0],
             event,
             layout,
             cursor,
             renderer,
-            clipboard,
             shell,
             viewport,
         );
@@ -111,18 +98,13 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
+        self.content
+            .mouse_interaction(&tree.children[0], layout, cursor, viewport, renderer)
     }
 
     fn draw(
@@ -131,11 +113,11 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.content.as_widget().draw(
+        self.content.draw(
             &tree.children[0],
             renderer,
             theme,
@@ -149,30 +131,19 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        self.content.as_widget_mut().overlay(
+        window: Size,
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content.overlay(
             &mut tree.children[0],
             layout,
             renderer,
             viewport,
             translation,
+            window,
         )
-    }
-}
-
-impl<'a, Key, Message, Theme, Renderer> From<Keyed<'a, Key, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Key: Copy + PartialEq + 'static,
-    Message: 'a,
-    Theme: 'a,
-    Renderer: renderer::Renderer + 'a,
-{
-    fn from(keyed: Keyed<'a, Key, Message, Theme, Renderer>) -> Self {
-        Element::new(keyed)
     }
 }

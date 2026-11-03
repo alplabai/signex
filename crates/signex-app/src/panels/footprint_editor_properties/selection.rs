@@ -1,5 +1,5 @@
 use iced::widget::{Column, container, pick_list, row, text};
-use iced::{Color, Length};
+use iced::{Color, Element, Length};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -22,14 +22,14 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 pub(super) fn view_selection<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     mode_label: &str,
     palette: PanelPalette,
     custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
     active_custom_filter_tab: usize,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
@@ -203,9 +203,8 @@ pub(super) fn view_selection<'a>(
             {
                 use crate::library::messages::RoleTag;
                 let current = fp.selected_sketch_role;
-                let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
-                    PanelMsg::FpEditorSetRole { id, role: new_role }
-                })
+                let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+                .on_select(move |new_role| PanelMsg::FpEditorSetRole { id, role: new_role })
                 .text_size(11)
                 .padding([3.0, SP.m])
                 .width(Length::Fill);

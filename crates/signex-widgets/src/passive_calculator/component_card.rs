@@ -1,5 +1,5 @@
 use iced::widget::{column, container, pick_list, row, text};
-use iced::{Alignment, Background, Border, Element, Length};
+use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::color_code::ComponentColorCode;
@@ -61,9 +61,11 @@ impl<'a> ComponentCard<'a> {
             ),
             labeled(
                 "Tolerance",
-                pick_list(Tolerance::ALL, Some(tolerance), move |tolerance| {
-                    ComponentCardMessage::ToleranceChanged { index, tolerance }
-                })
+                pick_list(Some(tolerance), Tolerance::ALL, Tolerance::to_string)
+                    .on_select(move |tolerance| ComponentCardMessage::ToleranceChanged {
+                        index,
+                        tolerance,
+                    })
                 .text_size(11)
                 .padding([4, 6])
                 .width(105),
@@ -82,14 +84,12 @@ impl<'a> ComponentCard<'a> {
             .padding(12)
             .width(Length::Fill)
             .style(move |_theme| card_style(tokens))
-            .into()
+            .boxed()
     }
 }
 
-fn labeled<'a, M: 'a>(label: &'a str, control: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    column![text(label).size(11), control.into()]
-        .spacing(4)
-        .into()
+fn labeled<'a, M: 'a>(label: &'a str, control: impl Widget<M> + 'a) -> Element<'a, M> {
+    column![text(label).size(11), control].spacing(4).boxed()
 }
 
 fn metric<'a>(
@@ -104,7 +104,7 @@ fn metric<'a>(
         text(value).size(11).color(token_color(tokens.text)),
     ]
     .spacing(2)
-    .into()
+    .boxed()
 }
 
 fn card_style(tokens: &ThemeTokens) -> container::Style {
@@ -114,6 +114,7 @@ fn card_style(tokens: &ThemeTokens) -> container::Style {
             width: 1.0,
             radius: 4.0.into(),
             color: token_color(tokens.border),
+            ..Border::default()
         },
         ..container::Style::default()
     }

@@ -19,16 +19,16 @@ use crate::{
 };
 use chrono::{Duration, Local, NaiveTime, Timelike};
 use iced_core::{
-    Alignment, Border, Clipboard, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels,
-    Point, Rectangle, Renderer as _, Shell, Size, Text, Vector, Widget,
+    Border, Color, Element, Event, Layout, Length, Overlay, Padding, Pixels, Point,
+    Rectangle, Renderer as _, Shell, Size, Text, Vector, Widget,
     alignment::{Horizontal, Vertical},
     event, keyboard,
-    layout::{Limits, Node},
+    layout::Limits,
     mouse::{self, Cursor},
-    overlay, renderer,
+    overlay, renderer, shell,
     text::Renderer as _,
     touch,
-    widget::{self, tree::Tree},
+    widget::{self, Meta, tree::Tree},
 };
 use iced_widget::{
     Button, Column, Container, Renderer, Row, button,
@@ -55,24 +55,68 @@ const PERIOD_SIZE_PERCENTAGE: f32 = 0.2;
 pub struct TimePickerOverlay<'a, 'b, Message, Theme>
 where
     Message: Clone,
-    Theme: Catalog + button::Catalog,
+    Theme: Catalog + button::Catalog + text::Catalog,
     'b: 'a,
 {
     /// The state of the [`TimePickerOverlay`].
     state: &'a mut State,
     /// The cancel button of the [`TimePickerOverlay`].
-    cancel_button: Button<'a, Message, Theme, Renderer>,
+    cancel_button: Button<'a, Message, widget::Text<'a, Theme>, Theme>,
     /// The submit button of the [`TimePickerOverlay`].
-    submit_button: Button<'a, Message, Theme, Renderer>,
+    submit_button: Button<'a, Message, widget::Text<'a, Theme>, Theme>,
     /// The function that produces a message when the submit button of the [`TimePickerOverlay`] is pressed.
     on_submit: &'a dyn Fn(Time) -> Message,
-    /// The position of the [`TimePickerOverlay`].
-    position: Point,
     /// The style of the [`TimePickerOverlay`].
     class: &'a <Theme as Catalog>::Class<'b>,
     /// The reference to the tree holding the state of this overlay.
     tree: &'a mut Tree,
+    /// The viewport of the [`TimePickerOverlay`].
     viewport: Rectangle,
+    /// The size of the window the overlay is displayed in.
+    window: Size,
+    /// The computed layout of all the elements of the [`TimePickerOverlay`].
+    geometry: Geometry,
+}
+
+/// The layout of a single column (up arrow, value and down arrow) of the
+/// digital clock.
+#[derive(Debug, Clone, Copy, Default)]
+struct DigitalColumn {
+    /// The bounds of the whole column.
+    bounds: Rectangle,
+    /// The bounds of the up arrow.
+    up: Rectangle,
+    /// The bounds of the value.
+    center: Rectangle,
+    /// The bounds of the down arrow.
+    down: Rectangle,
+}
+
+/// The absolute layout of all the elements of the [`TimePickerOverlay`].
+#[derive(Debug, Clone, Copy)]
+struct Geometry {
+    /// The layout of the whole overlay.
+    overlay: Layout,
+    /// The layout of the analog clock.
+    clock: Layout,
+    /// The layout of the container of the digital clock.
+    digital: Layout,
+    /// The hour column of the digital clock.
+    hour: DigitalColumn,
+    /// The bounds of the separator between hours and minutes.
+    hour_minute_separator: Rectangle,
+    /// The minute column of the digital clock.
+    minute: DigitalColumn,
+    /// The bounds of the separator between minutes and seconds.
+    minute_second_separator: Option<Rectangle>,
+    /// The second column of the digital clock.
+    second: Option<DigitalColumn>,
+    /// The bounds of the period (AM/PM) of the digital clock.
+    period: Option<Rectangle>,
+    /// The layout of the cancel button.
+    cancel: Layout,
+    /// The layout of the submit button.
+    submit: Layout,
 }
 
 impl<'a, 'b, Message, Theme> TimePickerOverlay<'a, 'b, Message, Theme>
@@ -82,6 +126,7 @@ where
     'b: 'a,
 {
     /// Creates a new [`TimePickerOverlay`] on the given position.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         state: &'a mut time_picker::State,
         on_cancel: Message,
@@ -90,34 +135,52 @@ where
         class: &'a <Theme as Catalog>::Class<'b>,
         tree: &'a mut Tree,
         viewport: Rectangle,
+        renderer: &Renderer,
+        window: Size,
     ) -> Self {
         let time_picker::State { overlay_state } = state;
         let (cancel_content, cancel_font, _cancel_shaping) = cancel();
         let (submit_content, submit_font, _submit_shaping) = ok();
 
+        let mut cancel_button = Button::new(
+            widget::Text::new(cancel_content)
+                .font(cancel_font)
+                .align_x(Horizontal::Center)
+                .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .on_press(on_cancel.clone());
+        let mut submit_button = Button::new(
+            widget::Text::new(submit_content)
+                .font(submit_font)
+                .align_x(Horizontal::Center)
+                .width(Length::Fill),
+        )
+        .width(Length::Fill)
+        .on_press(on_cancel); // Sending a fake message
+
+        // The layout is not part of the `Overlay` trait anymore, so it is
+        // computed once, when the overlay is created.
+        let geometry = compute_geometry(
+            overlay_state,
+            &mut cancel_button,
+            &mut submit_button,
+            tree,
+            position,
+            renderer,
+            window,
+        );
+
         TimePickerOverlay {
             state: overlay_state,
-            cancel_button: Button::new(
-                text::Text::new(cancel_content)
-                    .font(cancel_font)
-                    .align_x(Horizontal::Center)
-                    .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .on_press(on_cancel.clone()),
-            submit_button: Button::new(
-                text::Text::new(submit_content)
-                    .font(submit_font)
-                    .align_x(Horizontal::Center)
-                    .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .on_press(on_cancel), // Sending a fake message
+            cancel_button,
+            submit_button,
             on_submit,
-            position,
             class,
             tree,
             viewport,
+            window,
+            geometry,
         }
     }
 
@@ -132,7 +195,7 @@ where
     fn on_event_clock(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
     ) -> event::Status {
         if cursor.is_over(layout.bounds()) {
@@ -294,56 +357,15 @@ where
     }
 
     /// The event handling for the digital clock.
-    #[allow(clippy::too_many_lines)]
-    fn on_event_digital_clock(
-        &mut self,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: Cursor,
-    ) -> event::Status {
-        let mut digital_clock_children = layout.children();
-
-        if !self.state.use_24h {
-            // Placeholder
-            let _ = digital_clock_children.next();
-        }
-
-        let hour_layout = digital_clock_children
-            .next()
-            .expect("widget: Layout should have a hour layout");
-        let mut hour_children = hour_layout.children();
-
-        let hour_up_arrow = hour_children
-            .next()
-            .expect("widget: Layout should have an up arrow for hours");
-        let _ = hour_children.next();
-        let hour_down_arrow = hour_children
-            .next()
-            .expect("widget: Layout should have a down arrow for hours");
-
-        let _ = digital_clock_children.next();
-
-        let minute_layout = digital_clock_children
-            .next()
-            .expect("widget: Layout should have a minute layout");
-        let mut minute_children = minute_layout.children();
-
-        let minute_up_arrow = minute_children
-            .next()
-            .expect("widget: Layout should have an up arrow for minutes");
-        let _ = minute_children.next();
-        let minute_down_arrow = minute_children
-            .next()
-            .expect("widget: Layout should have a down arrow for minutes");
-
+    fn on_event_digital_clock(&mut self, event: &Event, cursor: Cursor) -> event::Status {
         let calculate_time = |time: &mut NaiveTime,
-                              up_arrow: Layout<'_>,
-                              down_arrow: Layout<'_>,
+                              up_arrow: Rectangle,
+                              down_arrow: Rectangle,
                               duration: Duration| {
-            if cursor.is_over(up_arrow.bounds()) {
+            if cursor.is_over(up_arrow) {
                 *time += duration;
                 event::Status::Captured
-            } else if cursor.is_over(down_arrow.bounds()) {
+            } else if cursor.is_over(down_arrow) {
                 *time -= duration;
                 event::Status::Captured
             } else {
@@ -351,25 +373,28 @@ where
             }
         };
 
+        let hour = self.geometry.hour;
+        let minute = self.geometry.minute;
+
         let digital_clock_status = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                if cursor.is_over(hour_layout.bounds()) {
+                if cursor.is_over(hour.bounds) {
                     self.state.focus = Focus::DigitalHour;
 
                     calculate_time(
                         &mut self.state.time,
-                        hour_up_arrow,
-                        hour_down_arrow,
+                        hour.up,
+                        hour.down,
                         Duration::hours(1),
                     )
-                } else if cursor.is_over(minute_layout.bounds()) {
+                } else if cursor.is_over(minute.bounds) {
                     self.state.focus = Focus::DigitalMinute;
 
                     calculate_time(
                         &mut self.state.time,
-                        minute_up_arrow,
-                        minute_down_arrow,
+                        minute.up,
+                        minute.down,
                         Duration::minutes(1),
                     )
                 } else {
@@ -379,32 +404,17 @@ where
             _ => event::Status::Ignored,
         };
 
-        let second_status = if self.state.show_seconds {
-            let _ = digital_clock_children.next();
-
-            let second_layout = digital_clock_children
-                .next()
-                .expect("widget: Layout should have a second layout");
-            let mut second_children = second_layout.children();
-
-            let second_up_arrow = second_children
-                .next()
-                .expect("widget: Layout should have an up arrow for seconds");
-            let _ = second_children.next();
-            let second_down_arrow = second_children
-                .next()
-                .expect("widget: Layout should have a down arrow for seconds");
-
+        let second_status = if let Some(second) = self.geometry.second {
             match event {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
                 | Event::Touch(touch::Event::FingerPressed { .. }) => {
-                    if cursor.is_over(second_layout.bounds()) {
+                    if cursor.is_over(second.bounds) {
                         self.state.focus = Focus::DigitalSecond;
 
                         calculate_time(
                             &mut self.state.time,
-                            second_up_arrow,
-                            second_down_arrow,
+                            second.up,
+                            second.down,
                             Duration::seconds(1),
                         )
                     } else {
@@ -496,124 +506,20 @@ where
     Theme: 'a + Catalog + button::Catalog + text::Catalog + container::Catalog,
     'b: 'a,
 {
-    fn layout(&mut self, renderer: &Renderer, bounds: Size) -> Node {
-        let limits = Limits::new(Size::ZERO, bounds)
-            .shrink(PADDING)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .max_width(300.0)
-            .max_height(350.0);
-
-        // Digital Clock
-        let digital_clock_limits = limits;
-        let mut digital_clock = digital_clock(self, renderer, digital_clock_limits);
-
-        // Pre-Buttons TODO: get rid of it
-        let cancel_limits = limits;
-        let cancel_button =
-            self.cancel_button
-                .layout(&mut self.tree.children[0], renderer, &cancel_limits);
-
-        let limits = limits.shrink(Size::new(
-            0.0,
-            digital_clock.bounds().height + cancel_button.bounds().height + 2.0 * SPACING.0,
-        ));
-
-        // Clock-Canvas
-        let mut clock = Row::<(), Renderer>::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .layout(self.tree, renderer, &limits);
-
-        let clock_bounds = clock.bounds();
-        clock = clock.move_to(Point::new(
-            clock_bounds.x + PADDING.left,
-            clock_bounds.y + PADDING.top,
-        ));
-
-        let digital_bounds = digital_clock.bounds();
-        digital_clock = digital_clock.move_to(Point::new(
-            digital_bounds.x + PADDING.left,
-            digital_bounds.y + PADDING.top + SPACING.0 + clock.bounds().height,
-        ));
-
-        // Buttons
-        let cancel_limits =
-            limits.max_width(((clock.bounds().width / 2.0) - BUTTON_SPACING.0).max(0.0));
-
-        let mut cancel_button =
-            self.cancel_button
-                .layout(&mut self.tree.children[0], renderer, &cancel_limits);
-
-        let submit_limits =
-            limits.max_width(((clock.bounds().width / 2.0) - BUTTON_SPACING.0).max(0.0));
-
-        let mut submit_button =
-            self.submit_button
-                .layout(&mut self.tree.children[1], renderer, &submit_limits);
-
-        let cancel_bounds = cancel_button.bounds();
-        cancel_button = cancel_button.move_to(Point {
-            x: cancel_bounds.x + PADDING.left,
-            y: cancel_bounds.y
-                + clock.bounds().height
-                + PADDING.top
-                + digital_clock.bounds().height
-                + 2.0 * SPACING.0,
-        });
-
-        let submit_bounds = submit_button.bounds();
-        submit_button = submit_button.move_to(Point {
-            x: submit_bounds.x + clock.bounds().width - submit_bounds.width + PADDING.left,
-            y: submit_bounds.y
-                + clock.bounds().height
-                + PADDING.top
-                + digital_clock.bounds().height
-                + 2.0 * SPACING.0,
-        });
-
-        let mut node = Node::with_children(
-            Size::new(
-                clock.bounds().width + PADDING.x(),
-                clock.bounds().height
-                    + digital_clock.bounds().height
-                    + cancel_button.bounds().height
-                    + PADDING.y()
-                    + 2.0 * SPACING.0,
-            ),
-            vec![clock, digital_clock, cancel_button, submit_button],
-        );
-
-        node.center_and_bounce(self.position, bounds);
-        node
-    }
-
     fn update(
         &mut self,
         event: &Event,
-        layout: Layout<'_>,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<Message>,
+        shell: &mut Shell<'_, Message>,
     ) {
         let mut status = self.on_event_keyboard(event);
-        let mut children = layout.children();
 
         // Clock canvas
-        let clock_layout = children
-            .next()
-            .expect("widget: Layout should have a clock canvas layout");
-        let clock_status = self.on_event_clock(event, clock_layout, cursor);
+        let clock_status = self.on_event_clock(event, self.geometry.clock, cursor);
 
         // ----------- Digital clock ------------------
-        let digital_clock_layout = children
-            .next()
-            .expect("widget: Layout should have a digital clock parent")
-            .children()
-            .next()
-            .expect("widget: Layout should have a digital clock layout");
-        let digital_clock_status = self.on_event_digital_clock(event, digital_clock_layout, cursor);
+        let digital_clock_status = self.on_event_digital_clock(event, cursor);
 
         if digital_clock_status == event::Status::Captured
             || clock_status == event::Status::Captured
@@ -622,42 +528,41 @@ where
         }
 
         // ----------- Buttons --------------
-        let cancel_button_layout = children
-            .next()
-            .expect("widget: Layout should have a cancel button layout for a TimePicker");
+        let viewport = self.geometry.overlay.bounds();
 
-        let mut fake_messages: Vec<Message> = Vec::new();
+        let mut fake_messages: shell::Bus<Message> = shell::Bus::new();
+        {
+            let mut fake_shell = shell.local(&mut fake_messages);
 
-        self.cancel_button.update(
-            &mut self.tree.children[0],
-            event,
-            cancel_button_layout,
-            cursor,
-            renderer,
-            clipboard,
-            &mut Shell::new(&mut fake_messages),
-            &layout.bounds(),
-        );
+            self.cancel_button.update(
+                &mut self.tree.children[0],
+                event,
+                self.geometry.cancel,
+                cursor,
+                renderer,
+                &mut fake_shell,
+                &viewport,
+            );
+        }
 
-        while let Some(message) = fake_messages.pop() {
+        for (message, _receipt) in fake_messages.drain() {
             shell.publish(message);
             status = event::Status::Captured;
         }
 
-        let submit_button_layout = children
-            .next()
-            .expect("widget: Layout should have a submit button layout for a TimePicker");
+        {
+            let mut fake_shell = shell.local(&mut fake_messages);
 
-        self.submit_button.update(
-            &mut self.tree.children[1],
-            event,
-            submit_button_layout,
-            cursor,
-            renderer,
-            clipboard,
-            &mut Shell::new(&mut fake_messages),
-            &layout.bounds(),
-        );
+            self.submit_button.update(
+                &mut self.tree.children[1],
+                event,
+                self.geometry.submit,
+                cursor,
+                renderer,
+                &mut fake_shell,
+                &viewport,
+            );
+        }
 
         if !fake_messages.is_empty() {
             let (hour, period) = if self.state.use_24h {
@@ -692,53 +597,22 @@ where
         }
     }
 
-    fn mouse_interaction(
-        &self,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        let mut children = layout.children();
+    fn mouse_interaction(&self, cursor: mouse::Cursor, renderer: &Renderer) -> mouse::Interaction {
         let mouse_interaction = mouse::Interaction::default();
 
         // Clock canvas
-        let clock_layout = children
-            .next()
-            .expect("Graphics: Layout should have a clock canvas layout");
-        let clock_mouse_interaction = if cursor.is_over(clock_layout.bounds()) {
+        let clock_mouse_interaction = if cursor.is_over(self.geometry.clock.bounds()) {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::default()
         };
 
         // Digital clock
-        let digital_clock_layout = children
-            .next()
-            .expect("Graphics: Layout should have a digital clock layout");
-        //let digital_clock_mouse_interaction = mouse::Interaction::default();
-        let mut digital_clock_children = digital_clock_layout
-            .children()
-            .next()
-            .expect("Graphics: Layout should have digital clock children")
-            .children();
-
-        let f = |layout: Layout<'_>| {
-            let mut children = layout.children();
-
-            let up_bounds = children
-                .next()
-                .expect("Graphics: Layout should have a up arrow bounds")
-                .bounds();
-            let _center_bounds = children.next();
-            let down_bounds = children
-                .next()
-                .expect("Graphics: Layout should have a down arrow bounds")
-                .bounds();
-
+        let f = |column: DigitalColumn| {
             let mut mouse_interaction = mouse::Interaction::default();
 
-            let up_arrow_hovered = cursor.is_over(up_bounds);
-            let down_arrow_hovered = cursor.is_over(down_bounds);
+            let up_arrow_hovered = cursor.is_over(column.up);
+            let down_arrow_hovered = cursor.is_over(column.down);
 
             if up_arrow_hovered || down_arrow_hovered {
                 mouse_interaction = mouse_interaction.max(mouse::Interaction::Pointer);
@@ -747,54 +621,25 @@ where
             mouse_interaction
         };
 
-        if !self.state.use_24h {
-            // Placeholder
-            let _ = digital_clock_children.next();
-        }
-
-        let hour_layout = digital_clock_children
-            .next()
-            .expect("Graphics: Layout should have a hour layout");
-        let hour_mouse_interaction = f(hour_layout);
-
-        let _hour_minute_separator = digital_clock_children.next();
-
-        let minute_layout = digital_clock_children
-            .next()
-            .expect("Graphics: Layout should have a minute layout");
-        let minute_mouse_interaction = f(minute_layout);
-
-        let second_mouse_interaction = if self.state.show_seconds {
-            let _minute_second_separator = digital_clock_children.next();
-
-            let second_layout = digital_clock_children
-                .next()
-                .expect("Graphics: Layout should have a second layout");
-            f(second_layout)
-        } else {
-            mouse::Interaction::default()
-        };
+        let hour_mouse_interaction = f(self.geometry.hour);
+        let minute_mouse_interaction = f(self.geometry.minute);
+        let second_mouse_interaction = self
+            .geometry
+            .second
+            .map_or_else(mouse::Interaction::default, f);
 
         // Buttons
-        let cancel_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a cancel button layout for a TimePicker");
-
         let cancel_mouse_interaction = self.cancel_button.mouse_interaction(
             &self.tree.children[0],
-            cancel_button_layout,
+            self.geometry.cancel,
             cursor,
             &self.viewport,
             renderer,
         );
 
-        let submit_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a submit button layout for a TimePicker");
-
         let submit_mouse_interaction = self.submit_button.mouse_interaction(
             &self.tree.children[1],
-            submit_button_layout,
+            self.geometry.submit,
             cursor,
             &self.viewport,
             renderer,
@@ -814,11 +659,9 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
         cursor: Cursor,
     ) {
-        let bounds = layout.bounds();
-        let mut children = layout.children();
+        let bounds = self.geometry.overlay.bounds();
 
         let mut style_sheet: HashMap<StyleState, Style> = HashMap::new();
         let _ = style_sheet.insert(
@@ -855,6 +698,7 @@ where
                         radius: style_sheet[&style_state].border_radius.into(),
                         width: style_sheet[&style_state].border_width,
                         color: style_sheet[&style_state].border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -863,48 +707,34 @@ where
         }
 
         // ----------- Clock canvas --------------------
-        let clock_layout = children
-            .next()
-            .expect("Graphics: Layout should have a clock canvas layout");
-        draw_clock(renderer, self, clock_layout, cursor, &style_sheet);
+        draw_clock(renderer, self, self.geometry.clock, cursor, &style_sheet);
 
         // ----------- Digital clock ------------------
-        let digital_clock_layout = children
-            .next()
-            .expect("Graphics: Layout should have a digital clock layout");
-        draw_digital_clock(renderer, self, digital_clock_layout, cursor, &style_sheet);
+        draw_digital_clock(renderer, self, cursor, &style_sheet);
 
         // ----------- Buttons ------------------------
-        let cancel_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a cancel button layout for a TimePicker");
-
         self.cancel_button.draw(
             &self.tree.children[0],
             renderer,
             theme,
             style,
-            cancel_button_layout,
+            self.geometry.cancel,
             cursor,
             &bounds,
         );
-
-        let submit_button_layout = children
-            .next()
-            .expect("Graphics: Layout should have a submit button layout for a TimePicker");
 
         self.submit_button.draw(
             &self.tree.children[1],
             renderer,
             theme,
             style,
-            submit_button_layout,
+            self.geometry.submit,
             cursor,
             &bounds,
         );
 
         // Buttons are not focusable right now...
-        let cancel_button_bounds = cancel_button_layout.bounds();
+        let cancel_button_bounds = self.geometry.cancel.bounds();
         if (self.state.focus == Focus::Cancel)
             && (cancel_button_bounds.width > 0.)
             && (cancel_button_bounds.height > 0.)
@@ -916,6 +746,7 @@ where
                         radius: style_sheet[&StyleState::Focused].border_radius.into(),
                         width: style_sheet[&StyleState::Focused].border_width,
                         color: style_sheet[&StyleState::Focused].border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -923,7 +754,7 @@ where
             );
         }
 
-        let submit_button_bounds = submit_button_layout.bounds();
+        let submit_button_bounds = self.geometry.submit.bounds();
         if (self.state.focus == Focus::Submit)
             && (submit_button_bounds.width > 0.)
             && (submit_button_bounds.height > 0.)
@@ -935,6 +766,7 @@ where
                         radius: style_sheet[&StyleState::Focused].border_radius.into(),
                         width: style_sheet[&StyleState::Focused].border_width,
                         color: style_sheet[&StyleState::Focused].border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -943,307 +775,343 @@ where
         }
     }
 
-    fn operate(
-        &mut self,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn widget::Operation,
-    ) {
-        let mut children = layout.children();
-
+    fn operate(&mut self, renderer: &Renderer, operation: &mut dyn widget::Operation) {
         // Skip the clock canvas (analog display) - it has no text to expose
-        let _clock_layout = children.next();
 
-        // Get the digital clock layout (contains hour, minute, second text)
-        if let Some(digital_clock_layout) = children.next() {
-            // Operate on the digital clock element stored in tree.children[2]
-            // This recursively exposes all text elements: hour, minute, second, separators, period
-            if let Some(digital_clock_tree) = self.tree.children.get_mut(2) {
-                // Need to recreate the digital clock element to call operate on it
-                // This is the same structure created in the digital_clock() function
-                let arrow_size = renderer.default_size().0;
-                let font_size = 1.2 * renderer.default_size().0;
+        // Operate on the digital clock element stored in tree.children[2]
+        // This recursively exposes all text elements: hour, minute, second, separators, period
+        if let Some(digital_clock_tree) = self.tree.children.get_mut(2) {
+            // Need to recreate the digital clock element to call operate on it
+            // This is the same structure created when the layout is computed
+            let mut element = digital_clock_element::<Message, Theme>(self.state, renderer, false);
 
-                let (up_content, up_font, _up_shaping) = up_open();
-                let (down_content, down_font, _down_shaping) = down_open();
-
-                let mut digital_clock_row = Row::<Message, Theme, Renderer>::new()
-                    .align_y(Alignment::Center)
-                    .height(Length::Shrink)
-                    .width(Length::Shrink)
-                    .spacing(1);
-
-                if !self.state.use_24h {
-                    let period_text = if self.state.time.hour12().0 {
-                        "PM"
-                    } else {
-                        "AM"
-                    };
-                    digital_clock_row = digital_clock_row.push(
-                        Column::new()
-                            .height(Length::Shrink)
-                            .push(text::Text::new(period_text).size(font_size)),
-                    );
-                }
-
-                digital_clock_row = digital_clock_row
-                    .push(
-                        // Hour column
-                        Column::new()
-                            .align_x(Alignment::Center)
-                            .height(Length::Shrink)
-                            .push(text::Text::new(&up_content).font(up_font).size(arrow_size))
-                            .push(
-                                text::Text::new(format!(
-                                    "{:02}",
-                                    if self.state.use_24h {
-                                        self.state.time.hour()
-                                    } else {
-                                        self.state.time.hour12().1
-                                    }
-                                ))
-                                .size(font_size),
-                            )
-                            .push(
-                                text::Text::new(&down_content)
-                                    .font(down_font)
-                                    .size(arrow_size),
-                            ),
-                    )
-                    .push(
-                        Column::new()
-                            .height(Length::Shrink)
-                            .push(text::Text::new(":").size(font_size)),
-                    )
-                    .push(
-                        // Minute column
-                        Column::new()
-                            .align_x(Alignment::Center)
-                            .height(Length::Shrink)
-                            .push(text::Text::new(&up_content).font(up_font).size(arrow_size))
-                            .push(
-                                text::Text::new(format!("{:02}", self.state.time.minute()))
-                                    .size(font_size),
-                            )
-                            .push(
-                                text::Text::new(&down_content)
-                                    .font(down_font)
-                                    .size(arrow_size),
-                            ),
-                    );
-
-                if self.state.show_seconds {
-                    digital_clock_row = digital_clock_row
-                        .push(
-                            Column::new()
-                                .height(Length::Shrink)
-                                .push(text::Text::new(":").size(font_size)),
-                        )
-                        .push(
-                            // Second column
-                            Column::new()
-                                .align_x(Alignment::Center)
-                                .height(Length::Shrink)
-                                .push(text::Text::new(&up_content).font(up_font).size(arrow_size))
-                                .push(
-                                    text::Text::new(format!("{:02}", self.state.time.second()))
-                                        .size(font_size),
-                                )
-                                .push(
-                                    text::Text::new(&down_content)
-                                        .font(down_font)
-                                        .size(arrow_size),
-                                ),
-                        );
-                }
-
-                if !self.state.use_24h {
-                    let period_text = if self.state.time.hour12().0 {
-                        "PM"
-                    } else {
-                        "AM"
-                    };
-                    digital_clock_row = digital_clock_row.push(
-                        Column::new()
-                            .height(Length::Shrink)
-                            .push(text::Text::new(period_text).size(font_size)),
-                    );
-                }
-
-                let container = Container::new(digital_clock_row)
-                    .width(Length::Fill)
-                    .height(Length::Shrink)
-                    .center_x(Length::Fill)
-                    .center_y(Length::Shrink);
-
-                let mut element: Element<Message, Theme, Renderer> = Element::new(container);
-                element.as_widget_mut().operate(
-                    digital_clock_tree,
-                    digital_clock_layout,
-                    renderer,
-                    operation,
-                );
-            }
+            element.operate(
+                digital_clock_tree,
+                self.geometry.digital,
+                &self.viewport,
+                renderer,
+                operation,
+            );
         }
 
         // Operate on cancel button
-        if let Some(cancel_layout) = children.next() {
-            Widget::operate(
-                &mut self.cancel_button,
-                &mut self.tree.children[0],
-                cancel_layout,
-                renderer,
-                operation,
-            );
-        }
+        Widget::operate(
+            &mut self.cancel_button,
+            &mut self.tree.children[0],
+            self.geometry.cancel,
+            &self.viewport,
+            renderer,
+            operation,
+        );
 
         // Operate on submit button
-        if let Some(submit_layout) = children.next() {
-            Widget::operate(
-                &mut self.submit_button,
-                &mut self.tree.children[1],
-                submit_layout,
-                renderer,
-                operation,
-            );
-        }
+        Widget::operate(
+            &mut self.submit_button,
+            &mut self.tree.children[1],
+            self.geometry.submit,
+            &self.viewport,
+            renderer,
+            operation,
+        );
     }
 }
 
-/// Defines the layout of the digital clock of the time picker.
-fn digital_clock<Message, Theme>(
-    time_picker: &mut TimePickerOverlay<'_, '_, Message, Theme>,
-    renderer: &Renderer,
-    limits: Limits,
-) -> Node
-where
-    Message: 'static + Clone,
-    Theme: Catalog + button::Catalog + text::Catalog + container::Catalog,
-{
-    let arrow_size = renderer.default_size().0;
-    let font_size = 1.2 * renderer.default_size().0;
-
-    let mut digital_clock_row = Row::<Message, Theme, Renderer>::new()
-        .align_y(Alignment::Center)
-        .height(Length::Shrink)
-        .width(Length::Shrink)
-        .spacing(1);
-
-    if !time_picker.state.use_24h {
-        digital_clock_row = digital_clock_row.push(
-            Column::new() // Just a placeholder
-                .height(Length::Shrink)
-                .push(text::Text::new("AM").size(font_size)),
-        );
-    }
-
-    digital_clock_row = digital_clock_row
-        .push(
-            // Hour
-            Column::new()
-                .align_x(Alignment::Center)
-                .height(Length::Shrink)
-                .push(
-                    // Up Hour arrow
-                    Row::new()
-                        .width(Length::Fixed(arrow_size))
-                        .height(Length::Fixed(arrow_size)),
-                )
-                .push(
-                    text::Text::new(format!("{:02}", time_picker.state.time.hour()))
-                        .size(font_size),
-                )
-                .push(
-                    // Down Hour arrow
-                    Row::new()
-                        .width(Length::Fixed(arrow_size))
-                        .height(Length::Fixed(arrow_size)),
-                ),
-        )
-        .push(
-            Column::new()
-                .height(Length::Shrink)
-                .push(text::Text::new(":").size(font_size)),
-        )
-        .push(
-            Column::new()
-                .align_x(Alignment::Center)
-                .height(Length::Shrink)
-                .push(
-                    // Up Minute arrow
-                    Row::new()
-                        .width(Length::Fixed(arrow_size))
-                        .height(Length::Fixed(arrow_size)),
-                )
-                .push(
-                    text::Text::new(format!("{:02}", time_picker.state.time.hour()))
-                        .size(font_size),
-                )
-                .push(
-                    // Down Minute arrow
-                    Row::new()
-                        .width(Length::Fixed(arrow_size))
-                        .height(Length::Fixed(arrow_size)),
-                ),
-        );
-
-    if time_picker.state.show_seconds {
-        digital_clock_row = digital_clock_row
-            .push(
-                Column::new()
-                    .height(Length::Shrink)
-                    .push(text::Text::new(":").size(font_size)),
-            )
-            .push(
-                Column::new()
-                    .align_x(Alignment::Center)
-                    .height(Length::Shrink)
-                    .push(
-                        // Up Minute arrow
-                        Row::new()
-                            .width(Length::Fixed(arrow_size))
-                            .height(Length::Fixed(arrow_size)),
-                    )
-                    .push(
-                        text::Text::new(format!("{:02}", time_picker.state.time.hour()))
-                            .size(font_size),
-                    )
-                    .push(
-                        // Down Minute arrow
-                        Row::new()
-                            .width(Length::Fixed(arrow_size))
-                            .height(Length::Fixed(arrow_size)),
-                    ),
-            );
-    }
-
-    if !time_picker.state.use_24h {
-        digital_clock_row = digital_clock_row.push(
-            Column::new()
-                .height(Length::Shrink)
-                .push(text::Text::new("AM").size(font_size)),
-        );
-    }
-
-    let container = Container::new(digital_clock_row)
-        .width(Length::Fill)
-        .height(Length::Shrink)
-        .center_x(Length::Fill)
-        .center_y(Length::Shrink);
-
-    let mut element: Element<Message, Theme, Renderer> = Element::new(container);
-    let container_tree = if let Some(child_tree) = time_picker.tree.children.get_mut(2) {
-        child_tree.diff(element.as_widget_mut());
-        child_tree
+/// Reconciles the child tree at the given index with the given widget.
+fn sync_child<Message, Theme>(
+    tree: &mut Tree,
+    index: usize,
+    widget: &mut impl Widget<Message, Theme, Renderer>,
+) {
+    if let Some(child) = tree.children.get_mut(index) {
+        child.diff(widget);
     } else {
-        let child_tree = Tree::new(element.as_widget());
-        time_picker.tree.children.insert(2, child_tree);
-        &mut time_picker.tree.children[2]
+        let mut child = Tree::new(&*widget);
+        child.diff(widget);
+        tree.children.push(child);
+    }
+}
+
+/// Boxes the given widget into an [`Element`].
+fn boxed<'a, Message, Theme>(
+    widget: impl Widget<Message, Theme, Renderer> + 'a,
+) -> Element<'a, Message, Theme, Renderer> {
+    Widget::<Message, Theme, Renderer>::_boxed(widget)
+}
+
+/// Builds the element of the digital clock of the time picker.
+///
+/// If `placeholder` is set, the element only contains placeholders that have
+/// the same size as the final content. This is what is used to compute the
+/// layout.
+fn digital_clock_element<'a, Message, Theme>(
+    state: &State,
+    renderer: &Renderer,
+    placeholder: bool,
+) -> Element<'a, Message, Theme, Renderer>
+where
+    Message: 'a,
+    Theme: 'a + text::Catalog + container::Catalog,
+{
+    let arrow_size = renderer.text_size().0;
+    let font_size = 1.2 * renderer.text_size().0;
+
+    let (up_content, up_font, _up_shaping) = up_open();
+    let (down_content, down_font, _down_shaping) = down_open();
+
+    let arrow = |content: &str, font| {
+        boxed(
+            widget::Text::<'a, Theme>::new(if placeholder {
+                String::new()
+            } else {
+                content.to_owned()
+            })
+            .font(font)
+            .size(arrow_size)
+            .width(Length::Fixed(arrow_size))
+            .height(Length::Fixed(arrow_size)),
+        )
     };
 
-    element
-        .as_widget_mut()
-        .layout(container_tree, renderer, &limits)
+    let label = |content: String| {
+        boxed(
+            Column::<Element<'a, Message, Theme, Renderer>>::new()
+                .height(Length::Fit)
+                .push(boxed(
+                    widget::Text::<'a, Theme>::new(content).size(font_size),
+                )),
+        )
+    };
+
+    let value_column = |value: u32| {
+        boxed(
+            Column::<Element<'a, Message, Theme, Renderer>>::new()
+                .align_x(Horizontal::Center)
+                .height(Length::Fit)
+                .push(arrow(&up_content, up_font))
+                .push(boxed(
+                    widget::Text::<'a, Theme>::new(format!("{value:02}")).size(font_size),
+                ))
+                .push(arrow(&down_content, down_font)),
+        )
+    };
+
+    let period_text = if !placeholder && state.time.hour12().0 {
+        "PM"
+    } else {
+        "AM"
+    };
+
+    let mut digital_clock_row = Row::<Element<'a, Message, Theme, Renderer>>::new()
+        .align_y(Vertical::Center)
+        .height(Length::Fit)
+        .width(Length::Fit)
+        .spacing(1);
+
+    if !state.use_24h {
+        digital_clock_row = digital_clock_row.push(label(period_text.to_owned()));
+    }
+
+    // The placeholders always use the hour as content
+    let hour = if state.use_24h || placeholder {
+        state.time.hour()
+    } else {
+        state.time.hour12().1
+    };
+    let minute = if placeholder {
+        state.time.hour()
+    } else {
+        state.time.minute()
+    };
+    let second = if placeholder {
+        state.time.hour()
+    } else {
+        state.time.second()
+    };
+
+    digital_clock_row = digital_clock_row
+        .push(value_column(hour))
+        .push(label(":".to_owned()))
+        .push(value_column(minute));
+
+    if state.show_seconds {
+        digital_clock_row = digital_clock_row
+            .push(label(":".to_owned()))
+            .push(value_column(second));
+    }
+
+    if !state.use_24h {
+        digital_clock_row = digital_clock_row.push(label(period_text.to_owned()));
+    }
+
+    boxed(
+        Container::new(digital_clock_row)
+            .width(Length::Fill)
+            .height(Length::Fit)
+            .center_x(Length::Fill)
+            .center_y(Length::Fit),
+    )
+}
+
+/// Applies a maximum width and height to the given [`Limits`].
+fn max_size(mut limits: Limits, max_width: f32, max_height: f32) -> Limits {
+    limits.max.width = limits.max.width.min(max_width);
+    limits.min.width = limits.min.width.min(limits.max.width);
+    limits.max.height = limits.max.height.min(max_height);
+    limits.min.height = limits.min.height.min(limits.max.height);
+    limits
+}
+
+/// Extracts the layout of a column of the digital clock.
+fn digital_column((layout, tree): (Layout, &Tree)) -> DigitalColumn {
+    let mut cells = layout.iter(&tree.children);
+
+    let mut next_bounds = || cells.next().map(|(layout, _)| layout.bounds());
+
+    DigitalColumn {
+        bounds: layout.bounds(),
+        up: next_bounds().unwrap_or_default(),
+        center: next_bounds().unwrap_or_default(),
+        down: next_bounds().unwrap_or_default(),
+    }
+}
+
+/// Computes the layout of the whole time picker overlay.
+#[allow(clippy::too_many_lines)]
+fn compute_geometry<'a, Message, Theme>(
+    state: &State,
+    cancel_button: &mut Button<'a, Message, widget::Text<'a, Theme>, Theme>,
+    submit_button: &mut Button<'a, Message, widget::Text<'a, Theme>, Theme>,
+    tree: &mut Tree,
+    position: Point,
+    renderer: &Renderer,
+    window: Size,
+) -> Geometry
+where
+    Message: 'a + Clone,
+    Theme: 'a + button::Catalog + text::Catalog + container::Catalog,
+{
+    let limits = max_size(
+        Limits::new(Size::ZERO, window)
+            .shrink(Size::new(PADDING.x(), PADDING.y()))
+            .width(Length::Fill)
+            .height(Length::Fill),
+        300.0,
+        350.0,
+    );
+
+    // Digital Clock
+    let mut digital_clock = digital_clock_element::<Message, Theme>(state, renderer, true);
+    sync_child(tree, 2, &mut digital_clock);
+    digital_clock.layout(&mut tree.children[2], renderer, &limits);
+    let digital_size = tree.children[2].size;
+
+    // Pre-Buttons TODO: get rid of it
+    sync_child(tree, 0, cancel_button);
+    sync_child(tree, 1, submit_button);
+
+    cancel_button.layout(&mut tree.children[0], renderer, &limits);
+    let pre_cancel_height = tree.children[0].size.height;
+
+    let limits = limits.shrink(Size::new(
+        0.0,
+        digital_size.height + pre_cancel_height + 2.0 * SPACING.0,
+    ));
+
+    // Clock-Canvas
+    let clock_size = iced_core::layout::atomic(&limits, Length::Fill, Length::Fill);
+
+    // Buttons
+    let button_limits = max_size(
+        limits,
+        ((clock_size.width / 2.0) - BUTTON_SPACING.0).max(0.0),
+        f32::INFINITY,
+    );
+
+    cancel_button.layout(&mut tree.children[0], renderer, &button_limits);
+    let cancel_size = tree.children[0].size;
+
+    submit_button.layout(&mut tree.children[1], renderer, &button_limits);
+    let submit_size = tree.children[1].size;
+
+    // The whole overlay
+    let mut overlay = Layout::new(Size::new(
+        clock_size.width + PADDING.x(),
+        clock_size.height
+            + digital_size.height
+            + cancel_size.height
+            + PADDING.y()
+            + 2.0 * SPACING.0,
+    ));
+    overlay.center_and_bounce(position, window);
+
+    // Everything below is positioned relative to the overlay
+    let origin = overlay.position();
+    let at = |size: Size, offset: Vector| {
+        Layout::new(size).move_to(origin + offset + Vector::new(PADDING.left, PADDING.top))
+    };
+
+    let clock = at(clock_size, Vector::ZERO);
+    let digital = at(
+        digital_size,
+        Vector::new(0.0, SPACING.0 + clock_size.height),
+    );
+
+    let buttons_y = clock_size.height + digital_size.height + 2.0 * SPACING.0;
+    let cancel = at(cancel_size, Vector::new(0.0, buttons_y));
+    let submit = at(
+        submit_size,
+        Vector::new(clock_size.width - submit_size.width, buttons_y),
+    );
+
+    // Digital clock: container -> row -> columns
+    let digital_tree = &tree.children[2];
+    let mut digital_children = digital.iter(&digital_tree.children);
+    let (row_layout, row_tree) = digital_children
+        .next()
+        .expect("widget: Layout should have a digital clock layout");
+
+    let mut columns = row_layout.iter(&row_tree.children);
+
+    if !state.use_24h {
+        // Placeholder
+        let _ = columns.next();
+    }
+
+    let hour = columns.next().map(digital_column).unwrap_or_default();
+    let hour_minute_separator = columns
+        .next()
+        .map(|(layout, _)| layout.bounds())
+        .unwrap_or_default();
+    let minute = columns.next().map(digital_column).unwrap_or_default();
+
+    let (minute_second_separator, second) = if state.show_seconds {
+        (
+            columns.next().map(|(layout, _)| layout.bounds()),
+            columns.next().map(digital_column),
+        )
+    } else {
+        (None, None)
+    };
+
+    let period = if state.use_24h {
+        None
+    } else {
+        columns.next().map(|(layout, _)| layout.bounds())
+    };
+
+    Geometry {
+        overlay,
+        clock,
+        digital,
+        hour,
+        hour_minute_separator,
+        minute,
+        minute_second_separator,
+        second,
+        period,
+        cancel,
+        submit,
+    }
 }
 
 /// Draws the analog clock.
@@ -1251,7 +1119,7 @@ where
 fn draw_clock<Message, Theme>(
     renderer: &mut Renderer,
     time_picker: &TimePickerOverlay<'_, '_, Message, Theme>,
-    layout: Layout<'_>,
+    layout: Layout,
     cursor: Cursor,
     style: &HashMap<StyleState, Style>,
 ) where
@@ -1396,12 +1264,14 @@ fn draw_clock<Message, Theme>(
                     .expect("Style Sheet not found.")
                     .clock_number_color,
                 size: Pixels(period_size),
-                font: renderer.default_font(),
+                font: renderer.font(),
                 align_x: text::Alignment::Center,
                 align_y: Vertical::Center,
                 line_height: text::LineHeight::Relative(1.3),
                 shaping: text::Shaping::Basic,
                 max_width: f32::INFINITY,
+                wrapping: Wrapping::default(),
+                ellipsis: text::Ellipsis::None,
             };
             frame.fill_text(period_text);
 
@@ -1442,12 +1312,14 @@ fn draw_clock<Message, Theme>(
                         .expect("Style Sheet not found.")
                         .clock_number_color,
                     size: Pixels(number_size),
-                    font: renderer.default_font(),
+                    font: renderer.font(),
                     align_x: text::Alignment::Center,
                     align_y: Vertical::Center,
                     shaping: text::Shaping::Basic,
                     line_height: text::LineHeight::Relative(1.3),
                     max_width: f32::INFINITY,
+                    wrapping: Wrapping::default(),
+                    ellipsis: text::Ellipsis::None,
                 };
 
                 frame.fill_text(text);
@@ -1478,12 +1350,14 @@ fn draw_clock<Message, Theme>(
                             .expect("Style Sheet not found.")
                             .clock_number_color,
                         size: Pixels(number_size),
-                        font: renderer.default_font(),
+                        font: renderer.font(),
                         align_x: text::Alignment::Center,
                         align_y: Vertical::Center,
                         shaping: text::Shaping::Basic,
                         line_height: text::LineHeight::Relative(1.3),
                         max_width: f32::INFINITY,
+                        wrapping: Wrapping::default(),
+                        ellipsis: text::Ellipsis::None,
                     };
 
                     frame.fill_text(text);
@@ -1525,12 +1399,14 @@ fn draw_clock<Message, Theme>(
                                 .expect("Style Sheet not found.")
                                 .clock_number_color,
                             size: Pixels(number_size),
-                            font: renderer.default_font(),
+                            font: renderer.font(),
                             align_x: text::Alignment::Center,
                             align_y: Vertical::Center,
                             shaping: text::Shaping::Basic,
                             line_height: text::LineHeight::Relative(1.3),
                             max_width: f32::INFINITY,
+                            wrapping: Wrapping::default(),
+                            ellipsis: text::Ellipsis::None,
                         };
 
                         frame.fill_text(text);
@@ -1559,41 +1435,45 @@ fn draw_clock<Message, Theme>(
 fn draw_digital_clock<Message, Theme>(
     renderer: &mut Renderer,
     time_picker: &TimePickerOverlay<'_, '_, Message, Theme>,
-    layout: Layout<'_>,
     cursor: Cursor,
     style: &HashMap<StyleState, Style>,
 ) where
     Message: 'static + Clone,
     Theme: Catalog + button::Catalog + text::Catalog,
 {
-    //println!("layout: {:#?}", layout);
-    let mut children = layout
-        .children()
-        .next()
-        .expect("Graphics: Layout should have digital clock children")
-        .children();
+    let geometry = &time_picker.geometry;
 
-    let f = |renderer: &mut Renderer, layout: Layout<'_>, text: String, target: Focus| {
+    let draw_text = |renderer: &mut Renderer, content: String, bounds: Rectangle| {
+        renderer.fill_text(
+            Text {
+                content,
+                bounds: Size::new(bounds.width, bounds.height),
+                size: renderer.text_size(),
+                font: renderer.font(),
+                align_x: text::Alignment::Center,
+                align_y: Vertical::Center,
+                line_height: text::LineHeight::Relative(1.3),
+                shaping: text::Shaping::Basic,
+                wrapping: Wrapping::default(),
+                ellipsis: text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
+            },
+            Point::new(bounds.center_x(), bounds.center_y()),
+            style[&StyleState::Active].text_color,
+            bounds,
+        );
+    };
+
+    let f = |renderer: &mut Renderer, column: DigitalColumn, text: String, target: Focus| {
         let style_state = if time_picker.state.focus == target {
             StyleState::Focused
         } else {
             StyleState::Active
         };
 
-        let mut children = layout.children();
-
-        let up_bounds = children
-            .next()
-            .expect("Graphics: Layout should have a up arrow bounds")
-            .bounds();
-        let center_bounds = children
-            .next()
-            .expect("Graphics: Layout should have a center bounds")
-            .bounds();
-        let down_bounds = children
-            .next()
-            .expect("Graphics: Layout should have a down arrow bounds")
-            .bounds();
+        let up_bounds = column.up;
+        let center_bounds = column.center;
+        let down_bounds = column.down;
 
         let up_arrow_hovered = cursor.is_over(up_bounds);
         let down_arrow_hovered = cursor.is_over(down_bounds);
@@ -1602,7 +1482,7 @@ fn draw_digital_clock<Message, Theme>(
         if style_state == StyleState::Focused {
             renderer.fill_quad(
                 renderer::Quad {
-                    bounds: layout.bounds(),
+                    bounds: column.bounds,
                     border: Border {
                         radius: style
                             .get(&style_state)
@@ -1617,6 +1497,7 @@ fn draw_digital_clock<Message, Theme>(
                             .get(&style_state)
                             .expect("Style Sheet not found.")
                             .border_color,
+                        ..Border::default()
                     },
                     ..renderer::Quad::default()
                 },
@@ -1634,13 +1515,15 @@ fn draw_digital_clock<Message, Theme>(
             Text {
                 content: up_content,
                 bounds: Size::new(up_bounds.width, up_bounds.height),
-                size: Pixels(renderer.default_size().0 + if up_arrow_hovered { 1.0 } else { 0.0 }),
+                size: Pixels(renderer.text_size().0 + if up_arrow_hovered { 1.0 } else { 0.0 }),
                 font: up_font,
                 align_x: text::Alignment::Center,
                 align_y: Vertical::Center,
                 line_height: text::LineHeight::Relative(1.3),
                 shaping: text::Shaping::Basic,
                 wrapping: Wrapping::default(),
+                ellipsis: text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
             },
             Point::new(up_bounds.center_x(), up_bounds.center_y()),
             style
@@ -1651,25 +1534,7 @@ fn draw_digital_clock<Message, Theme>(
         );
 
         // Text
-        renderer.fill_text(
-            Text {
-                content: text,
-                bounds: Size::new(center_bounds.width, center_bounds.height),
-                size: renderer.default_size(),
-                font: renderer.default_font(),
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Basic,
-                wrapping: Wrapping::default(),
-            },
-            Point::new(center_bounds.center_x(), center_bounds.center_y()),
-            style
-                .get(&StyleState::Active)
-                .expect("Style Sheet not found.")
-                .text_color,
-            center_bounds,
-        );
+        draw_text(renderer, text, center_bounds);
 
         // Down caret
         renderer.fill_text(
@@ -1677,7 +1542,7 @@ fn draw_digital_clock<Message, Theme>(
                 content: down_content,
                 bounds: Size::new(down_bounds.width, down_bounds.height),
                 size: Pixels(
-                    renderer.default_size().0 + if down_arrow_hovered { 1.0 } else { 0.0 },
+                    renderer.text_size().0 + if down_arrow_hovered { 1.0 } else { 0.0 },
                 ),
                 font: down_font,
                 align_x: text::Alignment::Center,
@@ -1685,6 +1550,8 @@ fn draw_digital_clock<Message, Theme>(
                 line_height: text::LineHeight::Relative(1.3),
                 shaping: text::Shaping::Basic,
                 wrapping: Wrapping::default(),
+                ellipsis: text::Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
             },
             Point::new(down_bounds.center_x(), down_bounds.center_y()),
             style
@@ -1695,18 +1562,10 @@ fn draw_digital_clock<Message, Theme>(
         );
     };
 
-    if !time_picker.state.use_24h {
-        // Placeholder
-        let _ = children.next();
-    }
-
     // Draw hours
-    let hour_layout = children
-        .next()
-        .expect("Graphics: Layout should have a hour layout");
     f(
         renderer,
-        hour_layout,
+        geometry.hour,
         format!(
             "{:02}",
             if time_picker.state.use_24h {
@@ -1719,108 +1578,43 @@ fn draw_digital_clock<Message, Theme>(
     );
 
     // Draw separator between hours and minutes
-    let hour_minute_separator = children
-        .next()
-        .expect("Graphics: Layout should have a hour/minute separator layout");
-
-    renderer.fill_text(
-        Text {
-            content: ":".to_owned(),
-            bounds: Size::new(
-                hour_minute_separator.bounds().width,
-                hour_minute_separator.bounds().height,
-            ),
-            size: renderer.default_size(),
-            font: renderer.default_font(),
-            align_x: text::Alignment::Center,
-            align_y: Vertical::Center,
-            line_height: text::LineHeight::Relative(1.3),
-            shaping: text::Shaping::Basic,
-            wrapping: Wrapping::default(),
-        },
-        Point::new(
-            hour_minute_separator.bounds().center_x(),
-            hour_minute_separator.bounds().center_y(),
-        ),
-        style[&StyleState::Active].text_color,
-        hour_minute_separator.bounds(),
-    );
+    draw_text(renderer, ":".to_owned(), geometry.hour_minute_separator);
 
     // Draw minutes
-    let minute_layout = children
-        .next()
-        .expect("Graphics: Layout should have a minute layout");
     f(
         renderer,
-        minute_layout,
+        geometry.minute,
         format!("{:02}", time_picker.state.time.minute()),
         Focus::DigitalMinute,
     );
 
     if time_picker.state.show_seconds {
         // Draw separator between minutes and seconds
-        let minute_second_separator = children
-            .next()
-            .expect("Graphics: Layout should have a minute/second separator layout");
-        renderer.fill_text(
-            Text {
-                content: ":".to_owned(),
-                bounds: Size::new(
-                    minute_second_separator.bounds().width,
-                    minute_second_separator.bounds().height,
-                ),
-                size: renderer.default_size(),
-                font: renderer.default_font(),
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Basic,
-                wrapping: Wrapping::default(),
-            },
-            Point::new(
-                minute_second_separator.bounds().center_x(),
-                minute_second_separator.bounds().center_y(),
-            ),
-            style[&StyleState::Active].text_color,
-            minute_second_separator.bounds(),
-        );
+        if let Some(separator) = geometry.minute_second_separator {
+            draw_text(renderer, ":".to_owned(), separator);
+        }
 
         // Draw seconds
-        let second_layout = children
-            .next()
-            .expect("Graphics: Layout should have a second layout");
-        f(
-            renderer,
-            second_layout,
-            format!("{:02}", time_picker.state.time.second()),
-            Focus::DigitalSecond,
-        );
+        if let Some(second) = geometry.second {
+            f(
+                renderer,
+                second,
+                format!("{:02}", time_picker.state.time.second()),
+                Focus::DigitalSecond,
+            );
+        }
     }
 
     // Draw period
-    if !time_picker.state.use_24h {
-        let period = children
-            .next()
-            .expect("Graphics: Layout should have a period layout");
-        renderer.fill_text(
-            Text {
-                content: if time_picker.state.time.hour12().0 {
-                    "PM".to_owned()
-                } else {
-                    "AM".to_owned()
-                },
-                bounds: Size::new(period.bounds().width, period.bounds().height),
-                size: renderer.default_size(),
-                font: renderer.default_font(),
-                align_x: text::Alignment::Center,
-                align_y: Vertical::Center,
-                line_height: text::LineHeight::Relative(1.3),
-                shaping: text::Shaping::Basic,
-                wrapping: Wrapping::default(),
+    if let Some(period) = geometry.period {
+        draw_text(
+            renderer,
+            if time_picker.state.time.hour12().0 {
+                "PM".to_owned()
+            } else {
+                "AM".to_owned()
             },
-            Point::new(period.bounds().center_x(), period.bounds().center_y()),
-            style[&StyleState::Active].text_color,
-            period.bounds(),
+            period,
         );
     }
 }
@@ -1897,22 +1691,28 @@ where
         let (submit_content, submit_font, _submit_shaping) = ok();
 
         Self {
-            cancel_button: Button::new(
-                text::Text::new(cancel_content)
+            cancel_button: boxed(Button::new(
+                widget::Text::new(cancel_content)
                     .font(cancel_font)
                     .align_x(Horizontal::Center)
                     .width(Length::Fill),
-            )
-            .into(),
-            submit_button: Button::new(
-                text::Text::new(submit_content)
+            )),
+            submit_button: boxed(Button::new(
+                widget::Text::new(submit_content)
                     .font(submit_font)
                     .align_x(Horizontal::Center)
                     .width(Length::Fill),
-            )
-            .into(),
+            )),
         }
     }
+}
+
+#[allow(clippy::unimplemented)]
+impl<Message, Theme> Meta for TimePickerOverlayButtons<'_, Message, Theme>
+where
+    Message: Clone,
+    Theme: Catalog + button::Catalog,
+{
 }
 
 #[allow(clippy::unimplemented)]
@@ -1922,22 +1722,15 @@ where
     Message: Clone,
     Theme: Catalog + button::Catalog,
 {
-    fn children(&self) -> Vec<Tree> {
-        vec![
-            Tree::new(&self.cancel_button),
-            Tree::new(&self.submit_button),
-        ]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.cancel_button, &self.submit_button]);
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.diff_children(&mut [&mut self.cancel_button, &mut self.submit_button]);
     }
 
     fn size(&self) -> Size<Length> {
         unimplemented!("This should never be reached!")
     }
 
-    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) -> Node {
+    fn layout(&mut self, _tree: &mut Tree, _renderer: &Renderer, _limits: &Limits) {
         unimplemented!("This should never be reached!")
     }
 
@@ -1947,7 +1740,7 @@ where
         _renderer: &mut Renderer,
         _theme: &Theme,
         _style: &renderer::Style,
-        _layout: Layout<'_>,
+        _layout: Layout,
         _cursor: Cursor,
         _viewport: &Rectangle,
     ) {
@@ -1962,7 +1755,7 @@ where
     Theme: 'a + Catalog + button::Catalog,
 {
     fn from(overlay: TimePickerOverlayButtons<'a, Message, Theme>) -> Self {
-        Self::new(overlay)
+        boxed(overlay)
     }
 }
 
@@ -2308,8 +2101,10 @@ mod tests {
         let buttons: TimePickerOverlayButtons<(), iced_widget::Theme> =
             TimePickerOverlayButtons::default();
 
-        let children = Widget::<(), iced_widget::Theme, Renderer>::children(&buttons);
-        assert_eq!(children.len(), 2);
+        let mut buttons = buttons;
+        let mut tree = Tree::new(&buttons);
+        Widget::<(), iced_widget::Theme, Renderer>::diff(&mut buttons, &mut tree);
+        assert_eq!(tree.children.len(), 2);
     }
 
     #[test]

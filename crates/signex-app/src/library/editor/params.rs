@@ -19,7 +19,7 @@
 use std::collections::BTreeSet;
 
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{ParamKind, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -111,7 +111,7 @@ pub fn view<'a>(
         },
     };
 
-    let mut body = column![
+    let mut body: iced::widget::Column<Element<'a, LibraryMessage>> = column![
         text(header_label).size(TS.title).color(text_c),
         Space::new().height(10),
     ]
@@ -131,8 +131,8 @@ pub fn view<'a>(
     if let Some(t) = template {
         // ── Required ────────────────────────────────────────────────
         if !t.required_params.is_empty() {
-            body = body.push(text("Required").size(TS.body).color(muted));
-            body = body.push(Space::new().height(6));
+            body = body.push(text("Required").size(TS.body).color(muted).boxed());
+            body = body.push(Space::new().height(6).boxed());
             for slot in &t.required_params {
                 body = body.push(template_row(
                     state,
@@ -142,14 +142,14 @@ pub fn view<'a>(
                     tokens,
                     &address,
                 ));
-                body = body.push(Space::new().height(4));
+                body = body.push(Space::new().height(4).boxed());
             }
-            body = body.push(Space::new().height(8));
+            body = body.push(Space::new().height(8).boxed());
         }
         // ── Optional ────────────────────────────────────────────────
         if !t.optional_params.is_empty() {
-            body = body.push(text("Optional").size(TS.body).color(muted));
-            body = body.push(Space::new().height(6));
+            body = body.push(text("Optional").size(TS.body).color(muted).boxed());
+            body = body.push(Space::new().height(6).boxed());
             for slot in &t.optional_params {
                 body = body.push(template_row(
                     state,
@@ -159,9 +159,9 @@ pub fn view<'a>(
                     tokens,
                     &address,
                 ));
-                body = body.push(Space::new().height(4));
+                body = body.push(Space::new().height(4).boxed());
             }
-            body = body.push(Space::new().height(8));
+            body = body.push(Space::new().height(8).boxed());
         }
     } else {
         body = body.push(
@@ -170,9 +170,10 @@ pub fn view<'a>(
                 state.row.class.as_str()
             ))
             .size(TS.body)
-            .color(muted),
+            .color(muted)
+            .boxed(),
         );
-        body = body.push(Space::new().height(10));
+        body = body.push(Space::new().height(10).boxed());
     }
 
     // ── Custom parameters ────────────────────────────────────────────
@@ -183,19 +184,19 @@ pub fn view<'a>(
         .filter(|k| !template_keys.contains(k.as_str()))
         .collect();
 
-    body = body.push(text("Custom").size(TS.body).color(muted));
-    body = body.push(Space::new().height(6));
+    body = body.push(text("Custom").size(TS.body).color(muted).boxed());
+    body = body.push(Space::new().height(6).boxed());
 
     if custom_keys.is_empty() {
-        body = body.push(text("No custom parameters yet.").size(TS.body).color(muted));
-        body = body.push(Space::new().height(6));
+        body = body.push(text("No custom parameters yet.").size(TS.body).color(muted).boxed());
+        body = body.push(Space::new().height(6).boxed());
     } else {
         for key in custom_keys {
             let val = &state.row.parameters[key];
             body = body.push(custom_row(state, key, val, tokens, &address));
-            body = body.push(Space::new().height(4));
+            body = body.push(Space::new().height(4).boxed());
         }
-        body = body.push(Space::new().height(6));
+        body = body.push(Space::new().height(6).boxed());
     }
 
     // [+ Add custom parameter] row
@@ -204,7 +205,7 @@ pub fn view<'a>(
     container(scrollable(body).width(Length::Fill).height(Length::Fill))
         .style(crate::styles::modal_card(tokens))
         .padding(14)
-        .into()
+        .boxed()
 }
 
 /// Layout one slot row from the template — value editor + unit suffix +
@@ -240,15 +241,15 @@ fn template_row<'a>(
         (Some(u), ParamKind::Measurement) => container(text(u.clone()).size(TS.body).color(muted))
             .padding([0.0, SP.m])
             .width(Length::Fixed(60.0))
-            .into(),
-        _ => Space::new().width(Length::Fixed(60.0)).into(),
+            .boxed(),
+        _ => Space::new().width(Length::Fixed(60.0)).boxed(),
     };
 
     let status: Element<'a, LibraryMessage> = if required && !present {
         let amber = iced::Color::from_rgb(0.95, 0.70, 0.18);
         container(text("\u{2717} missing").size(TS.body).color(amber))
             .width(Length::Fixed(STATUS_W))
-            .into()
+            .boxed()
     } else if let Some(why) = problem {
         container(
             text(format!("\u{2717} {why}"))
@@ -256,9 +257,9 @@ fn template_row<'a>(
                 .color(theme_ext::error_color(tokens)),
         )
         .width(Length::Fixed(STATUS_W))
-        .into()
+        .boxed()
     } else {
-        Space::new().width(Length::Fixed(STATUS_W)).into()
+        Space::new().width(Length::Fixed(STATUS_W)).boxed()
     };
 
     row![
@@ -270,7 +271,7 @@ fn template_row<'a>(
     .align_y(iced::Alignment::Center)
     .spacing(SP.m)
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Layout a custom parameter row — same value editor as `template_row`
@@ -323,14 +324,14 @@ fn custom_row<'a>(
                     }
                 }))
                 .width(Length::Fixed(90.0))
-                .into()
+                .boxed()
             }
             Err(raw) => container(text(raw.to_string()).size(TS.body).color(muted))
                 .padding([0, 8])
                 .width(Length::Fixed(90.0))
-                .into(),
+                .boxed(),
         },
-        _ => Space::new().width(Length::Fixed(90.0)).into(),
+        _ => Space::new().width(Length::Fixed(90.0)).boxed(),
     };
 
     let lib_path = address.library_path.clone();
@@ -359,13 +360,14 @@ fn custom_row<'a>(
                         width: 1.0,
                         radius: 3.0.into(),
                         color: theme_ext::border_color(tokens),
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }
             });
 
     let status_block: Element<'a, LibraryMessage> =
-        container(remove_btn).width(Length::Fixed(110.0)).into();
+        container(remove_btn).width(Length::Fixed(110.0)).boxed();
 
     row![
         label,
@@ -376,7 +378,7 @@ fn custom_row<'a>(
     .align_y(iced::Alignment::Center)
     .spacing(SP.m)
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Build the kind-appropriate editor widget for one parameter cell.
@@ -424,7 +426,7 @@ fn text_cell<'a>(
     };
     let address = address.clone();
     let name = name.to_string();
-    text_input("", &value)
+    text_input("", value)
         .on_input(move |s| {
             editor_event(
                 &address,
@@ -436,7 +438,7 @@ fn text_cell<'a>(
         })
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn number_cell<'a>(
@@ -455,7 +457,7 @@ fn number_cell<'a>(
     });
     let (input_address, input_name) = (address.clone(), name.to_string());
     let (submit_address, submit_name) = (address.clone(), name.to_string());
-    text_input("", &buf)
+    text_input("", buf)
         .on_input(move |s| {
             editor_event(
                 &input_address,
@@ -471,7 +473,7 @@ fn number_cell<'a>(
         ))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn bool_cell<'a>(
@@ -494,7 +496,7 @@ fn bool_cell<'a>(
         })
         .size(TS.heading)
         .spacing(SP.s)
-        .into()
+        .boxed()
 }
 
 /// Cheap text view of a `ParamValue` for fallback rendering when the
@@ -555,11 +557,12 @@ fn add_custom_row<'a>(
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }
             })
-            .into()
+            .boxed()
     };
 
     let name_input = {
@@ -592,7 +595,7 @@ fn add_custom_row<'a>(
     ]
     .align_y(iced::Alignment::Center)
     .spacing(0)
-    .into()
+    .boxed()
 }
 
 /// Build the validation list for a draft — wraps

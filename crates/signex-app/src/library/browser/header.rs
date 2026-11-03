@@ -33,13 +33,14 @@ pub(super) fn view_header<'a>(
     // every row's lifecycle field.
     let library_for_lc = lib_pb.clone();
     let lifecycle_picker = pick_list(
-        LifecycleFilter::ALL.to_vec(),
         Some(browser.lifecycle_filter),
-        move |f| LibraryMessage::BrowserSetLifecycleFilter {
-            library_path: library_for_lc.clone(),
-            filter: f,
-        },
+        LifecycleFilter::ALL,
+        |f: &LifecycleFilter| f.to_string(),
     )
+    .on_select(move |f: LifecycleFilter| LibraryMessage::BrowserSetLifecycleFilter {
+        library_path: library_for_lc.clone(),
+        filter: f,
+    })
     .placeholder("Lifecycle")
     .padding(SP.s)
     .text_size(BROWSER_TEXT_SIZE);
@@ -56,5 +57,5 @@ pub(super) fn view_header<'a>(
     )
     .padding([6, 10])
     .style(crate::styles::tab_bar_strip(tokens))
-    .into()
+    .boxed()
 }

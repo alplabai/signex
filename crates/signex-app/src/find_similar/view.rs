@@ -1,6 +1,6 @@
 use super::{FindSimilarMsg, FindSimilarState, SimilarScope};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Background, Element, Length, Theme};
+use iced::{Background, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -96,7 +96,8 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
                 .width(110),
             ]
             .align_y(iced::Alignment::Center)
-            .spacing(10),
+            .spacing(10)
+            .boxed(),
         );
     }
 
@@ -119,12 +120,12 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
     let ok: Element<'a, FindSimilarMsg> = if state.running {
         container(text("Searching...").size(TS.body).color(text_secondary))
             .padding([6, 10])
-            .into()
+            .boxed()
     } else {
         button(text("OK").size(TS.body).color(text_primary))
             .on_press(FindSimilarMsg::ApplyPressed)
             .style(crate::styles::menu_item(tokens))
-            .into()
+            .boxed()
     };
     let footer = row![
         text("Selects every match. Matches on other sheets are only counted.")
@@ -176,7 +177,7 @@ pub fn view<'a>(state: &'a FindSimilarState, tokens: &ThemeTokens) -> Element<'a
         background: Some(Background::Color(crate::styles::tokens::scrim(0.5))),
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

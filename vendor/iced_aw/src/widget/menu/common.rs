@@ -1,6 +1,6 @@
 use iced_core::{
     Padding, Rectangle, Shell, Size,
-    layout::{Layout, Node},
+    layout::Layout,
     mouse, renderer,
     widget::Tree,
 };
@@ -118,11 +118,11 @@ impl MenuSlice {
     pub(super) fn from_bounds_rel(
         lower_bound_rel: f32,
         upper_bound_rel: f32,
-        items_node: &Node,
-        get_position: fn(&Node) -> f32,
+        items_tree: &Tree,
+        get_position: fn(&Tree) -> f32,
     ) -> Self {
-        let max_index = items_node.children().len().saturating_sub(1);
-        let nodes = items_node.children();
+        let nodes = &items_tree.children;
+        let max_index = nodes.len().saturating_sub(1);
         let start_index = search_bound(0, max_index, lower_bound_rel, nodes, get_position);
         let end_index = search_bound(start_index, max_index, upper_bound_rel, nodes, get_position);
 
@@ -137,7 +137,7 @@ impl MenuSlice {
 
 /* fn search_bound_lin(
     bound: f32,
-    nodes: &[Node],
+    nodes: &[Tree],
     mut start_index: usize, // should be less than nodes.len()-1
 ) -> usize{
     for (i, n) in nodes.iter().enumerate().skip(start_index){
@@ -154,8 +154,8 @@ pub(super) fn search_bound(
     default_left: usize,
     default_right: usize,
     bound: f32,
-    list: &[Node],
-    get_position: fn(&Node) -> f32,
+    list: &[Tree],
+    get_position: fn(&Tree) -> f32,
 ) -> usize {
     // binary search
     let mut left = default_left;
@@ -172,30 +172,25 @@ pub(super) fn search_bound(
     left
 }
 
-pub(super) fn clip_node_y(node: &Node, height: f32, offset: f32) -> Node {
-    let node_bounds = node.bounds();
-    Node::with_children(
-        Size::new(node_bounds.width, height),
-        node.children()
-            .iter()
-            .map(|n| n.clone().translate([0.0, -offset]))
-            .collect(),
-    )
-    .move_to(node_bounds.position())
-    .translate([0.0, offset])
+/// Clips the height of the given tree node in place.
+///
+/// Layout nodes no longer exist: sizes and (parent-relative) translations
+/// live in the widget [`Tree`], so the clipping is applied by mutating it.
+pub(super) fn clip_node_y(node: &mut Tree, height: f32, offset: f32) {
+    node.size = Size::new(node.size.width, height);
+    for child in &mut node.children {
+        child.translation.y -= offset;
+    }
+    node.translation.y += offset;
 }
 
-pub(super) fn clip_node_x(node: &Node, width: f32, offset: f32) -> Node {
-    let node_bounds = node.bounds();
-    Node::with_children(
-        Size::new(width, node_bounds.height),
-        node.children()
-            .iter()
-            .map(|n| n.clone().translate([-offset, 0.0]))
-            .collect(),
-    )
-    .move_to(node_bounds.position())
-    .translate([offset, 0.0])
+/// Clips the width of the given tree node in place.
+pub(super) fn clip_node_x(node: &mut Tree, width: f32, offset: f32) {
+    node.size = Size::new(width, node.size.height);
+    for child in &mut node.children {
+        child.translation.x -= offset;
+    }
+    node.translation.x += offset;
 }
 
 /// Parameters that are shared by all menus in the menu bar
@@ -209,11 +204,11 @@ pub(super) struct GlobalParameters<'a, Theme: crate::style::menu_bar::Catalog> {
 }
 
 /// Tries to open a menu at the given cursor position
-pub(super) fn try_open_menu<'a, 'b, Message, Theme: Catalog, Renderer: renderer::Renderer>(
+pub(super) fn try_open_menu<'a, Message, Theme: Catalog, Renderer: renderer::Renderer>(
     items: &mut [Item<'a, Message, Theme, Renderer>],
     menu_state: &mut MenuState,
     item_trees: &mut [Tree],
-    item_layouts: impl Iterator<Item = Layout<'b>>,
+    item_layouts: impl Iterator<Item = Layout>,
     cursor: mouse::Cursor,
     shell: &mut Shell<'_, Message>,
 ) {
@@ -244,7 +239,6 @@ pub(super) fn try_open_menu<'a, 'b, Message, Theme: Catalog, Renderer: renderer:
 #[allow(clippy::too_many_arguments)]
 pub(super) fn schedule_close_on_click<
     'a,
-    'b,
     Message,
     Theme: Catalog,
     Renderer: renderer::Renderer,
@@ -253,7 +247,7 @@ pub(super) fn schedule_close_on_click<
     global_parameters: &GlobalParameters<'_, Theme>,
     slice: MenuSlice,
     items: &mut [Item<'a, Message, Theme, Renderer>],
-    slice_layout: impl Iterator<Item = Layout<'b>>,
+    slice_layout: impl Iterator<Item = Layout>,
     cursor: mouse::Cursor,
     menu_close_on_item_click: Option<bool>,
     menu_close_on_background_click: Option<bool>,

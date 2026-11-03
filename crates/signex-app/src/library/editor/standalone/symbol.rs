@@ -2,7 +2,7 @@
 //! Split from `library/editor/standalone.rs` as pure code motion.
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::coord::Unit;
 use signex_widgets::theme_ext;
 
@@ -62,7 +62,7 @@ pub fn view_symbol<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
-        .into()
+        .boxed()
 }
 
 /// Bottom status footer for the .snxsym tab — Altium SchLib parity.
@@ -126,7 +126,7 @@ fn view_symbol_status<'a>(
             tokens,
         )
     } else {
-        Space::new().into()
+        Space::new().boxed()
     };
 
     container(
@@ -162,7 +162,7 @@ fn view_symbol_status<'a>(
     .padding([SP.s, SP.l])
     .style(crate::styles::status_bar(tokens))
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
@@ -236,7 +236,7 @@ fn view_symbol_toolbar<'a>(
     )
     .padding([6, 10])
     .style(crate::styles::tab_bar_strip(tokens))
-    .into()
+    .boxed()
 }
 
 /// The De Morgan body controls: which body to show (Normal / Alternate) and
@@ -284,7 +284,7 @@ fn body_toolbar<'a>(
     ]
     .spacing(6)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 fn symbol_tool_button_style(
@@ -301,6 +301,7 @@ fn symbol_tool_button_style(
             width: 1.0,
             radius: 3.0.into(),
             color: border,
+            ..Border::default()
         },
         ..iced::widget::button::Style::default()
     }
@@ -348,15 +349,15 @@ fn view_symbol_canvas<'a>(
     device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let program = symbol_canvas(editor, panel_ctx, display, device_px_per_logical_px);
-    let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
+    let path = editor.path.clone();
+    iced::widget::Canvas::<_, sym_canvas::CanvasAction>::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into();
-    let path = editor.path.clone();
-    widget.map(move |action| LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
-        msg: PrimitiveEdit::Symbol(symbol_action_to_primitive_msg(action)),
-    })
+        .map(move |action| LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Symbol(symbol_action_to_primitive_msg(action)),
+        })
+        .boxed()
 }
 
 pub(crate) fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {

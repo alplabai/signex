@@ -22,8 +22,8 @@
 #![allow(clippy::use_self)]
 
 use iced_core::{
-    Alignment, Element, Length, Padding, Pixels, Point, Size,
-    layout::{Limits, Node},
+    Alignment, Element, Length, Padding, Pixels, Size, Vector, Widget,
+    layout::Limits,
     renderer, widget,
 };
 
@@ -63,7 +63,9 @@ impl Axis {
 /// Computes the flex layout with the given axis and limits, applying spacing,
 /// padding and alignment to the items as needed.
 ///
-/// It returns a new layout [`Node`].
+/// The layout of each item is stored in its [`widget::Tree`] (size and
+/// translation relative to the container), and the resolved [`Size`] of the
+/// container is returned.
 pub fn resolve<'a, E, T, Message, Theme, Renderer>(
     axis: Axis,
     renderer: &Renderer,
@@ -75,7 +77,7 @@ pub fn resolve<'a, E, T, Message, Theme, Renderer>(
     align_items: Alignment,
     items: &mut [E],
     trees: &mut [T],
-) -> Node
+) -> Size
 where
     E: std::borrow::BorrowMut<Element<'a, Message, Theme, Renderer>>,
     T: std::borrow::BorrowMut<widget::Tree>,
@@ -83,7 +85,7 @@ where
 {
     let limits = limits.width(width).height(height).shrink(padding);
     let total_spacing = spacing * items.len().saturating_sub(1) as f32;
-    let max_cross = axis.cross(limits.max());
+    let max_cross = axis.cross(limits.max);
 
     let mut fill_main_sum = 0;
     let mut cross = match axis {
@@ -97,14 +99,11 @@ where
         },
     };
 
-    let mut available = axis.main(limits.max()) - total_spacing.0;
-
-    let mut nodes: Vec<Node> = Vec::with_capacity(items.len());
-    nodes.resize(items.len(), Node::default());
+    let mut available = axis.main(limits.max) - total_spacing.0;
 
     for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
         let (fill_main_factor, fill_cross_factor) = {
-            let size = child.borrow().as_widget().size();
+            let size = child.borrow().size();
 
             axis.pack(size.width.fill_factor(), size.height.fill_factor())
         };
@@ -115,17 +114,13 @@ where
 
                 let child_limits = Limits::new(Size::ZERO, Size::new(max_width, max_height));
 
-                let layout = child.borrow_mut().as_widget_mut().layout(
-                    tree.borrow_mut(),
-                    renderer,
-                    &child_limits,
-                );
-                let size = layout.size();
+                child
+                    .borrow_mut()
+                    .layout(tree.borrow_mut(), renderer, &child_limits);
+                let size = tree.borrow().size;
 
                 available -= axis.main(size);
                 cross = cross.max(axis.cross(size));
-
-                nodes[i] = layout;
             }
         } else {
             fill_main_sum += fill_main_factor;
@@ -134,7 +129,7 @@ where
 
     for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
         let (fill_main_factor, fill_cross_factor) = {
-            let size = child.borrow().as_widget().size();
+            let size = child.borrow().size();
 
             axis.pack(size.width.fill_factor(), size.height.fill_factor())
         };
@@ -144,17 +139,13 @@ where
 
             let child_limits = Limits::new(Size::ZERO, Size::new(max_width, max_height));
 
-            let layout = child.borrow_mut().as_widget_mut().layout(
-                tree.borrow_mut(),
-                renderer,
-                &child_limits,
-            );
-            let size = layout.size();
+            child
+                .borrow_mut()
+                .layout(tree.borrow_mut(), renderer, &child_limits);
+            let size = tree.borrow().size;
 
             available -= axis.main(size);
-            cross = cross.max(axis.cross(layout.size()));
-
-            nodes[i] = layout;
+            cross = cross.max(axis.cross(size));
         }
     }
 
@@ -169,9 +160,9 @@ where
         },
     };
 
-    for (i, (child, tree)) in items.iter_mut().zip(trees).enumerate() {
+    for (i, (child, tree)) in items.iter_mut().zip(trees.iter_mut()).enumerate() {
         let (fill_main_factor, fill_cross_factor) = {
-            let size = child.borrow().as_widget().size();
+            let size = child.borrow().size();
 
             axis.pack(size.width.fill_factor(), size.height.fill_factor())
         };
@@ -199,45 +190,43 @@ where
                 Size::new(max_width, max_height),
             );
 
-            let layout = child.borrow_mut().as_widget_mut().layout(
-                tree.borrow_mut(),
-                renderer,
-                &child_limits,
-            );
-            cross = cross.max(axis.cross(layout.size()));
-
-            nodes[i] = layout;
+            child
+                .borrow_mut()
+                .layout(tree.borrow_mut(), renderer, &child_limits);
+            cross = cross.max(axis.cross(tree.borrow().size));
         }
     }
 
     let pad = axis.pack(padding.left, padding.top);
     let mut main = pad.0;
 
-    for (i, node) in nodes.iter_mut().enumerate() {
+    for (i, tree) in trees.iter_mut().enumerate() {
+        let tree = tree.borrow_mut();
+
         if i > 0 {
             main += spacing.0;
         }
 
         let (x, y) = axis.pack(main, pad.1);
 
-        node.move_to_mut(Point::new(x, y));
-
-        match axis {
+        let alignment = match axis {
             Axis::Horizontal => {
-                node.align_mut(Alignment::Start, align_items, Size::new(0.0, cross));
+                tree.size
+                    .align(Size::new(0.0, cross), Alignment::Start, align_items)
             }
             Axis::Vertical => {
-                node.align_mut(align_items, Alignment::Start, Size::new(cross, 0.0));
+                tree.size
+                    .align(Size::new(cross, 0.0), align_items, Alignment::Start)
             }
-        }
+        };
 
-        let size = node.size();
+        tree.translation = Vector::new(x, y) + alignment;
 
-        main += axis.main(size);
+        main += axis.main(tree.size);
     }
 
     let (intrinsic_width, intrinsic_height) = axis.pack(main - pad.0, cross);
     let size = limits.resolve(width, height, Size::new(intrinsic_width, intrinsic_height));
 
-    Node::with_children(size.expand(padding), nodes)
+    size.expand(padding)
 }

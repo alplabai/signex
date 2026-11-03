@@ -7,7 +7,7 @@
 
 use super::*;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use crate::app::state::AnnotateOrder;
 
@@ -96,7 +96,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -171,7 +171,7 @@ impl Signex {
                 .size(TS.caption)
                 .color(text_muted),
             container(text("Designator").size(TS.body).color(text_c),)
-                .padding([5, 10])
+                .padding([5.0, 10.0])
                 .width(Length::Fill)
                 .style(bordered_style(border_c)),
         ]
@@ -180,7 +180,7 @@ impl Signex {
         let replace_sub = column![
             text("Replace Sub-Parts").size(TS.caption).color(text_muted),
             container(text("Off").size(TS.body).color(text_muted))
-                .padding([5, 10])
+                .padding([5.0, 10.0])
                 .width(Length::Fill)
                 .style(bordered_style(border_c)),
         ]
@@ -207,7 +207,7 @@ impl Signex {
             }
             set.into_iter().collect()
         };
-        let mut param_rows: iced::widget::Column<'_, Message> = column![
+        let mut param_rows: iced::widget::Column<Element<'_, Message>> = column![
             row![
                 text("Component Parameter")
                     .size(TS.caption)
@@ -222,8 +222,7 @@ impl Signex {
         ]
         .spacing(0);
         for name in &param_names {
-            param_rows = param_rows.push(
-                row![
+            param_rows = param_rows.push((row![
                     row![
                         check_pip(false, border_c),
                         Space::new().width(6),
@@ -236,18 +235,15 @@ impl Signex {
                         .width(Length::FillPortion(1)),
                 ]
                 .padding([3.0, SP.m])
-                .align_y(iced::Alignment::Center),
-            );
+                .align_y(iced::Alignment::Center)).boxed());
         }
         if param_names.is_empty() {
-            param_rows = param_rows.push(
-                container(
+            param_rows = param_rows.push((container(
                     text("No custom parameters on any symbol yet.")
                         .size(TS.body)
                         .color(text_muted),
                 )
-                .padding([10.0, SP.m]),
-            );
+                .padding([10.0, SP.m])).boxed());
         }
 
         let matching = column![
@@ -279,7 +275,7 @@ impl Signex {
         // Sheets list: include every open tab so the multi-sheet view is
         // visible. All but the active sheet render greyed because only the
         // active snapshot feeds the preview for v0.7.
-        let mut sheet_rows: iced::widget::Column<'_, Message> = column![].spacing(0);
+        let mut sheet_rows: iced::widget::Column<Element<'_, Message>> = column![].spacing(0);
         let active_title = self
             .document_state
             .tabs
@@ -289,8 +285,7 @@ impl Signex {
             let is_active = Some(&tab.title) == active_title.as_ref();
             let row_color = if is_active { text_c } else { text_muted };
             let suffix_placeholder = if is_active { "" } else { "—" };
-            sheet_rows = sheet_rows.push(
-                row![
+            sheet_rows = sheet_rows.push((row![
                     row![
                         check_pip(is_active, border_c),
                         Space::new().width(6),
@@ -321,18 +316,15 @@ impl Signex {
                     .width(Length::FillPortion(2)),
                 ]
                 .padding([3.0, SP.m])
-                .align_y(iced::Alignment::Center),
-            );
+                .align_y(iced::Alignment::Center)).boxed());
         }
         if self.document_state.tabs.is_empty() {
-            sheet_rows = sheet_rows.push(
-                container(
+            sheet_rows = sheet_rows.push((container(
                     text("No schematic tab open.")
                         .size(TS.body)
                         .color(text_muted),
                 )
-                .padding([6.0, SP.m]),
-            );
+                .padding([6.0, SP.m])).boxed());
         }
 
         let sheets_table = column![
@@ -412,11 +404,10 @@ impl Signex {
         .padding([SP.s, SP.m]);
 
         let locked_set = &self.ui_state.annotate_locked;
-        let mut rows_col: iced::widget::Column<'_, Message> =
+        let mut rows_col: iced::widget::Column<Element<'_, Message>> =
             column![].spacing(0).width(Length::Fill);
         if proposed.is_empty() {
-            rows_col = rows_col.push(
-                container(
+            rows_col = rows_col.push((container(
                     text(if self.ui_state.annotate_preview.loading {
                         "Loading project sheets…"
                     } else if self.ui_state.annotate_preview.load_failed {
@@ -427,8 +418,7 @@ impl Signex {
                     .size(TS.body)
                     .color(text_muted),
                 )
-                .padding([10.0, SP.l]),
-            );
+                .padding([10.0, SP.l])).boxed());
         } else {
             for entry in proposed {
                 let is_locked = locked_set.contains(&entry.uuid);
@@ -459,7 +449,7 @@ impl Signex {
                         .align_y(iced::alignment::Vertical::Center),
                 )
                 .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
-                .padding(0)
+                .padding(0.0)
                 .style(move |_: &Theme, _| button::Style {
                     background: Some(Background::Color(if is_locked {
                         Color::from_rgba(1.0, 1.0, 1.0, 0.12)
@@ -470,16 +460,16 @@ impl Signex {
                         width: 1.0,
                         radius: 2.0.into(),
                         color: border_c,
+                        ..Border::default()
                     },
                     text_color: text_c,
                     ..button::Style::default()
                 })
-                .into();
-                rows_col = rows_col.push(
-                    row![
+                .boxed();
+                rows_col = rows_col.push((row![
                         container(lock_btn)
                             .width(Length::Fixed(42.0))
-                            .padding([0, 6]),
+                            .padding([0.0, 6.0]),
                         text(entry.current.clone())
                             .size(TS.body)
                             .color(cur_color)
@@ -494,8 +484,7 @@ impl Signex {
                             .width(Length::FillPortion(3)),
                     ]
                     .align_y(iced::Alignment::Center)
-                    .padding([SP.xs, SP.m]),
-                );
+                    .padding([SP.xs, SP.m])).boxed());
             }
         }
 
@@ -612,7 +601,7 @@ impl Signex {
             // Fill portions bound each column, so long lines wrap instead
             // of running past the dialog edge (#1770).
             container(scrollable(left_col))
-                .padding([14, 14])
+                .padding([14.0, 14.0])
                 .width(Length::FillPortion(10)),
             container(iced::widget::Space::new().width(1).height(Length::Fill),).style(
                 move |_: &Theme| container::Style {
@@ -621,7 +610,7 @@ impl Signex {
                 }
             ),
             container(right_col)
-                .padding([14, 14])
+                .padding([14.0, 14.0])
                 .width(Length::FillPortion(11)),
         ]
         .spacing(0)
@@ -638,14 +627,14 @@ impl Signex {
             (Length::Fill, Length::Fill)
         };
         let dialog = container(
-            column![header, body_row, container(footer).padding([10, 14]),]
+            column![header, body_row, container(footer).padding([10.0, 14.0]),]
                 .width(modal_w)
                 .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
 
-        dialog.into()
+        dialog.boxed()
     }
 
     pub(in crate::app::view) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
@@ -687,7 +676,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -707,7 +696,7 @@ impl Signex {
                     .size(TS.body)
                     .color(text_muted),
                 )
-                .padding([14, 14]),
+                .padding([14.0, 14.0]),
                 container(
                     row![
                         Space::new().width(Length::Fill),
@@ -725,12 +714,12 @@ impl Signex {
                     ]
                     .align_y(iced::Alignment::Center),
                 )
-                .padding([10, 14]),
+                .padding([10.0, 14.0]),
             ]
             .width(self.dialog_width(super::super::super::state::ModalId::AnnotateResetConfirm, 420.0)),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }

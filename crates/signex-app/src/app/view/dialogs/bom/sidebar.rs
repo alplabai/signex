@@ -6,7 +6,7 @@
 
 use super::super::*;
 use iced::widget::{Column, Space, button, column, container, row, scrollable, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use super::super::widgets::section_header;
 
@@ -21,7 +21,7 @@ impl Signex {
     pub(super) fn bom_sidebar(&self) -> Element<'_, Message> {
         use signex_output::{BomColumn, BomFormat, BomGrouping};
         let Some(ref preview) = self.document_state.bom_preview else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -56,12 +56,13 @@ impl Signex {
                             width: 1.0,
                             radius: 3.0.into(),
                             color: border_color,
+                            ..Border::default()
                         },
                         text_color: text_c,
                         ..button::Style::default()
                     }
                 })
-                .into()
+                .boxed()
         };
 
         let grouping_row: Element<'_, Message> = row![
@@ -86,7 +87,7 @@ impl Signex {
             ),
         ]
         .align_y(iced::Alignment::Center)
-        .into();
+        .boxed();
 
         let format_row: Element<'_, Message> = row![
             text("Format:").size(TS.body).color(text_muted),
@@ -110,7 +111,7 @@ impl Signex {
             ),
         ]
         .align_y(iced::Alignment::Center)
-        .into();
+        .boxed();
 
         let toggle_row: Element<'_, Message> = row![
             row_pill(
@@ -128,12 +129,12 @@ impl Signex {
             ),
         ]
         .align_y(iced::Alignment::Center)
-        .into();
+        .boxed();
 
         // Variant picker — only shown when the active project
         // declares variants. "Base" is the no-override view.
         let variant_row: Element<'_, Message> = if preview.variants.is_empty() {
-            Space::new().into()
+            Space::new().boxed()
         } else {
             let active_label = preview
                 .options
@@ -152,14 +153,14 @@ impl Signex {
             .align_y(iced::Alignment::Center);
             for variant in &preview.variants {
                 let is_active = active_label.as_str() == variant.as_str();
-                r = r.push(Space::new().width(4));
+                r = r.push(Space::new().width(4).boxed());
                 r = r.push(row_pill(
                     variant.clone(),
                     is_active,
                     Message::BomPreview(BomPreviewMsg::SetVariant(Some(variant.clone()))),
                 ));
             }
-            r.into()
+            r.boxed()
         };
         // Column picker — toggles for the standard column set + any
         // custom-field column discovered in the rolled-up rows. The
@@ -215,12 +216,13 @@ impl Signex {
                             width: 1.0,
                             radius: 3.0.into(),
                             color: border_color,
+                            ..iced::Border::default()
                         },
                         text_color: text_c,
                         ..button::Style::default()
                     }
                 })
-                .into()
+                .boxed()
         };
 
         let general_pane: Element<'_, Message> = column![
@@ -241,7 +243,7 @@ impl Signex {
             container(column![format_row].spacing(0),).padding([SP.m, SP.l]),
         ]
         .spacing(0)
-        .into();
+        .boxed();
 
         // Columns tab — vertical list with a tick checkbox per row,
         // mirroring Altium's Columns table. Same standard column
@@ -249,9 +251,9 @@ impl Signex {
         // rows. Each row is clickable and toggles via
         // `Message::BomPreview(BomPreviewMsg::ToggleColumn)` — the existing handler
         // already does add/remove on the Vec.
-        let mut col_list: Column<'_, Message> = Column::new().spacing(0);
+        let mut col_list: Column<Element<'_, Message>> = Column::new().spacing(0);
         col_list = col_list.push(section_header("Columns", text_muted));
-        let mut list_items: Column<'_, Message> = Column::new().spacing(0);
+        let mut list_items: Column<Element<'_, Message>> = Column::new().spacing(0);
         let render_col_row = |col: BomColumn, label: String, on: bool| -> Element<'_, Message> {
             let pip_bg = if on {
                 Color::from_rgb(0.00, 0.47, 0.84)
@@ -259,9 +261,9 @@ impl Signex {
                 Color::from_rgba(1.0, 1.0, 1.0, 0.04)
             };
             let inner = if on {
-                text("\u{2713}").size(9).color(Color::WHITE)
+                text("\u{2713}").size(9.0).color(Color::WHITE)
             } else {
-                text(" ").size(9)
+                text(" ").size(9.0)
             };
             let pip = container(inner)
                 .width(14)
@@ -274,6 +276,7 @@ impl Signex {
                         width: 1.0,
                         radius: 2.0.into(),
                         color: border_c,
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 });
@@ -303,7 +306,7 @@ impl Signex {
                     ..button::Style::default()
                 }
             })
-            .into()
+            .boxed()
         };
         for (col, label) in &column_options {
             let on = preview.options.columns.iter().any(|c| c == col);
@@ -314,8 +317,8 @@ impl Signex {
             let on = preview.options.columns.iter().any(|c| c == &col);
             list_items = list_items.push(render_col_row(col, key.clone(), on));
         }
-        col_list = col_list.push(container(list_items).padding([SP.s, 0.0]));
-        let columns_pane: Element<'_, Message> = col_list.into();
+        col_list = col_list.push(container(list_items).padding([SP.s, 0.0]).boxed());
+        let columns_pane: Element<'_, Message> = col_list.boxed();
 
         let sidebar_body: Element<'_, Message> = match sidebar_tab {
             BomSidebarTab::General => general_pane,
@@ -343,6 +346,6 @@ impl Signex {
                 .height(Length::Fill),
         ]
         .spacing(0);
-        sidebar.into()
+        sidebar.boxed()
     }
 }

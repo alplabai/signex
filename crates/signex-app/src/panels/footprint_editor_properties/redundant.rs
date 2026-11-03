@@ -1,7 +1,7 @@
 //! #1649 — the "Redundant" rows of the DOF / Last solve section: consistent
 //! constraints that restate earlier ones. Advisory (amber), not a conflict.
 
-use iced::widget::{Column, button, container, text};
+use iced::widget::{Column, Widget, button, container, text};
 use iced::{Color, Element, Length, Theme};
 
 use super::super::{FootprintSolveSummary, PanelMsg};
@@ -14,12 +14,12 @@ const SP: Spacing = Spacing::DEFAULT;
 const MAX_ROWS: usize = 8;
 
 pub(super) fn push_redundant_rows<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     s: &'a FootprintSolveSummary,
     muted: Color,
     input_bg: Color,
     input_bdr: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     col = props_kv_row(
         col,
         muted,
@@ -31,17 +31,17 @@ pub(super) fn push_redundant_rows<'a>(
     let amber = Color::from_rgba(1.00, 0.78, 0.35, 1.00);
     for rc in s.redundant_constraints.iter().take(MAX_ROWS) {
         let label = format!("{} — already implied by earlier constraints", rc.kind_label);
-        let row: Element<'_, _> = match rc.focus_entity_id {
+        let row: Element<'a, PanelMsg> = match rc.focus_entity_id {
             Some(id) => button(text(label).size(TS.caption).color(amber))
                 .padding([SP.xs, SP.m])
                 .width(Length::Fill)
                 .on_press(PanelMsg::FpEditorSelectSketchEntity { id })
                 .style(|_t: &Theme, _| iced::widget::button::Style::default())
-                .into(),
+                .boxed(),
             None => container(text(label).size(TS.caption).color(amber))
                 .padding([SP.xs, SP.m])
                 .width(Length::Fill)
-                .into(),
+                .boxed(),
         };
         col = col.push(row);
     }
@@ -56,7 +56,8 @@ pub(super) fn push_redundant_rows<'a>(
                 .color(muted),
             )
             .padding([SP.xs, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
     col

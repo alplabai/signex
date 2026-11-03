@@ -75,7 +75,7 @@ pub fn entries(
 fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     use SymbolFilterKind as K;
     use iced::widget::{column, container, row};
-    use iced::{Color, Length};
+    use iced::{Color, Length, Widget as _};
     use signex_widgets::active_bar_dropdown::chip_btn;
 
     let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
@@ -132,7 +132,7 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
     .spacing(0)
     .width(Length::Shrink);
 
-    vec![DropdownEntry::Custom(layout.into())]
+    vec![DropdownEntry::Custom(layout.boxed())]
 }
 
 fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {

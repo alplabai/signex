@@ -1,7 +1,7 @@
 //! Pad Stack section renderer, split out of `form/mod.rs` to keep both
 //! files under the 800-line cap (ADR-0001 #165). Verbatim code motion.
 
-use iced::Length;
+use iced::{Element, Length, Widget};
 use iced::widget::{Column, container, text};
 
 use super::super::super::super::{CollapsedSections, PanelMsg, PanelPalette};
@@ -36,26 +36,29 @@ const SP: Spacing = Spacing::DEFAULT;
 /// handles (Rect / Oval) and during pad placement (no minted
 /// entities yet).
 pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     values: &PadFormValues,
     target: PadEditTarget,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     shape_params: &'a [crate::panels::PadShapeParamSummary],
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
         border: border_c,
         ..
     } = palette;
-    col = col.push(props_section_header(
-        "Pad Stack",
-        "fp_pad_stack",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header(
+            "Pad Stack",
+            "fp_pad_stack",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pad_stack", collapsed_sections) {
         return col;
     }
@@ -240,7 +243,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<
         col = col.push(
             container(text("Hole Details").size(9).color(muted))
                 .padding([6.0, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
         let tol_p_buf = values
             .hole_tolerance_plus_mm
