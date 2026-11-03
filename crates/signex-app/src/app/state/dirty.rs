@@ -15,14 +15,18 @@
 //!   row, and reaches the tab bar through `tab_bar::dirty_tab_paths`. The flag
 //!   follows a row undo history with a saved position (`RowHistory`, #1854),
 //!   so Undo back to the saved row reads clean; a half-typed value in an edit
-//!   buffer still counts as unsaved (`has_unsaved_edits`).
+//!   buffer still counts as unsaved (`has_unsaved_edits`);
+//! - a `.snxprj` folds its General, rules and net-class histories under one
+//!   saved cursor, the bytes the file holds (`dirty/project_history.rs`,
+//!   #1854): a history step reads clean when the project encodes to them and
+//!   nothing outside the histories marked it.
 //!
 //! Tabs, the title bar count, the quit and close gates, Save All and the
 //! project tree all ask [`DocumentState::is_document_dirty`] or one of its
 //! siblings, and every write goes through [`DocumentState::mark_document_dirty`],
 //! [`DocumentState::mark_history_edit_dirty`], [`DocumentState::sync_history_dirty`],
 //! [`DocumentState::mark_document_clean`], [`DocumentState::clear_document_dirty`]
-//! or [`DocumentState::rekey_document_dirty`].
+//! or [`DocumentState::rekey_document_dirty`] (a project also has `note_project_clean_state` and `sync_project_history_dirty`).
 //! The set's contents are private to this module, so the compiler keeps it that way. Rationale and the
 //! failures the old three-way mirror caused: docs/DIRTY_STATE.md.
 
@@ -30,6 +34,8 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::DocumentState;
+
+mod project_history;
 
 /// The paths of documents with unsaved edits that no editor draft holds.
 #[derive(Debug, Default)]
@@ -40,6 +46,9 @@ pub(crate) struct DirtyDocuments {
     /// restore). Undoing back to the engine's save point cannot clear these:
     /// only a save does.
     external: HashSet<PathBuf>,
+    /// A `.snxprj`'s saved cursor: the bytes it encodes to when it equals the
+    /// file (`project_history.rs`). Absent means unknown, so it stays dirty.
+    project_saved: project_history::ProjectSavedBytes,
 }
 
 impl DocumentState {
@@ -179,6 +188,7 @@ impl DocumentState {
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+        self.record_project_saved_state(path);
     }
 
     /// Clear every stored dirty mark of `path` without touching the engine's
@@ -187,6 +197,7 @@ impl DocumentState {
     pub fn clear_document_dirty(&mut self, path: &Path) {
         self.dirty_docs.paths.remove(path);
         self.dirty_docs.external.remove(path);
+        self.dirty_docs.project_saved.remove(path);
         if let Some(editor) = self.symbol_editors.get_mut(path) {
             editor.set_dirty(false);
         }
@@ -216,6 +227,8 @@ impl DocumentState {
         if was_dirty {
             self.dirty_docs.paths.insert(to.to_path_buf());
         }
+        // The cursor names the old file's bytes: unknown at the new key.
+        self.dirty_docs.project_saved.remove(from);
         if self.dirty_docs.external.remove(from) {
             self.dirty_docs.external.insert(to.to_path_buf());
         }

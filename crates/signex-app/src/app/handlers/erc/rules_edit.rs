@@ -117,19 +117,20 @@ impl Signex {
         // computed against the old ones.
         self.invalidate_pending_profile_update();
         let ds = &mut self.document_state;
-        let Some((id, path, before)) = ds
+        let Some((id, before)) = ds
             .active_document_project()
-            .map(|p| (p.id, p.path.clone(), p.data.rules.clone()))
+            .map(|p| (p.id, p.data.rules.clone()))
         else {
             return;
         };
         if record {
+            ds.note_project_clean_state(id);
             ds.rules_history.entry(id).or_default().record(before);
         }
         if let Some(loaded) = ds.projects.iter_mut().find(|p| p.id == id) {
             loaded.data.rules = rules;
         }
-        ds.mark_document_dirty(&path);
+        ds.sync_project_history_dirty(id, true);
         self.refresh_panel_ctx();
     }
 }

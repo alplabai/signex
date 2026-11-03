@@ -274,11 +274,16 @@ impl Signex {
                 sequence,
             };
             self.finish_clean_project_save(path, saved);
-        } else if self.document_state.is_document_dirty(path) {
-            crate::diagnostics::log_info(format!(
-                "[save] {} changed while it was being written; it stays modified",
-                path.display()
-            ));
+        } else {
+            // The file now holds `bytes`, so undoing back to them is clean.
+            self.document_state
+                .note_project_bytes_on_disk(path, bytes, newest);
+            if self.document_state.is_document_dirty(path) {
+                crate::diagnostics::log_info(format!(
+                    "[save] {} changed while it was being written; it stays modified",
+                    path.display()
+                ));
+            }
         }
     }
 
@@ -310,6 +315,8 @@ impl Signex {
                 return false;
             }
             Err(reason) => {
+                // The state this write carried never reached the file.
+                self.document_state.forget_project_saved_state(path);
                 self.document_state
                     .document_saves
                     .record_failure(path.to_path_buf(), reason.clone());

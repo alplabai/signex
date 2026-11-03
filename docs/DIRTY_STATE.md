@@ -200,6 +200,36 @@ position", and a half-typed value in `params_edit_buf` still counts as unsaved
 
 The title-bar count still leaves a Component row out (see "Readers that differ").
 
+## Project file save point (#1854)
+
+The `.snxprj` has three undo histories (the Project tab's General and
+Parameters fields, the stored ERC rules, the net-class table), each stepped
+separately, so no single stack position names the saved state. The one cursor
+is the bytes the file holds (`state/dirty/project_history.rs`): the project as
+`encode_project` writes it at the last save, or at the moment before its first
+history edit while it was clean. After any history step (edit, undo, redo) the
+project is clean exactly when it encodes to those bytes, nothing outside the
+histories marked it, and no write is in flight. That needs no hook in the
+histories, so eviction at depth 100, a coalesced typing run and a cut redo
+branch cannot leave a stale position behind.
+
+- `note_project_clean_state` runs before a history edit; `sync_project_history_dirty`
+  after any history step. The three paths (`project_tab/update.rs`,
+  `handlers/erc/rules_edit.rs`, the net-class panel and `pick_undo.rs`) use them
+  instead of `mark_document_dirty`.
+- A save that lands clean records the cursor (`mark_document_clean`). A write that
+  landed while the project was edited records the bytes it wrote
+  (`note_project_bytes_on_disk`), so undo back to them is clean; when a newer
+  write is still to land the cursor is unknown until it does.
+- Forgotten, so the project stays dirty until the next save: a failed write
+  (`forget_project_saved_state`), a discard (`clear_document_dirty`), a rename or
+  Save As (`rekey_document_dirty`), and a project that was already dirty when its
+  first history edit came in.
+- The roughly twenty edits outside the histories (a library added, removed or
+  renamed, a sheet list change, a sheet reference rewrite, a Save As repoint)
+  keep `mark_document_dirty`: they sit in `external`, so undo never hides them and
+  only a save clears them.
+
 ## Why a draft can also sit in the set
 
 A save snapshot resets the editor flag ("edited since this snapshot"), but
