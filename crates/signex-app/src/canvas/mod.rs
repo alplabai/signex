@@ -602,13 +602,10 @@ impl<'a> SchematicCanvas<'a> {
         if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
             return Some(frame);
         }
+        // Locked items stay in place in the ghost, as on commit (#1918).
+        let moved = state.ghost.plain_selection(revision, &self.selected);
         Some(drag_layers::DragFrame {
-            moving: std::rc::Rc::new(shift_snapshot_for_selection(
-                &session.lifted,
-                &self.selected,
-                dx,
-                dy,
-            )),
+            moving: std::rc::Rc::new(shift_snapshot_for_selection(&session.lifted, moved, dx, dy)),
             skip: session.ids.clone(),
         })
     }
@@ -660,10 +657,20 @@ impl<'a> SchematicCanvas<'a> {
             return;
         };
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
-        if !self.keeps_wires(state) || self.selected.is_empty() || too_big {
+        if self.selected.is_empty() {
             return;
         }
+        let keep_wires = self.keeps_wires(state);
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
+            if !keep_wires || too_big {
+                state
+                    .ghost
+                    .hold_locked(snap, cache.revision(), &self.selected, keep_wires);
+                if let Some(held) = state.ghost.take_unreported_held() {
+                    crate::diagnostics::log_locked_holds(&held);
+                }
+                return;
+            }
             let (gx, gy) = self.ghost_delta(dx, dy);
             state.ghost.refresh_with(
                 snap,

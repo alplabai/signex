@@ -38,6 +38,9 @@ impl Signex {
                  (missing) marks may be out of date until it succeeds"
             ));
         }
+        for line in finish.repaired {
+            crate::diagnostics::log_warning(line);
+        }
         if finish.changed {
             self.refresh_panel_ctx();
         }

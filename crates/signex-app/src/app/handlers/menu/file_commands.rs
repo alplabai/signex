@@ -136,7 +136,7 @@ impl Signex {
                     });
                 let library_path = path.and_then(|p| {
                     self.library
-                        .containing_library(&p)
+                        .containing_library_with(&p, self.identity_fold_for(&p))
                         .map(|lib| lib.root.clone())
                 });
                 library_path.map(|library_path| {
