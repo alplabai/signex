@@ -46,6 +46,7 @@ pub(crate) const KEYCHAIN_SIGIL: &str = "@signex-keychain:";
 const ENV_REFERENCE_PREFIX: &str = "${env:";
 
 /// Variable names a manifest may reference.
+#[cfg(feature = "database")]
 const ENV_NAME_PREFIX: &str = "SIGNEX_";
 
 /// The variable name in an `auth` of the form `${env:NAME}`, whatever the
@@ -54,6 +55,7 @@ pub(crate) fn env_reference(auth: &str) -> Option<&str> {
     auth.strip_prefix(ENV_REFERENCE_PREFIX)?.strip_suffix('}')
 }
 
+#[cfg(feature = "database")]
 fn env_name_is_allowed(name: &str) -> bool {
     name.strip_prefix(ENV_NAME_PREFIX).is_some_and(|rest| {
         !rest.is_empty()
@@ -75,6 +77,7 @@ pub fn auth_is_plain_token(auth: &str) -> bool {
 /// production) only when its name starts with `SIGNEX_`; any other name is
 /// refused without calling `lookup`. Anything else is the token itself.
 /// Empty means no auth.
+#[cfg(feature = "database")]
 pub(crate) fn resolve_auth(
     auth: &str,
     lookup: impl Fn(&str) -> Option<String>,
@@ -523,7 +526,11 @@ classes = ["connector"]
         assert!(!auth_is_plain_token("@signex-keychain:lab"));
         assert!(!auth_is_plain_token("${env:SIGNEX_DB_TOKEN}"));
         assert!(!auth_is_plain_token("${env:}"), "refused, not sent as text");
+    }
 
+    #[cfg(feature = "database")]
+    #[test]
+    fn env_references_resolve_through_the_lookup() {
         let lookup = |name: &str| (name == "SIGNEX_DB_TOKEN").then(|| "tok".to_string());
         assert_eq!(
             resolve_auth("${env:SIGNEX_DB_TOKEN}", lookup).unwrap(),
@@ -538,6 +545,7 @@ classes = ["connector"]
         );
     }
 
+    #[cfg(feature = "database")]
     #[test]
     fn only_signex_prefixed_variables_can_be_read_and_the_lookup_is_never_called() {
         let lookup = |name: &str| -> Option<String> {

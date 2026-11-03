@@ -18,9 +18,11 @@ impl Signex {
         self.library.clock = chrono::Utc::now();
         // The same tick re-checks the project tree's `(missing)` marks (#111).
         let stat_pass = self.start_library_stat_pass();
+        // ...and open documents against the disk (#1877).
+        let disk_poll = self.start_document_disk_poll();
         match self.start_project_fs_probe(true) {
-            Some(probe) => Task::batch([stat_pass, probe]),
-            None => stat_pass,
+            Some(probe) => Task::batch([stat_pass, disk_poll, probe]),
+            None => Task::batch([stat_pass, disk_poll]),
         }
     }
 

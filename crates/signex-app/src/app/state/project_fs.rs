@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::ProjectId;
-use super::project_hierarchy::{HierarchyJob, HierarchyRequest, walk_hierarchies};
+use super::project_hierarchy::{HierarchyJob, HierarchyRequest, RepairedSheet, walk_hierarchies};
 use crate::app::sheet_hierarchy::SheetHierarchy;
 
 /// A probe still unanswered after this long is presumed hung (a dead network
@@ -37,6 +37,9 @@ pub struct ProjectFsFacts {
     /// projects that placed it back through the walk (#1618).
     mtimes: HashMap<PathBuf, std::time::SystemTime>,
     hierarchies: HashMap<ProjectId, SheetHierarchy>,
+    /// Closed sheets the walk found repeating ids. Consumed by
+    /// [`ProjectFsCache::finish_probe`], never kept in the cache.
+    repaired: Vec<RepairedSheet>,
 }
 
 impl ProjectFsFacts {
@@ -100,7 +103,7 @@ pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
             }
         }
     }
-    facts.hierarchies = walk_hierarchies(&request.hierarchy);
+    (facts.hierarchies, facts.repaired) = walk_hierarchies(&request.hierarchy);
     facts
 }
 
@@ -180,6 +183,9 @@ pub struct ProjectFsCache {
     hierarchy_done: HashMap<ProjectId, HierarchyJob>,
     /// The jobs the running probe walks, recorded as done when it lands.
     hierarchy_inflight: Vec<HierarchyJob>,
+    /// The repaired sheets already told to the user this session, by path and
+    /// repair key: a walk repeats on every project change.
+    told_repairs: HashSet<(PathBuf, u64)>,
 }
 
 /// What a finished probe means for the caller.
@@ -189,6 +195,9 @@ pub struct ProbeFinish {
     pub changed: bool,
     /// The worker died and this is the first failure of a streak: report it.
     pub warning: Option<String>,
+    /// One line for each closed sheet found repeating ids that was not told
+    /// before this session (#1830).
+    pub repaired: Vec<String>,
 }
 
 impl ProjectFsCache {
@@ -250,10 +259,12 @@ impl ProjectFsCache {
                 ProbeFinish {
                     changed: false,
                     warning: first.then_some(reason),
+                    repaired: Vec::new(),
                 }
             }
             Ok(mut f) => {
                 self.failing = false;
+                let repaired = self.untold_repairs(std::mem::take(&mut f.repaired));
                 self.keep_unwalked_hierarchies(&mut f, walked);
                 let changed = f != self.facts;
                 if changed {
@@ -262,9 +273,19 @@ impl ProjectFsCache {
                 ProbeFinish {
                     changed,
                     warning: None,
+                    repaired,
                 }
             }
         }
+    }
+
+    /// The summary line of each sheet in `found` not told this session.
+    fn untold_repairs(&mut self, found: Vec<RepairedSheet>) -> Vec<String> {
+        found
+            .into_iter()
+            .filter(|sheet| self.told_repairs.insert((sheet.path.clone(), sheet.key)))
+            .map(|sheet| crate::app::sheet_repairs::summary_line(&sheet.path, sheet.count))
+            .collect()
     }
 
     /// A project not walked this time keeps its last hierarchy, unless a file
@@ -347,6 +368,34 @@ mod tests {
             .checked_sub(PROBE_DEADLINE + Duration::from_secs(1))
             .map(|t| (generation, t));
         assert!(cache.begin_probe(true).is_some(), "deadline passed");
+    }
+
+    fn facts_repairing(key: u64) -> ProjectFsFacts {
+        ProjectFsFacts {
+            repaired: vec![RepairedSheet {
+                path: PathBuf::from("/p/Broken.snxsch"),
+                count: 3,
+                key,
+            }],
+            ..ProjectFsFacts::default()
+        }
+    }
+
+    #[test]
+    fn a_repaired_closed_sheet_is_told_once_per_session_and_content() {
+        let mut cache = watching();
+        let mut probe_with = |key: u64| {
+            let (generation, _) = cache.begin_probe(true).unwrap();
+            cache
+                .finish_probe(generation, Ok(facts_repairing(key)))
+                .repaired
+        };
+        assert_eq!(
+            probe_with(1),
+            vec!["Broken.snxsch has 3 repeated ids; open and save it to fix".to_string()]
+        );
+        assert!(probe_with(1).is_empty(), "the same content is told once");
+        assert_eq!(probe_with(2).len(), 1, "an edited file is told again");
     }
 
     #[test]

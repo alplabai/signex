@@ -13,6 +13,9 @@
 #      depend on the UI / GPU stack (iced*, wgpu, winit, cryoglyph, rfd) or on
 #      signex-widgets / signex-app, directly.
 #
+# jq.exe on Windows ends lines with CRLF; it is stripped so a local run
+# agrees with Linux CI.
+#
 # Dev-dependencies are exempt: a test may pull in anything.
 #
 # Usage:
@@ -56,7 +59,7 @@ current_edges() {
     | select(.kind == null)
     | select(.name as $n | $ws | index($n))
     | "\($from) -> \(.name)"
-  ' <<<"$META" | sort -u
+  ' <<<"$META" | tr -d '\r' | sort -u
 }
 
 # The table's edges, one per line, without comments or blanks. `grep -v`
@@ -116,7 +119,7 @@ for crate in "${DOMAIN[@]}"; do
   deps="$(jq -r --arg c "$crate" '
     .packages[] | select(.name == $c) | .dependencies[]
     | select(.kind == null) | .name
-  ' <<<"$META")"
+  ' <<<"$META" | tr -d '\r')"
   while IFS= read -r dep; do
     [[ -z "$dep" ]] && continue
     for banned in "${UI_STACK[@]}"; do

@@ -140,7 +140,7 @@ impl Signex {
             _ => return None,
         };
         self.library
-            .containing_library(path)
+            .containing_library_with(path, self.identity_fold_for(path))
             .map(|lib| lib.root.clone())
     }
 

@@ -520,3 +520,25 @@ fn the_lock_covers_only_the_units_of_the_picked_part() {
     engine.set_document(doc);
     swap(&mut engine, first);
 }
+
+#[test]
+fn a_fan_out_mapping_never_gives_two_pins_one_uuid() {
+    use signex_types::schematic::{PinMapping, PinMatchedBy, PinPair};
+    let (engine, _) = engine_with_wired_pin_2();
+    let mut sym = engine.document().symbols[0].clone();
+    let shared = Uuid::from_u128(0xD1);
+    sym.pin_uuids.insert("1".into(), shared);
+    let pair = |new: &str| PinPair {
+        old: "1".into(),
+        new: new.into(),
+        by: PinMatchedBy::Number,
+    };
+    let mapping = PinMapping {
+        pairs: vec![pair("A"), pair("B")],
+        unmatched: vec![],
+    };
+    let shown = lib_pin("1", "IN", 0.0);
+    let out = super::change_component::remap_pin_uuids(&sym, &[&shown], &mapping);
+    assert_eq!(out["A"], shared);
+    assert_ne!(out["B"], shared);
+}

@@ -76,7 +76,8 @@ fn libraries_in_one_folder_tie_for_a_draft() {
     let draft = Path::new("/d/symbols/s.snxsym");
     let fold = CaseFold::from_probe(false);
     assert_eq!(owning_libraries(draft, &libraries, fold).len(), 2);
-    assert!(owning_library(draft, &libraries, fold).is_some());
+    // No single library claims a tied draft: Close Project keeps it.
+    assert_eq!(owning_library(draft, &libraries, fold), None);
 }
 
 #[test]
