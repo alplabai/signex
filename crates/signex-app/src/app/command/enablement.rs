@@ -572,15 +572,27 @@ mod tests {
         }
     }
 
-    /// #368 review: ERC and annotation assemble the project's sheets, so
-    /// they run with a PCB or editor tab active too.
+    /// #368 review: ERC assembles the project's sheets, so it runs with a PCB
+    /// or editor tab active too. The quiet annotate commands start from the
+    /// active sheet's path and only logged "no sheet is open" without one, so
+    /// they are off until a sheet is open (#1922); their keystroke still
+    /// reaches the handler, which says so.
     #[test]
-    fn erc_and_annotation_stay_enabled_with_a_project_but_no_active_schematic() {
+    fn erc_stays_enabled_with_a_project_but_annotation_needs_an_open_sheet() {
         let (mut app, _path) = with_footprint_editor();
         assert!(!enabled(&app, "run_erc"));
         app.document_state.active_project = Some(app.document_state.mint_project_id());
         assert!(enabled(&app, "run_erc"));
+        for name in [
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ] {
+            assert!(!enabled(&app, name), "{name} with no sheet open");
+            assert!(explains_when_unavailable(&id(name)), "{name}");
+        }
+        let app = with_schematic();
         assert!(enabled(&app, "annotate_schematic_quietly"));
+        assert!(enabled(&app, "force_annotate_all_schematics"));
     }
 
     #[test]
