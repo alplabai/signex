@@ -409,7 +409,7 @@ impl SchematicCanvas<'_> {
                     );
                 }
                 return Some(
-                    canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
+                    canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved))
                         .and_capture(),
                 );
             }

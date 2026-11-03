@@ -261,6 +261,7 @@ pub(super) struct Probe {
     pub context_menu: bool,
     pub fit_queued: bool,
     pub window_fit_queued: bool,
+    pub tour_open: bool,
     pub error_notice: bool,
     pub refs: Vec<String>,
 }
@@ -312,6 +313,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         zoom_percent: canvas.zoom_percent(),
         context_menu: app.interaction_state.context_menu.is_some(),
         fit_queued: canvas.pending_fit.get().is_some(),
+        tour_open: app.ui_state.first_run_tour_open,
         window_fit_queued: app
             .interaction_state
             .canvases

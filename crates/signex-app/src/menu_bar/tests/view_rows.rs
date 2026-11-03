@@ -43,9 +43,12 @@ fn fit_all_queues_a_fit_to_the_sheet_content() {
         .set_render_cache(Some(
             crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
         ));
+    // The first-run tour card is showing, as on a fresh install.
+    app.ui_state.first_run_tour_open = true;
     let before = probe(&app);
-    assert!(!before.fit_queued);
+    assert!(!before.fit_queued && before.tour_open);
     let _ = click(&mut app, "View/Fit All");
+    // Fit All is not a pointer gesture: the card stays (#1994).
     assert_eq!(
         probe(&app),
         Probe {

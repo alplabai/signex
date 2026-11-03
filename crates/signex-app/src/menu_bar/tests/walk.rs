@@ -243,3 +243,24 @@ fn command_rows_name_real_commands_and_only_two_rows_keep_their_own_action() {
         ["View/Cycle Grid Size", "Design/Electrical Rules Check"]
     );
 }
+
+/// #1994: no menu row is a pointer gesture, so none closes the first-run
+/// tour card.
+#[test]
+fn no_menu_row_closes_the_first_run_tour_card() {
+    for (state, build) in FIXTURES {
+        let probe_app = build();
+        for (path, item) in all_rows(&probe_app, None) {
+            if !is_live(&item) {
+                continue;
+            }
+            let mut app = build();
+            app.ui_state.first_run_tour_open = true;
+            let _ = click(&mut app, &path);
+            assert!(
+                app.ui_state.first_run_tour_open,
+                "{path} in {state} closed the tour card"
+            );
+        }
+    }
+}

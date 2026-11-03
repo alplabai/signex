@@ -24,12 +24,12 @@ pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [Pc
             event: CanvasEvent::MoveSelected { .. },
             ..
         } => PCB_EVENTS_FOOTPRINT_MOVE,
-        Message::CanvasEvent(CanvasEvent::CursorMoved)
+        Message::CanvasEvent(CanvasEvent::CursorMoved | CanvasEvent::ViewMoved)
         | Message::CanvasEvent(CanvasEvent::CursorAt { .. })
         | Message::CanvasEvent(CanvasEvent::FitAll)
         | Message::CanvasEvent(CanvasEvent::CenterAtCursor)
         | Message::CanvasEventInWindow {
-            event: CanvasEvent::CursorMoved,
+            event: CanvasEvent::CursorMoved | CanvasEvent::ViewMoved,
             ..
         }
         | Message::CanvasEventInWindow {

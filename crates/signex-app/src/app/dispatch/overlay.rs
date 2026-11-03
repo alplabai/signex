@@ -676,13 +676,36 @@ impl Signex {
 
 /// Persist the first-run tour dismissal on a blocking worker, never in
 /// `update` (#1469).
-pub(super) fn dismiss_first_run_tour_task() -> Task<Message> {
+pub(in crate::app) fn dismiss_first_run_tour_task() -> Task<Message> {
     crate::fonts::background_pref_write("first_run_tour_dismissed", || {
         crate::fonts::write_first_run_tour_dismissed(true)
     })
 }
 
 impl Signex {
+    /// Close the first-run tour card on a deliberate pointer gesture on a
+    /// canvas ([`crate::canvas::CanvasEvent::is_user_gesture`]) and persist
+    /// that, off the update thread. Nothing for a hover or a key's command.
+    pub(super) fn dismiss_first_run_tour_on(
+        &mut self,
+        event: &crate::canvas::CanvasEvent,
+    ) -> Task<Message> {
+        if event.is_user_gesture() {
+            self.dismiss_first_run_tour()
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Close the first-run tour card if it is open, and persist that.
+    pub(super) fn dismiss_first_run_tour(&mut self) -> Task<Message> {
+        if !self.ui_state.first_run_tour_open {
+            return Task::none();
+        }
+        self.ui_state.first_run_tour_open = false;
+        dismiss_first_run_tour_task()
+    }
+
     /// Close every right-click menu (canvas, document tab, project tree,
     /// dock tab, Components row) and their submenu state. Each menu's open
     /// handler calls this first, so exactly one is ever open.
