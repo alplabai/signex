@@ -95,6 +95,12 @@ pub enum MenuMessage {
     /// dropdown. The message is swallowed by `handle_menu_message` via
     /// its `Task::none()` fallthrough — no handler needs to match it.
     NoOp,
+    /// A row that carries a command id: runs the id through
+    /// [`crate::app::Signex::dispatch_command`], like its shortcut and the
+    /// palette do, so one id has one behaviour on every surface. Only a row
+    /// whose action is not that command keeps a message of its own (View ▸
+    /// Cycle Grid Size, Design ▸ Electrical Rules Check).
+    Command(AppCommandId),
     /// Help ▸ About Signex.
     OpenAbout,
     /// Help ▸ Documentation — opens the user guide in the browser.
@@ -117,7 +123,6 @@ pub enum MenuMessage {
     /// companion on a picked `.PrjPcb` / `.SchDoc` / `.PcbDoc` / `.SchLib`
     /// / `.PcbLib`.
     ImportAltium,
-    Save,
     SaveAs,
     /// File ▸ Save All — saves every unsaved document and Component Preview
     /// row, then does nothing else (no close, no quit).
@@ -129,8 +134,6 @@ pub enum MenuMessage {
     /// tree's Close Project, through its unsaved-changes gate; nothing when
     /// no project is open.
     CloseProject,
-    /// File ▸ Print... — the Ctrl+P print preview.
-    Print,
     ExportPdf,
     ExportNetlist,
     ExportBom,
@@ -162,28 +165,14 @@ pub enum MenuMessage {
     /// as `AddLibrarySymbol` but mints `Footprint::empty()` and
     /// opens a `.snxfpt` tab.
     AddLibraryFootprint,
-    // Edit
-    Undo,
-    Redo,
-    Cut,
-    Copy,
-    Paste,
-    SmartPaste,
-    Delete,
-    SelectAll,
-    Duplicate,
     // Edit ▸ Arrange (drawings only, #1583)
     BringDrawingsToFront,
     SendDrawingsToBack,
     BringDrawingsForward,
     SendDrawingsBackward,
-    Find,
-    Replace,
     // View
     ZoomIn,
     ZoomOut,
-    ZoomFit,
-    ToggleGrid,
     CycleGrid,
     OpenProjectsPanel,
     OpenComponentsPanel,
@@ -194,34 +183,18 @@ pub enum MenuMessage {
     OpenErcPanel,
     OpenMessagesPanel,
     OpenSignalPanel,
-    // Place
-    PlaceWire,
-    PlaceBus,
-    PlaceLabel,
-    PlaceComponent,
-    /// Place ▸ Power Port — arms the Active Bar's default (GND) power port.
-    PlacePowerPort,
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     /// Place ▸ No Connect — the no-connect tool.
     PlaceNoConnect,
-    /// Place ▸ Junction — the junction tool.
-    PlaceJunction,
     // Design
     Annotate,
-    AnnotateQuietly,
     AnnotateReset,
     AnnotateResetDuplicates,
-    AnnotateForceAll,
     AnnotateBack,
     AnnotateSheets,
     Erc,
-    /// Design ▸ Parameter Manager... - the active sheet's parameter table.
-    OpenParameterManager,
-    ToggleAutoFocus,
     // Tools
-    /// Open the Preferences dialog.
-    OpenPreferences,
     /// Tools ▸ Passive Network Calculator — opens the in-app
     /// resistor/capacitor/inductor calculator modal. Not an OS window
     /// (see `passive_calculator_modal.rs` for why); re-invoking while it
@@ -257,23 +230,24 @@ pub enum MenuMessage {
 }
 
 impl MenuMessage {
-    /// The command a row runs against the document of the window it was
-    /// clicked in, when the row is per-window (Undo / Redo #1550; Save, Save
-    /// As, Print, Close Document and the tab stepper #1794). Every other row
-    /// still arrives as `Message::Menu`. Export ▸ PDF opens the Print
-    /// preview, so it runs as Print (#1813).
-    pub(crate) fn window_command(&self) -> Option<&'static str> {
-        Some(match self {
-            Self::Undo => "undo",
-            Self::Redo => "redo",
-            Self::Save => "save_document",
-            Self::SaveAs => "save_document_as",
-            Self::Print | Self::ExportPdf => "print",
-            Self::CloseDocument => "close_active_document",
-            Self::NextDocumentTab => "next_document_tab",
-            Self::PreviousDocumentTab => "previous_document_tab",
-            _ => return None,
-        })
+    /// The command a row runs in the window it was clicked in: a row that
+    /// carries a command id, and Export ▸ PDF, which opens the Print preview
+    /// and so runs as Print (#1813). Such a row clicked in an undocked
+    /// window arrives as `UiMsg::MenuInWindow`, so the command acts on that
+    /// window's document (#1550, #1794); every other row arrives as
+    /// `Message::Menu`.
+    pub(crate) fn window_command(&self) -> Option<AppCommandId> {
+        match self {
+            Self::Command(id) => Some(id.clone()),
+            Self::ExportPdf => AppCommandId::new("print").ok(),
+            _ => None,
+        }
+    }
+
+    /// The message of a row that runs command `id`, for tests.
+    #[cfg(test)]
+    pub(crate) fn command(id: &str) -> Self {
+        Self::Command(AppCommandId::new(id).expect("a command id"))
     }
 
     /// Whether this is a View-menu panel row, which carries a check mark.

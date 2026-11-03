@@ -905,7 +905,7 @@ mod tests {
 
         let _ = app.update(Message::Ui(UiMsg::MenuInWindow {
             window,
-            msg: MenuMessage::Undo,
+            msg: MenuMessage::command("undo"),
         }));
 
         assert!(app.document_state.engines[&path].can_redo());

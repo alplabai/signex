@@ -15,6 +15,7 @@ mod file_rows;
 mod help_tools_rows;
 mod place_design_rows;
 mod view_rows;
+mod walk;
 mod window_native_rows;
 
 use crate::app::{Message, Signex, TabInfo, TabKind};
@@ -71,6 +72,7 @@ pub(super) fn bare_app() -> Signex {
 
 /// An app showing `sheet` as its only tab, saved at `path`.
 pub(super) fn app_with_at(sheet: SchematicSheet, path: std::path::PathBuf) -> Signex {
+    let sheet_copy = sheet.clone();
     let mut app = bare_app();
     app.document_state.engines.insert(
         path.clone(),
@@ -85,6 +87,16 @@ pub(super) fn app_with_at(sheet: SchematicSheet, path: std::path::PathBuf) -> Si
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
+    // What a drawn frame leaves behind: the canvas bounds and the snapshot
+    // the selection and fit commands read.
+    let canvas = app.interaction_state.active_canvas_mut();
+    canvas.set_viewport(iced::Rectangle::new(
+        iced::Point::ORIGIN,
+        iced::Size::new(800.0, 600.0),
+    ));
+    canvas.set_render_cache(Some(
+        crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet_copy),
+    ));
     app
 }
 

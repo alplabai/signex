@@ -6,6 +6,13 @@ use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::SchematicSheet;
 use std::path::PathBuf;
 
+/// The message a main-menu row sends for command `id`.
+fn menu_row(id: &str) -> Message {
+    Message::Menu(MenuMessage::Command(
+        signex_app::keymap::AppCommandId::new(id).expect("a command id"),
+    ))
+}
+
 fn app_with_empty_sheet() -> Signex {
     let path = PathBuf::from("place_component.snxsch");
     let sheet = SchematicSheet {
@@ -31,7 +38,7 @@ fn app_with_empty_sheet() -> Signex {
 fn place_menu_component_opens_the_picker() {
     let mut app = app_with_empty_sheet();
     assert!(app.library.picker.is_none());
-    let _ = app.update(Message::Menu(MenuMessage::PlaceComponent));
+    let _ = app.update(menu_row("open_components_panel"));
     assert!(app.library.picker.is_some());
     assert_eq!(app.interaction_state.current_tool, Tool::Select);
 }

@@ -4,7 +4,9 @@
 //! ([`enablement::is_enabled`]) the menu bar reads too. The palette and the
 //! keymap run commands through [`Signex::dispatch_command`], and so do the
 //! context menus' command rows (`ContextAction::Command`, #1727), which pass
-//! the click point and project in [`InvocationContext`].
+//! the click point and project in [`InvocationContext`]. The menu bar's rows
+//! that carry a command id run it here too (`MenuMessage::Command`, #1922):
+//! the main window's, an undocked window's and the native menu's.
 
 pub(crate) mod active_bar;
 mod args;

@@ -16,6 +16,13 @@ use signex_types::project::ProjectData;
 use std::path::Path;
 use tempfile::TempDir;
 
+/// The message a main-menu row sends for command `id`.
+fn menu_row(id: &str) -> Message {
+    Message::Menu(MenuMessage::Command(
+        signex_app::keymap::AppCommandId::new(id).expect("a command id"),
+    ))
+}
+
 fn idle_move(app: &mut Signex) {
     let _ = app.update(Message::Ui(UiMsg::DragMove(12.0, 34.0)));
 }
@@ -39,7 +46,7 @@ fn idle_cursor_move_only_records_the_position() {
 #[test]
 fn idle_cursor_move_repairs_panel_ctx_mirrors_left_stale_by_other_dispatchers() {
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::Menu(MenuMessage::ToggleGrid));
+    let _ = app.update(menu_row("toggle_visible_grid"));
     idle_move(&mut app);
     assert_eq!(
         app.document_state.panel_ctx.grid_visible,

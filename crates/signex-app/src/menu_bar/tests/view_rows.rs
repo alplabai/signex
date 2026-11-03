@@ -133,12 +133,11 @@ fn panel_rows_show_their_panel_and_check_it() {
     }
 }
 
-/// KNOWN-DIVERGENT (#1922): Shift+Ctrl+G and the status bar save the grid
-/// choice to the preferences file in the background; the menu row flips the
-/// grid and saves nothing.
+/// #1922: the menu row saves the grid choice to the preferences file in the
+/// background, as Shift+Ctrl+G and the status bar do.
 #[test]
-fn toggle_grid_row_does_not_save_the_choice() {
+fn toggle_grid_row_saves_the_choice() {
     let mut app = one_symbol_selected();
     let task = click(&mut app, "View/Toggle Grid");
-    assert!(!has_work(&task), "the menu row started a job");
+    assert!(has_work(&task), "the menu row saved nothing");
 }

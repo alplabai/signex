@@ -2,7 +2,7 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_if, item, item_if, panel_item, stub, submenu,
+    cmd, cmd_item, cmd_item_gated, cmd_item_own_action, item, item_if, panel_item, stub, submenu,
     unavailable,
 };
 use super::{MenuEntry, MenuMessage};
@@ -16,22 +16,13 @@ const SEP: MenuEntry = MenuEntry::Separator;
 
 pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item(
-            ctx,
-            cmd("new_document", "New Project", "Ctrl+N"),
-            MenuMessage::NewProject,
-        ),
-        cmd_item(
-            ctx,
-            cmd("open_document", "Open...", "Ctrl+O"),
-            MenuMessage::OpenProject,
-        ),
+        cmd_item(ctx, cmd("new_document", "New Project", "Ctrl+N")),
+        cmd_item(ctx, cmd("open_document", "Open...", "Ctrl+O")),
         submenu("Open Recent", open_recent(ctx)),
         SEP,
         cmd_item_gated(
             ctx,
             cmd("close_active_document", "Close Document", "Ctrl+F4"),
-            MenuMessage::CloseDocument,
         ),
         item_if(
             "Close Project",
@@ -40,16 +31,8 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         SEP,
         // Save gating: docs/MENU_BAR.md#file-save
-        cmd_item_gated(
-            ctx,
-            cmd("save_document", "Save", "Ctrl+S"),
-            MenuMessage::Save,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("save_document_as", "Save As...", "Ctrl+Shift+S"),
-            MenuMessage::SaveAs,
-        ),
+        cmd_item_gated(ctx, cmd("save_document", "Save", "Ctrl+S")),
+        cmd_item_gated(ctx, cmd("save_document_as", "Save As...", "Ctrl+Shift+S")),
         // Greyed when nothing is unsaved; runs the shared Save All flow.
         item_if(
             "Save All",
@@ -66,7 +49,7 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
         ),
         // Export > PDF and File > Print open the same modal; only Print shows Ctrl+P: docs/MENU_BAR.md#file-export-pdf
         submenu("Export", export(ctx)),
-        cmd_item_gated(ctx, cmd("print", "Print...", "Ctrl+P"), MenuMessage::Print),
+        cmd_item_gated(ctx, cmd("print", "Print...", "Ctrl+P")),
         SEP,
         item("Exit", MenuMessage::Exit),
     ]
@@ -129,41 +112,21 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("undo", "Undo", "Ctrl+Z"), MenuMessage::Undo),
-        cmd_item_gated(ctx, cmd("redo", "Redo", "Ctrl+Y"), MenuMessage::Redo),
+        cmd_item_gated(ctx, cmd("undo", "Undo", "Ctrl+Z")),
+        cmd_item_gated(ctx, cmd("redo", "Redo", "Ctrl+Y")),
         SEP,
-        cmd_item_gated(ctx, cmd("cut", "Cut", "Ctrl+X"), MenuMessage::Cut),
-        cmd_item_gated(ctx, cmd("copy", "Copy", "Ctrl+C"), MenuMessage::Copy),
-        cmd_item_gated(ctx, cmd("paste", "Paste", "Ctrl+V"), MenuMessage::Paste),
-        cmd_item_gated(
-            ctx,
-            cmd("smart_paste", "Paste Special", "Shift+Ctrl+V"),
-            MenuMessage::SmartPaste,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("duplicate", "Duplicate", "Ctrl+D"),
-            MenuMessage::Duplicate,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("delete_selection", "Delete", "Del"),
-            MenuMessage::Delete,
-        ),
+        cmd_item_gated(ctx, cmd("cut", "Cut", "Ctrl+X")),
+        cmd_item_gated(ctx, cmd("copy", "Copy", "Ctrl+C")),
+        cmd_item_gated(ctx, cmd("paste", "Paste", "Ctrl+V")),
+        cmd_item_gated(ctx, cmd("smart_paste", "Paste Special", "Shift+Ctrl+V")),
+        cmd_item_gated(ctx, cmd("duplicate", "Duplicate", "Ctrl+D")),
+        cmd_item_gated(ctx, cmd("delete_selection", "Delete", "Del")),
         submenu("Arrange", arrange(ctx)),
         SEP,
-        cmd_item_gated(
-            ctx,
-            cmd("select_all", "Select All", "Ctrl+A"),
-            MenuMessage::SelectAll,
-        ),
+        cmd_item_gated(ctx, cmd("select_all", "Select All", "Ctrl+A")),
         SEP,
-        cmd_item_gated(ctx, cmd("find", "Find", "Ctrl+F"), MenuMessage::Find),
-        cmd_item_gated(
-            ctx,
-            cmd("find_and_replace", "Find and Replace", "Ctrl+H"),
-            MenuMessage::Replace,
-        ),
+        cmd_item_gated(ctx, cmd("find", "Find", "Ctrl+F")),
+        cmd_item_gated(ctx, cmd("find_and_replace", "Find and Replace", "Ctrl+H")),
     ]
 }
 
@@ -201,28 +164,17 @@ fn arrange(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(
-            ctx,
-            cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+="),
-            MenuMessage::ZoomIn,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-"),
-            MenuMessage::ZoomOut,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("zoom_to_fit", "Fit All", "Home"),
-            MenuMessage::ZoomFit,
-        ),
+        cmd_item_gated(ctx, cmd("zoom_in_at_cursor", "Zoom In", "Ctrl+=")),
+        cmd_item_gated(ctx, cmd("zoom_out_at_cursor", "Zoom Out", "Ctrl+-")),
+        cmd_item_gated(ctx, cmd("zoom_to_fit", "Fit All", "Home")),
         SEP,
         cmd_item_gated(
             ctx,
             cmd("toggle_visible_grid", "Toggle Grid", "Shift+Ctrl+G"),
-            MenuMessage::ToggleGrid,
         ),
-        cmd_item_if(
+        // The id opens the footprint editor's grid picker; this row steps the
+        // schematic / PCB grid, so it keeps its own action and gate.
+        cmd_item_own_action(
             ctx,
             cmd("cycle_snap_grid_forward", "Cycle Grid Size", "G"),
             MenuMessage::CycleGrid,
@@ -231,7 +183,6 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(
             ctx,
             cmd("toggle_auto_focus", "AutoFocus (dim unselected)", "F9"),
-            MenuMessage::ToggleAutoFocus,
         ),
         SEP,
         // Panels work without an active document (they show an empty
@@ -278,29 +229,13 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
 
 pub(super) fn place(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        cmd_item_gated(ctx, cmd("place_wire", "Wire", "W"), MenuMessage::PlaceWire),
-        cmd_item_gated(ctx, cmd("place_bus", "Bus", "B"), MenuMessage::PlaceBus),
-        cmd_item_gated(
-            ctx,
-            cmd("place_net_label", "Net Label", "L"),
-            MenuMessage::PlaceLabel,
-        ),
+        cmd_item_gated(ctx, cmd("place_wire", "Wire", "W")),
+        cmd_item_gated(ctx, cmd("place_bus", "Bus", "B")),
+        cmd_item_gated(ctx, cmd("place_net_label", "Net Label", "L")),
         SEP,
-        cmd_item_gated(
-            ctx,
-            cmd("open_components_panel", "Component...", "P"),
-            MenuMessage::PlaceComponent,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("place_power_symbol", "Power Port", "P"),
-            MenuMessage::PlacePowerPort,
-        ),
-        cmd_item_gated(
-            ctx,
-            cmd("place_junction", "Junction", "J"),
-            MenuMessage::PlaceJunction,
-        ),
+        cmd_item_gated(ctx, cmd("open_components_panel", "Component...", "P")),
+        cmd_item_gated(ctx, cmd("place_power_symbol", "Power Port", "P")),
+        cmd_item_gated(ctx, cmd("place_junction", "Junction", "J")),
         SEP,
         item_if("Text", MenuMessage::PlaceText, ctx.commands.has_schematic),
         item_if(
@@ -316,15 +251,16 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu("Annotation", annotation(ctx)),
         SEP,
-        cmd_item_gated(
+        // F8 runs ERC at once; this row opens the ERC dialog to pick rules.
+        cmd_item_own_action(
             ctx,
             cmd("run_erc", "Electrical Rules Check", "F8"),
             MenuMessage::Erc,
+            enabled(ctx, "run_erc"),
         ),
         cmd_item_gated(
             ctx,
             cmd("open_parameter_manager", "Parameter Manager...", ""),
-            MenuMessage::OpenParameterManager,
         ),
         SEP,
         // The same working BOM dialog File > Export > Bill of Materials
@@ -365,7 +301,6 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
                 "Annotate Schematics Quietly",
                 "Alt+A",
             ),
-            MenuMessage::AnnotateQuietly,
         ),
         cmd_item_gated(
             ctx,
@@ -374,7 +309,6 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
                 "Force Annotate All Schematics",
                 "Shift+Alt+A",
             ),
-            MenuMessage::AnnotateForceAll,
         ),
         SEP,
         stub("Back Annotate Schematics..."),
@@ -416,11 +350,7 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::OpenPassiveCalculator,
         ),
         SEP,
-        cmd_item(
-            ctx,
-            cmd("open_preferences", "Preferences...", "Ctrl+,"),
-            MenuMessage::OpenPreferences,
-        ),
+        cmd_item(ctx, cmd("open_preferences", "Preferences...", "Ctrl+,")),
     ]
 }
 
@@ -443,7 +373,6 @@ pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item(
             ctx,
             cmd("show_current_command_hotkeys", "Keyboard Shortcuts", "F1"),
-            MenuMessage::OpenKeyboardShortcuts,
         ),
     ]
 }

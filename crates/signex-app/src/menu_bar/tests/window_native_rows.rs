@@ -85,7 +85,7 @@ fn every_live_row_has_the_same_effect_from_the_native_bar() {
 
 /// An undocked tab window: its own window id, canvas and tab, with the main
 /// window's tab placed after it.
-fn with_undocked_window(mut app: Signex) -> (Signex, iced::window::Id) {
+pub(super) fn with_undocked_window(mut app: Signex) -> (Signex, iced::window::Id) {
     let path = std::path::PathBuf::from("/w/undocked.snxsch");
     let engine = signex_engine::Engine::new(sheet_of(Vec::new())).expect("engine");
     app.document_state.engines.insert(path.clone(), engine);
@@ -159,33 +159,42 @@ fn undocked_window_rows_act_on_the_main_document_like_the_main_bar() {
     }
 }
 
-/// KNOWN-DIVERGENT (#1922): View ▸ Fit All is enabled by the undocked
-/// window's own canvas, but the click fits the main window's canvas.
+/// #1922: View ▸ Fit All is enabled by the undocked window's own canvas and
+/// now fits that canvas, as its shortcut does; it used to fit the main
+/// window's canvas.
 #[test]
-fn undocked_fit_all_fits_the_main_canvas_not_its_own() {
+fn undocked_fit_all_fits_its_own_canvas_not_the_main_one() {
     let (mut app, window) = with_undocked_window(one_symbol_selected());
-    let sheet = doc(&app).clone();
+    let sheet = sheet_of(vec![symbol(5, "R5", 50.0, 50.0)]);
+    let cache = || {
+        Some(crate::schematic_runtime::SchematicRenderCache::from_sheet(
+            &sheet,
+        ))
+    };
     app.interaction_state
         .active_canvas_mut()
-        .set_render_cache(Some(
-            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
-        ));
+        .set_render_cache(cache());
+    app.interaction_state
+        .canvases
+        .get_mut(&window)
+        .expect("canvas")
+        .set_render_cache(cache());
     assert!(row_is_live_in(&app, window, "View/Fit All"));
     let _ = click_in_window(&mut app, window, "View/Fit All");
+    assert!(
+        app.interaction_state.canvases[&window]
+            .pending_fit
+            .get()
+            .is_some(),
+        "the undocked canvas was not fitted"
+    );
     assert!(
         app.interaction_state
             .active_canvas()
             .pending_fit
             .get()
-            .is_some(),
-        "the main canvas was not fitted"
-    );
-    assert!(
-        app.interaction_state.canvases[&window]
-            .pending_fit
-            .get()
             .is_none(),
-        "the undocked canvas was fitted"
+        "the main canvas was fitted"
     );
 }
 

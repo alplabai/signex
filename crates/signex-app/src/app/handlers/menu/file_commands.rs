@@ -36,7 +36,6 @@ impl Signex {
                 },
                 |p| Message::File(FileMsg::AltiumImportPicked(p)),
             )),
-            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(self.save_as_dialog_for_active_tab()),
             MenuMessage::SaveAll => Some(self.save_all_dirty()),
             MenuMessage::CloseDocument => {
@@ -44,9 +43,6 @@ impl Signex {
                 Some(self.handle_tab_context_action(crate::app::TabContextAction::Close(active)))
             }
             MenuMessage::CloseProject => Some(self.close_active_project()),
-            MenuMessage::Print => {
-                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
-            }
             MenuMessage::NewProject => {
                 let target = self.save_target(None);
                 Some(Task::perform(
@@ -152,7 +148,7 @@ impl Signex {
     /// Resolve the active tab; if it's a `.snxsym` standalone editor
     /// fire `msg` against its `path`. Returns `None` when no Symbol
     /// editor is active so the menu item silently no-ops on other
-    /// tab kinds (mirrors `MenuMessage::Save`-style guards).
+    /// tab kinds (the same guard Save has).
     fn dispatch_active_symbol_primitive_event(
         &mut self,
         msg: crate::library::messages::SymbolEditorMsg,

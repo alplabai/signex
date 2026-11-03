@@ -33,9 +33,12 @@ fn design_menu_opens_the_parameter_manager() {
         panic!("the row must be live, not a stub");
     };
     assert!(is_enabled);
-    assert!(matches!(action, MenuMessage::OpenParameterManager));
+    assert!(matches!(
+        action,
+        MenuMessage::Command(id) if id.as_str() == "open_parameter_manager"
+    ));
 
-    let (mut app, _task) = crate::app::Signex::new();
+    let mut app = super::tests::one_symbol_selected();
     assert!(!app.ui_state.parameter_manager_open);
     let _ = app.update(crate::app::Message::Menu(action.clone()));
     assert!(

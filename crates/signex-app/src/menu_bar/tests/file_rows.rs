@@ -28,6 +28,7 @@ fn new_project_and_open_ask_for_a_file_and_move_nothing() {
 #[test]
 fn open_recent_drops_a_vanished_project_and_says_so() {
     let mut app = one_symbol_selected();
+    app.ui_state.recent_projects.clear();
     app.ui_state
         .recent_projects
         .record(std::path::Path::new("/w/gone-menu-row.snxprj"));
@@ -47,6 +48,7 @@ fn open_recent_drops_a_vanished_project_and_says_so() {
 #[test]
 fn clear_recent_empties_the_list() {
     let mut app = one_symbol_selected();
+    app.ui_state.recent_projects.clear();
     app.ui_state
         .recent_projects
         .record(std::path::Path::new("/w/a.snxprj"));
