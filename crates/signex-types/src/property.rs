@@ -26,7 +26,7 @@ pub struct SchematicProperty {
 
 /// Captures Standard footprint property metadata while preserving the legacy
 /// footprint `reference` and `value` compatibility fields.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct PcbProperty {
     #[serde(default)]
     pub key: String,

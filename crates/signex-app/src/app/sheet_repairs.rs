@@ -130,10 +130,19 @@ mod tests {
 
     #[test]
     fn a_board_repaired_on_open_opens_modified_and_reports_once() {
+        let _ = crate::diagnostics::init_logging();
         let mut app = app_workspace("/w/proj", &[]);
-        let path = std::path::PathBuf::from("/w/proj/board_repair.snxpcb");
+        let path = std::path::PathBuf::from("/w/proj/board_repair_once.snxpcb");
         app.open_pcb_tab(path.clone(), "board_repair".into(), repaired_board(false));
         assert!(app.document_state.is_document_dirty(&path));
+        let told = crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| {
+                e.message
+                    .starts_with("board_repair_once.snxpcb repaired on load")
+            })
+            .count();
+        assert_eq!(told, 1);
         let Some(crate::app::TabDocument::Pcb(board)) = app
             .document_state
             .tabs
@@ -227,10 +236,16 @@ mod tests {
 
     #[test]
     fn repairs_are_taken_once_on_open() {
+        let _ = crate::diagnostics::init_logging();
         let mut app = app_workspace("/w/proj", &[]);
         let path = std::path::PathBuf::from("/w/proj/taken_once.snxsch");
         app.open_schematic_tab(path.clone(), "taken_once".into(), repaired_sheet(false));
         assert!(app.document_state.is_document_dirty(&path));
+        let told = crate::diagnostics::recent_entries()
+            .iter()
+            .filter(|e| e.message.starts_with("taken_once.snxsch repaired on load"))
+            .count();
+        assert_eq!(told, 1);
         let engine = app.document_state.engines.get(&path).expect("engine");
         assert!(engine.document().unknown.load_repairs.is_empty());
     }
