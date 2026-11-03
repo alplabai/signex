@@ -100,19 +100,29 @@ pub(super) fn dd_cmd(
     )
 }
 
-/// [`dd_cmd`] dispatching `action` through the context-menu bridge.
-pub(super) fn dd_cmd_action(
+/// A row that runs the catalog command `command_id` through the command
+/// registry, like the palette and the keymap do (#1727): clicking it closes
+/// the menu and dispatches the id with the point the menu was opened at, and
+/// with `project` when the row stands on a project. An id that fails to
+/// parse gives a greyed row instead of a panic.
+pub(super) fn dd_command(
     icon: Option<Handle>,
     command_id: &'static str,
     shortcut: &str,
-    action: ContextAction,
+    project: Option<String>,
 ) -> DropdownEntry<Message> {
-    dd_cmd(
-        icon,
-        command_id,
-        shortcut,
-        Message::ContextMenu(ContextMenuMsg::Action(action)),
-    )
+    match crate::keymap::AppCommandId::new(command_id) {
+        Ok(id) => dd_cmd(
+            icon,
+            command_id,
+            shortcut,
+            Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+                id,
+                project,
+            })),
+        ),
+        Err(_) => dd_cmd_disabled(icon, command_id, shortcut),
+    }
 }
 
 /// [`dd_cmd`] greyed because the command cannot run right now. The row
@@ -160,12 +170,7 @@ pub(super) fn dd_planned(
 /// the `save_document` command like every other surface.
 pub(super) fn save_entry(enabled: bool, shortcut: &str) -> DropdownEntry<Message> {
     if enabled {
-        dd_cmd(
-            None,
-            "save_document",
-            shortcut,
-            Message::Menu(crate::menu_bar::MenuMessage::Save),
-        )
+        dd_command(None, "save_document", shortcut, None)
     } else {
         dd_cmd_disabled(None, "save_document", shortcut)
     }

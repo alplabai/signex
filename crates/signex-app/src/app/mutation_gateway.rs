@@ -101,14 +101,7 @@ impl Signex {
 
     /// Tell the user which locked symbols an edit passed over.
     pub(crate) fn report_locked_skips(skipped: &[String]) {
-        if skipped.is_empty() {
-            return;
-        }
-        crate::diagnostics::log_warning(format!(
-            "Skipped {} locked object(s): {}; unlock in Properties to change them",
-            skipped.len(),
-            skipped.join(", ")
-        ));
+        crate::diagnostics::log_locked_skips(skipped);
     }
 
     pub(crate) fn apply_engine_commands(
@@ -269,17 +262,25 @@ impl Signex {
         engine.set_wire_colors(colors);
         let mut failed = None;
 
-        // The same rule as a batch: locked symbols are skipped and named. A
-        // command that is nothing but locked symbols still reaches the
-        // engine, so the user is told why nothing happened.
-        let command = if engine.names_locked_item(&command) {
+        // The same rule as a batch: held items are skipped and named, a
+        // wire on a locked pin included. A command that is nothing but locked
+        // items still reaches the engine, so the user is told why nothing
+        // happened; one that is only held items the engine would not refuse
+        // (a wire on a locked pin) does nothing, and says so. Other commands
+        // pass untouched, without a copy.
+        let names_locked = engine.names_locked_item(&command);
+        let command = if names_locked || is_selection_command(&command) {
             let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
             match kept.pop() {
                 Some(pruned) => {
                     Self::report_locked_skips(&skipped);
                     pruned
                 }
-                None => command,
+                None if names_locked => command,
+                None => {
+                    Self::report_locked_skips(&skipped);
+                    return (CommandOutcome::Unchanged, None);
+                }
             }
         } else {
             command
@@ -505,6 +506,20 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
+}
+
+/// Whether `command` acts on a selection, the shape `without_locked` prunes.
+fn is_selection_command(command: &signex_engine::Command) -> bool {
+    use signex_engine::Command;
+    matches!(
+        command,
+        Command::MoveSelection { .. }
+            | Command::RotateSelection { .. }
+            | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
+            | Command::DeleteSelection { .. }
+            | Command::MoveEach { .. }
+    )
 }
 
 #[cfg(test)]
