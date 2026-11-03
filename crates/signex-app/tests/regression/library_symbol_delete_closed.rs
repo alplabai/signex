@@ -84,6 +84,18 @@ fn warning(app: &Signex) -> Option<SymbolDeleteWarning> {
         .clone()
 }
 
+/// Give the unused sibling a name no other test uses, so a log line asserted
+/// below cannot come from a test running in parallel (the buffer is shared).
+fn rename_sibling(app: &mut Signex, path: &Path, name: &str) {
+    app.document_state
+        .symbol_editors
+        .get_mut(path)
+        .unwrap()
+        .file
+        .symbols[1]
+        .name = name.into();
+}
+
 fn logged(needle: &str) -> bool {
     let _ = signex_app::diagnostics::init_logging();
     signex_app::diagnostics::recent_entries()
@@ -188,6 +200,7 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
         _dir,
         ..
     } = setup(&[("clean.snxsch", None)], &[]);
+    rename_sibling(&mut app, &path, "CLEAN-SIB");
 
     let task = delete(&mut app, 1);
     assert_eq!(symbol_count(&app, &path), 2, "held until the scan answers");
@@ -196,7 +209,7 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
     assert_eq!(symbol_count(&app, &path), 1);
     assert!(warning(&app).is_none());
     assert!(logged(
-        "SIBLING deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
+        "CLEAN-SIB deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
     ));
 }
 
@@ -208,6 +221,7 @@ fn a_scan_that_lands_after_the_symbol_file_changed_is_dropped() {
         _dir,
         ..
     } = setup(&[("clean.snxsch", None)], &[]);
+    rename_sibling(&mut app, &path, "STALE-SIB");
 
     let task = delete(&mut app, 1);
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
@@ -220,7 +234,7 @@ fn a_scan_that_lands_after_the_symbol_file_changed_is_dropped() {
     assert_eq!(symbol_count(&app, &path), 2, "a stale scan deletes nothing");
     assert!(warning(&app).is_none(), "and leaves no warning behind");
     assert!(logged(
-        "SIBLING changed since the warning; press Delete again."
+        "STALE-SIB changed since the warning; press Delete again."
     ));
 }
 
@@ -447,19 +461,49 @@ fn a_project_opened_during_the_scan_is_not_assumed_clean() {
 
 #[test]
 fn an_open_sheet_closed_during_the_scan_is_listed_unchecked() {
-    let mut s = setup(&[("clean.snxsch", None)], &[]);
+    // The open sheet is also a declared page of the project.
+    let mut s = setup(&[("clean.snxsch", None), ("open.snxsch", None)], &[]);
+    let key = s.app.document_state.engines.keys().next().cloned().unwrap();
+    let engine = s.app.document_state.engines.remove(&key).unwrap();
+    let open = s._dir.path().join("open.snxsch");
+    s.app.document_state.engines.insert(open.clone(), engine);
     let task = delete(&mut s.app, 1);
 
-    let open: Vec<PathBuf> = s.app.document_state.engines.keys().cloned().collect();
-    assert_eq!(open.len(), 1, "the fixture's open sheet");
-    s.app.document_state.engines.remove(&open[0]);
+    s.app.document_state.engines.remove(&open);
     run(&mut s.app, task);
 
     let text = warning(&s.app).expect("held, not deleted").lines.join("\n");
+    let name = open.file_name().unwrap().to_string_lossy();
     assert!(
-        text.contains("place-364.snxsch was closed while the check ran"),
+        text.contains(&format!("{name} was closed while the check ran")),
         "{text}"
     );
+    assert!(
+        !text.contains(&format!("{name} was added")),
+        "a page that was open is not 'added': {text}"
+    );
+    assert_eq!(symbol_count(&s.app, &s.path), 2);
+}
+
+#[test]
+fn a_scan_whose_worker_died_leaves_everything_unchecked_and_unlabelled() {
+    let mut s = setup(&[("clean.snxsch", None)], &[]);
+    let _task = delete(&mut s.app, 1);
+    let serial = s.app.library.pending_symbol_delete.as_ref().unwrap().serial;
+    let report = signex_app::library::closed_sheets::ClosedSheetsReport {
+        serial,
+        scan: signex_app::library::closed_sheets::ClosedSheetScan::unfinished("boom"),
+        plan: Default::default(),
+    };
+
+    let task = s.app.update(Message::Library(
+        signex_app::library::LibraryMessage::SymbolDeleteClosedSheetsScanned(Box::new(report)),
+    ));
+    run(&mut s.app, task);
+
+    let text = warning(&s.app).expect("not deleted").lines.join("\n");
+    assert!(text.contains("closed sheets (boom)"), "{text}");
+    assert!(!text.contains("was added"), "{text}");
     assert_eq!(symbol_count(&s.app, &s.path), 2);
 }
 

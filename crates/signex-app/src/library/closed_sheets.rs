@@ -41,6 +41,8 @@ pub struct ClosedSheetScan {
     pub unreadable: Vec<String>,
     /// Keys of the sheets the walk reached (read or not).
     pub visited: Vec<String>,
+    /// The worker died: nothing was read, `unreadable` says so.
+    pub unfinished: bool,
 }
 
 impl ClosedSheetScan {
@@ -50,6 +52,7 @@ impl ClosedSheetScan {
             placed: Vec::new(),
             unreadable: vec![format!("closed sheets ({reason})")],
             visited: Vec::new(),
+            unfinished: true,
         }
     }
 }
@@ -95,6 +98,7 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
         placed: Vec::new(),
         unreadable: plan.unresolved.clone(),
         visited: Vec::new(),
+        unfinished: false,
     };
     let mut visited = std::collections::HashSet::new();
     let mut queue: Vec<(PathBuf, CaseFold)> = plan.seeds.clone();

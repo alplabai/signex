@@ -173,10 +173,20 @@ impl Signex {
                     .push(format!("{} was closed while the check ran", name(sheet)));
             }
         }
+        // A dead worker already marked everything unchecked; per-seed lines
+        // would only mislabel the sheets as "added".
+        if scan.unfinished {
+            return;
+        }
         let now = self.closed_scan_plan();
         for (path, fold) in &now.seeds {
             let key = crate::app::project_sheets::fold_key(path, *fold);
-            if !scan.visited.contains(&key) {
+            // A page that was open when the scan began is reported as closed.
+            let was_open = asked
+                .open
+                .iter()
+                .any(|o| crate::app::project_sheets::fold_key(o, *fold) == key);
+            if !was_open && !scan.visited.contains(&key) {
                 scan.unreadable.push(format!(
                     "{} was added while the check ran and was not read",
                     name(path)
