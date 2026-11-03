@@ -27,8 +27,9 @@ const _: () = assert!(MARKER_DISC_ALPHA <= 0.3 && MARKER_HALO_ALPHA <= MARKER_DI
 /// Point-marker sizes: a world size in mm that grows with zoom, floored in
 /// screen px so the marker stays readable zoomed out (as the No-Connect cross
 /// is). The cross reads at normal zoom, and its corners stay inside the ring
-/// at both sizes. The halo stays under half the 2.54 mm pin pitch, so the
-/// markers of neighbouring pins do not overlap.
+/// at both sizes. The mm sizes alone stay under half the 2.54 mm pin pitch,
+/// so the markers of neighbouring pins stop overlapping only at high zoom,
+/// once the mm size beats the px floor; zoomed out they overlap.
 const MARKER_HALO_RADIUS_MM: f32 = 1.2;
 const MARKER_HALO_RADIUS_MIN_PX: f32 = 18.0;
 const MARKER_RING_RADIUS_MM: f32 = 1.0;

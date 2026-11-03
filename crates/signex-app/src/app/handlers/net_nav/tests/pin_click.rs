@@ -210,13 +210,35 @@ fn a_pin_focus_recorded_for_another_sheet_or_placement_is_not_kept() {
     p.app.update_selection_info();
     assert_eq!(focused(&p).as_deref(), Some("1"));
 
-    // The same symbol uuid under another placement of the sheet is not it.
-    let mut other_placement = clicked.clone();
-    other_placement.placement = Some(InstancePath::root().child(uuid::Uuid::from_u128(5)));
-    p.app.interaction_state.clicked_pin = Some(other_placement);
+    // The same symbol uuid under another known placement of the sheet is not
+    // it; an unknown placement on either side agrees with any.
+    let sheet = clicked.sheet.clone();
+    let placement_a = InstancePath::root().child(uuid::Uuid::from_u128(5));
+    let placement_b = InstancePath::root().child(uuid::Uuid::from_u128(6));
+    p.app
+        .document_state
+        .tab_placements
+        .record(&sheet, Some(placement_a.clone()));
+    let mut recorded_a = clicked.clone();
+    recorded_a.placement = Some(placement_a);
+    p.app.interaction_state.clicked_pin = Some(recorded_a.clone());
     p.app.update_selection_info();
-    assert_eq!(focused(&p), None);
+    assert_eq!(focused(&p).as_deref(), Some("1"), "same known placement");
+
+    p.app
+        .document_state
+        .tab_placements
+        .record(&sheet, Some(placement_b));
+    p.app.update_selection_info();
+    assert_eq!(focused(&p), None, "another known placement");
     assert!(p.app.interaction_state.clicked_pin.is_none());
+
+    // Recorded before the hierarchy was known, shown after: still the same.
+    let mut recorded_unknown = clicked.clone();
+    recorded_unknown.placement = None;
+    p.app.interaction_state.clicked_pin = Some(recorded_unknown);
+    p.app.update_selection_info();
+    assert_eq!(focused(&p).as_deref(), Some("1"), "unknown agrees");
 
     // Nor is one recorded for another sheet.
     let mut other_sheet = clicked;

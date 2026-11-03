@@ -219,7 +219,7 @@ impl Signex {
             .is_some_and(|c| {
                 let same_sheet = self.document_state.active_path.as_deref()
                     == Some(c.sheet.as_path())
-                    && self.shown_placement(&c.sheet) == c.placement;
+                    && placements_agree(self.shown_placement(&c.sheet), &c.placement);
                 same_sheet
                     && matches!(
                         self.interaction_state.active_canvas().selected.as_slice(),
@@ -525,6 +525,19 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
         }
+    }
+}
+
+/// Whether two placements of a sheet are the same one. An unknown placement
+/// (the hierarchy has not filled in yet, or has gone) agrees with any, so a
+/// pin focus survives the hierarchy arriving; two known ones must be equal.
+fn placements_agree(
+    a: Option<signex_types::schematic::InstancePath>,
+    b: &Option<signex_types::schematic::InstancePath>,
+) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a == *b,
+        _ => true,
     }
 }
 
