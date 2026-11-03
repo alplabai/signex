@@ -261,6 +261,20 @@ mod tests {
         );
     }
 
+    /// The stock root ranks as Stock before it mounts, ahead of Project.
+    #[test]
+    fn a_stock_root_still_mounting_ranks_as_stock() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let path = dev_path(&root);
+        let mut lib = crate::library::LibraryState::default();
+        register_stock_at(&mut lib, path.clone(), false);
+        assert!(lib.stock_library.is_none());
+        assert_eq!(
+            lib.mount_source_for(&path, std::slice::from_ref(&path)),
+            crate::library::state::ComponentsMountSource::Stock
+        );
+    }
+
     #[test]
     fn a_synchronous_open_of_the_stock_file_is_read_only_too() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

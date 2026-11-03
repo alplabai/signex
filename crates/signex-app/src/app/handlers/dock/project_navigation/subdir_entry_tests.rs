@@ -51,6 +51,7 @@ fn confirm_remove(app: &mut Signex, target: PathBuf, choice: RemoveChoice) {
         display_name: String::new(),
         is_outside_project: false,
         unsaved_prompt: false,
+        is_directory_package: false,
     });
     // A delete runs on a worker (#859); settle drives its completion.
     crate::app::path_ops::settle(app, Message::Remove(RemoveMsg::Confirm(choice)));

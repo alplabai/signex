@@ -50,6 +50,10 @@ app with `SIGNEX_EDIT_STOCK=1`):
 
 Never copy the folder to make a "second stock library": two mounted
 libraries may not share an id (#1894), so the copy is refused.
+Giving a copy its own library id lets it open, but it then breaks design
+references: a design names a row by library id, so a part placed from the
+copy points at the copy's id, and a stock reference never resolves to the
+copy's rows. A copy with a new id is a different library, not stock.
 
 ## The seed generator
 

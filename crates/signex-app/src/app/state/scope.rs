@@ -153,6 +153,7 @@ pub(crate) fn owning_libraries<'a>(
 /// The one library that owns the draft at `path`, or `None` when none does or
 /// several share its folder (no single one can claim it: Close Project keeps
 /// such a draft).
+#[cfg(test)]
 pub(crate) fn owning_library<'a>(
     path: &Path,
     libraries: &'a [PathBuf],

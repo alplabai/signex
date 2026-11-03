@@ -12,7 +12,9 @@ mod buttons;
 pub mod tokens;
 pub mod typography;
 
-pub use buttons::{accent_button, hover_row, outline_button, subtle_button};
+pub use buttons::{
+    accent_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
+};
 pub use typography::{HAIRLINE, Spacing, TypeScale};
 
 #[cfg(test)]

@@ -5,13 +5,13 @@ use super::*;
 use crate::app::{SymbolDocument, TabInfo, TabKind};
 use crate::library::messages::CloseLibraryChoice;
 
-fn send(f: &mut Fixture, msg: LibraryMessage) {
+pub(super) fn send(f: &mut Fixture, msg: LibraryMessage) {
     let task = f.app.update(Message::Library(msg));
     run_task(&mut f.app, task);
 }
 
 /// A dirty symbol editor (with its tab) at `path`.
-fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
+pub(super) fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym1"));
     f.app.document_state.symbol_editors.insert(
         path.to_path_buf(),
@@ -27,11 +27,11 @@ fn open_dirty_symbol(f: &mut Fixture, path: &std::path::Path) {
     f.app.document_state.mark_document_dirty(path);
 }
 
-fn symbol_in_library(f: &Fixture, name: &str) -> PathBuf {
+pub(super) fn symbol_in_library(f: &Fixture, name: &str) -> PathBuf {
     f.file.parent().unwrap().join("symbols").join(name)
 }
 
-fn request_close(f: &mut Fixture) {
+pub(super) fn request_close(f: &mut Fixture) {
     send(f, LibraryMessage::CloseLibrary(f.file.clone()));
 }
 
@@ -130,10 +130,11 @@ fn a_symbol_and_a_row_are_both_listed_and_both_discarded() {
 /// (display entry only; nothing is written through it).
 fn mount_nested_library(f: &mut Fixture) -> PathBuf {
     let root = f.file.parent().unwrap().join("vendor").join("V.snxlib");
-    mount_display_only(f, root)
+    mount_library_at(f, root)
 }
 
-fn mount_display_only(f: &mut Fixture, root: PathBuf) -> PathBuf {
+/// A display-only mount of a library at `root`.
+pub(super) fn mount_library_at(f: &mut Fixture, root: PathBuf) -> PathBuf {
     f.app.library.open_libraries.push(OpenLibrary {
         root: root.clone(),
         display_name: "V".into(),
@@ -276,7 +277,7 @@ fn one_library_under_two_spellings_still_owns_its_draft() {
 fn libraries_sharing_a_folder_each_list_the_shared_draft() {
     let mut f = fixture();
     let other = f.file.parent().unwrap().join("Other.snxlib");
-    let sibling = mount_display_only(&mut f, other);
+    let sibling = mount_library_at(&mut f, other);
     let symbol = symbol_in_library(&f, "s.snxsym");
     open_dirty_symbol(&mut f, &symbol);
 
@@ -433,7 +434,7 @@ fn a_symbol_in_a_folder_two_libraries_share_is_not_loose() {
     let mut f = fixture();
     let dir = f.file.parent().unwrap().to_path_buf();
     let other = dir.join("Other.snxlib");
-    mount_display_only(&mut f, other);
+    mount_library_at(&mut f, other);
     let mut workspace = crate::app::handlers::menu::export::tests::app_workspace(
         &dir.join("proj").to_string_lossy(),
         &[],
