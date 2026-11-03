@@ -429,7 +429,7 @@ fn an_editor_dirtied_while_the_delete_ran_is_reported_not_dropped_silently() {
 }
 
 #[test]
-fn a_delete_that_found_nothing_on_disk_reports_no_lost_editor() {
+fn a_delete_that_found_nothing_on_disk_still_says_the_editor_was_dropped() {
     let _ = crate::diagnostics::init_logging();
     let mut f = fixture();
     let delete = start_delete(&mut f);
@@ -438,7 +438,14 @@ fn a_delete_that_found_nothing_on_disk_reports_no_lost_editor() {
     dirty_preview(&mut f);
     crate::app::path_ops::settle_task(&mut f.app, delete);
 
-    assert_eq!(lost_edit_lines(&f), 0, "nothing was deleted by this app");
+    assert_eq!(lost_edit_lines(&f), 1, "the dropped edits are named");
+    let library = f.manifest.display().to_string();
+    assert!(
+        crate::diagnostics::recent_entries().iter().any(|e| {
+            e.message.contains(&library) && e.message.contains("already gone from disk")
+        }),
+        "the line says the file was already gone, not that it was deleted"
+    );
 }
 
 /// Open the Remove dialog for `f`'s library and confirm Delete; the worker

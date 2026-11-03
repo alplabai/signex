@@ -15,7 +15,7 @@ pub(crate) struct PartSyncCheck {
     libs: Vec<MountedLibrary>,
     stamps: Vec<ApplyStamp>,
     opened: HashMap<Uuid, Opened>,
-    wanted: HashMap<Uuid, PartIdentity>,
+    wanted: HashMap<(Uuid, Uuid), PartIdentity>,
 }
 
 impl PartSyncCheck {
@@ -55,7 +55,7 @@ impl PartSyncCheck {
         let libs = &self.libs;
         let want = self
             .wanted
-            .entry(row.row_id)
+            .entry((w.library_id, row.row_id))
             .or_insert_with(|| row_identity(opened, row, libs));
         part_sync_against(w, want, row).is_some()
     }

@@ -224,7 +224,12 @@ pub fn row_edit_task(
         let (before, missing) = match adapter.read_row(&table, row_id) {
             Ok(row) => (Some(row), None),
             Err(error @ LibraryError::NotFound(_)) => (None, Some(error)),
-            Err(error) => return Err(error),
+            Err(error) => {
+                return Err(LibraryError::Backend(format!(
+                    "edit refused: the stored row could not be read to check whether its \
+                     footprint, Manufacturer or MPN changed ({error})"
+                )));
+            }
         };
         let hash = |row: &mut ComponentRow| -> Result<(), LibraryError> {
             row.content_hash = signex_library::hash_row_content(row)

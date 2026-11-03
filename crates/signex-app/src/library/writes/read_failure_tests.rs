@@ -120,6 +120,7 @@ fn edit_manufacturer(
 ) -> Result<(), String> {
     let mut changed = f.row.clone();
     changed.primary_mpn.manufacturer = "Other Corp".into();
+    let changed_row = changed.clone();
     let edit = RowEdit {
         table: "R".into(),
         row_id: RowId::from_uuid(f.row.row_id),
@@ -133,7 +134,13 @@ fn edit_manufacturer(
     let task = row_edit_task(
         &mut f.state,
         &f.root,
-        WriteKind::TableDeleted { name: "R".into() },
+        WriteKind::CellSaved {
+            table: "R".into(),
+            row_id: RowId::from_uuid(f.row.row_id),
+            column: "Manufacturer".into(),
+            typed: "Other Corp".into(),
+            saved: Box::new(changed_row),
+        },
         edit,
     );
     let done = outputs(task)
@@ -157,6 +164,10 @@ fn an_unreadable_row_refuses_the_edit() {
 
     let reason = outcome.expect_err("the edit is refused");
     assert!(reason.contains("table file unreadable"), "{reason}");
+    assert!(
+        reason.contains("edit refused") && reason.contains("Manufacturer"),
+        "the reason says why the edit was refused: {reason}"
+    );
     assert!(
         f.writes.lock().unwrap().is_empty(),
         "nothing is written without the version bump"

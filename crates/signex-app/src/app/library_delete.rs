@@ -38,8 +38,8 @@ const KNOWN_PARENTS: &[&str] = &["assets"];
 
 /// Delete the library whose manifest is `manifest`. `library_dir` is the
 /// folder cleaned up after it: `None` skips the clean-up (the folder is the
-/// project's, or another library shares it) and lists the known folders that
-/// were left untouched. Returns the paths that were left on disk.
+/// project's, or another library shares it) and leaves every folder alone.
+/// Returns the paths that were left on disk.
 pub(crate) fn delete_library(
     manifest: &Path,
     library_dir: Option<&Path>,
@@ -47,24 +47,26 @@ pub(crate) fn delete_library(
     // Named after this library, so safe to remove even beside a sibling.
     let sidecars = lock_sidecars(manifest);
     fs::remove_file(manifest).map_err(|e| e.to_string())?;
-    let mut stuck = Vec::new();
+    let mut warned = Vec::new();
     for sidecar in sidecars {
         // Usually absent (a git library keeps its lock elsewhere).
         if let Err(e) = fs::remove_file(&sidecar)
             && e.kind() != std::io::ErrorKind::NotFound
         {
+            // Reported here with its reason; not repeated in the leftovers.
             crate::diagnostics::log_warning(format!(
                 "Could not remove {} beside the deleted library: {e}",
                 sidecar.display()
             ));
-            stuck.push(sidecar);
+            warned.push(sidecar);
         }
     }
     let mut left = match library_dir {
         Some(dir) => remove_known_artifacts(dir),
-        None => untouched_known_folders(manifest.parent()),
+        // Skipped: the folders are the project's or shared, not left over.
+        None => Vec::new(),
     };
-    left.extend(stuck);
+    left.retain(|path| !warned.contains(path));
     Ok(left)
 }
 
@@ -102,17 +104,6 @@ pub(crate) fn holds_other_library(dir: &Path, manifest: &Path) -> bool {
             path != manifest && crate::app::file_extension::has_extension(&path, "snxlib")
         })
     })
-}
-
-fn untouched_known_folders(dir: Option<&Path>) -> Vec<PathBuf> {
-    let Some(dir) = dir else {
-        return Vec::new();
-    };
-    known_folders()
-        .iter()
-        .map(|(folder, _)| dir.join(folder))
-        .filter(|p| p.is_dir())
-        .collect()
 }
 
 /// A real directory: not a symlink or junction leading somewhere else.
@@ -266,7 +257,7 @@ mod tests {
         assert!(!dir.join("A.snxlib").exists());
         assert!(dir.join("B.snxlib").exists());
         assert!(dir.join("symbols/b.snxsym").exists());
-        assert!(left.contains(&dir.join("symbols")));
+        assert!(left.is_empty(), "{left:?}");
     }
 
     #[test]
@@ -285,7 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn a_lock_file_that_cannot_be_removed_is_listed_with_its_reason() {
+    fn a_lock_file_that_cannot_be_removed_is_reported_once_with_its_reason() {
         let _ = crate::diagnostics::init_logging();
         let tmp = tempfile::tempdir().expect("tempdir");
         let dir = tmp.path().join("lib");
@@ -298,7 +289,7 @@ mod tests {
 
         let left = delete_library(&dir.join("lib.snxlib"), Some(&dir)).unwrap();
 
-        assert!(left.contains(&stuck), "{left:?}");
+        assert!(!left.contains(&stuck), "listed twice: {left:?}");
         let shown = stuck.display().to_string();
         assert!(
             crate::diagnostics::recent_entries()
