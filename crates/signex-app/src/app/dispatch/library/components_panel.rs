@@ -214,6 +214,9 @@ impl Signex {
         if let Some(drag) = self.library.components_panel.drag.as_mut() {
             drag.armed = true;
         }
+        // A session already open (Place Component, a paste) is not this
+        // drag's: end it so a release before the read lands cannot commit it.
+        self.cancel_placement_session();
         self.handle_place_library_component(k.library_path, k.table, k.row_id)
     }
 

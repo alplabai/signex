@@ -307,6 +307,42 @@ fn the_symbol_ghost_goes_when_the_drag_is_released_off_the_canvas_or_escaped() {
     assert!(doc(&app).symbols.is_empty());
 }
 
+/// A part already on the cursor is not what a row dragged onto the canvas
+/// drops: releasing before the row's read lands places that row or nothing.
+#[test]
+fn a_drop_before_the_read_lands_never_places_the_part_already_on_the_cursor() {
+    let mut app = app_with_stock();
+    let a = key_of(&app, "STOCK-R");
+    let b = key_of(&app, "STOCK-IC_Generic");
+    let canvas = over_canvas(&app);
+
+    settle(
+        &mut app,
+        Message::Library(LibraryMessage::PlaceLibraryComponent {
+            library_path: a.library_path.clone(),
+            table: a.table.clone(),
+            row_id: a.row_id,
+        }),
+    );
+    assert!(
+        app.interaction_state.placement.is_some(),
+        "A is on the cursor"
+    );
+
+    pointer(&mut app, (20.0, canvas.1));
+    settle(&mut app, press(&b));
+    pointer(&mut app, (20.0 + 40.0, canvas.1));
+    // The pointer reaches the canvas; B's read is not run before the release.
+    let read = app.update(Message::Ui(UiMsg::DragMove(canvas.0, canvas.1)));
+    let drop = app.update(Message::Ui(UiMsg::DragEnd));
+    settle_task(&mut app, drop);
+    settle_task(&mut app, read);
+
+    for s in &doc(&app).symbols {
+        assert_ne!(s.row_id, Some(a.row_id.0), "A must not be placed");
+    }
+}
+
 #[test]
 fn hover_follows_the_pointer_entering_and_leaving_a_row() {
     let mut app = app_with_stock();
