@@ -24,6 +24,8 @@ fn bundled_window_icon() -> Option<iced::window::Icon> {
 #[cfg(test)]
 mod boot_tests;
 mod new;
+#[cfg(test)]
+pub(in crate::app) use new::first_run_tour_boot;
 mod subscription;
 pub(crate) use subscription::modal_overlay_id;
 mod window_subscriptions;

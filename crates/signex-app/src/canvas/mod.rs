@@ -864,6 +864,10 @@ pub enum CanvasEvent {
         zoom_pct: f64,
     },
     CursorMoved,
+    /// The user moved the view with the pointer: a wheel zoom or a pan drag.
+    /// Handled like [`Self::CursorMoved`]; a separate event so the app can
+    /// tell a deliberate gesture from a hover or a queued fit landing.
+    ViewMoved,
     FitAll,
     /// Frame the current selection (`zoom_to_selection_area`, #1256).
     FitSelection,
@@ -909,6 +913,24 @@ pub enum CanvasEvent {
     },
 }
 
+impl CanvasEvent {
+    /// Whether the event is the user acting on the canvas with the pointer:
+    /// a click, a box select, a drag-move, a wheel zoom or a pan. A hover,
+    /// and the fit / centre commands a key or the menu sends, are not.
+    pub fn is_user_gesture(&self) -> bool {
+        matches!(
+            self,
+            Self::Clicked { .. }
+                | Self::CtrlClicked { .. }
+                | Self::DoubleClicked { .. }
+                | Self::BoxSelect { .. }
+                | Self::MoveSelected { .. }
+                | Self::MovePicked { .. }
+                | Self::ViewMoved
+        )
+    }
+}
+
 #[cfg(test)]
 mod active_bar_hit;
 #[cfg(test)]
@@ -917,6 +939,8 @@ mod gpu_mount_drag_tests;
 mod gpu_mount_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
+#[cfg(test)]
+mod view_gesture_tests;
 
 #[cfg(test)]
 mod tests {

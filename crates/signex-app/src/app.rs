@@ -82,6 +82,8 @@ pub use documents::{
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub(crate) use history_save_point::SavePoint;
+#[cfg(test)]
+pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
