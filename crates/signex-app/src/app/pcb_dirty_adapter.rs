@@ -125,6 +125,23 @@ mod tests {
         assert!(dirty_flags_for_events(events).is_empty());
     }
 
+    /// #1922: View ▸ Fit All runs `zoom_to_fit`, which the PCB renderer hears
+    /// as a camera move (the old menu message gave it nothing). A camera move
+    /// dirties no geometry, so the renderer redraws nothing it did not before.
+    #[test]
+    fn the_menu_fit_all_reaches_the_pcb_renderer_as_a_camera_move_only() {
+        let command = crate::keymap::AppCommandId::new("zoom_to_fit").unwrap();
+        let message = crate::app::command::bridge::core_to_message(
+            &command,
+            &crate::app::command::CommandArgs::none(),
+        )
+        .expect("zoom_to_fit resolves");
+        let events = pcb_renderer_events_for_message(&message);
+
+        assert_eq!(events, &[PcbAppEvent::CameraMoved]);
+        assert!(dirty_flags_for_events(events).is_empty());
+    }
+
     #[test]
     fn unrelated_message_has_no_pcb_dirty_hint() {
         let message = Message::Ui(UiMsg::GridToggle);
