@@ -133,6 +133,9 @@ impl Default for NetColorCustomState {
 #[derive(Debug, Clone, Default)]
 pub struct MoveSelectionState {
     pub open: bool,
+    /// The undocked window the dialog was opened from (`None`: the main
+    /// window); Apply moves that window's selection.
+    pub window: Option<iced::window::Id>,
     pub dx: String,
     pub dy: String,
 }

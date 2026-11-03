@@ -18,6 +18,7 @@ impl Signex {
         match msg {
             ActiveBarMsg::ToggleMenu(menu) => {
                 self.interaction_state.active_bar_menu = Some(menu);
+                self.interaction_state.menu_window = self.interaction_state.acting_window;
                 self.interaction_state.context_menu = None;
                 Task::none()
             }

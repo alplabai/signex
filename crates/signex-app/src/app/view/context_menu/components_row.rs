@@ -23,12 +23,16 @@ impl Signex {
     /// window; empty when no menu is open.
     pub(in crate::app::view) fn components_row_context_menu_overlay(
         &self,
+        window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let Some(menu_ctx) = self.library.components_panel.row_menu.as_ref() else {
             return Vec::new();
         };
+        if !self.belongs_to_window(self.interaction_state.menu_window, window_id) {
+            return Vec::new();
+        }
         let entries = components_row_menu_entries();
         let entries_len = entries.len();
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -65,6 +69,7 @@ impl Signex {
     /// pointer; empty until the press has become a drag.
     pub(in crate::app::view) fn components_row_drag_label_overlay(
         &self,
+        window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
@@ -79,6 +84,9 @@ impl Signex {
         else {
             return Vec::new();
         };
+        if !self.belongs_to_window(drag.window, window_id) {
+            return Vec::new();
+        }
         let key = &drag.key;
         let Some(pn) = self
             .library

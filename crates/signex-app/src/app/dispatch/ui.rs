@@ -509,7 +509,9 @@ impl Signex {
         // that a panicking handler may leave `self` in a partially
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
+        let saved_acting = self.interaction_state.acting_window.replace(window_id);
         let task_result = catch_unwind(AssertUnwindSafe(|| handler(self)));
+        self.interaction_state.acting_window = saved_acting;
 
         // Always-run cleanup (runs on success, error return, or panic
         // via resume_unwind below): swap the canvases back and restore

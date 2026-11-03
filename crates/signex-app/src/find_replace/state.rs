@@ -77,6 +77,9 @@ pub struct ProjectScan {
 #[derive(Debug, Clone, Default)]
 pub struct FindReplaceState {
     pub open: bool,
+    /// The undocked window the dialog was opened in (`None`: the main
+    /// window); it paints and searches only there.
+    pub window: Option<iced::window::Id>,
     pub replace_mode: bool,
     pub query: String,
     pub replacement: String,

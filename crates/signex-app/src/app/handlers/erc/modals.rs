@@ -357,6 +357,7 @@ impl Signex {
     pub(crate) fn handle_open_move_selection_dialog(&mut self) -> Task<Message> {
         self.ui_state.move_selection = super::super::super::state::MoveSelectionState {
             open: true,
+            window: self.interaction_state.acting_window,
             dx: "0".to_string(),
             dy: "0".to_string(),
         };
@@ -365,6 +366,22 @@ impl Signex {
 
     pub(crate) fn handle_close_move_selection_dialog(&mut self) -> Task<Message> {
         self.ui_state.move_selection.open = false;
+        Task::none()
+    }
+
+    /// Apply, run against the window the dialog was opened from: its
+    /// selection moves, not the main window's.
+    pub(crate) fn apply_move_selection_in_its_window(&mut self) -> Task<Message> {
+        let Some(window) = self.ui_state.move_selection.window else {
+            return self.handle_move_selection_apply();
+        };
+        if self.is_document_window(window) {
+            return self.run_in_window_document(window, |app| app.handle_move_selection_apply());
+        }
+        self.ui_state.move_selection.open = false;
+        crate::diagnostics::log_info(
+            "The window this Move Selection was opened from is closed, so nothing moved.",
+        );
         Task::none()
     }
 

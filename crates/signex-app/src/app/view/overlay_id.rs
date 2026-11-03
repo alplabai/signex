@@ -297,6 +297,26 @@ pub(crate) fn visible(has_blocking_modal: bool) -> &'static [OverlayId] {
     }
 }
 
+/// Overlays whose buttons act on a document: in an undocked window their
+/// messages run against the sheet that window shows (#1910, #1966).
+pub(crate) fn acts_on_window_document(id: OverlayId) -> bool {
+    matches!(
+        id,
+        OverlayId::PlacementPaused
+            | OverlayId::SchematicActiveBar
+            | OverlayId::TextEdit
+            | OverlayId::ActiveBarMenu
+            | OverlayId::ContextMenu
+            | OverlayId::TabContextMenu
+            | OverlayId::ProjectTreeContextMenu
+            | OverlayId::ComponentsRowContextMenu
+            | OverlayId::GridPicker
+            | OverlayId::FindReplace
+            | OverlayId::FindSimilar
+            | OverlayId::PasteArray
+    )
+}
+
 impl Signex {
     /// Append `id`'s layers to the stack under construction.
     ///
@@ -339,26 +359,26 @@ impl Signex {
                 layers.extend(self.symbol_context_menu_overlay(window_id))
             }
             OverlayId::TextEdit => layers.extend(self.text_edit_overlay(window_id)),
-            OverlayId::ActiveBarMenu => layers.extend(self.active_bar_menu_overlay()),
-            OverlayId::ContextMenu => layers.extend(self.context_menu_overlay()),
-            OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay()),
+            OverlayId::ActiveBarMenu => layers.extend(self.active_bar_menu_overlay(window_id)),
+            OverlayId::ContextMenu => layers.extend(self.context_menu_overlay(window_id)),
+            OverlayId::TabContextMenu => layers.extend(self.tab_context_menu_overlay(window_id)),
             OverlayId::ProjectTreeContextMenu => {
-                layers.extend(self.project_tree_context_menu_overlay())
+                layers.extend(self.project_tree_context_menu_overlay(window_id))
             }
             OverlayId::ComponentsRowContextMenu => {
-                layers.extend(self.components_row_context_menu_overlay())
+                layers.extend(self.components_row_context_menu_overlay(window_id))
             }
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
-                layers.extend(self.components_row_drag_label_overlay())
+                layers.extend(self.components_row_drag_label_overlay(window_id))
             }
             OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay()),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
-            OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),
-            OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
-            OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
+            OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
+            OverlayId::FindSimilar => layers.extend(self.find_similar_overlay(window_id)),
+            OverlayId::PasteArray => layers.extend(self.paste_array_overlay(window_id)),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),

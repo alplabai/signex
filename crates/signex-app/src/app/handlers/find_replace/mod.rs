@@ -20,6 +20,7 @@ impl Signex {
         replace_mode: bool,
     ) -> Task<Message> {
         self.ui_state.find_replace.open = true;
+        self.ui_state.find_replace.window = self.interaction_state.acting_window;
         self.ui_state.find_replace.replace_mode = replace_mode;
         self.interaction_state.context_menu = None;
         self.ui_state.panel_list_open = false;

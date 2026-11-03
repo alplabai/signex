@@ -129,6 +129,7 @@ impl Signex {
             key: key.clone(),
             start: self.interaction_state.last_mouse_pos,
             started: false,
+            window: self.interaction_state.acting_window,
         });
         self.select_components_panel_row(key)
     }
@@ -140,6 +141,7 @@ impl Signex {
     ) -> Task<Message> {
         let (x, y) = self.interaction_state.last_mouse_pos;
         self.close_all_context_menus();
+        self.interaction_state.menu_window = self.interaction_state.acting_window;
         let panel = &mut self.library.components_panel;
         panel.drag = None;
         panel.row_menu = Some(crate::library::state::ComponentsRowMenu {
@@ -191,6 +193,26 @@ impl Signex {
     /// pointer; released anywhere else (or over a tab that is not a schematic), or never
     /// dragged, it places nothing.
     pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
+        let Some(window) = self
+            .library
+            .components_panel
+            .drag
+            .as_ref()
+            .and_then(|drag| drag.window)
+        else {
+            return self.finish_components_row_drag_here();
+        };
+        if self.is_document_window(window) {
+            return self
+                .run_in_window_document(window, |app| app.finish_components_row_drag_here());
+        }
+        // The window the row was pressed in has closed: nothing to drop on.
+        self.library.components_panel.drag = None;
+        Task::none()
+    }
+
+    /// The drop, against the active document of the window this runs in.
+    fn finish_components_row_drag_here(&mut self) -> Task<Message> {
         let Some(drag) = self.library.components_panel.drag.take() else {
             return Task::none();
         };

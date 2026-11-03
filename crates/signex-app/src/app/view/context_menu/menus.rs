@@ -185,11 +185,57 @@ impl Signex {
         (selection, project_key)
     }
 
+    /// [`Self::canvas_menu_inputs`] for the sheet the window `window` shows.
+    pub(super) fn canvas_menu_inputs_for(
+        &self,
+        window: iced::window::Id,
+    ) -> (CanvasSelection, Option<Vec<String>>) {
+        if !self.is_document_window(window) {
+            return self.canvas_menu_inputs();
+        }
+        let canvas = self.interaction_state.canvas_for_window(window);
+        let engine = self
+            .document_state
+            .engine_for_window(window, &self.ui_state);
+        let selected = canvas.selected.as_slice();
+        let selection = CanvasSelection {
+            has_selection: !selected.is_empty(),
+            child_sheet_selected: selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
+            drawing_selected: selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::Drawing),
+            placed_part_selected: match (selected, engine) {
+                ([item], Some(engine)) => {
+                    item.kind == signex_types::schematic::SelectedKind::Symbol
+                        && engine
+                            .document()
+                            .symbols
+                            .iter()
+                            .any(|s| s.uuid == item.uuid && !s.is_power)
+                }
+                _ => false,
+            },
+        };
+        let project_key = match self.ui_state.windows.get(&window) {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => {
+                self.document_state.document_project(path)
+            }
+            _ => None,
+        }
+        .map(|p| vec![p.id.to_string()]);
+        (selection, project_key)
+    }
+
     /// Canvas right-click menu. Resolves selection state + shortcut hints
     /// from `self`, then delegates to the pure [`canvas_menu_entries`].
-    pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_context_menu(
+        &self,
+        window: iced::window::Id,
+    ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let (selection, project_key) = self.canvas_menu_inputs();
+        let (selection, project_key) = self.canvas_menu_inputs_for(window);
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.

@@ -20,6 +20,7 @@ mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
+mod window_action;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
@@ -119,6 +120,9 @@ impl Signex {
     /// minimize / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
+            WindowMsg::ActionTakenInWindow { window, message } => {
+                self.run_action_in_window(window, *message)
+            }
             WindowMsg::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes

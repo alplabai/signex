@@ -847,6 +847,9 @@ pub struct ComponentsRowDrag {
     pub key: ComponentsPanelRowKey,
     pub start: (f32, f32),
     pub started: bool,
+    /// The undocked window the press happened in (`None`: the main window):
+    /// the drag label paints there and the drop lands on its sheet.
+    pub window: Option<iced::window::Id>,
 }
 
 /// What a row menu item does.

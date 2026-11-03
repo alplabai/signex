@@ -182,7 +182,7 @@ impl Signex {
                 self.ui_state.move_selection.dy = s;
                 Task::none()
             }
-            MoveSelectionMsg::Apply => self.handle_move_selection_apply(),
+            MoveSelectionMsg::Apply => self.apply_move_selection_in_its_window(),
         }
     }
 
@@ -224,6 +224,7 @@ impl Signex {
                 if self.interaction_state.active_bar_menu.is_none() {
                     let world = self.cursor_world_now();
                     self.close_all_context_menus();
+                    self.interaction_state.menu_window = self.interaction_state.acting_window;
                     self.interaction_state.context_menu = Some(ContextMenuState { x, y, world });
                 }
                 Task::none()
@@ -249,6 +250,7 @@ impl Signex {
                 // clicking a leaf row would still render the stale
                 // submenu next to the new (leaf) menu.
                 self.close_all_context_menus();
+                self.interaction_state.menu_window = self.interaction_state.acting_window;
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.project_tree_context_menu =
                     Some(crate::app::ProjectTreeContextMenuState { x, y, key });
@@ -270,6 +272,7 @@ impl Signex {
                 // previous right-click before anchoring the tab menu
                 // at `last_mouse_pos`.
                 self.close_all_context_menus();
+                self.interaction_state.menu_window = self.interaction_state.acting_window;
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.tab_context_menu =
                     Some(crate::app::TabContextMenuState { x, y, tab_idx: idx });

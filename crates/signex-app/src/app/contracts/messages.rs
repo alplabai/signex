@@ -7,6 +7,13 @@ use super::*;
 /// `dispatch_window_message`.
 #[derive(Debug, Clone)]
 pub enum WindowMsg {
+    /// An action taken in an undocked document window, run against the
+    /// document that window shows rather than the main window's active tab
+    /// (#1910, #1966). Built by `Signex::scope_to_window`.
+    ActionTakenInWindow {
+        window: iced::window::Id,
+        message: Box<Message>,
+    },
     /// Resize event carrying the window id. Forwarded by the
     /// `iced::window::resize_events()` subscription so the dispatcher
     /// can drop non-main-window resizes before they touch

@@ -362,14 +362,20 @@ impl Signex {
     /// Active-bar dropdown menu (Place / Align / filter presets etc.).
     /// Absolute-positioned with `Translate` so the column can auto-size
     /// to its widest label. Pushes the dismiss layer then the dropdown.
-    pub(super) fn active_bar_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn active_bar_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let Some(ab_menu) = interaction.active_bar_menu else {
             return Vec::new();
         };
-        let has_selection = !interaction.canvas.selected.is_empty();
+        if !self.belongs_to_window(interaction.menu_window, window_id) {
+            return Vec::new();
+        }
+        let has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
         let has_net_colors = !ui.net_colors.is_empty();
         let dropdown = crate::active_bar::view_dropdown(
             ab_menu,
@@ -403,14 +409,20 @@ impl Signex {
     /// Clamps the menu inside the window; the submenu pops to the right
     /// (or left on overflow) aligned to its launcher row. Pushes dismiss,
     /// menu, then the optional submenu.
-    pub(super) fn context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let interaction = &self.interaction_state;
         let Some(ctx_menu) = interaction.context_menu.as_ref() else {
             return Vec::new();
         };
-        let menu = self.view_context_menu();
+        if !self.belongs_to_window(interaction.menu_window, window_id) {
+            return Vec::new();
+        }
+        let menu = self.view_context_menu(window_id);
         // Clamp the menu inside the window so a click near the
         // right/bottom edge doesn't push it off-screen. Estimate
         // the menu's footprint conservatively from the maximum
@@ -507,7 +519,10 @@ impl Signex {
     /// Document-tab right-click menu. Rendered before the project-tree
     /// menu since the two are mutually exclusive. Pushes dismiss then the
     /// clamped menu.
-    pub(super) fn tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn tab_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let ui = &self.ui_state;
@@ -515,6 +530,9 @@ impl Signex {
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
             return self.dock_tab_context_menu_overlay();
         };
+        if !self.belongs_to_window(interaction.menu_window, window_id) {
+            return Vec::new();
+        }
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
@@ -575,7 +593,10 @@ impl Signex {
 
     /// Projects-panel tree right-click menu (+ its AddNewToProject
     /// submenu). Pushes dismiss, menu, then the optional submenu.
-    pub(super) fn project_tree_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(super) fn project_tree_context_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         use iced::widget::{column, row};
 
         let ui = &self.ui_state;
@@ -583,6 +604,9 @@ impl Signex {
         let Some(tree_ctx) = interaction.project_tree_context_menu.as_ref() else {
             return Vec::new();
         };
+        if !self.belongs_to_window(interaction.menu_window, window_id) {
+            return Vec::new();
+        }
         let menu = self.view_project_tree_context_menu(tree_ctx);
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look

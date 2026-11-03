@@ -74,7 +74,10 @@ impl Signex {
                 if !is_main {
                     return Task::none();
                 }
-                Task::done(Message::ContextMenu(ContextMenuMsg::ShowTab(idx)))
+                Task::done(self.scope_to_window(
+                    window_id,
+                    Message::ContextMenu(ContextMenuMsg::ShowTab(idx)),
+                ))
             }
             TabMessage::CloseClicked(idx) => {
                 // Same path as the menu's "Close [filename]". An undocked

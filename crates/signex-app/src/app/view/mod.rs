@@ -222,7 +222,7 @@ impl Signex {
                         msg,
                     })
                 }
-                msg => Message::Menu(msg),
+                msg => self.scope_to_window(window_id, Message::Menu(msg)),
             })
         };
 
@@ -234,6 +234,7 @@ impl Signex {
         let bottom_collapsed = document.dock.is_collapsed(PanelPosition::Bottom);
 
         let left = self.view_dock_panel(
+            window_id,
             PanelPosition::Left,
             left_has_panels,
             left_collapsed,
@@ -251,6 +252,7 @@ impl Signex {
             true,
         );
         let right = self.view_dock_panel(
+            window_id,
             PanelPosition::Right,
             right_has_panels,
             right_collapsed,
@@ -264,6 +266,7 @@ impl Signex {
             false,
         );
         let bottom = self.view_dock_panel_h(
+            window_id,
             PanelPosition::Bottom,
             bottom_has_panels,
             bottom_collapsed,
@@ -640,7 +643,7 @@ impl Signex {
                     Message::CanvasEvent(event) => {
                         Message::CanvasEventInWindow { window_id, event }
                     }
-                    other => other,
+                    other => self.scope_to_window(window_id, other),
                 })
             };
             // A sheet from a newer Signex is read-only: say so on the canvas
@@ -672,7 +675,7 @@ impl Signex {
                     Message::CanvasEvent(event) => {
                         Message::CanvasEventInWindow { window_id, event }
                     }
-                    other => other,
+                    other => self.scope_to_window(window_id, other),
                 })
             };
             if pcb_canvas.gpu_render {
@@ -751,6 +754,14 @@ impl Signex {
             }
             let first_new = layers.len();
             self.extend_overlay(&mut layers, *id, window_id);
+            // An undocked window's overlay acts on the sheet that window
+            // shows (#1910, #1966).
+            if overlay_id::acts_on_window_document(*id) && self.is_document_window(window_id) {
+                for layer in &mut layers[first_new..] {
+                    let inner = std::mem::replace(layer, iced::widget::Space::new().into());
+                    *layer = inner.map(move |msg| self.scope_to_window(window_id, msg));
+                }
+            }
             // #562 — stop the wheel here rather than let it reach the
             // canvas. Applied per overlay id, not per builder: most
             // builders wrap their card in neither `wrap_modal` nor
