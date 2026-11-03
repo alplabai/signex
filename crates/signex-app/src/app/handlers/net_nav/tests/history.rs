@@ -54,7 +54,7 @@ fn up_lands_on_the_sheet_symbol_that_instantiates_the_sheet() {
     let mut p = project();
     p.focus(&p.mid.clone());
 
-    p.app.ascend_to_parent_sheet();
+    p.app.ascend_settled();
 
     assert_eq!(p.active(), Some(p.root.clone()));
     let picked: Vec<_> = p.selected().iter().map(|i| (i.uuid, i.kind)).collect();

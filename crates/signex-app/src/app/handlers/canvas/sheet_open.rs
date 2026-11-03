@@ -1,0 +1,261 @@
+//! Opening a sheet without reading it inside `update` (#859, #1756).
+//!
+//! Every route that shows a sheet by path (the Navigator, net navigation, Find,
+//! search reveal, Up Hierarchy, the canvas descent) goes through
+//! [`Signex::open_sheet`]. A sheet that is already open is focused at once;
+//! anything else is read on a worker and the tab is installed when the result
+//! lands, only while it is still the read that was asked for. What the route
+//! wanted to happen once the sheet is showing travels with the request
+//! ([`SheetOpen`]) instead of running straight after the call.
+
+use std::path::{Path, PathBuf};
+
+use iced::Task;
+use signex_types::schematic::{InstancePath, SelectedItem};
+use uuid::Uuid;
+
+use super::super::super::*;
+
+/// The placement a sheet's tab shows once opened.
+#[derive(Debug, Clone)]
+pub enum PlacementOnOpen {
+    /// Leave whatever placement the tab already records.
+    Keep,
+    /// Record this one; `None` clears a stale one rather than leave the tab on
+    /// a different copy than the user entered.
+    Record(Option<InstancePath>),
+}
+
+/// What to do once the opened sheet is the focused one.
+#[derive(Debug, Clone)]
+pub enum AfterOpen {
+    Nothing,
+    /// Centre on a world point and select `item` there.
+    FocusAt {
+        x: f64,
+        y: f64,
+        item: Option<SelectedItem>,
+    },
+    /// Search reveal: select `item` at the position it has now.
+    Reveal {
+        item: Option<SelectedItem>,
+    },
+    /// Offer Create Sheet for `symbol`, a sheet symbol on the sheet just opened.
+    OfferCreate {
+        symbol: Uuid,
+    },
+    /// A back / forward step: the sheet shown is the step's destination.
+    ArriveHistory {
+        forward: bool,
+    },
+}
+
+/// One request to show a sheet.
+#[derive(Debug, Clone)]
+pub struct SheetOpen {
+    pub placement: PlacementOnOpen,
+    pub then: AfterOpen,
+    /// The sheet symbol the file belongs to: a file found missing offers to
+    /// create it for this symbol (#1275).
+    pub create_for: Option<Uuid>,
+}
+
+impl SheetOpen {
+    pub fn plain() -> Self {
+        Self {
+            placement: PlacementOnOpen::Keep,
+            then: AfterOpen::Nothing,
+            create_for: None,
+        }
+    }
+
+    pub fn at(placement: Option<InstancePath>) -> Self {
+        Self {
+            placement: PlacementOnOpen::Record(placement),
+            ..Self::plain()
+        }
+    }
+
+    pub fn then(mut self, then: AfterOpen) -> Self {
+        self.then = then;
+        self
+    }
+}
+
+/// A sheet open whose file is being read on a worker: the request, the sheet it
+/// came from, and the read it waits for.
+#[derive(Debug)]
+pub struct PendingDescent {
+    open: SheetOpen,
+    /// The sheet the request started on: a missing child is offered for
+    /// creation only while that sheet is still the focused one.
+    parent: Option<PathBuf>,
+    /// The read this open waits for; any other completion for the path (a
+    /// stale one) must leave it alone.
+    generation: Option<u64>,
+}
+
+impl Signex {
+    /// Show the sheet at `path`. Returns the task that reads it when it is not
+    /// open yet; the request in `open` runs when the sheet is showing.
+    pub(crate) fn open_sheet(&mut self, path: PathBuf, open: SheetOpen) -> Task<Message> {
+        // Record under the spelling the tab is held at (#1149), not the
+        // spelling the hierarchy resolved.
+        let path = self.resolve_held_spelling_now(path);
+        let stepping = matches!(open.then, AfterOpen::ArriveHistory { .. });
+        // A back / forward step's own focus change is not a visit.
+        self.document_state.net_nav.history.hold(stepping);
+        let focused = self.focus_open_sheet(&path);
+        self.document_state.net_nav.history.hold(false);
+        if focused {
+            return self.arrive_at_sheet(&path, open);
+        }
+        // A rename or delete still moving the file would leave the new tab on
+        // a path that is about to vanish.
+        if let Err(refusal) = self.refuse_start_while_path_op(&path, "opened") {
+            let detail = refusal.to_string();
+            crate::diagnostics::log_warning(detail.clone());
+            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(detail));
+            return Task::none();
+        }
+        let title = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Schematic".to_string());
+        let parent = self.active_tab_path();
+        let task = self.begin_document_read(
+            path.clone(),
+            crate::app::document_read::ReadJob::ChildSchematic { title },
+        );
+        // The read this open rides on: the one just started, or the one
+        // already in flight for the file.
+        let generation = self.document_state.pending_opens.generation_of(&path);
+        self.ui_state.pending_descents.insert(
+            path,
+            PendingDescent {
+                open,
+                parent,
+                generation,
+            },
+        );
+        task
+    }
+
+    /// [`Self::open_sheet`] recording `placement`: `None` clears a stale one.
+    pub(crate) fn open_sheet_with_placement(
+        &mut self,
+        path: PathBuf,
+        placement: Option<InstancePath>,
+    ) -> Task<Message> {
+        self.open_sheet(path, SheetOpen::at(placement))
+    }
+
+    /// The sheet is showing: record its placement, then run what was asked.
+    fn arrive_at_sheet(&mut self, path: &Path, open: SheetOpen) -> Task<Message> {
+        if let PlacementOnOpen::Record(placement) = open.placement {
+            self.record_descent_placement(path.to_path_buf(), placement);
+        }
+        if matches!(open.then, AfterOpen::Nothing) {
+            return Task::none();
+        }
+        // The user may have moved on while the sheet was read.
+        let held = self.resolve_held_spelling(path.to_path_buf());
+        if self.document_state.active_path.as_deref() != Some(held.as_path()) {
+            crate::diagnostics::log_warning(format!(
+                "{} opened but is not the focused sheet; the jump was not made",
+                path.display()
+            ));
+            return Task::none();
+        }
+        match open.then {
+            AfterOpen::Nothing => Task::none(),
+            AfterOpen::FocusAt { x, y, item } => self.handle_focus_at(x, y, item),
+            AfterOpen::Reveal { item } => self.reveal_item_on_active_sheet(path, item),
+            AfterOpen::OfferCreate { symbol } => {
+                self.open_create_child_sheet_dialog(symbol, true);
+                Task::none()
+            }
+            AfterOpen::ArriveHistory { forward } => {
+                let landed = self.active_tab_path().unwrap_or_else(|| path.to_path_buf());
+                self.document_state.net_nav.history.arrive(forward, &landed);
+                Task::none()
+            }
+        }
+    }
+
+    /// The pending open for `path`, only when it waits for read `generation`.
+    fn take_descent(&mut self, path: &Path, generation: u64) -> Option<PendingDescent> {
+        let waits = self
+            .ui_state
+            .pending_descents
+            .get(path)
+            .is_some_and(|d| d.generation == Some(generation));
+        if waits {
+            self.ui_state.pending_descents.remove(path)
+        } else {
+            None
+        }
+    }
+
+    /// Whether the open waiting on read `generation` of `path` is a history
+    /// step, whose tab install must not count as a visit.
+    pub(crate) fn is_history_step_read(&self, path: &Path, generation: u64) -> bool {
+        self.ui_state.pending_descents.get(path).is_some_and(|d| {
+            d.generation == Some(generation)
+                && matches!(d.open.then, AfterOpen::ArriveHistory { .. })
+        })
+    }
+
+    /// The read of `path` ended: when its tab is up, record the placement and
+    /// run what the open asked. Anything else (a failed or stale read) leaves
+    /// nothing to do.
+    pub(crate) fn finish_descent(&mut self, path: &Path, generation: u64) -> Task<Message> {
+        let Some(descent) = self.take_descent(path, generation) else {
+            return Task::none();
+        };
+        if !self.has_tab_for(path) {
+            return Task::none();
+        }
+        self.arrive_at_sheet(path, descent.open)
+    }
+
+    /// The read of `path` failed (`missing` when the file is not there): a
+    /// descent through a sheet symbol offers to create the sheet, a history
+    /// step forgets the entry it could not reach.
+    pub(crate) fn descent_read_failed(
+        &mut self,
+        path: &Path,
+        generation: u64,
+        missing: bool,
+    ) -> Task<Message> {
+        let Some(descent) = self.take_descent(path, generation) else {
+            return Task::none();
+        };
+        match descent.open.then {
+            // The step goes on to the next sheet it can reach, as it did
+            // when the file was checked before the step.
+            AfterOpen::ArriveHistory { forward } => {
+                self.drop_unreadable_history_entry(forward, path);
+                return self.step_sheet_history(forward);
+            }
+            AfterOpen::Reveal { .. } => crate::diagnostics::log_warning(format!(
+                "Search: could not open {}; the list may be out of date.",
+                path.display()
+            )),
+            _ => {}
+        }
+        let Some(symbol) = descent.open.create_for.filter(|_| missing) else {
+            return Task::none();
+        };
+        if descent.parent != self.active_tab_path() {
+            crate::diagnostics::log_warning(format!(
+                "Create Sheet was not offered for {}: the sheet it was entered from is no \
+                 longer the focused one",
+                path.display()
+            ));
+            return Task::none();
+        }
+        self.open_create_child_sheet_dialog(symbol, true);
+        Task::none()
+    }
+}

@@ -174,6 +174,12 @@ impl Project {
         let _task = self.app.update(Message::Ui(UiMsg::NetNav(msg)));
     }
 
+    /// Run `msg` and everything it sets going, sheet reads included.
+    pub fn send_opening(&mut self, msg: NetNavMsg) {
+        let task = self.app.update(Message::Ui(UiMsg::NetNav(msg)));
+        crate::app::path_ops::settle_task(&mut self.app, task);
+    }
+
     /// Run `msg`, then finish the index build it waited for.
     pub fn send_settled(&mut self, msg: NetNavMsg) {
         self.send(msg);

@@ -4,6 +4,7 @@
 use iced::Task;
 
 use super::super::super::*;
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
 impl Signex {
     /// Make result `index` the current one and select it on the canvas,
@@ -38,6 +39,7 @@ impl Signex {
         let Some(found) = self.ui_state.find_replace.matches.get(index).cloned() else {
             return Task::none();
         };
+        let position = found.hit.position;
         if let Some(sheet) = found.sheet.clone() {
             let held = self.resolve_held_spelling(sheet.clone());
             if self.document_state.active_path.as_deref() != Some(held.as_path()) {
@@ -45,18 +47,16 @@ impl Signex {
                     let hierarchy = self.document_state.panel_ctx.navigator.hierarchy.as_ref()?;
                     crate::app::state::default_placement(hierarchy.placements_of(&held))
                 });
-                self.open_sheet_with_placement(sheet.clone(), placement);
-                let opened = self.resolve_held_spelling(sheet.clone());
-                if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
-                    crate::diagnostics::log_warning(format!(
-                        "Find: could not open {} to show the result.",
-                        sheet.display()
-                    ));
-                    return Task::none();
-                }
+                // The jump lands when the sheet is showing: at once for an
+                // open sheet, after a worker read otherwise.
+                let then = AfterOpen::FocusAt {
+                    x: position.x,
+                    y: position.y,
+                    item: Some(found.hit.item),
+                };
+                return self.open_sheet(sheet, SheetOpen::at(placement).then(then));
             }
         }
-        let position = found.hit.position;
         self.handle_focus_at(position.x, position.y, Some(found.hit.item))
     }
 

@@ -46,12 +46,21 @@ impl Signex {
             .document_state
             .pending_opens
             .is_current(&path, generation);
+        // A back / forward step installs its tab without making a visit.
+        let stepping = current && self.is_history_step_read(&path, generation);
+        if stepping {
+            self.document_state.net_nav.history.hold(true);
+        }
         let task = self.finish_document_read(request, result);
+        if stepping {
+            self.document_state.net_nav.history.hold(false);
+        }
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
-        // So was a canvas descent, which records its placement now.
+        // So was a sheet open, which records its placement and runs what it
+        // asked for now.
         if current {
-            self.finish_descent(&path, generation);
+            return Task::batch([task, self.finish_descent(&path, generation)]);
         }
         task
     }
@@ -90,11 +99,9 @@ impl Signex {
             Err(failure) => {
                 // No silent no-op: a descent into a missing child offers to
                 // create the file (#1275).
-                if matches!(failure, OpenFailure::Missing(_)) {
-                    self.offer_to_create_missing_child(&request.path, request.generation);
-                }
+                let missing = matches!(failure, OpenFailure::Missing(_));
                 self.report_read_failure(failure);
-                Task::none()
+                self.descent_read_failed(&request.path, request.generation, missing)
             }
         }
     }

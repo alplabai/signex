@@ -314,6 +314,14 @@ pub enum LibraryMessage {
             crate::library::preview_reads::TabResolveOutcome,
         >,
     },
+    /// The two symbols of an alternate-symbol pick were looked up off the UI
+    /// thread (#1756). Applied only to the preview, as it still is, that the
+    /// pick was made on.
+    AlternateSymbolResolved {
+        readout: crate::library::shared_resolver::OneShotCell<
+            crate::library::alternate_reads::AlternateOutcome,
+        >,
+    },
     /// The bindings of the selected library row were looked up off the UI
     /// thread for the Properties panel (#859). Kept only while it is the
     /// read that was asked for.

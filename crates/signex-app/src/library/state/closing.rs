@@ -98,6 +98,8 @@ impl LibraryState {
             self.editors.retain(|key, _| key.library_path != root);
             self.editor_reload_generations
                 .retain(|key, _| key.library_path != root);
+            self.alternate_generations
+                .retain(|key, _| key.library_path != root);
             self.tab_resolve_generations
                 .retain(|key, _| key.library_path != root);
             // Names, drift rows and Update must not use an unmounted library.

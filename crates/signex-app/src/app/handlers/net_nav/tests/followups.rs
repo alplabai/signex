@@ -113,7 +113,7 @@ fn history_drops_a_sheet_it_cannot_open_instead_of_skipping_it_every_pass() {
     std::fs::remove_file(&mid).expect("delete mid");
     p.focus(&p.root.clone());
 
-    p.send(NetNavMsg::SheetBackRequested);
+    p.send_opening(NetNavMsg::SheetBackRequested);
     assert_eq!(
         p.active(),
         Some(p.third.clone()),

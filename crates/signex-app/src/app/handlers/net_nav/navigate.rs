@@ -13,6 +13,7 @@ use super::super::super::*;
 use super::index_job::IndexLookup;
 use super::messages;
 use super::target::NetTarget;
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
 /// The selection kind a net member is picked as on its sheet.
 pub(super) fn selected_kind_of(member: &NetMember) -> SelectedKind {
@@ -141,7 +142,8 @@ impl Signex {
     }
 
     /// Open `path` at `member`'s placement, select the member and centre on
-    /// it. `None` when the sheet could not be opened (said in Messages).
+    /// it. A sheet not open yet is read on a worker and the jump lands when it
+    /// arrives. `None` when the sheet could not be opened (said in Messages).
     pub(super) fn go_to_member(
         &mut self,
         data: &ProjectNetData,
@@ -152,46 +154,49 @@ impl Signex {
         // Another placement of the same file is another sheet instance: switch
         // to the member's own, not just to the file.
         let shows_it = self.net_occurrence(data, &held).as_ref() == Some(&member.occurrence);
-        if self.document_state.active_path.as_deref() != Some(held.as_path()) || !shows_it {
-            self.open_sheet_with_placement(path.to_path_buf(), Some(member.occurrence.clone()));
+        let shown = self.document_state.active_path.as_deref() == Some(held.as_path());
+        let item = SelectedItem::new(member.id, selected_kind_of(member));
+        if shown && shows_it {
+            return Some(self.handle_focus_at(member.at.x, member.at.y, Some(item)));
         }
+        let then = AfterOpen::FocusAt {
+            x: member.at.x,
+            y: member.at.y,
+            item: Some(item),
+        };
+        let task = self.open_sheet(
+            path.to_path_buf(),
+            SheetOpen::at(Some(member.occurrence.clone())).then(then),
+        );
+        // Neither showing nor on its way: the open was refused.
         let opened = self.resolve_held_spelling(path.to_path_buf());
-        if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
+        let reading = self.ui_state.pending_descents.contains_key(&opened);
+        if !reading && self.document_state.active_path.as_deref() != Some(opened.as_path()) {
             crate::diagnostics::log_warning(messages::cannot_open(path));
             return None;
         }
-        let item = SelectedItem::new(member.id, selected_kind_of(member));
-        Some(self.handle_focus_at(member.at.x, member.at.y, Some(item)))
+        Some(task)
     }
 
     /// Back / forward through the sheets visited. A sheet that can no longer
-    /// be opened is skipped and said so.
+    /// be opened is dropped from the history and said so.
     pub(crate) fn step_sheet_history(&mut self, forward: bool) -> Task<Message> {
-        loop {
-            let history = &mut self.document_state.net_nav.history;
-            let Some(path) = history.peek(forward).map(std::path::Path::to_path_buf) else {
-                crate::diagnostics::log_info(messages::no_history(forward));
-                return Task::none();
-            };
-            // A sheet that is neither open nor on disk is skipped here, so the
-            // open path does not report it as a missing child sheet.
-            let open = self.document_state.tabs.iter().any(|t| t.path == path);
-            if open || path.exists() {
-                // The history moves only once the sheet is really shown, and
-                // the focus change this causes is not a visit of its own.
-                self.document_state.net_nav.history.hold(true);
-                let shown = self.open_or_focus_sheet_path(path.clone());
-                self.document_state.net_nav.history.hold(false);
-                if shown {
-                    let landed = self.active_tab_path().unwrap_or(path);
-                    self.document_state.net_nav.history.arrive(forward, &landed);
-                    return Task::none();
-                }
-            }
-            // It cannot be opened: forget it rather than skip it every pass.
-            self.document_state.net_nav.history.drop_entry(forward);
-            crate::diagnostics::log_warning(messages::history_skipped(&path));
-        }
+        let history = &self.document_state.net_nav.history;
+        let Some(path) = history.peek(forward).map(std::path::Path::to_path_buf) else {
+            crate::diagnostics::log_info(messages::no_history(forward));
+            return Task::none();
+        };
+        self.open_sheet(
+            path,
+            SheetOpen::plain().then(AfterOpen::ArriveHistory { forward }),
+        )
+    }
+
+    /// A history step's sheet could not be read: forget the entry rather than
+    /// meet it on every pass, and say so.
+    pub(crate) fn drop_unreadable_history_entry(&mut self, forward: bool, path: &std::path::Path) {
+        self.document_state.net_nav.history.drop_entry(forward);
+        crate::diagnostics::log_warning(messages::history_skipped(path));
     }
 
     /// A schematic sheet came into focus: record it as the current one in the
