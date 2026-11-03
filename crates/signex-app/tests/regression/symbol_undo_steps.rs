@@ -281,6 +281,17 @@ fn undo_back_to_the_opened_state_reads_clean_everywhere() {
     );
 }
 
+/// #1854: the canvas Ctrl+Z path (`SymbolEditorMsg::Undo`) reads clean too.
+#[test]
+fn canvas_undo_back_to_the_opened_state_reads_clean() {
+    let (mut app, path) = symbol_app();
+    canvas(&mut app, &path, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+    canvas(&mut app, &path, SymbolEditorMsg::Undo);
+    assert!(!app.document_state.is_document_dirty(&path));
+    canvas(&mut app, &path, SymbolEditorMsg::Redo);
+    assert!(app.document_state.is_document_dirty(&path));
+}
+
 #[test]
 fn history_shares_unchanged_symbols_between_snapshots() {
     let mut file = SymbolFile::from_symbol(Symbol::empty("A"));

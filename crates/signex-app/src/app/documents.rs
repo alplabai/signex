@@ -391,8 +391,7 @@ impl SymbolDocument {
         self.save_point.forget_if_at(self.undo_snapshots.len());
     }
 
-    /// Set the flag outright: a save or discard clears it, a rejected edit
-    /// gives back the value it held before.
+    /// Set the flag outright: a save or discard clears it.
     pub fn set_dirty(&mut self, dirty: bool) {
         self.dirty = dirty;
     }

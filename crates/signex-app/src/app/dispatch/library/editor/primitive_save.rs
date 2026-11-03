@@ -451,6 +451,11 @@ impl Signex {
                     cascade::apply_symbol_versions(&mut editor.file, versions);
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
+                    // Older undo steps still hold the pre-bump version, so
+                    // the saved depth no longer reproduces the file.
+                    if editor.is_dirty() && !versions.is_empty() {
+                        editor.save_point.forget();
+                    }
                     editor.is_dirty()
                 }),
             WrittenContainer::Footprint(saved) => self
@@ -461,6 +466,9 @@ impl Signex {
                     cascade::apply_footprint_versions(&mut editor.file, versions);
                     editor.baseline = saved;
                     editor.cascade_owed = owed.to_vec();
+                    if editor.is_dirty() && !versions.is_empty() {
+                        editor.save_point.forget();
+                    }
                     editor.is_dirty()
                 }),
         };
@@ -520,6 +528,16 @@ impl Signex {
         }
     }
 
+    /// The draft at `path` has no state known to match disk.
+    fn forget_draft_save_point(&mut self, path: &std::path::Path) {
+        let document = &mut self.document_state;
+        if let Some(editor) = document.symbol_editors.get_mut(path) {
+            editor.save_point.forget();
+        } else if let Some(editor) = document.footprint_editors.get_mut(path) {
+            editor.save_point.forget();
+        }
+    }
+
     fn fail_primitive_save(
         &mut self,
         path: &std::path::Path,
@@ -536,8 +554,11 @@ impl Signex {
             }
             None => ("Save failed", ours.then(|| path.to_path_buf()), reason),
         };
-        // The snapshot cleared the flag; the draft is still unsaved.
+        // The snapshot cleared the flag; the draft is still unsaved. Its
+        // save point named content that never reached disk, so Undo back to
+        // that depth must not read clean.
         if let Some(draft) = &draft {
+            self.forget_draft_save_point(draft);
             self.document_state.mark_document_dirty(draft);
         }
         let failed_path = draft.unwrap_or_else(|| path.to_path_buf());

@@ -133,9 +133,10 @@ and redoing reads dirty; `restore` no longer marks the draft dirty itself.
 The save point is set where a save snapshot is taken (`mark_saved`, the same
 place that resets the flag), not when the write lands. The in-flight rule is
 unchanged: the path rides in the set until the completion, so an Undo to the
-snapshot during the write still reads dirty, a failed write stays dirty, and
-the completion clears it only if the flag is clean (the draft is at the
-snapshot).
+snapshot during the write still reads dirty, and the completion clears it
+only if the flag is clean (the draft is at the snapshot). A failed write
+forgets the save point (the snapshot's depth named content that never reached
+disk), so the draft stays dirty through any Undo or Redo until the next save.
 
 The save point is forgotten, and the draft stays dirty until the next save,
 when no step can reproduce the file:
@@ -147,14 +148,21 @@ when no step can reproduce the file:
 - an edit after undoing below the point (it clears the redo branch);
 - the saved step evicted at depth 100, or a capped redo stack losing it;
 - a footprint drag batch collapsing after it pushed steps off a full history;
+- a failed write (`fail_primitive_save`), and a landed write that applied
+  version bumps while the draft was edited since (older steps hold the
+  pre-bump version);
 - anything built from content not known to be on disk: an autosave recovery
   copy (`mark_dirty` after construction) and a repaired load.
 
 A rejected edit (`attempt.rs`, a rejected drag batch) gives the save point back
 together with the flag.
 
-Known limit: a footprint drag whose ticks evict steps from a full history
-forgets the point even when the drag is rejected.
+Known limit: an accepted footprint drag whose ticks evicted steps from a full
+history forgets the point; a rejected one forgets it only when it pushed its
+own first step off the history.
+
+Undo and Redo own the flag: the symbol canvas's Ctrl+Z / Ctrl+Y
+(`SymbolEditorMsg::Undo`) must not call `mark_dirty` afterwards.
 
 ## Why a draft can also sit in the set
 
