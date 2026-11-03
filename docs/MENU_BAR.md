@@ -6,6 +6,37 @@ renders it as iced_aw menus. Its content is pinned by
 `menu_bar/testdata/menu_bar.golden.tsv`; changing a menu, label, shortcut,
 order or message is a content change and needs the maintainers' sign-off.
 
+## How a row runs {#row-routing}
+
+A row that carries a command id (`cmd_item`, `cmd_item_gated`; every row with
+a shortcut) publishes `MenuMessage::Command(id)`. The main window sends it to
+`handle_menu_message`, which runs the id through `Signex::dispatch_command`,
+the same entry the shortcut, the palette and the context menu use, so an id has
+one behaviour on every surface. An undocked window sends it as
+`UiMsg::MenuInWindow`, and the native menu routes it the same way for the
+focused window; both dispatch the id against that window, so Save, Undo,
+Fit All and the rest act on the document the window shows.
+
+A live row's command must run: `menu_bar/tests/walk.rs` checks, for every row
+in each kind of window state, that a live row's `CommandOutcome` is `Ran` and a
+greyed row's is `Disabled`. The golden fixture still names each such row by the
+message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
+the id back to that name.
+
+## Rows with their own action {#own-action}
+
+Two rows take their label and shortcut from a command but do something else, so
+they keep a `MenuMessage` of their own (`cmd_item_own_action`) and their own
+gate:
+
+- View ▸ Cycle Grid Size (`cycle_snap_grid_forward`): the id opens the footprint
+  editor's grid picker (and is enabled only there); the row steps the schematic
+  or PCB grid.
+- Design ▸ Electrical Rules Check (`run_erc`): F8 runs ERC at once; the row opens
+  the ERC dialog to choose the rules first.
+
+Whether each should run its id instead is the maintainers' decision.
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active
