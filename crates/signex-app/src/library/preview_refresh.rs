@@ -116,7 +116,7 @@ impl PreviewRefreshPlan {
 
 impl LibraryState {
     /// Plan the re-resolution of every Component Preview whose row binds a
-    /// primitive in the library whose directory contains `saved`. The
+    /// primitive in the deepest library whose directory contains `saved`. The
     /// binding's `library_id` decides, not the library the preview tab
     /// belongs to: a row may bind a primitive from another library.
     ///
@@ -127,13 +127,7 @@ impl LibraryState {
     /// re-resolving. Each plan supersedes the earlier one for its library.
     pub fn plan_preview_refresh(&mut self, saved: &Path) -> Option<PreviewRefreshPlan> {
         let (saved_library, root) = self
-            .open_libraries
-            .iter()
-            .find(|lib| {
-                lib.root_dir()
-                    .map(|d| saved.starts_with(d))
-                    .unwrap_or(false)
-            })
+            .write_target_library(saved)
             .map(|lib| (lib.library_id, lib.root.clone()))?;
         let mut items = Vec::new();
         for (address, state) in &self.editors {

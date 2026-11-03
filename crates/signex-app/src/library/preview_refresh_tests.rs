@@ -257,3 +257,21 @@ fn a_readout_planned_under_a_closed_mount_does_not_land_on_the_next_mount() {
 
     assert_eq!(fx.shown(), "Old");
 }
+
+/// An outer library mounted before the nested one must not take the save:
+/// the previews bound to the inner library are the ones re-read (#1916).
+#[test]
+fn a_save_in_a_nested_library_refreshes_its_own_previews() {
+    let mut fx = fixture();
+    let outer = PathBuf::from("/tmp/Outer.snxlib");
+    open(&mut fx.state, &outer, Uuid::now_v7());
+    fx.state.open_libraries.rotate_right(1);
+    let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
+
+    let plan = fx.state.plan_preview_refresh(&saved);
+
+    assert!(
+        plan.is_some(),
+        "the inner library's preview was not planned for re-reading"
+    );
+}
