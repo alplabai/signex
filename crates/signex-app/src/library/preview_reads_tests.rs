@@ -136,7 +136,7 @@ impl Fixture {
 
 #[test]
 fn planning_a_tab_lookup_reads_nothing_and_the_worker_does() {
-    let f = fixture();
+    let mut f = fixture();
     let plan = f
         .state
         .plan_tab_resolve(&f.address, PreviewTab::Preview)
@@ -148,7 +148,7 @@ fn planning_a_tab_lookup_reads_nothing_and_the_worker_does() {
 
 #[test]
 fn a_tab_that_shows_no_primitive_needs_no_lookup() {
-    let f = fixture();
+    let mut f = fixture();
     assert!(
         f.state
             .plan_tab_resolve(&f.address, PreviewTab::Parameters)
@@ -398,4 +398,23 @@ fn a_requested_reload_of_a_clean_copy_edited_meanwhile_says_so() {
 
     assert_eq!(f.state.apply_editor_reload(outcome), ReloadApplied::Refused);
     assert_eq!(f.description(), "Typed");
+}
+
+#[test]
+fn a_tab_lookup_planned_before_a_newer_one_is_dropped() {
+    let mut f = fixture();
+    let older = f
+        .state
+        .plan_tab_resolve(&f.address, PreviewTab::Preview)
+        .expect("a plan")
+        .read();
+    // The preview was closed and reopened, and asked again.
+    let newer = f
+        .state
+        .plan_tab_resolve(&f.address, PreviewTab::Preview)
+        .expect("a plan");
+    f.state.apply_tab_resolve(older);
+    assert_eq!(f.symbol_name(), None);
+    f.state.apply_tab_resolve(newer.read());
+    assert_eq!(f.symbol_name().as_deref(), Some("Disk"));
 }

@@ -212,10 +212,7 @@ impl Signex {
                     .active_canvas_mut()
                     .clear_overlay_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
-                self.interaction_state
-                    .active_canvas_mut()
-                    .pending_fit
-                    .set(None);
+                self.interaction_state.active_canvas().cancel_pending_fit();
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
             }
             CanvasEvent::CenterAtCursor => {
@@ -230,10 +227,7 @@ impl Signex {
                 let (x, y) = (self.ui_state.cursor_x as f32, self.ui_state.cursor_y as f32);
                 // A user camera move cancels a deferred fit, as in `CursorMoved`;
                 // otherwise a queued fit lands afterwards and undoes the centring.
-                self.interaction_state
-                    .active_canvas_mut()
-                    .pending_fit
-                    .set(None);
+                self.interaction_state.active_canvas().cancel_pending_fit();
                 self.interaction_state.pcb_canvas.pending_fit.set(None);
                 if self.has_active_schematic() {
                     self.interaction_state

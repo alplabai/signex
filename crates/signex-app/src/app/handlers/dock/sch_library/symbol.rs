@@ -515,7 +515,7 @@ impl Signex {
             return true;
         }
         let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
-        let history = (editor.undo_snapshots.len(), editor.redo_snapshots.len());
+        let history = editor.history_generation;
         let name = editor.file.symbols[idx].name.clone();
         // A symbol rows or open sheets still use is not deleted until the
         // user has seen who (#1845).
