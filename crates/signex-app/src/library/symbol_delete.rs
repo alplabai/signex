@@ -405,8 +405,8 @@ mod tests {
         pending.apply_closed_scan(
             SymbolUsage::default(),
             &ClosedSheetScan {
-                placed: Vec::new(),
                 unreadable: vec!["x.snxsch could not be read".into()],
+                ..Default::default()
             },
         );
 
@@ -425,7 +425,7 @@ mod tests {
             SymbolUsage::default(),
             &ClosedSheetScan {
                 placed: vec!["y.snxsch: U1".into()],
-                unreadable: Vec::new(),
+                ..Default::default()
             },
         );
         assert!(!pending.warning.only_unknown);

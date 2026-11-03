@@ -103,6 +103,8 @@ struct Setup {
 }
 
 fn setup(sheets: &[(&str, Option<&str>)], unreadable: &[&str]) -> Setup {
+    // Installed before anything logs; a line emitted earlier is lost.
+    let _ = signex_app::diagnostics::init_logging();
     let f = fixture();
     let mut app = app_with_library(&f);
     let path = open_container_editor(&mut app, &f);
@@ -194,7 +196,7 @@ fn an_unused_symbol_is_deleted_once_every_closed_sheet_reads_clean() {
     assert_eq!(symbol_count(&app, &path), 1);
     assert!(warning(&app).is_none());
     assert!(logged(
-        "SIBLING deleted. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
+        "SIBLING deleted from two-unit.snxsym. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked."
     ));
 }
 
@@ -401,4 +403,88 @@ fn a_symbol_placed_on_an_open_sheet_during_the_scan_stops_the_delete() {
     assert!(shown.lines.join("\n").contains("U5"), "{:?}", shown.lines);
     assert!(!shown.checking);
     assert_eq!(symbol_count(&app, &path), 2);
+}
+
+fn sibling_lib_id(s: &Setup) -> String {
+    let sibling = s.app.document_state.symbol_editors[&s.path].file.symbols[1].uuid;
+    signex_app::library::place::lib_id_of(&PrimitiveRef::new(s.library_id, sibling))
+}
+
+fn write_sheet(path: &Path, lib_id: Option<&str>, children: &[&str]) {
+    let mut sheet = SchematicSheet::default();
+    if let Some(id) = lib_id {
+        sheet.symbols.push(Symbol {
+            lib_id: id.into(),
+            reference: "U3".into(),
+            ..Default::default()
+        });
+    }
+    sheet.child_sheets = children.iter().map(|c| child_ref(c)).collect();
+    std::fs::write(path, SnxSchematic::new(sheet).write_string().unwrap()).unwrap();
+}
+
+#[test]
+fn a_project_opened_during_the_scan_is_not_assumed_clean() {
+    let mut s = setup(&[("clean.snxsch", None)], &[]);
+    let task = delete(&mut s.app, 1);
+
+    let late = tempfile::tempdir().unwrap();
+    write_sheet(
+        &late.path().join("late.snxsch"),
+        Some(&sibling_lib_id(&s)),
+        &[],
+    );
+    open_project(&mut s.app, late.path(), &["late.snxsch"]);
+    run(&mut s.app, task);
+
+    let text = warning(&s.app).expect("held, not deleted").lines.join("\n");
+    assert!(
+        text.contains("late.snxsch was added while the check ran"),
+        "{text}"
+    );
+    assert_eq!(symbol_count(&s.app, &s.path), 2);
+}
+
+#[test]
+fn an_open_sheet_closed_during_the_scan_is_listed_unchecked() {
+    let mut s = setup(&[("clean.snxsch", None)], &[]);
+    let task = delete(&mut s.app, 1);
+
+    let open: Vec<PathBuf> = s.app.document_state.engines.keys().cloned().collect();
+    assert_eq!(open.len(), 1, "the fixture's open sheet");
+    s.app.document_state.engines.remove(&open[0]);
+    run(&mut s.app, task);
+
+    let text = warning(&s.app).expect("held, not deleted").lines.join("\n");
+    assert!(
+        text.contains("place-364.snxsch was closed while the check ran"),
+        "{text}"
+    );
+    assert_eq!(symbol_count(&s.app, &s.path), 2);
+}
+
+#[test]
+fn a_child_referenced_only_by_an_open_sheet_is_scanned() {
+    let mut s = setup(&[], &[]);
+    let dir = s._dir.path().to_path_buf();
+    // The open sheet's tab holds the child reference; its disk copy does not
+    // exist, so only the live document can lead to kid.snxsch.
+    write_sheet(&dir.join("kid.snxsch"), Some(&sibling_lib_id(&s)), &[]);
+    let key = s.app.document_state.engines.keys().next().cloned().unwrap();
+    let mut engine = s.app.document_state.engines.remove(&key).unwrap();
+    let mut doc = engine.document().clone();
+    doc.child_sheets.push(child_ref("kid.snxsch"));
+    engine.set_document(doc);
+    let parent = dir.join("parent.snxsch");
+    s.app.document_state.engines.insert(parent, engine);
+
+    let task = delete(&mut s.app, 1);
+    run(&mut s.app, task);
+
+    let text = warning(&s.app)
+        .expect("the child keeps it")
+        .lines
+        .join("\n");
+    assert!(text.contains("kid.snxsch: U3"), "{text}");
+    assert_eq!(symbol_count(&s.app, &s.path), 2);
 }

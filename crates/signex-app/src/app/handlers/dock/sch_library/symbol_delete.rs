@@ -3,6 +3,7 @@
 //! closed sheets of the open projects are read from disk by a `Task`.
 
 use super::*;
+use crate::app::CaseFold;
 use crate::library::LibraryMessage;
 use crate::library::closed_sheets::{
     ClosedSheetScan, ClosedSheetsReport, ScanPlan, SymbolMatch, scan_closed_sheets,
@@ -82,7 +83,7 @@ impl Signex {
         if !checking {
             return Task::none();
         }
-        let skipped_open = plan.open.clone();
+        let asked = plan.clone();
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || scan_closed_sheets(&plan, target))
@@ -94,7 +95,7 @@ impl Signex {
                     ClosedSheetsReport {
                         serial,
                         scan,
-                        skipped_open,
+                        plan: asked,
                     },
                 )))
             },
@@ -130,19 +131,7 @@ impl Signex {
             return Task::none();
         }
         let mut scan = report.scan;
-        // A sheet that was open when the scan began was not read from disk;
-        // if it has been closed since, its saved state was never checked.
-        for sheet in &report.skipped_open {
-            if !self.document_state.engines.contains_key(sheet) {
-                scan.unreadable.push(format!(
-                    "{} was closed while the check ran",
-                    sheet.file_name().map_or_else(
-                        || sheet.display().to_string(),
-                        |n| n.to_string_lossy().into_owned()
-                    )
-                ));
-            }
-        }
+        self.note_unscanned(&mut scan, &report.plan);
         // Rows and open sheets may have changed while the disk was read.
         let (usage, _) = self.symbol_usage_lines(&path, symbol);
         let Some(pending) = self.library.pending_symbol_delete.as_mut() else {
@@ -154,14 +143,51 @@ impl Signex {
             // asked for goes ahead.
             let pending = self.library.pending_symbol_delete.take().expect("pending");
             crate::diagnostics::log_info(format!(
-                "{} deleted. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked.",
-                pending.warning.name
+                "{} deleted from {}. Not used by open sheets or mounted libraries; the closed sheets of the open projects were checked.",
+                pending.warning.name,
+                pending.path.file_name().map_or_else(
+                    || pending.path.display().to_string(),
+                    |n| n.to_string_lossy().into_owned()
+                )
             ));
             self.delete_symbol_from_container(&pending.path, pending.warning.idx, pending.symbol);
             return Task::none();
         }
         self.refresh_panel_ctx();
         Task::none()
+    }
+
+    /// What changed while the scan ran, as unchecked entries: a sheet that was
+    /// open and has been closed (its saved copy was never read), and any
+    /// sheet or child reference the plan now has that the scan never reached.
+    fn note_unscanned(&self, scan: &mut ClosedSheetScan, asked: &ScanPlan) {
+        let name = |p: &std::path::Path| {
+            p.file_name().map_or_else(
+                || p.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            )
+        };
+        for sheet in &asked.open {
+            if !self.document_state.engines.contains_key(sheet) {
+                scan.unreadable
+                    .push(format!("{} was closed while the check ran", name(sheet)));
+            }
+        }
+        let now = self.closed_scan_plan();
+        for (path, fold) in &now.seeds {
+            let key = crate::app::project_sheets::fold_key(path, *fold);
+            if !scan.visited.contains(&key) {
+                scan.unreadable.push(format!(
+                    "{} was added while the check ran and was not read",
+                    name(path)
+                ));
+            }
+        }
+        for entry in &now.unresolved {
+            if !asked.unresolved.contains(entry) {
+                scan.unreadable.push(entry.clone());
+            }
+        }
     }
 
     /// The user answered "Delete anyway" to the in-use warning.
@@ -257,30 +283,41 @@ impl Signex {
             ChildReferenceRefusal, project_root_sheet_path, resolve_child_reference_quiet,
         };
         let engines = &self.document_state.engines;
-        let mut seeds: Vec<std::path::PathBuf> = Vec::new();
+        let mut seeds: Vec<(std::path::PathBuf, CaseFold)> = Vec::new();
         let mut unresolved = Vec::new();
         for project in &self.document_state.projects {
             let dir = project.dir();
-            seeds.extend(project.data.sheets.iter().map(|s| dir.join(&s.filename)));
-            seeds.extend(project_root_sheet_path(project));
+            let fold = project.case_fold;
+            seeds.extend(
+                project
+                    .data
+                    .sheets
+                    .iter()
+                    .map(|s| (dir.join(&s.filename), fold)),
+            );
+            seeds.extend(project_root_sheet_path(project).map(|p| (p, fold)));
         }
         for (path, engine) in engines {
             let dir = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+            let fold = self
+                .document_state
+                .document_project(path)
+                .map_or_else(CaseFold::host_default, |p| p.case_fold);
             for child in &engine.document().child_sheets {
                 match resolve_child_reference_quiet(dir, &child.filename) {
-                    Ok(resolved) => seeds.push(resolved),
+                    Ok(resolved) => seeds.push((resolved, fold)),
                     Err(ChildReferenceRefusal::Empty) => {}
                     Err(ChildReferenceRefusal::Escapes { reference, .. }) => {
                         unresolved.push(format!(
-                            "child sheet {reference} of an open sheet is outside the project folder"
+                            "child sheet {reference} of an open sheet is outside its parent sheet's folder"
                         ))
                     }
                 }
             }
         }
-        seeds.retain(|p| !engines.contains_key(p));
-        seeds.sort();
-        seeds.dedup();
+        seeds.retain(|(p, _)| !engines.contains_key(p));
+        seeds.sort_by(|a, b| a.0.cmp(&b.0));
+        seeds.dedup_by(|a, b| a.0 == b.0);
         ScanPlan {
             seeds,
             open: engines.keys().cloned().collect(),

@@ -212,9 +212,9 @@ pub(crate) fn load_sheet(
     )
 }
 
-/// The identity of a sheet path under the host's key rules.
-pub(crate) fn host_path_key(path: &Path) -> String {
-    path_key_with(path, CaseFold::host_default())
+/// The identity of a sheet path under `fold`, the owning project's key rules.
+pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
+    path_key_with(path, fold)
 }
 
 /// A disk parse of one sheet, ignoring open tabs (a worker has no engines).

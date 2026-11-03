@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
+use crate::app::CaseFold;
+
 use super::drift::split_lib_id;
 use super::symbol_delete::placed_on_sheets;
 
@@ -37,6 +39,8 @@ pub struct ClosedSheetScan {
     pub placed: Vec<String>,
     /// `sheet.snxsch (why)` for every sheet that could not be checked.
     pub unreadable: Vec<String>,
+    /// Keys of the sheets the walk reached (read or not).
+    pub visited: Vec<String>,
 }
 
 impl ClosedSheetScan {
@@ -45,6 +49,7 @@ impl ClosedSheetScan {
         Self {
             placed: Vec::new(),
             unreadable: vec![format!("closed sheets ({reason})")],
+            visited: Vec::new(),
         }
     }
 }
@@ -55,8 +60,8 @@ impl ClosedSheetScan {
 pub struct ClosedSheetsReport {
     pub serial: u64,
     pub scan: ClosedSheetScan,
-    /// The sheets that were open when the scan began and so were skipped.
-    pub skipped_open: Vec<PathBuf>,
+    /// What the scan was asked to read; the open sheets in it were skipped.
+    pub plan: ScanPlan,
 }
 
 /// Where the disk scan starts, gathered in `update` from memory.
@@ -65,7 +70,7 @@ pub struct ScanPlan {
     /// Sheets to read, and to follow down their `child_sheets`: every
     /// declared page and root of the open projects, plus the children of the
     /// open sheets. Sheets that are open are not listed (memory covers them).
-    pub seeds: Vec<PathBuf>,
+    pub seeds: Vec<(PathBuf, CaseFold)>,
     /// Sheets open as tabs; a walk that reaches one skips it, its content and
     /// children were already counted from memory.
     pub open: Vec<PathBuf>,
@@ -80,23 +85,25 @@ impl ScanPlan {
     }
 }
 
-use crate::app::project_sheets::host_path_key as key;
+use crate::app::project_sheets::fold_key as key;
 
 /// Read every sheet the plan reaches, children included, and collect the
-/// ones that place `target`. A sheet visited twice is read once.
+/// ones that place `target`. A sheet visited twice is read once. Each sheet
+/// is keyed under the key rules of the project that reached it.
 pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetScan {
     let mut scan = ClosedSheetScan {
         placed: Vec::new(),
         unreadable: plan.unresolved.clone(),
+        visited: Vec::new(),
     };
-    let open: std::collections::HashSet<String> = plan.open.iter().map(|p| key(p)).collect();
     let mut visited = std::collections::HashSet::new();
-    let mut queue: Vec<PathBuf> = plan.seeds.clone();
-    while let Some(path) = queue.pop() {
-        let k = key(&path);
-        if open.contains(&k) || !visited.insert(k) {
+    let mut queue: Vec<(PathBuf, CaseFold)> = plan.seeds.clone();
+    while let Some((path, fold)) = queue.pop() {
+        let k = key(&path, fold);
+        if plan.open.iter().any(|o| key(o, fold) == k) || !visited.insert(k.clone()) {
             continue;
         }
+        scan.visited.push(k);
         let sheet = match crate::app::project_sheets::load_sheet_disk(&path) {
             Ok(Some(sheet)) => sheet,
             // Declared but absent: nothing was read, so nothing is known.
@@ -120,11 +127,11 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
                 ChildReferenceRefusal, resolve_child_reference_quiet,
             };
             match resolve_child_reference_quiet(dir, &child.filename) {
-                Ok(resolved) => queue.push(resolved),
+                Ok(resolved) => queue.push((resolved, fold)),
                 Err(ChildReferenceRefusal::Empty) => {}
                 Err(ChildReferenceRefusal::Escapes { reference, .. }) => {
                     scan.unreadable.push(format!(
-                        "{}: child sheet {reference} is outside the project folder",
+                        "{}: child sheet {reference} is outside its parent sheet's folder",
                         file_name(&path)
                     ))
                 }
@@ -133,6 +140,7 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
     }
     scan.placed.sort();
     scan.unreadable.sort();
+    scan.visited.sort();
     scan
 }
 

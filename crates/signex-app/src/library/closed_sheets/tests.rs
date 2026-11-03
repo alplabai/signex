@@ -16,7 +16,10 @@ fn write_sheet(dir: &Path, name: &str, lib_id: &str, reference: &str) -> PathBuf
 
 fn plan(seeds: &[PathBuf]) -> ScanPlan {
     ScanPlan {
-        seeds: seeds.to_vec(),
+        seeds: seeds
+            .iter()
+            .map(|p| (p.clone(), CaseFold::host_default()))
+            .collect(),
         ..Default::default()
     }
 }
@@ -147,7 +150,7 @@ fn an_absent_or_escaping_child_is_unchecked() {
 
     let text = scan.unreadable.join("\n");
     assert!(text.contains("gone.snxsch (file not found)"), "{text}");
-    assert!(text.contains("outside the project folder"), "{text}");
+    assert!(text.contains("outside its parent sheet's folder"), "{text}");
 }
 
 #[test]
