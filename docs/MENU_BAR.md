@@ -14,8 +14,12 @@ a shortcut) publishes `MenuMessage::Command(id)`. The main window sends it to
 the same entry the shortcut, the palette and the context menu use, so an id has
 one behaviour on every surface. An undocked window sends it as
 `UiMsg::MenuInWindow`, and the native menu routes it the same way for the
-focused window; both dispatch the id against that window, so Save, Undo,
-Fit All and the rest act on the document the window shows.
+focused window; both dispatch the id against that window, exactly as the
+shortcut typed there does. Only some ids act on that window's own document:
+Save, Save As, Print, Close Document and the tab steppers, Undo and Redo, and
+the commands that send a canvas event (Fit All). Cut, Copy, Paste, Delete,
+Select All, Find, the Place rows, Zoom In / Out and AutoFocus still act on the
+main window's active tab, as their shortcuts do.
 
 A live row's command must run: `menu_bar/tests/walk.rs` checks, for every row
 in each kind of window state, that a live row's `CommandOutcome` is `Ran` and a
@@ -35,7 +39,7 @@ gate:
 - Design ▸ Electrical Rules Check (`run_erc`): F8 runs ERC at once; the row opens
   the ERC dialog to choose the rules first.
 
-Whether each should run its id instead is the maintainers' decision.
+Whether each should run its id instead is the maintainers' decision (#1991).
 
 ## File ▸ Library {#file-library}
 
