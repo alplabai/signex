@@ -1,5 +1,5 @@
 //! #1404 — the X / Y keys, the Mirror X / Y command ids (what the context-menu rows dispatch,
-//! pinned in-crate by `catalog_agreement_tests`) and the active
+//! axes pinned in-crate by `row_effects::mirror_rows_flip_the_axes_the_keys_flip`) and the active
 //! bar's Flip Selected Sheet Symbols Along X / Y are three entry points to
 //! one operation, so each pair must flip a placed symbol the same way.
 //! The active bar once crossed the axes the other two agree on.
