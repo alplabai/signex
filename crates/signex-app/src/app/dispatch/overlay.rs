@@ -65,10 +65,7 @@ impl Signex {
             }
             OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
             OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
-            OverlayMsg::DismissFirstRunTour => {
-                self.ui_state.first_run_tour_open = false;
-                dismiss_first_run_tour_task()
-            }
+            OverlayMsg::DismissFirstRunTour => self.dismiss_first_run_tour(),
             OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
             OverlayMsg::FocusAt {

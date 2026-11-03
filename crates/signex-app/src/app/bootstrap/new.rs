@@ -722,7 +722,13 @@ pub(in crate::app) fn first_run_tour_boot(
     if crate::fonts::read_first_run_tour_dismissed_from(prefs) {
         return (false, iced::Task::none());
     }
-    (true, crate::app::dispatch::dismiss_first_run_tour_task())
+    // Built when the runtime runs the task, not here: the write takes a slot
+    // of the in-flight preference-write count when it is made, and a boot that
+    // only builds the app must not leave that count raised.
+    (
+        true,
+        iced::Task::done(()).then(|()| crate::app::dispatch::dismiss_first_run_tour_task()),
+    )
 }
 
 /// Settings for the main window. Every case is borderless (the custom strip

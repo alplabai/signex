@@ -58,6 +58,13 @@ impl Drop for InFlightSlot {
     }
 }
 
+/// How many ordered writes are in flight, for tests that guard a path from
+/// taking a slot before its task runs.
+#[cfg(test)]
+pub(crate) fn pref_writes_in_flight() -> usize {
+    IN_FLIGHT.load(Ordering::SeqCst)
+}
+
 /// Block until every ordered write started so far has finished, or `limit`
 /// passes. Returns whether none are left. Call from a blocking worker.
 pub fn wait_for_pref_writes(limit: Duration) -> bool {

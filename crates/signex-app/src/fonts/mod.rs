@@ -732,6 +732,8 @@ mod erc;
 pub mod measure;
 mod misc;
 mod ordered_write;
+#[cfg(test)]
+pub(crate) use ordered_write::pref_writes_in_flight;
 mod prefs_file;
 mod presets;
 mod recent;

@@ -146,6 +146,17 @@ fn a_launch_with_no_pref_opens_the_card_and_saves_that_it_was_shown() {
     assert!(open && has_work(&task));
 }
 
+/// The boot write is built when the runtime runs the task, so constructing the
+/// app (as every test does) leaves the in-flight write count alone; a raised
+/// count would make the quit path wait out its whole limit.
+#[test]
+fn building_the_app_takes_no_preference_write_slot() {
+    let before = crate::fonts::pref_writes_in_flight();
+    let (_app, _task) = Signex::new();
+    let (_open, _task) = crate::app::bootstrap::first_run_tour_boot(None);
+    assert_eq!(crate::fonts::pref_writes_in_flight(), before);
+}
+
 #[test]
 fn a_launch_with_the_pref_set_does_not_open_the_card() {
     let prefs = serde_json::json!({ "first_run_tour_dismissed": true });
