@@ -59,7 +59,7 @@ pub(super) struct PinTextLayout {
 pub(super) const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
     number_size_mm: 1.27,
     name_size_mm: 1.27,
-    name_offset_x_mm: 0.50,
+    name_offset_x_mm: signex_types::schematic::PIN_NAME_OFFSET_MM as f32,
 };
 
 /// Approximate glyph advance as a fraction of the text size — used to

@@ -50,7 +50,6 @@ type Case = ((f64, f64, bool, bool), (f64, f64), f64, HAlign, (f64, f64));
 
 const UP: (f64, f64) = (0.0, -1.0);
 const LEFT: (f64, f64) = (-1.0, 0.0);
-const RIGHT: (f64, f64) = (1.0, 0.0);
 
 fn cases() -> Vec<Case> {
     vec![
@@ -73,9 +72,9 @@ fn cases() -> Vec<Case> {
         (
             (270.0, 0.0, false, false),
             (0.0, 1.0),
-            90.0,
-            HAlign::Left,
-            RIGHT,
+            -90.0,
+            HAlign::Right,
+            LEFT,
         ),
         // Symbol turns, pin pointing right in the library.
         (
@@ -95,18 +94,18 @@ fn cases() -> Vec<Case> {
         (
             (0.0, 270.0, false, false),
             (0.0, 1.0),
-            90.0,
-            HAlign::Left,
-            RIGHT,
+            -90.0,
+            HAlign::Right,
+            LEFT,
         ),
         // Mirrors flip the direction, never the glyphs.
         ((0.0, 0.0, false, true), (-1.0, 0.0), 0.0, HAlign::Right, UP),
         (
             (90.0, 0.0, true, false),
             (0.0, 1.0),
-            90.0,
-            HAlign::Left,
-            RIGHT,
+            -90.0,
+            HAlign::Right,
+            LEFT,
         ),
         (
             (90.0, 0.0, false, true),
@@ -173,7 +172,7 @@ fn text_is_never_upside_down() {
             for label in labels {
                 let r = label.rotation_rad;
                 assert!(
-                    (-FRAC_PI_2 - 1e-9..=FRAC_PI_2 + 1e-9).contains(&r),
+                    (-FRAC_PI_2..FRAC_PI_2).contains(&r),
                     "pin {pin_rot} sym {sym_rot}: {r}"
                 );
             }
@@ -231,4 +230,74 @@ fn a_power_port_has_no_pin_text() {
     let mut sym = placed(0.0, false, false);
     sym.is_power = true;
     assert!(lower_pin_labels(&lib, &sym).is_empty());
+}
+
+/// A library whose pins sit on one edge: local x = `edge_x`, pointing
+/// `rotation`, at each of `ys`.
+fn lib_with_edge(edge_x: f64, rotation: f64, ys: &[f64]) -> LibSymbol {
+    let mut lib: LibSymbol =
+        serde_json::from_value(serde_json::json!({ "id": "L:E" })).expect("lib symbol");
+    for (i, y) in ys.iter().enumerate() {
+        let mut pin = pin_json(rotation, "IO");
+        pin["position"] = serde_json::json!({ "x": edge_x, "y": y });
+        pin["number"] = serde_json::json!((i + 1).to_string());
+        lib.pins.push(LibPin {
+            unit: 0,
+            body_style: crate::schematic::BODY_NORMAL,
+            pin: serde_json::from_value(pin).expect("pin"),
+        });
+    }
+    lib
+}
+
+/// Off the origin, a 90 or 270 degree turn leaves float noise in each
+/// pin's world direction. Every pin on one edge must still read the same
+/// way, with its name aligned the same and its number on the same side.
+#[test]
+fn every_pin_on_an_edge_reads_the_same_way_off_the_origin() {
+    let ys: Vec<f64> = (-8..=8).map(|k| f64::from(k) * 1.27).collect();
+    let lib = lib_with_edge(-7.62, 0.0, &ys);
+    for sym_rot in [0.0, 90.0, 180.0, 270.0] {
+        for (mx, my) in [(false, false), (true, false), (false, true)] {
+            for (sx, sy) in [(12.7, 38.1), (101.6, 63.5), (-25.4, 7.62)] {
+                let mut sym = placed(sym_rot, mx, my);
+                sym.position = Point::new(sx, sy);
+                let labels = lower_pin_labels(&lib, &sym);
+                let case = format!("sym {sym_rot} mx {mx} my {my} at ({sx}, {sy})");
+                assert_eq!(labels.len(), 2 * ys.len(), "{case}");
+                let first = &labels[0];
+                for label in &labels {
+                    assert_eq!(label.rotation_rad, first.rotation_rad, "{case}");
+                    assert!(
+                        [-FRAC_PI_2, 0.0].contains(&label.rotation_rad),
+                        "{case}: {} is not on an axis",
+                        label.rotation_rad
+                    );
+                }
+                let names: Vec<_> = labels
+                    .iter()
+                    .filter(|l| l.kind == PinLabelKind::Name)
+                    .collect();
+                assert!(
+                    names.iter().all(|l| l.h_align == names[0].h_align),
+                    "{case}: name alignment differs along the edge"
+                );
+            }
+        }
+    }
+}
+
+/// The reviewer's repro: a pin off the origin on a symbol turned 270
+/// degrees reads bottom-to-top like its neighbours.
+#[test]
+fn a_pin_off_the_origin_on_a_turned_symbol_is_not_flipped() {
+    let lib = lib_with_edge(-7.62, 0.0, &[-7.62, -5.08, 0.0, 2.54]);
+    let mut sym = placed(270.0, false, false);
+    sym.position = Point::new(12.7, 38.1);
+    for label in lower_pin_labels(&lib, &sym) {
+        assert_eq!(label.rotation_rad, -FRAC_PI_2, "pin {}", label.pin_number);
+        if label.kind == PinLabelKind::Name {
+            assert_eq!(label.h_align, HAlign::Right, "pin {}", label.pin_number);
+        }
+    }
 }

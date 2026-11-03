@@ -300,9 +300,9 @@ fn a_pin_name_is_inside_the_body_past_the_pin_end() {
         (y - (-5.08 + 2.54 + off)).abs() < 1e-4,
         "TOP runs inside: {y}"
     );
-    // The name turns with the vertical pin (read top-to-bottom), so in its own
-    // frame it still starts at the anchor and runs away from the edge.
-    assert_eq!((align.as_str(), v_align.as_str()), ("Left", "Center"));
+    // Vertical pin text always reads bottom-to-top, so a pin pointing down
+    // ends its name at the anchor: right-aligned in the text's own frame.
+    assert_eq!((align.as_str(), v_align.as_str()), ("Right", "Center"));
 }
 
 /// #1858: output pins stroke at the symbol's library width, like the body

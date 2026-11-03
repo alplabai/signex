@@ -39,8 +39,8 @@ pub struct PinLabel {
     /// Number of the pin the text belongs to.
     pub pin_number: String,
     pub position: Point,
-    /// Clockwise screen angle (Y-down), in `[-pi/2, pi/2]`: text is never
-    /// upside-down. A vertical pin pointing up reads bottom-to-top.
+    /// Clockwise screen angle (Y-down), in `[-pi/2, pi/2)`: text is never
+    /// upside-down, and every vertical pin reads bottom-to-top.
     pub rotation_rad: f64,
     /// Alignment in the text's own frame.
     pub h_align: HAlign,
@@ -61,24 +61,21 @@ pub struct PinTextLayout {
 /// Lay out the texts of a pin whose connection point is `tip`, pointing
 /// `dir` (unit, tip to body end) for `length`, in a Y-down frame.
 ///
-/// Text turns with the pin and is folded into `[-pi/2, pi/2]`. The name sits
-/// `name_offset` past the body end, running away from the edge. The number
-/// sits near the tip, on the side the text's top faces.
+/// Text turns with the pin and is folded into `[-pi/2, pi/2)`. Every
+/// vertical pin, pointing up or down, reads bottom-to-top at `-pi/2`, so the
+/// pins on one edge all read the same way and their numbers sit on the same
+/// side. The name sits `name_offset` past the body end, running away from
+/// the edge. The number sits near the tip, on the side the text's top faces.
 pub fn pin_text_layout(
     tip: Point,
     dir: (f64, f64),
     length: f64,
     name_offset: f64,
 ) -> PinTextLayout {
-    let mut rotation = dir.1.atan2(dir.0);
-    let mut folded = false;
-    if rotation > FRAC_PI_2 {
-        rotation -= PI;
-        folded = true;
-    } else if rotation < -FRAC_PI_2 {
-        rotation += PI;
-        folded = true;
-    }
+    let (rotation, folded) = folded_angle(dir);
+    // Use the snapped direction below too, so positions carry no noise.
+    let dir = (rotation.cos(), rotation.sin());
+    let dir = if folded { (-dir.0, -dir.1) } else { dir };
     // The text's top, as a screen direction.
     let up = (rotation.sin(), -rotation.cos());
     let along = length * PIN_NUMBER_ALONG_RATIO;
@@ -94,6 +91,31 @@ pub fn pin_text_layout(
         ),
         name_h_align: if folded { HAlign::Right } else { HAlign::Left },
     }
+}
+
+/// Angle tolerance of [`folded_angle`]. A 90 or 270 degree symbol turn
+/// leaves about 1e-16 of cos/sin noise in a pin's world direction; without
+/// a tolerance that noise decides which way a vertical pin's text reads.
+const FOLD_EPS: f64 = 1e-9;
+
+/// The text angle for a pin pointing `dir`, and whether the text was turned
+/// half a circle to stay readable. Near-axis angles snap to the axis, and
+/// both vertical directions land on `-pi/2`.
+fn folded_angle(dir: (f64, f64)) -> (f64, bool) {
+    let raw = dir.1.atan2(dir.0);
+    let (mut rotation, folded) = if raw > FRAC_PI_2 - FOLD_EPS {
+        (raw - PI, true)
+    } else if raw < -FRAC_PI_2 - FOLD_EPS {
+        (raw + PI, true)
+    } else {
+        (raw, false)
+    };
+    for axis in [-FRAC_PI_2, 0.0] {
+        if (rotation - axis).abs() < FOLD_EPS {
+            rotation = axis;
+        }
+    }
+    (rotation, folded)
 }
 
 /// Pin numbers and names of `sym`'s visible pins, honouring the per-pin
