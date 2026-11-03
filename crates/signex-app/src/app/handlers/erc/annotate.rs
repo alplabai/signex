@@ -28,17 +28,17 @@ pub(super) fn annotate_unopened_for_write(
         }
     };
     match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
-        Ok(true) => {
-            // The sheet is written with the repairs: say so.
-            crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
-        }
+        Ok(true) => {}
         Ok(false) => return None,
         Err(error) => {
             crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
             return None;
         }
     }
-    encode_unopened("Annotate", path, &engine)
+    let bytes = encode_unopened("Annotate", path, &engine)?;
+    // The sheet is written with the repairs: say so, now the encode held.
+    crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
+    Some(bytes)
 }
 
 /// The sheet `engine` holds as `.snxsch` bytes, for the write worker. `None`

@@ -244,12 +244,14 @@ fn repair_sheet_pins(ids: &mut IdSpace, sheet: &mut SchematicSheet) {
 }
 
 /// Maps keyed by object uuid (`net_colors` for wires and junctions,
-/// `drawing_placements` for drawings). A re-minted object takes its old
-/// id's entry: copied when the first holder is the same sort of object (the
-/// entry may be both's), moved when the holder is another kind (the entry
-/// was never the holder's, and must not stay behind to be written back).
+/// `drawing_placements` for drawings). Every re-minted object takes a copy of
+/// its old id's entry (several can be re-minted off one id). When the first
+/// holder is another kind the entry was never the holder's and must not stay
+/// behind to be written back, so those old keys go once all copies are made.
 fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]) {
     let colored = |k: &str| k == kind::WIRE || k == kind::JUNCTION;
+    let mut stale_colors = Vec::new();
+    let mut stale_placements = Vec::new();
     for repair in repairs {
         let SheetLoadRepair::UuidReminted {
             object,
@@ -266,7 +268,7 @@ fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]
         {
             sheet.net_colors.insert(*new, color);
             if !colored(holder) {
-                sheet.net_colors.remove(old);
+                stale_colors.push(*old);
             }
         }
         if object.kind == kind::DRAWING
@@ -274,9 +276,15 @@ fn move_side_map_entries(sheet: &mut SchematicSheet, repairs: &[SheetLoadRepair]
         {
             sheet.drawing_placements.insert(*new, placement);
             if *holder != kind::DRAWING {
-                sheet.drawing_placements.remove(old);
+                stale_placements.push(*old);
             }
         }
+    }
+    for old in stale_colors {
+        sheet.net_colors.remove(&old);
+    }
+    for old in stale_placements {
+        sheet.drawing_placements.remove(&old);
     }
 }
 
