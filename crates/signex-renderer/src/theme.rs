@@ -43,7 +43,7 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::Ghost, to_rgba(canvas.body_fill));
         resolved.set_slot(ColorSlot::LassoStroke, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::LassoFill, to_rgba(canvas.selection));
-        resolved.set_slot(ColorSlot::Ratsnest, to_rgba(canvas.ratsnest));
+        resolved.set_slot(ColorSlot::Ratsnest, to_rgba(canvas.ratsnest_color()));
 
         resolved
     }

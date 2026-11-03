@@ -182,7 +182,13 @@ impl Signex {
                     let at = signex_types::schematic::Point::new(world_x, world_y);
                     let clicked_pin = hit.and_then(|h| {
                         let sheet = self.document_state.active_path.as_deref()?;
-                        self.pin_under(sheet, &h, at).map(|pin| (h.uuid, pin))
+                        self.pin_under(sheet, &h, at)
+                            .map(|pin| crate::app::state::ClickedPin {
+                                sheet: sheet.to_path_buf(),
+                                placement: self.shown_placement(sheet),
+                                symbol: h.uuid,
+                                pin,
+                            })
                     });
                     if clicked_pin.is_some() {
                         // A pin click opens the Pins section; the user can

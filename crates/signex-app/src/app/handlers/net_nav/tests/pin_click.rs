@@ -193,6 +193,40 @@ fn another_selection_drops_the_pin_focus_for_good() {
 }
 
 #[test]
+fn a_pin_focus_recorded_for_another_sheet_or_placement_is_not_kept() {
+    use signex_types::schematic::InstancePath;
+
+    let (mut p, part) = project_with_part(false);
+    click(&mut p, 45.1, 50.0);
+    let clicked = p
+        .app
+        .interaction_state
+        .clicked_pin
+        .clone()
+        .expect("a focus");
+    assert_eq!(clicked.symbol, part);
+
+    // The same focus, refreshed in the same place, is kept.
+    p.app.update_selection_info();
+    assert_eq!(focused(&p).as_deref(), Some("1"));
+
+    // The same symbol uuid under another placement of the sheet is not it.
+    let mut other_placement = clicked.clone();
+    other_placement.placement = Some(InstancePath::root().child(uuid::Uuid::from_u128(5)));
+    p.app.interaction_state.clicked_pin = Some(other_placement);
+    p.app.update_selection_info();
+    assert_eq!(focused(&p), None);
+    assert!(p.app.interaction_state.clicked_pin.is_none());
+
+    // Nor is one recorded for another sheet.
+    let mut other_sheet = clicked;
+    other_sheet.sheet = std::path::PathBuf::from("other.snxsch");
+    p.app.interaction_state.clicked_pin = Some(other_sheet);
+    p.app.update_selection_info();
+    assert_eq!(focused(&p), None);
+}
+
+#[test]
 fn a_click_on_the_body_centre_focuses_no_pin() {
     let (mut p, part) = project_with_part(false);
     click(&mut p, 50.0, 50.0);

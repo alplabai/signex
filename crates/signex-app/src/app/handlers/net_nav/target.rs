@@ -79,18 +79,20 @@ pub(super) fn net_of_target(
 
 /// The net a hover card is for. Unlike [`net_of_target`], a placed symbol
 /// answers only for a picked pin; its body belongs to the part, whose own
-/// card shows there.
+/// card shows there. A power port is the exception: it is a net name, so
+/// the card shows over the whole port, as the highlight does.
 pub(super) fn net_of_hover(
     data: &ProjectNetData,
     sheet: &SheetKey,
     item: &SelectedItem,
     pin: Option<&str>,
+    is_power: bool,
     occurrence: Option<&InstancePath>,
 ) -> Option<usize> {
-    if item.kind == SelectedKind::Symbol {
+    if item.kind == SelectedKind::Symbol && !is_power {
         return pin.and_then(|k| pin_net(data, sheet, item.uuid, k, occurrence));
     }
-    net_of_target(data, sheet, item, None, occurrence)
+    net_of_target(data, sheet, item, pin, occurrence)
 }
 
 /// Where `item` sits on `sheet`: a point on it to centre the view on.
@@ -132,6 +134,17 @@ impl Signex {
     pub(crate) fn schematic_px_per_mm(&self) -> f64 {
         self.interaction_state.active_canvas().zoom_percent() / 100.0
             * f64::from(signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE)
+    }
+
+    /// Whether `item` is a power port on the sheet at `sheet`.
+    pub(crate) fn is_power_port(&self, sheet: &std::path::Path, item: &SelectedItem) -> bool {
+        item.kind == SelectedKind::Symbol
+            && self.document_state.engines.get(sheet).is_some_and(|e| {
+                e.document()
+                    .symbols
+                    .iter()
+                    .any(|s| s.uuid == item.uuid && s.is_power)
+            })
     }
 
     /// The pin of the placed symbol `item` that the point `at` picks on the

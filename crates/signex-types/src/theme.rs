@@ -193,22 +193,20 @@ pub struct CanvasColors {
     /// DRC violation marker, warning severity.
     pub drc_warning: Color,
     pub selection: Color,
-    /// PCB ratsnest lines. Its own colour, so a change to the selection
-    /// outline does not recolour the ratsnest; files without it read as the
-    /// old default.
-    #[serde(default = "default_ratsnest")]
-    pub ratsnest: Color,
+    /// PCB ratsnest lines; `None` (a custom theme file from before this
+    /// field) draws them in the selection colour, as they always were.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ratsnest: Option<Color>,
     pub bus: Color,
     pub grid: Color,
     pub cursor: Color,
 }
 
-fn default_ratsnest() -> Color {
-    Color {
-        r: 0x00,
-        g: 0x78,
-        b: 0xD4,
-        a: 0xFF,
+impl CanvasColors {
+    /// The colour of PCB ratsnest lines.
+    #[must_use]
+    pub fn ratsnest_color(&self) -> Color {
+        self.ratsnest.unwrap_or(self.selection)
     }
 }
 
@@ -259,7 +257,7 @@ const CATPPUCCIN_MOCHA_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0xF3, 0x8B, 0xA8),
     drc_warning: c(0xF3, 0x8B, 0xA8),
     selection: c(0xFF, 0xEE, 0x00), // Bright yellow: apart from the pin, wire and label colours
-    ratsnest: c(0xF5, 0xE0, 0xDC),
+    ratsnest: Some(c(0xF5, 0xE0, 0xDC)),
     bus: c(0x89, 0xDC, 0xEB),
     grid: c(0x45, 0x47, 0x5A),
     cursor: c(0xF5, 0xE0, 0xDC),
@@ -304,7 +302,7 @@ const VSCODE_DARK_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0xF4, 0x44, 0x47),
     drc_warning: c(0xF4, 0x44, 0x47),
     selection: c(0xFF, 0xFF, 0x00), // Bright yellow: apart from the pin, wire and label colours
-    ratsnest: c(0xFF, 0xFF, 0xFF),
+    ratsnest: Some(c(0xFF, 0xFF, 0xFF)),
     bus: c(0x9C, 0xDC, 0xFE),
     grid: c(0x3C, 0x3C, 0x3C),
     cursor: c(0xFF, 0xFF, 0xFF),
@@ -352,7 +350,7 @@ const SIGNEX_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0x80, 0x00, 0x00),
     drc_warning: c(0x80, 0x00, 0x00),
     selection: c(0x00, 0xA0, 0x00), // Altium-style green; reads on cream paper and on dark chrome
-    ratsnest: c(0x00, 0x78, 0xD4),
+    ratsnest: Some(c(0x00, 0x78, 0xD4)),
     bus: c(0x00, 0x00, 0x80),    // Navy blue bus (rendered thicker)
     grid: c(0xC0, 0xC0, 0xC0),   // Light gray grid dots/lines
     cursor: c(0x00, 0x00, 0x00), // Black cursor crosshair
@@ -423,7 +421,7 @@ const GITHUB_DARK_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0xFF, 0x7B, 0x72),
     drc_warning: c(0xFF, 0x7B, 0x72),
     selection: c(0xFF, 0xDD, 0x00), // Bright yellow: apart from the pin, wire and label colours
-    ratsnest: c(0xFF, 0xFF, 0xFF),
+    ratsnest: Some(c(0xFF, 0xFF, 0xFF)),
     bus: c(0x79, 0xC0, 0xFF),
     grid: c(0x30, 0x36, 0x3D),
     cursor: c(0xFF, 0xFF, 0xFF),
@@ -468,7 +466,7 @@ const SOLARIZED_LIGHT_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0xDC, 0x32, 0x2F),
     drc_warning: c(0xDC, 0x32, 0x2F),
     selection: c(0x00, 0x2B, 0x36),
-    ratsnest: c(0x00, 0x2B, 0x36),
+    ratsnest: Some(c(0x00, 0x2B, 0x36)),
     bus: c(0x6C, 0x71, 0xC4),
     grid: c(0x93, 0xA1, 0xA1),
     cursor: c(0x00, 0x2B, 0x36),
@@ -513,7 +511,7 @@ const NORD_CANVAS: CanvasColors = CanvasColors {
     drc_error: c(0xBF, 0x61, 0x6A),
     drc_warning: c(0xBF, 0x61, 0x6A),
     selection: c(0xFF, 0xCC, 0x00), // Bright amber: apart from the pin, wire and label colours
-    ratsnest: c(0xEC, 0xEF, 0xF4),
+    ratsnest: Some(c(0xEC, 0xEF, 0xF4)),
     bus: c(0x81, 0xA1, 0xC1),
     grid: c(0x4C, 0x56, 0x6A),
     cursor: c(0xEC, 0xEF, 0xF4),
@@ -612,9 +610,20 @@ mod tests {
             ThemeId::Nord => (0xEC, 0xEF, 0xF4),
         };
         for &id in ThemeId::BUILTINS {
-            let r = canvas_colors(id).ratsnest;
+            let r = canvas_colors(id).ratsnest_color();
             assert_eq!((r.r, r.g, r.b), old(id), "{id:?}");
         }
+    }
+
+    #[test]
+    fn an_old_custom_theme_file_draws_its_ratsnest_in_its_selection_colour() {
+        let mut canvas = canvas_colors(ThemeId::Signex);
+        canvas.selection = Color::new(1, 2, 3, 255);
+        let mut json = serde_json::to_value(canvas).unwrap();
+        json.as_object_mut().unwrap().remove("ratsnest");
+        let old: CanvasColors = serde_json::from_value(json).unwrap();
+        assert_eq!(old.ratsnest, None);
+        assert_eq!(old.ratsnest_color(), Color::new(1, 2, 3, 255));
     }
 
     #[test]

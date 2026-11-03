@@ -216,17 +216,25 @@ impl Signex {
             .interaction_state
             .clicked_pin
             .as_ref()
-            .is_some_and(|(owner, _)| {
-                matches!(
-                    self.interaction_state.active_canvas().selected.as_slice(),
-                    [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
-                        && item.uuid == *owner
-                )
+            .is_some_and(|c| {
+                let same_sheet = self.document_state.active_path.as_deref()
+                    == Some(c.sheet.as_path())
+                    && self.shown_placement(&c.sheet) == c.placement;
+                same_sheet
+                    && matches!(
+                        self.interaction_state.active_canvas().selected.as_slice(),
+                        [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
+                            && item.uuid == c.symbol
+                    )
             });
         if !keeps_focus {
             self.interaction_state.clicked_pin = None;
         }
-        let clicked_pin = self.interaction_state.clicked_pin.clone();
+        let clicked_pin = self
+            .interaction_state
+            .clicked_pin
+            .as_ref()
+            .map(|c| (c.symbol, c.pin.clone()));
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
