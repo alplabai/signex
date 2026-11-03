@@ -525,12 +525,7 @@ pub enum FileMsg {
         result: Result<Box<crate::app::handlers::document_files::ReloadedFile>, String>,
     },
     /// An idle poll re-read the files of open documents (#1877).
-    DocumentDiskPolled(
-        Vec<(
-            PathBuf,
-            crate::app::handlers::document_files::DiskObservation,
-        )>,
-    ),
+    DocumentDiskPolled(Vec<crate::app::handlers::document_files::DiskRead>),
     /// Completion of an off-thread document write (Save / Save As). The
     /// dirty marker clears only if the document has not changed since the
     /// snapshot; see `handlers/document_files/save_async.rs`.

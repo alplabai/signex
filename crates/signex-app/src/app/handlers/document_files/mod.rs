@@ -11,7 +11,7 @@ mod dir_case;
 mod disk_poll;
 mod external_change;
 pub(crate) use dir_case::FoldAnswer;
-pub(crate) use disk_poll::{DiskObservation, DiskPoll};
+pub(crate) use disk_poll::{DiskPoll, DiskRead};
 pub(crate) use external_change::ReloadedFile;
 #[cfg(test)]
 mod dir_case_tests;

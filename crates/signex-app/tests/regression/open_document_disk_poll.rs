@@ -115,3 +115,76 @@ fn a_change_met_while_another_notice_shows_is_reported_once_the_slot_frees() {
 
     assert_eq!(card_title(&app).as_deref(), Some("File Changed on Disk"));
 }
+
+#[test]
+fn a_poll_while_a_reload_reads_raises_no_second_card() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("PollReload.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    fs::write(&path, sheet_text("A0")).unwrap();
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .expect("engine")
+        .execute(signex_engine::Command::SetPaperSize {
+            paper_size: "A3".to_string(),
+        })
+        .expect("edit");
+    app.document_state.mark_document_dirty(&path);
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
+    assert_eq!(
+        card_title(&app).as_deref(),
+        Some("File Changed on Disk"),
+        "save-time card"
+    );
+
+    // The user picks Reload; its read is still running when the poll ticks.
+    let reload = app.update(Message::Overlay(
+        signex_app::app::OverlayMsg::DiskConflictReloadChosen,
+    ));
+    poll(&mut app);
+    let during = card_title(&app);
+    crate::settle_support::settle_task(&mut app, reload);
+
+    assert_eq!(
+        app.document_state.engines[&path].document().paper_size,
+        "A0",
+        "reloaded"
+    );
+    assert!(
+        during.is_none() && card_title(&app).is_none(),
+        "a card for the change being reloaded: during the read {during:?}, after it {:?}",
+        card_title(&app)
+    );
+}
+
+#[test]
+fn a_save_landing_during_a_poll_read_raises_no_card() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("PollSave.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    app.document_state
+        .engines
+        .get_mut(&path)
+        .expect("engine")
+        .execute(signex_engine::Command::SetPaperSize {
+            paper_size: "A3".to_string(),
+        })
+        .expect("edit");
+    app.document_state.mark_document_dirty(&path);
+
+    // The poll starts against the original baseline, the save lands, then the
+    // poll's read of the pre-save file is delivered.
+    let polling = app.update(Message::Library(LibraryMessage::ExternalEditsPollTicked));
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
+    crate::settle_support::settle_task(&mut app, polling);
+
+    assert!(
+        card_title(&app).is_none(),
+        "a stale read is dropped, not reported"
+    );
+}
