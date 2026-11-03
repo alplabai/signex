@@ -138,3 +138,24 @@ fn an_undo_during_a_save_in_flight_keeps_the_document_dirty() {
     state.mark_document_clean(&path);
     assert!(!state.is_document_dirty(&path));
 }
+
+/// `mark_document_clean` says the draft equals disk now: like an engine, the
+/// draft's save point must move to the current depth.
+#[test]
+fn a_draft_marked_clean_by_the_workspace_does_not_read_clean_at_an_older_depth() {
+    let (mut app, _task) = crate::app::Signex::new();
+    let state = &mut app.document_state;
+    let path = PathBuf::from("Lib.snxsym");
+    let mut editor = editor();
+    rename(&mut editor, "A"); // depth 1; save point still the opened depth 0
+    state.symbol_editors.insert(path.clone(), editor);
+
+    state.mark_document_clean(&path); // disk now holds depth 1 ("A")
+    assert!(!state.is_document_dirty(&path));
+
+    assert!(state.symbol_editors.get_mut(&path).unwrap().undo());
+    assert!(
+        state.is_document_dirty(&path),
+        "depth 0 (Sym1) is not what disk holds (A), yet the draft reads clean"
+    );
+}

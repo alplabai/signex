@@ -46,6 +46,25 @@ impl RowHistory {
         self.undo.iter().chain(self.redo.iter())
     }
 
+    /// Is there an edit to undo?
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    /// Is there an undone edit to redo?
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    /// Carry a cascade's pins and version into every state an undo or redo
+    /// can restore, so stepping to one does not bring back a pre-cascade pin
+    /// (#1840).
+    pub fn rebase_onto_cascade(&mut self, stored: &ComponentRow) {
+        for row in self.undo.iter_mut().chain(self.redo.iter_mut()) {
+            crate::library::preview_rebase::rebase_onto_cascade(row, stored);
+        }
+    }
+
     /// The current row is what a save is writing.
     pub fn mark_saved(&mut self) {
         self.point.mark_saved(self.undo.len());
@@ -159,6 +178,8 @@ impl ComponentPreviewState {
     pub fn restart_history(&mut self) {
         let saved = !self.dirty && !self.history.is_dirty();
         self.history.restart(saved);
+        // The steps that pinned a PDF are gone.
+        self.prune_staged_datasheets();
     }
 
     /// The row is being written: its current state is the saved position.
@@ -180,22 +201,39 @@ impl ComponentPreviewState {
         self.dirty = self.history.is_dirty() || (self.saving_row.is_some() && self.dirty);
     }
 
-    /// Undo or redo one edit. `false` when there is nothing to step to.
-    /// Versions, pins and the base revision stay the current row's: only the
-    /// edits move.
-    pub fn step_history(&mut self, undo: bool) -> bool {
-        let Some(mut target) = self.history.step(self.row.clone(), undo) else {
-            return false;
-        };
-        crate::library::preview_rebase::rebase_onto_cascade(&mut target, &self.row);
-        self.row = target;
-        // The buffers hold text typed against the row that was just replaced.
+    /// Rebase the row and every history state onto the row a cascade
+    /// rewrote (#1840).
+    pub fn rebase_onto_cascade(&mut self, stored: &ComponentRow) {
+        crate::library::preview_rebase::rebase_onto_cascade(&mut self.row, stored);
+        self.history.rebase_onto_cascade(stored);
+    }
+
+    fn clear_edit_buffers(&mut self) {
         self.params_edit_buf.clear();
         self.params_prefix.clear();
         self.params_slot.clear();
         self.params_error.clear();
         self.params_note.clear();
         self.pin_map_state = PinMapInlineState::default();
+    }
+
+    /// Undo or redo one edit. `false` when there is nothing to step to.
+    /// Versions, pins and the base revision stay the current row's: only the
+    /// edits move.
+    pub fn step_history(&mut self, undo: bool) -> bool {
+        // Half-typed text is not an edit yet: the first step only drops it.
+        if !self.params_edit_buf.is_empty() {
+            self.clear_edit_buffers();
+            self.note_edit();
+            return true;
+        }
+        let Some(mut target) = self.history.step(self.row.clone(), undo) else {
+            return false;
+        };
+        crate::library::preview_rebase::rebase_onto_cascade(&mut target, &self.row);
+        self.row = target;
+        // The buffers hold text typed against the row that was just replaced.
+        self.clear_edit_buffers();
         self.note_edit();
         self.sync_dirty();
         true
@@ -329,5 +367,39 @@ mod tests {
             assert!(state.step_history(true));
         }
         assert!(state.dirty, "the opened state fell off the stack");
+    }
+
+    #[test]
+    fn undo_after_a_cascade_keeps_the_cascade_pin_of_a_restored_alternate() {
+        use signex_library::{AlternateSymbol, PrimitiveRef};
+        let mut row = crate::library::component_preview::test_row();
+        let alt = PrimitiveRef::new(uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        row.alternate_symbols
+            .push(AlternateSymbol::new(alt, "", "IEC"));
+        row.alternate_symbols[0].symbol_version = "0.0.1".into();
+        let mut state = ComponentPreviewState::from_row(
+            PathBuf::from("/tmp/t.snxlib"),
+            "t".into(),
+            row.clone(),
+        );
+        apply_inline_edit(&mut state, EditorMsg::AlternateSymbolRemoved { idx: 0 });
+        let mut stored = row;
+        stored.alternate_symbols[0].symbol_version = "0.0.2".into();
+        stored.server_revision = Some(9);
+        state.rebase_onto_cascade(&stored); // what Rebased does
+        assert!(state.step_history(true));
+        assert_eq!(state.row.alternate_symbols[0].symbol_version, "0.0.2");
+    }
+
+    #[test]
+    fn the_first_undo_with_a_half_typed_value_only_drops_the_text() {
+        let mut state = preview();
+        set_state(&mut state, LifecycleState::Released);
+        state.params_edit_buf.insert("v".into(), "1.".into());
+        assert!(state.step_history(true));
+        assert!(state.params_edit_buf.is_empty());
+        assert_eq!(state.row.state, LifecycleState::Released, "no step yet");
+        assert!(state.step_history(true));
+        assert!(!state.dirty);
     }
 }

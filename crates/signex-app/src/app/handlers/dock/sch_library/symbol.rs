@@ -44,7 +44,8 @@ impl Signex {
         else {
             return true;
         };
-        if let Some(lib) = self.library.containing_library_mut(&path) {
+        let fold = self.identity_fold_for(&path);
+        if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
             mutator(&mut lib.display);
         }
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
@@ -515,7 +516,7 @@ impl Signex {
             return true;
         }
         let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
-        let history = (editor.undo_snapshots.len(), editor.redo_snapshots.len());
+        let history = editor.history_generation;
         let name = editor.file.symbols[idx].name.clone();
         // A symbol rows or open sheets still use is not deleted until the
         // user has seen who (#1845).
@@ -604,12 +605,18 @@ impl Signex {
             .engines
             .iter()
             .map(|(p, e)| (p.as_path(), e.document()));
-        match self.library.containing_library(path) {
+        let fold = self.identity_fold_for(path);
+        match self.library.containing_library_with(path, fold) {
             Some(lib) => {
                 let reference = signex_library::PrimitiveRef::new(lib.library_id, symbol);
                 usage_lines(&self.library.open_libraries, sheets, &reference)
             }
-            None => usage_outside_library(path, sheets, symbol),
+            None => usage_outside_library(
+                path,
+                sheets,
+                symbol,
+                self.library.libraries_share_folder_of(path, fold),
+            ),
         }
     }
 

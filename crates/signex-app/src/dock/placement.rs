@@ -5,8 +5,9 @@ use crate::panels::PanelKind;
 use crate::styles::TypeScale;
 use crate::styles::typography::DEFAULT_BASE_SIZE;
 
-/// A length that was 1:1 pixels at the default font size, scaled with the
-/// body font so the drop zones follow the UI scale.
+/// A length that was 1:1 pixels at the default font size, scaled by the
+/// default type scale's body size. Compile-time only: it does not follow a
+/// UI scale chosen at runtime.
 const fn em(px_at_default: f32) -> f32 {
     TypeScale::DEFAULT.body * px_at_default / DEFAULT_BASE_SIZE
 }

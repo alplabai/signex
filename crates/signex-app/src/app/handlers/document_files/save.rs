@@ -71,7 +71,7 @@ impl Signex {
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             // Refused before any branch below could ask for a Save As dialog
             // for a path that is only missing because it is being renamed.
-            self.refuse_while_path_op(&tab.path, "saved")?;
+            self.refuse_save_while_path_op(&tab.path)?;
             self.refuse_save_while_restoring(&tab.path)?;
         }
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S

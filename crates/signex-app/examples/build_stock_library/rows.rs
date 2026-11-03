@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::footprint_binding::FootprintBinding;
 use signex_library::identity::{ComponentClass, InternalPn};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
@@ -267,6 +268,25 @@ fn ids_for(kind: StockKind) -> &'static StockIds {
         .expect("every footprint kind has an id row")
 }
 
+/// The other chip sizes offered next to a row's default footprint: the
+/// plain sizes for `Chip-0805`, the polarised ones for `Chip-0805-Polarised`.
+/// Every other default has none.
+fn alternate_kinds(default: StockKind) -> &'static [StockKind] {
+    use StockKind::*;
+    match default {
+        Chip0805 => &[Chip0201, Chip0402, Chip0603, Chip1206, Chip1210, Chip2512],
+        Chip0805Polarised => &[
+            Chip0201Polarised,
+            Chip0402Polarised,
+            Chip0603Polarised,
+            Chip1206Polarised,
+            Chip1210Polarised,
+            Chip2512Polarised,
+        ],
+        _ => &[],
+    }
+}
+
 /// Pad numbers a footprint authors in its sketch.
 fn pad_numbers(kind: StockKind) -> BTreeSet<String> {
     build(ids_for(kind))
@@ -294,6 +314,8 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
         let mut description = symbol.description.clone();
         let mut footprint_ref = None;
         let mut footprint_version = String::new();
+        let mut alternate_footprints = Vec::new();
+        let mut row_version = STOCK_VERSION.to_string();
         if let Some(kind) = spec.footprint {
             let ids = ids_for(kind);
             let pins: BTreeSet<String> = symbol.pins.iter().map(|p| p.number.clone()).collect();
@@ -307,7 +329,26 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             }
             description.push_str(&format!(" {} footprint.", build(ids).name));
             footprint_ref = Some(PrimitiveRef::new(library_id, ids.footprint_uuid()));
-            footprint_version = STOCK_VERSION.to_string();
+            // A row on a revised footprint carries the footprint's version
+            // and bumps its own, as a footprint save cascades (#832).
+            footprint_version = build(ids).version;
+            if footprint_version != STOCK_VERSION {
+                row_version = footprint_version.clone();
+            }
+            for alt in alternate_kinds(kind) {
+                let alt_ids = ids_for(*alt);
+                if pad_numbers(*alt) != pins {
+                    return Err(format!(
+                        "stock row {}: symbol pins {pins:?} do not match alternate footprint pads",
+                        spec.symbol
+                    )
+                    .into());
+                }
+                alternate_footprints.push(FootprintBinding::new(PrimitiveRef::new(
+                    library_id,
+                    alt_ids.footprint_uuid(),
+                )));
+            }
         }
         let mut row = ComponentRow {
             row_id: Uuid::parse_str(spec.row_id)?,
@@ -321,7 +362,7 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             symbol_ref: PrimitiveRef::new(library_id, symbol_ids(spec.symbol).1),
             alternate_symbols: Vec::new(),
             footprint_ref,
-            alternate_footprints: Vec::new(),
+            alternate_footprints,
             sim_ref: None,
             pin_map_overrides: Vec::new(),
             primary_mpn: ManufacturerPart::draft("", ""),
@@ -329,7 +370,7 @@ pub fn stock_rows() -> Result<Vec<ComponentRow>, Box<dyn Error>> {
             supply: Vec::new(),
             parameters: Default::default(),
             plm: PlmReserved::default(),
-            version: STOCK_VERSION.to_string(),
+            version: row_version,
             released: true,
             symbol_version: STOCK_VERSION.to_string(),
             footprint_version,

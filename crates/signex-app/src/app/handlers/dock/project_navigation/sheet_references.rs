@@ -461,7 +461,9 @@ impl Signex {
             let sheet = parents
                 .remove(parent)
                 .ok_or_else(|| "was not read before the rename".to_string())??;
-            let engine = signex_engine::Engine::new_with_path(*sheet, Some(parent.clone()))
+            let mut sheet = *sheet;
+            crate::app::sheet_repairs::take_and_log(parent, &mut sheet);
+            let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.insert_engine(parent.clone(), engine);
             self.adopt_net_colors_of(parent);

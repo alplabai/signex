@@ -39,6 +39,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 display_name: "p".into(),
                 is_outside_project: false,
                 unsaved_prompt: false,
+                is_directory_package: false,
             })
         }
         ModalId::EnableVersionControl => {

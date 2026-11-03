@@ -25,7 +25,24 @@ impl Signex {
     /// Result of the `rfd` directory pick — mount the library at `path`,
     /// routing any open error into the recovery flow.
     pub(super) fn handle_open_library_at(&mut self, path: std::path::PathBuf) -> Task<Message> {
-        if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
+        self.open_library_at_as(path, false)
+    }
+
+    /// [`Self::handle_open_library_at`]; `as_project` ranks `path` as a
+    /// project library even though no project lists it yet (Locate Library
+    /// repoints the entries only after the mount).
+    pub(super) fn open_library_at_as(
+        &mut self,
+        path: std::path::PathBuf,
+        as_project: bool,
+    ) -> Task<Message> {
+        let mut project_paths = self.open_project_library_paths();
+        if as_project {
+            project_paths.push(path.clone());
+        }
+        if let Err(e) =
+            commands::open_library_among(&mut self.library, path.clone(), &project_paths)
+        {
             tracing::warn!(target: "signex::library", error = %e, path = %path.display(), "open_library failed");
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
@@ -37,15 +54,37 @@ impl Signex {
         Task::none()
     }
 
-    /// True when `path` is a library entry of an open project.
-    fn is_open_project_library(&self, path: &std::path::Path) -> bool {
-        self.document_state.projects.iter().any(|project| {
-            project
-                .data
-                .libraries
-                .iter()
-                .any(|e| project.data.resolve_library_path(e) == path)
-        })
+    /// Every library path the open projects list.
+    pub(super) fn open_project_library_paths(&self) -> Vec<std::path::PathBuf> {
+        self.document_state
+            .projects
+            .iter()
+            .flat_map(|project| {
+                project
+                    .data
+                    .libraries
+                    .iter()
+                    .map(|e| project.data.resolve_library_path(e))
+            })
+            .collect()
+    }
+
+    /// The open project that lists `path` as a library, if any.
+    fn owning_project_of_library(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<crate::app::state::ProjectId> {
+        self.document_state
+            .projects
+            .iter()
+            .find(|project| {
+                project
+                    .data
+                    .libraries
+                    .iter()
+                    .any(|e| project.data.resolve_library_path(e) == path)
+            })
+            .map(|project| project.id)
     }
 
     /// A `.snxlib` mount prepared off the UI thread has landed — issue
@@ -114,13 +153,24 @@ impl Signex {
                 // file is gone: that gets Library Missing (#1846). Global and
                 // stock libraries, and git trouble, never pop a dialog at
                 // startup (#532). A mount the user asked for routes fully.
-                let routable = match intent {
-                    crate::library::mount::MountIntent::OpenBrowserTab => true,
+                let silent_missing_owner = match intent {
+                    crate::library::mount::MountIntent::OpenBrowserTab => None,
                     crate::library::mount::MountIntent::Silent => {
-                        matches!(err, signex_library::LibraryError::LibraryFileMissing { .. })
-                            && this.is_open_project_library(path)
+                        if matches!(err, signex_library::LibraryError::LibraryFileMissing { .. })
+                            && !this.library.is_read_only_target(path)
+                        {
+                            this.owning_project_of_library(path)
+                        } else {
+                            None
+                        }
                     }
                 };
+                // Several missing libraries queue their dialogs (#1897).
+                if let Some(owner) = silent_missing_owner {
+                    this.library.raise_missing_library(path, owner);
+                    return;
+                }
+                let routable = matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab);
                 if routable && route_open_error(&mut this.library, path, err) {
                     return;
                 }
@@ -133,7 +183,8 @@ impl Signex {
             Ok(prepared) => {
                 let library_id = prepared.entry.library_id;
                 let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
-                if let Err(e) = self.library.mount_prepared(prepared) {
+                let project_paths = self.open_project_library_paths();
+                if let Err(e) = self.library.mount_prepared_among(prepared, &project_paths) {
                     report(self, &path, &e);
                     return self.readmit_stock_copies(&path);
                 }
@@ -210,7 +261,7 @@ impl Signex {
 
     /// Every `.snxlib` a symbol / footprint draft can belong to: the mounted
     /// libraries plus those the open projects list. The candidate set for
-    /// [`owning_library`](crate::app::state::scope::owning_library).
+    /// [`owning_libraries`](crate::app::state::scope::owning_libraries).
     pub(crate) fn draft_library_roots(&self) -> Vec<std::path::PathBuf> {
         let mut roots: Vec<std::path::PathBuf> = self
             .library
@@ -228,22 +279,54 @@ impl Signex {
         roots
     }
 
-    /// Dirty symbol and footprint drafts owned by the library at `root`
-    /// (deepest containing library folder), sorted. Same collector as the
-    /// quit and Close Project prompts.
+    /// The case rule that decides which library owns the draft at `path`:
+    /// the one rule every prompt uses, so a draft has one owner in all of
+    /// them on a volume that mixes case rules.
+    pub(crate) fn draft_fold(&self, path: &std::path::Path) -> crate::app::state::CaseFold {
+        self.identity_fold_for(path)
+    }
+
+    /// [`Self::draft_fold`] for every dirty draft.
+    pub(crate) fn dirty_draft_folds(
+        &self,
+    ) -> std::collections::HashMap<std::path::PathBuf, crate::app::state::CaseFold> {
+        self.document_state
+            .dirty_primitive_paths()
+            .map(|path| {
+                let fold = self.draft_fold(&path);
+                (path, fold)
+            })
+            .collect()
+    }
+
+    /// Dirty symbol and footprint drafts the library at `root` could own,
+    /// sorted. Only mounted libraries (and `root`) compete: a library an open
+    /// project lists but nobody mounted must not take a draft away from the
+    /// one being closed. A draft tied between libraries of one folder is
+    /// listed for each of them.
     pub(crate) fn dirty_primitive_paths_of_library(
         &self,
         root: &std::path::Path,
     ) -> Vec<std::path::PathBuf> {
-        use crate::app::state::scope::{owning_library, path_key_with};
-        let roots = self.draft_library_roots();
+        use crate::app::state::scope::{owning_libraries, path_key_with};
+        let mut roots: Vec<std::path::PathBuf> = self
+            .library
+            .open_libraries
+            .iter()
+            .map(|lib| lib.root.clone())
+            .collect();
+        roots.push(root.to_path_buf());
+        roots.sort();
+        roots.dedup();
         let mut paths: Vec<std::path::PathBuf> = self
             .document_state
             .dirty_primitive_paths()
             .filter(|path| {
-                let fold = self.identity_decision(path).fold;
-                owning_library(path, &roots, fold)
-                    .is_some_and(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
+                // Libraries sharing a folder all list its drafts.
+                let fold = self.draft_fold(path);
+                owning_libraries(path, &roots, fold)
+                    .into_iter()
+                    .any(|owner| path_key_with(owner, fold) == path_key_with(root, fold))
             })
             .collect();
         paths.sort();

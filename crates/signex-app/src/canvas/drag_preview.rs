@@ -198,6 +198,8 @@ struct DragGhost {
     /// What the ghost changes against the source sheet, found when the ghost
     /// is computed so a frame only draws that (#1335).
     frame: DragFrame,
+    /// References the lock holds back from this move, sorted (#1716).
+    held: Vec<String>,
 }
 
 /// The rubber-banded drag ghost and the pre-move nets it is built against,
@@ -208,6 +210,21 @@ struct DragGhost {
 pub struct GhostState {
     session: Option<(u64, Rc<signex_engine::MovePreview>)>,
     ghost: Option<DragGhost>,
+    /// The held references already reported for this drag, so the Messages
+    /// panel hears each set once, not on every cursor step.
+    reported_held: Vec<String>,
+    /// What the lock holds back from a plain-shift drag (keep-wires off, or a
+    /// selection too large for the engine pass), found once per drag (#1918).
+    plain: Option<PlainHold>,
+}
+
+/// The selection a plain shift moves once the lock's holds are taken out.
+#[derive(Debug)]
+struct PlainHold {
+    revision: u64,
+    selection: Vec<SelectedItem>,
+    kept: Vec<SelectedItem>,
+    held: Vec<String>,
 }
 
 fn key_of(revision: u64, selection: &[SelectedItem], dx: f64, dy: f64) -> GhostKey {
@@ -260,13 +277,17 @@ impl GhostState {
     /// Compute the rubber-banded ghost for `selection` moved by `(dx, dy)`:
     /// the very sheet the engine would commit at that delta (see
     /// [`signex_engine::MovePreview`]). Callers pass [`ghost_delta`].
-    pub(super) fn refresh(
+    /// With the net colours the commit uses, so the fold
+    /// the ghost shows is the fold the commit makes. The fold pass runs once
+    /// per ghost delta step (O(wires) per step on top of the rubber band).
+    pub(super) fn refresh_with(
         &mut self,
         snap: &SchematicRenderSnapshot,
         revision: u64,
         selection: &[SelectedItem],
         dx: f64,
         dy: f64,
+        wire_colors: &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     ) -> Rc<SchematicRenderSnapshot> {
         if let Some(ready) = self.ready_ghost(revision, selection, dx, dy) {
             return ready.snapshot.clone();
@@ -279,22 +300,101 @@ impl GhostState {
                 fresh
             }
         };
+        self.plain = None;
         let key = key_of(revision, selection, dx, dy);
         let moves: Vec<_> = selection.iter().map(|item| (*item, dx, dy)).collect();
-        let snapshot = Rc::new(session.moved(&moves, true));
+        let (moved, held) = session.moved_with(&moves, true, wire_colors);
+        let snapshot = Rc::new(moved);
         let frame = split_ghost(snap, &snapshot, &moved_item_ids(snap, selection));
         self.ghost = Some(DragGhost {
             key,
             snapshot: snapshot.clone(),
             frame,
+            held,
         });
         snapshot
+    }
+
+    /// The references the lock holds back from the ghost's move.
+    pub(super) fn held(&self) -> &[String] {
+        match (&self.ghost, &self.plain) {
+            (Some(ghost), _) => &ghost.held,
+            (None, Some(plain)) => &plain.held,
+            (None, None) => &[],
+        }
+    }
+
+    /// Work out, once per revision and selection, which of `selection` the
+    /// lock holds back from a plain shift. No engine pass runs per cursor
+    /// step: the lock check is one throwaway engine per drag (#1918).
+    pub(super) fn hold_locked(
+        &mut self,
+        snap: &SchematicRenderSnapshot,
+        revision: u64,
+        selection: &[SelectedItem],
+        keep_wires: bool,
+    ) {
+        self.ghost = None;
+        let fits = self
+            .plain
+            .as_ref()
+            .is_some_and(|p| p.revision == revision && p.selection == selection);
+        if fits {
+            return;
+        }
+        let (kept, held) = match signex_engine::Engine::new(snap.clone()) {
+            Ok(engine) => {
+                let moves = selection.iter().map(|item| (*item, 0.0, 0.0)).collect();
+                let (command, held) =
+                    engine.without_locked(signex_engine::Command::MoveEach { moves, keep_wires });
+                let kept = match command {
+                    Some(signex_engine::Command::MoveEach { moves, .. }) => {
+                        moves.into_iter().map(|(item, _, _)| item).collect()
+                    }
+                    _ => Vec::new(),
+                };
+                (kept, held)
+            }
+            Err(_) => (selection.to_vec(), Vec::new()),
+        };
+        self.plain = Some(PlainHold {
+            revision,
+            selection: selection.to_vec(),
+            kept,
+            held,
+        });
+    }
+
+    /// The part of `selection` a plain shift moves: all of it unless the lock
+    /// holds some back (see [`Self::hold_locked`]).
+    pub(super) fn plain_selection<'a>(
+        &'a self,
+        revision: u64,
+        selection: &'a [SelectedItem],
+    ) -> &'a [SelectedItem] {
+        match &self.plain {
+            Some(p) if p.revision == revision && p.selection == selection => &p.kept,
+            _ => selection,
+        }
+    }
+
+    /// The held references not yet reported this drag, once: the commit
+    /// would skip them, so the Messages panel says so before the drop.
+    pub(super) fn take_unreported_held(&mut self) -> Option<Vec<String>> {
+        let held = self.held();
+        if held.is_empty() || held == self.reported_held {
+            return None;
+        }
+        self.reported_held = held.to_vec();
+        Some(self.reported_held.clone())
     }
 
     /// Drop the ghost and the pre-move reference (a drag ended).
     pub(super) fn clear(&mut self) {
         self.session = None;
         self.ghost = None;
+        self.plain = None;
+        self.reported_held.clear();
     }
 }
 
@@ -385,7 +485,7 @@ mod tests {
     fn the_ghost_rubber_bands_the_wires_when_the_preference_is_on() {
         let (sheet, item) = sheet_with_wired_resistor();
         let mut state = GhostState::default();
-        let ghost = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
+        let ghost = state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
         assert_eq!(ghost.symbols[0].position, Point::new(50.0, 60.0));
         assert_eq!(ghost.wires.len(), 2, "a bend wire reaches the new pin tip");
         assert!(
@@ -403,7 +503,7 @@ mod tests {
     fn the_ghost_is_exactly_what_the_commit_leaves() {
         let (sheet, item) = sheet_with_wired_resistor();
         let mut state = GhostState::default();
-        let ghost = state.refresh(&sheet, 1, &[item], 2.5, 10.0);
+        let ghost = state.refresh_with(&sheet, 1, &[item], 2.5, 10.0, &Default::default());
         let mut engine = signex_engine::Engine::new(sheet).expect("engine");
         engine
             .execute(signex_engine::Command::MoveSelection {
@@ -427,10 +527,10 @@ mod tests {
     fn an_unchanged_delta_reuses_the_ghost() {
         let (sheet, item) = sheet_with_wired_resistor();
         let mut state = GhostState::default();
-        let first = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
-        let again = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
+        let first = state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
+        let again = state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
         assert!(Rc::ptr_eq(&first, &again));
-        let moved = state.refresh(&sheet, 1, &[item], 0.0, 12.5);
+        let moved = state.refresh_with(&sheet, 1, &[item], 0.0, 12.5, &Default::default());
         assert!(!Rc::ptr_eq(&first, &moved));
     }
 
@@ -455,7 +555,7 @@ mod tests {
     fn a_new_revision_or_item_kind_never_gets_a_stale_ghost() {
         let (sheet, item) = sheet_with_wired_resistor();
         let mut state = GhostState::default();
-        let first = state.refresh(&sheet, 1, &[item], 0.0, 10.0);
+        let first = state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
         assert!(state.ready(2, &[item], 0.0, 10.0).is_none(), "revision");
         let field = SelectedItem::new(item.uuid, SelectedKind::SymbolRefField);
         assert!(state.ready(1, &[field], 0.0, 10.0).is_none(), "kind");
@@ -463,7 +563,7 @@ mod tests {
         // The committed sheet, synced in place under a new revision.
         let mut moved = sheet.clone();
         moved.symbols[0].position = Point::new(50.0, 60.0);
-        let second = state.refresh(&moved, 2, &[item], 0.0, 10.0);
+        let second = state.refresh_with(&moved, 2, &[item], 0.0, 10.0, &Default::default());
         assert!(!Rc::ptr_eq(&first, &second));
         assert_eq!(second.symbols[0].position, Point::new(50.0, 70.0));
         assert_eq!(first.symbols[0].position, Point::new(50.0, 60.0));
@@ -481,7 +581,14 @@ mod tests {
         let mut ghosts = GhostState::default();
         let y_of = |g: &SchematicRenderSnapshot| g.symbols[0].position.y;
 
-        let first = ghosts.refresh(cache.snapshot(), cache.revision(), &[item], 0.0, 10.0);
+        let first = ghosts.refresh_with(
+            cache.snapshot(),
+            cache.revision(),
+            &[item],
+            0.0,
+            10.0,
+            &Default::default(),
+        );
         assert_eq!(y_of(&first), 60.0);
 
         engine
@@ -499,7 +606,14 @@ mod tests {
             engine.revision(),
         );
         assert!(ghosts.ready(cache.revision(), &[item], 0.0, 10.0).is_none());
-        let second = ghosts.refresh(cache.snapshot(), cache.revision(), &[item], 0.0, 10.0);
+        let second = ghosts.refresh_with(
+            cache.snapshot(),
+            cache.revision(),
+            &[item],
+            0.0,
+            10.0,
+            &Default::default(),
+        );
         assert_eq!(y_of(&second), 70.0, "the symbol is at 60 now; +10 is 70");
 
         engine.undo().expect("undo");
@@ -510,7 +624,14 @@ mod tests {
             engine.revision(),
         );
         assert!(ghosts.ready(cache.revision(), &[item], 0.0, 10.0).is_none());
-        let third = ghosts.refresh(cache.snapshot(), cache.revision(), &[item], 0.0, 10.0);
+        let third = ghosts.refresh_with(
+            cache.snapshot(),
+            cache.revision(),
+            &[item],
+            0.0,
+            10.0,
+            &Default::default(),
+        );
         assert_eq!(y_of(&third), 60.0, "after undo the symbol is back at 50");
     }
 
@@ -526,5 +647,91 @@ mod tests {
         assert_eq!(ghost.symbols[0].position, Point::new(50.0, 60.0));
         assert_eq!(ghost.wires.len(), 1);
         assert_eq!(ghost.wires[0].end, Point::new(45.0, 50.0));
+    }
+
+    fn wire_at(x0: f64, x1: f64) -> Wire {
+        Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(x0, 0.0),
+            end: Point::new(x1, 0.0),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_ghost_shows_the_fold_the_commit_makes() {
+        let mut sheet = SchematicSheet::default();
+        let (moving, still) = (wire_at(0.0, 10.0), wire_at(20.0, 30.0));
+        let item = SelectedItem::new(moving.uuid, SelectedKind::Wire);
+        sheet.wires.extend([moving.clone(), still]);
+        let mut state = GhostState::default();
+
+        // Slid right, the two wires meet end to end at x = 20.
+        let ghost = state.refresh_with(&sheet, 1, &[item], 10.0, 0.0, &Default::default());
+
+        assert_eq!(ghost.wires.len(), 1, "{:?}", ghost.wires);
+        let frame = state.ready_frame(1, &[item], 10.0, 0.0).expect("frame");
+        assert_eq!(frame.moving.wires.len(), 1, "the folded wire is drawn");
+        let mut engine = signex_engine::Engine::new(sheet).expect("engine");
+        engine
+            .execute(signex_engine::Command::MoveSelection {
+                items: vec![item],
+                dx: 10.0,
+                dy: 0.0,
+                keep_wires: true,
+            })
+            .expect("move");
+        assert_eq!(engine.document().wires, ghost.wires, "same fold as commit");
+    }
+
+    #[test]
+    fn the_ghost_keeps_two_wires_the_commit_keeps_apart_by_colour() {
+        let mut sheet = SchematicSheet::default();
+        let (moving, still) = (wire_at(0.0, 10.0), wire_at(20.0, 30.0));
+        let item = SelectedItem::new(moving.uuid, SelectedKind::Wire);
+        let colors = std::collections::HashMap::from([(
+            moving.uuid,
+            signex_types::theme::Color::new(0, 255, 0, 255),
+        )]);
+        sheet.wires.extend([moving, still]);
+
+        let ghost = GhostState::default().refresh_with(&sheet, 1, &[item], 10.0, 0.0, &colors);
+
+        assert_eq!(ghost.wires.len(), 2, "different colours are not folded");
+    }
+
+    #[test]
+    fn a_locked_symbol_is_held_in_place_and_named_once() {
+        let (mut sheet, item) = sheet_with_wired_resistor();
+        sheet.symbols[0].reference = "R1".to_string();
+        sheet.symbols[0].locked = true;
+        let mut state = GhostState::default();
+
+        let ghost = state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
+
+        assert_eq!(ghost.symbols[0].position, Point::new(50.0, 50.0));
+        assert_eq!(ghost.wires.len(), 1, "no bend: nothing moved");
+        assert_eq!(state.held(), ["R1".to_string()]);
+        assert_eq!(state.take_unreported_held(), Some(vec!["R1".to_string()]));
+        assert_eq!(state.take_unreported_held(), None, "told once per drag");
+        state.clear();
+        state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
+        assert!(state.take_unreported_held().is_some(), "a new drag reports");
+    }
+
+    #[test]
+    fn a_symbol_on_a_locked_wire_is_held_with_the_symbol_named() {
+        let (mut sheet, item) = sheet_with_wired_resistor();
+        sheet.symbols[0].reference = "R1".to_string();
+        sheet.wires[0].locked = true;
+        let mut state = GhostState::default();
+
+        let ghost = state.refresh_with(&sheet, 1, &[item], 0.0, 10.0, &Default::default());
+
+        assert_eq!(ghost.symbols[0].position, Point::new(50.0, 50.0));
+        assert_eq!(
+            state.held(),
+            ["R1 (a wire attached to it is locked)".to_string()]
+        );
     }
 }

@@ -30,27 +30,18 @@ impl Signex {
             return Vec::new();
         };
         let entries = components_row_menu_entries();
-        let rows = entries.len() as f32;
+        let entries_len = entries.len();
         let tokens = &self.document_state.panel_ctx.tokens;
         let menu = signex_widgets::active_bar_dropdown::view(
             entries,
             tokens,
             Some(Self::CONTEXT_MENU_WIDTH),
         );
-        let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let est_menu_h: f32 = rows * 22.0 + 8.0;
-        let (win_w, win_h) = self.ui_state.window_size;
-        let edge_margin: f32 = 4.0;
-        let x = if menu_ctx.x + menu_w + edge_margin > win_w {
-            (win_w - menu_w - edge_margin).max(0.0)
-        } else {
-            menu_ctx.x
-        };
-        let y = if menu_ctx.y + est_menu_h + edge_margin > win_h {
-            (menu_ctx.y - est_menu_h).max(0.0)
-        } else {
-            menu_ctx.y
-        };
+        let (x, y) = super::clamp_menu_origin(
+            (menu_ctx.x, menu_ctx.y),
+            (Self::CONTEXT_MENU_WIDTH, super::menu_height(entries_len)),
+            self.ui_state.window_size,
+        );
         vec![
             Self::dismiss_layer(Message::Library(
                 LibraryMessage::ComponentsPanelRowMenuDismissed,

@@ -118,7 +118,14 @@ impl Signex {
                 // not replace what was typed.
                 return self.reload_editor_from_server(&address, true);
             }
-            EditorMsg::ReloadConfirmed => return self.reload_editor_from_server(&address, false),
+            EditorMsg::ReloadConfirmed => {
+                // The bar goes at once; the read that replaces the copy
+                // lands later (#1756).
+                if let Some(state) = self.library.editors.get_mut(&address) {
+                    state.reload_confirming = false;
+                }
+                return self.reload_editor_from_server(&address, false);
+            }
             EditorMsg::ReloadCancelled => {
                 if let Some(state) = self.library.editors.get_mut(&address) {
                     state.reload_confirming = false;
@@ -394,7 +401,7 @@ impl Signex {
             // The saved copy is stored; what was typed since is not.
             // Only the new base revision is taken over, and the pins and
             // version a cascade moved the saved copy to (#1840).
-            crate::library::preview_rebase::rebase_onto_cascade(&mut state.row, &row);
+            state.rebase_onto_cascade(&row);
             // Whatever the history says, the row differs from the copy
             // stored: no undo may read it clean.
             if !state.history.is_dirty() {
@@ -428,7 +435,15 @@ impl Signex {
         address: &EditorAddress,
         require_clean: bool,
     ) -> Task<Message> {
-        crate::library::preview_reads::reload_task(&mut self.library, address, require_clean, true)
+        let task = crate::library::preview_reads::reload_task(
+            &mut self.library,
+            address,
+            require_clean,
+            true,
+        );
+        // A row whose library is gone logs a warning instead of reading.
+        self.sync_diagnostics_panel_ctx();
+        task
     }
 
     /// After a write to `rows` that did not go through their Component
@@ -445,9 +460,14 @@ impl Signex {
     ) -> Task<Message> {
         self.forget_dirty_editors_of(library_path, rows);
         let clean = self.clean_editors_of(library_path, rows);
-        Task::batch(clean.iter().map(|address| {
-            crate::library::preview_reads::reload_task(&mut self.library, address, true, false)
-        }))
+        let tasks: Vec<_> = clean
+            .iter()
+            .map(|address| {
+                crate::library::preview_reads::reload_task(&mut self.library, address, true, false)
+            })
+            .collect();
+        self.sync_diagnostics_panel_ctx();
+        Task::batch(tasks)
     }
 
     /// [`Self::refresh_clean_editors`] on this thread, for the save that is
@@ -474,11 +494,12 @@ impl Signex {
         rows: &[RowId],
     ) -> Task<Message> {
         let dirty = self.dirty_editors_of(library_path, rows);
-        Task::batch(
-            dirty.iter().map(|address| {
-                crate::library::preview_reads::rebase_task(&mut self.library, address)
-            }),
-        )
+        let tasks: Vec<_> = dirty
+            .iter()
+            .map(|address| crate::library::preview_reads::rebase_task(&mut self.library, address))
+            .collect();
+        self.sync_diagnostics_panel_ctx();
+        Task::batch(tasks)
     }
 
     /// [`Self::rebase_dirty_editors`] on this thread, for the blocking save.
@@ -507,15 +528,14 @@ impl Signex {
             .collect()
     }
 
-    /// A dirty editor keeps its old base, so its saved position names disk
-    /// content the library no longer stores: undo must not read it clean.
-    /// An editor whose own save is in flight is left alone.
+    /// An editor of a written row keeps its old base until a reload lands
+    /// (a clean one's reload yields to an edit typed first), so its saved
+    /// position names disk content the library no longer stores: undo must
+    /// not read it clean. An editor whose own save is in flight is left
+    /// alone.
     fn forget_dirty_editors_of(&mut self, library_path: &std::path::Path, rows: &[RowId]) {
         for (a, s) in self.library.editors.iter_mut() {
-            if a.library_path == library_path
-                && rows.contains(&a.row_id)
-                && s.has_unsaved_edits()
-                && s.saving_row.is_none()
+            if a.library_path == library_path && rows.contains(&a.row_id) && s.saving_row.is_none()
             {
                 s.history.forget();
             }

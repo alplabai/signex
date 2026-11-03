@@ -11,7 +11,7 @@ use super::annotate_job::PassKind;
 /// or parked) holds the user's unsaved edits and is annotated in place instead
 /// (#669).
 pub(super) fn annotate_unopened_for_write(
-    sheet: signex_types::schematic::SchematicSheet,
+    mut sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
     mode: signex_engine::AnnotateMode,
     next_by_prefix: &mut std::collections::HashMap<String, u32>,
@@ -19,6 +19,7 @@ pub(super) fn annotate_unopened_for_write(
     assigned: &mut std::collections::HashMap<usize, String>,
 ) -> Option<Vec<u8>> {
     let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let repairs = sheet.take_load_repairs();
     let mut engine = match signex_engine::Engine::new(sheet) {
         Ok(engine) => engine,
         Err(error) => {
@@ -34,7 +35,10 @@ pub(super) fn annotate_unopened_for_write(
             return None;
         }
     }
-    encode_unopened("Annotate", path, &engine)
+    let bytes = encode_unopened("Annotate", path, &engine)?;
+    // The sheet is written with the repairs: say so, now the encode held.
+    crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
+    Some(bytes)
 }
 
 /// The sheet `engine` holds as `.snxsch` bytes, for the write worker. `None`
@@ -66,7 +70,7 @@ pub(super) fn encode_unopened(
 /// Re-prefix uses this; plain Annotate uses `annotate_unopened_for_write`.
 /// `Err` means the sheet failed and was logged.
 pub(super) fn annotate_unopened_in_memory(
-    sheet: signex_types::schematic::SchematicSheet,
+    mut sheet: signex_types::schematic::SchematicSheet,
     path: &std::path::Path,
     mode: signex_engine::AnnotateMode,
     next_by_prefix: &mut std::collections::HashMap<String, u32>,
@@ -74,6 +78,7 @@ pub(super) fn annotate_unopened_in_memory(
     assigned: &mut std::collections::HashMap<usize, String>,
 ) -> Result<Option<signex_engine::Engine>, PassFailed> {
     let context = format!("Annotate failed on unopened sheet '{}'", path.display());
+    let repairs = sheet.take_load_repairs();
     let mut engine = match signex_engine::Engine::new(sheet) {
         Ok(engine) => engine,
         Err(error) => {
@@ -83,13 +88,23 @@ pub(super) fn annotate_unopened_in_memory(
     };
     engine.set_path(Some(path.to_path_buf()));
     match engine.annotate_in_project(mode, next_by_prefix, scope, assigned) {
-        Ok(true) => Ok(Some(engine)),
+        Ok(true) => {
+            crate::app::sheet_repairs::log_sheet_repairs(path, &repairs);
+            Ok(Some(engine))
+        }
         Ok(false) => Ok(None),
         Err(error) => {
             crate::diagnostics::log_error(&context, &anyhow::Error::new(error));
             Err(PassFailed)
         }
     }
+}
+
+fn sheet_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 /// A sheet of the pass failed (already logged with its path).
@@ -144,20 +159,76 @@ impl Signex {
     /// and a read landing later would install the pre-pass content over it.
     /// The reason leads the Messages line.
     pub(super) fn unopened_write_blocked(&self, pass: &str, path: &std::path::Path) -> bool {
-        let reason = if self.document_state.pending_restores.contains(path) {
-            "a History restore of it is still running"
-        } else if self.document_state.pending_opens.contains(path) {
-            "a read of it is still in flight"
-        } else if self.document_state.document_saves.is_saving(path) {
-            "a save of it is still running"
-        } else {
+        let Some(reason) = self.unopened_block_reason(path) else {
             return false;
         };
-        let name = path.file_name().map_or_else(
-            || path.display().to_string(),
-            |n| n.to_string_lossy().into_owned(),
-        );
+        let name = sheet_name(path);
         crate::diagnostics::log_warning(format!("{pass}: {name} was left unchanged, {reason}"));
+        true
+    }
+
+    /// Why a bulk pass cannot write the tab-less sheet at `path` now.
+    fn unopened_block_reason(&self, path: &std::path::Path) -> Option<&'static str> {
+        if self.document_state.pending_restores.contains(path) {
+            Some("a History restore of it is still running")
+        } else if self.document_state.pending_opens.contains(path) {
+            Some("a read of it is still in flight")
+        } else if self.document_state.document_saves.is_saving(path) {
+            Some("a save of it is still running")
+        } else {
+            None
+        }
+    }
+
+    /// Refuse a Reset & Renumber that would leave a sheet out (#1753): the
+    /// sheet keeps its designators, and the numbers handed out around it can
+    /// repeat them. Says which sheets and why; nothing has been changed yet.
+    /// True when refused.
+    pub(super) fn refuse_reset_that_skips(
+        &mut self,
+        label: &str,
+        project_set: &crate::app::project_sheets::ProjectSheetSet,
+        ordered_paths: &[std::path::PathBuf],
+        read_only: &std::collections::BTreeSet<std::path::PathBuf>,
+    ) -> bool {
+        let mut skipped: Vec<String> = read_only
+            .iter()
+            .map(|path| {
+                format!(
+                    "{} (written by a newer Signex, read-only here)",
+                    sheet_name(path)
+                )
+            })
+            .collect();
+        // A sheet that could not be read is skipped too, and its designators
+        // are missing from the counter's view of the project.
+        skipped.extend(
+            project_set
+                .unreadable
+                .iter()
+                .map(|(path, why)| format!("{} (it could not be read: {why})", sheet_name(path))),
+        );
+        for path in ordered_paths {
+            if self.document_state.engines.contains_key(path)
+                || !project_set.sheets.contains_key(path)
+                || read_only.contains(path)
+            {
+                continue;
+            }
+            if let Some(reason) = self.unopened_block_reason(path) {
+                skipped.push(format!("{} ({reason})", sheet_name(path)));
+            }
+        }
+        if skipped.is_empty() {
+            return false;
+        }
+        let detail = format!(
+            "{label} was not run: it would skip {}, and renumbering around a sheet can repeat \
+             its designators. Nothing was changed; try again once the sheet is free.",
+            skipped.join(", ")
+        );
+        crate::diagnostics::log_warning(detail.clone());
+        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }
 

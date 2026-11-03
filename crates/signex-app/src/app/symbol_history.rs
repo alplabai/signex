@@ -139,6 +139,7 @@ impl SymbolDocument {
         }
         self.redo_snapshots.clear();
         self.last_edit_key = None;
+        self.history_generation += 1;
     }
 
     /// Run a Properties-panel edit as one undo step. `edit` returns
@@ -160,6 +161,8 @@ impl SymbolDocument {
         }
         if let Some(snap) = snap {
             self.commit_history(snap);
+        } else {
+            self.history_generation += 1;
         }
         self.last_edit_key = key;
         true
@@ -171,6 +174,7 @@ impl SymbolDocument {
             return false;
         };
         self.redo_snapshots.push(self.snapshot());
+        self.history_generation += 1;
         self.restore(snap);
         self.sync_dirty_to_history();
         true
@@ -182,6 +186,7 @@ impl SymbolDocument {
             return false;
         };
         self.undo_snapshots.push(self.snapshot());
+        self.history_generation += 1;
         self.restore(snap);
         self.sync_dirty_to_history();
         true

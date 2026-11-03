@@ -331,7 +331,7 @@ fn an_unreadable_library_symbol_keeps_the_previous_drift_row() {
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains("Could not check library symbol")),
+            .any(|e| e.message.contains("symbols could not be read")),
         "the read failure reaches the Messages panel"
     );
     assert!(

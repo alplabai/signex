@@ -230,6 +230,8 @@ impl Signex {
         let active_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
         let (can_undo, can_redo) = if self.erc_dialog_takes_input(window) {
             self.rules_history_available()
+        } else if let Some(address) = self.window_component_editor(window) {
+            self.component_history_of(&address)
         } else if let Some(path) = self.undocked_tab_path(window) {
             // Undo / Redo there step that window's document (#1546), so
             // its menu rows grey by that document's history (#1550).
@@ -408,6 +410,7 @@ impl Signex {
                 .map_or((false, false), |e| {
                     (!e.history.is_empty(), !e.redo.is_empty())
                 }),
+            Some(TabKind::ComponentEditor(tab)) => self.component_history_available(tab),
             Some(TabKind::Project(project_id)) => self.project_tab_history_available(*project_id),
             _ => {
                 let engine = path.and_then(|p| document.engines.get(p));
@@ -747,7 +750,8 @@ mod tests {
         let resolved: Vec<(AppCommandId, String)> = crate::keymap::all_command_ids()
             .filter_map(|name| {
                 let command = id(name);
-                super::super::bridge::resolve(&command).map(|m| (command, format!("{m:?}")))
+                super::super::bridge::resolve(&command, &CommandArgs::none())
+                    .map(|m| (command, format!("{m:?}")))
             })
             .collect();
         for (a, message_a) in &resolved {

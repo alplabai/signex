@@ -157,10 +157,18 @@ pub fn view<'a>(
                     .color(styles::ti(tokens.text_secondary)),
             );
         }
-        let close_x = button(text(CLOSE_GLYPH).size(TAB_FONT_SIZE).color(text_c))
-            .padding([0.0, SP.xs])
-            .style(button::text)
-            .on_press(TabMessage::CloseClicked(i));
+        let close_x = button(
+            container(text(CLOSE_GLYPH).size(CLOSE_GLYPH_SIZE).line_height(
+                iced::widget::text::LineHeight::Absolute(CLOSE_HIT_SIZE.into()),
+            ))
+            .width(CLOSE_HIT_SIZE)
+            .height(CLOSE_HIT_SIZE)
+            .align_x(iced::alignment::Horizontal::Center)
+            .align_y(iced::alignment::Vertical::Center),
+        )
+        .padding(0)
+        .style(styles::subtle_button_with_rest(tokens, text_muted))
+        .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
                 .push(text(label).size(TAB_FONT_SIZE).color(text_c))
@@ -206,7 +214,7 @@ pub fn view<'a>(
     let baseline_color = styles::ti(tokens.border);
     let baseline = container(iced::widget::Space::new())
         .width(Length::Fill)
-        .height(1)
+        .height(BASELINE_HEIGHT)
         .style(move |_: &iced::Theme| iced::widget::container::Style {
             background: Some(iced::Background::Color(baseline_color)),
             ..iced::widget::container::Style::default()
@@ -227,7 +235,7 @@ pub fn view<'a>(
         // strip's fixed height.
         .height(Length::Fill)
         .padding(iced::Padding {
-            top: 2.0,
+            top: STRIP_TOP_PAD,
             right: 6.0,
             bottom: 0.0,
             left: 6.0,
@@ -240,13 +248,19 @@ pub fn view<'a>(
     .into()
 }
 
-/// Height of the document tab strip: two body-text lines for the pill plus
-/// the strip's top padding, 26 px. Both the strip and the empty-window
-/// placeholder take their height from here, so they cannot diverge and the
-/// chrome does not jump when the first tab opens. It is derived from the
+/// Height of the document tab strip: the close-x hit box plus the pill's
+/// vertical padding, the strip's top padding and the 1 px baseline. Both the
+/// strip and the empty-window placeholder take their height from here, so
+/// they cannot diverge and the chrome does not jump when the first tab
+/// opens. It is a whole number of pixels, so the canvas and every overlay
+/// keyed off it start on a pixel boundary. It is derived from the
 /// default type scale and spacing, the same constants the strip's text and
 /// padding use; the app has no runtime UI scale for it to follow.
-pub const TAB_STRIP_HEIGHT: f32 = TS.body * 2.0 + SP.s;
+pub const TAB_STRIP_HEIGHT: f32 = CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT;
+
+/// Padding above the pills, and the baseline line below them.
+const STRIP_TOP_PAD: f32 = 2.0;
+const BASELINE_HEIGHT: f32 = 1.0;
 
 /// The strip drawn with no document open: same height and background as the
 /// tab strip, nothing in it.
@@ -269,6 +283,11 @@ const CLOSE_GLYPH: &str = "\u{00d7}";
 
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
+/// Close x glyph size and square hit target, both relative to the tab
+/// text so they scale with the base font size. The hit target is rounded up
+/// to a whole pixel so the strip height built from it stays whole.
+const CLOSE_GLYPH_SIZE: f32 = TAB_FONT_SIZE * 1.25;
+const CLOSE_HIT_SIZE: f32 = (TAB_FONT_SIZE * 1.5).ceil();
 
 /// Dirty dot diameter as a fraction of the tab font size.
 const DIRTY_DOT_EM: f32 = 0.6;
@@ -388,7 +407,8 @@ fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::
 #[cfg(test)]
 mod tests {
     use super::{
-        READ_ONLY_TOOLTIP, dirty_dot_diameter, dirty_tab_paths, ellipsize_title,
+        BASELINE_HEIGHT, CLOSE_GLYPH_SIZE, CLOSE_HIT_SIZE, READ_ONLY_TOOLTIP, SP, STRIP_TOP_PAD,
+        TAB_STRIP_HEIGHT, dirty_dot_diameter, dirty_tab_paths, ellipsize_title,
         read_only_tab_paths, reveal_active_tab, reveal_offset, tab_is_dirty, tab_tooltip,
     };
     use crate::app::{TabInfo, TabKind};
@@ -396,13 +416,12 @@ mod tests {
     use std::path::PathBuf;
 
     /// The strip and the no-document placeholder are both exactly
-    /// `TAB_STRIP_HEIGHT` tall, and that is the 26 px they always were.
+    /// `TAB_STRIP_HEIGHT` tall.
     #[test]
     fn the_strip_and_its_placeholder_both_use_the_height_token() {
         use iced::Length;
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
-        assert_eq!(super::TAB_STRIP_HEIGHT, 26.0);
 
         let placeholder = super::placeholder::<()>(&tokens);
         assert_eq!(placeholder.as_widget().size().height, fixed);
@@ -564,5 +583,41 @@ mod tests {
         let cut = ellipsize_title("a_very_long_sheet_name_that_overflows.snxsch", 10);
         assert_eq!(cut.chars().count(), 10);
         assert!(cut.ends_with('…'));
+    }
+
+    /// The close x shows hover and pressed feedback in every built-in
+    /// theme, on an active and an inactive tab alike: the rest colour is
+    /// `text_secondary`, so hover can brighten the glyph to `text`.
+    #[test]
+    fn close_button_hover_and_pressed_differ_from_rest() {
+        use iced::widget::button::Status;
+        for &id in signex_types::theme::ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let rest_text = crate::styles::ti(tokens.text_secondary);
+            let style = crate::styles::subtle_button_with_rest(&tokens, rest_text);
+            let theme = iced::Theme::Dark;
+            let active = style(&theme, Status::Active);
+            let hovered = style(&theme, Status::Hovered);
+            let pressed = style(&theme, Status::Pressed);
+            assert!(active.background.is_none(), "{id:?}");
+            assert_ne!(hovered.background, active.background, "{id:?}");
+            assert_ne!(pressed.background, hovered.background, "{id:?}");
+            assert_ne!(hovered.text_color, active.text_color, "{id:?}");
+        }
+    }
+
+    /// The tab label's line box and the close glyph both fit the close hit
+    /// box, so the pill is as tall as the hit box and nothing is clamped;
+    /// and the strip is a whole number of pixels, so the chrome below it
+    /// starts on a pixel boundary.
+    #[test]
+    fn the_close_hit_box_fits_the_label_and_the_strip_is_whole_pixels() {
+        const LABEL_LINE_BOX: f32 = super::TAB_FONT_SIZE * 1.3;
+        const {
+            assert!(LABEL_LINE_BOX <= CLOSE_HIT_SIZE);
+            assert!(CLOSE_GLYPH_SIZE <= CLOSE_HIT_SIZE);
+            assert!(TAB_STRIP_HEIGHT == TAB_STRIP_HEIGHT.round());
+            assert!(STRIP_TOP_PAD + BASELINE_HEIGHT + 2.0 * SP.s < TAB_STRIP_HEIGHT);
+        }
     }
 }
