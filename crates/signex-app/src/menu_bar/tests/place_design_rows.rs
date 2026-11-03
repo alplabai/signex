@@ -265,3 +265,33 @@ fn quiet_annotate_rows_are_greyed_with_a_project_but_no_sheet() {
         "Design/Annotation/Annotate Schematics Quietly"
     ));
 }
+
+/// #1922: Wire, Bus and Junction run the Active Bar's own action, so, like the
+/// Active Bar button, the click also closes an open Active Bar dropdown and
+/// remembers the tool as the wiring group's default. The old menu messages did
+/// neither.
+#[test]
+fn wiring_rows_close_an_open_active_bar_menu_and_remember_the_tool() {
+    use crate::active_bar::{ActiveBarAction, ActiveBarMenu, ActiveBarMsg};
+    for (path, remembered) in [
+        ("Place/Wire", ActiveBarAction::DrawWire),
+        ("Place/Bus", ActiveBarAction::DrawBus),
+        ("Place/Junction", ActiveBarAction::PlaceJunction),
+    ] {
+        let mut app = one_symbol_selected();
+        let _ = app.update(Message::ActiveBar(ActiveBarMsg::ToggleMenu(
+            ActiveBarMenu::Filter,
+        )));
+        assert!(app.interaction_state.active_bar_menu.is_some());
+        let _ = click(&mut app, path);
+        assert!(
+            app.interaction_state.active_bar_menu.is_none(),
+            "{path} left the dropdown open"
+        );
+        assert_eq!(
+            app.interaction_state.last_tool.get("wiring"),
+            Some(&remembered),
+            "{path}"
+        );
+    }
+}
