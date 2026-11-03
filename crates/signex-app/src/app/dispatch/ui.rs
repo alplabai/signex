@@ -11,17 +11,10 @@ impl Signex {
                 Task::none()
             }
             UiMsg::MenuInWindow { window, msg } => {
-                let Some(command) = msg.window_command() else {
+                let Some(id) = msg.window_command() else {
                     return self.update(Message::Menu(msg));
                 };
-                match crate::keymap::AppCommandId::new(command) {
-                    Ok(id) => self.dispatch_command(
-                        &id,
-                        crate::app::command::CommandArgs::none(),
-                        Some(window),
-                    ),
-                    Err(_) => Task::none(),
-                }
+                self.run_menu_command(&id, Some(window))
             }
             UiMsg::HistoryLoaded {
                 generation,

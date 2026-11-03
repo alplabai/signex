@@ -861,7 +861,8 @@ impl Signex {
         // the mounted files off-thread; `view` only reads the caches.
         let library_poll = crate::library::external_poll::subscription(
             &self.library,
-            self.document_state.project_fs.is_watching(),
+            // Open documents are polled on the same tick (#1877).
+            self.document_state.project_fs.is_watching() || !self.document_state.tabs.is_empty(),
         )
         .map(Message::Library);
 

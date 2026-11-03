@@ -20,6 +20,8 @@ use signex_library::{
 };
 use uuid::Uuid;
 
+use crate::app::CaseFold;
+
 use super::resolve::{ResolvedKind, report_read_failure};
 use super::state::{EditorAddress, LibraryState};
 
@@ -116,7 +118,7 @@ impl PreviewRefreshPlan {
 
 impl LibraryState {
     /// Plan the re-resolution of every Component Preview whose row binds a
-    /// primitive in the library whose directory contains `saved`. The
+    /// primitive in the deepest library whose directory contains `saved`. The
     /// binding's `library_id` decides, not the library the preview tab
     /// belongs to: a row may bind a primitive from another library.
     ///
@@ -125,15 +127,13 @@ impl LibraryState {
     /// `sim_body` is a live edit buffer and replacing it would discard
     /// typing. `None` when `saved` is in no open library or nothing needs
     /// re-resolving. Each plan supersedes the earlier one for its library.
-    pub fn plan_preview_refresh(&mut self, saved: &Path) -> Option<PreviewRefreshPlan> {
+    pub fn plan_preview_refresh(
+        &mut self,
+        saved: &Path,
+        fold: CaseFold,
+    ) -> Option<PreviewRefreshPlan> {
         let (saved_library, root) = self
-            .open_libraries
-            .iter()
-            .find(|lib| {
-                lib.root_dir()
-                    .map(|d| saved.starts_with(d))
-                    .unwrap_or(false)
-            })
+            .write_target_library(saved, fold)
             .map(|lib| (lib.library_id, lib.root.clone()))?;
         let mut items = Vec::new();
         for (address, state) in &self.editors {
@@ -220,11 +220,11 @@ impl LibraryState {
     /// Plan, read and apply on the calling thread. For the one save path
     /// that is blocking by design (`save_primitive_tab_blocking`); an
     /// `update` handler uses [`preview_refresh_task`].
-    pub fn refresh_loaded_previews(&mut self, saved: &Path) {
+    pub fn refresh_loaded_previews(&mut self, saved: &Path, fold: CaseFold) {
         // The caller has just reloaded the primitive listings; caches built
         // from them (the browser's name search and sort) are now stale.
         self.touch_data();
-        if let Some(plan) = self.plan_preview_refresh(saved) {
+        if let Some(plan) = self.plan_preview_refresh(saved, fold) {
             self.apply_preview_readout(plan.read());
         }
     }
@@ -235,8 +235,9 @@ impl LibraryState {
 pub fn preview_refresh_task(
     state: &mut LibraryState,
     saved: &Path,
+    fold: CaseFold,
 ) -> iced::Task<crate::app::Message> {
-    let Some(plan) = state.plan_preview_refresh(saved) else {
+    let Some(plan) = state.plan_preview_refresh(saved, fold) else {
         return iced::Task::none();
     };
     // Behind every write of this library started so far, so the read never

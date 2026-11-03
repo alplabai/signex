@@ -40,6 +40,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             has_document: true,
             has_open_project: true,
             has_parent_sheet: true,
+            has_active_path: true,
             ..base
         }),
         with(CommandContext {
@@ -89,6 +90,7 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "newpart" => new_part_menu_enabled(&ctx.commands),
         "removepart" => remove_part_menu_enabled(&ctx.commands),
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
+        "libeditor" => ctx.commands.has_library_editor,
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
             enabled(ctx, id)
@@ -167,7 +169,62 @@ fn golden_fallback_literals_are_pinned_in_the_model_source() {
 
 // ─── The declarative model reproduces the golden fixture ────────────────
 
+use super::MenuMessage;
 use super::model::{ItemState, Menu, MenuEntry, menu_bar_model};
+
+/// Every row that carries a command id publishes `Command(id)` (#1922), and
+/// the fixture still names the row by the message it sent before. This maps
+/// the id back to that name, so the fixture stays byte-for-byte what it was
+/// and still pins which row runs which command. The two rows whose action is
+/// not their command (Cycle Grid Size, Electrical Rules Check) keep their
+/// own message and are not listed.
+const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
+    ("new_document", "NewProject"),
+    ("open_document", "OpenProject"),
+    ("close_active_document", "CloseDocument"),
+    ("save_document", "Save"),
+    ("save_document_as", "SaveAs"),
+    ("print", "Print"),
+    ("undo", "Undo"),
+    ("redo", "Redo"),
+    ("cut", "Cut"),
+    ("copy", "Copy"),
+    ("paste", "Paste"),
+    ("smart_paste", "SmartPaste"),
+    ("duplicate", "Duplicate"),
+    ("delete_selection", "Delete"),
+    ("select_all", "SelectAll"),
+    ("find", "Find"),
+    ("find_and_replace", "Replace"),
+    ("zoom_in_at_cursor", "ZoomIn"),
+    ("zoom_out_at_cursor", "ZoomOut"),
+    ("zoom_to_fit", "ZoomFit"),
+    ("toggle_visible_grid", "ToggleGrid"),
+    ("toggle_auto_focus", "ToggleAutoFocus"),
+    ("place_wire", "PlaceWire"),
+    ("place_bus", "PlaceBus"),
+    ("place_net_label", "PlaceLabel"),
+    ("open_components_panel", "PlaceComponent"),
+    ("place_power_symbol", "PlacePowerPort"),
+    ("place_junction", "PlaceJunction"),
+    ("open_parameter_manager", "OpenParameterManager"),
+    ("annotate_schematic_quietly", "AnnotateQuietly"),
+    ("force_annotate_all_schematics", "AnnotateForceAll"),
+    ("open_preferences", "OpenPreferences"),
+    ("show_current_command_hotkeys", "OpenKeyboardShortcuts"),
+];
+
+fn action_name(action: &MenuMessage) -> String {
+    match action {
+        MenuMessage::Command(id) => COMMAND_ROW_NAMES
+            .iter()
+            .find(|(command, _)| *command == id.as_str())
+            .unwrap_or_else(|| panic!("command row {id:?} is not in COMMAND_ROW_NAMES"))
+            .1
+            .to_string(),
+        other => format!("{other:?}"),
+    }
+}
 
 /// One fixture row per entry, columns `path kind label command_id shortcut
 /// action` plus the entry's enablement as `1` / `0` (`-` for containers).
@@ -182,7 +239,7 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
             MenuEntry::Item(item) => {
                 let (kind, action) = match &item.state {
                     ItemState::Placeholder | ItemState::Unavailable => ("stub", "-".to_string()),
-                    ItemState::Live { action, .. } => ("item", format!("{action:?}")),
+                    ItemState::Live { action, .. } => ("item", action_name(action)),
                 };
                 let (id, text) = item
                     .shortcut

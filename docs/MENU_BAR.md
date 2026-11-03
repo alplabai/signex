@@ -6,6 +6,52 @@ renders it as iced_aw menus. Its content is pinned by
 `menu_bar/testdata/menu_bar.golden.tsv`; changing a menu, label, shortcut,
 order or message is a content change and needs the maintainers' sign-off.
 
+## How a row runs {#row-routing}
+
+A row that carries a command id (`cmd_item`, `cmd_item_gated`; every row with
+a shortcut) publishes `MenuMessage::Command(id)`. The main window sends it to
+`handle_menu_message`, which runs the id through `Signex::dispatch_command`,
+the same entry the shortcut, the palette and the context menu use, so an id has
+one behaviour on every surface. An undocked window sends it as
+`UiMsg::MenuInWindow`, and the native menu routes it the same way for the
+focused window; both dispatch the id against that window, exactly as the
+shortcut typed there does. Only some ids act on that window's own document:
+Save, Save As, Print, Close Document and the tab steppers, Undo and Redo, and
+the commands that send a canvas event (Fit All). Cut, Copy, Paste, Delete,
+Select All, Find, the Place rows, Zoom In / Out and AutoFocus still act on the
+main window's active tab, as their shortcuts do.
+
+A menu click that cannot run is not silent: `run_menu_command` logs a command
+the window cannot act on to the Messages panel ("Menu: <id> did nothing:
+<reason>"), and the bridge already logs an unknown or unmapped id.
+
+No button without a function: `menu_bar/tests/walk.rs` also presses every live
+row in each window state (no document, a project alone, a schematic with and
+without selection, a dirty one, a symbol editor, a footprint editor, a PCB tab,
+an undocked window) and fails if a click moves nothing and starts no job.
+`KNOWN_INERT` lists the rows allowed to do that and is empty; it may only
+shrink.
+
+A live row's command must run: `menu_bar/tests/walk.rs` checks, for every row
+in each kind of window state, that a live row's `CommandOutcome` is `Ran` and a
+greyed row's is `Disabled`. The golden fixture still names each such row by the
+message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
+the id back to that name.
+
+## Rows with their own action {#own-action}
+
+Two rows take their label and shortcut from a command but do something else, so
+they keep a `MenuMessage` of their own (`cmd_item_own_action`) and their own
+gate:
+
+- View ▸ Cycle Grid Size (`cycle_snap_grid_forward`): the id opens the footprint
+  editor's grid picker (and is enabled only there); the row steps the schematic
+  or PCB grid.
+- Design ▸ Electrical Rules Check (`run_erc`): F8 runs ERC at once; the row opens
+  the ERC dialog to choose the rules first.
+
+Whether each should run its id instead is the maintainers' decision (#1991).
+
 ## File ▸ Library {#file-library}
 
 File ▸ Library carries only "Open Library..." (libraries outside the active

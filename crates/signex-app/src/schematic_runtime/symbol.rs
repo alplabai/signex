@@ -5,7 +5,8 @@
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
 use signex_types::schematic::{
-    LibSymbol, SymbolPrimitive, arc_polyline, lower_placed_symbol, primitives_bounds,
+    LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SymbolPrimitive, arc_polyline, lower_pin_labels,
+    lower_placed_symbol, primitives_bounds,
 };
 
 /// Half extents of the box a symbol gets when its library graphics are
@@ -158,6 +159,44 @@ pub(super) fn push_fallback_box(
         h_align: HAlign::Center,
         v_align: VAlign::Center,
     });
+}
+
+/// Colours the pin text of one symbol draws in.
+pub(super) struct PinTextStyle {
+    pub name: Color,
+    pub number: Color,
+    pub family: Option<std::sync::Arc<str>>,
+}
+
+/// The pin numbers and names of `symbol` as text inputs, placed by the shared
+/// `lower_pin_labels` (the SVG/PDF export draws the same list). A power port
+/// draws no pin text.
+pub(super) fn pin_text_inputs(
+    lib: Option<&LibSymbol>,
+    symbol: &Symbol,
+    style: &PinTextStyle,
+) -> Vec<TextInput> {
+    let Some(lib) = lib else {
+        return Vec::new();
+    };
+    lower_pin_labels(lib, symbol)
+        .into_iter()
+        .map(|label| TextInput {
+            content: label.text,
+            position: [label.position.x as f32, label.position.y as f32],
+            size_mm: SCHEMATIC_TEXT_MM as f32,
+            color: to_rgba(match label.kind {
+                PinLabelKind::Name => style.name,
+                PinLabelKind::Number => style.number,
+            }),
+            bold: false,
+            italic: false,
+            family: style.family.clone(),
+            rotation_rad: label.rotation_rad as f32,
+            h_align: label.h_align,
+            v_align: label.v_align,
+        })
+        .collect()
 }
 
 pub(super) fn push_primitives(

@@ -60,6 +60,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )))
     };
     let context_action = |action| Message::ContextMenu(ContextMenuMsg::Action(action));
+    // The Active Bar's own action for a tool: arms it and remembers it as the
+    // group's last tool, as the Active Bar button does.
+    let active_bar = |action| Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(action));
     let text_edit = |target| Message::TextEdit(TextEditMsg::Requested(target));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
@@ -115,8 +118,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "cut" => Message::Edit(EditMsg::Cut),
         "delete_selection" => Message::Edit(EditMsg::DeleteSelected),
         "remove_last_vertex" => Message::Tool(ToolMessage::RemoveLastVertex),
-        "draw_graphic_line" => Message::Tool(ToolMessage::SelectTool(Tool::Line)),
-        "draw_hierarchical_sheet" => Message::Tool(ToolMessage::SelectTool(Tool::Sheet)),
+        // Aliases of `draw_line` and `place_sheet_symbol`: one route each.
+        "draw_graphic_line" => active_bar(crate::active_bar::ActiveBarAction::DrawLine),
+        "draw_hierarchical_sheet" => {
+            active_bar(crate::active_bar::ActiveBarAction::PlaceSheetSymbol)
+        }
         "duplicate" => Message::Edit(EditMsg::Duplicate),
         // The selected placed part's library actions (#1301, #1262).
         "open_datasheet" => placed_part(PlacedPartAction::OpenDatasheet),
@@ -205,7 +211,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "paste_array" => Message::Edit(EditMsg::PasteArrayRequested),
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
-        "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
+        // Aliases of `draw_bus` / `draw_wire`: one route each, which also
+        // remembers the tool as the Active Bar's wiring default.
+        "place_bus" => active_bar(crate::active_bar::ActiveBarAction::DrawBus),
         // An alias of Place Net Label, which is an Active Bar command.
         "place_local_net_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
             crate::active_bar::ActiveBarAction::PlaceNetLabel,
@@ -224,8 +232,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_hierarchical_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
             crate::active_bar::ActiveBarAction::PlaceOffSheetConnector,
         )),
-        "place_text" => Message::Tool(ToolMessage::SelectTool(Tool::Text)),
-        "place_wire" => Message::Tool(ToolMessage::SelectTool(Tool::Wire)),
+        // An alias of `place_text_string`.
+        "place_text" => active_bar(crate::active_bar::ActiveBarAction::PlaceTextString),
+        "place_wire" => active_bar(crate::active_bar::ActiveBarAction::DrawWire),
         "place_wire_to_bus_entry" => Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)),
         "placement_accept" => Message::Selection(selection_request::SelectionRequest::LassoCommit),
         "placement_properties" => Message::Tool(ToolMessage::PrePlacementTab),
@@ -541,9 +550,12 @@ mod tests {
                 .unwrap_or_else(|| panic!("'{id}' no longer resolves"))
         }
 
+        // One route with its `draw_line` alias (#1922).
         assert!(matches!(
             resolve("draw_graphic_line"),
-            Message::Tool(ToolMessage::SelectTool(Tool::Line))
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::DrawLine
+            ))
         ));
         assert!(matches!(
             resolve("edit_selected_object_properties"),
