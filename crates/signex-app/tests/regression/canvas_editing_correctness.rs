@@ -136,6 +136,9 @@ fn selection_does_not_carry_to_another_schematic_tab() {
 #[test]
 fn menu_place_wire_drops_a_half_placed_shape() {
     let (mut app, _task) = Signex::new();
+    // The Place ▸ Wire row is greyed without a schematic, so one is open.
+    add_tab(&mut app, &PathBuf::from("wire.snxsch"));
+    activate(&mut app, 0);
     app.interaction_state.current_tool = Tool::Line;
     app.interaction_state.shape_anchor = Some(Point::new(1.0, 1.0));
 
