@@ -119,26 +119,27 @@ fn view_header<'a>(
     .into()
 }
 
-/// How many required parameters of the row's class have no value. Zero
-/// when the class has no template.
-fn missing_required_count(state: &ComponentPreviewState, library_state: &LibraryState) -> usize {
-    let Some(library_id) = library_state
-        .open_libraries
-        .iter()
-        .find(|lib| lib.root == state.library_path)
-        .map(|lib| lib.library_id)
-    else {
+/// How many required slots of `class` have no usable value. Zero for a
+/// blank class or one with no template.
+fn missing_required_in(
+    registry: &signex_library::TemplateRegistry,
+    library_id: uuid::Uuid,
+    class: &str,
+    params: &signex_library::ParamMap,
+) -> usize {
+    if class.trim().is_empty() {
         return 0;
-    };
-    library_state
-        .template_registry
-        .validate_params(library_id, state.row.class.as_str(), &state.row.parameters)
+    }
+    registry
+        .validate_params(library_id, class, params)
         .iter()
         .filter(|v| matches!(v, TemplateViolation::MissingRequired { .. }))
         .count()
 }
 
-/// The number a tab shows in its badge slot; `None` draws no badge.
+/// The number a tab shows in its badge slot; `None` draws no badge. The
+/// Parameters count is hidden at 0 and on a read-only library, where the
+/// tab is inert and the user cannot act on it.
 fn tab_badge(
     tab: PreviewTab,
     state: &ComponentPreviewState,
@@ -146,7 +147,17 @@ fn tab_badge(
 ) -> Option<usize> {
     match tab {
         PreviewTab::Parameters => {
-            Some(missing_required_count(state, library_state)).filter(|n| *n > 0)
+            if library_state.is_read_only(&state.library_path) {
+                return None;
+            }
+            let library_id = params::library_id_of(state, library_state)?;
+            let n = missing_required_in(
+                &library_state.template_registry,
+                library_id,
+                state.row.class.as_str(),
+                &state.row.parameters,
+            );
+            Some(n).filter(|n| *n > 0)
         }
         _ => None,
     }
@@ -400,6 +411,37 @@ fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, Li
 mod tests {
     use super::*;
     use signex_types::theme::{ThemeId, theme_tokens};
+
+    #[test]
+    fn missing_required_count_follows_template() {
+        use signex_library::{ParamMap, ParamValue, TemplateRegistry};
+        let reg = TemplateRegistry::new_with_builtins();
+        let id = uuid::Uuid::nil();
+        let mut p = ParamMap::new();
+        assert_eq!(missing_required_in(&reg, id, "unicorn", &p), 0);
+        assert_eq!(missing_required_in(&reg, id, "  ", &p), 0);
+        assert_eq!(missing_required_in(&reg, id, "resistor", &p), 3);
+        p.insert(
+            "value".into(),
+            ParamValue::Measurement {
+                value: 10_000.0,
+                unit: "ohm".into(),
+            },
+        );
+        assert_eq!(missing_required_in(&reg, id, "resistor", &p), 2);
+    }
+
+    #[test]
+    fn resting_and_active_tab_fills_differ_on_every_theme() {
+        for id in ThemeId::BUILTINS {
+            let t = theme_tokens(*id);
+            assert_ne!(
+                crate::styles::ti(t.hover),
+                tokens::overlay(&t, Overlay::Faint),
+                "{id:?}"
+            );
+        }
+    }
 
     #[test]
     fn identity_is_shown_once_with_class_and_state() {

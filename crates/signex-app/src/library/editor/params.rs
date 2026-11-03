@@ -50,7 +50,7 @@ fn resolve_template<'a>(
     library_state.template_registry.resolve(library_id, class)
 }
 
-fn library_id_of(
+pub(super) fn library_id_of(
     state: &ComponentPreviewState,
     library_state: &LibraryState,
 ) -> Option<uuid::Uuid> {
