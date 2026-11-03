@@ -22,7 +22,17 @@ fn fill(c: Color) -> Option<Background> {
 pub fn subtle_button(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
-    let text = ti(tokens.text);
+    subtle_button_with_rest(tokens, ti(tokens.text))
+}
+
+/// [`subtle_button`] with a chosen rest glyph colour; hover and press
+/// brighten the glyph to `tokens.text`. For dim icon buttons, such as a
+/// tab's close x.
+pub fn subtle_button_with_rest(
+    tokens: &ThemeTokens,
+    rest_text: Color,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
+    let bright = ti(tokens.text);
     let disabled = ti(tokens.text_secondary);
     let hover = tokens::overlay(tokens, Overlay::Hover);
     let pressed = tokens::overlay(tokens, Overlay::Pressed);
@@ -32,10 +42,10 @@ pub fn subtle_button(
             button::Status::Pressed => fill(pressed),
             _ => None,
         },
-        text_color: if status == button::Status::Disabled {
-            disabled
-        } else {
-            text
+        text_color: match status {
+            button::Status::Disabled => disabled,
+            button::Status::Hovered | button::Status::Pressed => bright,
+            button::Status::Active => rest_text,
         },
         border: Border {
             radius: RADIUS.into(),

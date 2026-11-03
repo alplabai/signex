@@ -260,6 +260,13 @@ impl Signex {
         }
         body_col = body_col.push(Space::new().height(6));
         body_col = body_col.push(lfs_row);
+        if st.scanning {
+            body_col = body_col.push(
+                text("Reading the project folder…")
+                    .size(TS.caption)
+                    .color(text_muted),
+            );
+        }
         if let Some(err) = st.error.as_ref() {
             body_col = body_col.push(
                 text(err.clone())

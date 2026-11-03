@@ -143,6 +143,9 @@ pub struct CanvasSlot {
     /// Pending fit target to transfer to CanvasState.
     /// Uses Cell so canvas::Program::update (&self) can consume it.
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
+    /// Fit the whole sheet at the next canvas event, so the paper size and the
+    /// canvas size are the ones laid out by then, not the ones at load (#1941).
+    pending_sheet_fit: std::cell::Cell<bool>,
     /// Bounds of the canvas as of the last canvas event — lets menu zoom (which has no
     /// cursor and no event bounds) find the view centre.
     viewport: std::cell::Cell<Rectangle>,
@@ -265,6 +268,7 @@ impl CanvasSlot {
             selected: Vec::new(),
             net_highlight: None,
             pending_fit: std::cell::Cell::new(None),
+            pending_sheet_fit: std::cell::Cell::new(false),
             viewport: std::cell::Cell::new(Rectangle::with_size(iced::Size::ZERO)),
             wire_preview: Vec::new(),
             drawing_mode: false,
@@ -417,7 +421,46 @@ impl CanvasSlot {
                 iced::Point::new(bounds.min_x as f32, bounds.min_y as f32),
                 iced::Size::new(bounds.width() as f32, bounds.height() as f32),
             )));
+        } else {
+            self.fit_to_sheet();
         }
+    }
+
+    /// Fit and centre the whole sheet paper at the next canvas event (#1941).
+    pub fn fit_to_sheet(&self) {
+        self.pending_sheet_fit.set(true);
+    }
+
+    /// Drop any queued fit, deferred or sheet, because the user moved the camera.
+    pub fn cancel_pending_fit(&self) {
+        self.pending_fit.set(None);
+        self.pending_sheet_fit.set(false);
+    }
+
+    /// Apply a queued fit against the canvas's real `viewport`; whether the
+    /// camera moved. A sheet fit reads the paper size as it is now.
+    pub fn resolve_pending_fit(&self, viewport: Rectangle) -> bool {
+        // A collapsed or tiny layout has no room to fit into; keep the
+        // request until the canvas is laid out larger than the padding.
+        if viewport.width <= Camera::FIT_PADDING * 2.0
+            || viewport.height <= Camera::FIT_PADDING * 2.0
+        {
+            return false;
+        }
+        if let Some(target) = self.pending_fit.take() {
+            self.pending_sheet_fit.set(false);
+            self.camera_mut().fit_rect(target, viewport);
+            return true;
+        }
+        if self.pending_sheet_fit.take() {
+            let paper = Rectangle::new(
+                iced::Point::ORIGIN,
+                iced::Size::new(self.paper_width_mm, self.paper_height_mm),
+            );
+            self.camera_mut().fit_rect(paper, viewport);
+            return true;
+        }
+        false
     }
 }
 
@@ -622,9 +665,17 @@ impl<'a> SchematicCanvas<'a> {
         }
         if let (Some(snap), Some(cache)) = (self.active_snapshot(), self.render_cache.as_ref()) {
             let (gx, gy) = self.ghost_delta(dx, dy);
-            state
-                .ghost
-                .refresh(snap, cache.revision(), &self.selected, gx, gy);
+            state.ghost.refresh_with(
+                snap,
+                cache.revision(),
+                &self.selected,
+                gx,
+                gy,
+                self.prefs.wire_color_overrides,
+            );
+            if let Some(held) = state.ghost.take_unreported_held() {
+                crate::diagnostics::log_locked_holds(&held);
+            }
         }
     }
 
@@ -913,6 +964,31 @@ mod tests {
             power_port_pending: false,
             device_px_per_logical_px: 1.0,
         }
+    }
+
+    #[test]
+    fn a_sheet_fit_waits_for_a_viewport_larger_than_the_padding() {
+        let canvas = CanvasSlot::new();
+        canvas.fit_to_sheet();
+        let before = canvas.live_camera();
+        let zero = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(0.0, 0.0));
+        assert!(!canvas.resolve_pending_fit(zero));
+        assert_eq!(canvas.live_camera(), before);
+        let real = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(1200.0, 800.0));
+        assert!(canvas.resolve_pending_fit(real), "the fit was kept");
+    }
+
+    #[test]
+    fn cancel_pending_fit_clears_both_requests() {
+        let canvas = CanvasSlot::new();
+        canvas.fit_to_sheet();
+        canvas.pending_fit.set(Some(Rectangle::new(
+            iced::Point::ORIGIN,
+            iced::Size::new(10.0, 10.0),
+        )));
+        canvas.cancel_pending_fit();
+        let real = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(1200.0, 800.0));
+        assert!(!canvas.resolve_pending_fit(real));
     }
 
     /// #632 regression. The camera used to live in `CanvasState` (the

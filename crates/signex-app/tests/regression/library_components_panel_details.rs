@@ -278,6 +278,24 @@ fn a_row_dragged_and_released_off_the_canvas_places_nothing() {
     assert!(app.library.components_panel.drag.is_none(), "drag over");
 }
 
+/// #1908: only a schematic tab takes a dropped row; over any other tab the
+/// drop places nothing and waits for nothing.
+#[test]
+fn a_row_dropped_on_a_tab_that_is_not_a_schematic_places_nothing() {
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    let canvas = over_canvas(&app);
+    let active = app.document_state.active_tab;
+    app.document_state.tabs[active].kind = signex_app::app::TabKind::Pcb;
+
+    drag_row(&mut app, &key, (20.0, canvas.1), canvas);
+
+    assert!(app.interaction_state.placement.is_none());
+    assert!(app.library.components_panel.pending_drop.is_none());
+    assert!(doc(&app).symbols.is_empty());
+    assert!(app.library.components_panel.drag.is_none(), "drag over");
+}
+
 #[test]
 fn a_press_that_never_leaves_the_threshold_is_a_plain_click() {
     let mut app = app_with_stock();

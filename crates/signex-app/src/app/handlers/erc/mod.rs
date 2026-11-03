@@ -7,6 +7,7 @@ mod annotate_job;
 #[cfg(test)]
 mod annotate_job_tests;
 mod annotate_pass;
+mod annotate_placements;
 mod annotate_preview;
 #[cfg(test)]
 mod annotate_tests;

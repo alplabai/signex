@@ -428,23 +428,21 @@ impl Signex {
         // Clamp the menu inside the window so a click near the
         // right/bottom edge doesn't push it off-screen. Estimate
         // the menu's footprint conservatively from the maximum
-        // possible row count (≈ 22 rows × 22 px + padding) and
+        // possible row count (22 rows) and
         // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
         // lands too close to an edge.
-        let (win_w, win_h) = self.ui_state.size_of_window(window_id);
+        let window_size = self.ui_state.size_of_window(window_id);
+        let (x, y) = super::context_menu::clamp_menu_origin(
+            (ctx_menu.x, ctx_menu.y),
+            (
+                Self::CONTEXT_MENU_WIDTH,
+                super::context_menu::menu_height(22),
+            ),
+            window_size,
+        );
         let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
-        let edge_margin: f32 = 4.0;
-        let x = if ctx_menu.x + menu_w + edge_margin > win_w {
-            (win_w - menu_w - edge_margin).max(0.0)
-        } else {
-            ctx_menu.x
-        };
-        let y = if ctx_menu.y + est_menu_h + edge_margin > win_h {
-            (ctx_menu.y - est_menu_h).max(0.0)
-        } else {
-            ctx_menu.y
-        };
+        let edge_margin = super::context_menu::EDGE_MARGIN;
+        let win_w = window_size.0;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         out.push(Self::dismiss_layer(Message::ContextMenu(
             ContextMenuMsg::Close,
@@ -538,20 +536,14 @@ impl Signex {
         let menu = self.view_tab_context_menu(tab_ctx);
         // Conservative footprint matches the project-tree menu so
         // the two visually align.
-        let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
-        let (win_w, win_h) = ui.window_size;
-        let edge_margin: f32 = 4.0;
-        let x = if tab_ctx.x + menu_w + edge_margin > win_w {
-            (win_w - menu_w - edge_margin).max(0.0)
-        } else {
-            tab_ctx.x
-        };
-        let y = if tab_ctx.y + est_menu_h + edge_margin > win_h {
-            (tab_ctx.y - est_menu_h).max(0.0)
-        } else {
-            tab_ctx.y
-        };
+        let (x, y) = super::context_menu::clamp_menu_origin(
+            (tab_ctx.x, tab_ctx.y),
+            (
+                Self::CONTEXT_MENU_WIDTH,
+                super::context_menu::menu_height(5),
+            ),
+            ui.window_size,
+        );
         vec![
             Self::dismiss_layer(Message::ContextMenu(ContextMenuMsg::CloseTab)),
             column![
@@ -576,20 +568,14 @@ impl Signex {
             return Vec::new();
         };
         let menu = self.view_dock_tab_context_menu();
-        let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
-        let (win_w, win_h) = self.ui_state.window_size;
-        let edge_margin: f32 = 4.0;
-        let x = if menu_ctx.x + menu_w + edge_margin > win_w {
-            (win_w - menu_w - edge_margin).max(0.0)
-        } else {
-            menu_ctx.x
-        };
-        let y = if menu_ctx.y + est_menu_h + edge_margin > win_h {
-            (menu_ctx.y - est_menu_h).max(0.0)
-        } else {
-            menu_ctx.y
-        };
+        let (x, y) = super::context_menu::clamp_menu_origin(
+            (menu_ctx.x, menu_ctx.y),
+            (
+                Self::CONTEXT_MENU_WIDTH,
+                super::context_menu::menu_height(5),
+            ),
+            self.ui_state.window_size,
+        );
         vec![
             Self::dismiss_layer(Message::Dock(crate::dock::DockMessage::TabMenuDismissed)),
             column![
@@ -619,20 +605,17 @@ impl Signex {
         // Conservative footprint: at most 6 rows × 22 px + 8 px
         // padding. Width matches the canvas menu so the two look
         // consistent.
+        let (x, y) = super::context_menu::clamp_menu_origin(
+            (tree_ctx.x, tree_ctx.y),
+            (
+                Self::CONTEXT_MENU_WIDTH,
+                super::context_menu::menu_height(6),
+            ),
+            ui.window_size,
+        );
         let menu_w = Self::CONTEXT_MENU_WIDTH;
-        let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
-        let (win_w, win_h) = ui.window_size;
-        let edge_margin: f32 = 4.0;
-        let x = if tree_ctx.x + menu_w + edge_margin > win_w {
-            (win_w - menu_w - edge_margin).max(0.0)
-        } else {
-            tree_ctx.x
-        };
-        let y = if tree_ctx.y + est_menu_h + edge_margin > win_h {
-            (tree_ctx.y - est_menu_h).max(0.0)
-        } else {
-            tree_ctx.y
-        };
+        let edge_margin = super::context_menu::EDGE_MARGIN;
+        let win_w = ui.window_size.0;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         out.push(Self::dismiss_layer(Message::ContextMenu(
             ContextMenuMsg::CloseProjectTree,
@@ -705,20 +688,11 @@ impl Signex {
             return Vec::new();
         };
         let menu = self.view_grid_picker_menu();
-        let menu_w: f32 = 200.0;
-        let est_menu_h: f32 = 13.0 * 22.0 + 8.0; // 13 rows + padding
-        let (win_w, win_h) = ui.window_size;
-        let edge_margin: f32 = 4.0;
-        let x = if picker.x + menu_w + edge_margin > win_w {
-            (win_w - menu_w - edge_margin).max(0.0)
-        } else {
-            picker.x
-        };
-        let y = if picker.y + est_menu_h + edge_margin > win_h {
-            (picker.y - est_menu_h).max(0.0)
-        } else {
-            picker.y
-        };
+        let (x, y) = super::context_menu::clamp_menu_origin(
+            (picker.x, picker.y),
+            (200.0, super::context_menu::menu_height(13)),
+            ui.window_size,
+        );
         vec![
             Self::dismiss_layer(Message::Ui(UiMsg::GridPickerClose)),
             column![

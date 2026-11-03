@@ -1,6 +1,7 @@
 //! Primitive read/write + git-commit inherent methods on `LocalGitAdapter`.
 
 use super::helpers::*;
+use super::walk_error::{WalkErrorAction, walk_error_action};
 use super::*;
 use crate::git_identity::identity_for_repo;
 
@@ -442,10 +443,18 @@ impl LocalGitAdapter {
 
     pub(super) fn scan_symbol_files(&self) -> Result<Vec<(PathBuf, SymbolFile)>, LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
-        if !dir.exists() {
-            self.record_symbol_problems(&[]);
-            self.symbol_index.rebuild(&[]);
-            return Ok(Vec::new());
+        // Only a folder that is really absent is empty; one that cannot be
+        // checked or listed is a backend failure, never "not found" (#1903).
+        let present = dir
+            .try_exists()
+            .map_err(|e| LibraryError::Backend(format!("check {}: {e}", dir.display())))?;
+        let empty = |this: &Self| {
+            this.record_symbol_problems(&[]);
+            this.symbol_index.rebuild(&[]);
+            Ok(Vec::new())
+        };
+        if !present {
+            return empty(self);
         }
         let suffix = format!(".{SYMBOL_EXT}");
         let mut out: Vec<(PathBuf, SymbolFile)> = Vec::new();
@@ -454,17 +463,44 @@ impl LocalGitAdapter {
             .min_depth(1)
             .max_depth(1)
             .into_iter()
-            .filter_map(Result::ok)
         {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    let kind = e.io_error().map(std::io::Error::kind);
+                    match walk_error_action(e.depth(), kind, e.path(), &suffix) {
+                        WalkErrorAction::Fail => {
+                            return Err(LibraryError::Backend(format!(
+                                "list {}: {e}",
+                                dir.display()
+                            )));
+                        }
+                        WalkErrorAction::Problem => {
+                            let at = e.path().map_or_else(|| dir.clone(), Path::to_path_buf);
+                            problems.push(SymbolFileProblem::new(at, &e.to_string()));
+                        }
+                        WalkErrorAction::Skip => {}
+                    }
+                    continue;
+                }
+            };
             let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
             let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
                 continue;
             };
             if !name.ends_with(&suffix) {
                 continue;
+            }
+            // Only regular files (or links to one) are read: a link to a
+            // device or FIFO must not be read. A stat that fails is a problem,
+            // not a skip, so the listing never reads as complete without it.
+            match fs::metadata(path) {
+                Ok(meta) if meta.is_file() => {}
+                Ok(_) => continue,
+                Err(e) => {
+                    problems.push(SymbolFileProblem::new(path.to_path_buf(), &e.to_string()));
+                    continue;
+                }
             }
             // #690 — a container that cannot be read or parsed affects only
             // itself: skip it, never rewrite it, and record it so it is

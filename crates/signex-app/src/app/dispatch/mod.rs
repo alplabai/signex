@@ -139,7 +139,12 @@ impl Signex {
                 // nothing to redraw, and must not clear the main canvas.
                 let has_canvas = self.ui_state.main_window_id == Some(id)
                     || self.interaction_state.canvases.contains_key(&id);
-                if self.ui_state.set_window_os_scale(id, scale) && has_canvas {
+                let changed = self.ui_state.set_window_os_scale(id, scale);
+                if changed && self.ui_state.main_window_id == Some(id) {
+                    self.document_state.panel_ctx.device_px_per_logical_px =
+                        self.ui_state.main_device_px_per_logical_px();
+                }
+                if changed && has_canvas {
                     let slot = self.interaction_state.canvas_for_window_mut(id);
                     slot.clear_bg_cache();
                     slot.clear_content_cache();
@@ -434,7 +439,7 @@ impl Signex {
                 );
                 per_window.special_strings = self.special_strings_for_path(&path);
                 per_window.designators = self.designators_for_path(&path);
-                per_window.fit_to_content();
+                per_window.fit_to_sheet();
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
                 // window no longer moves the other (#494).

@@ -405,12 +405,25 @@ fn a_paste_follow_up_for_a_window_without_a_canvas_is_cancelled_not_applied() {
         path: Some(f.a.clone()),
         dialog: 0,
     };
+    {
+        use crate::ignore::IgnoreResult;
+        crate::diagnostics::init_logging()
+            .ignore("another test in this binary already installed the same logger");
+    }
+    // Only entries newer than this one count, so older lines cannot satisfy it.
+    let newest = crate::diagnostics::newest_entry_id();
     let _ = f.app.update(Message::Edit(EditMsg::PasteTextRead {
         request,
         text: None,
     }));
     assert_eq!(wire_ends(&f.app, &f.a), a_before);
     assert_eq!(wire_ends(&f.app, &f.b), b_before);
+    let said = crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.id > newest.unwrap_or(0) && e.message.contains("Paste cancelled"))
+        .count();
+    // `>=`: other tests log the same text when threads share the ring.
+    assert!(said >= 1, "the cancel never reached the Messages panel");
 }
 
 #[test]

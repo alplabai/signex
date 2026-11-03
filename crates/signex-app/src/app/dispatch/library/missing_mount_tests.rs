@@ -8,7 +8,7 @@ use crate::library::mount::{MountIntent, PreparedMountCell, prepare_mount};
 use crate::library::recovery::RecoveryDialog;
 
 /// Register an open project whose library list holds `libs` (absolute).
-fn add_project(app: &mut Signex, libs: &[&std::path::Path]) {
+fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::ProjectId {
     use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
     let id = app.document_state.mint_project_id();
     app.document_state
@@ -46,6 +46,7 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) {
             case_probed: false,
             case_decided: false,
         });
+    id
 }
 
 /// Deliver a finished mount of `path` carrying `result` into `app`.
@@ -190,4 +191,189 @@ fn a_browser_open_of_a_missing_file_raises_the_dialog_not_an_error_card() {
         Some(RecoveryDialog::LibraryMissing { .. })
     ));
     assert!(app.document_state.error_notice.is_none());
+}
+
+fn two_missing(
+    app: &mut Signex,
+) -> (
+    std::path::PathBuf,
+    std::path::PathBuf,
+    crate::app::ProjectId,
+    tempfile::TempDir,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().to_path_buf();
+    let (a, b) = (dir.join("a.snxlib"), dir.join("b.snxlib"));
+    let id = add_project(app, &[&a, &b]);
+    for lib in [&a, &b] {
+        finish(app, lib, MountIntent::Silent, prepare_mount(lib));
+    }
+    (a, b, id, tmp)
+}
+
+fn open_path(app: &Signex) -> Option<std::path::PathBuf> {
+    match &app.library.recovery {
+        Some(RecoveryDialog::LibraryMissing { path }) => Some(path.clone()),
+        _ => None,
+    }
+}
+
+#[test]
+fn two_missing_libraries_raise_two_dialogs_in_turn() {
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    assert_eq!(open_path(&app), Some(a));
+    assert_eq!(app.library.missing.waiting_len(), 1);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        crate::library::recovery::LibraryMissingChoice::Cancel,
+    )));
+    assert_eq!(open_path(&app), Some(b));
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        crate::library::recovery::LibraryMissingChoice::Cancel,
+    )));
+    assert!(app.library.recovery.is_none());
+}
+
+#[test]
+fn closing_the_project_prunes_its_queued_dialogs_and_the_open_one() {
+    let (mut app, _task) = Signex::new();
+    let (_, _, id, _dir) = two_missing(&mut app);
+    app.library.forget_missing_libraries_of(id, |_| None);
+    assert!(app.library.recovery.is_none());
+    assert_eq!(app.library.missing.waiting_len(), 0);
+}
+
+#[test]
+fn a_closed_projects_dialogs_pass_to_another_project_that_lists_them() {
+    let (mut app, _task) = Signex::new();
+    let (a, b, first, _dir) = two_missing(&mut app);
+    let second = add_project(&mut app, &[&a, &b]);
+    app.library
+        .forget_missing_libraries_of(first, |_| Some(second));
+    assert_eq!(open_path(&app), Some(a), "the open dialog stays");
+    assert_eq!(app.library.missing.waiting_len(), 1, "the queued one too");
+    // Closing the new owner then drops them.
+    app.library.forget_missing_libraries_of(second, |_| None);
+    assert!(app.library.recovery.is_none());
+    assert_eq!(app.library.missing.waiting_len(), 0);
+}
+
+#[test]
+fn remove_from_project_marks_the_project_dirty_and_shows_the_next_dialog() {
+    use crate::library::recovery::LibraryMissingChoice::RemoveFromProject;
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        RemoveFromProject,
+    )));
+    let project = &app.document_state.projects[0];
+    assert_eq!(project.data.libraries.len(), 1);
+    assert_eq!(
+        project
+            .data
+            .resolve_library_path(&project.data.libraries[0]),
+        b
+    );
+    let project_path = project.path.clone();
+    assert!(app.document_state.is_document_dirty(&project_path));
+    assert_ne!(a, b);
+    assert_eq!(open_path(&app), Some(b));
+}
+
+#[test]
+fn locate_rewrites_the_projects_entry_and_marks_it_dirty() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(moved.clone())),
+    ));
+    assert!(app.library.library_at(&moved).is_some(), "the pick mounted");
+    let project = &app.document_state.projects[0];
+    assert_eq!(
+        project
+            .data
+            .resolve_library_path(&project.data.libraries[0]),
+        moved
+    );
+    let project_path = project.path.clone();
+    assert!(app.document_state.is_document_dirty(&project_path));
+    assert_eq!(open_path(&app), Some(b));
+}
+
+/// The picked library replaces the missing one in the project, so it ranks
+/// as a project library against an installed copy sharing its id (#1908).
+#[test]
+fn a_located_library_outranks_an_installed_copy_of_itself() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, _, _, _dir) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let copy = a.with_file_name("copy.snxlib");
+    std::fs::copy(&moved, &copy).unwrap();
+    app.library.installed_libraries.push(copy.clone());
+    app.library.open_library(copy.clone()).expect("copy mounts");
+
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(moved.clone())),
+    ));
+
+    assert!(app.library.library_at(&moved).is_some(), "the pick mounted");
+    assert!(app.library.library_at(&copy).is_none(), "the copy gave way");
+}
+
+#[test]
+fn a_pick_that_does_not_open_leaves_the_project_entry_alone() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, _, _, _dir) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let bogus = a.with_file_name("not-there.snxlib");
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(bogus)),
+    ));
+    let project = &app.document_state.projects[0];
+    assert_eq!(
+        project
+            .data
+            .resolve_library_path(&project.data.libraries[0]),
+        a
+    );
+    let project_path = project.path.clone();
+    assert!(!app.document_state.is_document_dirty(&project_path));
+}
+
+#[test]
+fn a_second_locate_while_picking_is_ignored() {
+    use crate::library::recovery::LibraryMissingChoice::Locate;
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+        Locate,
+    )));
+    let moved = a.with_file_name("moved.snxlib");
+    crate::library::commands::create_library_file(&moved, &Default::default()).unwrap();
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(Some(moved)),
+    ));
+    assert_eq!(open_path(&app), Some(b.clone()));
+    // A stray second result never closes the dialog that moved on.
+    let _ = app.update(Message::Library(
+        LibraryMessage::RecoveryLibraryMissingLocateResult(None),
+    ));
+    assert_eq!(open_path(&app), Some(b));
 }

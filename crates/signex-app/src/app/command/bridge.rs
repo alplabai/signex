@@ -8,6 +8,10 @@
 
 use crate::keymap::AppCommandId;
 
+use super::CommandArgs;
+#[cfg(test)]
+use super::args::InvocationContext;
+
 use super::super::*;
 
 /// Resolve a command for DISPATCH, reporting when it cannot be resolved.
@@ -27,8 +31,8 @@ use super::super::*;
 /// ring buffer, which evicted every real diagnostic before anyone could
 /// read it. The message was also false on that path: nothing had been
 /// invoked.
-pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
-    let resolved = resolve(command);
+pub(crate) fn core_to_message(command: &AppCommandId, args: &CommandArgs) -> Option<Message> {
+    let resolved = resolve(command, args);
     if resolved.is_none() {
         log_unmapped(command);
     }
@@ -40,12 +44,12 @@ pub(crate) fn core_to_message(command: &AppCommandId) -> Option<Message> {
 /// The counterpart to [`core_to_message`] for callers that are asking a
 /// question rather than dispatching. A query must not narrate.
 pub(crate) fn is_dispatchable(command: &AppCommandId) -> bool {
-    resolve(command).is_some()
+    resolve(command, &CommandArgs::none()).is_some()
 }
 
 /// The resolution itself. Pure: no logging, no side effects, so both
 /// entry points above are built from one table and cannot drift.
-pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
+pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Message> {
     use crate::library::editor::footprint::state::EditorMode;
     use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
 
@@ -76,7 +80,9 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         }
         "find_similar_objects" => {
             Message::Selection(selection_request::SelectionRequest::FindSimilar(
-                crate::find_similar::FindSimilarMsg::OpenRequested { at: None },
+                crate::find_similar::FindSimilarMsg::OpenRequested {
+                    at: args.context.origin,
+                },
             ))
         }
         "zoom_to_selection_area" => Message::CanvasEvent(CanvasEvent::FitSelection),
@@ -137,14 +143,21 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
             Message::Menu(MenuMessage::OpenPropertiesPanel)
         }
         // The selected sheet symbol's child-sheet actions: the canvas menu
-        // rows send the same context-menu action (#271).
+        // rows send the same context-menu action (#271). These three go round
+        // the message loop twice (row -> Command -> here); harmless, the
+        // second `context_menu.take()` finds None.
         "open_child_sheet" => context_action(ContextAction::OpenChildSheet),
         "create_sheet_from_sheet_symbol" => context_action(ContextAction::CreateChildSheet),
         "sync_sheet_pins" => context_action(ContextAction::SyncSheetPins),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
-        // Opens the active project's options tab; the project-tree row keeps
-        // its tree key and sends `ProjectTreeAction::OpenProjectOptions`.
-        "open_project_options" => Message::Menu(MenuMessage::OpenProjectOptions),
+        // Opens the options tab of the project the call names (`args.project`,
+        // a project-tree row), else of the active document's project.
+        "open_project_options" => match &args.context.project {
+            Some(id) => Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenProjectOptions(vec![id.clone()]),
+            )),
+            None => Message::Menu(MenuMessage::OpenProjectOptions),
+        },
         "find" | "find_text" => Message::Overlay(OverlayMsg::OpenFind),
         "find_and_replace" => Message::Overlay(OverlayMsg::OpenReplace),
         "footprint_mode_pads" => {
@@ -193,9 +206,10 @@ pub(super) fn resolve(command: &AppCommandId) -> Option<Message> {
         "paste" => Message::Edit(EditMsg::Paste),
         "paste_special" | "smart_paste" => Message::Edit(EditMsg::SmartPaste),
         "place_bus" => Message::Tool(ToolMessage::SelectTool(Tool::Bus)),
-        "place_local_net_label" | "place_net_label" => {
-            Message::Tool(ToolMessage::SelectTool(Tool::Label))
-        }
+        // An alias of Place Net Label, which is an Active Bar command.
+        "place_local_net_label" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlaceNetLabel,
+        )),
         "place_no_connect" => Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)),
         // The same Active Bar actions the buttons send, so a key and a click
         // arm the same tool. The Place menu's Power Port row sends GND too.
@@ -523,7 +537,8 @@ mod tests {
     fn the_newly_wired_ids_reach_their_named_messages() {
         fn resolve(id: &str) -> Message {
             let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
-            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+            core_to_message(&command, &CommandArgs::none())
+                .unwrap_or_else(|| panic!("'{id}' no longer resolves"))
         }
 
         assert!(matches!(
@@ -567,6 +582,19 @@ mod tests {
                 crate::active_bar::ActiveBarAction::PlaceJunction
             ))
         ));
+        // Place Net Label arms the net label and its ghost, the same as the
+        // Active Bar button; the local alias shares the arm (#1920).
+        for id in ["place_net_label", "place_local_net_label"] {
+            assert!(
+                matches!(
+                    resolve(id),
+                    Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                        crate::active_bar::ActiveBarAction::PlaceNetLabel
+                    ))
+                ),
+                "{id}"
+            );
+        }
         assert!(matches!(
             resolve("place_wire_to_bus_entry"),
             Message::Tool(ToolMessage::SelectTool(Tool::BusEntry))
@@ -594,7 +622,8 @@ mod tests {
         use crate::library::{LibraryMessage, PlacedPartAction, PlacedPartMsg};
         fn resolve(id: &str) -> Message {
             let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
-            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+            core_to_message(&command, &CommandArgs::none())
+                .unwrap_or_else(|| panic!("'{id}' no longer resolves"))
         }
         let action = |id: &str| match resolve(id) {
             Message::Library(LibraryMessage::PlacedPart(PlacedPartMsg::ActionRequested(a))) => a,
@@ -613,7 +642,7 @@ mod tests {
     fn the_field_edit_ids_request_their_target() {
         let target = |id: &str| {
             let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
-            match core_to_message(&command) {
+            match core_to_message(&command, &CommandArgs::none()) {
                 Some(Message::TextEdit(TextEditMsg::Requested(target))) => target,
                 other => panic!("'{id}' resolved to {other:?}"),
             }
@@ -636,7 +665,8 @@ mod tests {
     fn the_103_shortcuts_reach_their_named_messages() {
         fn resolve(id: &str) -> Message {
             let command = AppCommandId::new(id).expect("a catalog id is a valid AppCommandId");
-            core_to_message(&command).unwrap_or_else(|| panic!("'{id}' no longer resolves"))
+            core_to_message(&command, &CommandArgs::none())
+                .unwrap_or_else(|| panic!("'{id}' no longer resolves"))
         }
 
         assert!(matches!(
@@ -667,7 +697,7 @@ mod tests {
     fn move_object_resolves_to_the_interactive_move_action() {
         let command = AppCommandId::new("move_object").expect("a catalog id is valid");
         assert!(matches!(
-            core_to_message(&command),
+            core_to_message(&command, &CommandArgs::none()),
             Some(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
                 crate::active_bar::ActiveBarAction::Move
             )))
@@ -682,7 +712,7 @@ mod tests {
             .expect("a catalog id is valid");
         assert!(is_dispatchable(&command));
         assert!(matches!(
-            core_to_message(&command),
+            core_to_message(&command, &CommandArgs::none()),
             Some(Message::Input(InputMsg::FootprintCourtyardOutlineRequested))
         ));
     }
@@ -774,7 +804,7 @@ mod tests {
     fn remove_last_vertex_ends_a_wire_draw_instead_of_deleting() {
         let (mut app, _task) = Signex::new();
         let cmd = AppCommandId::new("remove_last_vertex").unwrap();
-        let msg = core_to_message(&cmd).unwrap();
+        let msg = core_to_message(&cmd, &CommandArgs::none()).unwrap();
         assert!(matches!(msg, Message::Tool(ToolMessage::RemoveLastVertex)));
         assert!(app.interaction_state.active_canvas().selected.is_empty());
         app.interaction_state.wire_drawing = true;
@@ -826,7 +856,10 @@ mod tests {
         let run_erc = AppCommandId::new("run_erc").unwrap();
 
         assert!(!is_dispatchable(&update_pcb));
-        assert!(matches!(resolve(&run_erc), Some(Message::Erc(ErcMsg::Run))));
+        assert!(matches!(
+            resolve(&run_erc, &CommandArgs::none()),
+            Some(Message::Erc(ErcMsg::Run))
+        ));
     }
 
     /// #1245 - the catalog command that opens the Parameter Manager resolves
@@ -836,7 +869,7 @@ mod tests {
         let id = AppCommandId::new("open_parameter_manager").unwrap();
         assert!(is_dispatchable(&id));
         assert!(matches!(
-            resolve(&id),
+            resolve(&id, &CommandArgs::none()),
             Some(Message::ParameterManager(ParameterManagerMsg::Open))
         ));
     }
@@ -851,7 +884,8 @@ mod tests {
             ("navigate_up_hierarchy", false),
         ] {
             let command = AppCommandId::new(id).unwrap();
-            let message = resolve(&command).unwrap_or_else(|| panic!("'{id}' must resolve"));
+            let message = resolve(&command, &CommandArgs::none())
+                .unwrap_or_else(|| panic!("'{id}' must resolve"));
             if expect_properties {
                 assert!(matches!(
                     message,
@@ -872,7 +906,7 @@ mod tests {
     /// #1256 / #1257 / #1266 - the canvas commands resolve to their messages.
     #[test]
     fn the_canvas_commands_resolve() {
-        let resolve_id = |id: &str| resolve(&AppCommandId::new(id).unwrap());
+        let resolve_id = |id: &str| resolve(&AppCommandId::new(id).unwrap(), &CommandArgs::none());
         assert!(matches!(
             resolve_id("measure_distance"),
             Some(Message::Tool(ToolMessage::SelectTool(Tool::Measure)))
@@ -909,7 +943,7 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let command = AppCommandId::new("center_on_cursor").unwrap();
 
-        assert!(core_to_message(&command).is_none());
+        assert!(core_to_message(&command, &CommandArgs::none()).is_none());
 
         assert!(crate::diagnostics::recent_entries().iter().any(|entry| {
             entry.message.contains("command 'center_on_cursor'")
@@ -933,7 +967,7 @@ mod tests {
         let before = records_naming(id);
 
         // Act
-        assert!(core_to_message(&command).is_none());
+        assert!(core_to_message(&command, &CommandArgs::none()).is_none());
 
         // Assert — exactly one new record, so a future change that reports
         // the same failure twice is caught too.
@@ -942,5 +976,43 @@ mod tests {
             before + 1,
             "dispatching `{id}` must still say it did nothing"
         );
+    }
+    /// The invocation context travels in `CommandArgs`: the click point seeds
+    /// Find Similar, and a project id sends Project Options to that project.
+    #[test]
+    fn command_args_reach_the_commands_that_read_them() {
+        let resolve_with = |id: &str, args: &CommandArgs| {
+            resolve(&AppCommandId::new(id).unwrap(), args).unwrap_or_else(|| panic!("{id}"))
+        };
+        assert!(matches!(
+            resolve_with(
+                "find_similar_objects",
+                &CommandArgs::in_context(InvocationContext {
+                    origin: Some((5.0, 20.0)),
+                    project: None
+                })
+            ),
+            Message::Selection(selection_request::SelectionRequest::FindSimilar(
+                crate::find_similar::FindSimilarMsg::OpenRequested {
+                    at: Some((5.0, 20.0))
+                }
+            ))
+        ));
+        assert!(matches!(
+            resolve_with("open_project_options", &CommandArgs::none()),
+            Message::Menu(MenuMessage::OpenProjectOptions)
+        ));
+        match resolve_with(
+            "open_project_options",
+            &CommandArgs::in_context(InvocationContext {
+                origin: None,
+                project: Some("p1".to_string()),
+            }),
+        ) {
+            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenProjectOptions(key),
+            )) => assert_eq!(key, ["p1"]),
+            other => panic!("resolved to {other:?}"),
+        }
     }
 }

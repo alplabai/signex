@@ -259,10 +259,8 @@ impl Signex {
             }
         };
         if path.exists() {
-            self.set_dialog_error(
-                "A file with that name already exists. Open it, or pick another name.".to_owned(),
-                true,
-            );
+            let (why, offer_open) = self.existing_file_reply(&confirm, &path);
+            self.set_dialog_error(why, offer_open);
             return None;
         }
         if let Err(why) = self.refuse_while_project_moves(&path, "create") {
@@ -303,6 +301,46 @@ impl Signex {
             document,
             project_id,
         })
+    }
+
+    /// What the dialog says about a typed path that already holds a file, and
+    /// whether "Open it" is offered. It is not when another sheet symbol of
+    /// the parent already points at the file: one file is placed once, and
+    /// linking this symbol too would be refused (#1835).
+    fn existing_file_reply(
+        &self,
+        confirm: &CreateChildSheetConfirmState,
+        path: &std::path::Path,
+    ) -> (String, bool) {
+        let fold = crate::app::state::project_case::fold_of(
+            self.document_state.document_project(&confirm.parent),
+        );
+        let taken_by = confirm
+            .parent
+            .parent()
+            .map(|dir| reference_from(dir, path, fold))
+            .and_then(|reference| {
+                let engine = self.document_state.engines.get(&confirm.parent)?;
+                signex_engine::other_sheet_symbol_using_file(
+                    &engine.document().child_sheets,
+                    confirm.symbol,
+                    &reference,
+                )
+                .map(|other| other.name.clone())
+            });
+        match taken_by {
+            Some(other) => (
+                format!(
+                    "A file with that name already exists, and sheet symbol '{other}' already \
+                     points at it. A sheet file is placed by one sheet symbol; pick another name."
+                ),
+                false,
+            ),
+            None => (
+                "A file with that name already exists. Open it, or pick another name.".to_owned(),
+                true,
+            ),
+        }
     }
 
     fn set_dialog_error(&mut self, why: String, exists: bool) {

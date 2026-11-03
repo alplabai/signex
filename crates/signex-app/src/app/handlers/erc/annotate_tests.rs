@@ -526,13 +526,14 @@ fn assert_unopened_sheet_untouched_while(
     let refs = child_refs(&dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, [expected], "the sheet file was not rewritten");
-    assert!(
-        logged_since(
-            since,
-            &format!("{pass}: z_child.snxsch was left unchanged, {reason}")
-        ),
-        "the skip is reported"
-    );
+    // Annotate here is Reset & Renumber, which refuses the run rather than
+    // number around the sheet (#1753); Reset Duplicates still skips it.
+    let said = if pass == "Annotate" {
+        format!("{pass} was not run: it would skip z_child.snxsch ({reason})")
+    } else {
+        format!("{pass}: z_child.snxsch was left unchanged, {reason}")
+    };
+    assert!(logged_since(since, &said), "the skip is reported");
 }
 
 fn claim_restore(app: &mut Signex, path: PathBuf) {
@@ -720,11 +721,11 @@ fn reset_duplicates_of_a_closed_sheet_leaves_the_erc_results_stale() {
 }
 
 #[test]
-fn a_rollback_that_could_not_discard_the_run_does_not_mark_the_sheet_clean() {
+fn a_rollback_that_found_no_run_leaves_an_unrelated_edit_dirty() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
     let root = dir.join("a_root.snxsch");
-    // The run's edit sits on the sheet, but the group asked to discard is
-    // not the top entry's, so nothing is rolled back.
+    // An edit sits on the sheet, but the group asked to discard is not the
+    // top entry's: the run recorded nothing here, so the edit is left alone.
     let id = app.document_state.engines[&root].document().symbols[0].uuid;
     let changed = app.apply_engine_command(
         signex_engine::Command::MoveSelection {
@@ -747,12 +748,42 @@ fn a_rollback_that_could_not_discard_the_run_does_not_mark_the_sheet_clean() {
         Some(wrong_group),
         &touched,
         &std::collections::HashSet::new(),
+        &[],
+        "test",
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        app.document_state.is_document_dirty(&root),
+        "a rollback that found no run must not clean the sheet"
+    );
+}
+
+#[test]
+fn a_rollback_that_found_no_run_on_the_active_sheet_leaves_it_unsaved() {
+    let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![]);
+    let root = dir.join("a_root.snxsch");
+    // Open through a save point, so the history decides dirty and the
+    // sheet reads clean until something is recorded on it.
+    app.document_state
+        .engines
+        .get_mut(&root)
+        .expect("root engine")
+        .mark_saved();
+    app.document_state.sync_history_dirty(&root);
+    assert!(!app.document_state.is_document_dirty(&root));
+    // The pass marked the sheet dirty before the rollback ran.
+    app.document_state.mark_document_dirty(&root);
+    let touched = [root.clone()];
+    let _ = app.roll_back_reprefix(
+        Some(signex_engine::UndoGroupId::new(u64::MAX)),
+        &touched,
+        &std::collections::HashSet::new(),
         &touched,
         "test",
     );
     std::fs::remove_dir_all(&dir).ok();
     assert!(
         app.document_state.is_document_dirty(&root),
-        "the run is still in the sheet"
+        "the run may still be in the sheet, so it stays unsaved"
     );
 }

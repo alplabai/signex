@@ -264,19 +264,14 @@ impl Signex {
         &mut self,
         key: crate::library::state::ComponentsPanelRowKey,
     ) -> Task<Message> {
-        const DOUBLE_CLICK_WINDOW: std::time::Duration = std::time::Duration::from_millis(500);
-        let now = std::time::Instant::now();
         let library = &mut self.library;
         library.panel_selected = Some(key.clone());
-        let is_double = matches!(
-            &library.panel_last_click,
-            Some((prev, t)) if *prev == key && now.duration_since(*t) <= DOUBLE_CLICK_WINDOW
-        );
+        let is_double = library
+            .panel_last_click
+            .register(key.clone(), std::time::Instant::now());
         if !is_double {
-            library.panel_last_click = Some((key, now));
             return Task::none();
         }
-        library.panel_last_click = None;
         self.handle_open_component_row(key.library_path, key.table, key.row_id)
     }
 

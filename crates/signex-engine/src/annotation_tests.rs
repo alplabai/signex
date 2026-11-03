@@ -43,6 +43,7 @@ fn a_phase_one_rewrite_records_history() {
         locked: &locked,
         undo_group: None,
         reprefix: None,
+        placements: &[],
     };
 
     let changed = engine
@@ -164,6 +165,7 @@ fn an_annotate_undo_group_is_stamped_and_survives_undo_and_redo() {
         locked: &locked,
         undo_group: Some(crate::UndoGroupId::new(7)),
         reprefix: None,
+        placements: &[],
     };
     engine
         .annotate_in_project(
@@ -345,6 +347,7 @@ fn reprefix_pass(
         locked,
         undo_group: None,
         reprefix: Some(targets),
+        placements: &[],
     };
     engine.annotate_in_project(
         AnnotateMode::Incremental,
@@ -470,6 +473,7 @@ fn overflow_on_one_sheet_does_not_leak_assigned_to_the_next() {
         locked: &locked,
         undo_group: None,
         reprefix: None,
+        placements: &[],
     };
     let mut counters = HashMap::new();
     let mut assigned = HashMap::new();
@@ -508,6 +512,7 @@ fn discarding_a_group_entry_leaves_nothing_to_redo() {
         locked: &locked,
         undo_group: Some(group),
         reprefix: Some(&targets),
+        placements: &[],
     };
     engine
         .annotate_in_project(
