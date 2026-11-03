@@ -219,8 +219,15 @@ branch cannot leave a stale position behind.
   instead of `mark_document_dirty`.
 - A save that lands clean records the cursor (`mark_document_clean`). A write that
   landed while the project was edited records the bytes it wrote
-  (`note_project_bytes_on_disk`), so undo back to them is clean; when a newer
+  (`note_project_bytes_on_disk`), so undo back to them is clean unless a
+  non-history edit was pending (that stays until a clean save); when a newer
   write is still to land the cursor is unknown until it does.
+- The disk-only project updates (Add New Schematic, delete, sheet rename, Save
+  As repoint) rewrite the `.snxprj` and record the bytes they wrote the same
+  way, without clearing the dirty mark: undoing the project back to exactly the
+  file reads clean.
+- A discard of excluded or deleted documents (`discard_documents_where`) records
+  no saved state.
 - Forgotten, so the project stays dirty until the next save: a failed write
   (`forget_project_saved_state`), a discard (`clear_document_dirty`), a rename or
   Save As (`rekey_document_dirty`), and a project that was already dirty when its

@@ -219,6 +219,20 @@ impl DocumentState {
         }
     }
 
+    /// Drop the dirty marks of every dirty document whose path satisfies
+    /// `matches` without recording any saved state: a discard (excluded or
+    /// deleted documents) wrote nothing, so no later undo may read clean.
+    pub fn discard_documents_where(&mut self, matches: impl Fn(&Path) -> bool) {
+        let hit: Vec<PathBuf> = self
+            .dirty_document_paths()
+            .into_iter()
+            .filter(|path| matches(path))
+            .collect();
+        for path in hit {
+            self.clear_document_dirty(&path);
+        }
+    }
+
     /// Move `from`'s stored dirty mark to `to` (a Save As or a rename re-keyed
     /// the document). Returns whether `from` was dirty. A draft's flag
     /// travels with its editor, which the caller re-keys; this moves the rest.

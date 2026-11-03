@@ -275,7 +275,7 @@ impl Signex {
             };
             self.finish_clean_project_save(path, saved);
         } else {
-            // The file now holds `bytes`, so undoing back to them is clean.
+            // The file now holds `bytes`, so undoing back to them is clean (unless a non-history edit is pending; that stays until a clean save).
             self.document_state
                 .note_project_bytes_on_disk(path, bytes, newest);
             if self.document_state.is_document_dirty(path) {
