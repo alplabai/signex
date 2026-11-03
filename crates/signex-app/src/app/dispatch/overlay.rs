@@ -425,6 +425,11 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
                 task
             }
+            AnnotateMsg::ReprefixSheetsRead { generation, result } => {
+                let task = self.handle_reprefix_sheets_read(generation, &result);
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
             AnnotateMsg::ReprefixConfirmed => {
                 let task = self.handle_reprefix_confirmed();
                 self.sync_diagnostics_panel_ctx();
