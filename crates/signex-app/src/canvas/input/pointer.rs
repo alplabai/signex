@@ -398,7 +398,7 @@ impl SchematicCanvas<'_> {
                 // On the very first frame where the pan actually
                 // moves, close the context menu (matches Altium:
                 // right-drag-to-pan dismisses the menu). Skipping
-                // the CursorMoved publish for this one frame is
+                // the ViewMoved publish for this one frame is
                 // harmless — `camera.pan` above already moved the
                 // view and the next cursor tick will publish
                 // normally.
