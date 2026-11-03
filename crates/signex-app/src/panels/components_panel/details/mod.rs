@@ -183,13 +183,7 @@ pub fn view<'a>(
     }
     col = col.push(match &d.footprint {
         Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(
-                fp.clone(),
-                theme_ext::accent(tokens),
-                primary,
-                muted,
-                primary,
-            );
+            let program = footprint_canvas::FootprintPreview::new(fp.clone(), tokens);
             let canvas = iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(PREVIEW_HEIGHT);

@@ -227,14 +227,10 @@ fn render_panes<'a>(
         .then_some(state.footprint.as_ref())
         .flatten()
         .map(|fp| {
-            let primary = theme_ext::text_primary(tokens);
             let program =
                 crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
                     fp.clone(),
-                    theme_ext::accent(tokens),
-                    primary,
-                    theme_ext::text_secondary(tokens),
-                    primary,
+                    tokens,
                 );
             iced::widget::canvas(program)
                 .width(Length::Fill)
