@@ -22,6 +22,7 @@ where
     Renderer: iced::advanced::Renderer,
 {
     content: Element<'a, Message, Theme, Renderer>,
+    veil: Color,
 }
 
 impl<'a, Message, Theme, Renderer> Inert<'a, Message, Theme, Renderer>
@@ -31,7 +32,32 @@ where
     pub fn new(content: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
         Self {
             content: content.into(),
+            veil: Color {
+                a: VEIL_ALPHA,
+                ..Color::BLACK
+            },
         }
+    }
+
+    /// Fade the child with `veil` instead of the default black.
+    pub fn with_veil(mut self, veil: Color) -> Self {
+        self.veil = veil;
+        self
+    }
+}
+
+/// Like [`unless_read_only`], fading the child with a caller-chosen
+/// (theme-token) `veil`.
+pub fn unless_read_only_veiled<'a, Message: 'a>(
+    read_only: bool,
+    veil: Color,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let content = content.into();
+    if read_only {
+        Inert::new(content).with_veil(veil).into()
+    } else {
+        content
     }
 }
 
@@ -132,10 +158,7 @@ where
                 bounds: layout.bounds(),
                 ..renderer::Quad::default()
             },
-            Background::Color(Color {
-                a: VEIL_ALPHA,
-                ..Color::BLACK
-            }),
+            Background::Color(self.veil),
         );
     }
 }
@@ -197,6 +220,12 @@ mod tests {
     #[test]
     fn a_plain_button_fires_on_click() {
         assert_eq!(click(|e| e), vec![7]);
+    }
+
+    #[test]
+    fn a_veiled_wrapper_stays_inert() {
+        let veil = Color::from_rgba(0.5, 0.5, 0.5, 0.5);
+        assert!(click(|e| Inert::new(e).with_veil(veil).into()).is_empty());
     }
 
     #[test]

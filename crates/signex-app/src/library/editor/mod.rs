@@ -34,16 +34,20 @@ pub mod symbol;
 pub mod text_extent;
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Color, Element, Length, Theme};
+use signex_library::TemplateViolation;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
+use self::kit::{SP, TS};
 use super::messages::{EditorMsg, LibraryMessage};
 use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTab};
+use crate::styles::tokens::{self, Overlay};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// Fade over a read-only tab: the panel colour, so it dims on any theme.
+const READ_ONLY_VEIL_ALPHA: f32 = 0.55;
+/// The close glyph is drawn this many times the heading size.
+const CLOSE_GLYPH_SCALE: f32 = 1.6;
 
 /// Render a Component Preview surface — five tabs (Preview / Parameters
 /// / Supply / Datasheet / Simulation), all read-only for Symbol+
@@ -57,7 +61,7 @@ pub fn view<'a>(
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
     let header = view_header(state, tokens, address.clone());
-    let tabs = view_tabs(state.active_tab, tokens, address.clone());
+    let tabs = view_tabs(state, library_state, tokens, address.clone());
     let body = view_active_tab(state, library_state, tokens, address.clone());
     let footer = view_footer(state, tokens, address, read_only);
 
@@ -68,6 +72,24 @@ pub fn view<'a>(
         .into()
 }
 
+/// The row's identity, shown once in the shell header: part number, then
+/// class and lifecycle state when present.
+fn identity_line(pn: &str, class: &str, state: &str) -> String {
+    let pn = if pn.trim().is_empty() {
+        "(no part number)"
+    } else {
+        pn
+    };
+    let mut line = pn.to_string();
+    if !class.trim().is_empty() {
+        line.push_str(&format!("  \u{2014}  {class}"));
+    }
+    if !state.trim().is_empty() {
+        line.push_str(&format!("  \u{2014}  {state}"));
+    }
+    line
+}
+
 fn view_header<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
@@ -75,60 +97,110 @@ fn view_header<'a>(
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let title = format!(
-        "{}  —  class: {}  —  {:?}",
+    // The row id is an internal key; the internal PN is the name a user
+    // knows the part by.
+    let identity = identity_line(
         state.row.internal_pn.as_str(),
         state.row.class.as_str(),
-        state.row.state,
+        &format!("{:?}", state.row.state),
     );
-    // The row id is an internal key; the internal PN in the title is the
-    // name a user knows the part by.
     container(
         row![
-            text("Component Preview — ").size(TS.title).color(muted),
-            text(title).size(TS.title).color(text_c),
+            text("Component Preview").size(TS.heading).color(muted),
+            Space::new().width(SP.m),
+            text(identity).size(TS.heading).color(text_c),
             Space::new().width(Length::Fill),
             close_btn(address, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([SP.m, 14.0])
+    .padding([SP.m, SP.l])
     .style(crate::styles::modal_header_strip(tokens))
     .into()
 }
 
+/// How many required parameters of the row's class have no value. Zero
+/// when the class has no template.
+fn missing_required_count(state: &ComponentPreviewState, library_state: &LibraryState) -> usize {
+    let Some(library_id) = library_state
+        .open_libraries
+        .iter()
+        .find(|lib| lib.root == state.library_path)
+        .map(|lib| lib.library_id)
+    else {
+        return 0;
+    };
+    library_state
+        .template_registry
+        .validate_params(library_id, state.row.class.as_str(), &state.row.parameters)
+        .iter()
+        .filter(|v| matches!(v, TemplateViolation::MissingRequired { .. }))
+        .count()
+}
+
+/// The number a tab shows in its badge slot; `None` draws no badge.
+fn tab_badge(
+    tab: PreviewTab,
+    state: &ComponentPreviewState,
+    library_state: &LibraryState,
+) -> Option<usize> {
+    match tab {
+        PreviewTab::Parameters => {
+            Some(missing_required_count(state, library_state)).filter(|n| *n > 0)
+        }
+        _ => None,
+    }
+}
+
+fn badge_pill<'a>(count: usize, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+    let fill = tokens::danger(tokens);
+    let ink = tokens::readable_on(fill);
+    container(text(count.to_string()).size(TS.caption).color(ink))
+        .padding([0.0, SP.s])
+        .style(move |_: &Theme| container::Style {
+            background: Some(fill.into()),
+            border: Border {
+                radius: TS.caption.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
 fn view_tabs<'a>(
-    active: PreviewTab,
+    state: &'a ComponentPreviewState,
+    library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     // The shared `TabPill`, so these tabs read like the document and dock
     // tabs: bordered pills, the active one filled with an accent line.
-    let tab_fill = crate::styles::ti(tokens.hover);
+    let active_fill = crate::styles::ti(tokens.hover);
+    let resting_fill = tokens::overlay(tokens, Overlay::Faint);
     let border = crate::styles::ti(tokens.border);
     let accent = crate::styles::ti(tokens.accent);
     let last = PreviewTab::ORDER.len().saturating_sub(1);
     let mut row_widget = row![].spacing(0).align_y(iced::Alignment::End);
     for (i, tab) in PreviewTab::ORDER.iter().enumerate() {
-        let is_active = *tab == active;
+        let is_active = *tab == state.active_tab;
         let (fill, text_c) = if is_active {
-            (tab_fill, theme_ext::text_primary(tokens))
+            (active_fill, theme_ext::text_primary(tokens))
         } else {
-            (
-                iced::Color {
-                    a: tab_fill.a * 0.35,
-                    ..tab_fill
-                },
-                theme_ext::text_secondary(tokens),
-            )
+            (resting_fill, theme_ext::text_secondary(tokens))
         };
-        let label = container(
+        let mut content = row![
             text(tab.label())
-                .size(TS.body)
+                .size(TS.label)
                 .color(text_c)
-                .wrapping(iced::widget::text::Wrapping::None),
-        )
-        .padding([SP.s, 10.0]);
+                .wrapping(iced::widget::text::Wrapping::None)
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+        if let Some(count) = tab_badge(*tab, state, library_state) {
+            content = content.push(badge_pill(count, tokens));
+        }
+        let label = container(content).padding([SP.s, SP.l]);
         let style = signex_widgets::tab_pill::TabPillStyle {
             fill,
             border,
@@ -158,6 +230,14 @@ fn view_tabs<'a>(
         .into()
 }
 
+/// The fade drawn over an inert (read-only) tab.
+fn read_only_veil(tokens: &ThemeTokens) -> Color {
+    Color {
+        a: READ_ONLY_VEIL_ALPHA,
+        ..crate::styles::ti(tokens.panel_bg)
+    }
+}
+
 fn view_active_tab<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
@@ -168,24 +248,29 @@ fn view_active_tab<'a>(
     // dimmed and inert; the Preview tab guards its own editing parts
     // because its Open Editor buttons must stay live.
     let read_only = library_state.is_read_only(&state.library_path);
+    let veil = read_only_veil(tokens);
     let inner: Element<'_, LibraryMessage> = match state.active_tab {
         PreviewTab::Preview => preview::view(state, library_state, tokens, address),
-        PreviewTab::Parameters => inert::unless_read_only(
+        PreviewTab::Parameters => inert::unless_read_only_veiled(
             read_only,
+            veil,
             params::view(state, library_state, tokens, address),
         ),
         PreviewTab::Supply => {
-            inert::unless_read_only(read_only, supply::view(state, tokens, address))
+            inert::unless_read_only_veiled(read_only, veil, supply::view(state, tokens, address))
         }
-        PreviewTab::Datasheet => {
-            inert::unless_read_only(read_only, datasheet_picker::view(state, tokens, address))
-        }
+        PreviewTab::Datasheet => inert::unless_read_only_veiled(
+            read_only,
+            veil,
+            datasheet_picker::view(state, tokens, address),
+        ),
         PreviewTab::Simulation => {
-            inert::unless_read_only(read_only, sim::view(state, tokens, address))
+            inert::unless_read_only_veiled(read_only, veil, sim::view(state, tokens, address))
         }
     };
+    // The one body padding; the tabs' cards pad themselves inside it.
     container(inner)
-        .padding(14)
+        .padding(SP.l)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -205,36 +290,22 @@ fn view_footer<'a>(
                 .size(TS.body)
                 .color(muted),
         )
-        .padding([10, 14])
+        .padding([SP.m, SP.l])
         .width(Length::Fill)
         .style(crate::styles::modal_footer_strip(tokens))
         .into();
     }
 
-    // Themed like every other dialog's actions: accent for the primary,
-    // outlined for the rest (`styles::buttons`), so they follow the theme.
-    let primary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(TS.body)).padding([SP.s, 14.0]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: addr.library_path.clone(),
-                table: addr.table.clone(),
-                row_id: addr.row_id,
-                msg,
-            })
-            .style(crate::styles::accent_button(tokens))
-    };
-    let secondary = |label: &'static str, msg: EditorMsg, addr: &EditorAddress| {
-        button(container(text(label).size(TS.body)).padding([SP.s, 14.0]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: addr.library_path.clone(),
-                table: addr.table.clone(),
-                row_id: addr.row_id,
-                msg,
-            })
-            .style(crate::styles::outline_button(tokens))
+    let event = |msg: EditorMsg| {
+        Some(LibraryMessage::EditorEvent {
+            library_path: address.library_path.clone(),
+            table: address.table.clone(),
+            row_id: address.row_id,
+            msg,
+        })
     };
     let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
-        text("• unsaved").size(TS.body).color(muted).into()
+        text("\u{2022} unsaved").size(TS.body).color(muted).into()
     } else {
         Space::new().width(0).into()
     };
@@ -245,98 +316,130 @@ fn view_footer<'a>(
         Space::new().width(0).into()
     } else if state.reload_confirming {
         row![
-            Space::new().width(12),
+            Space::new().width(SP.l),
             text("Discard your edits and reload?")
                 .size(TS.body)
                 .color(muted),
-            Space::new().width(8),
-            primary("Reload", EditorMsg::ReloadConfirmed, &address),
-            Space::new().width(8),
-            secondary("Keep editing", EditorMsg::ReloadCancelled, &address),
+            Space::new().width(SP.m),
+            kit::primary_button("Reload", event(EditorMsg::ReloadConfirmed), tokens),
+            Space::new().width(SP.m),
+            kit::secondary_button("Keep editing", event(EditorMsg::ReloadCancelled), tokens),
         ]
         .align_y(iced::Alignment::Center)
         .into()
     } else {
         row![
-            Space::new().width(12),
-            secondary("Reload saved version", EditorMsg::ReloadRequested, &address),
+            Space::new().width(SP.l),
+            kit::secondary_button(
+                "Reload saved version",
+                event(EditorMsg::ReloadRequested),
+                tokens
+            ),
         ]
         .into()
     };
 
     container(
         row![
-            secondary("Save", EditorMsg::SaveDraft, &address),
-            Space::new().width(8),
-            primary("Save & Close", EditorMsg::Commit, &address),
+            kit::secondary_button("Save", event(EditorMsg::SaveDraft), tokens),
+            Space::new().width(SP.m),
+            kit::primary_button("Save & Close", event(EditorMsg::Commit), tokens),
             reload,
             Space::new().width(Length::Fill),
             dirty_marker,
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([10, 14])
+    .padding([SP.m, SP.l])
     .style(crate::styles::modal_footer_strip(tokens))
     .into()
+}
+
+/// Fill of the close button: none at rest, token overlays on hover/press.
+fn close_background(tokens: &ThemeTokens, status: button::Status) -> Option<iced::Background> {
+    let step = match status {
+        button::Status::Hovered => Overlay::Hover,
+        button::Status::Pressed => Overlay::Pressed,
+        _ => return None,
+    };
+    Some(tokens::overlay(tokens, step).into())
 }
 
 fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
-    button(container(text("\u{00D7}".to_string()).size(TS.heading).color(text_c)).padding([0, 6]))
-        .on_press(LibraryMessage::EditorEvent {
-            library_path: address.library_path,
-            table: address.table,
-            row_id: address.row_id,
-            msg: EditorMsg::CloseEditor,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                )),
-                _ => Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.03,
-                ))),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                text_color: text_c,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+    let tokens = *tokens;
+    button(
+        container(
+            text("\u{00D7}")
+                .size(TS.heading * CLOSE_GLYPH_SCALE)
+                .color(text_c),
+        )
+        .padding([0.0, SP.m]),
+    )
+    .on_press(LibraryMessage::EditorEvent {
+        library_path: address.library_path,
+        table: address.table,
+        row_id: address.row_id,
+        msg: EditorMsg::CloseEditor,
+    })
+    .style(move |_: &Theme, status| button::Style {
+        background: close_background(&tokens, status),
+        border: Border {
+            width: crate::styles::HAIRLINE,
+            radius: SP.xs.into(),
+            color: border,
+        },
+        text_color: text_c,
+        ..button::Style::default()
+    })
+    .into()
 }
 
-/// Helper for placeholder-card layouts — kept around for tabs that
-/// still bottom out in TODO state during the Wave-3 refactor (sim-
-/// without-binding, e.g.).
-#[expect(
-    dead_code,
-    reason = "kept for tabs still bottoming out in TODO state during the Wave-3 refactor"
-)]
-pub(crate) fn placeholder_card<'a>(
-    title: &'a str,
-    todos: &'a [&'a str],
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let mut col = column![
-        text(title).size(TS.heading).color(text_c),
-        Space::new().height(8),
-    ]
-    .spacing(SP.s);
-    for todo in todos {
-        col = col.push(text(format!("• {todo}")).size(TS.body).color(muted));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    #[test]
+    fn identity_is_shown_once_with_class_and_state() {
+        assert_eq!(
+            identity_line("RES-0001", "resistor", "Draft"),
+            "RES-0001  \u{2014}  resistor  \u{2014}  Draft"
+        );
     }
-    container(col)
-        .padding(14)
-        .style(crate::styles::modal_card(tokens))
-        .into()
+
+    #[test]
+    fn identity_falls_back_when_pn_and_class_are_empty() {
+        assert_eq!(
+            identity_line(" ", "", "Draft"),
+            "(no part number)  \u{2014}  Draft"
+        );
+    }
+
+    #[test]
+    fn read_only_veil_follows_the_panel_colour() {
+        for &id in ThemeId::BUILTINS {
+            let t = theme_tokens(id);
+            let veil = read_only_veil(&t);
+            assert_eq!(veil.a, READ_ONLY_VEIL_ALPHA);
+            assert_eq!(
+                Color { a: 1.0, ..veil },
+                Color {
+                    a: 1.0,
+                    ..crate::styles::ti(t.panel_bg)
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn close_button_fills_only_on_hover_and_press() {
+        let t = theme_tokens(ThemeId::BUILTINS[0]);
+        assert!(close_background(&t, button::Status::Active).is_none());
+        let hover = close_background(&t, button::Status::Hovered);
+        let pressed = close_background(&t, button::Status::Pressed);
+        assert!(hover.is_some() && pressed.is_some());
+        assert_ne!(hover, pressed);
+    }
 }
