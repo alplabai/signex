@@ -5,8 +5,8 @@
 //! picker. A refused add shows its reason under the list; so do label
 //! problems that save would refuse.
 
-use iced::widget::{Space, button, column, container, row, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::widget::{Space, column, row, text, text_input};
+use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -127,34 +127,5 @@ fn small_btn<'a>(
     msg: Option<LibraryMessage>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = if msg.is_some() {
-        theme_ext::text_primary(tokens)
-    } else {
-        theme_ext::text_secondary(tokens)
-    };
-    let border = theme_ext::border_color(tokens);
-    let mut btn = button(container(text(label).size(TS.body).color(text_c)).padding([SP.xs, SP.m]));
-    if let Some(m) = msg {
-        btn = btn.on_press(m);
-    }
-    btn.padding(0)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let alpha = match status {
-                iced::widget::button::Status::Hovered => 0.10,
-                _ => 0.03,
-            };
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, alpha,
-                ))),
-                text_color: text_c,
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
+    super::kit::secondary_button(label, msg, tokens)
 }
