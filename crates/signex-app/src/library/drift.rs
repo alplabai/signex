@@ -22,6 +22,9 @@ use uuid::Uuid;
 
 use super::part_sync::{PartIdentity, PartSync};
 
+mod check;
+pub(crate) use check::PartSyncCheck;
+
 /// Stable content hash of a `LibSymbol` (FNV-1a 64 over the serde JSON of
 /// the in-memory value, whose field order is the struct's declaration
 /// order; the JSON is only a hash input, never stored). `LibSymbol` has no
@@ -523,23 +526,6 @@ fn stamp_or_reason(
     }
 }
 
-/// Whether `w` has a sync pending against `row` (see [`part_sync_of`]). A
-/// library that cannot be opened counts as pending: the caller then keeps
-/// the old stamp rather than hide a change it could not check.
-pub(crate) fn part_sync_pending(
-    w: &ApplyStamp,
-    row: &signex_library::ComponentRow,
-    libs: &[MountedLibrary],
-) -> bool {
-    match open_library(libs, w.library_id) {
-        Ok(opened) => part_sync_of(w, &opened, row, libs).is_some(),
-        Err(why) => {
-            tracing::debug!(target: "signex::library", %why, "part sync check: library unreadable; keeping the stamp");
-            true
-        }
-    }
-}
-
 /// The sync for `w` when its row's footprint, manufacturer or MPN differs.
 fn part_sync_of(
     w: &ApplyStamp,
@@ -547,8 +533,16 @@ fn part_sync_of(
     row: &signex_library::ComponentRow,
     libs: &[MountedLibrary],
 ) -> Option<PartSync> {
-    let want = row_identity(opened, row, libs);
-    let mut change = w.have.changes_to(&want);
+    part_sync_against(w, &row_identity(opened, row, libs), row)
+}
+
+/// [`part_sync_of`] against the identity `want` already read off `row`.
+fn part_sync_against(
+    w: &ApplyStamp,
+    want: &PartIdentity,
+    row: &signex_library::ComponentRow,
+) -> Option<PartSync> {
+    let mut change = w.have.changes_to(want);
     // A row that has not moved since the stamp leaves a differing value as
     // the user's override; a field the part holds nothing in is no override.
     // No stamp (empty) counts as moved.

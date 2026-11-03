@@ -414,6 +414,48 @@ fn a_folder_with_a_project_file_keeps_its_primitives() {
 fn an_editor_dirtied_while_the_delete_ran_is_reported_not_dropped_silently() {
     let _ = crate::diagnostics::init_logging();
     let mut f = fixture();
+    let delete = start_delete(&mut f);
+    // The editor goes dirty after Confirm checked for dirty ones, while the
+    // delete worker runs.
+    dirty_preview(&mut f);
+    crate::app::path_ops::settle_task(&mut f.app, delete);
+
+    assert!(!f.manifest.exists(), "the delete went through");
+    assert_eq!(
+        lost_edit_lines(&f),
+        1,
+        "the discarded edits are named in Messages, with this library's path"
+    );
+}
+
+#[test]
+fn a_delete_that_found_nothing_on_disk_reports_no_lost_editor() {
+    let _ = crate::diagnostics::init_logging();
+    let mut f = fixture();
+    let delete = start_delete(&mut f);
+    // The file is gone before the worker looks: this app deletes nothing.
+    fs::remove_file(&f.manifest).unwrap();
+    dirty_preview(&mut f);
+    crate::app::path_ops::settle_task(&mut f.app, delete);
+
+    assert_eq!(lost_edit_lines(&f), 0, "nothing was deleted by this app");
+}
+
+/// Open the Remove dialog for `f`'s library and confirm Delete; the worker
+/// task is returned unrun.
+fn start_delete(f: &mut Fixture) -> iced::Task<Message> {
+    let _ = f
+        .app
+        .update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::RemoveLibrary(f.row.clone()),
+        )));
+    f.app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )))
+}
+
+/// A Component Preview of `f`'s library, made dirty.
+fn dirty_preview(f: &mut Fixture) {
     let row = crate::library::component_preview::test_row();
     let address = crate::library::state::EditorAddress::new(
         f.manifest.clone(),
@@ -427,16 +469,13 @@ fn an_editor_dirtied_while_the_delete_ran_is_reported_not_dropped_silently() {
     );
     preview.dirty = true;
     f.app.library.editors.insert(address, preview);
+}
 
-    f.app.report_editors_lost_to_delete(
-        &f.manifest,
-        crate::app::state::scope::CaseFold::host_default(),
-    );
-
-    assert!(
-        crate::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.message.contains("unsaved edits") && e.message.contains("discarded")),
-        "the discarded edits are named in Messages"
-    );
+/// Messages that name the library at `f.manifest` and say edits were lost.
+fn lost_edit_lines(f: &Fixture) -> usize {
+    let library = f.manifest.display().to_string();
+    crate::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.message.contains(&library) && e.message.contains("unsaved edits"))
+        .count()
 }

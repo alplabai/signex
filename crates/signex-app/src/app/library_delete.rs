@@ -53,6 +53,10 @@ pub(crate) fn delete_library(
         if let Err(e) = fs::remove_file(&sidecar)
             && e.kind() != std::io::ErrorKind::NotFound
         {
+            crate::diagnostics::log_warning(format!(
+                "Could not remove {} beside the deleted library: {e}",
+                sidecar.display()
+            ));
             stuck.push(sidecar);
         }
     }
@@ -278,6 +282,30 @@ mod tests {
 
         assert!(left.is_empty(), "{left:?}");
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn a_lock_file_that_cannot_be_removed_is_listed_with_its_reason() {
+        let _ = crate::diagnostics::init_logging();
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let dir = tmp.path().join("lib");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("lib.snxlib"), b"m").unwrap();
+        // A directory where the lock file belongs: `remove_file` fails on it
+        // for a reason other than "absent".
+        let stuck = dir.join(".lib.snxlib.signex-writelock");
+        fs::create_dir_all(&stuck).unwrap();
+
+        let left = delete_library(&dir.join("lib.snxlib"), Some(&dir)).unwrap();
+
+        assert!(left.contains(&stuck), "{left:?}");
+        let shown = stuck.display().to_string();
+        assert!(
+            crate::diagnostics::recent_entries()
+                .iter()
+                .any(|e| e.message.contains(&shown) && e.message.contains("Could not remove")),
+            "the failure reaches Messages with its path"
+        );
     }
 
     #[cfg(unix)]

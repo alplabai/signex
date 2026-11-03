@@ -287,7 +287,10 @@ impl Signex {
                 {
                     tasks.extend(self.forget_deleted_library_folders(dir, left, request.fold));
                 }
-                self.report_editors_lost_to_delete(target, request.fold);
+                // An orphan removed nothing from disk: no editor lost its files.
+                if matches!(io, DeleteIo::DeletedLibrary { .. }) {
+                    self.report_editors_lost_to_delete(target, request.fold);
+                }
                 tasks.push(self.unmount_removed_library(&request.dialog, true));
                 self.settle_removed_entry(&request, entry);
             }
