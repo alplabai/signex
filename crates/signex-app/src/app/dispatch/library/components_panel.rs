@@ -129,6 +129,7 @@ impl Signex {
             key: key.clone(),
             start: self.interaction_state.last_mouse_pos,
             started: false,
+            armed: false,
         });
         self.select_components_panel_row(key)
     }
@@ -186,30 +187,54 @@ impl Signex {
         }
     }
 
-    /// The button went up. A row dragged past the threshold and released
-    /// over the schematic canvas starts the cursor-attached placement at the
-    /// pointer; released anywhere else (or over a tab that is not a schematic), or never
-    /// dragged, it places nothing.
-    pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
-        let Some(drag) = self.library.components_panel.drag.take() else {
-            return Task::none();
-        };
+    /// The schematic sheet the pointer is over, when a Components row drop
+    /// there would place: the pointer is on the canvas of a schematic tab.
+    fn pointer_over_schematic_canvas(&self) -> bool {
         let (x, y) = self.interaction_state.last_mouse_pos;
-        if !drag.started || !self.canvas_bounds().contains(iced::Point::new(x, y)) {
-            return Task::none();
-        }
-        // Only a schematic sheet takes a part: a PCB or an editor tab under
-        // the pointer is not a drop target.
         let on_schematic = self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
             .is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic));
-        if !on_schematic {
+        on_schematic && self.canvas_bounds().contains(iced::Point::new(x, y))
+    }
+
+    /// A dragged row whose pointer first reaches the schematic canvas reads
+    /// its part and attaches it to the cursor, so the symbol shows at the
+    /// grid point the drop would use, like Place Component. Runs after every
+    /// pointer move.
+    pub(crate) fn arm_components_row_drag(&mut self) -> Task<Message> {
+        let Some(drag) = self.library.components_panel.drag.as_ref() else {
+            return Task::none();
+        };
+        if !drag.started || drag.armed || !self.pointer_over_schematic_canvas() {
+            return Task::none();
+        }
+        let k = drag.key.clone();
+        if let Some(drag) = self.library.components_panel.drag.as_mut() {
+            drag.armed = true;
+        }
+        self.handle_place_library_component(k.library_path, k.table, k.row_id)
+    }
+
+    /// The button went up. A row dragged past the threshold and released
+    /// over the schematic canvas places its part at the ghost; released
+    /// anywhere else (or over a tab that is not a schematic), or never
+    /// dragged, it places nothing and the ghost goes.
+    pub(crate) fn finish_components_row_drag(&mut self) -> Task<Message> {
+        let Some(drag) = self.library.components_panel.drag.take() else {
+            return Task::none();
+        };
+        let over_canvas = self.pointer_over_schematic_canvas();
+        if !drag.started || !over_canvas {
+            if drag.armed {
+                self.cancel_placement_session();
+            }
             return Task::none();
         }
         // Release point in world mm, through the live camera and the canvas
-        // rectangle; the snap happens when the part arrives.
+        // rectangle; the snap happens when the part is placed.
+        let (x, y) = self.interaction_state.last_mouse_pos;
         let bounds = self.canvas_bounds();
         let at = self
             .interaction_state
@@ -217,6 +242,22 @@ impl Signex {
             .screen_to_world(iced::Point::new(x - bounds.x, y - bounds.y));
         let world = (f64::from(at.x), f64::from(at.y));
         let k = drag.key;
+        if drag.armed {
+            // The ghost is on the cursor or its read is still running: the
+            // drop commits when both the part and the sheet numbers are in.
+            let epoch = self.interaction_state.placement_epoch;
+            self.library.components_panel.pending_drop = Some((epoch, world));
+            let ready = self
+                .interaction_state
+                .placement
+                .as_ref()
+                .is_some_and(|s| self.designators_current(&s.target_sheet));
+            return if ready {
+                self.commit_pending_drop()
+            } else {
+                Task::none()
+            };
+        }
         // Only a read that starts carries the drop: the same checks
         // `handle_place_library_component` refuses a pick with.
         let starts = self.document_state.active_path.is_some()

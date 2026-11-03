@@ -67,7 +67,7 @@ fn over_canvas(app: &Signex) -> (f32, f32) {
 fn drag_row(app: &mut Signex, key: &ComponentsPanelRowKey, from: (f32, f32), to: (f32, f32)) {
     pointer(app, from);
     settle(app, press(key));
-    pointer(app, to);
+    settle(app, Message::Ui(UiMsg::DragMove(to.0, to.1)));
     settle(app, Message::Ui(UiMsg::DragEnd));
 }
 
@@ -221,7 +221,10 @@ fn the_drag_label_shows_while_dragging_and_goes_after_release() {
     pointer(&mut app, canvas);
     settle(&mut app, press(&key));
     assert!(!shown(&app), "a press alone shows no label");
-    pointer(&mut app, (canvas.0 + 40.0, canvas.1));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragMove(canvas.0 + 40.0, canvas.1)),
+    );
     assert!(shown(&app), "past the threshold the label follows");
     settle(&mut app, Message::Ui(UiMsg::DragEnd));
     assert!(!shown(&app) && app.library.components_panel.drag.is_none());
@@ -229,7 +232,10 @@ fn the_drag_label_shows_while_dragging_and_goes_after_release() {
     // Esc ends it too.
     pointer(&mut app, canvas);
     settle(&mut app, press(&key));
-    pointer(&mut app, (canvas.0 + 40.0, canvas.1));
+    settle(
+        &mut app,
+        Message::Ui(UiMsg::DragMove(canvas.0 + 40.0, canvas.1)),
+    );
     let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
         window: None,
     }));
@@ -237,6 +243,68 @@ fn the_drag_label_shows_while_dragging_and_goes_after_release() {
     settle(&mut app, Message::Ui(UiMsg::DragEnd));
     assert!(app.interaction_state.placement.is_none());
     assert_eq!(doc(&app).symbols.len(), 1, "only the first drop placed");
+}
+
+/// #1943: once the drag is over the canvas the symbol itself is on the
+/// cursor, through the same ghost as Place Component.
+#[test]
+fn the_symbol_ghost_follows_a_row_dragged_over_the_canvas() {
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    let canvas = over_canvas(&app);
+    let window = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(window);
+
+    pointer(&mut app, (20.0, canvas.1));
+    settle(&mut app, press(&key));
+    pointer(&mut app, (20.0 + 40.0, canvas.1));
+    assert!(
+        app.placement_ghost_for_window(window).is_none(),
+        "no ghost while the drag is over the panel"
+    );
+
+    // The pointer reaches the canvas: the read runs and the ghost arrives.
+    settle(&mut app, Message::Ui(UiMsg::DragMove(canvas.0, canvas.1)));
+    let ghost = app
+        .placement_ghost_for_window(window)
+        .expect("the symbol ghost is on the cursor");
+    let parts = &ghost.fragment().symbols;
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].row_id, Some(key.row_id.0), "STOCK-R's symbol");
+    assert!(doc(&app).symbols.is_empty(), "a ghost places nothing");
+
+    // Dropping places the part and takes the ghost away.
+    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    assert_eq!(doc(&app).symbols.len(), 1);
+    assert!(app.placement_ghost_for_window(window).is_none());
+}
+
+/// #1943: the ghost goes when the drag ends anywhere but the canvas, and
+/// with Esc.
+#[test]
+fn the_symbol_ghost_goes_when_the_drag_is_released_off_the_canvas_or_escaped() {
+    let mut app = app_with_stock();
+    let key = key_of(&app, "STOCK-R");
+    let canvas = over_canvas(&app);
+
+    pointer(&mut app, (20.0, canvas.1));
+    settle(&mut app, press(&key));
+    settle(&mut app, Message::Ui(UiMsg::DragMove(canvas.0, canvas.1)));
+    assert!(app.interaction_state.placement.is_some(), "ghost armed");
+    pointer(&mut app, (canvas.0, 4.0));
+    settle(&mut app, Message::Ui(UiMsg::DragEnd));
+    assert!(app.interaction_state.placement.is_none(), "ghost gone");
+    assert!(doc(&app).symbols.is_empty());
+
+    pointer(&mut app, (20.0, canvas.1));
+    settle(&mut app, press(&key));
+    settle(&mut app, Message::Ui(UiMsg::DragMove(canvas.0, canvas.1)));
+    assert!(app.interaction_state.placement.is_some());
+    let _ = app.update(Message::Input(signex_app::app::InputMsg::EscapePressed {
+        window: None,
+    }));
+    assert!(app.interaction_state.placement.is_none(), "Esc drops it");
+    assert!(doc(&app).symbols.is_empty());
 }
 
 #[test]
