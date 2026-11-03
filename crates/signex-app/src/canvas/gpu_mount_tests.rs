@@ -834,9 +834,20 @@ fn the_selection_highlight_draws_above_the_gpu_content() {
     };
     let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
     let changed = selected.changed_vs(&plain, (0, 0, WIDTH, HEIGHT));
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let want = to_u8(colors.selection);
+    // An outline pixel reads the theme's selection colour (edge pixels blend
+    // with the sheet, so the best of them is the one to compare).
+    let best = changed
+        .iter()
+        .map(|&(x, y)| {
+            let px = selected.px(x, y);
+            (0..3).map(|c| px[c].abs_diff(want[c])).max().unwrap_or(255)
+        })
+        .min();
     assert!(
-        changed.len() > 20,
-        "the selection outline is missing: {} pixels changed",
+        best.is_some_and(|d| d <= 40),
+        "no outline pixel reads the selection colour {want:?} ({} changed, closest off by {best:?})",
         changed.len()
     );
 }

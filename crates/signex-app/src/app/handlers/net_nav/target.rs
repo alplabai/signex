@@ -2,16 +2,12 @@
 
 use std::path::PathBuf;
 
-use signex_net::SheetKey;
+use signex_net::{NetMemberKind, SheetKey};
 use signex_types::schematic::{InstancePath, Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use crate::app::state::net_nav::ProjectNetData;
 
 use super::super::super::*;
-
-/// How close to a pin's tip the cursor must be to mean that pin, in mm: half
-/// the default grid.
-pub(super) const PIN_TOLERANCE_MM: f64 = 1.27;
 
 /// An object on a sheet, and the point the user meant on it.
 #[derive(Debug, Clone)]
@@ -33,22 +29,43 @@ pub(super) fn is_net_kind(kind: SelectedKind) -> bool {
     )
 }
 
+/// The net of the pin `key` of the placed symbol `symbol` in the placement
+/// `occurrence` (every placement when `None`).
+pub(crate) fn pin_net(
+    data: &ProjectNetData,
+    sheet: &SheetKey,
+    symbol: uuid::Uuid,
+    key: &str,
+    occurrence: Option<&InstancePath>,
+) -> Option<usize> {
+    data.index
+        .nets_in(sheet, symbol, occurrence)
+        .into_iter()
+        .find(|&net| {
+            data.index.net(net).is_some_and(|n| {
+                n.members.iter().any(|m| {
+                    m.id == symbol
+                        && occurrence.is_none_or(|o| &m.occurrence == o)
+                        && matches!(&m.kind, NetMemberKind::Pin { pin, .. } if pin == key)
+                })
+            })
+        })
+}
+
 /// The net of `item` as the stitched index knows it. A placed symbol has one
-/// net per pin, so it answers only for the pin at `at`.
+/// net per pin, so it answers for the picked `pin` (see
+/// [`Signex::pin_under`]), else for its only net.
 pub(super) fn net_of_target(
     data: &ProjectNetData,
     sheet: &SheetKey,
     item: &SelectedItem,
-    at: Point,
+    pin: Option<&str>,
     occurrence: Option<&InstancePath>,
 ) -> Option<usize> {
     let nets = data.index.nets_in(sheet, item.uuid, occurrence);
     match item.kind {
         SelectedKind::Symbol => {
-            let by_pin = data
-                .index
-                .pin_near(sheet, at, PIN_TOLERANCE_MM, occurrence)
-                .map(|(net, _)| net);
+            let by_pin = pin.and_then(|k| pin_net(data, sheet, item.uuid, k, occurrence));
             let only = match nets.as_slice() {
                 [only] => Some(*only),
                 _ => None,
@@ -61,22 +78,19 @@ pub(super) fn net_of_target(
 }
 
 /// The net a hover card is for. Unlike [`net_of_target`], a placed symbol
-/// answers only within pin pick tolerance of a pin; its body belongs to the
-/// part, whose own card shows there.
+/// answers only for a picked pin; its body belongs to the part, whose own
+/// card shows there.
 pub(super) fn net_of_hover(
     data: &ProjectNetData,
     sheet: &SheetKey,
     item: &SelectedItem,
-    at: Point,
+    pin: Option<&str>,
     occurrence: Option<&InstancePath>,
 ) -> Option<usize> {
     if item.kind == SelectedKind::Symbol {
-        return data
-            .index
-            .pin_near(sheet, at, PIN_TOLERANCE_MM, occurrence)
-            .map(|(net, _)| net);
+        return pin.and_then(|k| pin_net(data, sheet, item.uuid, k, occurrence));
     }
-    net_of_target(data, sheet, item, at, occurrence)
+    net_of_target(data, sheet, item, None, occurrence)
 }
 
 /// Where `item` sits on `sheet`: a point on it to centre the view on.
@@ -114,6 +128,57 @@ pub(super) fn item_position(sheet: &SchematicSheet, item: &SelectedItem) -> Opti
 }
 
 impl Signex {
+    /// Pixels per mm of the focused schematic canvas.
+    pub(crate) fn schematic_px_per_mm(&self) -> f64 {
+        self.interaction_state.active_canvas().zoom_percent() / 100.0
+            * f64::from(signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE)
+    }
+
+    /// The pin of the placed symbol `item` that the point `at` picks on the
+    /// sheet at `sheet`: the one rule for hover, click and the right-click
+    /// menu (`signex_types::schematic::symbol_pin_at`).
+    pub(crate) fn pin_under(
+        &self,
+        sheet: &std::path::Path,
+        item: &SelectedItem,
+        at: Point,
+    ) -> Option<String> {
+        if item.kind != SelectedKind::Symbol {
+            return None;
+        }
+        let doc = self.document_state.engines.get(sheet)?.document();
+        let tolerance = signex_types::schematic::pin_pick_tolerance_mm(self.schematic_px_per_mm());
+        signex_types::schematic::symbol_pin_at(doc, item.uuid, at, tolerance).map(|p| p.key)
+    }
+
+    /// The net name of each of `pins` (keys) of the placed symbol `symbol` on
+    /// the sheet at `sheet`, from the project net index in the placement the
+    /// sheet shows (the hover card reads the same). Empty while the index is
+    /// not built: this never starts a build.
+    pub(crate) fn pin_net_names(
+        &self,
+        sheet: &std::path::Path,
+        symbol: uuid::Uuid,
+        pins: &[String],
+    ) -> Vec<(String, String)> {
+        let Some(project) = self.project_of_sheet(sheet) else {
+            return Vec::new();
+        };
+        let Some(data) = self.ready_net_data(project) else {
+            return Vec::new();
+        };
+        let Some(key) = data.key_of(sheet) else {
+            return Vec::new();
+        };
+        let occurrence = self.net_occurrence(&data, sheet);
+        pins.iter()
+            .filter_map(|pin| {
+                let net = pin_net(&data, &key, symbol, pin, occurrence.as_ref())?;
+                Some((pin.clone(), data.index.net(net)?.name.clone()))
+            })
+            .collect()
+    }
+
     /// The object under `(x, y)` on the focused sheet.
     pub(crate) fn item_hit_at(&self, x: f64, y: f64) -> Option<SelectedItem> {
         let canvas = self.interaction_state.active_canvas();

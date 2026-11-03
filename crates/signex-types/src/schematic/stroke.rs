@@ -18,6 +18,9 @@ pub const SCHEMATIC_DEFAULT_WIRE_STROKE_MM: f64 = 0.254;
 /// Bus stroke width (mm).
 pub const SCHEMATIC_RENDER_BUS_STROKE_MM: f64 = 0.45;
 
+// A default wire stays visibly thinner than a bus, on the canvas and in exports.
+const _: () = assert!(SCHEMATIC_DEFAULT_WIRE_STROKE_MM * 1.5 < SCHEMATIC_RENDER_BUS_STROKE_MM);
+
 /// No-connect X and No-ERC diamond stroke width (mm). This and the two below
 /// keep the pre-#1858 look at 400 % zoom after the whole-pixel snap.
 pub const SCHEMATIC_NO_CONNECT_STROKE_MM: f64 = 0.2;
@@ -46,6 +49,21 @@ pub const UNSCALED_DEVICE_PX_PER_LOGICAL_PX: f32 = 1.0;
 pub fn effective_stroke_mm(width_mm: f64) -> f64 {
     let width = if width_mm.is_finite() { width_mm } else { 0.0 };
     width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
+}
+
+/// The world width a wire is drawn and exported at: the net class width, else
+/// the wire's own, raised to [`SCHEMATIC_RENDER_MIN_STROKE_MM`]; a width of
+/// `0` (or one that is not a finite number) is the default,
+/// [`SCHEMATIC_DEFAULT_WIRE_STROKE_MM`]. The canvas, hit-test and every export
+/// take the width from here.
+#[must_use]
+pub fn wire_stroke_mm(own_mm: f64, class_mm: Option<f64>) -> f64 {
+    let width = class_mm.unwrap_or(own_mm);
+    if width.is_finite() && width > 0.0 {
+        width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
+    } else {
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    }
 }
 
 /// The shared floor in logical pixels on a surface with

@@ -279,9 +279,9 @@ impl Engine {
                         info.push((
                             format!("{}{key}", info_keys::PIN_PREFIX),
                             format!(
-                                "{}\t{:?}\t{}",
+                                "{}\t{}\t{}",
                                 pin.name,
-                                pin.direction,
+                                pin.direction.label(),
                                 if pin.visible { "No" } else { "Yes" }
                             ),
                         ));

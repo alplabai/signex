@@ -90,8 +90,9 @@ impl Signex {
         select_here: bool,
     ) {
         let placement = self.net_occurrence(data, &target.sheet);
+        let pin = self.pin_under(&target.sheet, &target.item, target.at);
         let net = data.key_of(&target.sheet).and_then(|key| {
-            let net = net_of_target(data, &key, &target.item, target.at, placement.as_ref())?;
+            let net = net_of_target(data, &key, &target.item, pin.as_deref(), placement.as_ref())?;
             Some((key, net))
         });
         let Some((key, net)) = net else {

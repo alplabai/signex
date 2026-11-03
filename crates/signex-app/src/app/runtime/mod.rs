@@ -250,12 +250,22 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
-            pin_focus::focus_clicked_pin(
+            let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
+            let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
+            let focused = pin_focus::add_pin_rows(
                 &mut self.document_state.panel_ctx.selection_info,
-                engine.document(),
                 details.selected_uuid,
                 clicked_pin,
+                nets,
             );
+            if focused {
+                // A pin click opens the Pins section; the user can collapse
+                // it again, and that choice stands until the next pin click.
+                self.document_state
+                    .panel_ctx
+                    .collapsed_sections
+                    .remove(crate::panels::PINS_SECTION_KEY);
+            }
             // A tab opened through a placement shows, and edits, that
             // placement's designator (#1151).
             if let Some(designator) = self

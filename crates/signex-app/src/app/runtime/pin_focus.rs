@@ -1,37 +1,34 @@
-//! Bring a clicked pin forward in the Properties rows of a placed symbol.
+//! Pin facts in the Properties rows of a placed symbol: the net of each pin
+//! and the pin a click landed on.
 
 use signex_engine::info_keys;
-use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
-/// Add the `Focused Pin` row, and the net that pin sits on, to the rows of
-/// `symbol` when the click that selected it landed on one of its pins.
-pub(super) fn focus_clicked_pin(
+/// The keys of the pins listed in `info`, in order.
+pub(super) fn pin_keys(info: &[(String, String)]) -> Vec<String> {
+    info.iter()
+        .filter_map(|(k, _)| k.strip_prefix(info_keys::PIN_PREFIX).map(str::to_string))
+        .collect()
+}
+
+/// Add each pin's net (`nets`: pin key and net name) and, when the click that
+/// selected `symbol` landed on one of its pins, the `Focused Pin` row.
+/// Returns whether a pin was focused.
+pub(super) fn add_pin_rows(
     info: &mut Vec<(String, String)>,
-    document: &SchematicSheet,
     symbol: Uuid,
     clicked: Option<(Uuid, String)>,
-) {
+    nets: Vec<(String, String)>,
+) -> bool {
+    for (pin, net) in nets {
+        info.push((format!("{}{pin}", info_keys::PIN_NET_PREFIX), net));
+    }
     let Some((_, pin)) = clicked.filter(|(owner, _)| *owner == symbol) else {
-        return;
+        return false;
     };
-    let in_rows = info
-        .iter()
-        .any(|(k, _)| k.strip_prefix(info_keys::PIN_PREFIX) == Some(pin.as_str()));
-    if !in_rows {
-        return;
+    if !pin_keys(info).contains(&pin) {
+        return false;
     }
-    info.push((info_keys::FOCUSED_PIN.into(), pin.clone()));
-    let netlist = signex_net::build_netlist(document);
-    let net = netlist.nets.iter().find(|net| {
-        net.terminals
-            .iter()
-            .any(|t| t.symbol == symbol && t.pin == pin)
-    });
-    if let Some(net) = net {
-        info.push((
-            format!("{}{pin}", info_keys::PIN_NET_PREFIX),
-            net.name.clone(),
-        ));
-    }
+    info.push((info_keys::FOCUSED_PIN.into(), pin));
+    true
 }

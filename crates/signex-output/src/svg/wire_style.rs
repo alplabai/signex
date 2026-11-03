@@ -5,7 +5,8 @@
 //!
 //! - **colour** - the sheet's per-net colour override, else the net class
 //!   colour, else the palette's wire colour;
-//! - **width** - the class width, else the wire's own width, else 0.254 mm;
+//! - **width** - the class width, else the wire's own width, else 0.254 mm; never under the
+//!   0.15 mm floor;
 //! - **line style** - the class line style, else solid.
 //!
 //! A dashed or dotted wire is emitted as a run of short sub-paths in one
@@ -18,10 +19,6 @@ use signex_types::net_class::{NetClassStyle, NetLineStyle};
 use signex_types::schematic::{Junction, Wire};
 use signex_types::theme::Color;
 use uuid::Uuid;
-
-/// Default wire width in mm when neither the wire nor its class sets one: the
-/// width the canvas draws it at.
-const DEFAULT_WIRE_MM: f64 = signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM;
 
 /// `(mark, gap)` in units of the stroke width. The numbers are the canvas's
 /// screen-pixel pattern (`LineSegment::DASH_PX` / `DASH_GAP_PX` and `DOT_PX` /
@@ -71,14 +68,12 @@ pub(super) fn junction_rgb(
         .unwrap_or(class_color))
 }
 
-/// The stroke width of `wire` in mm.
+/// The stroke width of `wire` in mm: the one the canvas draws it at.
 pub(super) fn wire_width_mm(wire: &Wire, class: Option<&NetClassStyle>) -> f64 {
-    let own = if wire.stroke_width > 0.0 {
-        wire.stroke_width
-    } else {
-        DEFAULT_WIRE_MM
-    };
-    class.and_then(|style| style.wire_width_mm).unwrap_or(own)
+    signex_types::schematic::wire_stroke_mm(
+        wire.stroke_width,
+        class.and_then(|style| style.wire_width_mm),
+    )
 }
 
 /// One drawn piece of a patterned line: start and end points.

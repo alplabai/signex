@@ -178,13 +178,11 @@ impl Signex {
                     );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
-                    let clicked_pin = hit
-                        .filter(|h| h.kind == signex_types::schematic::SelectedKind::Symbol)
-                        .and_then(|h| {
-                            let at = signex_types::schematic::Point::new(world_x, world_y);
-                            let doc = self.document_state.active_engine()?.document();
-                            signex_engine::symbol_pin_at(doc, h.uuid, at).map(|pin| (h.uuid, pin))
-                        });
+                    let at = signex_types::schematic::Point::new(world_x, world_y);
+                    let clicked_pin = hit.and_then(|h| {
+                        let sheet = self.document_state.active_path.as_deref()?;
+                        self.pin_under(sheet, &h, at).map(|pin| (h.uuid, pin))
+                    });
                     self.interaction_state.clicked_pin = clicked_pin;
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
                     self.interaction_state

@@ -14,9 +14,7 @@
 use std::collections::HashMap;
 
 use signex_types::net_class::NetClassStyle;
-use signex_types::schematic::{
-    SCHEMATIC_DEFAULT_WIRE_STROKE_MM, SCHEMATIC_RENDER_MIN_STROKE_MM, Wire,
-};
+use signex_types::schematic::{Wire, wire_stroke_mm};
 use signex_types::theme::Color as ThemeColor;
 use uuid::Uuid;
 
@@ -101,14 +99,10 @@ pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Optio
 /// The width in mm a wire is drawn at, and so the width it is hit at.
 #[must_use]
 pub fn drawn_wire_width_mm(wire: &Wire, class: Option<&NetClassStyle>) -> f64 {
-    let width = class
-        .and_then(|style| style.wire_width_mm)
-        .unwrap_or(wire.stroke_width);
-    if width > 0.0 {
-        width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
-    } else {
-        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
-    }
+    wire_stroke_mm(
+        wire.stroke_width,
+        class.and_then(|style| style.wire_width_mm),
+    )
 }
 
 #[cfg(test)]

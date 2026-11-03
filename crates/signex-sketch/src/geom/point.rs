@@ -48,18 +48,7 @@ pub fn point_to_segment_distance_sq(
     b: impl Into<Point2>,
 ) -> f64 {
     let (p, a, b) = (p.into(), a.into(), b.into());
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let len_sq = dx * dx + dy * dy;
-    if len_sq <= f64::EPSILON {
-        return a.distance_sq(p);
-    }
-    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq).clamp(0.0, 1.0);
-    let cx = a.x + t * dx;
-    let cy = a.y + t * dy;
-    let ddx = p.x - cx;
-    let ddy = p.y - cy;
-    ddx * ddx + ddy * ddy
+    signex_types::segment::point_to_segment_distance_sq((p.x, p.y), (a.x, a.y), (b.x, b.y))
 }
 
 /// Euclidean distance from `p` to the segment `[a, b]`.

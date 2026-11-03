@@ -66,12 +66,13 @@ impl Signex {
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
                 let occurrence = self.net_occurrence(&data, &candidate.sheet);
+                let pin = self.pin_under(&candidate.sheet, &candidate.item, candidate.world);
                 let card = data.key_of(&candidate.sheet).and_then(|key| {
                     let net = net_of_hover(
                         &data,
                         &key,
                         &candidate.item,
-                        candidate.world,
+                        pin.as_deref(),
                         occurrence.as_ref(),
                     )?;
                     let hover = data.index.hover(net, &data.classes)?;

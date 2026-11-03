@@ -169,6 +169,22 @@ fn build(broken_page: bool) -> Project {
     }
 }
 
+/// One sheet, `u.snxsch`, open and focused.
+pub(super) fn single_sheet_project(sheet: signex_types::schematic::SchematicSheet) -> Project {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write(dir.path(), "u.snxsch", sheet);
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["u.snxsch"]);
+    assert!(app.open_or_focus_sheet_path(path.clone()));
+    Project {
+        app,
+        root: path.clone(),
+        mid: path.clone(),
+        third: path,
+        _dir: dir,
+    }
+}
+
 impl Project {
     pub fn send(&mut self, msg: NetNavMsg) {
         let _task = self.app.update(Message::Ui(UiMsg::NetNav(msg)));

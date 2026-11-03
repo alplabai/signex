@@ -341,6 +341,29 @@ pub enum PinDirection {
     Unclassified,
 }
 
+impl PinDirection {
+    /// The electrical type as shown to the user.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Input => "Input",
+            Self::Output => "Output",
+            Self::Bidirectional => "Bidirectional",
+            Self::ThreeStatable => "Tri-state",
+            Self::Passive => "Passive",
+            Self::PowerInput => "Power input",
+            Self::PowerOutput => "Power output",
+            Self::GroundReference => "Ground",
+            Self::OpenDrainLow => "Open drain (low)",
+            Self::OpenDrainHigh => "Open drain (high)",
+            Self::Differential => "Differential",
+            Self::Clock => "Clock",
+            Self::DoNotConnect => "Do not connect",
+            Self::Unclassified => "Unclassified",
+        }
+    }
+}
+
 /// Pin graphic decoration on the symbol pin tip.
 ///
 /// 7 variants — drops the per-direction "low" shape modifiers that
@@ -795,6 +818,11 @@ pub use hotspot::{
 mod power_port_symbol;
 pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
+};
+mod pin_pick;
+pub use pin_pick::{
+    PickedPin, SCHEMATIC_PIN_PICK_TOLERANCE_MM, SCHEMATIC_PIN_PICK_TOLERANCE_PX,
+    pin_pick_tolerance_mm, symbol_pin_at,
 };
 mod symbol_geometry;
 pub use symbol_geometry::{

@@ -71,6 +71,18 @@ impl NetIndexJob {
 }
 
 impl Signex {
+    /// The cached index of `project` when it is current for its sheets. Never
+    /// starts a build, so it is safe from `update` paths that return no task.
+    pub(super) fn ready_net_data(&self, project: ProjectId) -> Option<Arc<ProjectNetData>> {
+        let planned = plan_projects(&self.document_state)
+            .into_iter()
+            .find(|p| p.project == project)?;
+        self.document_state
+            .net_nav
+            .index
+            .fresh(project, &planned.key)
+    }
+
     /// Plan a build of `project`'s index when the cache holds none for its
     /// current key. `None` when it is fresh, already building, or failed.
     fn plan_net_index_job(&mut self, project: ProjectId) -> Result<NetIndexJob, IndexLookup> {

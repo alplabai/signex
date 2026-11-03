@@ -24,16 +24,23 @@ const MARKER_DISC_ALPHA: f32 = 0.22;
 const MARKER_HALO_ALPHA: f32 = 0.08;
 const _: () = assert!(MARKER_DISC_ALPHA <= 0.3 && MARKER_HALO_ALPHA <= MARKER_DISC_ALPHA);
 
-/// Point-marker sizes in screen px. The cross reads at normal zoom (the pin
-/// line it sits on is about 2 px wide), and its corners stay inside the ring.
-const MARKER_HALO_RADIUS_PX: f32 = 18.0;
-const MARKER_RING_RADIUS_PX: f32 = 10.0;
-const MARKER_RING_STROKE_PX: f32 = 2.0;
-const MARKER_CROSS_HALF_LEN_PX: f32 = 6.0;
-const MARKER_CROSS_STROKE_PX: f32 = 2.0;
+/// Point-marker sizes: a world size in mm that grows with zoom, floored in
+/// screen px so the marker stays readable zoomed out (as the No-Connect cross
+/// is). The cross reads at normal zoom, and its corners stay inside the ring
+/// at both sizes.
+const MARKER_HALO_RADIUS_MM: f32 = 3.6;
+const MARKER_HALO_RADIUS_MIN_PX: f32 = 18.0;
+const MARKER_RING_RADIUS_MM: f32 = 2.0;
+const MARKER_RING_RADIUS_MIN_PX: f32 = 10.0;
+const MARKER_CROSS_HALF_LEN_MM: f32 = 1.2;
+const MARKER_CROSS_HALF_LEN_MIN_PX: f32 = 6.0;
+const MARKER_STROKE_MM: f32 = 0.3;
+const MARKER_STROKE_MIN_PX: f32 = 2.0;
 const _: () = assert!(
-    MARKER_CROSS_HALF_LEN_PX * std::f32::consts::SQRT_2 < MARKER_RING_RADIUS_PX
-        && MARKER_RING_RADIUS_PX < MARKER_HALO_RADIUS_PX
+    MARKER_CROSS_HALF_LEN_MIN_PX * std::f32::consts::SQRT_2 < MARKER_RING_RADIUS_MIN_PX
+        && MARKER_CROSS_HALF_LEN_MM * std::f32::consts::SQRT_2 < MARKER_RING_RADIUS_MM
+        && MARKER_RING_RADIUS_MIN_PX < MARKER_HALO_RADIUS_MIN_PX
+        && MARKER_RING_RADIUS_MM < MARKER_HALO_RADIUS_MM
 );
 
 /// Least contrast (WCAG ratio) a marker's ring and cross keep against the sheet.
@@ -142,28 +149,28 @@ fn push_point_marker(
     stroke: Color,
     fill: Color,
 ) {
-    let px = |n: f32| screen_px_to_world_mm(n, transform.scale) as f32;
+    let size = |mm: f32, min_px: f32| mm.max(screen_px_to_world_mm(min_px, transform.scale) as f32);
     let center = [marker.x_mm as f32, marker.y_mm as f32];
     overlays.snap_circles.push(OverlayCircleInput {
         center,
-        radius_mm: px(MARKER_HALO_RADIUS_PX),
+        radius_mm: size(MARKER_HALO_RADIUS_MM, MARKER_HALO_RADIUS_MIN_PX),
         stroke_width_mm: 0.0,
         color: [fill.r, fill.g, fill.b, MARKER_HALO_ALPHA],
     });
     overlays.snap_circles.push(OverlayCircleInput {
         center,
-        radius_mm: px(MARKER_RING_RADIUS_PX),
+        radius_mm: size(MARKER_RING_RADIUS_MM, MARKER_RING_RADIUS_MIN_PX),
         stroke_width_mm: 0.0,
         color: to_rgba(fill),
     });
     overlays.snap_circles.push(OverlayCircleInput {
         center,
-        radius_mm: px(MARKER_RING_RADIUS_PX),
-        stroke_width_mm: px(MARKER_RING_STROKE_PX),
+        radius_mm: size(MARKER_RING_RADIUS_MM, MARKER_RING_RADIUS_MIN_PX),
+        stroke_width_mm: size(MARKER_STROKE_MM, MARKER_STROKE_MIN_PX),
         color: to_rgba(stroke),
     });
 
-    let arm = px(MARKER_CROSS_HALF_LEN_PX);
+    let arm = size(MARKER_CROSS_HALF_LEN_MM, MARKER_CROSS_HALF_LEN_MIN_PX);
     let (cx, cy) = (center[0], center[1]);
     for (p0, p1) in [
         ([cx - arm, cy - arm], [cx + arm, cy + arm]),
@@ -172,7 +179,7 @@ fn push_point_marker(
         overlays.preview_lines.push(OverlayLineInput {
             p0,
             p1,
-            width_mm: px(MARKER_CROSS_STROKE_PX),
+            width_mm: size(MARKER_STROKE_MM, MARKER_STROKE_MIN_PX),
             color: to_rgba(stroke),
         });
     }
@@ -215,7 +222,7 @@ mod tests {
     use signex_types::theme::{ThemeId, canvas_colors};
 
     #[test]
-    fn the_cross_is_readable_on_screen_at_normal_zoom_and_scales_with_it() {
+    fn the_cross_keeps_a_screen_px_floor_and_grows_with_zoom_beyond_it() {
         let marker = ErcMarker {
             x_mm: 10.0,
             y_mm: 10.0,
@@ -240,12 +247,15 @@ mod tests {
             );
             assert_eq!(overlays.preview_lines.len(), 2);
             for line in &overlays.preview_lines {
-                let half_px = (line.p1[0] - line.p0[0]) * 0.5 * scale;
+                let half_px = ((line.p1[0] - line.p0[0]) * 0.5 * scale).abs();
+                // Never under the px floor; past it, the mm size on screen.
+                let want = MARKER_CROSS_HALF_LEN_MIN_PX.max(MARKER_CROSS_HALF_LEN_MM * scale);
+                assert!((half_px - want).abs() < 1e-3, "@{scale}: arm {half_px} px");
+                assert!(half_px >= MARKER_CROSS_HALF_LEN_MIN_PX - 1e-3);
                 assert!(
-                    (half_px.abs() - MARKER_CROSS_HALF_LEN_PX).abs() < 1e-3,
-                    "@{scale}: arm {half_px} px"
+                    line.width_mm * scale >= MARKER_STROKE_MIN_PX - 1e-3,
+                    "@{scale}: thin cross"
                 );
-                assert!(line.width_mm * scale >= 2.0 - 1e-3, "@{scale}: thin cross");
             }
         }
     }

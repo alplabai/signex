@@ -4,16 +4,17 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::widget::row;
 use signex_engine::info_keys;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Section key in [`CollapsedSections`].
-const SECTION_KEY: &str = "sel_pins";
-
 /// Opacity of the accent behind the focused pin's row.
 const FOCUS_ROW_ALPHA: f32 = 0.25;
+
+/// Column widths as `FillPortion`s: designator, name, type, net, hidden.
+const COLUMN_PORTIONS: [u16; 5] = [2, 3, 4, 4, 2];
 
 /// One pin as the Properties rows carry it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,10 +27,13 @@ pub(super) struct PinRow {
     pub focused: bool,
 }
 
-/// The pin rows in `selection_info`, in order, with the focused one marked.
+/// The pin rows in `selection_info`, in order. Only the first row with the
+/// focused key is marked, so a symbol with a repeated pin number highlights
+/// one row.
 pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
     let value = |key: &str| info.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
-    let focused = value(info_keys::FOCUSED_PIN);
+    let focus = value(info_keys::FOCUSED_PIN);
+    let mut focus_taken = false;
     info.iter()
         .filter_map(|(k, v)| {
             let designator = k.strip_prefix(info_keys::PIN_PREFIX)?.to_string();
@@ -37,9 +41,11 @@ pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
             let name = cells.next().unwrap_or_default().to_string();
             let electrical_type = cells.next().unwrap_or_default().to_string();
             let hidden = cells.next() == Some("Yes");
+            let focused = !focus_taken && focus.as_deref() == Some(designator.as_str());
+            focus_taken |= focused;
             Some(PinRow {
                 net: value(&format!("{}{designator}", info_keys::PIN_NET_PREFIX)),
-                focused: focused.as_deref() == Some(designator.as_str()),
+                focused,
                 designator,
                 name,
                 electrical_type,
@@ -49,7 +55,8 @@ pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
         .collect()
 }
 
-/// The Pins section; open whenever a pin is focused.
+/// The Pins section. It follows the real collapse state; a pin click opens
+/// it through `update` (`PINS_SECTION_KEY`).
 pub(super) fn push_pins_section<'a>(
     col: Column<'a, PanelMsg>,
     ctx: &PanelContext,
@@ -62,54 +69,72 @@ pub(super) fn push_pins_section<'a>(
         return col;
     }
     let accent = PanelPalette::from_tokens(&ctx.tokens).accent;
-    let open = CollapsedSections::new();
-    let collapsed = if rows.iter().any(|r| r.focused) {
-        &open
-    } else {
-        &ctx.collapsed_sections
-    };
+    // The Net column exists only once the project net index can answer.
+    let show_net = rows.iter().any(|r| r.net.is_some());
     let title = format!("Pins ({})", rows.len());
     col.push(collapsible_section(
-        SECTION_KEY,
+        PINS_SECTION_KEY,
         &title,
-        collapsed,
+        &ctx.collapsed_sections,
         muted,
         border_c,
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
-            for row in rows {
-                c = c.push(pin_row_view(row, muted, primary, accent));
+            c = c.push(table_row(
+                ["Pin", "Name", "Type", "Net", "Hidden"].map(String::from),
+                show_net,
+                muted,
+                None,
+            ));
+            c = c.push(thin_sep(border_c));
+            for pin in rows {
+                let cells = [
+                    pin.designator,
+                    pin.name,
+                    pin.electrical_type,
+                    pin.net.unwrap_or_default(),
+                    if pin.hidden {
+                        "Yes".into()
+                    } else {
+                        String::new()
+                    },
+                ];
+                let colour = if pin.focused { primary } else { muted };
+                let backdrop = pin.focused.then_some(Color {
+                    a: FOCUS_ROW_ALPHA,
+                    ..accent
+                });
+                c = c.push(table_row(cells, show_net, colour, backdrop));
             }
             c
         },
     ))
 }
 
-fn pin_row_view<'a>(
-    row: PinRow,
-    muted: Color,
-    primary: Color,
-    accent: Color,
+fn table_row<'a>(
+    cells: [String; 5],
+    show_net: bool,
+    colour: Color,
+    backdrop: Option<Color>,
 ) -> Element<'a, PanelMsg> {
-    let hidden = if row.hidden { "hidden" } else { "shown" };
-    let net = row.net.unwrap_or_else(|| "no net".to_string());
-    let line = format!(
-        "{}  {}  {}  {}  {}",
-        row.designator, row.name, row.electrical_type, net, hidden
-    );
-    let colour = if row.focused { primary } else { muted };
-    let focused = row.focused;
-    container(text(line).size(TS.body).color(colour))
-        .padding([4.0, SP.m])
+    let mut line = row![].spacing(SP.s);
+    for (index, cell) in cells.into_iter().enumerate() {
+        if index == 3 && !show_net {
+            continue;
+        }
+        line = line.push(
+            text(cell)
+                .size(TS.body)
+                .color(colour)
+                .width(Length::FillPortion(COLUMN_PORTIONS[index]))
+                .wrapping(iced::widget::text::Wrapping::None),
+        );
+    }
+    container(line)
+        .padding([SP.s, SP.m])
         .width(Length::Fill)
         .style(move |_| container::Style {
-            background: focused.then(|| {
-                Color {
-                    a: FOCUS_ROW_ALPHA,
-                    ..accent
-                }
-                .into()
-            }),
+            background: backdrop.map(Into::into),
             ..container::Style::default()
         })
         .into()
@@ -124,27 +149,29 @@ mod tests {
             ("Type".into(), "Symbol".into()),
             ("Pin: 1".into(), "A\tPassive\tNo".into()),
             ("Pin: 2".into(), "K\tPassive\tYes".into()),
+            ("Pin: 2".into(), "K2\tPassive\tNo".into()),
             (info_keys::FOCUSED_PIN.into(), "2".into()),
+            ("Pin Net: 1".into(), "GND".into()),
             ("Pin Net: 2".into(), "VCC".into()),
         ]
     }
 
     #[test]
-    fn the_focused_pin_row_carries_its_facts_and_net() {
+    fn every_pin_row_carries_its_facts_and_its_own_net() {
         let rows = pin_rows(&info());
-        assert_eq!(rows.len(), 2);
-        assert!(!rows[0].focused && rows[0].net.is_none() && !rows[0].hidden);
-        let pin = &rows[1];
-        assert!(pin.focused && pin.hidden);
-        assert_eq!(
-            (
-                pin.designator.as_str(),
-                pin.name.as_str(),
-                pin.net.as_deref()
-            ),
-            ("2", "K", Some("VCC"))
-        );
-        assert_eq!(pin.electrical_type, "Passive");
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].net.as_deref(), Some("GND"));
+        assert!(!rows[0].focused && !rows[0].hidden);
+        assert_eq!(rows[1].net.as_deref(), Some("VCC"));
+        assert!(rows[1].hidden);
+        assert_eq!(rows[1].electrical_type, "Passive");
+    }
+
+    #[test]
+    fn a_repeated_pin_number_highlights_one_row() {
+        let rows = pin_rows(&info());
+        let focused: Vec<_> = rows.iter().map(|r| r.focused).collect();
+        assert_eq!(focused, [false, true, false]);
     }
 
     #[test]
@@ -152,5 +179,12 @@ mod tests {
         let mut rows = info();
         rows.retain(|(k, _)| k != info_keys::FOCUSED_PIN);
         assert!(pin_rows(&rows).iter().all(|r| !r.focused));
+    }
+
+    #[test]
+    fn with_no_net_index_the_rows_have_no_net() {
+        let mut rows = info();
+        rows.retain(|(k, _)| !k.starts_with(info_keys::PIN_NET_PREFIX));
+        assert!(pin_rows(&rows).iter().all(|r| r.net.is_none()));
     }
 }

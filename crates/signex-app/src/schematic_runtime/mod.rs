@@ -620,10 +620,8 @@ fn collect_item_bounds_with(
     for wire in &snapshot.wires {
         out.push(ItemBound {
             item: SelectedItem::new(wire.uuid, SelectedKind::Wire),
-            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y).expand(
-                wire.stroke_width
-                    .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
-            ),
+            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y)
+                .expand(drawn_wire_width_mm(wire, None)),
             anchor: Point::new(
                 (wire.start.x + wire.end.x) * 0.5,
                 (wire.start.y + wire.end.y) * 0.5,
