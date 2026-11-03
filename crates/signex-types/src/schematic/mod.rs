@@ -796,6 +796,8 @@ mod power_port_symbol;
 pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
 };
+mod pin_labels;
+pub use pin_labels::lower_pin_labels;
 mod symbol_geometry;
 pub use symbol_geometry::{
     SymbolPrimitive, arc_polyline, instance_pins, lower_placed_symbol, lower_symbol, pin_direction,

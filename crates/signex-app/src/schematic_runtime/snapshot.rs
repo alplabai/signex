@@ -206,6 +206,13 @@ pub fn build_renderer_snapshot(
             symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
+            if let Some(lib) = snapshot.lib_symbols.get(&symbol.lib_id) {
+                symbol::push_primitives(
+                    &signex_types::schematic::lower_pin_labels(lib, symbol),
+                    &style,
+                    &mut sink,
+                );
+            }
         }
 
         let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);

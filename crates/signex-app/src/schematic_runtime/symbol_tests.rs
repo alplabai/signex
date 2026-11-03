@@ -299,3 +299,63 @@ fn a_non_power_symbol_without_a_library_entry_still_gets_the_placeholder() {
     sheet.symbols.push(sym.clone());
     assert!(approx(symbol_bounds(&sheet, &sym), 6.0, 7.2, 14.0, 12.8));
 }
+
+/// A two-pin IC body (pin 1 on the left, pin 8 on the right) placed at the
+/// origin, with `show_numbers` / `show_names` as the library stores them.
+fn sheet_with_ic_pins(show_numbers: bool, show_names: bool) -> SchematicSheet {
+    use signex_types::schematic::{LibPin, Pin, PinDirection, PinShapeStyle};
+    let (mut sheet, _) = sheet_with_body(10.0, 8.0, 0.0, 0.0, 0.0);
+    let lib = sheet.lib_symbols.get_mut("L:Body").expect("lib");
+    lib.show_pin_numbers = show_numbers;
+    lib.show_pin_names = show_names;
+    for (number, name, x, rotation) in [("1", "VIN", -7.54, 0.0), ("8", "VOUT", 7.54, 180.0)] {
+        lib.pins.push(LibPin {
+            unit: 0,
+            body_style: 1,
+            pin: Pin {
+                direction: PinDirection::Passive,
+                shape_style: PinShapeStyle::Plain,
+                position: Point::new(x, 0.0),
+                rotation,
+                length: 2.54,
+                name: name.to_owned(),
+                number: number.to_owned(),
+                visible: true,
+                name_visible: true,
+                number_visible: true,
+            },
+        });
+    }
+    sheet
+}
+
+fn placed_ic_texts(sheet: &SchematicSheet) -> Vec<String> {
+    let transform = ScreenTransform {
+        offset_x: 400.0,
+        offset_y: 400.0,
+        scale: 10.0,
+        device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
+    };
+    let bounds = Rectangle::new(iced::Point::ORIGIN, iced::Size::new(800.0, 800.0));
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::CatppuccinMocha);
+    let snap =
+        build_renderer_snapshot(sheet, &transform, &colors, bounds, None, Default::default());
+    snap.parameter_texts
+        .into_iter()
+        .map(|t| t.content)
+        .collect()
+}
+
+/// #1961: a placed IC drew bare pin lines. Its pin numbers and names are in
+/// the scene text, and the library's show flags switch each kind off.
+#[test]
+fn placed_ic_draws_pin_numbers_and_names() {
+    let texts = placed_ic_texts(&sheet_with_ic_pins(true, true));
+    for want in ["1", "8", "VIN", "VOUT"] {
+        assert!(texts.iter().any(|t| t == want), "missing {want}: {texts:?}");
+    }
+    let texts = placed_ic_texts(&sheet_with_ic_pins(true, false));
+    assert!(texts.iter().any(|t| t == "1") && !texts.iter().any(|t| t == "VIN"));
+    let texts = placed_ic_texts(&sheet_with_ic_pins(false, true));
+    assert!(!texts.iter().any(|t| t == "1") && texts.iter().any(|t| t == "VIN"));
+}
