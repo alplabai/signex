@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn time_picker_new_creates_instance() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn time_picker_show_picker_true() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn time_picker_use_24h_sets_value() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn time_picker_show_seconds_sets_value() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn time_picker_chained_configuration() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn time_picker_tag_returns_state_tag() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -571,7 +571,7 @@ mod tests {
 
     #[test]
     fn time_picker_has_two_children() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -593,7 +593,7 @@ mod tests {
 
     #[test]
     fn time_picker_size_matches_underlay() {
-        let underlay = iced_widget::text::Text::new("Pick a time");
+        let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
         let time = Time::Hm {
             hour: 14,
             minute: 30,
@@ -752,7 +752,7 @@ mod tests {
                 minute: expected_minute,
                 period,
             };
-            let underlay = iced_widget::text::Text::new("Pick a time");
+            let underlay = iced_core::Widget::_boxed(iced_widget::text::Text::new("Pick a time"));
 
             let time_picker = TestTimePicker::new(
                 false,

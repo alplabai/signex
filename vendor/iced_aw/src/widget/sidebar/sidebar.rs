@@ -1792,12 +1792,12 @@ mod tests {
             .push(
                 TestTabId::One,
                 TabLabel::Text("Tab One".into()),
-                Text::new("Content One"),
+                Widget::_boxed(Text::new("Content One")),
             )
             .push(
                 TestTabId::Two,
                 TabLabel::Text("Tab Two".into()),
-                Text::new("Content Two"),
+                Widget::_boxed(Text::new("Content Two")),
             );
 
         assert_eq!(sidebar.sidebar.size(), 2);
@@ -1813,12 +1813,12 @@ mod tests {
             .push(
                 TestTabId::One,
                 TabLabel::Text("Tab One".into()),
-                Text::new("Content One"),
+                Widget::_boxed(Text::new("Content One")),
             )
             .push(
                 TestTabId::Two,
                 TabLabel::Text("Tab Two".into()),
-                Text::new("Content Two"),
+                Widget::_boxed(Text::new("Content Two")),
             )
             .set_active_tab(&TestTabId::Two);
 
@@ -1833,7 +1833,7 @@ mod tests {
             .push(
                 TestTabId::One,
                 TabLabel::Text("Tab One".into()),
-                Text::new("Content One"),
+                Widget::_boxed(Text::new("Content One")),
             )
             .width(Length::Fill)
             .height(Length::Fill)
@@ -1900,12 +1900,12 @@ mod tests {
             .push(
                 TestTabId::One,
                 TabLabel::Text("Tab One".into()),
-                Text::new("Content One"),
+                Widget::_boxed(Text::new("Content One")),
             )
             .push(
                 TestTabId::Two,
                 TabLabel::Text("Tab Two".into()),
-                Text::new("Content Two"),
+                Widget::_boxed(Text::new("Content Two")),
             );
 
         assert_eq!(sidebar.sidebar.size(), 2);

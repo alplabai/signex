@@ -79,6 +79,7 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -317,6 +318,7 @@ async fn run_readback_smoke_pass(
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -451,7 +453,9 @@ async fn run_readback_smoke_pass(
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
 
     let samples = {
-        let data = slice.get_mapped_range();
+        let data = slice
+            .get_mapped_range()
+            .map_err(|err| format!("readback get_mapped_range failed: {err}"))?;
         samples
             .iter()
             .map(|&(x, y)| {
@@ -475,6 +479,7 @@ async fn run_arc_smoke_pass_with(scale_px_per_mm: f32, arcs: &[Arc]) -> Result<u
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -570,6 +575,7 @@ async fn run_polygon_smoke_pass_with(
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -660,6 +666,7 @@ async fn run_grid_smoke_pass_with(scale_px_per_mm: f32) -> Result<GridSmokeRepor
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -748,6 +755,7 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;

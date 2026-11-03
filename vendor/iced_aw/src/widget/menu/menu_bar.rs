@@ -778,9 +778,15 @@ mod tests {
 
     type TestMenuBar<'a> = MenuBar<'a, TestMessage, iced_widget::Theme, iced_widget::Renderer>;
 
+    fn text_item(label: &'static str) -> Item<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> {
+        let element: Element<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> =
+            Widget::_boxed(Text::new(label));
+        Item::new(element)
+    }
+
     #[test]
     fn menu_bar_new_creates_instance() {
-        let items = vec![Item::new(Text::new("File")), Item::new(Text::new("Edit"))];
+        let items = vec![text_item("File"), text_item("Edit")];
 
         let menu_bar = TestMenuBar::new(items);
         assert_eq!(menu_bar.roots.len(), 2);
@@ -791,35 +797,35 @@ mod tests {
 
     #[test]
     fn menu_bar_width_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).width(Length::Fill);
         assert_eq!(menu_bar.width, Length::Fill);
     }
 
     #[test]
     fn menu_bar_height_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).height(Length::Fixed(50.0));
         assert_eq!(menu_bar.height, Length::Fixed(50.0));
     }
 
     #[test]
     fn menu_bar_spacing_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).spacing(Pixels(10.0));
         assert_eq!(menu_bar.spacing, Pixels(10.0));
     }
 
     #[test]
     fn menu_bar_padding_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).padding(Padding::new(5.0));
         assert_eq!(menu_bar.padding, Padding::new(5.0));
     }
 
     #[test]
     fn menu_bar_safe_bounds_margin_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).safe_bounds_margin(100.0);
         #[allow(clippy::float_cmp)]
         {
@@ -829,28 +835,28 @@ mod tests {
 
     #[test]
     fn menu_bar_close_on_item_click_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).close_on_item_click(true);
         assert_eq!(menu_bar.close_on_item_click, Some(true));
     }
 
     #[test]
     fn menu_bar_close_on_background_click_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).close_on_background_click(true);
         assert_eq!(menu_bar.close_on_background_click, Some(true));
     }
 
     #[test]
     fn menu_bar_close_on_item_click_global_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).close_on_item_click_global(true);
         assert!(menu_bar.global_parameters.close_on_item_click);
     }
 
     #[test]
     fn menu_bar_close_on_background_click_global_sets_value() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items).close_on_background_click_global(true);
         assert!(menu_bar.global_parameters.close_on_background_click);
     }
@@ -858,10 +864,10 @@ mod tests {
     #[test]
     fn menu_bar_with_multiple_items() {
         let items = vec![
-            Item::new(Text::new("File")),
-            Item::new(Text::new("Edit")),
-            Item::new(Text::new("View")),
-            Item::new(Text::new("Help")),
+            text_item("File"),
+            text_item("Edit"),
+            text_item("View"),
+            text_item("Help"),
         ];
 
         let menu_bar = TestMenuBar::new(items);
@@ -870,7 +876,7 @@ mod tests {
 
     #[test]
     fn menu_bar_chained_configuration() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
 
         let menu_bar = TestMenuBar::new(items)
             .width(Length::Fill)
@@ -895,7 +901,7 @@ mod tests {
 
     #[test]
     fn menu_bar_tag_returns_state_tag() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items);
 
         let tag = Widget::<TestMessage, iced_widget::Theme, iced_widget::Renderer>::tag(&menu_bar);
@@ -904,7 +910,7 @@ mod tests {
 
     #[test]
     fn menu_bar_children_returns_item_trees() {
-        let items = vec![Item::new(Text::new("File")), Item::new(Text::new("Edit"))];
+        let items = vec![text_item("File"), text_item("Edit")];
 
         let mut menu_bar = TestMenuBar::new(items);
         let mut tree = Tree::new(&menu_bar);
@@ -917,7 +923,7 @@ mod tests {
 
     #[test]
     fn menu_bar_size_returns_configured_size() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items)
             .width(Length::Fill)
             .height(Length::Fixed(40.0));
@@ -930,7 +936,7 @@ mod tests {
 
     #[test]
     fn menu_bar_converts_to_element() {
-        let items = vec![Item::new(Text::new("File"))];
+        let items = vec![text_item("File")];
         let menu_bar = TestMenuBar::new(items);
         let _element: Element<TestMessage, iced_widget::Theme, iced_widget::Renderer> =
             menu_bar.into();

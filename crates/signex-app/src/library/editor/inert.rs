@@ -161,6 +161,7 @@ mod tests {
     use iced::advanced::shell::{Bus, Waker};
     use iced::window::Headless;
     use iced::widget::{Space, button};
+    use iced::Widget as _;
     use iced::{Point, Theme};
 
     /// Click the middle of a button built by `wrap` and return the
@@ -169,7 +170,7 @@ mod tests {
         wrap: impl FnOnce(Element<'static, u8, Theme, ()>) -> Element<'static, u8, Theme, ()>,
     ) -> Vec<u8> {
         let pressable: Element<'static, u8, Theme, ()> =
-            button(Space::new().width(40).height(20)).on_press(7).into();
+            button(Space::new().width(40).height(20)).on_press(7).boxed();
         let mut element = wrap(pressable);
         let mut tree = Tree::new(&element);
         let limits = Limits::new(Size::ZERO, Size::new(200.0, 100.0));

@@ -66,7 +66,7 @@ fn checkbox_state_word_is_readable_on_solarized_light() {
     let theme = Signex::id_to_iced_theme(LIGHT, None);
     let surfaces = [
         ti(tokens.panel_bg),
-        theme.extended_palette().background.base.color,
+        theme.palette().background.base.color,
     ];
     for surface in surfaces {
         assert_readable("On", check_state_color(true, p.muted, surface), surface);
@@ -106,7 +106,7 @@ fn dark_themes_keep_every_label_that_was_visible() {
         let tokens = theme_tokens(id);
         let p = PanelPalette::from_tokens(&tokens);
         let theme = Signex::id_to_iced_theme(id, None);
-        let surface = theme.extended_palette().background.base.color;
+        let surface = theme.palette().background.base.color;
 
         assert_unchanged_unless_lost(
             &format!("{id:?} active segment"),
@@ -191,7 +191,7 @@ fn on_label_reads_on_the_panel_background_of_every_builtin() {
         let on = check_state_color(
             true,
             p.muted,
-            theme.extended_palette().background.base.color,
+            theme.palette().background.base.color,
         );
         let panel = ti(tokens.panel_bg);
         assert!(

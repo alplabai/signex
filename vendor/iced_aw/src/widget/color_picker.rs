@@ -358,8 +358,8 @@ mod tests {
 
     type TestColorPicker<'a> = ColorPicker<'a, TestMessage, iced_widget::Theme>;
 
-    fn create_test_button() -> iced_widget::Button<'static, TestMessage, iced_widget::Theme> {
-        iced_widget::button(iced_widget::text::Text::new("Pick"))
+    fn create_test_button() -> Element<'static, TestMessage, iced_widget::Theme, Renderer> {
+        iced_widget::button(iced_widget::text::Text::new("Pick")._boxed())._boxed()
     }
 
     #[test]

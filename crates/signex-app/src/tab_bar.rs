@@ -424,12 +424,13 @@ mod tests {
     /// `TAB_STRIP_HEIGHT` tall.
     #[test]
     fn the_strip_and_its_placeholder_both_use_the_height_token() {
+        use iced::advanced::Widget as _;
         use iced::Length;
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let fixed = Length::Fixed(super::TAB_STRIP_HEIGHT);
 
         let placeholder = super::placeholder::<()>(&tokens);
-        assert_eq!(placeholder.as_widget().size().height, fixed);
+        assert_eq!(placeholder.size().height, fixed);
 
         let none = HashSet::new();
         let marks = super::TabMarks {
@@ -438,7 +439,7 @@ mod tests {
             tooltips_enabled: true,
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
-        assert_eq!(strip.as_widget().size().height, fixed);
+        assert_eq!(strip.size().height, fixed);
     }
 
     fn tab(path: &str) -> TabInfo {

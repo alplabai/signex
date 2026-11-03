@@ -53,6 +53,7 @@ fn gpu() -> Option<iced::Renderer> {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }))
         .ok()?;
     let (device, queue) =
@@ -82,8 +83,11 @@ fn gpu() -> Option<iced::Renderer> {
     drop(fonts);
     Some(iced::Renderer::Primary(iced_wgpu::Renderer::new(
         engine,
-        Font::with_name("Roboto"),
-        Pixels(16.0),
+        iced::advanced::renderer::Settings {
+            font: Font::new("Roboto"),
+            text_size: Pixels(16.0),
+            ..Default::default()
+        },
     )))
 }
 
@@ -94,14 +98,16 @@ fn draw(renderer: &mut iced::Renderer, app: &Signex) -> Vec<u8> {
     let size = Size::new(WIDTH as f32, HEIGHT as f32);
     let mut ui = UserInterface::build(app.view(window), size, Cache::default(), renderer);
     // The canvas applies a pending fit and learns its size on a redraw event.
-    let mut ignored = Vec::new();
+    let mut ignored = iced::advanced::shell::Bus::new();
+    let waker = iced::advanced::shell::Waker::noop();
     let _ = ui.update(
+        &iced::window::Headless,
+        &waker,
         &[iced::Event::Window(iced::window::Event::RedrawRequested(
             std::time::Instant::now(),
         ))],
         iced::mouse::Cursor::Unavailable,
         renderer,
-        &mut iced::advanced::clipboard::Null,
         &mut ignored,
     );
     ui.draw(
@@ -113,7 +119,7 @@ fn draw(renderer: &mut iced::Renderer, app: &Signex) -> Vec<u8> {
         iced::mouse::Cursor::Unavailable,
     );
     let viewport =
-        iced::advanced::graphics::Viewport::with_physical_size(Size::new(WIDTH, HEIGHT), 1.0);
+        iced::advanced::graphics::Viewport::with_physical_size(Size::new(WIDTH, HEIGHT), iced::advanced::renderer::Scale::default());
     let iced::Renderer::Primary(wgpu_renderer) = renderer else {
         unreachable!("built as Primary")
     };

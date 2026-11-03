@@ -12,6 +12,7 @@
 //! on a non-lavapipe one.
 
 use iced::advanced::renderer::Style;
+use iced::widget::Widget as _;
 use iced::{Color, Element, Font, Pixels, Size, Theme};
 use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
@@ -46,6 +47,7 @@ pub(super) fn gpu() -> Gpu {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }));
     // A missing adapter fails loudly, as in the other GPU tests: a pixel test
     // that skips itself is a test nobody notices has stopped running.
@@ -87,8 +89,11 @@ pub(super) fn gpu() -> Gpu {
     Gpu {
         renderer: iced::Renderer::Primary(iced_wgpu::Renderer::new(
             engine,
-            Font::DEFAULT,
-            Pixels(16.0),
+            iced::advanced::renderer::Settings {
+                font: Font::DEFAULT,
+                text_size: Pixels(16.0),
+                ..Default::default()
+            },
         )),
         is_lavapipe,
     }
@@ -145,7 +150,7 @@ fn render_at(gpu: &mut Gpu, element: Element<'_, crate::app::Message>, dpi: f32)
     );
     let (width, height) = ((WIDTH as f32 * dpi) as u32, (HEIGHT as f32 * dpi) as u32);
     let viewport =
-        iced::advanced::graphics::Viewport::with_physical_size(Size::new(width, height), dpi);
+        iced::advanced::graphics::Viewport::with_physical_size(Size::new(width, height), iced::advanced::renderer::Scale { window: dpi, application: 1.0 });
     let iced::Renderer::Primary(wgpu_renderer) = &mut gpu.renderer else {
         unreachable!("built as Primary above")
     };
@@ -274,7 +279,7 @@ fn fill<'a, P: canvas::Program<crate::app::Message> + 'a>(
     canvas(program)
         .width(iced::Length::Fill)
         .height(iced::Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Backdrop plus the content and drag shader layers, no interactive canvas.
@@ -291,7 +296,7 @@ fn shaders<'a>(
             .width(iced::Length::Fill)
             .height(iced::Length::Fill),
     ]
-    .into()
+    .boxed()
 }
 
 fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
@@ -355,7 +360,7 @@ fn frame_with(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet, look: &Look) 
     };
     let element = iced::widget::container(element)
         .padding(look.padding)
-        .into();
+        .boxed();
     render_at(gpu, element, look.dpi)
 }
 

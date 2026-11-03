@@ -393,7 +393,7 @@ mod tests {
 
     #[test]
     fn date_picker_new_creates_instance() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 6, 15);
 
         let date_picker = TestDatePicker::new(
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn date_picker_show_picker_true() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 1, 1);
 
         let date_picker = TestDatePicker::new(
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn date_picker_font_size_sets_value() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 1, 1);
 
         let date_picker = TestDatePicker::new(
@@ -446,7 +446,7 @@ mod tests {
 
     #[test]
     fn date_picker_font_size_from_integer() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 1, 1);
 
         let date_picker = TestDatePicker::new(
@@ -463,7 +463,7 @@ mod tests {
 
     #[test]
     fn date_picker_tag_returns_state_tag() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 1, 1);
 
         let date_picker = TestDatePicker::new(
@@ -480,7 +480,7 @@ mod tests {
 
     #[test]
     fn date_picker_has_two_children() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 1, 1);
 
         let date_picker = TestDatePicker::new(
@@ -499,7 +499,7 @@ mod tests {
 
     #[test]
     fn date_picker_size_matches_underlay() {
-        let underlay = iced_widget::text::Text::new("Pick a date");
+        let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
         let date = Date::from_ymd(2024, 1, 1);
 
         let date_picker = TestDatePicker::new(
@@ -526,7 +526,7 @@ mod tests {
 
         for (year, month, day) in test_dates {
             let date = Date::from_ymd(year, month, day);
-            let underlay = iced_widget::text::Text::new("Pick a date");
+            let underlay = iced_widget::text::Text::new("Pick a date")._boxed();
 
             let date_picker = TestDatePicker::new(
                 false,

@@ -334,9 +334,15 @@ mod tests {
 
     type TestBadge<'a> = Badge<'a, TestMessage, iced_widget::Theme, iced_widget::Renderer>;
 
+    fn content(
+        label: &'static str,
+    ) -> Element<'static, TestMessage, iced_widget::Theme, iced_widget::Renderer> {
+        iced_widget::text::Text::new(label)._boxed()
+    }
+
     #[test]
     fn badge_new_has_default_values() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test"));
+        let badge = TestBadge::new(content("Test"));
 
         assert_eq!(badge.padding, 7);
         assert_eq!(badge.width, Length::Shrink);
@@ -348,49 +354,49 @@ mod tests {
 
     #[test]
     fn badge_padding_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).padding(15);
+        let badge = TestBadge::new(content("Test")).padding(15);
         assert_eq!(badge.padding, 15);
     }
 
     #[test]
     fn badge_width_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).width(200);
+        let badge = TestBadge::new(content("Test")).width(200);
         assert_eq!(badge.width, Length::Fixed(200.0));
     }
 
     #[test]
     fn badge_width_fill_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).width(Length::Fill);
+        let badge = TestBadge::new(content("Test")).width(Length::Fill);
         assert_eq!(badge.width, Length::Fill);
     }
 
     #[test]
     fn badge_height_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).height(50);
+        let badge = TestBadge::new(content("Test")).height(50);
         assert_eq!(badge.height, Length::Fixed(50.0));
     }
 
     #[test]
     fn badge_height_shrink_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).height(Length::Shrink);
+        let badge = TestBadge::new(content("Test")).height(Length::Shrink);
         assert_eq!(badge.height, Length::Shrink);
     }
 
     #[test]
     fn badge_align_x_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).align_x(Alignment::Start);
+        let badge = TestBadge::new(content("Test")).align_x(Alignment::Start);
         assert_eq!(badge.horizontal_alignment, Alignment::Start);
     }
 
     #[test]
     fn badge_align_y_sets_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).align_y(Alignment::End);
+        let badge = TestBadge::new(content("Test")).align_y(Alignment::End);
         assert_eq!(badge.vertical_alignment, Alignment::End);
     }
 
     #[test]
     fn badge_size_method_returns_correct_size() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test"))
+        let badge = TestBadge::new(content("Test"))
             .width(100)
             .height(50);
 
@@ -401,7 +407,7 @@ mod tests {
 
     #[test]
     fn badge_chaining_methods() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test"))
+        let badge = TestBadge::new(content("Test"))
             .padding(10)
             .width(150)
             .height(40)
@@ -417,19 +423,19 @@ mod tests {
 
     #[test]
     fn badge_default_padding_is_7() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test"));
+        let badge = TestBadge::new(content("Test"));
         assert_eq!(badge.padding, 7);
     }
 
     #[test]
     fn badge_padding_can_be_zero() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).padding(0);
+        let badge = TestBadge::new(content("Test")).padding(0);
         assert_eq!(badge.padding, 0);
     }
 
     #[test]
     fn badge_padding_max_value() {
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test")).padding(u16::MAX);
+        let badge = TestBadge::new(content("Test")).padding(u16::MAX);
         assert_eq!(badge.padding, u16::MAX);
     }
 
@@ -439,7 +445,7 @@ mod tests {
 
         for h_align in alignments {
             for v_align in alignments {
-                let badge = TestBadge::new(iced_widget::text::Text::new("Test"))
+                let badge = TestBadge::new(content("Test"))
                     .align_x(h_align)
                     .align_y(v_align);
 
@@ -452,7 +458,7 @@ mod tests {
     #[test]
     fn badge_length_fillportion() {
         let badge =
-            TestBadge::new(iced_widget::text::Text::new("Test")).width(Length::FillPortion(3));
+            TestBadge::new(content("Test")).width(Length::FillPortion(3));
 
         assert_eq!(badge.width, Length::FillPortion(3));
     }
@@ -469,13 +475,13 @@ mod tests {
         }
 
         // This is a compiler only test. not really a running test.
-        let badge = TestBadge::new(iced_widget::text::Text::new("Test"));
+        let badge = TestBadge::new(content("Test"));
         assert_has_operate(&badge);
     }
 
     #[test]
     fn badge_diff_creates_content_tree() {
-        let mut badge = TestBadge::new(iced_widget::text::Text::new("Original"));
+        let mut badge = TestBadge::new(content("Original"));
         let mut tree = Tree::empty();
 
         // Diffing an empty tree should create exactly one child (the content)

@@ -239,6 +239,7 @@ where
 mod tests {
     use super::*;
     use iced_core::Point;
+    use iced_widget::Widget as _;
     use iced_widget::text::Text;
 
     const WINDOW: Size = Size::new(1920.0, 1080.0);
@@ -252,7 +253,7 @@ mod tests {
 
     fn create_test_content()
     -> Element<'static, TestMessage, iced_widget::Theme, ()> {
-        Text::new("Test content").into()
+        Text::new("Test content").boxed()
     }
 
     fn create_test_state() -> crate::context_menu::State {

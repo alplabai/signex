@@ -266,8 +266,8 @@ mod tests {
     #[test]
     fn custom_layout_with_elements() {
         let elements = vec![
-            iced_widget::text::Text::new("Element 1").into(),
-            iced_widget::text::Text::new("Element 2").into(),
+            iced_widget::text::Text::new("Element 1")._boxed(),
+            iced_widget::text::Text::new("Element 2")._boxed(),
         ];
         let layout = TestCustomLayout::new(elements, simple_layout_fn);
 
@@ -277,9 +277,9 @@ mod tests {
     #[test]
     fn custom_layout_children_count_matches_elements() {
         let elements = vec![
-            iced_widget::text::Text::new("Element 1").into(),
-            iced_widget::text::Text::new("Element 2").into(),
-            iced_widget::text::Text::new("Element 3").into(),
+            iced_widget::text::Text::new("Element 1")._boxed(),
+            iced_widget::text::Text::new("Element 2")._boxed(),
+            iced_widget::text::Text::new("Element 3")._boxed(),
         ];
         let mut layout = TestCustomLayout::new(elements, simple_layout_fn);
 

@@ -13,8 +13,9 @@
 //! running app's. Assert on relations a few pixels cannot flip: a label
 //! sits on one line, a button is at least as wide as its label.
 
+use iced::advanced::widget::operation::Text;
 use iced::advanced::widget::{Id, Operation, Tree};
-use iced::advanced::{Layout, layout};
+use iced::advanced::{Layout, Widget as _, layout, renderer};
 use iced::{Element, Font, Pixels, Rectangle, Size, Theme};
 
 /// One text widget as laid out: its content and its bounds in window
@@ -32,15 +33,21 @@ pub(crate) fn lay_out_texts<M>(
     window: Size,
 ) -> Vec<LaidOutText> {
     let renderer = headless_renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let widget = element.as_widget_mut();
-    let node = widget.layout(
+    let mut tree = Tree::new(&element);
+    element.layout(
         &mut tree,
         &renderer,
         &layout::Limits::new(Size::ZERO, window),
     );
+    let size = tree.size;
     let mut collect = CollectTexts(Vec::new());
-    widget.operate(&mut tree, Layout::new(&node), &renderer, &mut collect);
+    element.operate(
+        &mut tree,
+        Layout::new(size),
+        &Rectangle::with_size(size),
+        &renderer,
+        &mut collect,
+    );
     collect.0
 }
 
@@ -50,15 +57,13 @@ pub(crate) fn root_size<M>(
     window: Size,
 ) -> Size {
     let renderer = headless_renderer();
-    let mut tree = Tree::new(element.as_widget());
-    element
-        .as_widget_mut()
-        .layout(
-            &mut tree,
-            &renderer,
-            &layout::Limits::new(Size::ZERO, window),
-        )
-        .size()
+    let mut tree = Tree::new(&element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    tree.size
 }
 
 /// The text widget whose content is exactly `label`.
@@ -78,7 +83,11 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
 }
 
 pub(crate) fn headless_renderer() -> iced::Renderer {
-    iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(Font::DEFAULT, Pixels(16.0)))
+    iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(renderer::Settings {
+        font: Font::DEFAULT,
+        text_size: Pixels(16.0),
+        ..renderer::Settings::default()
+    }))
 }
 
 struct CollectTexts(Vec<LaidOutText>);
@@ -88,9 +97,9 @@ impl<T> Operation<T> for CollectTexts {
         operate(self);
     }
 
-    fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
+    fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &mut dyn Text) {
         self.0.push(LaidOutText {
-            text: text.to_owned(),
+            text: text.text().into_owned(),
             bounds,
         });
     }
@@ -99,18 +108,19 @@ impl<T> Operation<T> for CollectTexts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iced::Widget as _;
     use iced::widget::text;
 
     #[test]
     fn a_label_reports_its_bounds_and_wraps_when_squeezed() {
         let single = natural::<()>(
-            text("Start a fresh preferences file").into(),
+            text("Start a fresh preferences file").boxed(),
             "Start a fresh preferences file",
         );
         assert!(single.width > 50.0 && single.height > 0.0, "{single:?}");
 
         let narrow = lay_out_texts::<()>(
-            text("Start a fresh preferences file").into(),
+            text("Start a fresh preferences file").boxed(),
             Size::new(single.width / 3.0, 500.0),
         );
         let narrow = find(&narrow, "Start a fresh preferences file").bounds;

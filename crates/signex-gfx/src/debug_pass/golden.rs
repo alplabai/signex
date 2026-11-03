@@ -39,6 +39,7 @@ pub async fn render_golden_scene(
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -205,7 +206,11 @@ pub async fn render_golden_scene(
         .map_err(|err| format!("readback map callback dropped: {err}"))?
         .map_err(|err| format!("readback map failed: {err}"))?;
 
-    let mut rgba = readback.slice(..).get_mapped_range().to_vec();
+    let mut rgba = readback
+        .slice(..)
+        .get_mapped_range()
+        .map_err(|err| format!("readback get_mapped_range failed: {err}"))?
+        .to_vec();
     readback.unmap();
     for px in rgba.chunks_exact_mut(4) {
         px.swap(0, 2); // Bgra8 -> Rgba8
