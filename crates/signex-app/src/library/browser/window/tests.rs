@@ -402,8 +402,9 @@ fn bound_row_ids(
     count: usize,
 ) -> HashMap<usize, Uuid> {
     let range = visible_rows(scroll, count);
-    // The grid column sits three levels under the container (sensor, key, scrollable).
-    let grid = &tree.children[0].children[0].children[0];
+    // The grid column sits four levels under the container (key, sensor,
+    // scrollable, column).
+    let grid = &tree.children[0].children[0].children[0].children[0];
     let lead = 1 + usize::from(range.start > 0);
     range
         .clone()

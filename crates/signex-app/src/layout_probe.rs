@@ -34,6 +34,9 @@ pub(crate) fn lay_out_texts<M>(
 ) -> Vec<LaidOutText> {
     let renderer = headless_renderer();
     let mut tree = Tree::new(&element);
+    // The fork's widgets build their child trees in `diff`, not in
+    // `Tree::new`: lay out only after reconciling.
+    tree.diff(&mut element);
     element.layout(
         &mut tree,
         &renderer,
@@ -58,6 +61,9 @@ pub(crate) fn root_size<M>(
 ) -> Size {
     let renderer = headless_renderer();
     let mut tree = Tree::new(&element);
+    // The fork's widgets build their child trees in `diff`, not in
+    // `Tree::new`: lay out only after reconciling.
+    tree.diff(&mut element);
     element.layout(
         &mut tree,
         &renderer,

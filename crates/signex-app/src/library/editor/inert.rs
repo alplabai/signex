@@ -173,6 +173,7 @@ mod tests {
             button(Space::new().width(40).height(20)).on_press(7).boxed();
         let mut element = wrap(pressable);
         let mut tree = Tree::new(&element);
+        tree.diff(&mut element);
         let limits = Limits::new(Size::ZERO, Size::new(200.0, 100.0));
         element.layout(&mut tree, &(), &limits);
         let layout = Layout::new(tree.size);

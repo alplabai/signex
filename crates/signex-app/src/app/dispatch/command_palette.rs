@@ -277,7 +277,12 @@ mod tests {
 
         let task = app.execute_command_palette_selected();
 
-        assert_eq!(task.units(), 1, "the cached row's action must run");
+        // `Task::done` carries a stream but no work "units" in the iced fork,
+        // so check for a stream rather than `units()`.
+        assert!(
+            iced_runtime::task::into_stream(task).is_some(),
+            "the cached row's action must run"
+        );
         assert!(!app.ui_state.command_palette.open);
     }
 
