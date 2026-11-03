@@ -72,8 +72,10 @@ impl LibraryState {
     /// about dirty editors first (`dirty_editors_for_library`), both when
     /// Close is requested and again when a deferred close comes due.
     ///
-    /// Callers must call [`Self::drop_symbol_delete_held_by`] first: the
-    /// pending symbol delete is matched to its library while it is mounted.
+    /// Callers should call [`Self::drop_symbol_delete_held_by`] first with
+    /// the pending path's own fold. As a backstop, a pending delete this
+    /// library holds under either fold is dropped here too: dropping a
+    /// warning only means Delete must be pressed again.
     pub fn close_library(&mut self, root: &Path) {
         // A pricing walk of this library must not write after it is closed.
         self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
@@ -85,6 +87,9 @@ impl LibraryState {
             return;
         }
         self.closing.remove(root);
+        for fold in [CaseFold::from_probe(true), CaseFold::from_probe(false)] {
+            self.drop_symbol_delete_held_by(root, fold);
+        }
         // Cancel any mount still being prepared off-thread for this path
         // (#99 part 2c). `pending_mounts` doubles as the cancellation
         // tombstone: `take_mount_intent` returns `None` for a path that
