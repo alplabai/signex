@@ -265,7 +265,7 @@ fn missing_units(units: &[&Symbol], drawing: &LibSymbol) -> Vec<String> {
 /// The pin uuids of one unit after the swap: a shown pin keeps its uuid
 /// under the number it maps to, a shown pin with no match loses it, and a
 /// pin the unit does not show is carried over as it was.
-fn remap_pin_uuids(
+pub(super) fn remap_pin_uuids(
     sym: &Symbol,
     old_shown: &[&LibPin],
     mapping: &PinMapping,
@@ -277,9 +277,20 @@ fn remap_pin_uuids(
         .filter(|(key, _)| !shown.contains(&key.as_str()))
         .map(|(key, uuid)| (key.clone(), *uuid))
         .collect();
+    // A pin keeps the uuid of the pin it maps from. A fan-out (one old pin
+    // mapped to several new ones) hands the first the uuid and mints one for
+    // each other, so the saved file never repeats a pin uuid within a symbol.
+    let mut taken: std::collections::HashSet<Uuid> = out.values().copied().collect();
     for pair in &mapping.pairs {
         if let Some(uuid) = sym.pin_uuids.get(&pair.old) {
-            out.insert(pair.new.clone(), *uuid);
+            let own = if taken.insert(*uuid) {
+                *uuid
+            } else {
+                let fresh = Uuid::now_v7();
+                taken.insert(fresh);
+                fresh
+            };
+            out.insert(pair.new.clone(), own);
         }
     }
     out
