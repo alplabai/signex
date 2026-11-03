@@ -1,6 +1,7 @@
 # Every new id is a UUID v7; see CONTRIBUTING.md, "Object ids". A dependency
-# (tantivy) turns on uuid's `v4` feature, so this lint is the guard. `allow-invalid` because builds without that
-# dependency leave uuid's `v4` feature off and the path does not resolve.
+# (tantivy) turns on uuid's `v4` feature, so this lint is the guard.
+# `allow-invalid` because builds without that dependency leave uuid's `v4`
+# feature off and the path does not resolve.
 disallowed-methods = [
     { path = "uuid::Uuid::new_v4", reason = "ids are UUID v7: use Uuid::now_v7 (CONTRIBUTING.md, \"Object ids\")", allow-invalid = true },
 ]
