@@ -262,6 +262,7 @@ impl Signex {
         let is_pcb = super::save_async::is_pcb_path(&path);
         // Edits made while the read runs are not in the file being read.
         let edit_stamp = self.edit_stamp(&path);
+        self.document_state.disk_poll.begin_reload(path.clone());
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_for_reload(&read_path, is_pcb))
@@ -309,6 +310,7 @@ impl Signex {
         edit_stamp: EditStamp,
         result: Result<Box<ReloadedFile>, String>,
     ) -> Task<Message> {
+        self.document_state.disk_poll.end_reload(&path);
         let name = file_label(&path);
         let reloaded = match result {
             Ok(reloaded) => reloaded,
