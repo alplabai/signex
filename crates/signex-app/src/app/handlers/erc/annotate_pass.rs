@@ -1,4 +1,5 @@
 //! The project-wide annotate walk, shared by Annotate and (#1315) Re-prefix.
+//! The sheets always come from a read worker (#859, #1756); nothing here reads disk.
 
 use iced::Task;
 
@@ -23,40 +24,6 @@ pub(super) struct AnnotatePass<'a> {
 }
 
 impl Signex {
-    /// Re-prefix's entry (#1315): assemble the project here and number it in
-    /// this one `update`. Re-prefix writes nothing (it parks the unopened sheets
-    /// dirty), but its sheet read is still inline; Annotate itself runs through
-    /// `annotate_job` and reaches [`Self::number_project`] with sheets a worker
-    /// read.
-    pub(super) fn annotate_project(&mut self, pass: AnnotatePass<'_>) -> Task<Message> {
-        let label = pass.label;
-        if self.ui_state.annotate_runs.is_running() {
-            let detail = format!(
-                "{label} was not run: an Annotate or Reset Duplicate Designators run is still going. \
-                 Try again once it has finished."
-            );
-            crate::diagnostics::log_warning(detail.clone());
-            self.document_state.error_notice =
-                Some(crate::app::state::ErrorNotice::annotate(detail));
-            return Task::none();
-        }
-        // The project, from the one assembler: the declared pages plus
-        // everything reachable down the child-sheet graph (#406).
-        let (_pages, project_set) =
-            crate::app::project_sheets::assemble_active_project_sheets(&self.document_state);
-        // Refused up front, before any sheet is touched, so a re-prefix stays
-        // all or nothing and an annotate never half-runs.
-        let sheets = || project_set.sheets.keys().map(std::path::PathBuf::as_path);
-        if self.refuse_annotate_while_project_moves(sheets(), label)
-            || self.refuse_annotate_while_path_op(sheets(), label)
-        {
-            return Task::none();
-        }
-        let applied = self.number_project(pass, project_set);
-        debug_assert!(applied.writes.is_empty(), "a re-prefix writes nothing");
-        applied.task
-    }
-
     /// Annotate the project `project_set` (read by a worker): one shared
     /// counter across every sheet, in the order `ordered_project_sheet_paths`
     /// defines. Open sheets are annotated in place; each unopened sheet comes
@@ -76,7 +43,9 @@ impl Signex {
         )
     }
 
-    fn number_project(
+    /// Number `project_set` under `pass`. Shared by Annotate, Reset Duplicates
+    /// and Re-prefix: every one of them reaches it with sheets a worker read.
+    pub(super) fn number_project(
         &mut self,
         pass: AnnotatePass<'_>,
         project_set: ProjectSheetSet,

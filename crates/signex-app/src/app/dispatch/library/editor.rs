@@ -415,9 +415,7 @@ impl Signex {
     /// `None` when `path` lives outside any mounted library.
     fn library_root_containing(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
         self.library
-            .open_libraries
-            .iter()
-            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false))
+            .library_containing(path)
             .map(|lib| lib.root.clone())
     }
 

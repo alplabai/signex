@@ -138,6 +138,17 @@ impl LibraryState {
         self.open_libraries.iter().find(|lib| lib.root == path)
     }
 
+    /// The open library whose directory holds `path`. A library nested inside
+    /// another one's directory owns the paths under it, so the innermost
+    /// match wins: its write order is the one a write there must take a turn
+    /// on (#1756).
+    pub fn library_containing(&self, path: &Path) -> Option<&OpenLibrary> {
+        self.open_libraries
+            .iter()
+            .filter(|lib| lib.root_dir().is_some_and(|dir| path.starts_with(dir)))
+            .max_by_key(|lib| lib.root_dir().map_or(0, |dir| dir.components().count()))
+    }
+
     /// On-disk file of the primitive `r` names, looked up in the open
     /// library `r.library_id`: the file its listing found it in (a symbol
     /// file is named by its author, #1841), else `<dir>/<uuid>.<ext>`.

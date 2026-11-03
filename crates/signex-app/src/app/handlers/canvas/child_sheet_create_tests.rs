@@ -902,3 +902,100 @@ fn a_missing_child_is_not_offered_against_another_sheet_after_a_tab_switch() {
     assert!(app.ui_state.pending_descents.is_empty());
     drop(parent);
 }
+
+// ---- #1756: a descent deduplicated against an untracked File > Open claim.
+
+fn open_finished(
+    app: &mut Signex,
+    path: PathBuf,
+    result: Result<(), String>,
+) -> iced::Task<crate::app::Message> {
+    app.update(crate::app::Message::File(
+        crate::app::FileMsg::SchematicOpenFinished {
+            title: "sheet1".into(),
+            path,
+            result: result.map(|()| Box::new(SchematicSheet::default())),
+            disk: None,
+        },
+    ))
+}
+
+#[test]
+fn a_descent_deduplicated_against_an_untracked_open_still_offers_create_when_it_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    let child = dir.path().join("sheet1.snxsch");
+    // File > Open of the child is already reading it.
+    assert!(app.document_state.pending_opens.insert(child.clone()));
+
+    let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    assert!(app.ui_state.pending_descents.contains_key(&child));
+
+    // That open fails (the file is not there): the descent must not strand.
+    let task = iced::Task::batch([
+        task,
+        open_finished(&mut app, child.clone(), Err("read schematic".into())),
+    ]);
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert_eq!(confirm(&app).symbol, id, "the Create offer fires");
+    assert!(app.ui_state.pending_descents.is_empty());
+}
+
+#[test]
+fn a_descent_deduplicated_against_an_untracked_open_arrives_when_it_succeeds() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, parent, id) = parent_with_symbol(dir.path());
+    write_child_file(dir.path(), 0);
+    let child = dir.path().join("sheet1.snxsch");
+    assert!(app.document_state.pending_opens.insert(child.clone()));
+    let root = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
+    app.document_state
+        .tab_placements
+        .record(&parent, Some(root.clone()));
+
+    let _ = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
+    let task = open_finished(&mut app, child.clone(), Ok(()));
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(app.has_tab_for(&child));
+    assert!(app.ui_state.pending_descents.is_empty());
+    assert_eq!(
+        app.document_state.tab_placements.get(&child),
+        Some(&root.child(id)),
+        "the placement it came through"
+    );
+}
+
+#[test]
+fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    // A file the open path refuses outright (unsupported type).
+    let child = dir.path().join("sheet1.txt");
+    assert!(app.document_state.pending_opens.insert(child.clone()));
+    let _ = app.descend_through_sheet_symbol(id, "sheet1.txt");
+    assert!(
+        app.ui_state
+            .pending_descents
+            .get(&child)
+            .is_some_and(|d| d.is_untracked()),
+        "parked on the untracked claim"
+    );
+
+    // The deferred File > Open runs and is refused: no SchematicOpened follows.
+    let task = app.reopen_deferred(child.clone());
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(
+        !app.ui_state
+            .pending_descents
+            .get(&child)
+            .is_some_and(|d| d.is_untracked()),
+        "the descent answered instead of waiting for an open that never comes"
+    );
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the refusal shows"
+    );
+}

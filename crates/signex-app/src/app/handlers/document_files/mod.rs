@@ -40,6 +40,7 @@ mod save;
 mod save_as_target;
 #[cfg(test)]
 mod save_as_target_tests;
+mod schematic_open_finished;
 #[cfg(test)]
 mod undocked_primitive_save_tests;
 pub(crate) use save::log_foreign_column_offenders;

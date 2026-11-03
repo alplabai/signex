@@ -256,15 +256,17 @@ impl Signex {
     }
 
     /// Run an open that waited for its directory's rule.
-    fn reopen_deferred(&mut self, request: PathBuf) -> Task<Message> {
+    pub(crate) fn reopen_deferred(&mut self, request: PathBuf) -> Task<Message> {
         self.document_state.pending_opens.remove_untracked(&request);
-        match self.open_document_path(request) {
+        match self.open_document_path(request.clone()) {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open document path", &error);
                 self.document_state.error_notice =
                     Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
-                Task::none()
+                // No SchematicOpened will come: a descent parked on this
+                // claim must still answer (#1756).
+                self.settle_untracked_descent(&request)
             }
         }
     }
