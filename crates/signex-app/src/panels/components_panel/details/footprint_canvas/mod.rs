@@ -22,8 +22,8 @@ use crate::styles::HAIRLINE;
 pub(crate) const EMPTY_FOOTPRINT_TEXT: &str = "Footprint has no geometry";
 /// The scale bar aims at this share of the box width.
 const SCALE_BAR_SHARE: f32 = 0.25;
-/// Stroke dash length of a derived courtyard, in hairline widths.
-const DERIVED_DASH: f32 = 4.0;
+/// Pad numbers are this share of the pad's short side, capped at a title.
+const PAD_NUMBER_SHARE: f32 = 0.6;
 
 pub struct FootprintPreview {
     footprint: Footprint,
@@ -103,19 +103,10 @@ impl<M> canvas::Program<M> for FootprintPreview {
 
 fn draw_courtyard(frame: &mut Frame, fp: &Footprint, fit: &Fit, p: &Palette) {
     let Some(court) = courtyard(fp) else { return };
-    let path = closed_path(&court.points, fit);
-    let dash = [HAIRLINE * DERIVED_DASH, HAIRLINE * DERIVED_DASH];
-    let mut stroke = Stroke::default()
+    let stroke = Stroke::default()
         .with_color(p.courtyard)
         .with_width(HAIRLINE);
-    // A courtyard derived from the pads is dashed: it is not stored data.
-    if court.derived {
-        stroke.line_dash = canvas::LineDash {
-            segments: &dash,
-            offset: 0,
-        };
-    }
-    frame.stroke(&path, stroke);
+    frame.stroke(&closed_path(court, fit), stroke);
 }
 
 fn draw_pads(frame: &mut Frame, fp: &Footprint, fit: &Fit, p: &Palette) {
@@ -152,7 +143,7 @@ fn draw_pads(frame: &mut Frame, fp: &Footprint, fit: &Fit, p: &Palette) {
                 content: pad.number.clone(),
                 position: at,
                 color: p.pad_text,
-                size: (short * 0.6).into(),
+                size: (short * PAD_NUMBER_SHARE).min(TS.title).into(),
                 align_x: alignment::Horizontal::Center.into(),
                 align_y: alignment::Vertical::Center,
                 ..Text::default()
@@ -173,11 +164,17 @@ fn draw_readouts(frame: &mut Frame, bounds: Size, extent: &Extent, fit: &Fit, p:
         ..Text::default()
     });
 
+    // Skip the scale bar when it would run into the size label.
+    let label_end = SP.l + size_label(extent).chars().count() as f32 * TS.caption;
     let target_mm = f64::from(bounds.width * SCALE_BAR_SHARE) / fit.scale;
     let Some(bar_mm) = scale_bar_mm(target_mm) else {
         return;
     };
     let bar_px = fit.px(bar_mm);
+    let label_w = scale_bar_label(bar_mm).chars().count() as f32 * TS.caption;
+    if bounds.width - SP.l - bar_px - SP.m - label_w < label_end {
+        return;
+    }
     let right = bounds.width - SP.l;
     let y = baseline - TS.caption / 2.0;
     let tick = TS.caption / 2.0;

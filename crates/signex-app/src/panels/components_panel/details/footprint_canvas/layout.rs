@@ -5,9 +5,6 @@
 use iced::{Point, Rectangle};
 use signex_library::primitive::{Footprint, FpGraphic, FpGraphicKind, Pad};
 
-/// Courtyard clearance added around the pads when a footprint stores no
-/// courtyard of its own (IPC-7351 nominal excess, mm).
-pub(super) const DERIVED_COURTYARD_EXCESS_MM: f64 = 0.25;
 /// Floor for a span so a single-point footprint still gets a finite scale.
 const MIN_SPAN_MM: f64 = 0.1;
 /// Scale-bar lengths come from this mantissa ladder times a power of ten.
@@ -44,32 +41,10 @@ impl Extent {
     }
 }
 
-/// The courtyard to draw and whether it was derived from the pads.
-pub(super) struct Courtyard {
-    pub points: Vec<[f64; 2]>,
-    pub derived: bool,
-}
-
-/// The stored courtyard, or a rectangle around the pads when the footprint
-/// stores none, so every footprint shows its keep-out.
-pub(super) fn courtyard(fp: &Footprint) -> Option<Courtyard> {
-    if fp.courtyard.points.len() > 2 {
-        return Some(Courtyard {
-            points: fp.courtyard.points.clone(),
-            derived: false,
-        });
-    }
-    let pads = Extent::from_points(&pad_points(&fp.pads))?;
-    let e = DERIVED_COURTYARD_EXCESS_MM;
-    Some(Courtyard {
-        points: vec![
-            [pads.lo[0] - e, pads.lo[1] - e],
-            [pads.hi[0] + e, pads.lo[1] - e],
-            [pads.hi[0] + e, pads.hi[1] + e],
-            [pads.lo[0] - e, pads.hi[1] + e],
-        ],
-        derived: true,
-    })
+/// The stored courtyard outline. A footprint that stores none draws none:
+/// the preview shows data, it does not invent keep-out geometry.
+pub(super) fn courtyard(fp: &Footprint) -> Option<&[[f64; 2]]> {
+    (fp.courtyard.points.len() > 2).then_some(fp.courtyard.points.as_slice())
 }
 
 /// Corners of each pad's rotated bounding box.
@@ -90,7 +65,7 @@ fn pad_points(pads: &[Pad]) -> Vec<[f64; 2]> {
 pub(super) fn extent(fp: &Footprint) -> Option<Extent> {
     let mut points = pad_points(&fp.pads);
     if let Some(court) = courtyard(fp) {
-        points.extend(court.points);
+        points.extend(court.iter().copied());
     }
     let graphics = [&fp.silk_f, &fp.silk_b, &fp.fab_f, &fp.fab_b];
     for g in graphics.into_iter().flatten() {
@@ -199,20 +174,17 @@ mod tests {
     }
 
     #[test]
-    fn a_footprint_without_a_courtyard_gets_one_around_its_pads() {
-        let court = courtyard(&chip()).expect("pads give a courtyard");
-        assert!(court.derived);
-        assert_eq!(court.points[0], [-1.75, -0.875]);
-        assert_eq!(court.points[2], [1.75, 0.875]);
+    fn a_footprint_without_a_courtyard_shows_none() {
+        assert!(courtyard(&chip()).is_none());
+        let e = extent(&chip()).unwrap();
+        assert_eq!((e.lo, e.hi), ([-1.5, -0.625], [1.5, 0.625]));
     }
 
     #[test]
     fn a_stored_courtyard_is_used_as_is() {
         let mut fp = chip();
         fp.courtyard = Polygon::new(vec![[-1.9, -0.9], [1.9, -0.9], [1.9, 0.9], [-1.9, 0.9]]);
-        let court = courtyard(&fp).unwrap();
-        assert!(!court.derived);
-        assert_eq!(court.points.len(), 4);
+        assert_eq!(courtyard(&fp).unwrap().len(), 4);
         let e = extent(&fp).unwrap();
         assert_eq!((e.lo, e.hi), ([-1.9, -0.9], [1.9, 0.9]));
     }
@@ -239,7 +211,7 @@ mod tests {
     #[test]
     fn the_size_label_reports_the_drawing_extent() {
         let e = extent(&chip()).unwrap();
-        assert_eq!(size_label(&e), "3.50 × 1.75 mm");
+        assert_eq!(size_label(&e), "3.00 × 1.25 mm");
     }
 
     #[test]
