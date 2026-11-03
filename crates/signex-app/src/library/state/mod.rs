@@ -847,6 +847,9 @@ pub struct ComponentsRowDrag {
     pub key: ComponentsPanelRowKey,
     pub start: (f32, f32),
     pub started: bool,
+    /// The part was read for the cursor ghost: the pointer reached the
+    /// schematic canvas while dragging, so the part is (or is being) attached.
+    pub armed: bool,
 }
 
 /// What a row menu item does.
