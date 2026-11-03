@@ -77,6 +77,8 @@ pub use documents::{
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+#[cfg(test)]
+pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{

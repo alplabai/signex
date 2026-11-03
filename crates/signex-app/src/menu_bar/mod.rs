@@ -646,3 +646,5 @@ fn menu_item_btn(
 
 #[cfg(test)]
 mod golden_tests;
+#[cfg(test)]
+mod tests;
