@@ -99,6 +99,17 @@ impl Signex {
     /// Show the sheet at `path`. Returns the task that reads it when it is not
     /// open yet; the request in `open` runs when the sheet is showing.
     pub(crate) fn open_sheet(&mut self, path: PathBuf, open: SheetOpen) -> Task<Message> {
+        self.open_sheet_outcome(path, open).0
+    }
+
+    /// [`Self::open_sheet`], also saying whether the open was refused (a
+    /// rename or delete still moving the file), so a caller need not infer it
+    /// from state.
+    pub(crate) fn open_sheet_outcome(
+        &mut self,
+        path: PathBuf,
+        open: SheetOpen,
+    ) -> (Task<Message>, bool) {
         // Record under the spelling the tab is held at (#1149), not the
         // spelling the hierarchy resolved.
         let path = self.resolve_held_spelling_now(path);
@@ -108,7 +119,7 @@ impl Signex {
         let focused = self.focus_open_sheet(&path);
         self.document_state.net_nav.history.hold(false);
         if focused {
-            return self.arrive_at_sheet(&path, open);
+            return (self.arrive_at_sheet(&path, open), false);
         }
         // A rename or delete still moving the file would leave the new tab on
         // a path that is about to vanish.
@@ -116,7 +127,7 @@ impl Signex {
             let detail = refusal.to_string();
             crate::diagnostics::log_warning(detail.clone());
             self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(detail));
-            return Task::none();
+            return (Task::none(), true);
         }
         let title = path
             .file_stem()
@@ -130,15 +141,27 @@ impl Signex {
         // The read this open rides on: the one just started, or the one
         // already in flight for the file.
         let generation = self.document_state.pending_opens.generation_of(&path);
-        self.ui_state.pending_descents.insert(
-            path,
+        // One request per path: a later open of a sheet still being read
+        // replaces the earlier one (the later request wins).
+        if let Some(replaced) = self.ui_state.pending_descents.insert(
+            path.clone(),
             PendingDescent {
                 open,
                 parent,
                 generation,
             },
-        );
-        task
+        ) {
+            crate::diagnostics::log_warning(format!(
+                "{} was asked to open again while it was being read; the earlier request                  ({}) was replaced",
+                path.display(),
+                if matches!(replaced.open.then, AfterOpen::ArriveHistory { .. }) {
+                    "a history step"
+                } else {
+                    "a jump"
+                }
+            ));
+        }
+        (task, false)
     }
 
     /// [`Self::open_sheet`] recording `placement`: `None` clears a stale one.
@@ -235,7 +258,13 @@ impl Signex {
             // The step goes on to the next sheet it can reach, as it did
             // when the file was checked before the step.
             AfterOpen::ArriveHistory { forward } => {
-                self.drop_unreadable_history_entry(forward, path);
+                if !self.drop_unreadable_history_entry(forward, path) {
+                    crate::diagnostics::log_warning(format!(
+                        "History step to {} failed, but the history moved on while it was                          read; the step was not retried",
+                        path.display()
+                    ));
+                    return Task::none();
+                }
                 return self.step_sheet_history(forward);
             }
             AfterOpen::Reveal { .. } => crate::diagnostics::log_warning(format!(

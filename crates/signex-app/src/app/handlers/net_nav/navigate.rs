@@ -164,14 +164,11 @@ impl Signex {
             y: member.at.y,
             item: Some(item),
         };
-        let task = self.open_sheet(
+        let (task, refused) = self.open_sheet_outcome(
             path.to_path_buf(),
             SheetOpen::at(Some(member.occurrence.clone())).then(then),
         );
-        // Neither showing nor on its way: the open was refused.
-        let opened = self.resolve_held_spelling(path.to_path_buf());
-        let reading = self.ui_state.pending_descents.contains_key(&opened);
-        if !reading && self.document_state.active_path.as_deref() != Some(opened.as_path()) {
+        if refused {
             crate::diagnostics::log_warning(messages::cannot_open(path));
             return None;
         }
@@ -194,9 +191,20 @@ impl Signex {
 
     /// A history step's sheet could not be read: forget the entry rather than
     /// meet it on every pass, and say so.
-    pub(crate) fn drop_unreadable_history_entry(&mut self, forward: bool, path: &std::path::Path) {
-        self.document_state.net_nav.history.drop_entry(forward);
+    /// Returns whether the entry was dropped: it is only when it is still the
+    /// one a step would go to (the stack may have moved while the read ran).
+    pub(crate) fn drop_unreadable_history_entry(
+        &mut self,
+        forward: bool,
+        path: &std::path::Path,
+    ) -> bool {
+        let history = &mut self.document_state.net_nav.history;
+        if history.peek(forward) != Some(path) {
+            return false;
+        }
+        history.drop_entry(forward);
         crate::diagnostics::log_warning(messages::history_skipped(path));
+        true
     }
 
     /// A schematic sheet came into focus: record it as the current one in the

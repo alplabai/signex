@@ -294,6 +294,27 @@ fn an_alternate_pick_does_not_land_on_a_preview_closed_while_it_was_read() {
 }
 
 #[test]
+fn an_alternate_pick_for_a_preview_closed_while_it_was_read_says_so() {
+    let needle = "Alternate symbol not added: the component preview was closed";
+    let before = crate::diagnostics::logged_count(needle);
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    f.app.library.editors.remove(&f.address);
+    settle_task(&mut f.app, pick);
+
+    assert_eq!(
+        crate::diagnostics::logged_count(needle),
+        before + 1,
+        "the closed preview is reported"
+    );
+}
+
+#[test]
 fn a_second_alternate_pick_supersedes_the_first_still_in_flight() {
     let mut f = fixture();
     let library_id = f.preview().row.symbol_ref.library_id;

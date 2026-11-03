@@ -111,11 +111,21 @@ impl LibraryState {
         let same_mount = self
             .library_at(&address.library_path)
             .is_some_and(|lib| lib.library_id == library_id);
-        if !same_mount || self.alternate_generations.get(&address) != Some(&generation) {
+        if !same_mount {
+            crate::diagnostics::log_warning(
+                "Alternate symbol not added: the library was closed or replaced while the symbols were read",
+            );
+            return;
+        }
+        // A newer pick superseded this one: it owns the outcome.
+        if self.alternate_generations.get(&address) != Some(&generation) {
             return;
         }
         self.alternate_generations.remove(&address);
         let Some(state) = self.editors.get_mut(&address) else {
+            crate::diagnostics::log_warning(
+                "Alternate symbol not added: the component preview was closed while the symbols were read",
+            );
             return;
         };
         let pn = state.row.internal_pn.to_string();
