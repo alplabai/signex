@@ -7,7 +7,7 @@
 //! light and dark themes alike.
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Background, Border, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -19,7 +19,7 @@ pub(crate) const TS: TypeScale = TypeScale::DEFAULT;
 /// Spacing scale shared by every Component Preview tab.
 pub(crate) const SP: Spacing = Spacing::DEFAULT;
 
-const RADIUS: f32 = 3.0;
+pub(crate) const RADIUS: f32 = 3.0;
 const CARD_RADIUS: f32 = 4.0;
 
 // ─── Style functions (pure; unit-tested) ─────────────────────
@@ -238,6 +238,40 @@ pub(crate) fn danger_button<'a, M: Clone + 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     labelled(label, on_press, danger_button_style(tokens))
+}
+
+/// Small filled label (role / source badge, tab count): `fill` behind
+/// `ink` text, corners at [`RADIUS`].
+pub(crate) fn pill<'a, M: 'a>(label: String, fill: Color, ink: Color) -> Element<'a, M> {
+    container(text(label).size(TS.caption).color(ink))
+        .padding([SP.xs, SP.s])
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: RADIUS.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// The one row-action convention: ↑ / ↓ (disabled when `None`, i.e. at
+/// the ends of the list) and a danger "Remove".
+pub(crate) fn reorder_remove<'a, M: Clone + 'a>(
+    up: Option<M>,
+    down: Option<M>,
+    remove: M,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    row![
+        secondary_button("↑", up, tokens),
+        secondary_button("↓", down, tokens),
+        danger_button("Remove", Some(remove), tokens),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center)
+    .into()
 }
 
 // ─── Empty state ─────────────────────────────────────────────

@@ -19,7 +19,7 @@
 
 use std::collections::BTreeSet;
 
-use iced::widget::{column, container, row, scrollable, text, text_input};
+use iced::widget::{column, row, scrollable, text, text_input};
 use iced::{Element, Length};
 use signex_library::{
     ParamKind, ParamMap, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation,
@@ -233,9 +233,9 @@ pub fn view<'a>(
     .spacing(SP.l)
     .width(Length::Fill);
 
-    container(scrollable(body).width(Length::Fill).height(Length::Fill))
-        .style(crate::styles::modal_card(tokens))
-        .padding(SP.xl)
+    scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .into()
 }
 

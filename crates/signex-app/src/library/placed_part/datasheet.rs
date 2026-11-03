@@ -53,16 +53,7 @@ pub fn datasheet_targets(
                     "" => DEFAULT_LABEL.to_string(),
                     label => label.to_string(),
                 };
-                let location = match &doc.source {
-                    DatasheetRef::Url { url } => web_link(url).map(DatasheetLocation::Url),
-                    DatasheetRef::HashPinned { hash, .. } => {
-                        datasheet_asset_path(library_file, hash).and_then(|path| {
-                            let assets_dir = library_file.parent()?.join(DATASHEET_ASSET_DIR);
-                            Some(DatasheetLocation::Pinned { path, assets_dir })
-                        })
-                    }
-                };
-                match location {
+                match location_of(&doc.source, library_file) {
                     Some(location) => targets.push(DatasheetTarget { label, location }),
                     None => bad_link = true,
                 }
@@ -93,6 +84,19 @@ pub fn datasheet_targets(
             "Place {reference} from a library part to open its datasheet: it has no library row."
         )
     })
+}
+
+/// Where `source` lives for the library file `library_file`, or `None`
+/// when a link is not `http(s)` or a pinned hash names no file.
+pub fn location_of(source: &DatasheetRef, library_file: &Path) -> Option<DatasheetLocation> {
+    match source {
+        DatasheetRef::Url { url } => web_link(url).map(DatasheetLocation::Url),
+        DatasheetRef::HashPinned { hash, .. } => {
+            let path = datasheet_asset_path(library_file, hash)?;
+            let assets_dir = library_file.parent()?.join(DATASHEET_ASSET_DIR);
+            Some(DatasheetLocation::Pinned { path, assets_dir })
+        }
+    }
 }
 
 const DEFAULT_LABEL: &str = "Datasheet";
@@ -142,6 +146,27 @@ mod tests {
         let mut row = crate::library::component_preview::test_row();
         row.set_documents(docs);
         row
+    }
+
+    #[test]
+    fn location_of_takes_web_links_and_pinned_hashes_only() {
+        let url = DatasheetRef::url("https://x.test/d.pdf");
+        assert_eq!(
+            location_of(&url, &lib()),
+            Some(DatasheetLocation::Url("https://x.test/d.pdf".into()))
+        );
+        assert_eq!(
+            location_of(&DatasheetRef::url("file:///etc/passwd"), &lib()),
+            None
+        );
+        let pinned = DatasheetRef::HashPinned {
+            hash: "0".repeat(64),
+            filename: "d.pdf".into(),
+        };
+        assert!(matches!(
+            location_of(&pinned, &lib()),
+            Some(DatasheetLocation::Pinned { .. })
+        ));
     }
 
     fn lib() -> PathBuf {

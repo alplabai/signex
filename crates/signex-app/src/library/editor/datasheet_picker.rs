@@ -10,13 +10,14 @@
 //! The mode is derived from the document's `DatasheetRef` variant.
 
 use iced::widget::{Space, column, container, pick_list, row, scrollable, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Color, Element, Length};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
+use super::inert::unless_read_only_veiled as veiled;
 use super::kit::{self, SP, TS};
 
 /// One-line hint under the section title.
@@ -58,18 +59,26 @@ impl std::fmt::Display for DatasheetMode {
 /// Render the Datasheet tab: a titled section with "Add document", then one
 /// card per document in `state.row.documents()` (the primary first). The
 /// whole tab scrolls so a long list never pushes the action off-screen.
+/// On a read-only library the editing controls take `veil` and ignore
+/// input; each row's Open button stays live.
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    read_only: bool,
+    veil: Color,
 ) -> Element<'a, LibraryMessage> {
     let docs = state.row.documents();
     let count = docs.len();
 
-    let add = kit::secondary_button(
-        "Add document",
-        Some(event(&address, DatasheetMsg::Add)),
-        tokens,
+    let add = veiled(
+        read_only,
+        veil,
+        kit::secondary_button(
+            "Add document",
+            Some(event(&address, DatasheetMsg::Add)),
+            tokens,
+        ),
     );
     let header = kit::section_header("Datasheets", Some(add), tokens);
     let intro = text(INTRO)
@@ -92,6 +101,7 @@ pub fn view<'a>(
             error,
             tokens,
             address.clone(),
+            (read_only, veil),
         ));
     }
 
@@ -148,7 +158,8 @@ fn mode_label(mode: DatasheetMode) -> &'static str {
     }
 }
 
-/// A small pill: the accent fill when `accent`, a hover overlay otherwise.
+/// A role / source badge: the accent fill when `accent`, a hover overlay
+/// otherwise.
 fn pill<'a>(
     label: &'static str,
     accent: bool,
@@ -165,17 +176,7 @@ fn pill<'a>(
             theme_ext::text_secondary(tokens),
         )
     };
-    container(text(label).size(TS.caption).color(fg))
-        .padding([SP.xs, SP.s])
-        .style(move |_: &Theme| container::Style {
-            background: Some(fill.into()),
-            border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .into()
+    kit::pill(label.to_string(), fill, fg)
 }
 
 /// One document card: a header with its role and reorder / remove
@@ -187,8 +188,10 @@ fn view_document<'a>(
     error: Option<&'a str>,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
+    (read_only, veil): (bool, Color),
 ) -> Element<'a, LibraryMessage> {
     let mode = DatasheetMode::from_ref(Some(&doc.source));
+    let has_source = !doc.source.is_empty();
 
     let mode_address = address.clone();
     let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
@@ -207,44 +210,32 @@ fn view_document<'a>(
     let mut actions = row![].spacing(SP.s).align_y(iced::Alignment::Center);
     if index > 0 {
         let to_top = DatasheetMsg::Move { from: index, to: 0 };
-        let up = DatasheetMsg::Move {
-            from: index,
-            to: index - 1,
-        };
-        actions = actions
-            .push(kit::secondary_button(
-                "Make primary",
-                Some(event(&address, to_top)),
-                tokens,
-            ))
-            .push(kit::secondary_button(
-                "Up",
-                Some(event(&address, up)),
-                tokens,
-            ));
-    }
-    if index + 1 < count {
-        let down = DatasheetMsg::Move {
-            from: index,
-            to: index + 1,
-        };
         actions = actions.push(kit::secondary_button(
-            "Down",
-            Some(event(&address, down)),
+            "Make primary",
+            Some(event(&address, to_top)),
             tokens,
         ));
     }
-    actions = actions.push(kit::danger_button(
-        "Remove",
-        Some(event(&address, DatasheetMsg::Remove(index))),
+    let move_to = |to: usize| Some(event(&address, DatasheetMsg::Move { from: index, to }));
+    actions = actions.push(kit::reorder_remove(
+        (index > 0).then(|| move_to(index - 1)).flatten(),
+        (index + 1 < count).then(|| move_to(index + 1)).flatten(),
+        event(&address, DatasheetMsg::Remove(index)),
         tokens,
     ));
 
+    // Open only reads, so it sits outside the read-only veil.
+    let open = kit::secondary_button(
+        "Open",
+        has_source.then(|| event(&address, DatasheetMsg::Open(index))),
+        tokens,
+    );
     let header = row![
         pill(role_label(index), index == 0, tokens),
         pill(mode_label(mode), false, tokens),
         Space::new().width(Length::Fill),
-        actions,
+        open,
+        veiled(read_only, veil, actions),
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
@@ -257,13 +248,17 @@ fn view_document<'a>(
         ),
     };
 
-    let mut body = column![
-        header,
-        field_row("Label", label_input, tokens),
-        field_row("Source", mode_picker, tokens),
-        field_row(value_label, value_row, tokens),
-    ]
-    .spacing(SP.m);
+    let fields = veiled(
+        read_only,
+        veil,
+        column![
+            field_row("Label", label_input, tokens),
+            field_row("Source", mode_picker, tokens),
+            field_row(value_label, value_row, tokens),
+        ]
+        .spacing(SP.m),
+    );
+    let mut body = column![header, fields].spacing(SP.m);
     if let Some(reason) = error {
         body = body.push(
             text(reason)

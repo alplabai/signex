@@ -13,7 +13,7 @@
 //! `EditorMsg::Supply*` → the library dispatcher's `dispatch/library/`
 //! handlers, which write to the editor's draft row and mark it dirty.
 
-use iced::widget::{column, container, pick_list, scrollable, text, text_input};
+use iced::widget::{column, pick_list, scrollable, text, text_input};
 use iced::{Element, Length};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
@@ -151,9 +151,7 @@ pub fn view<'a>(
     .spacing(SP.xl)
     .width(Length::Fill);
 
-    container(scrollable(body).width(Length::Fill).height(Length::Fill))
-        .padding(SP.xl)
-        .style(crate::styles::modal_card(tokens))
+    scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()

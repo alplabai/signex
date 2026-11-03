@@ -75,6 +75,7 @@ impl Signex {
         // draft state changes.
         let navigates = match &msg {
             EditorMsg::CloseEditor | EditorMsg::SelectTab(_) | EditorMsg::OpenWhereUsedTab => true,
+            EditorMsg::Datasheet(DatasheetMsg::Open(_)) => true,
             EditorMsg::SimBodyAction(action) => !action.is_edit(),
             _ => false,
         };
@@ -151,6 +152,9 @@ impl Signex {
                      Preview surface"
                 );
                 return Task::none();
+            }
+            EditorMsg::Datasheet(DatasheetMsg::Open(index)) => {
+                return self.open_datasheet_document(&address, index);
             }
             EditorMsg::Datasheet(DatasheetMsg::UploadDialog(index)) => {
                 return self.begin_datasheet_pick(&address, index);

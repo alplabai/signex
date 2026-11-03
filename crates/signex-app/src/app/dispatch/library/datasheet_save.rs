@@ -92,6 +92,39 @@ impl Signex {
         })
     }
 
+    /// Open document `index` of the row in the browser or the PDF viewer.
+    /// The launch runs on a worker; a refusal comes back as advice.
+    pub(super) fn open_datasheet_document(
+        &mut self,
+        address: &EditorAddress,
+        index: usize,
+    ) -> Task<Message> {
+        let Some(state) = self.library.editors.get(address) else {
+            return Task::none();
+        };
+        let Some(doc) = state.row.documents().into_iter().nth(index) else {
+            return Task::none();
+        };
+        let part = match state.row.primary_mpn.mpn.trim() {
+            "" => "this component".to_string(),
+            mpn => mpn.to_string(),
+        };
+        let Some(location) =
+            crate::library::placed_part::location_of(&doc.source, &address.library_path)
+        else {
+            crate::diagnostics::log_warning(format!(
+                "Fix the datasheet of {part}: it needs an https:// or http:// link or a pinned PDF."
+            ));
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        };
+        crate::library::placed_part::opener::open_task(
+            location,
+            part,
+            self.library.datasheet_opener,
+        )
+    }
+
     /// Refuse before anything is written when the library cannot hold the
     /// staged PDFs: read-only, or an adapter that keeps no files beside
     /// its library file (a server library).

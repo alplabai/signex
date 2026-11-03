@@ -30,12 +30,18 @@ pub fn view<'a>(
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let read_only = library_state.is_read_only(&state.library_path);
+    let veil = super::read_only_veil(tokens);
     let body = column![
         header_row(&state.row, tokens),
         render_panes(state, library_state, tokens, &address, read_only),
-        super::inert::unless_read_only(read_only, pin_map_subsection(state, tokens, &address)),
-        super::inert::unless_read_only(
+        super::inert::unless_read_only_veiled(
             read_only,
+            veil,
+            pin_map_subsection(state, tokens, &address),
+        ),
+        super::inert::unless_read_only_veiled(
+            read_only,
+            veil,
             super::alternate_symbols::view(state, tokens, &address),
         ),
         where_used_footer(state, library_state, tokens),
@@ -43,9 +49,9 @@ pub fn view<'a>(
     .spacing(SP.l)
     .width(Length::Fill);
 
-    container(scrollable(body).width(Length::Fill).height(Length::Fill))
-        .padding(SP.l)
-        .style(crate::styles::modal_card(tokens))
+    scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .into()
 }
 

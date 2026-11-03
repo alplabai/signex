@@ -14,9 +14,6 @@ use iced::advanced::{Clipboard, Layout, Shell, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Background, Color, Element, Event, Length, Rectangle, Size};
 
-/// Opacity of the veil drawn over an inert child.
-const VEIL_ALPHA: f32 = 0.35;
-
 pub struct Inert<'a, Message, Theme = iced::Theme, Renderer = iced::Renderer>
 where
     Renderer: iced::advanced::Renderer,
@@ -29,25 +26,17 @@ impl<'a, Message, Theme, Renderer> Inert<'a, Message, Theme, Renderer>
 where
     Renderer: iced::advanced::Renderer,
 {
-    pub fn new(content: impl Into<Element<'a, Message, Theme, Renderer>>) -> Self {
+    /// Wrap `content`, fading it with the (theme-token) `veil`.
+    pub fn new(content: impl Into<Element<'a, Message, Theme, Renderer>>, veil: Color) -> Self {
         Self {
             content: content.into(),
-            veil: Color {
-                a: VEIL_ALPHA,
-                ..Color::BLACK
-            },
+            veil,
         }
-    }
-
-    /// Fade the child with `veil` instead of the default black.
-    pub fn with_veil(mut self, veil: Color) -> Self {
-        self.veil = veil;
-        self
     }
 }
 
-/// Like [`unless_read_only`], fading the child with a caller-chosen
-/// (theme-token) `veil`.
+/// Wrap `content` so it ignores input when `read_only`, fading it with
+/// the theme-token `veil`; otherwise hand it back untouched.
 pub fn unless_read_only_veiled<'a, Message: 'a>(
     read_only: bool,
     veil: Color,
@@ -55,21 +44,7 @@ pub fn unless_read_only_veiled<'a, Message: 'a>(
 ) -> Element<'a, Message> {
     let content = content.into();
     if read_only {
-        Inert::new(content).with_veil(veil).into()
-    } else {
-        content
-    }
-}
-
-/// Wrap `content` so it ignores input when `read_only`; otherwise hand
-/// it back untouched.
-pub fn unless_read_only<'a, Message: 'a>(
-    read_only: bool,
-    content: impl Into<Element<'a, Message>>,
-) -> Element<'a, Message> {
-    let content = content.into();
-    if read_only {
-        Inert::new(content).into()
+        Inert::new(content, veil).into()
     } else {
         content
     }
@@ -225,11 +200,6 @@ mod tests {
     #[test]
     fn a_veiled_wrapper_stays_inert() {
         let veil = Color::from_rgba(0.5, 0.5, 0.5, 0.5);
-        assert!(click(|e| Inert::new(e).with_veil(veil).into()).is_empty());
-    }
-
-    #[test]
-    fn a_button_inside_inert_ignores_clicks() {
-        assert!(click(|e| Inert::new(e).into()).is_empty());
+        assert!(click(|e| Inert::new(e, veil).into()).is_empty());
     }
 }

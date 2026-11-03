@@ -20,7 +20,7 @@ const EMPTY_MESSAGE: &str = "No alternate drawings; the row uses its default sym
 const COLUMNS: [Length; 3] = [
     Length::FillPortion(3),
     Length::FillPortion(2),
-    Length::FillPortion(2),
+    Length::FillPortion(4),
 ];
 
 pub fn view<'a>(
@@ -107,16 +107,12 @@ fn alternate_row<'a>(
             to: idx + 1,
         })
     });
-    let actions = iced::widget::row![
-        kit::secondary_button("↑", up, tokens),
-        kit::secondary_button("↓", down, tokens),
-        kit::secondary_button(
-            "×",
-            Some(event(EditorMsg::AlternateSymbolRemoved { idx })),
-            tokens
-        ),
-    ]
-    .spacing(SP.s);
+    let actions = kit::reorder_remove(
+        up,
+        down,
+        event(EditorMsg::AlternateSymbolRemoved { idx }),
+        tokens,
+    );
 
     kit::table_row(
         vec![
@@ -128,7 +124,7 @@ fn alternate_row<'a>(
                     .into(),
                 COLUMNS[1],
             ),
-            (actions.into(), COLUMNS[2]),
+            (actions, COLUMNS[2]),
         ],
         idx,
         None,

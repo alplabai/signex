@@ -163,22 +163,6 @@ fn tab_badge(
     }
 }
 
-fn badge_pill<'a>(count: usize, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
-    let fill = tokens::danger(tokens);
-    let ink = tokens::readable_on(fill);
-    container(text(count.to_string()).size(TS.caption).color(ink))
-        .padding([0.0, SP.s])
-        .style(move |_: &Theme| container::Style {
-            background: Some(fill.into()),
-            border: Border {
-                radius: TS.caption.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .into()
-}
-
 fn view_tabs<'a>(
     state: &'a ComponentPreviewState,
     library_state: &'a LibraryState,
@@ -209,7 +193,12 @@ fn view_tabs<'a>(
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
         if let Some(count) = tab_badge(*tab, state, library_state) {
-            content = content.push(badge_pill(count, tokens));
+            let fill = tokens::danger(tokens);
+            content = content.push(kit::pill(
+                count.to_string(),
+                fill,
+                tokens::readable_on(fill),
+            ));
         }
         let label = container(content).padding([SP.s, SP.l]);
         let style = signex_widgets::tab_pill::TabPillStyle {
@@ -270,16 +259,15 @@ fn view_active_tab<'a>(
         PreviewTab::Supply => {
             inert::unless_read_only_veiled(read_only, veil, supply::view(state, tokens, address))
         }
-        PreviewTab::Datasheet => inert::unless_read_only_veiled(
-            read_only,
-            veil,
-            datasheet_picker::view(state, tokens, address),
-        ),
+        // Open stays live on a read-only library, so the tab veils its
+        // own editing controls instead of being wrapped whole.
+        PreviewTab::Datasheet => datasheet_picker::view(state, tokens, address, read_only, veil),
         PreviewTab::Simulation => {
             inert::unless_read_only_veiled(read_only, veil, sim::view(state, tokens, address))
         }
     };
-    // The one body padding; the tabs' cards pad themselves inside it.
+    // The one body padding. A tab is a scrolling stack of `kit::card`
+    // sections with no outer surface of its own.
     container(inner)
         .padding(SP.l)
         .width(Length::Fill)

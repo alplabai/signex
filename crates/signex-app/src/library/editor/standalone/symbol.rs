@@ -229,10 +229,10 @@ fn view_symbol_toolbar<'a>(
             Space::new().width(SP.m),
             btn(save_label, PrimitiveEdit::Save),
         ]
-        .spacing(SP.s)
+        .spacing(SP.m)
         .align_y(iced::Alignment::Center),
     )
-    .padding([SP.s, SP.m])
+    .padding([SP.m, SP.l])
     .style(crate::styles::tab_bar_strip(tokens))
     .into()
 }
@@ -290,7 +290,7 @@ fn symbol_tool_button_style(
     tokens: &signex_types::theme::ThemeTokens,
 ) -> impl Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style + use<> {
     use crate::styles::tokens::{Overlay, overlay};
-    let fill = overlay(
+    let resting = overlay(
         tokens,
         if active {
             Overlay::Pressed
@@ -298,12 +298,18 @@ fn symbol_tool_button_style(
             Overlay::Faint
         },
     );
+    let hover = overlay(tokens, Overlay::Hover);
+    let pressed = overlay(tokens, Overlay::Pressed);
     let border = theme_ext::border_color(tokens);
-    move |_: &Theme, _| iced::widget::button::Style {
-        background: Some(iced::Background::Color(fill)),
+    move |_: &Theme, status| iced::widget::button::Style {
+        background: Some(iced::Background::Color(match status {
+            iced::widget::button::Status::Hovered => hover,
+            iced::widget::button::Status::Pressed => pressed,
+            _ => resting,
+        })),
         border: Border {
             width: crate::styles::HAIRLINE,
-            radius: 3.0.into(),
+            radius: crate::library::editor::kit::RADIUS.into(),
             color: border,
         },
         ..iced::widget::button::Style::default()

@@ -152,6 +152,10 @@ fn draw_pads(frame: &mut Frame, fp: &Footprint, fit: &Fit, p: &Palette) {
     }
 }
 
+/// Average glyph width as a share of the font size, for the readouts'
+/// room check (a glyph is narrower than a full em).
+const GLYPH_EM: f32 = 0.55;
+
 /// Size text bottom-left and a round-number scale bar bottom-right.
 fn draw_readouts(frame: &mut Frame, bounds: Size, extent: &Extent, fit: &Fit, p: &Palette) {
     let baseline = bounds.height - SP.s;
@@ -165,13 +169,13 @@ fn draw_readouts(frame: &mut Frame, bounds: Size, extent: &Extent, fit: &Fit, p:
     });
 
     // Skip the scale bar when it would run into the size label.
-    let label_end = SP.l + size_label(extent).chars().count() as f32 * TS.caption;
+    let label_end = SP.l + size_label(extent).chars().count() as f32 * TS.caption * GLYPH_EM;
     let target_mm = f64::from(bounds.width * SCALE_BAR_SHARE) / fit.scale;
     let Some(bar_mm) = scale_bar_mm(target_mm) else {
         return;
     };
     let bar_px = fit.px(bar_mm);
-    let label_w = scale_bar_label(bar_mm).chars().count() as f32 * TS.caption;
+    let label_w = scale_bar_label(bar_mm).chars().count() as f32 * TS.caption * GLYPH_EM;
     if bounds.width - SP.l - bar_px - SP.m - label_w < label_end {
         return;
     }
