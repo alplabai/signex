@@ -249,10 +249,11 @@ pub fn view<'a>(
 }
 
 /// Height of the document tab strip: the close-x hit box plus the pill's
-/// vertical padding, the strip's top padding and the 1 px baseline. Both
-/// the strip and the empty-window
-/// placeholder take their height from here, so they cannot diverge and the
-/// chrome does not jump when the first tab opens. It is derived from the
+/// vertical padding, the strip's top padding and the 1 px baseline. Both the
+/// strip and the empty-window placeholder take their height from here, so
+/// they cannot diverge and the chrome does not jump when the first tab
+/// opens. It is a whole number of pixels, so the canvas and every overlay
+/// keyed off it start on a pixel boundary. It is derived from the
 /// default type scale and spacing, the same constants the strip's text and
 /// padding use; the app has no runtime UI scale for it to follow.
 pub const TAB_STRIP_HEIGHT: f32 = CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT;
@@ -283,9 +284,10 @@ const CLOSE_GLYPH: &str = "\u{00d7}";
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
 /// Close x glyph size and square hit target, both relative to the tab
-/// text so they scale with the base font size.
+/// text so they scale with the base font size. The hit target is rounded up
+/// to a whole pixel so the strip height built from it stays whole.
 const CLOSE_GLYPH_SIZE: f32 = TAB_FONT_SIZE * 1.25;
-const CLOSE_HIT_SIZE: f32 = TAB_FONT_SIZE * 1.5;
+const CLOSE_HIT_SIZE: f32 = (TAB_FONT_SIZE * 1.5).ceil();
 
 /// Dirty dot diameter as a fraction of the tab font size.
 const DIRTY_DOT_EM: f32 = 0.6;
@@ -414,7 +416,7 @@ mod tests {
     use std::path::PathBuf;
 
     /// The strip and the no-document placeholder are both exactly
-    /// `TAB_STRIP_HEIGHT` tall, and that is the 26 px they always were.
+    /// `TAB_STRIP_HEIGHT` tall.
     #[test]
     fn the_strip_and_its_placeholder_both_use_the_height_token() {
         use iced::Length;
@@ -604,15 +606,18 @@ mod tests {
         }
     }
 
-    /// The close hit box fits inside the strip with the pill padding,
-    /// top padding and baseline around it, and the glyph fits the box.
+    /// The tab label's line box and the close glyph both fit the close hit
+    /// box, so the pill is as tall as the hit box and nothing is clamped;
+    /// and the strip is a whole number of pixels, so the chrome below it
+    /// starts on a pixel boundary.
     #[test]
-    fn the_close_hit_box_fits_the_strip() {
+    fn the_close_hit_box_fits_the_label_and_the_strip_is_whole_pixels() {
+        const LABEL_LINE_BOX: f32 = super::TAB_FONT_SIZE * 1.3;
         const {
-            assert!(
-                CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT <= TAB_STRIP_HEIGHT
-            );
+            assert!(LABEL_LINE_BOX <= CLOSE_HIT_SIZE);
             assert!(CLOSE_GLYPH_SIZE <= CLOSE_HIT_SIZE);
+            assert!(TAB_STRIP_HEIGHT == TAB_STRIP_HEIGHT.round());
+            assert!(STRIP_TOP_PAD + BASELINE_HEIGHT + 2.0 * SP.s < TAB_STRIP_HEIGHT);
         }
     }
 }
