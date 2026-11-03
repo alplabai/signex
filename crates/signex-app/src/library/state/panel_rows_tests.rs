@@ -142,3 +142,36 @@ fn renaming_a_library_refilters_without_a_data_change() {
     s.sync_view_caches();
     assert_eq!(shown(&s).len(), 2);
 }
+
+/// #1895: an expanded library row lists every table, empty ones too, by
+/// name with each table's components under it.
+#[test]
+fn the_expanded_panel_lists_tables_with_their_components() {
+    let mut lib = library(
+        "passives",
+        vec![
+            ("res", vec![row("R-10K", "ERA-3AED", "Panasonic")]),
+            ("cap", vec![row("C-100N", "GRM21", "Murata")]),
+            ("misc", vec![]),
+        ],
+    );
+    lib.tables
+        .get_mut("res")
+        .unwrap()
+        .push(row("R-1K", "X", "Y"));
+
+    let tree: Vec<(&str, Vec<&str>)> = lib
+        .panel_tables()
+        .into_iter()
+        .map(|(t, rows)| (t, rows.iter().map(|r| r.internal_pn.as_str()).collect()))
+        .collect();
+
+    assert_eq!(
+        tree,
+        vec![
+            ("cap", vec!["C-100N"]),
+            ("misc", vec![]),
+            ("res", vec!["R-10K", "R-1K"]),
+        ]
+    );
+}

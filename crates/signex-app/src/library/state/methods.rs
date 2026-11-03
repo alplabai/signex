@@ -891,6 +891,19 @@ impl OpenLibrary {
     pub fn total_rows(&self) -> usize {
         self.tables.values().map(|v| v.len()).sum()
     }
+
+    /// The Library panel's expanded tree: each table (by name, empty ones
+    /// included) with its rows in stored order. Read from the cached
+    /// tables; no IO (#1895).
+    pub fn panel_tables(&self) -> Vec<(&str, &[ComponentRow])> {
+        let mut tables: Vec<(&str, &[ComponentRow])> = self
+            .tables
+            .iter()
+            .map(|(name, rows)| (name.as_str(), rows.as_slice()))
+            .collect();
+        tables.sort_by(|a, b| a.0.cmp(b.0));
+        tables
+    }
 }
 
 impl std::fmt::Debug for OpenLibrary {
