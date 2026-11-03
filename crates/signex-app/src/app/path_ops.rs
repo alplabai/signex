@@ -24,6 +24,10 @@ pub enum PathOpKind {
     /// Annotate or Reset Duplicate Designators reading or rewriting the
     /// project's sheets.
     ProjectRewrite,
+    /// Annotate or Reset Duplicate Designators reading the project's sheets.
+    /// Saving an open sheet is allowed meanwhile: the save moves
+    /// `documents_epoch` and the run cancels itself (#1753).
+    ProjectRead,
     /// Add New Schematic writing a blank sheet and listing it in the saved
     /// project file.
     AddSheet,
@@ -37,6 +41,7 @@ impl PathOpKind {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
             Self::ProjectRewrite => "project-wide rewrite",
+            Self::ProjectRead => "project-wide read",
             Self::AddSheet => "new-sheet add",
             Self::SaveAsSheet => "Save As",
         }
@@ -151,6 +156,16 @@ impl PendingPathOps {
         self.find(|op, root| path_is_under(path, root, op.fold))
     }
 
+    /// As [`Self::blocking_write`] for a document save only: a save of an open
+    /// sheet is let through while a project read holds it, because the save
+    /// moves `documents_epoch` and the run drops itself (#1753). A restore or a
+    /// Replace write still goes through `blocking_write` and is refused.
+    pub fn blocking_save(&self, path: &Path) -> Option<PathOpConflict> {
+        self.find(|op, root| {
+            op.kind != PathOpKind::ProjectRead && path_is_under(path, root, op.fold)
+        })
+    }
+
     /// As [`Self::blocking_write`], and also an operation that sits below
     /// `path`: moving or deleting a directory while something inside it is
     /// being moved collides with that move.
@@ -167,9 +182,12 @@ impl PendingPathOps {
 
     /// Is an Annotate or Reset Duplicate Designators run holding sheets?
     pub fn rewrite_running(&self) -> bool {
-        self.ops
-            .iter()
-            .any(|op| op.kind == PathOpKind::ProjectRewrite)
+        self.ops.iter().any(|op| {
+            matches!(
+                op.kind,
+                PathOpKind::ProjectRewrite | PathOpKind::ProjectRead
+            )
+        })
     }
 
     /// Is a library rename or delete running? Library edits write through
@@ -251,6 +269,15 @@ impl crate::app::Signex {
     pub(crate) fn refuse_while_path_op(&self, path: &Path, outcome: &str) -> anyhow::Result<()> {
         match self.document_state.pending_path_ops.blocking_write(path) {
             Some(conflict) => anyhow::bail!(refusal(&conflict, path, outcome)),
+            None => Ok(()),
+        }
+    }
+
+    /// As [`Self::refuse_while_path_op`] for saving an open document, which a
+    /// project read lets through (see [`PendingPathOps::blocking_save`]).
+    pub(crate) fn refuse_save_while_path_op(&self, path: &Path) -> anyhow::Result<()> {
+        match self.document_state.pending_path_ops.blocking_save(path) {
+            Some(conflict) => anyhow::bail!(refusal(&conflict, path, "saved")),
             None => Ok(()),
         }
     }

@@ -3,6 +3,7 @@ mod error;
 mod patch;
 
 mod annotation;
+mod annotation_placements;
 mod clipboard_text;
 mod history;
 mod history_snapshot;
@@ -18,6 +19,7 @@ mod selection_payload;
 mod sheet;
 mod sheet_entry;
 mod sheet_identity;
+pub use sheet_identity::other_sheet_symbol_using_file;
 mod sheet_placement;
 mod transform;
 
@@ -28,6 +30,8 @@ mod find_similar;
 #[cfg(test)]
 pub(crate) mod test_support;
 
+#[cfg(test)]
+mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
 
@@ -54,7 +58,7 @@ mod sheet_identity_tests;
 
 use std::path::{Path, PathBuf};
 
-pub use annotation::AnnotateScope;
+pub use annotation::{AnnotatePlacement, AnnotateScope};
 pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
