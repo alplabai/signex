@@ -8,13 +8,6 @@ use signex_app::diagnostics;
 use signex_app::menu_bar::MenuMessage;
 use std::path::PathBuf;
 
-/// The message a main-menu row sends for command `id`.
-fn menu_row(id: &str) -> Message {
-    Message::Menu(MenuMessage::Command(
-        signex_app::keymap::AppCommandId::new(id).expect("a command id"),
-    ))
-}
-
 fn app_with_empty_sheet() -> Signex {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -143,7 +136,7 @@ fn place_menu_rows_arm_their_tools() {
 fn place_power_port_row_arms_a_power_port() {
     let mut app = app_with_empty_sheet();
     assert!(app.interaction_state.pending_power.is_none());
-    let _ = app.update(menu_row("place_power_symbol"));
+    let _ = app.update(crate::menu_support::menu_row("place_power_symbol"));
     let (net, lib_id) = app
         .interaction_state
         .pending_power

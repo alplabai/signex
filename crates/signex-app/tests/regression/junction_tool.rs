@@ -6,16 +6,8 @@
 use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
 use signex_app::app::{EditMsg, Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::canvas::CanvasEvent;
-use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::SchematicSheet;
 use std::path::PathBuf;
-
-/// The message a main-menu row sends for command `id`.
-fn menu_row(id: &str) -> Message {
-    Message::Menu(MenuMessage::Command(
-        signex_app::keymap::AppCommandId::new(id).expect("a command id"),
-    ))
-}
 
 fn app_with_empty_sheet() -> Signex {
     let path = PathBuf::from("junction.snxsch");
@@ -64,14 +56,14 @@ fn the_button_and_the_menu_row_arm_the_same_tool() {
     assert_eq!(app.interaction_state.current_tool, Tool::Junction);
 
     let mut app = app_with_empty_sheet();
-    let _ = app.update(menu_row("place_junction"));
+    let _ = app.update(crate::menu_support::menu_row("place_junction"));
     assert_eq!(app.interaction_state.current_tool, Tool::Junction);
 }
 
 #[test]
 fn a_click_places_a_junction_at_the_point_and_undo_removes_it() {
     let mut app = app_with_empty_sheet();
-    let _ = app.update(menu_row("place_junction"));
+    let _ = app.update(crate::menu_support::menu_row("place_junction"));
     click(&mut app, 10.0, 20.0);
     // The click snaps to the grid before the tool sees it.
 
@@ -93,7 +85,7 @@ fn a_click_places_a_junction_at_the_point_and_undo_removes_it() {
 #[test]
 fn a_second_click_on_the_same_point_leaves_one_junction() {
     let mut app = app_with_empty_sheet();
-    let _ = app.update(menu_row("place_junction"));
+    let _ = app.update(crate::menu_support::menu_row("place_junction"));
     click(&mut app, 10.0, 20.0);
     click(&mut app, 10.0, 20.0);
     assert_eq!(doc(&app).junctions.len(), 1);
@@ -109,7 +101,7 @@ fn a_junction_off_any_wire_changes_neither_nets_nor_erc() {
     let mut app = app_with_empty_sheet();
     let before_nets = format!("{:?}", signex_net::build_netlist(doc(&app)));
     let before_erc = format!("{:?}", signex_erc::run(doc(&app)));
-    let _ = app.update(menu_row("place_junction"));
+    let _ = app.update(crate::menu_support::menu_row("place_junction"));
     click(&mut app, 10.0, 20.0);
     assert_eq!(doc(&app).junctions.len(), 1);
     assert_eq!(

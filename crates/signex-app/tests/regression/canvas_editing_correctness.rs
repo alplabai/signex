@@ -12,19 +12,11 @@
 
 use signex_app::app::{Message, Signex, TabInfo, TabKind, Tool};
 use signex_app::canvas::CanvasEvent;
-use signex_app::menu_bar::MenuMessage;
 use signex_app::tab_bar::TabMessage;
 use signex_app::toolbar::ToolMessage;
 use signex_types::schematic::{Point, SchDrawing, SchematicSheet, SelectedItem, SelectedKind};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-/// The message a main-menu row sends for command `id`.
-fn menu_row(id: &str) -> Message {
-    Message::Menu(MenuMessage::Command(
-        signex_app::keymap::AppCommandId::new(id).expect("a command id"),
-    ))
-}
 
 fn empty_sheet() -> SchematicSheet {
     SchematicSheet {
@@ -142,7 +134,7 @@ fn menu_place_wire_drops_a_half_placed_shape() {
     app.interaction_state.current_tool = Tool::Line;
     app.interaction_state.shape_anchor = Some(Point::new(1.0, 1.0));
 
-    let _ = app.update(menu_row("place_wire"));
+    let _ = app.update(crate::menu_support::menu_row("place_wire"));
 
     assert_eq!(app.interaction_state.current_tool, Tool::Wire);
     assert!(app.interaction_state.shape_anchor.is_none());
