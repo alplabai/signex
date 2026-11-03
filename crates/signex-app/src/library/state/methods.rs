@@ -307,12 +307,13 @@ impl LibraryState {
     /// The open library a draft at `path` is written, committed and cascaded
     /// through: the deepest one holding it (a nested library owns its own
     /// files), so the outer library of a nested pair is never picked. When
-    /// several libraries share the deepest folder, the one with the smallest
-    /// path key, so the choice depends on neither mount order nor spelling.
+    /// several libraries share the deepest folder, the one whose `.snxlib`
+    /// file name sorts first by raw bytes: the order `enclosing_library_file`
+    /// (the write lock's pick) uses, so both name one library.
     pub fn write_target_library(&self, path: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
         self.deepest_libraries(path, fold)
             .into_iter()
-            .min_by_key(|lib| crate::app::path_key_with(&lib.root, fold))
+            .min_by(|a, b| a.root.file_name().cmp(&b.root.file_name()))
     }
 
     fn deepest_libraries(&self, file: &Path, fold: CaseFold) -> Vec<&OpenLibrary> {

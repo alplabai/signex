@@ -528,32 +528,38 @@ fn two_libraries_in_one_folder_leave_the_owner_unknown_in_either_order() {
 }
 
 #[test]
-fn a_tie_is_broken_by_path_key_whatever_the_spelling_or_mount_order() {
+fn a_tie_is_broken_like_the_write_lock_whatever_the_mount_order() {
     use crate::app::CaseFold;
-    let file = Path::new("/p/symbols/a.snxsym");
-    for order in [
-        ["/p/B.snxlib", "/p/a.snxlib"],
-        ["/p/a.snxlib", "/p/B.snxlib"],
-    ] {
+    let dir = tempfile::tempdir().unwrap();
+    let names = ["Passives.snxlib", "connectors.snxlib"];
+    for name in names {
+        std::fs::write(dir.path().join(name), "").unwrap();
+    }
+    let file = dir.path().join("symbols").join("a.snxsym");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let locked = signex_library::enclosing_library_file(&file).expect("a library file");
+    for order in [names, [names[1], names[0]]] {
         let state = LibraryState {
-            open_libraries: order.iter().map(|r| bare_library(r)).collect(),
+            open_libraries: order
+                .iter()
+                .map(|n| bare_library(dir.path().join(n).to_str().unwrap()))
+                .collect(),
             ..Default::default()
         };
-        // Folding, `a` sorts before `B`; byte order would pick `B`.
-        assert_eq!(
-            state
-                .write_target_library(file, CaseFold::FOLD)
-                .map(|l| l.root.clone()),
-            Some(PathBuf::from("/p/a.snxlib")),
-            "{order:?}"
-        );
+        for fold in [CaseFold::FOLD, CaseFold::PRESERVE] {
+            assert_eq!(
+                state.write_target_library(&file, fold).map(|l| &l.root),
+                Some(&locked),
+                "{order:?} {fold:?}"
+            );
+        }
         // A tie names no owner, but the folder is still held by a library.
         assert!(
             state
-                .containing_library_with(file, CaseFold::FOLD)
+                .containing_library_with(&file, CaseFold::FOLD)
                 .is_none()
         );
-        assert!(state.is_in_mounted_library(file, CaseFold::FOLD));
+        assert!(state.is_in_mounted_library(&file, CaseFold::FOLD));
     }
 }
 

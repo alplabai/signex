@@ -21,12 +21,16 @@ impl Signex {
         if kind != PrimitiveKind::Symbol {
             return Task::none();
         }
-        // A file under a mounted library's directory is left out even when it
-        // is outside that library's `symbols/` folder: this is the same rule
-        // `deepest_libraries` applies everywhere, and `push_loose` hides
-        // the same files once the library is open.
-        let files: Vec<PathBuf> = self
-            .document_state
+        read_loose_task(self.loose_symbol_candidates(), false)
+    }
+
+    /// The project-listed `.snxsym` files outside every mounted library. A
+    /// file under a mounted library's directory is left out even when it is
+    /// outside that library's `symbols/` folder, or when several libraries
+    /// share the folder: this is the rule `deepest_libraries` applies
+    /// everywhere, and `push_loose` hides the same files once it is open.
+    pub(super) fn loose_symbol_candidates(&self) -> Vec<PathBuf> {
+        self.document_state
             .projects
             .iter()
             .flat_map(|project| {
@@ -42,8 +46,7 @@ impl Signex {
                     .library
                     .is_in_mounted_library(path, self.identity_fold_for(path))
             })
-            .collect();
-        read_loose_task(files, false)
+            .collect()
     }
 
     /// A file outside every library, picked with Browse.

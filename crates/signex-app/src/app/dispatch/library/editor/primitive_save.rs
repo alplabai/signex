@@ -188,7 +188,7 @@ impl Signex {
         let fold = self.identity_fold_for(path);
         let target = self.library.write_target_library(path, fold);
         let mounted_library = target.map(|lib| lib.root.clone());
-        let write_path = write_path_under(path, target);
+        let mounted_alias = alias_under(path, target);
         if mounted_library.is_some() && self.library.libraries_share_folder_of(path, fold) {
             crate::diagnostics::log_warning(format!(
                 "{}: several libraries share its folder; saved through {}.",
@@ -201,7 +201,8 @@ impl Signex {
             .as_deref()
             .map(|library| self.library.writes.turn(library));
         let write = PrimitiveWrite {
-            path: write_path,
+            path: path.to_path_buf(),
+            mounted_alias,
             mode,
             mounted_library,
             now,
@@ -592,18 +593,14 @@ impl Signex {
     }
 }
 
-/// The path a save writes: `path`, spelled under the mounted library's own
-/// folder when it is held by another spelling of it (`..`, case). The
-/// adapter takes the write lock for, and checks, the raw prefix; the file is
-/// the same one.
-fn write_path_under(
+/// `path` spelled under the mounted library's own folder, when the library
+/// holds it under another spelling (`..`, case). Only a guess from the text:
+/// the worker checks on disk that it is the same directory
+/// (`PrimitiveWrite::route`) before writing through it.
+fn alias_under(
     path: &std::path::Path,
     library: Option<&crate::library::state::OpenLibrary>,
-) -> std::path::PathBuf {
-    match library.and_then(|lib| lib.root_dir()) {
-        Some(dir) if !path.starts_with(dir) => {
-            crate::app::state::scope::rebase_under(path, dir, dir)
-        }
-        _ => path.to_path_buf(),
-    }
+) -> Option<std::path::PathBuf> {
+    let dir = library?.root_dir()?;
+    (!path.starts_with(dir)).then(|| crate::app::state::scope::rebase_under(path, dir, dir))
 }

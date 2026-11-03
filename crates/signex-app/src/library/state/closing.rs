@@ -71,6 +71,9 @@ impl LibraryState {
     /// every Component Preview editor pointing at it. The dispatcher asks
     /// about dirty editors first (`dirty_editors_for_library`), both when
     /// Close is requested and again when a deferred close comes due.
+    ///
+    /// Callers must call [`Self::drop_symbol_delete_held_by`] first: the
+    /// pending symbol delete is matched to its library while it is mounted.
     pub fn close_library(&mut self, root: &Path) {
         // A pricing walk of this library must not write after it is closed.
         self.cancel_pricing_refresh_of(&[root.to_path_buf()]);
