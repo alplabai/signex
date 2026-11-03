@@ -245,3 +245,35 @@ fn importing_a_theme_file_moves_the_panel_theme_without_a_refresh() {
         "a second import replaces the first one's tokens"
     );
 }
+
+/// #1942 - the Symbol previews draw on the panel context's canvas colours,
+/// so they must follow a Preferences draft and a custom theme import.
+#[test]
+fn the_panel_canvas_colours_follow_the_previewed_theme() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.preferences_open = true;
+    let drafted = drafted_other_than_saved(&app);
+
+    send(&mut app, PrefMsg::DraftTheme(drafted));
+
+    assert_eq!(
+        app.document_state.panel_ctx.canvas_colors,
+        signex_types::theme::canvas_colors(drafted)
+    );
+}
+
+#[test]
+fn importing_a_theme_file_moves_the_panel_canvas_colours() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.preferences_open = true;
+
+    send(
+        &mut app,
+        PrefMsg::ThemeFileLoaded(custom_theme_file(ThemeId::SolarizedLight)),
+    );
+
+    assert_eq!(
+        app.document_state.panel_ctx.canvas_colors,
+        signex_types::theme::canvas_colors(ThemeId::SolarizedLight)
+    );
+}

@@ -42,7 +42,7 @@ pub(super) fn symbol_geometry_of(
 }
 
 /// Hit-test / selection box of `symbol`.
-pub(super) fn symbol_bounds(snapshot: &SchematicRenderSnapshot, symbol: &Symbol) -> Aabb {
+pub(crate) fn symbol_bounds(snapshot: &SchematicRenderSnapshot, symbol: &Symbol) -> Aabb {
     symbol_geometry(snapshot, symbol).1
 }
 
