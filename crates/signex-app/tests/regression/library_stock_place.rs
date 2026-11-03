@@ -119,3 +119,47 @@ fn a_placed_stock_part_has_its_fields_clear_of_its_body() {
         );
     }
 }
+
+/// #1938 — Stock is Personal mode, so the open-time scan applies a newer row
+/// without asking. A design saved against `STOCK-R` 0.0.1 must open clean:
+/// the stock chip lands changed, but the row version did not move.
+#[test]
+fn an_existing_stock_resistor_opens_clean_and_stays_at_its_version() {
+    let mut app = app_with_stock();
+    let (_, resistor) = app
+        .library
+        .all_components()
+        .into_iter()
+        .find(|(_, c)| c.internal_pn.as_str() == "STOCK-R")
+        .expect("Stock lists the generic resistor");
+    let table = app
+        .library
+        .table_of_row(&stock_file(), resistor.row_id)
+        .expect("the resistor's table");
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::ComponentsPanelPlace {
+            library_path: stock_file(),
+            table,
+            row_id: signex_library::RowId(resistor.row_id),
+        }),
+    );
+    click(&mut app, PLACE_AT);
+
+    let path = app.document_state.active_path.clone().expect("active path");
+    let mut sheet = doc(&app).clone();
+    sheet.symbols[0].library_version = "0.0.1".into();
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("engine"),
+    );
+    app.document_state.mark_document_clean(&path);
+
+    app.scan_library_updates_for_open_schematic(path.clone());
+
+    assert_eq!(doc(&app).symbols[0].library_version, "0.0.1");
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "opening a design must not dirty it"
+    );
+}

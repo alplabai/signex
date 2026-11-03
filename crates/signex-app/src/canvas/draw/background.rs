@@ -52,6 +52,7 @@ impl SchematicCanvas<'_> {
                     self.paper_width_mm,
                     self.paper_height_mm,
                     self.prefs.grid_style,
+                    self.prefs.device_px_per_logical_px,
                 );
             }
 

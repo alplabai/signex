@@ -278,6 +278,26 @@ impl Signex {
         )
     }
 
+    /// The reloaded document matches disk only when it was installed: a
+    /// failed install leaves the older, possibly edited engine at `path`
+    /// dirty (#1854). Then the conflict state survives untouched: the old
+    /// baseline and the save failure stay, so the next Save still asks.
+    /// Returns whether the reload was applied.
+    pub(crate) fn settle_disk_reload(
+        &mut self,
+        path: &std::path::Path,
+        hash: ContentHash,
+        installed: bool,
+    ) -> bool {
+        if !installed {
+            return false;
+        }
+        self.document_state.mark_document_clean(path);
+        self.document_state.document_saves.clear_failure(path);
+        self.record_disk_baseline(path, hash);
+        true
+    }
+
     pub(crate) fn handle_disk_reload_finished(
         &mut self,
         path: PathBuf,
@@ -316,10 +336,13 @@ impl Signex {
             return Task::none();
         }
         let ReloadedFile { document, hash } = *reloaded;
-        let task = self.apply_reloaded_with(idx, Ok(document), None, false);
-        self.document_state.mark_document_clean(&path);
-        self.document_state.document_saves.clear_failure(&path);
-        self.record_disk_baseline(&path, hash);
+        let (task, installed) = self.apply_reloaded_reporting(idx, Ok(document), None, false);
+        if !self.settle_disk_reload(&path, hash, installed) {
+            crate::diagnostics::log_warning(format!(
+                "[reload] {name} could not be applied; the document keeps its edits"
+            ));
+            return task;
+        }
         crate::diagnostics::log_info(format!("[reload] Reloaded {name} from disk"));
         self.refresh_panel_ctx();
         Task::batch([task, self.autosave_after_disk_write(&path)])

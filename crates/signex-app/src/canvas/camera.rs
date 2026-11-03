@@ -27,6 +27,8 @@ impl Default for Camera {
 
 impl Camera {
     // 100% = `SCHEMATIC_ZOOM_100_SCALE`, so 25%..1600% = x0.25..x16.0.
+    /// Screen margin `fit_rect` keeps around the fitted rectangle.
+    pub const FIT_PADDING: f32 = 40.0;
     pub const MIN_SCALE: f32 = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 0.25;
     pub const MAX_SCALE: f32 = signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE * 16.0;
     /// Per-wheel-notch zoom step, as a percent, bounds and default. The
@@ -128,7 +130,7 @@ impl Camera {
 
     /// Fit a world-space rectangle into the viewport with some padding.
     pub fn fit_rect(&mut self, world_rect: Rectangle, viewport: Rectangle) {
-        let padding = 40.0; // screen pixels
+        let padding = Self::FIT_PADDING;
         let available_w = viewport.width - padding * 2.0;
         let available_h = viewport.height - padding * 2.0;
 

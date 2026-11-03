@@ -58,11 +58,15 @@ pub(crate) fn snap_outline(
 ) -> (Vec<Point>, f32) {
     let dpr = normalised_dpr(device_px_per_logical_px);
     let width_device = width * dpr;
-    if width_device >= SNAP_BELOW_PX || !width_device.is_finite() || !is_rectilinear(ring) {
+    if width_device >= SNAP_BELOW_PX || !width_device.is_finite() {
+        return (ring.to_vec(), width);
+    }
+    // One rule: rectilinear is decided on the same device ring the snap tests.
+    let device: Vec<Point> = ring.iter().map(|p| to_device(*p, dpr)).collect();
+    if !is_rectilinear(&device) {
         return (ring.to_vec(), width);
     }
     let snapped = snapped_width(width_device);
-    let device: Vec<Point> = ring.iter().map(|p| to_device(*p, dpr)).collect();
     let points = snap_rectilinear_ring(&device, snapped);
     if collapses(&device, &points) {
         return (ring.to_vec(), snapped / dpr);
@@ -361,5 +365,19 @@ mod tests {
         ];
         let (points, _) = snap_outline(&ring, 1.0, 1.0);
         assert_eq!(points[0].y, points[1].y, "{points:?}");
+    }
+
+    #[test]
+    fn near_axis_edge_is_not_collapsed_at_2x() {
+        // dy is 1.4e-3 device px at 2x: not axis-aligned, so the outline keeps
+        // its exact vertices instead of merging the top edge's ends.
+        let ring = [
+            Point::new(10.0, 20.0),
+            Point::new(50.0, 20.0007),
+            Point::new(50.0, 40.0),
+            Point::new(10.0, 40.0),
+        ];
+        let (points, _) = snap_outline(&ring, 1.0, 2.0);
+        assert_eq!(points, ring.to_vec());
     }
 }
