@@ -160,15 +160,37 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    the wire : pin : body weights changed from one zoom step to the next.
 3. **One floor.** A stroke thinner than one device pixel draws at one device
    pixel, the same for every kind and on both the CPU and GPU paths. It is a
-   whole pixel because the CPU canvas has no anti-aliasing: body outlines,
-   circles and diagonals are not snapped, and at 0.76 px (a 0.254 mm body at
-   100 %) whole edges of a rectangle missed every pixel centre and vanished.
-4. **Then the whole-pixel snap** (#1674, `scene_line_snap.rs`) rounds
-   axis-aligned hairlines under 4 device pixels to whole device pixels.
+   whole pixel because the CPU canvas has no anti-aliasing: at 0.76 px (a
+   0.254 mm body at 100 %) whole edges of a rectangle missed every pixel
+   centre and vanished.
+4. **Then the whole-pixel snap** (#1674, #1888, `scene_line_snap.rs`) rounds
+   strokes under 4 device pixels to whole device pixels:
+   - axis-aligned lines: width and position;
+   - rectangle and rectilinear polygon outlines: width and every edge
+     position, each edge snapped once. An outline that would collapse under
+     one device pixel across keeps its exact vertices and snaps only its
+     width;
+   - circle and arc rings: width only (the centre and radius stay exact);
+   - slanted lines and slanted outlines keep their exact vertices and exact
+     width. The 45 degree bus entry and its ghost are such lines, so they
+     draw at the exact stroke law, the same as the placed entry.
+
+   The placed-wire preview, the ghost bus entry and the sheet frame go
+   through the same snap, so equal mm widths draw at equal pixel widths. The
+   Symbol Editor replays through `draw_scene_with_world_to_screen` (the PCB
+   path is separate and unsnapped) and gets it too. A snapped outline is
+   stroked from snapped vertices while its fill stays on the exact ones, so
+   the stroke can sit up to half a device pixel off the fill edge.
+   The paper border in `canvas/draw/background.rs` is chrome, not a
+   schematic stroke: a fixed `with_width(1.0)` logical px, outside the floor
+   rule and the snap.
 5. **Display scale.** The floor and the snap are defined in device pixels.
-   The CPU canvas does not receive the window's scale factor yet, so both
-   still run with one device pixel per logical pixel
-   (`UNSCALED_DEVICE_PX_PER_LOGICAL_PX`) and the GPU path matches it.
+   Each window's scale (OS factor times the interface scale,
+   `UiState::device_px_per_logical_px`) reaches its canvas through
+   `CanvasViewPrefs` and `ScreenTransform`, and a window moved to another
+   display re-renders with that display's factor. The GPU path floors at one
+   device pixel too. Only a surface with no window uses
+   `UNSCALED_DEVICE_PX_PER_LOGICAL_PX` (one device pixel per logical pixel).
 6. **Output** (PDF, SVG, print) uses mm widths only, with no pixel floor and
    no snap. Output keeps each item's stored width (a width of `0` gets the
    exporter's default); the 0.15 mm minimum of rule 1 is the screen rule.

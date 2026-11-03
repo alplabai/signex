@@ -11,6 +11,8 @@ pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
+#[cfg(test)]
+mod draft_ownership_tests;
 mod error_notice;
 mod interaction;
 mod keymap_recorder;
@@ -40,6 +42,8 @@ pub(crate) mod sheet_refs;
 mod tab_placements;
 mod ui;
 pub(crate) mod volume_case;
+mod window_scales;
+mod window_tab;
 
 pub use case_fold::CaseFold;
 pub use error_notice::{ErrorNotice, NoticeAction};
@@ -338,6 +342,8 @@ pub struct DocumentState {
     /// [`DocumentState::note_sheet_edit`], mostly via `mark_document_dirty`.
     /// ERC compares it with the count its results were read at (#1768).
     pub sheet_edit_epoch: u64,
+    /// Symbol editors opened so far; see [`DocumentState::next_symbol_history_base`].
+    pub symbol_editors_opened: u64,
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
     /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
@@ -389,7 +395,7 @@ pub struct DocumentState {
     /// Per-tab state for open `.snxsym` document tabs. Keyed by the
     /// file path stored on `TabInfo.path` for matching
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
-    /// `LibraryMessage::OpenPrimitiveEditor`; drop in
+    /// `Signex::open_primitive`; drop in
     /// `close_tab_at_index` alongside the engine cleanup.
     pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolDocument>,
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same

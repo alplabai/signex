@@ -1585,3 +1585,69 @@ fn bind_row_primitive_version_skips_a_row_that_no_longer_binds_the_primitive() {
     assert_eq!(after.footprint_version, "0.0.1");
     assert_eq!(after.version, row.version);
 }
+
+// ── Unlistable symbols folder (#1903) ────────────────────────────────────
+
+/// A `symbols/` folder that cannot be listed is a backend failure, not an
+/// absent symbol: lookups must not read as `NotFound` (the app would then
+/// call every placed part "Symbol missing"). An absent folder stays empty.
+#[cfg(unix)]
+#[test]
+fn an_unlistable_symbols_folder_is_not_reported_as_not_found() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Unreadable", false);
+    let sym = fixture_symbol("R-0603");
+    let uuid = sym.uuid;
+    adapter.save_symbol(sym, "add R-0603").unwrap();
+    drop(adapter);
+
+    let folder = symbols_dir(&file);
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let restore = || std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755));
+    if std::fs::read_dir(&folder).is_ok() {
+        restore().unwrap();
+        eprintln!("skipped: permissions are not enforced (running as root?)");
+        return;
+    }
+
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let got = reopened.get_symbol(uuid);
+    let listed = reopened.list_symbols();
+    restore().unwrap();
+
+    assert!(
+        matches!(got, Err(LibraryError::Backend(_))),
+        "unreadable, not NotFound: {got:?}"
+    );
+    assert!(listed.is_err(), "listing must not claim an empty folder");
+
+    std::fs::remove_dir_all(&folder).unwrap();
+    let absent = LocalGitAdapter::open(&file).unwrap();
+    assert!(matches!(
+        absent.get_symbol(uuid),
+        Err(LibraryError::NotFound(_))
+    ));
+    assert!(absent.list_symbols().unwrap().is_empty());
+}
+
+/// #1903 — a `.snxsym` link to a device is never read (a link to a FIFO or
+/// `/dev/zero` would hang or exhaust memory); it is not a symbol file.
+#[cfg(unix)]
+#[test]
+fn a_symbol_link_to_a_device_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Dev", false);
+    let symbols_dir = file.parent().unwrap().join("symbols");
+    std::fs::create_dir_all(&symbols_dir).unwrap();
+    std::os::unix::fs::symlink("/dev/null", symbols_dir.join("dev.snxsym")).unwrap();
+
+    adapter.save_symbol(fixture_symbol("A"), "add A").unwrap();
+
+    assert_eq!(adapter.list_symbols().unwrap().len(), 1);
+    assert!(
+        adapter.symbol_file_problems().is_empty(),
+        "the device link was read as a symbol container"
+    );
+}

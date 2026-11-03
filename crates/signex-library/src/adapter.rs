@@ -25,6 +25,13 @@ pub enum LibraryError {
     Io(#[from] std::io::Error),
     #[error("not found: {0}")]
     NotFound(String),
+    /// The `.snxlib` file itself is absent: moved, deleted, or its folder
+    /// is gone. Raised only when the filesystem answers "does not exist";
+    /// a path that cannot be inspected (permission, IO) is [`Self::Io`],
+    /// so a recovery flow that removes the library never fires for a
+    /// library that is still there.
+    #[error("no .snxlib file at {}", path.display())]
+    LibraryFileMissing { path: PathBuf },
     #[error("conflict: {0}")]
     Conflict(String),
     /// The stored row is no longer at the base revision the write was

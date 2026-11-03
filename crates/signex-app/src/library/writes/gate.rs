@@ -106,8 +106,10 @@ struct GateState {
     serving: u64,
     /// Numbers released before their turn came.
     skipped: BTreeSet<u64>,
-    /// How many of the turns handed out and not yet released are reads.
-    reads: u64,
+    /// How many of the turns handed out and not yet released are writes.
+    /// Counted apart from the ticket range so a turn released out of order
+    /// (a dropped read task) is not mistaken for a write.
+    writes: u64,
 }
 
 /// The write order of one library.
@@ -136,7 +138,7 @@ impl WriteGate {
     /// Writes that have not finished; reads queued behind them do not count.
     pub fn pending_writes(&self) -> u64 {
         let state = self.lock();
-        state.next - state.serving - state.reads
+        state.writes
     }
 
     /// Wait until every turn handed out so far is released, at most `limit`.
@@ -172,7 +174,7 @@ impl Turn {
         let mut state = gate.lock();
         let ticket = state.next;
         state.next += 1;
-        state.reads += u64::from(read);
+        state.writes += u64::from(!read);
         drop(state);
         Self {
             gate: Arc::clone(gate),
@@ -202,7 +204,7 @@ impl Turn {
 impl Drop for Turn {
     fn drop(&mut self) {
         let mut state = self.gate.lock();
-        state.reads -= u64::from(self.read);
+        state.writes -= u64::from(!self.read);
         if state.serving == self.ticket {
             state.serving += 1;
             loop {
@@ -403,6 +405,19 @@ mod tests {
         assert!(waiter.wait_all_idle(Duration::from_secs(5)));
         assert!(started.elapsed() >= Duration::from_millis(150));
         releaser.join().unwrap();
+    }
+
+    #[test]
+    fn a_read_released_out_of_order_is_not_counted_as_a_write() {
+        let mut writes = LibraryWrites::default();
+        let root = Path::new("a.snxlib");
+        let write = writes.turn(root);
+        let read = writes.read_turn(root);
+        // The read's task is dropped while the write ahead of it still runs.
+        drop(read);
+        assert_eq!(writes.pending_writes(root), 1);
+        drop(write);
+        assert_eq!(writes.pending_writes(root), 0);
     }
 
     #[test]

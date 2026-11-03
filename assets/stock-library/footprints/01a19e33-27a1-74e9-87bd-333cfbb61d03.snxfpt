@@ -1,0 +1,205 @@
+format = "snxfpt/1"
+file_uuid = "01a19e33-27a1-700b-b310-48232a08c82f"
+display_name = "Chip-2512-Polarised"
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+
+[[footprints]]
+uuid = "01a19e33-27a1-74e9-87bd-333cfbb61d03"
+name = "Chip-2512-Polarised"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+1	Smd	rect	1.45	3.5	-3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+2	Smd	rect	1.45	3.5	3.1	0	0	Top Layer|Top Solder|Top Paste			0.05	0
+'''
+silk_b = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13Z"
+updated = "2026-05-04T19:01:13Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = [
+    [
+    -4.25,
+    -2.0,
+],
+    [
+    4.25,
+    -2.0,
+],
+    [
+    4.25,
+    2.0,
+],
+    [
+    -4.25,
+    2.0,
+],
+]
+
+[[footprints.silk_f]]
+stroke_width = 0.12
+filled = false
+sketch_entity = "aa6684f6-ecd8-4d75-b623-6eb72b305eeb"
+
+[footprints.silk_f.kind]
+kind = "line"
+from = [
+    -4.045,
+    -1.675,
+]
+to = [
+    -4.045,
+    1.675,
+]
+
+[[footprints.fab_f]]
+stroke_width = 0.1
+filled = false
+
+[footprints.fab_f.kind]
+kind = "rectangle"
+from = [
+    -3.2,
+    -1.6,
+]
+to = [
+    3.2,
+    1.6,
+]
+
+[[footprints.fab_f]]
+stroke_width = 0.1
+filled = false
+
+[footprints.fab_f.kind]
+kind = "line"
+from = [
+    -2.9,
+    -1.6,
+]
+to = [
+    -2.9,
+    1.6,
+]
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 0.699999988079071
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "d4f7b99d-557a-4d74-8cc0-75445341a856"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "90aa3c83-521b-428d-b5ae-e3ea1e73bf64"
+plane = "d4f7b99d-557a-4d74-8cc0-75445341a856"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "e33300bd-35e1-445f-a0c7-3103e47aa2fc"
+plane = "d4f7b99d-557a-4d74-8cc0-75445341a856"
+construction = false
+centerline = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "03bbd0cc-5b97-4cb8-94f7-fe0af079ed99"
+plane = "d4f7b99d-557a-4d74-8cc0-75445341a856"
+construction = false
+centerline = false
+kind = "Point"
+x = -4.045
+y = -1.675
+
+[[footprints.sketch.entities]]
+id = "5932cf4b-af7a-48c4-b5b1-764e14d662f4"
+plane = "d4f7b99d-557a-4d74-8cc0-75445341a856"
+construction = false
+centerline = false
+kind = "Point"
+x = -4.045
+y = 1.675
+
+[[footprints.sketch.entities]]
+id = "aa6684f6-ecd8-4d75-b623-6eb72b305eeb"
+plane = "d4f7b99d-557a-4d74-8cc0-75445341a856"
+construction = false
+centerline = false
+kind = "Line"
+start = "03bbd0cc-5b97-4cb8-94f7-fe0af079ed99"
+end = "5932cf4b-af7a-48c4-b5b1-764e14d662f4"
+
+[footprints.sketch.entities.silk]
+layer = "top_silk"
+
+[footprints.sketch.parameters]
+body_h = "3.2mm"
+body_w = "6.4mm"
+pad_h = "3.5mm"
+pad_spacing = "6.2mm"
+pad_w = "1.45mm"

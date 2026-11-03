@@ -87,65 +87,37 @@ impl Signex {
             label,
         } = pass;
         let mut writes: Vec<PendingWrite> = Vec::new();
-        // Pass A: seed the shared counter from every sheet's already-
-        // annotated symbols. This happens inside annotate_with_seed's
-        // phase 2, but running a separate seed pass first ensures
-        // order-independence — without this, sheet B could reuse
-        // numbers it considers free that sheet A actually claims.
-        // One per-prefix counter shared by every project sheet, so designators
-        // don't collide across the sheets of the project.
-        let mut next_by_prefix = signex_types::designator::seed_counters(
-            project_set
-                .sheets
-                .values()
-                .flat_map(|sheet| sheet.symbols.iter())
-                .filter(|sym| !sym.is_power && !sym.reference.starts_with('#'))
-                .map(|sym| sym.reference.as_str()),
-        );
-
-        // Pass B: walk every sheet the counter must cover — cached tabs,
-        // unopened sheets, and the active engine alike — in the ONE order
-        // `ordered_project_sheet_paths` defines. The preview walks the exact
-        // same order over the exact same set, so the number it promises for
-        // a sheet is the number this pass assigns it (#435): the active
-        // engine no longer gets an unconditional last turn regardless of
-        // where its path sorts.
+        // Every sheet the counter must cover - cached tabs, unopened sheets
+        // and the active engine alike - in the ONE order
+        // `ordered_project_sheet_paths` defines. The preview walks the same
+        // order over the same set, and numbers a sheet file placed more than
+        // once per placement as this pass does, so the number it promises for
+        // a sheet is the number this pass assigns it (#435, #1919).
         let locked = self.ui_state.annotate_locked.clone();
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
             &project_set,
             active_path.as_deref(),
         );
-        // Group units into parts across the WHOLE project before any sheet is
-        // touched: a part whose units sit on different sheets must stay one
-        // part through a reset, which a per-sheet grouping cannot see (#691).
-        // A live engine is the document, so it wins over the assembler's copy.
-        let parts = {
-            let documents: Vec<&[signex_types::schematic::Symbol]> = ordered_paths
-                .iter()
-                .map(|path| {
-                    self.document_state
-                        .engines
-                        .get(path)
-                        .map(|engine| engine.document().symbols.as_slice())
-                        .or_else(|| {
-                            project_set
-                                .sheets
-                                .get(path)
-                                .map(|sheet| sheet.symbols.as_slice())
-                        })
-                        .unwrap_or(&[])
-                })
-                .collect();
-            signex_types::schematic::ProjectParts::new(
-                &documents,
-                &locked,
-                self.ui_state.annotate_order,
-            )
-        };
+        let read_only = read_only_sheets(&self.document_state, &project_set);
+        let resets = reprefix.is_none()
+            && matches!(
+                mode,
+                signex_engine::AnnotateMode::ResetOnly
+                    | signex_engine::AnnotateMode::ResetAndRenumber
+            );
+        // A Reset & Renumber that skipped a sheet would number around the
+        // designators that sheet keeps and could collide with them (#1753).
+        if reprefix.is_none()
+            && matches!(mode, signex_engine::AnnotateMode::ResetAndRenumber)
+            && self.refuse_reset_that_skips(label, &project_set, &ordered_paths, &read_only)
+        {
+            return PassApplied::without_writes(Task::none());
+        }
+        let (parts, mut next_by_prefix, first_unit, placements) =
+            self.walk_project(&project_set, &ordered_paths, &locked, resets);
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
-        let read_only = read_only_sheets(&self.document_state, &project_set);
         let mut any_active_changed = false;
         let mut any_cached_changed = false;
         // One project-wide undo step per run, unless the preference asks for
@@ -172,10 +144,11 @@ impl Signex {
         for (sheet, path) in ordered_paths.iter().enumerate() {
             let scope = signex_engine::AnnotateScope {
                 parts: &parts,
-                sheet,
+                sheet: first_unit[sheet],
                 locked: &locked,
                 undo_group,
                 reprefix,
+                placements: &placements[sheet],
             };
             if read_only.contains(path) {
                 continue;
@@ -364,7 +337,7 @@ impl Signex {
     /// A re-prefix sheet failed: undo every sheet already changed (the pass's
     /// own entry is on top of each history) and forget the sheets it parked,
     /// so the project is exactly as it was and no part is left half converted.
-    fn roll_back_reprefix(
+    pub(super) fn roll_back_reprefix(
         &mut self,
         group: Option<signex_engine::UndoGroupId>,
         touched: &[std::path::PathBuf],
@@ -372,28 +345,64 @@ impl Signex {
         newly_dirty: &[std::path::PathBuf],
         label: &str,
     ) -> Task<Message> {
+        let mut not_rolled_back = std::collections::HashSet::new();
         for path in touched {
             if parked.contains(path) {
                 self.document_state.remove_engine(path);
             } else if let Some(engine) = self.document_state.engines.get_mut(path)
                 && let Some(group) = group
+            {
                 // Discarded, not undone: an undo would leave the half run on
                 // the redo stack for Ctrl+Y to bring back.
-                && let Err(error) = engine.discard_undo_group_top(group)
-            {
-                crate::diagnostics::log_error(
-                    &format!("{label}: could not undo '{}'", path.display()),
-                    &anyhow::Error::new(error),
-                );
+                match engine.discard_undo_group_top(group) {
+                    Ok(Some(_)) => {}
+                    // The run is still in the sheet: it must stay dirty.
+                    Ok(None) => {
+                        not_rolled_back.insert(path.clone());
+                    }
+                    Err(error) => {
+                        not_rolled_back.insert(path.clone());
+                        crate::diagnostics::log_error(
+                            &format!("{label}: could not undo '{}'", path.display()),
+                            &anyhow::Error::new(error),
+                        );
+                    }
+                }
             }
         }
         for path in newly_dirty {
-            self.document_state.mark_document_clean(path);
+            if !not_rolled_back.contains(path) {
+                self.document_state.clear_document_dirty(path);
+            }
         }
-        crate::diagnostics::log_warning(format!(
-            "{label}: a sheet could not be converted, so the whole run was undone and nothing \
-             was changed. Any redo history the touched sheets had before the run is gone."
-        ));
+        // The message below says these sheets stay unsaved: make that true.
+        // The active sheet is in no `newly_dirty` (the pass marks it only
+        // after it succeeds), so without this it would read clean.
+        for path in &not_rolled_back {
+            if self.document_state.active_path.as_ref() == Some(path) {
+                self.mark_active_document_dirty();
+            } else {
+                self.document_state.mark_document_dirty(path);
+            }
+        }
+        if not_rolled_back.is_empty() {
+            crate::diagnostics::log_warning(format!(
+                "{label}: a sheet could not be converted, so the whole run was undone and \
+                 nothing was changed. Any redo history the touched sheets had before the run \
+                 is gone."
+            ));
+        } else {
+            let mut names: Vec<String> = not_rolled_back
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            names.sort();
+            crate::diagnostics::log_warning(format!(
+                "{label}: a sheet could not be converted and the run could not be undone on: \
+                 {}. Those sheets keep the run's changes and stay unsaved; undo them by hand.",
+                names.join(", ")
+            ));
+        }
         // The active sheet may have been rolled back or never touched; only
         // a whole redraw is right for both.
         self.interaction_state

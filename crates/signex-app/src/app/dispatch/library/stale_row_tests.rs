@@ -60,6 +60,14 @@ fn row_at(revision: u64) -> ComponentRow {
 /// and the user's copy of that row (read at `read`) cached and open in a
 /// dirty Component Preview.
 fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
+    let (app, address, _symbol) = app_with_row_and_symbol(stored, read);
+    (app, address)
+}
+
+type SymbolCell = std::sync::Arc<std::sync::Mutex<Option<signex_library::Symbol>>>;
+
+/// [`app_with_row`], plus the cell the library's `get_symbol` answers from.
+fn app_with_row_and_symbol(stored: u64, read: u64) -> (Signex, EditorAddress, SymbolCell) {
     let (mut app, _task) = Signex::new();
     let library_id = Uuid::now_v7();
     let root = std::env::temp_dir()
@@ -69,6 +77,7 @@ fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
     let row = row_at(read);
     let adapter = RevisionedRowAdapter::new(library_id, stored);
     adapter.store(row.clone());
+    let symbol = adapter.symbol_cell();
     app.library
         .set
         .mount(Box::new(adapter))
@@ -93,7 +102,7 @@ fn app_with_row(stored: u64, read: u64) -> (Signex, EditorAddress) {
     let mut preview = ComponentPreviewState::from_row(root, TABLE.into(), row);
     preview.dirty = true;
     app.library.editors.insert(address.clone(), preview);
-    (app, address)
+    (app, address, symbol)
 }
 
 fn editor<'a>(app: &'a Signex, address: &EditorAddress) -> &'a ComponentPreviewState {
@@ -619,4 +628,99 @@ fn a_failed_refresh_without_a_follow_up_warns_once_naming_the_library() {
         .collect();
     assert_eq!(hits.len(), 1, "exactly one warning for the failed read");
     assert!(hits[0].message.contains(&name), "it names the library");
+}
+
+/// #1868: a dirty preview that already drew the symbol shows the saved one
+/// as soon as the save lands, with its unsaved edit and the cascade's pins.
+/// The post-save preview refresh covers it whichever tab is showing.
+#[test]
+fn a_dirty_preview_draws_the_symbol_a_save_just_rewrote() {
+    use crate::library::state::PreviewTab;
+    for tab in [PreviewTab::Preview, PreviewTab::Parameters] {
+        a_dirty_preview_on_tab_draws_the_rewritten_symbol(tab);
+    }
+}
+
+fn a_dirty_preview_on_tab_draws_the_rewritten_symbol(tab: crate::library::state::PreviewTab) {
+    let (mut app, address, symbol) = app_with_row_and_symbol(1, 1);
+    let library_id = app
+        .library
+        .library_at(&address.library_path)
+        .unwrap()
+        .library_id;
+    *symbol.lock().unwrap() = Some(signex_library::Symbol::empty("Saved"));
+    // The row binds a symbol of the library the save happened in.
+    app.library
+        .editors
+        .get_mut(&address)
+        .unwrap()
+        .row
+        .symbol_ref
+        .library_id = library_id;
+    let mut bumped = editor(&app, &address).row.clone();
+    bumped.symbol_version = "9.9.9".into();
+    app.library
+        .set
+        .get(library_id)
+        .unwrap()
+        .update_row(TABLE, bumped, "cascade")
+        .unwrap();
+    record_cascade(&mut app, &address);
+    let inside = address.library_path.parent().unwrap().join("x.snxsym");
+    let preview = app.library.editors.get_mut(&address).unwrap();
+    preview.row.description = "Mine".into();
+    preview.symbol = Some(signex_library::Symbol::empty("Old"));
+    preview.active_tab = tab;
+
+    let task =
+        app.handle_primitive_saved(primitive_saved_with_cascade(inside, vec![address.row_id]));
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    let preview = editor(&app, &address);
+    assert_eq!(
+        preview.symbol.as_ref().map(|s| s.name.as_str()),
+        Some("Saved")
+    );
+    assert_eq!(preview.row.description, "Mine");
+    assert_eq!(preview.row.symbol_version, "9.9.9");
+}
+
+#[test]
+fn the_confirm_bar_goes_as_soon_as_the_reload_is_confirmed() {
+    let (mut app, address) = app_with_row(1, 1);
+    commit_cell(&mut app, &address, "R-115b");
+    let task = app.handle_editor_event(address.clone(), EditorMsg::ReloadRequested);
+    run_write(&mut app, task);
+    assert!(editor(&app, &address).reload_confirming);
+    // The task that reads the row has not run yet.
+    let _task = app.handle_editor_event(address.clone(), EditorMsg::ReloadConfirmed);
+    assert!(!editor(&app, &address).reload_confirming);
+}
+
+/// #1756: a reload of a row whose library is no longer mounted logs a
+/// warning, and the Messages panel's copy of the log must catch up in the
+/// same step.
+#[test]
+fn a_reload_of_a_row_whose_library_is_gone_warns_in_the_messages_panel() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, address) = app_with_row(1, 1);
+    let library_id = app
+        .library
+        .library_at(&address.library_path)
+        .expect("open")
+        .library_id;
+    app.library.set.unmount(library_id);
+    app.document_state.panel_ctx.diagnostics.clear();
+
+    drop(app.reload_editor_from_server(&address, false));
+
+    let needle = format!("Row {} could not be reloaded", address.row_id);
+    assert!(
+        app.document_state
+            .panel_ctx
+            .diagnostics
+            .iter()
+            .any(|entry| entry.message.contains(&needle)),
+        "the warning reaches the diagnostics context"
+    );
 }

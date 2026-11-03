@@ -1,0 +1,203 @@
+# id	category	label	menu_label	group	icon	keybind	enablement	flags
+autoplace_fields	edit	Autoplace fields	-	General	-	-	RequiresSelection	mutates_doc,undoable
+bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable
+bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable
+send_drawings_backward	edit	Send drawings backward	Send Backward	General	-	-	RequiresSelection	mutates_doc,undoable
+send_drawings_to_back	edit	Send drawings to back	Send to Back	General	-	-	RequiresSelection	mutates_doc,undoable
+break_wire	modify	Break wire	-	General	-	-	Always	gui_only,mutates_doc,undoable
+cancel_current_tool	interactive	Cancel current stage / exit placement mode	-	General	-	-	Always	gui_only
+center_on_cursor	view	Center on cursor	-	General	-	-	Always	gui_only
+center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always	gui_only
+close_active_document	file	Close active document	Close Document	General	-	-	Always	-
+copy	edit	Copy	-	General	-	-	RequiresSelection	-
+copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable
+cut	edit	Cut	-	General	-	-	RequiresSelection	mutates_doc,undoable
+cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only
+cycle_unit	view	Cycle display unit	-	General	-	-	Always	-
+cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only
+cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	-
+cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	Cycle Grid Size	General	-	-	Always	gui_only
+cycle_wire_bus_graphic_mode	interactive	Cycle wire/bus/graphic-line mode: free, 90 degrees, 45 degrees	-	General	-	-	Always	gui_only
+cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only
+delete_selection	edit	Delete selection	Delete	General	-	-	RequiresSelection	mutates_doc,undoable
+drag_keep_connections	modify	Drag while keeping connections	-	General	-	-	Always	gui_only,mutates_doc,undoable
+duplicate	edit	Duplicate	-	General	-	-	RequiresSelection	mutates_doc,undoable
+edit_footprint_field	edit	Edit footprint field	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+edit_library_symbol	library	Edit library symbol	-	General	-	-	RequiresSelection	gui_only
+edit_object_properties	edit	Edit properties of object under cursor	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+edit_reference_designator	edit	Edit reference designator	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+edit_selected_object_properties	edit	Properties / edit selected object	Properties...	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+edit_selected_symbol_in_symbol_editor	library	Edit selected symbol in Symbol Editor	Edit Symbol	General	-	-	RequiresSelection	gui_only
+edit_text_in_place	edit	In-place edit selected text	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+edit_value	edit	Edit value	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+fast_grid_1	view	Fast grid 1	-	General	-	-	Always	gui_only
+fast_grid_2	view	Fast grid 2	-	General	-	-	Always	gui_only
+find	search	Find	-	General	-	-	Always	gui_only
+find_and_replace	search	Find and replace	Find and Replace	General	-	-	Always	gui_only
+find_next	search	Find next	-	General	-	-	Always	gui_only
+find_previous	search	Find previous	-	General	-	-	Always	gui_only
+find_similar_objects	select	Find Similar Objects	Find Similar Objects...	General	-	-	RequiresSelection	gui_only
+find_text	search	Find text	-	General	-	-	Always	gui_only
+import_graphics	library	Import graphics	-	General	-	-	Always	gui_only,mutates_doc,undoable
+measure_distance	view	Measure distance	-	General	-	-	Always	gui_only
+mirror_x	modify	Mirror along X-axis	Mirror X	General	-	-	RequiresSelection	mutates_doc,undoable
+mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutates_doc,undoable
+move_object	modify	Move object	Move	General	-	-	Always	gui_only,mutates_doc,undoable
+move_selection	modify	Move selection	Move Selection	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+new_document	file	New	New Project	General	-	-	Always	-
+next_document_tab	window	Next open document tab	-	General	-	-	Always	gui_only
+next_grid	view	Next grid	-	General	-	-	Always	gui_only
+open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only
+open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	gui_only
+open_document	file	Open document	Open...	General	-	-	Always	-
+open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only
+open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only
+open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only
+open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only
+paste	edit	Paste	-	General	-	-	Always	mutates_doc,undoable
+paste_array	edit	Paste array	-	General	-	-	Always	mutates_doc,undoable
+paste_special	edit	Paste special	-	General	-	-	Always	mutates_doc,undoable
+placement_accept	interactive	Accept current placement or move stage	-	General	-	-	Always	gui_only
+placement_properties	interactive	Edit properties of the object being placed or moved	-	General	-	-	Always	gui_only
+previous_document_tab	window	Previous open document tab	-	General	-	-	Always	gui_only
+previous_grid	view	Previous grid	-	General	-	-	Always	gui_only
+print	file	Print	Print...	General	-	-	Always	gui_only
+redo	edit	Redo	-	General	-	-	Always	mutates_doc
+refresh_view	view	Refresh/redraw	-	General	-	-	Always	gui_only
+remove_last_vertex	interactive	Remove last placed vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable
+repeat_last_item	edit	Repeat last item	-	General	-	-	Always	gui_only,mutates_doc,undoable
+report_manager_bom	reports	Report Manager / BOM	-	General	-	-	Always	-
+reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only
+rotate_clockwise	modify	Rotate clockwise by 90 degrees	-	General	-	-	RequiresSelection	mutates_doc,undoable
+rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable
+rubber_stamp_copy	edit	Rubber-stamp copy / repeated paste	-	General	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+save_document	file	Save document	Save	General	-	-	Always	-
+save_document_as	file	Save as	Save As...	General	-	-	Always	-
+select_all	select	Select all	Select All	General	-	-	Always	-
+select_expand_connection	select	Select / expand connection	-	General	-	-	Always	gui_only
+select_node_or_connection_item	select	Select node / connection item under cursor	-	General	-	-	Always	gui_only
+show_all_design_objects	view	Show all design objects	-	General	-	-	Always	gui_only
+show_current_command_hotkeys	help	Show graphical editing hotkey list for current command	Keyboard Shortcuts	General	-	-	Always	gui_only
+show_current_command_shortcuts	help	Show valid shortcuts for the current interactive command	-	General	-	-	Always	gui_only
+smart_paste	edit	Smart Paste	Paste Special	General	-	-	Always	mutates_doc,undoable
+switch_segment_posture	interactive	Switch current segment posture	-	General	-	-	Always	gui_only
+toggle_cross_select_mode	select	Toggle Cross Select Mode	-	General	-	-	Always	-
+toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	-
+toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only
+toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only
+toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only
+toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only
+toggle_search_panel	search	Show/hide search panel	-	General	-	-	Always	gui_only
+toggle_selection	select	Add/remove object from selection	Toggle Selection	General	-	-	Always	gui_only
+toggle_auto_focus	view	Toggle AutoFocus	AutoFocus (dim unselected)	General	-	-	Always	-
+toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	-
+undo	edit	Undo	-	General	-	-	Always	mutates_doc
+undo_last_segment	interactive	Undo last segment while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable
+unselect_all	select	Unselect all	-	General	-	-	Always	-
+zoom_in_at_cursor	view	Zoom in at cursor	Zoom In	General	-	-	Always	gui_only
+zoom_out_at_cursor	view	Zoom out at cursor	Zoom Out	General	-	-	Always	gui_only
+zoom_to_all_objects	view	Zoom to all objects	-	General	-	-	Always	gui_only
+zoom_to_fit	view	Zoom to fit	Fit All	General	-	-	Always	gui_only
+zoom_to_selection_area	view	Zoom to selection area	-	General	-	-	RequiresSelection	gui_only
+annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable
+annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable
+clear_net_highlighting	select	Clear net highlighting	-	Schematic	-	-	RequiresDocument(Schematic)	-
+draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_hierarchical_sheet	place	Draw hierarchical sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+force_annotate_all_schematics	design	Force annotate all schematics	Force Annotate All Schematics	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable
+go_to_net_partner	navigation	Go to net partner on another sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+highlight_net_under_cursor	select	Highlight net under cursor	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+highlight_related_net_objects	select	Highlight/select related net objects across sheets	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+create_sheet_from_sheet_symbol	design	Create a child sheet from the selected sheet symbol	Create Sheet From Sheet Symbol	Schematic	-	-	RequiresSelection	gui_only
+leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+navigate_up_hierarchy	navigation	Navigate up hierarchy	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+next_highlighted_net_item	select	Next item on highlighted net	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+next_sheet	navigation	Next sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only
+open_components_panel	panels	Open Components panel / place components	Component...	Schematic	-	-	Always	gui_only
+open_net_color_palette	view	Open net color palette	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+place_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_design_block	place	Place design block	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_global_label	place	Place global label	Global Label	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_hierarchical_label	place	Place hierarchical label	Hierarchical Label	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_junction	place	Place junction	Junction	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_local_net_label	place	Place local net label	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_net_label	place	Place net label	Net Label	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_no_connect	place	Place no-connect flag	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_symbol	place	Place symbol	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_text	place	Place text	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_wire	place	Place wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_wire_to_bus_entry	place	Place wire-to-bus entry	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+previous_highlighted_net_item	select	Previous item on highlighted net	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	-
+open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	-
+reset_schematic_designators	design	Reset schematic designators	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable
+sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only
+sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child sheet	Sync Sheet Pins	Schematic	-	-	RequiresSelection	gui_only
+change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+open_project_options	file	Open Project Options for the active project	Project Options...	Schematic	-	-	Always	gui_only
+update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc
+tool_select	select	Tool select	-	Schematic	-	-	Always	gui_only
+lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only
+select_connection	select	Select connection	Connection	Schematic	-	-	Always	gui_only
+drag	modify	Drag	Drag	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+move_selection_xy	modify	Move selection x y	Move Selection by X, Y...	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+drag_selection	modify	Drag selection	Drag Selection	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable
+move_to_front	modify	Move to front	Move To Front	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+rotate_selection	modify	Rotate selection counter-clockwise	Rotate Selection Counter-Clockwise	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+rotate_selection_cw	modify	Rotate selection clockwise	Rotate Selection Clockwise	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+flip_selected_x	modify	Flip selected x	Flip Selected Sheet Symbols Along X	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+flip_selected_y	modify	Flip selected y	Flip Selected Sheet Symbols Along Y	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+bring_to_front	modify	Bring to front	Bring To Front	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+send_to_back	modify	Send to back	Send To Back	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+bring_to_front_of	modify	Bring to front of	Bring To Front Of	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+send_to_back_of	modify	Send to back of	Send To Back Of	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+place_sheet_symbol	place	Place sheet symbol	Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_sheet_entry	place	Place sheet entry	Sheet Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_device_sheet_symbol	place	Place device sheet symbol	Device Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_reuse_block	place	Place reuse block	Reuse Block...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+align_left	modify	Align left	Align Left	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+align_right	modify	Align right	Align Right	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+align_horizontal_centers	modify	Align horizontal centers	Align Horizontal Centers	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+distribute_horizontally	modify	Distribute horizontally	Distribute Horizontally	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+align_top	modify	Align top	Align Top	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+align_bottom	modify	Align bottom	Align Bottom	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+align_vertical_centers	modify	Align vertical centers	Align Vertical Centers	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+distribute_vertically	modify	Distribute vertically	Distribute Vertically	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+align_to_grid	modify	Align to grid	Align To Grid	Schematic	-	-	RequiresSelection	mutates_doc,undoable
+draw_wire	place	Draw wire	Wire	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_bus	place	Draw bus	Bus	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_bus_entry	place	Place bus entry	Bus Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_signal_harness	place	Place signal harness	Signal Harness	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_harness_connector	place	Place harness connector	Harness Connector	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_harness_entry	place	Place harness entry	Harness Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_port	place	Place port	Port	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_off_sheet_connector	place	Place off sheet connector	Off Sheet Connector	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_parameter_set	place	Place parameter set	Parameter Set	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_diff_pair	place	Place diff pair	Differential Pair	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_blanket	place	Place blanket	Blanket	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_text_string	place	Place text string	Text String	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_text_frame	place	Place text frame	Text Frame	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_note	place	Place note	Note	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_arc	place	Draw arc	Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_full_circle	place	Draw full circle	Full Circle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_elliptical_arc	place	Draw elliptical arc	Elliptical Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_ellipse	place	Draw ellipse	Ellipse	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_line	place	Draw line	Line	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_rectangle	place	Draw rectangle	Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+place_graphic	place	Place graphic	Graphic...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocument(Schematic)	-
+clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	-
+place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable
+footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only
+footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only
+footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only
+footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outline from pads	-	3D	-	-	RequiresDocument(Footprint)	gui_only

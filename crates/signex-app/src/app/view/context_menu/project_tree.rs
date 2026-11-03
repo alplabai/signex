@@ -7,7 +7,7 @@
 
 use super::*;
 
-use super::items::{dd_cmd, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
+use super::items::{dd_command, dd_disabled, dd_msg, dd_planned, save_entry, submenu_launcher};
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::tree_view::TreeIcon;
 
@@ -156,17 +156,12 @@ impl Signex {
                     .and_then(|idx| self.document_state.projects.get(*idx))
                     .and_then(|p| p.path.parent())
                     .is_some();
-                // Save is enabled when *either* a schematic is active or
-                // the right-clicked project's .snxprj is dirty.
-                let project_path = path
-                    .first()
-                    .and_then(|idx| self.document_state.projects.get(*idx))
-                    .map(|p| p.path.clone());
-                let project_is_dirty = project_path
-                    .as_ref()
-                    .map(|p| self.document_state.is_document_dirty(p))
-                    .unwrap_or(false);
-                let can_save = has_schematic || project_is_dirty;
+                // Save writes the active document and the active project, so
+                // the row follows the same gate as Ctrl+S and File ▸ Save,
+                // not the clicked project's own state.
+                let can_save = crate::keymap::AppCommandId::new("save_document").is_ok_and(|id| {
+                    crate::app::command::is_enabled(&id, &self.command_context(None))
+                });
 
                 v.push(dd_planned(
                     None,
@@ -248,13 +243,11 @@ impl Signex {
                 v.push(dd_planned(None, "Project Releaser...", Some("v5.2")));
                 v.push(DropdownEntry::Separator);
                 v.push(dd_planned(None, "Share...", Some("v3.4")));
-                v.push(dd_cmd(
+                v.push(dd_command(
                     None,
                     "open_project_options",
                     &self.keymap_shortcut_label("open_project_options"),
-                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenProjectOptions(
-                        key.clone(),
-                    ))),
+                    key.first().cloned(),
                 ));
                 // Enable Version Control — only surfaced when the project
                 // dir has no `.git/` yet.

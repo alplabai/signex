@@ -43,11 +43,39 @@ pub enum DockMessage {
     DockFloating(usize),
     /// Re-dock a floating panel to a specific region.
     DockFloatingTo(usize, PanelPosition),
+    /// Right-click on a dock tab: open its context menu at the cursor.
+    TabContextMenuRequested(PanelPosition, usize),
+    /// The dock tab context menu was dismissed (click outside, Esc).
+    TabMenuDismissed,
+    /// A row of the open dock tab context menu was picked.
+    TabMenuActionPicked(DockTabAction),
     Panel(PanelMsg),
     /// v0.9 Library panel message — wraps `crate::library::LibraryMessage`
     /// when the Library panel is active inside a dock region. The
     /// dispatcher unwraps this back into `Message::Library(_)`.
     Library(crate::library::LibraryMessage),
+}
+
+/// What a dock tab's right-click menu can do to its panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DockTabAction {
+    /// Close the panel (same as the region's close button).
+    Close,
+    /// Pull the panel out into a floating panel.
+    Float,
+    /// Move the panel into another dock region.
+    MoveTo(PanelPosition),
+}
+
+/// The open dock tab context menu: which tab it is for and where it opened.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DockTabMenu {
+    /// Region the tab was in when the menu opened.
+    pub position: PanelPosition,
+    /// The panel the menu acts on; its tab index is resolved at pick time.
+    pub kind: PanelKind,
+    pub x: f32,
+    pub y: f32,
 }
 
 /// Where a panel kind currently lives inside the dock.
@@ -92,4 +120,9 @@ pub struct DockArea {
     /// Dock tab currently under the pointer, for Altium-style hover
     /// highlight on inactive tabs. `None` when no tab is hovered.
     pub hovered_tab: Option<(PanelPosition, usize)>,
+    /// Region a floating panel would dock into if released now; drawn as
+    /// the drop preview. `None` when a release would leave it floating.
+    pub drop_preview: Option<PanelPosition>,
+    /// Open dock tab right-click menu, if any.
+    pub tab_menu: Option<DockTabMenu>,
 }

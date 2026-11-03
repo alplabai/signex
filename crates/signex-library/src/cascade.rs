@@ -319,6 +319,7 @@ fn cascade_with(
 pub fn retry_cannot_fix(error: &LibraryError) -> bool {
     match error {
         LibraryError::NotFound(_)
+        | LibraryError::LibraryFileMissing { .. }
         | LibraryError::Conflict(_)
         | LibraryError::Unauthorized(_)
         | LibraryError::VersionControlRefused(_)

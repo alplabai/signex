@@ -223,6 +223,7 @@ impl Signex {
                 }
                 if self.interaction_state.active_bar_menu.is_none() {
                     let world = self.cursor_world_now();
+                    self.close_all_context_menus();
                     self.interaction_state.context_menu = Some(ContextMenuState { x, y, world });
                 }
                 Task::none()
@@ -247,12 +248,7 @@ impl Signex {
                 // New to Project ›", dismissing the menu, then right-
                 // clicking a leaf row would still render the stale
                 // submenu next to the new (leaf) menu.
-                self.interaction_state.context_menu = None;
-                self.interaction_state.context_submenu = None;
-                self.interaction_state.pending_submenu = None;
-                self.interaction_state.submenu_launcher_hovered = None;
-                self.interaction_state.submenu_panel_hovered = false;
-                self.interaction_state.submenu_unhovered_since = None;
+                self.close_all_context_menus();
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.project_tree_context_menu =
                     Some(crate::app::ProjectTreeContextMenuState { x, y, key });
@@ -273,13 +269,7 @@ impl Signex {
                 // menus — close them and any submenu state from a
                 // previous right-click before anchoring the tab menu
                 // at `last_mouse_pos`.
-                self.interaction_state.context_menu = None;
-                self.interaction_state.project_tree_context_menu = None;
-                self.interaction_state.context_submenu = None;
-                self.interaction_state.pending_submenu = None;
-                self.interaction_state.submenu_launcher_hovered = None;
-                self.interaction_state.submenu_panel_hovered = false;
-                self.interaction_state.submenu_unhovered_since = None;
+                self.close_all_context_menus();
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 self.interaction_state.tab_context_menu =
                     Some(crate::app::TabContextMenuState { x, y, tab_idx: idx });
@@ -358,16 +348,24 @@ impl Signex {
                     .context_menu
                     .take()
                     .and_then(|menu| menu.world);
+                // The project tree's menu closes with the canvas one: a row of
+                // either runs a command, and neither may outlive the pick.
+                self.interaction_state.project_tree_context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
                 self.interaction_state.submenu_launcher_hovered = None;
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
                 match action {
-                    ContextAction::Copy => self.dispatch_edit_message(EditMsg::Copy),
-                    ContextAction::Cut => self.dispatch_edit_message(EditMsg::Cut),
-                    ContextAction::Paste => self.dispatch_edit_message(EditMsg::Paste),
-                    ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
+                    ContextAction::Command { id, project } => {
+                        let args = crate::app::command::CommandArgs::in_context(
+                            crate::app::command::InvocationContext {
+                                origin: opened_at,
+                                project,
+                            },
+                        );
+                        self.dispatch_command(&id, args, None)
+                    }
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet().unwrap_or_else(Task::none)
                     }
@@ -382,31 +380,9 @@ impl Signex {
                         self.sync_diagnostics_panel_ctx();
                         Task::none()
                     }
-                    ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),
-                    ContextAction::SelectAll => self
-                        .handle_selection_request(selection_request::SelectionRequest::SelectAll),
-                    ContextAction::ZoomFit => {
-                        self.handle_canvas_interaction_event(CanvasEvent::FitAll)
-                    }
-                    ContextAction::RotateSelected => {
-                        self.dispatch_edit_message(EditMsg::RotateSelectedCounterclockwise)
-                    }
-                    ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
-                    ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
-                    ContextAction::ArrangeDrawings(arrange) => {
-                        self.dispatch_edit_message(EditMsg::ArrangeDrawings(arrange))
-                    }
-                    ContextAction::PlacedPart(action) => {
-                        self.dispatch_library_message(crate::library::LibraryMessage::PlacedPart(
-                            crate::library::PlacedPartMsg::ActionRequested(action),
-                        ))
-                    }
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }
-                    ContextAction::FindSimilar => self.handle_find_similar_message(
-                        crate::find_similar::FindSimilarMsg::OpenRequested { at: opened_at },
-                    ),
                 }
             }
         }
@@ -704,4 +680,23 @@ pub(super) fn dismiss_first_run_tour_task() -> Task<Message> {
     crate::fonts::background_pref_write("first_run_tour_dismissed", || {
         crate::fonts::write_first_run_tour_dismissed(true)
     })
+}
+
+impl Signex {
+    /// Close every right-click menu (canvas, document tab, project tree,
+    /// dock tab, Components row) and their submenu state. Each menu's open
+    /// handler calls this first, so exactly one is ever open.
+    pub(crate) fn close_all_context_menus(&mut self) {
+        let interaction = &mut self.interaction_state;
+        interaction.context_menu = None;
+        interaction.tab_context_menu = None;
+        interaction.project_tree_context_menu = None;
+        interaction.context_submenu = None;
+        interaction.pending_submenu = None;
+        interaction.submenu_launcher_hovered = None;
+        interaction.submenu_panel_hovered = false;
+        interaction.submenu_unhovered_since = None;
+        self.document_state.dock.tab_menu = None;
+        self.library.components_panel.row_menu = None;
+    }
 }

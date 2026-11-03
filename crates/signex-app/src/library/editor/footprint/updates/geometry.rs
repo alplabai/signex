@@ -131,6 +131,7 @@ fn track_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64)
                     },
                     stroke_width: 0.15,
                     filled: false,
+                    sketch_entity: None,
                 });
             // Chain — the second click becomes the next
             // segment's start, matching Altium's stroke-a-
@@ -180,6 +181,7 @@ fn arc_click(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
                         },
                         stroke_width: 0.15,
                         filled: false,
+                        sketch_entity: None,
                     });
                 editor.mark_dirty();
             }
@@ -223,6 +225,7 @@ fn polygon_commit(editor: &mut crate::app::FootprintDocument) {
                 kind: signex_library::primitive::footprint::FpGraphicKind::Polygon { vertices },
                 stroke_width: if filled { 0.0 } else { 0.15 },
                 filled,
+                sketch_entity: None,
             });
         editor.mark_dirty();
     }
@@ -252,6 +255,7 @@ fn add_text(editor: &mut crate::app::FootprintDocument, x_mm: f64, y_mm: f64) {
             },
             stroke_width: 0.0,
             filled: false,
+            sketch_entity: None,
         });
     editor.canvas_cache.clear();
     editor.mark_dirty();

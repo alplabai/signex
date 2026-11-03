@@ -94,7 +94,7 @@ impl Signex {
                     // Save As re-keyed the document; the old key no longer
                     // has an engine, so a lingering dirty marker would make
                     // every later Save All fail on it.
-                    self.document_state.mark_document_clean(&old_path);
+                    self.document_state.clear_document_dirty(&old_path);
                     self.rekey_page_setup(&old_path, &new_path);
                     // The new file is not what any sheet symbol places.
                     self.document_state.tab_placements.forget(&old_path);
@@ -161,7 +161,12 @@ impl Signex {
     /// Install a reloaded `sheet` as the engine of the (non-active) schematic
     /// at `path`, leaving the canvas and the user's tool alone. A sheet the
     /// engine rejects drops the stale engine, so a save cannot undo it.
-    pub(crate) fn install_schematic_at(&mut self, path: &std::path::Path, sheet: SchematicSheet) {
+    /// Returns whether the new engine was installed.
+    pub(crate) fn install_schematic_at(
+        &mut self,
+        path: &std::path::Path,
+        sheet: SchematicSheet,
+    ) -> bool {
         // Inline text typed into a window on this sheet targets an object of
         // the engine being replaced.
         if self.text_edit_targets_sheet_at(path) {
@@ -183,6 +188,7 @@ impl Signex {
                     crate::schematic_runtime::RenderInvalidation::FULL,
                     true,
                 );
+                true
             }
             Err(error) => {
                 self.document_state.engines.remove(path);
@@ -190,6 +196,7 @@ impl Signex {
                     "[git] restore: {} was restored but its engine could not start: {error}",
                     path.display()
                 ));
+                false
             }
         }
     }
@@ -197,11 +204,12 @@ impl Signex {
     /// Make `result` the engine of the active tab at `p`. A failed engine is
     /// reported to the Messages panel and the engine already open there is
     /// kept: it may hold unsaved edits that dropping it would lose silently.
+    /// Returns whether the new engine was installed.
     fn install_active_engine(
         &mut self,
         p: PathBuf,
         result: Result<signex_engine::Engine, signex_engine::EngineError>,
-    ) {
+    ) -> bool {
         match result {
             Ok(engine) => {
                 // The incoming sheet's saved colours replace those
@@ -211,22 +219,39 @@ impl Signex {
                 self.adopt_net_colors_of(&p);
                 self.clear_net_color_steps(&p);
                 self.document_state.active_path = Some(p);
+                true
             }
-            Err(error) => crate::diagnostics::log_warning(format!(
-                "{} could not be loaded into the editor ({error}); the sheet already open was kept",
-                p.display()
-            )),
+            Err(error) => {
+                crate::diagnostics::log_warning(format!(
+                    "{} could not be loaded into the editor ({error}); the sheet already open was kept",
+                    p.display()
+                ));
+                false
+            }
         }
     }
 
-    fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) {
+    /// Returns whether a new engine was installed from `schematic`.
+    fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) -> bool {
         let path = self.active_tab_path();
         match (path, schematic) {
             (Some(p), Some(sheet)) => {
                 let result = signex_engine::Engine::new_with_path(sheet, Some(p.clone()));
-                self.install_active_engine(p, result);
+                self.install_active_engine(p, result)
             }
-            _ => self.document_state.clear_active_engine(),
+            _ => {
+                self.document_state.clear_active_engine();
+                false
+            }
+        }
+    }
+
+    /// The engine at `path` holds what was just read from disk: its history
+    /// position is the clean point. Only when `installed`: a failed install
+    /// leaves the older engine at `path`, which is not known to equal the file.
+    pub(crate) fn mark_installed_engine_saved(&mut self, path: &std::path::Path, installed: bool) {
+        if installed && let Some(engine) = self.document_state.engines.get_mut(path) {
+            engine.mark_saved();
         }
     }
 
@@ -452,14 +477,12 @@ impl Signex {
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
-        self.apply_loaded_schematic(Some(sheet), true, true, true);
+        let installed = self.apply_loaded_schematic(Some(sheet), true, true, true);
         // Read from disk: the opened document is the saved state, so undoing
         // every edit made since returns to a clean sheet. (A recovery copy
         // is installed by a different path and stays dirty-safe.)
-        if let Some(engine) = self.document_state.engines.get_mut(&scan_path) {
-            engine.mark_saved();
-        }
-        if repaired {
+        self.mark_installed_engine_saved(&scan_path, installed);
+        if repaired && installed {
             // The file on disk still holds what was repaired (#1830).
             self.document_state.mark_document_dirty(&scan_path);
         }
@@ -659,7 +682,8 @@ impl Signex {
 
     /// Refresh the canvas and panel context against the active schematic
     /// engine, optionally installing `schematic` as that engine's document
-    /// first.
+    /// first. `fit_sheet` queues a fit of the paper at the next canvas event
+    /// (the sheet's first show).
     ///
     /// There is no "commit to the active tab" step: since the parked-session
     /// refactor, schematic tabs keep their document in
@@ -667,18 +691,20 @@ impl Signex {
     /// `cached_document: None`. `TabDocument` has no `Schematic` variant to
     /// write back to, and dirty tracking runs through
     /// `with_active_schematic_session_mut` in the mutation gateway.
+    /// Returns whether `schematic` was installed as a new active engine.
     pub(crate) fn apply_loaded_schematic(
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
-        fit_to_content: bool,
+        fit_sheet: bool,
         refresh_panel_ctx: bool,
-    ) {
-        if let Some(schematic) = schematic {
-            self.sync_engine_from_schematic(Some(schematic));
-        }
+    ) -> bool {
+        let installed = match schematic {
+            Some(schematic) => self.sync_engine_from_schematic(Some(schematic)),
+            None => false,
+        };
         if !self.document_state.has_active_engine() {
-            return;
+            return installed;
         }
         self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
         if let Some(snapshot) = self.active_render_snapshot() {
@@ -689,8 +715,10 @@ impl Signex {
             }
         }
 
-        if fit_to_content {
-            self.interaction_state.active_canvas_mut().fit_to_content();
+        // The first time a sheet is shown it opens fitted and centred, whatever
+        // it holds; the fit is taken at the next canvas event (#1941).
+        if fit_sheet {
+            self.interaction_state.active_canvas().fit_to_sheet();
         }
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
@@ -704,6 +732,7 @@ impl Signex {
         } else {
             self.sync_panel_ctx_from_visible_document();
         }
+        installed
     }
 
     fn sync_panel_ctx_from_visible_document(&mut self) {
@@ -921,5 +950,89 @@ mod tests {
         assert!(app.document_state.engines.contains_key(&path));
         assert_eq!(app.document_state.active_path, Some(path));
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+    }
+
+    /// #1854 — a restore whose install failed keeps a read-only older
+    /// engine dirty instead of reading it as matching the disk.
+    #[test]
+    fn a_failed_restore_install_keeps_the_old_read_only_sheet_dirty() {
+        let path = PathBuf::from("readonly-1854.snxsch");
+        let (mut app, _boot) = Signex::new();
+        let mut sheet = SchematicSheet::default();
+        sheet.unknown.newer_minor_source = Some("1.99".to_string());
+        let engine = signex_engine::Engine::new_with_path(sheet, Some(path.clone())).unwrap();
+        assert!(engine.document().is_read_only());
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.mark_document_dirty(&path);
+
+        app.settle_restored_schematic(&path, false, false, None);
+        assert!(app.document_state.is_document_dirty(&path));
+        assert!(!app.document_state.engines[&path].is_at_save_point());
+
+        app.settle_restored_schematic(&path, true, false, None);
+        assert!(!app.document_state.is_document_dirty(&path));
+    }
+
+    /// #1854 — a failed install must not mark the older, edited engine saved.
+    #[test]
+    fn a_failed_install_does_not_mark_the_old_engine_saved() {
+        let path = PathBuf::from("stale-1854.snxsch");
+        let (mut app, _boot) = Signex::new();
+        let engine =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()))
+                .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.active_path = Some(path.clone());
+
+        let installed =
+            app.install_active_engine(path.clone(), Err(signex_engine::EngineError::MissingPath));
+        assert!(!installed);
+        app.mark_installed_engine_saved(&path, installed);
+        assert!(!app.document_state.engines[&path].is_at_save_point());
+
+        let fresh =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()));
+        let installed = app.install_active_engine(path.clone(), fresh);
+        assert!(installed);
+        app.mark_installed_engine_saved(&path, installed);
+        assert!(app.document_state.engines[&path].is_at_save_point());
+    }
+
+    /// #1916 — a disk-conflict Reload whose install failed keeps the older
+    /// edited sheet dirty, the old baseline and the save failure; an installed
+    /// one is clean and adopts the disk hash. Covers only the settle rule:
+    /// `Engine::new_with_path` cannot fail, so no seam makes the real
+    /// `apply_reloaded_reporting` install fail.
+    #[test]
+    fn a_failed_disk_reload_install_keeps_the_conflict_state() {
+        use crate::persist::ContentHash;
+        let path = PathBuf::from("reload-1916.snxsch");
+        let (mut app, _boot) = Signex::new();
+        let engine =
+            signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(path.clone()))
+                .unwrap();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.document_state.active_path = Some(path.clone());
+        app.document_state.mark_document_dirty(&path);
+        let old = ContentHash::of(b"old");
+        let disk = ContentHash::of(b"external");
+        app.record_disk_baseline(&path, old);
+        app.document_state
+            .document_saves
+            .record_failure(path.clone(), "disk changed".into());
+
+        assert!(!app.settle_disk_reload(&path, disk, false, false));
+        assert!(app.document_state.is_document_dirty(&path));
+        assert_eq!(app.document_state.document_saves.baseline(&path), Some(old));
+        assert!(app.document_state.document_saves.failure(&path).is_some());
+
+        assert!(app.settle_disk_reload(&path, disk, true, false));
+        assert!(!app.document_state.is_document_dirty(&path));
+        assert!(app.document_state.engines[&path].is_at_save_point());
+        assert_eq!(
+            app.document_state.document_saves.baseline(&path),
+            Some(disk)
+        );
+        assert!(app.document_state.document_saves.failure(&path).is_none());
     }
 }

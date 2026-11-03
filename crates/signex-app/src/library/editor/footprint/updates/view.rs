@@ -160,6 +160,7 @@ fn set_pads_tool(
                     kind: signex_library::primitive::footprint::FpGraphicKind::Polygon { vertices },
                     stroke_width: 0.15,
                     filled: false,
+                    sketch_entity: None,
                 });
             editor.mark_dirty();
         }

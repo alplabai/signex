@@ -301,7 +301,10 @@ fn the_context_menu_row_opens_the_dialog_for_the_object_it_was_opened_over() {
     // The cursor then moved off to the menu row, away from the wire.
     app.ui_state.cursor_x = 500.0;
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::Action(
-        ContextAction::FindSimilar,
+        ContextAction::Command {
+            id: crate::keymap::AppCommandId::new("find_similar_objects").unwrap(),
+            project: None,
+        },
     )));
 
     assert!(app.interaction_state.context_menu.is_none());

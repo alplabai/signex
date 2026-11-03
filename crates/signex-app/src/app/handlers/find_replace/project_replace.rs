@@ -376,7 +376,9 @@ impl Signex {
                 active_invalidation = done.invalidation;
                 self.ui_state.net_color_redo.remove(&done.path);
             } else {
-                self.document_state.mark_document_dirty(&done.path);
+                // Recorded in the sheet's history: undo back to the save
+                // point clears the mark.
+                self.document_state.mark_history_edit_dirty(&done.path);
             }
         }
         let names: Vec<String> = applied

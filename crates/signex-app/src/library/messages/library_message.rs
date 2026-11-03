@@ -176,10 +176,9 @@ pub enum LibraryMessage {
         table: String,
         row_id: RowId,
     },
-    /// Open a standalone primitive editor tab for the file at `path`.
-    /// Fired by the Component Preview tab's right-click context menu
-    /// on the Symbol / Footprint render panes; routed to the
-    /// standalone `.snxsym` / `.snxfpt` document tab.
+    /// Open the `.snxsym` / `.snxfpt` at `path` in its editor tab. Fired
+    /// by the Component Preview's Open Symbol / Footprint Editor buttons;
+    /// a stock primitive goes to Copy to Library (#813).
     OpenPrimitiveEditor {
         path: PathBuf,
     },
@@ -515,11 +514,41 @@ pub enum LibraryMessage {
     /// the section up by name so adding a fourth section later
     /// doesn't ripple through the message enum.
     ComponentsPanelToggleSection(super::super::state::ComponentsMountSource),
+    /// The pointer went down on a Components panel row: it is selected (the
+    /// details section fills) and a drag onto the schematic is armed. A
+    /// click, double click included, only selects; it never places a part
+    /// and never opens a tab.
+    ComponentsPanelRowPressed(super::super::state::ComponentsPanelRowKey),
+    /// A Components panel row was right-clicked: it is selected and its
+    /// menu (Place / Open) opens at the pointer.
+    ComponentsPanelRowRightClicked(super::super::state::ComponentsPanelRowKey),
+    /// The pointer entered a row.
+    ComponentsPanelRowEntered(super::super::state::ComponentsPanelRowKey),
+    /// The pointer left a row.
+    ComponentsPanelRowExited(super::super::state::ComponentsPanelRowKey),
+    /// The row menu was dismissed without a pick.
+    ComponentsPanelRowMenuDismissed,
+    /// A row menu item was picked.
+    ComponentsPanelRowMenuPicked(super::super::state::ComponentsRowAction),
+    /// The divider above the details section was pressed; the pointer now
+    /// drives the list height until release.
+    ComponentsPanelSplitDragStarted,
+    /// The off-thread read of a row's details finished. A result for a row
+    /// that is no longer the selected one is dropped.
+    ComponentsPanelDetailsLoaded {
+        key: super::super::state::ComponentsPanelRowKey,
+        /// Which read of the row this is; an older one is dropped.
+        generation: u64,
+        result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+    },
     /// Live edit of the Components Panel filter input. Substring
     /// matched across mpn / manufacturer / internal_pn / library
     /// name. Stage 9 ships this; the rich syntax (plan §5) is
     /// follow-up work.
     ComponentsPanelSetFilter(String),
+    /// The user dismissed the shared-library-id notices at the top of the
+    /// Components panel (#1908).
+    IdClashNoticesDismissed,
     /// "+ Add Library…" button on the Installed / Global section
     /// header. Opens an `rfd::AsyncFileDialog` with `*.snxlib`
     /// filter and lands in `ComponentsPanelAddLibraryAt`.
@@ -597,8 +626,9 @@ pub struct ResolvedPlacement {
     /// on the symbol, where ERC, the netlist and the BOM read it (#1842).
     pub footprint: String,
     /// The part's primary datasheet link and identity fields (Manufacturer,
-    /// MPN and the row's parameters). A placement does not stamp them;
-    /// Change Component replaces the old part's with them.
+    /// MPN and the row's parameters). A placement stamps the
+    /// Manufacturer and MPN (#1867); Change Component replaces the old
+    /// part's with all of them.
     pub datasheet: String,
     pub fields: Vec<(String, String)>,
 }

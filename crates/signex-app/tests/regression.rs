@@ -117,6 +117,9 @@ mod autosave;
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
 
+#[path = "regression/dock_tab_controls.rs"]
+mod dock_tab_controls;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #1826 / #1827 / #1828 — a save writes the file the document is.
@@ -151,11 +154,18 @@ mod undo_marker_divergence;
 #[path = "regression/primitive_dirty_quit.rs"]
 mod primitive_dirty_quit;
 
+#[path = "regression/close_prompt_primitives.rs"]
+mod close_prompt_primitives;
+
 #[path = "regression/dirty_paths_gateway.rs"]
 mod dirty_paths_gateway;
 
 #[path = "regression/single_dirty_source.rs"]
 mod single_dirty_source;
+
+// #1716 — the drag ghost and the drop agree on what a lock holds back.
+#[path = "regression/drag_ghost_lock_parity.rs"]
+mod drag_ghost_lock_parity;
 
 // #1250 — a locked symbol refuses delete and move, with a Messages note.
 #[path = "regression/symbol_locked_enforced.rs"]
@@ -178,6 +188,9 @@ mod library_placement;
 #[path = "regression/library_pad_geometry.rs"]
 mod library_pad_geometry;
 
+// #1718 — hand-placed silk survives a sketch re-bake and a save.
+#[path = "regression/footprint_hand_silk_rebake.rs"]
+mod footprint_hand_silk_rebake;
 #[path = "regression/footprint_legacy_pad_stack.rs"]
 mod footprint_legacy_pad_stack;
 #[path = "regression/footprint_pad_fields_persist.rs"]
@@ -225,6 +238,9 @@ mod library_uncommitted;
 
 #[path = "regression/library_read_only_mount.rs"]
 mod library_read_only_mount;
+// #1894 / #1895 — Library panel expand; a copied library is refused.
+#[path = "regression/library_panel_and_ids.rs"]
+mod library_panel_and_ids;
 
 #[path = "regression/library_new_component.rs"]
 mod library_new_component;
@@ -295,6 +311,8 @@ mod library_dangling_refs;
 mod library_delete_undo;
 #[path = "regression/managed_gitignore.rs"]
 mod managed_gitignore;
+#[path = "regression/new_project_fit.rs"]
+mod new_project_fit;
 #[path = "regression/new_project_folder.rs"]
 mod new_project_folder;
 #[path = "regression/newer_minor_read_only.rs"]
@@ -326,8 +344,14 @@ mod symbol_undo_steps;
 mod field_edit_support;
 #[path = "regression/library_alternate_symbols.rs"]
 mod library_alternate_symbols;
+#[path = "regression/library_browser_row_delete.rs"]
+mod library_browser_row_delete;
+#[path = "regression/library_components_panel_details.rs"]
+mod library_components_panel_details;
 #[path = "regression/library_named_symbol_file.rs"]
 mod library_named_symbol_file;
+#[path = "regression/library_part_follows_row.rs"]
+mod library_part_follows_row;
 #[path = "regression/library_place_designator_standard.rs"]
 mod library_place_designator_standard;
 #[path = "regression/library_place_footprint.rs"]
@@ -338,10 +362,14 @@ mod library_place_symbol;
 mod library_place_ui;
 #[path = "regression/library_stock_copy.rs"]
 mod library_stock_copy;
+#[path = "regression/library_stock_editable.rs"]
+mod library_stock_editable;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
+#[path = "regression/library_symbol_missing.rs"]
+mod library_symbol_missing;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.

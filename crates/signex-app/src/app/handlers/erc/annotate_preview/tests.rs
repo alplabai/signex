@@ -391,6 +391,28 @@ fn lock_all_waits_for_a_pending_reload() {
 }
 
 #[test]
+fn the_fingerprint_follows_a_per_placement_designator() {
+    let (mut app, dir) = fixture();
+    let root = dir.join("a_root.snxsch");
+    let mut doc = app.document_state.engines[&root].document().clone();
+    let before = super::fingerprint(&app.document_state);
+    let placement = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(1)]);
+    doc.symbols[0].set_instance_designator(&placement, "Q4".to_string());
+    open_with(&mut app.document_state, &root, doc.clone());
+    let with_instance = super::fingerprint(&app.document_state);
+    assert_ne!(before, with_instance, "a new instance entry reloads");
+
+    doc.symbols[0].set_instance_designator(&placement, "Q5".to_string());
+    open_with(&mut app.document_state, &root, doc);
+    assert_ne!(
+        with_instance,
+        super::fingerprint(&app.document_state),
+        "a changed instance designator reloads, `reference` untouched"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn the_fingerprint_follows_the_declared_pages() {
     let (mut app, dir) = fixture();
     let before = super::fingerprint(&app.document_state);

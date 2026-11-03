@@ -112,7 +112,7 @@ fn quit_save_all_writes_the_edited_footprint() {
 }
 
 /// Load a project rooted at `dir` mounting the project-local `lib.snxlib`.
-fn push_project(app: &mut Signex, dir: &Path, name: &str) {
+pub(crate) fn push_project(app: &mut Signex, dir: &Path, name: &str) {
     std::fs::create_dir_all(dir).unwrap();
     let prj = dir.join(format!("{name}.snxprj"));
     std::fs::write(&prj, b"{}").unwrap();
@@ -150,37 +150,10 @@ fn push_project(app: &mut Signex, dir: &Path, name: &str) {
 }
 
 /// An app with one loaded project `p` rooted at `dir` (project id 0).
-fn app_with_open_project(dir: &Path) -> Signex {
+pub(crate) fn app_with_open_project(dir: &Path) -> Signex {
     let (mut app, _t) = Signex::new();
     push_project(&mut app, dir, "p");
     app
-}
-
-#[test]
-fn project_close_keeps_an_edited_footprint_draft_it_cannot_prove_is_its_own() {
-    // A footprint draft under the project's folder is reached by no sheet walk,
-    // so it is never the project's to discard: it is kept, its editor and tab
-    // stay open, and the close does not prompt for it.
-    let tmp = TempDir::new().unwrap();
-    let path = tmp
-        .path()
-        .join("lib.snxlib")
-        .join("footprints")
-        .join("d.snxfpt");
-    let mut app = app_with_open_project(tmp.path());
-    open_footprint_editor(&mut app, &path);
-    edit_description_via_panel(&mut app);
-
-    crate::close_support::close_first_project(&mut app);
-
-    assert!(
-        app.ui_state.project_close_confirm.is_none(),
-        "nothing is provably the project's, so there is nothing to save or discard",
-    );
-    assert!(app.document_state.projects.is_empty(), "the project closes");
-    assert!(app.document_state.is_document_dirty(&path));
-    assert!(app.document_state.footprint_editors.contains_key(&path));
-    assert!(app.document_state.tabs.iter().any(|t| t.path == path));
 }
 
 fn preview_row() -> ComponentRow {
@@ -224,7 +197,7 @@ pub(crate) fn app_with_preview_edit() -> Signex {
 }
 
 /// Same, with the row's library at `library_path` on an existing app.
-fn preview_edit_in(mut app: Signex, library_path: PathBuf) -> Signex {
+pub(crate) fn preview_edit_in(mut app: Signex, library_path: PathBuf) -> Signex {
     let row = preview_row();
     let row_id = RowId::from_uuid(row.row_id);
     let table = "generics".to_string();

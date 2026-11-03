@@ -25,6 +25,7 @@ mod handlers;
 mod helpers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
+mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub mod parent_reference_disk;

@@ -127,6 +127,41 @@ pub(crate) fn project_owning_sheet_with<'a>(
     OwnershipIndex::build(0, projects, loaded, Some(fold)).owner(projects, path)
 }
 
+/// The library that owns the symbol / footprint draft at `path`: among the
+/// `.snxlib` files in `libraries`, the one whose folder contains the draft and
+/// is deepest, so a library nested in another's folder owns its own drafts.
+/// The one ownership decision the Close Project and Close Library prompts
+/// share.
+pub(crate) fn owning_library<'a>(
+    path: &Path,
+    libraries: &'a [PathBuf],
+    fold: CaseFold,
+) -> Option<&'a PathBuf> {
+    owning_libraries(path, libraries, fold).pop()
+}
+
+/// Every library [`owning_library`] could pick: all whose folder contains
+/// `path` and is deepest. Two `.snxlib` files in one folder tie, and a prompt
+/// that picked one would let the other close without asking.
+pub(crate) fn owning_libraries<'a>(
+    path: &Path,
+    libraries: &'a [PathBuf],
+    fold: CaseFold,
+) -> Vec<&'a PathBuf> {
+    let under: Vec<(&PathBuf, usize)> = libraries
+        .iter()
+        .filter_map(|lib| Some((lib, lib.parent()?)))
+        .filter(|(_, dir)| path_is_under(path, dir, fold))
+        .map(|(lib, dir)| (lib, path_key_with(dir, fold).len()))
+        .collect();
+    let deepest = under.iter().map(|(_, depth)| *depth).max();
+    under
+        .into_iter()
+        .filter(|(_, depth)| Some(*depth) == deepest)
+        .map(|(lib, _)| lib)
+        .collect()
+}
+
 /// True when `path` is `root` or lies under it, compared component-wise on
 /// [`path_key_with`] keys so a differently-cased or `\\`-separated spelling of
 /// the same file still matches.

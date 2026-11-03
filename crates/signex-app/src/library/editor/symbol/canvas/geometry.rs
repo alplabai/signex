@@ -39,10 +39,16 @@ pub(super) fn unwrap_angle(prev: f64, raw: f64) -> f64 {
 /// by [`SELECTED_STROKE_FACTOR`] while selected. The schematic's law (#1858);
 /// the thickening applies after the floor, so a selected stroke stays wider
 /// when zoomed out.
-pub(super) fn symbol_stroke_mm(width_mm: f64, selected: bool, scale: f32) -> f32 {
+pub(super) fn symbol_stroke_mm(
+    width_mm: f64,
+    selected: bool,
+    scale: f32,
+    device_px_per_logical_px: f32,
+) -> f32 {
     let mm = signex_types::schematic::effective_stroke_mm(width_mm) as f32;
     if selected {
-        stroke_px(mm, scale) * SELECTED_STROKE_FACTOR / scale.max(f32::MIN_POSITIVE)
+        stroke_px(mm, scale, device_px_per_logical_px) * SELECTED_STROKE_FACTOR
+            / scale.max(f32::MIN_POSITIVE)
     } else {
         mm
     }
@@ -50,12 +56,8 @@ pub(super) fn symbol_stroke_mm(width_mm: f64, selected: bool, scale: f32) -> f32
 
 /// Screen width of a stroke drawn straight to the frame (previews), under
 /// the same law the scene replay applies.
-pub(super) fn stroke_px(width_mm: f32, scale: f32) -> f32 {
-    signex_types::schematic::stroke_px(
-        width_mm,
-        scale,
-        signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
-    )
+pub(super) fn stroke_px(width_mm: f32, scale: f32, device_px_per_logical_px: f32) -> f32 {
+    signex_types::schematic::stroke_px(width_mm, scale, device_px_per_logical_px)
 }
 
 pub(super) fn screen_px_to_world_mm(px: f32, scale: f32) -> f32 {

@@ -19,7 +19,7 @@ use iced::Task;
 use super::super::contracts::Message;
 use super::super::state::Signex;
 use crate::library::drift::{
-    ApplyInput, DriftJob, DriftReport, MountedLibrary, SheetEntries, instance_stamps,
+    ApplyInput, DriftJob, DriftReport, MountedLibrary, SheetEntries, instance_stamps, part_stamps,
 };
 use crate::library::messages::LibraryMessage;
 
@@ -71,7 +71,9 @@ impl Signex {
         let libs = self.mounted_libraries();
         if libs.is_empty() {
             self.library.drift.drifted.clear();
+            self.library.drift.missing.clear();
             self.library.drift.names.clear();
+            self.library.drift.unreadable_libs.clear();
             self.update_selection_info();
             return None;
         }
@@ -93,9 +95,16 @@ impl Signex {
                 (path.clone(), entries)
             })
             .collect();
+        let parts = self
+            .document_state
+            .engines
+            .iter()
+            .map(|(path, engine)| (path.clone(), part_stamps(engine.document())))
+            .collect();
         Some(DriftJob {
             generation: self.library.drift.generation,
             sheets,
+            parts,
             libs,
         })
     }
@@ -107,8 +116,11 @@ impl Signex {
                 .is_some_and(|library| libs.iter().any(|l| l.id == library))
         };
         let drift = &mut self.library.drift;
+        drift
+            .unreadable_libs
+            .retain(|library, _| libs.iter().any(|l| l.id == *library));
         drift.names.retain(|lib_id, _| mounted(lib_id));
-        for rows in drift.drifted.values_mut() {
+        for rows in drift.drifted.values_mut().chain(drift.missing.values_mut()) {
             rows.retain(|lib_id| mounted(lib_id));
         }
     }
@@ -125,6 +137,19 @@ impl Signex {
         if report.sheets.is_empty() && !report.problems.is_empty() {
             return Task::none();
         }
+        // Say it once per (library, reason): a different failure is new.
+        for (library, (name, reason)) in &report.unreadable_libs {
+            if self.library.drift.unreadable_libs.get(library) != Some(reason) {
+                crate::diagnostics::log_warning(crate::library::drift::unreadable_library_warning(
+                    name, reason,
+                ));
+            }
+        }
+        self.library.drift.unreadable_libs = report
+            .unreadable_libs
+            .iter()
+            .map(|(library, (_, reason))| (*library, reason.clone()))
+            .collect();
         let mut drifted = std::collections::HashMap::new();
         for (sheet, entries) in report.sheets {
             // Closed meanwhile: nothing to show.
@@ -147,11 +172,62 @@ impl Signex {
             drifted.insert(sheet, entries);
         }
         self.library.drift.drifted = drifted;
+        self.record_missing_symbols(report.missing, &report.unreadable);
         let mut names = report.names;
         keep_unreadable_names(&mut names, &self.library.drift.names, &report.unreadable);
         self.library.drift.names = names;
         self.update_selection_info();
         Task::none()
+    }
+
+    /// Store which placed symbols lost their library symbol (#1845) and say
+    /// so once per change, naming the sheet; the Properties panel shows the
+    /// state on each placed part.
+    fn record_missing_symbols(
+        &mut self,
+        mut missing: std::collections::HashMap<
+            std::path::PathBuf,
+            std::collections::BTreeSet<String>,
+        >,
+        unreadable: &std::collections::HashSet<String>,
+    ) {
+        // An unreadable lookup says nothing about a removal: keep the
+        // previous state, as `keep_unreadable_rows` does for drift.
+        for (sheet, previous) in &self.library.drift.missing {
+            let kept: Vec<&String> = previous
+                .iter()
+                .filter(|id| unreadable.contains(*id))
+                .collect();
+            if !kept.is_empty() {
+                missing
+                    .entry(sheet.clone())
+                    .or_default()
+                    .extend(kept.into_iter().cloned());
+            }
+        }
+        missing.retain(|sheet, _| self.document_state.engines.contains_key(sheet));
+        for (sheet, ids) in &missing {
+            if self.library.drift.missing.get(sheet) == Some(ids) {
+                continue;
+            }
+            let names: Vec<String> = ids
+                .iter()
+                .map(|id| {
+                    self.library
+                        .drift
+                        .display_name(id, &self.library.open_libraries)
+                })
+                .collect();
+            crate::diagnostics::log_warning(format!(
+                "{}: library symbol missing for {}; the sheet keeps its embedded copy.",
+                sheet.file_name().map_or_else(
+                    || sheet.display().to_string(),
+                    |n| n.to_string_lossy().into_owned()
+                ),
+                names.join(", ")
+            ));
+        }
+        self.library.drift.missing = missing;
     }
 
     /// Properties ▸ "Update from library" for the placed symbol `uuid`: the
@@ -172,6 +248,15 @@ impl Signex {
         else {
             return Task::none();
         };
+        if self.library.drift.is_missing(&sheet, &lib_id) {
+            crate::diagnostics::log_warning(format!(
+                "{} is missing from its library; this sheet keeps its embedded copy, so there is nothing to update from.",
+                self.library
+                    .drift
+                    .display_name(&lib_id, &self.library.open_libraries)
+            ));
+            return Task::none();
+        }
         if !self.library.drift.is_drifted(&sheet, &lib_id) {
             crate::diagnostics::log_warning(format!(
                 "{} has no pending library update on this sheet.",
@@ -218,3 +303,6 @@ fn keep_unreadable_names(
         names.entry(lib_id.clone()).or_insert_with(|| name.clone());
     }
 }
+
+#[cfg(test)]
+mod tests;
