@@ -270,6 +270,17 @@ impl LibraryRollbackJob {
     }
 }
 
+/// What `DeleteJob` took off disk.
+enum Removed {
+    /// A file, or a `.snxlib` directory package, whole.
+    Plain,
+    /// A library manifest file and, when `cleaned`, its known folders.
+    Library {
+        cleaned: Option<PathBuf>,
+        left: Vec<PathBuf>,
+    },
+}
+
 /// Deletes a file or `.snxlib` directory, but only when it is provably inside
 /// the owning project's folder and not a shared library (#139).
 pub struct DeleteJob {
@@ -323,15 +334,14 @@ impl DeleteJob {
                 return (DeleteIo::Failed(why), EntryPatch::NotListed);
             }
         };
-        let removed = if self.target.is_dir() {
-            std::fs::remove_dir_all(&self.target)
-        } else {
-            std::fs::remove_file(&self.target)
+        let e = match self.remove_target() {
+            Ok(Removed::Plain) => return (DeleteIo::Deleted, entry),
+            Ok(Removed::Library { cleaned, left }) => {
+                return (DeleteIo::DeletedLibrary { cleaned, left }, entry);
+            }
+            Err(e) => e,
         };
-        let Err(e) = removed else {
-            return (DeleteIo::Deleted, entry);
-        };
-        let mut why = e.to_string();
+        let mut why = e;
         if self.target.is_dir() {
             why.push_str("; some of its contents may already be gone");
         }
@@ -361,6 +371,38 @@ impl DeleteJob {
         }
     }
 
+    /// Remove the target from disk. A `.snxlib` directory package is itself
+    /// the library and goes whole; a `.snxlib` file goes by its known
+    /// artifacts only (see `library_delete`).
+    fn remove_target(&self) -> Result<Removed, String> {
+        if is_library_manifest(&self.target) && self.target.is_file() {
+            return self.delete_library();
+        }
+        let removed = if self.target.is_dir() {
+            std::fs::remove_dir_all(&self.target)
+        } else {
+            std::fs::remove_file(&self.target)
+        };
+        removed.map(|()| Removed::Plain).map_err(|e| e.to_string())
+    }
+
+    /// A manifest directly in the project folder, or in a folder another
+    /// library or a project document shares, gets no folder clean-up.
+    fn delete_library(&self) -> Result<Removed, String> {
+        let library_dir = self.target.parent().filter(|dir| {
+            self.project_root
+                .as_deref()
+                .is_some_and(|root| is_inside_project_root(dir, root))
+                && !crate::app::library_delete::holds_other_library(dir, &self.target)
+                && !crate::app::library_delete::holds_project_files(dir)
+        });
+        let left = crate::app::library_delete::delete_library(&self.target, library_dir)?;
+        Ok(Removed::Library {
+            cleaned: library_dir.map(Path::to_path_buf),
+            left,
+        })
+    }
+
     fn drop_entry(&self) -> Result<EntryPatch, signex_types::project::ProjectError> {
         match &self.project {
             Some((file, fold)) => remove_entry(file, &self.target, *fold),
@@ -379,6 +421,10 @@ impl DeleteJob {
                 .iter()
                 .any(|library| same_path(library, &self.target))
     }
+}
+
+fn is_library_manifest(target: &Path) -> bool {
+    crate::app::file_extension::has_extension(target, "snxlib")
 }
 
 /// An orphan row whose project entry could not be dropped on disk: the

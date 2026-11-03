@@ -90,16 +90,32 @@ pub fn resolve_placement_of(
 /// footprint field that ERC, the netlist and the BOM read (#1842); empty
 /// when the row binds none. A footprint that cannot be read is reported and
 /// leaves the field empty, so the placement still goes ahead.
-fn footprint_name(
+pub(crate) fn footprint_name(
     own: &signex_library::adapters::local_git::LocalGitAdapter,
     row: &signex_library::ComponentRow,
     open_libraries: &[(Uuid, PathBuf)],
 ) -> String {
+    read_footprint_name(own, row, open_libraries).unwrap_or_else(|why| {
+        crate::diagnostics::log_warning(format!(
+            "The footprint of {} could not be read ({why}); the placed part has no footprint.",
+            row.internal_pn
+        ));
+        String::new()
+    })
+}
+
+/// The name of the footprint `row` binds (empty when it binds none), or why
+/// it could not be read. Silent: each caller words its own report.
+pub(crate) fn read_footprint_name(
+    own: &signex_library::adapters::local_git::LocalGitAdapter,
+    row: &signex_library::ComponentRow,
+    open_libraries: &[(Uuid, PathBuf)],
+) -> Result<String, String> {
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
     let Some(reference) = row.footprint_ref else {
-        return String::new();
+        return Ok(String::new());
     };
     let read = if reference.library_id == own.library_id() {
         own.get_footprint(reference.uuid).map_err(|e| e.to_string())
@@ -111,16 +127,7 @@ fn footprint_name(
             .and_then(|(_, path)| LocalGitAdapter::open(path).map_err(|e| e.to_string()))
             .and_then(|a| a.get_footprint(reference.uuid).map_err(|e| e.to_string()))
     };
-    match read {
-        Ok(footprint) => footprint.name,
-        Err(why) => {
-            crate::diagnostics::log_warning(format!(
-                "The footprint of {} could not be read ({why}); the placed part has no footprint.",
-                row.internal_pn
-            ));
-            String::new()
-        }
-    }
+    read.map(|footprint| footprint.name)
 }
 
 /// The identity fields a placed part carries for `row`: its manufacturer

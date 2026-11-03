@@ -252,6 +252,74 @@ fn a_document_saved_or_moved_while_the_sheets_are_read_cancels_the_run() {
 }
 
 #[test]
+fn saving_the_open_root_while_the_sheets_are_read_is_allowed_and_cancels_the_run() {
+    let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
+    let root = root_path(&dir);
+    let read = app.handle_annotate(ResetAndRenumber);
+    let message = completion(read);
+    // A real save of the open root: not refused, and its completion moves the
+    // epoch that cancels the run.
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "a_root".into(),
+        path: root.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.mark_document_dirty(&root);
+    let epoch = app.document_state.documents_epoch;
+    let save = app.save_active_document();
+    let allowed = save.is_ok();
+    if let Ok(save) = save {
+        settle_task(&mut app, save);
+    }
+    let epoch_moved = app.document_state.documents_epoch != epoch;
+    // Only a document save is let through: a History restore or a Replace
+    // write of the sheet is still refused while the read holds it.
+    let restore_refused = app.refuse_while_path_op(&root, "restored").is_err();
+
+    let task = app.update(message);
+    settle_task(&mut app, task);
+
+    let (refs, idle) = (
+        root_refs(&app, &dir),
+        pending_nothing(&app, &[&child_path(&dir)]),
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(allowed, "a save is no longer refused during the read");
+    assert!(epoch_moved, "the save completion moves the epoch");
+    assert!(
+        restore_refused,
+        "a restore is still refused during the read"
+    );
+    assert_eq!(refs, ["R?"], "the stale run changed nothing");
+    assert!(idle);
+}
+
+#[test]
+fn run_requests_from_the_dialog_are_refused_in_messages_while_a_run_is_going() {
+    let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
+    let read = app.handle_annotate(ResetAndRenumber);
+    assert!(app.ui_state.annotate_runs.is_running());
+    app.document_state.error_notice = None;
+
+    let _ = crate::diagnostics::init_logging();
+    let since = crate::diagnostics::newest_entry_id();
+    let ignored = app.dispatch_annotate_message(AnnotateMsg::Run(ResetAndRenumber));
+    let notice = notice_detail(&app);
+    let logged = logged_since(since, "Annotate was not run");
+
+    settle_task(&mut app, ignored);
+    settle_task(&mut app, read);
+    let idle = pending_nothing(&app, &[&child_path(&dir)]);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(notice.contains("still going"), "{notice}");
+    assert!(logged, "a stale click still reaches the Messages panel");
+    assert!(idle);
+}
+
+#[test]
 fn a_sheet_symbol_placed_while_the_sheets_are_read_cancels_the_run() {
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     let read = app.handle_annotate(ResetAndRenumber);
@@ -289,7 +357,7 @@ fn a_rename_or_delete_of_the_runs_sheets_is_refused_until_it_ends() {
     let read = app.handle_annotate(ResetAndRenumber);
     let while_reading = (
         app.refuse_start_while_path_op(&root, "renamed").is_err(),
-        app.refuse_while_path_op(&root, "saved").is_err(),
+        app.refuse_save_while_path_op(&root).is_err(),
     );
 
     let write = app.update(completion(read));
@@ -307,7 +375,9 @@ fn a_rename_or_delete_of_the_runs_sheets_is_refused_until_it_ends() {
         pending_nothing(&app, &[&child]),
     );
     std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(while_reading, (true, true));
+    // Reading holds the sheets against a rename or delete, but not a save
+    // (the save moves the epoch and the run cancels, #1753).
+    assert_eq!(while_reading, (true, false));
     assert_eq!(while_writing, (true, true, true, true));
     assert_eq!(after, (true, true, true));
 }
@@ -461,11 +531,17 @@ fn an_unopened_sheet_with_a_save_running_is_left_alone() {
     settle_task(&mut app, task);
 
     let refs = child_refs(&dir);
+    let root = root_refs(&app, &dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, ["R5"], "a sheet a save owns is not rewritten");
+    assert_eq!(
+        root,
+        ["R?"],
+        "the run was refused whole, not numbered around the sheet"
+    );
     assert!(logged_since(
         since,
-        "Annotate: z_child.snxsch was left unchanged, a save of it is still running"
+        "Annotate was not run: it would skip z_child.snxsch (a save of it is still running)"
     ));
 }
 

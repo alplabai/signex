@@ -11,6 +11,7 @@ use signex_library::PrimitiveRef;
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
+use super::drift::split_lib_id;
 use super::state::OpenLibrary;
 use crate::panels::SymbolDeleteWarning;
 
@@ -22,9 +23,9 @@ const MAX_LISTED: usize = 6;
 pub struct PendingSymbolDelete {
     pub path: PathBuf,
     pub symbol: Uuid,
-    /// `(undo, redo)` depths of the editor when the warning was raised; an
+    /// The editor's `history_generation` when the warning was raised; any
     /// edit, undo or redo since then makes the warning stale.
-    pub history: (usize, usize),
+    pub history: u64,
     /// How many rows and open sheets the warning named.
     pub rows: usize,
     pub sheets: usize,
@@ -38,7 +39,7 @@ impl PendingSymbolDelete {
     /// and the symbol it names is still at its slot.
     pub fn is_current(&self, editor: &crate::app::SymbolDocument) -> bool {
         editor.path == self.path
-            && (editor.undo_snapshots.len(), editor.redo_snapshots.len()) == self.history
+            && editor.history_generation == self.history
             && editor
                 .file
                 .symbols
@@ -94,8 +95,8 @@ pub fn usage_lines<'a>(
             }
         }
     }
-    let lib_id = super::place::lib_id_of(symbol);
-    let placed = placed_on_sheets(sheets, |id| id == lib_id);
+    let target = (symbol.library_id, symbol.uuid);
+    let placed = placed_on_sheets(sheets, |id| split_lib_id(id) == Some(target));
     let mut lines = Vec::new();
     if !rows.is_empty() {
         lines.push(format!("Component rows: {}", capped(&rows)));
@@ -142,18 +143,26 @@ fn placed_on_sheets<'a>(
     placed
 }
 
-/// The scan for a container that is not inside a mounted library: its
+/// The scan for a container whose library is unknown: it is outside every
+/// mounted library, or (`shared_folder`) several share its folder. Its
 /// component rows cannot be checked (usage is unknown), but open sheets are
 /// still matched by the symbol's uuid, whatever library the part names.
 pub fn usage_outside_library<'a>(
     container: &Path,
     sheets: impl Iterator<Item = (&'a Path, &'a SchematicSheet)>,
     symbol: Uuid,
+    shared_folder: bool,
 ) -> SymbolUsage {
-    let suffix = format!(":{symbol}");
-    let placed = placed_on_sheets(sheets, |id| id.ends_with(&suffix));
+    let placed = placed_on_sheets(sheets, |id| {
+        split_lib_id(id).is_some_and(|(_, sym)| sym == symbol)
+    });
+    let why = if shared_folder {
+        "its library cannot be told apart (several libraries share its folder)"
+    } else {
+        "it is not inside a mounted library"
+    };
     let mut lines = vec![format!(
-        "{} is not inside a mounted library; its component rows were not checked",
+        "{}: {why}; its component rows were not checked",
         container.display()
     )];
     if !placed.is_empty() {
@@ -186,6 +195,24 @@ fn capped(items: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_shared_folder_is_not_called_unmounted() {
+        let file = Path::new("/w/symbols/s.snxsym");
+        let lines = |shared| {
+            usage_outside_library(file, std::iter::empty(), Uuid::nil(), shared)
+                .lines
+                .join("\n")
+        };
+        assert!(lines(false).contains("is not inside a mounted library"));
+        let shared = lines(true);
+        assert!(
+            shared.contains("several libraries share its folder"),
+            "{shared}"
+        );
+        assert!(!shared.contains("not inside a mounted library"), "{shared}");
+    }
+
     use crate::library::state::LibraryDisplaySettings;
     use crate::library::test_adapters::{FailingListingAdapter, FailingTableListAdapter};
     use std::collections::HashMap;
@@ -233,5 +260,120 @@ mod tests {
         lib.reload_tables(&FailingListingAdapter::new(lib.library_id))
             .unwrap();
         assert!(scan(&lib).lines.is_empty(), "a good load clears the flag");
+    }
+
+    fn sheet_placing(lib_id: &str, reference: &str) -> SchematicSheet {
+        let mut sheet = SchematicSheet::default();
+        sheet.symbols.push(signex_types::schematic::Symbol {
+            lib_id: lib_id.into(),
+            reference: reference.into(),
+            ..Default::default()
+        });
+        sheet
+    }
+
+    use crate::app::SymbolDocument;
+    use signex_library::{Symbol, SymbolFile};
+
+    fn pending_for(editor: &SymbolDocument) -> PendingSymbolDelete {
+        PendingSymbolDelete {
+            path: editor.path.clone(),
+            symbol: editor.file.symbols[0].uuid,
+            history: editor.history_generation,
+            rows: 1,
+            sheets: 0,
+            unchecked: 0,
+            warning: SymbolDeleteWarning {
+                idx: 0,
+                name: "A".into(),
+                only_unknown: false,
+                lines: Vec::new(),
+            },
+        }
+    }
+
+    fn edit(editor: &mut SymbolDocument) {
+        assert!(editor.record_edit(None, |e| {
+            e.file.symbols[0].name.push('x');
+            true
+        }));
+    }
+
+    fn editor() -> SymbolDocument {
+        SymbolDocument::new(
+            PathBuf::from("a.snxsym"),
+            SymbolFile::from_symbol(Symbol::empty("A")),
+        )
+    }
+
+    #[test]
+    fn undo_then_a_new_edit_leaves_the_warning_stale() {
+        // Undo depth is 1 again after undo + edit; only the generation differs.
+        let mut ed = editor();
+        edit(&mut ed);
+        let pending = pending_for(&ed);
+        assert!(pending.is_current(&ed));
+
+        assert!(ed.undo());
+        assert!(!pending.is_current(&ed), "undo");
+        edit(&mut ed);
+        assert_eq!(ed.undo_snapshots.len(), 1);
+        assert!(!pending.is_current(&ed), "undo then edit");
+    }
+
+    #[test]
+    fn redo_leaves_the_warning_stale() {
+        let mut ed = editor();
+        edit(&mut ed);
+        assert!(ed.undo());
+        let pending = pending_for(&ed);
+        assert!(pending.is_current(&ed));
+
+        assert!(ed.redo());
+        assert!(!pending.is_current(&ed));
+    }
+
+    #[test]
+    fn a_reopened_editor_does_not_revive_the_warning() {
+        let (mut app, _task) = crate::app::Signex::new();
+        let path = PathBuf::from("a.snxsym");
+        let file = SymbolFile::from_symbol(Symbol::empty("A"));
+
+        app.open_symbol_editor_tab(path.clone(), file.clone());
+        edit(app.document_state.symbol_editors.get_mut(&path).unwrap());
+        let pending = pending_for(&app.document_state.symbol_editors[&path]);
+        assert!(pending.is_current(&app.document_state.symbol_editors[&path]));
+
+        // Close, reopen and make the same single edit.
+        app.document_state.symbol_editors.remove(&path);
+        app.document_state.tabs.clear();
+        app.open_symbol_editor_tab(path.clone(), file);
+        edit(app.document_state.symbol_editors.get_mut(&path).unwrap());
+        assert!(!pending.is_current(&app.document_state.symbol_editors[&path]));
+    }
+
+    #[test]
+    fn an_upper_case_lib_id_on_a_sheet_is_still_named() {
+        let lib = library();
+        let symbol = PrimitiveRef::new(lib.library_id, Uuid::now_v7());
+        let upper = super::super::place::lib_id_of(&symbol).to_uppercase();
+        let sheet = sheet_placing(&upper, "U7");
+        let path = PathBuf::from("/tmp/a.snxsch");
+
+        let usage = usage_lines(
+            std::slice::from_ref(&lib),
+            std::iter::once((path.as_path(), &sheet)),
+            &symbol,
+        );
+        assert_eq!(usage.sheets, 1);
+        assert!(usage.lines.join("\n").contains("U7"), "{:?}", usage.lines);
+
+        let outside = usage_outside_library(
+            Path::new("/tmp/x.snxsym"),
+            std::iter::once((path.as_path(), &sheet)),
+            symbol.uuid,
+            false,
+        );
+        assert_eq!(outside.sheets, 1);
     }
 }

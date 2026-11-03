@@ -375,6 +375,9 @@ impl Signex {
                 // presets (Label/Power port/etc.) re-arm their specific
                 // ghost after the dispatch.
                 self.clear_ghost_previews();
+                // A port the previous pick armed is not this tool's: a
+                // placement that wants one sets it after this arm (#1920).
+                self.interaction_state.pending_port = None;
                 // Arm a default ghost text-note preview for the Text tool so
                 // the user sees a sample "Text" glyph at the cursor. Other
                 // tools with ghosts arm them from their placement preset.
@@ -427,5 +430,84 @@ mod tests {
         let canvas = app.interaction_state.active_canvas();
         assert!(canvas.selected.is_empty());
         assert!(canvas.overlay_cache_clears > before, "stale overlay left");
+    }
+
+    /// A schematic with one empty sheet, as the canvas click handlers need.
+    fn app_with_empty_sheet() -> Signex {
+        let path = std::path::PathBuf::from("tool-pick.snxsch");
+        let sheet = signex_types::schematic::SchematicSheet {
+            paper_size: "A4".to_string(),
+            ..Default::default()
+        };
+        let (mut app, _task) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        app.document_state.engines.insert(
+            path.clone(),
+            signex_engine::Engine::new(sheet).expect("engine"),
+        );
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "tool-pick".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(path);
+        app
+    }
+
+    /// The label types the sheet holds after one click at (10, 10).
+    fn label_types_after_click(app: &mut Signex) -> Vec<signex_types::schematic::LabelType> {
+        let _ = app.update(Message::CanvasEvent(crate::app::CanvasEvent::Clicked {
+            world_x: 10.0,
+            world_y: 10.0,
+        }));
+        app.document_state
+            .active_engine()
+            .expect("engine")
+            .document()
+            .labels
+            .iter()
+            .map(|label| label.label_type)
+            .collect()
+    }
+
+    /// #1920 - a Port (Global) armed from the Active Bar, then Place Net
+    /// Label from the palette, the keyboard or the Place menu, must place a
+    /// net label: the port the first pick left behind is not the new tool's.
+    #[test]
+    fn a_label_tool_pick_after_a_port_places_a_net_label() {
+        use signex_types::schematic::LabelType;
+        let arm_port = |app: &mut Signex| {
+            let _ = app.update(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+                crate::active_bar::ActiveBarAction::PlacePort,
+            )));
+            assert!(app.interaction_state.pending_port.is_some(), "port armed");
+        };
+
+        let mut by_command = app_with_empty_sheet();
+        arm_port(&mut by_command);
+        let id = crate::keymap::AppCommandId::new("place_net_label").unwrap();
+        let _ = by_command.dispatch_command(&id, crate::app::command::CommandArgs::none(), None);
+        assert_eq!(label_types_after_click(&mut by_command), [LabelType::Net]);
+
+        let mut by_menu = app_with_empty_sheet();
+        arm_port(&mut by_menu);
+        let _ = by_menu.update(Message::Menu(crate::menu_bar::MenuMessage::PlaceLabel));
+        assert_eq!(label_types_after_click(&mut by_menu), [LabelType::Net]);
+    }
+
+    /// The `SelectTool` arm itself drops a port the previous pick armed
+    /// (#1920), independent of any caller that also clears it.
+    #[test]
+    fn selecting_a_tool_drops_a_pending_port() {
+        let mut app = app_with_empty_sheet();
+        let _ = app.update(Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::PlacePort,
+        )));
+        assert!(app.interaction_state.pending_port.is_some(), "port armed");
+        let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
+        assert!(app.interaction_state.pending_port.is_none());
     }
 }

@@ -467,9 +467,13 @@ mod tests {
                 // grows under load, so pin the memo to a future instant:
                 // `duration_since` saturates to zero, keeping the second
                 // click inside the double-click window deterministically.
-                let memo = app.interaction_state.last_tree_click.as_mut();
-                memo.expect("first click memoed").1 =
-                    std::time::Instant::now() + std::time::Duration::from_secs(3600);
+                assert!(
+                    app.interaction_state.last_tree_click.key().is_some(),
+                    "first click memoed"
+                );
+                app.interaction_state
+                    .last_tree_click
+                    .restamp(std::time::Instant::now() + std::time::Duration::from_secs(3600));
             }
             let task = app.update(Message::Dock(crate::dock::DockMessage::Panel(
                 crate::panels::PanelMsg::Tree(TreeMsg::Select(key.clone())),

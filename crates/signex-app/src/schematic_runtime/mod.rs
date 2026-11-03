@@ -30,7 +30,7 @@ mod scene_cache;
 pub mod selection;
 mod snapshot;
 mod symbol;
-pub(crate) use symbol::symbols_without_geometry;
+pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 pub mod text;
 mod text_width;
 mod wire_style;

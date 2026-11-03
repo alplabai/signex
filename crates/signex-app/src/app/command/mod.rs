@@ -2,10 +2,12 @@
 //! (`bridge.rs`), the dispatch entry point ([`Signex::dispatch_command`]) and
 //! its argument type ([`CommandArgs`]), and the enablement gate
 //! ([`enablement::is_enabled`]) the menu bar reads too. The palette and the
-//! keymap run commands through [`Signex::dispatch_command`]. Of the menu items
-//! only Undo and Redo reach it, and only from an undocked window's menu or the
-//! native menu; the main window's menu emits its own `Message` variants
-//! (`handlers/menu/editing.rs`).
+//! keymap run commands through [`Signex::dispatch_command`], and so do the
+//! context menus' command rows (`ContextAction::Command`, #1727), which pass
+//! the click point and project in [`InvocationContext`]. Of the menu bar's
+//! items only Undo and Redo reach it, and only from an undocked window's menu
+//! or the native menu; the main window's menu emits its own `Message`
+//! variants (`handlers/menu/editing.rs`).
 
 pub(crate) mod active_bar;
 mod args;
@@ -13,7 +15,7 @@ pub(crate) mod bridge;
 pub(crate) mod enablement;
 mod window_document;
 
-pub(crate) use args::CommandArgs;
+pub(crate) use args::{CommandArgs, InvocationContext};
 use bridge::core_to_message;
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;
@@ -32,10 +34,8 @@ impl Signex {
     /// command palette, and a future CLI later) names *what* to run
     /// without knowing the app's internal message shape.
     ///
-    /// `args` is accepted but unused: [`core_to_message`] ignores it,
-    /// because every catalog command is nullary today. It is here only
-    /// so this signature is stable ahead of a consumer that needs it —
-    /// do not thread it through `core_to_message` speculatively.
+    /// `args` carries what the caller knows that the id does not (see
+    /// [`CommandArgs`]); the bridge reads it for the commands that take it.
     ///
     /// An id can fail to resolve two ways, and both are a silent no-op,
     /// never a panic: it isn't in the catalog at all, or it's a real
@@ -54,7 +54,7 @@ impl Signex {
     pub(crate) fn dispatch_command(
         &mut self,
         command: &crate::keymap::AppCommandId,
-        _args: CommandArgs,
+        args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
         // Undo / Redo typed in an undocked tab step that window's document
@@ -65,7 +65,7 @@ impl Signex {
             && self.undocked_tab_has_canvas(window)
         {
             return self.run_in_window(window_id, true, |app| {
-                app.dispatch_command(command, _args, None)
+                app.dispatch_command(command, args, None)
             });
         }
         // Undo / Redo typed in a Component Preview window step that
@@ -88,7 +88,7 @@ impl Signex {
         }
         // Save, Save As, Print and the tab stepper act on the document the
         // window shows (#1794).
-        if let Some(task) = self.window_document_command(command, window) {
+        if let Some(task) = self.window_document_command(command, &args, window) {
             return task;
         }
         if !is_enabled(command, &self.command_context(window))
@@ -103,10 +103,10 @@ impl Signex {
             match command.as_str() {
                 "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
                 "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
-                _ => core_to_message(command),
+                _ => core_to_message(command, &args),
             }
         } else {
-            core_to_message(command)
+            core_to_message(command, &args)
         };
         match (resolved, window) {
             (Some(Message::CanvasEvent(event)), Some(window_id))
@@ -308,6 +308,6 @@ mod tests {
     }
 
     fn core_message(command: &AppCommandId) -> Message {
-        bridge::core_to_message(command).expect("the command resolves")
+        bridge::core_to_message(command, &CommandArgs::none()).expect("the command resolves")
     }
 }

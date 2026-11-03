@@ -11,6 +11,8 @@ pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
+#[cfg(test)]
+mod draft_ownership_tests;
 mod error_notice;
 mod interaction;
 mod keymap_recorder;
@@ -340,6 +342,8 @@ pub struct DocumentState {
     /// [`DocumentState::note_sheet_edit`], mostly via `mark_document_dirty`.
     /// ERC compares it with the count its results were read at (#1768).
     pub sheet_edit_epoch: u64,
+    /// Symbol editors opened so far; see [`DocumentState::next_symbol_history_base`].
+    pub symbol_editors_opened: u64,
     pub dock: DockArea,
     /// Change detection + debounce for persisting `dock` (#692). The
     /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
@@ -358,6 +362,8 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Idle check of open documents against the disk (#1877).
+    pub disk_poll: crate::app::handlers::document_files::DiskPoll,
     /// Off-thread Navigator hierarchy assembly (#1470).
     pub navigator_job: navigator_job::NavigatorJob,
     /// Cached sheet-path -> owning-project index, rebuilt when its inputs

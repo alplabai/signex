@@ -25,6 +25,7 @@ mod handlers;
 mod helpers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
+mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub mod parent_reference_disk;
@@ -32,6 +33,7 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub mod project_entry_disk;
 mod project_tab;
+pub(crate) mod sheet_repairs;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub(crate) mod designator_scan;
 #[cfg(test)]
@@ -49,7 +51,7 @@ pub(crate) mod sheet_hierarchy;
 mod state;
 pub(crate) use state::library_entry;
 pub(crate) use state::rule_profile_ui;
-pub(crate) use state::scope::path_key_with;
+pub(crate) use state::scope::{deepest_owner, deepest_owners, path_key_with};
 pub(crate) use state::volume_case::probe_directory_case;
 #[cfg(test)]
 mod draft_save_point_tests;

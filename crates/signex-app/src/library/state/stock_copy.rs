@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use super::LibraryState;
+use crate::app::CaseFold;
 use crate::library::stock_copy::StockPrimitiveKind;
 
 /// The pinned `library_id` of the bundled stock library (#323).
@@ -55,42 +56,15 @@ impl LibraryState {
     /// The kind of `path` when it is a primitive file inside the locked
     /// stock library; `None` for any other path, and for every path while
     /// a maintainer edits the stock library itself (#1892).
-    pub(crate) fn stock_primitive_kind(&self, path: &Path) -> Option<StockPrimitiveKind> {
+    pub(crate) fn stock_primitive_kind(
+        &self,
+        path: &Path,
+        fold: CaseFold,
+    ) -> Option<StockPrimitiveKind> {
         let kind = StockPrimitiveKind::of_path(path)?;
-        self.containing_library(path)
+        self.containing_library_with(path, fold)
             .is_some_and(|lib| self.is_locked_stock_root(&lib.root))
             .then_some(kind)
-    }
-
-    /// Drop what the Components and Library panels hold for the closed
-    /// library at `root`: its selection, details, row menu, drag, hover and
-    /// expand state. Without this a closed library's details stay on screen
-    /// and its row menu can still try Place or Open.
-    pub(crate) fn forget_panel_state_of(&mut self, root: &Path) {
-        let of = |key: &crate::library::state::ComponentsPanelRowKey| key.library_path == root;
-        let panel = &mut self.components_panel;
-        if panel.selected.as_ref().is_some_and(of) {
-            panel.selected = None;
-        }
-        if panel.details.key.as_ref().is_some_and(of) {
-            panel.details = Default::default();
-        }
-        if panel.row_menu.as_ref().is_some_and(|m| of(&m.key)) {
-            panel.row_menu = None;
-        }
-        if panel.drag.as_ref().is_some_and(|d| of(&d.key)) {
-            panel.drag = None;
-        }
-        if panel.hovered.as_ref().is_some_and(of) {
-            panel.hovered = None;
-        }
-        self.panel_expanded.remove(root);
-        if self.panel_selected.as_ref().is_some_and(of) {
-            self.panel_selected = None;
-        }
-        if self.panel_last_click.as_ref().is_some_and(|(k, _)| of(k)) {
-            self.panel_last_click = None;
-        }
     }
 
     /// Mounted libraries that accept writes, as `(.snxlib path, name)`.
@@ -122,12 +96,17 @@ impl LibraryState {
     /// What to call the stock file at `path` in the dialog: the name the
     /// library lists for it when the file name is its uuid, else the file
     /// name without extension.
-    pub fn stock_primitive_label(&self, path: &Path, kind: StockPrimitiveKind) -> String {
+    pub fn stock_primitive_label(
+        &self,
+        path: &Path,
+        kind: StockPrimitiveKind,
+        fold: CaseFold,
+    ) -> String {
         let stem = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let Some(lib) = self.containing_library(path) else {
+        let Some(lib) = self.containing_library_with(path, fold) else {
             return stem;
         };
         let summaries = match kind {
@@ -142,8 +121,8 @@ impl LibraryState {
 
     /// The directory of the library `path` lives in, for resolving the
     /// STEP models its footprints attach.
-    pub(crate) fn library_dir_of(&self, path: &Path) -> Option<PathBuf> {
-        self.containing_library(path)
+    pub(crate) fn library_dir_of(&self, path: &Path, fold: CaseFold) -> Option<PathBuf> {
+        self.containing_library_with(path, fold)
             .and_then(|lib| lib.root_dir())
             .map(Path::to_path_buf)
     }

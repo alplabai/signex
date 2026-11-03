@@ -458,10 +458,13 @@ impl Signex {
         &mut self,
         path: PathBuf,
         title: String,
-        sheet: SchematicSheet,
+        mut sheet: SchematicSheet,
     ) {
         warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
         report_unrecognized_sheet_size(&path, &sheet.paper_size);
+        // A read-only sheet cannot be saved, so a repair to it stays a report.
+        let repaired = super::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
+            && !sheet.is_read_only();
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
@@ -479,6 +482,10 @@ impl Signex {
         // every edit made since returns to a clean sheet. (A recovery copy
         // is installed by a different path and stays dirty-safe.)
         self.mark_installed_engine_saved(&scan_path, installed);
+        if repaired && installed {
+            // The file on disk still holds what was repaired (#1830).
+            self.document_state.mark_document_dirty(&scan_path);
+        }
         self.note_sheet_focused();
         // Every schematic open funnels through here; `finish_update` starts
         // the (once per project) per-placement designator note off-thread.
@@ -669,7 +676,8 @@ impl Signex {
 
     /// Refresh the canvas and panel context against the active schematic
     /// engine, optionally installing `schematic` as that engine's document
-    /// first.
+    /// first. `fit_sheet` queues a fit of the paper at the next canvas event
+    /// (the sheet's first show).
     ///
     /// There is no "commit to the active tab" step: since the parked-session
     /// refactor, schematic tabs keep their document in
@@ -682,7 +690,7 @@ impl Signex {
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
-        fit_to_content: bool,
+        fit_sheet: bool,
         refresh_panel_ctx: bool,
     ) -> bool {
         let installed = match schematic {
@@ -701,8 +709,10 @@ impl Signex {
             }
         }
 
-        if fit_to_content {
-            self.interaction_state.active_canvas_mut().fit_to_content();
+        // The first time a sheet is shown it opens fitted and centred, whatever
+        // it holds; the fit is taken at the next canvas event (#1941).
+        if fit_sheet {
+            self.interaction_state.active_canvas().fit_to_sheet();
         }
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
@@ -1005,12 +1015,12 @@ mod tests {
             .document_saves
             .record_failure(path.clone(), "disk changed".into());
 
-        assert!(!app.settle_disk_reload(&path, disk, false));
+        assert!(!app.settle_disk_reload(&path, disk, false, false));
         assert!(app.document_state.is_document_dirty(&path));
         assert_eq!(app.document_state.document_saves.baseline(&path), Some(old));
         assert!(app.document_state.document_saves.failure(&path).is_some());
 
-        assert!(app.settle_disk_reload(&path, disk, true));
+        assert!(app.settle_disk_reload(&path, disk, true, false));
         assert!(!app.document_state.is_document_dirty(&path));
         assert!(app.document_state.engines[&path].is_at_save_point());
         assert_eq!(

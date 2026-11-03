@@ -1,6 +1,7 @@
 //! `LibraryState` / `OpenLibrary` methods (open/close/refresh/reload).
 
 use super::*;
+use crate::app::CaseFold;
 
 /// Move one primitive listing onto its cache, keeping the previous
 /// contents when the adapter failed.
@@ -66,7 +67,7 @@ impl Default for LibraryState {
             panel_search: String::new(),
             panel_expanded: Default::default(),
             panel_selected: None,
-            panel_last_click: None,
+            panel_last_click: Default::default(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -76,6 +77,7 @@ impl Default for LibraryState {
             primitive_picker: None,
             document_options: None,
             recovery: None,
+            missing: Default::default(),
             create_options: None,
             library_updates: None,
             queued_library_updates: Vec::new(),
@@ -86,6 +88,7 @@ impl Default for LibraryState {
             stock_library_root: None,
             stock_editable: false,
             stock_copies_refused: Vec::new(),
+            id_clash_notices: Vec::new(),
             components_panel: ComponentsPanelState::default(),
             pending_mounts: HashMap::new(),
             external_poll_in_flight: false,
@@ -101,6 +104,7 @@ impl Default for LibraryState {
             refresh_generation_counter: 0,
             preview_generations: HashMap::new(),
             editor_reload_generations: HashMap::new(),
+            tab_resolve_generations: HashMap::new(),
             row_summary_job: Default::default(),
             refresh_in_flight: HashMap::new(),
             pending_follow_ups: HashMap::new(),
@@ -242,30 +246,97 @@ impl LibraryState {
         self.open_libraries.iter_mut().find(|lib| lib.root == path)
     }
 
-    /// Find the open library whose `root_dir` is an ancestor of
-    /// `child_path`. Used to resolve `.snxsym` / `.snxfpt` files back
-    /// to the `.snxlib` they live alongside — e.g. for sourcing
-    /// per-library canvas display settings
-    /// ([`LibraryDisplaySettings`]).
-    ///
-    /// Per `v0.9-snxlib-as-file-plan.md` §2 Stage C the comparison
-    /// is against the `.snxlib`'s *parent directory*, not the file
-    /// itself, so `<root_dir>/symbols/foo.snxsym` correctly resolves
-    /// to its library.
-    pub fn containing_library(&self, child_path: &Path) -> Option<&OpenLibrary> {
-        self.open_libraries.iter().find(|lib| {
-            lib.root_dir()
-                .map(|d| child_path.starts_with(d))
-                .unwrap_or(false)
-        })
+    /// Find the open library whose `root_dir` is an ancestor of `child_path`
+    /// (so `<root_dir>/symbols/foo.snxsym` resolves to its library; used for
+    /// per-library canvas display settings). The deepest matching folder
+    /// wins, so a library nested in another's folder owns its own files.
+    /// `fold` is the path's identity rule (`Signex::identity_fold_for`): the
+    /// one case rule shared with the close prompts and the save routing.
+    pub fn containing_library_with(
+        &self,
+        child_path: &Path,
+        fold: CaseFold,
+    ) -> Option<&OpenLibrary> {
+        let index = self.containing_index(child_path, fold)?;
+        self.open_libraries.get(index)
     }
 
-    pub fn containing_library_mut(&mut self, child_path: &Path) -> Option<&mut OpenLibrary> {
-        self.open_libraries.iter_mut().find(|lib| {
-            lib.root_dir()
-                .map(|d| child_path.starts_with(d))
-                .unwrap_or(false)
-        })
+    pub fn containing_library_mut_with(
+        &mut self,
+        child_path: &Path,
+        fold: CaseFold,
+    ) -> Option<&mut OpenLibrary> {
+        let index = self.containing_index(child_path, fold)?;
+        self.open_libraries.get_mut(index)
+    }
+
+    /// The open library that actually HOLDS `file` as a primitive of `kind`:
+    /// its owner by [`Self::containing_library_with`], and `file` sits
+    /// directly in the owner's folder for that kind (`symbols/`,
+    /// `footprints/` or `sims/`, what the adapter scans). A file elsewhere
+    /// under the library's folder, in another kind's folder, or in a nested
+    /// library that is not open, is held by none.
+    pub fn library_holding_with(
+        &self,
+        file: &Path,
+        kind: signex_library::PrimitiveKind,
+        fold: CaseFold,
+    ) -> Option<&OpenLibrary> {
+        use signex_library::PrimitiveKind;
+        let dir = match kind {
+            PrimitiveKind::Symbol => "symbols",
+            PrimitiveKind::Footprint => "footprints",
+            PrimitiveKind::Sim => "sims",
+            _ => return None,
+        };
+        let lib = self.containing_library_with(file, fold)?;
+        let key = |p: &Path| crate::app::path_key_with(p, fold);
+        (key(file.parent()?) == key(&lib.root_dir()?.join(dir))).then_some(lib)
+    }
+
+    /// True when some open library holds `file` in its folder, even when
+    /// several share it and none can be named its owner.
+    pub fn is_in_mounted_library(&self, file: &Path, fold: CaseFold) -> bool {
+        !self.deepest_libraries(file, fold).is_empty()
+    }
+
+    /// True when several open libraries share the deepest folder holding
+    /// `file`, so none of them can be named its owner.
+    pub fn libraries_share_folder_of(&self, file: &Path, fold: CaseFold) -> bool {
+        self.deepest_libraries(file, fold).len() > 1
+    }
+
+    /// The open library a draft at `path` is written, committed and cascaded
+    /// through: the deepest one holding it (a nested library owns its own
+    /// files), so the outer library of a nested pair is never picked. When
+    /// several libraries share the deepest folder, the one whose `.snxlib`
+    /// file name sorts first by raw bytes: the order `enclosing_library_file`
+    /// (the write lock's pick) uses, so both name one library.
+    pub fn write_target_library(&self, path: &Path, fold: CaseFold) -> Option<&OpenLibrary> {
+        self.deepest_libraries(path, fold)
+            .into_iter()
+            .min_by(|a, b| a.root.file_name().cmp(&b.root.file_name()))
+    }
+
+    fn deepest_libraries(&self, file: &Path, fold: CaseFold) -> Vec<&OpenLibrary> {
+        crate::app::deepest_owners(
+            file,
+            self.open_libraries
+                .iter()
+                .filter_map(|lib| Some((lib, lib.root_dir()?))),
+            fold,
+        )
+    }
+
+    fn containing_index(&self, child_path: &Path, fold: CaseFold) -> Option<usize> {
+        crate::app::deepest_owner(
+            child_path,
+            self.open_libraries
+                .iter()
+                .enumerate()
+                .filter_map(|(i, lib)| Some((i, lib.root_dir()?))),
+            fold,
+        )
     }
 
     /// Open the `*.snxlib/` at `root`, mounting the adapter under its
@@ -278,7 +349,17 @@ impl LibraryState {
     /// entries are left empty — one bad table doesn't sink the open
     /// flow.
     pub fn open_library(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, false)
+        self.open_library_marked(root, false, &[])
+    }
+
+    /// [`Self::open_library`] knowing which paths the open projects list,
+    /// so a shared `library_id` is settled by source (#1908).
+    pub fn open_library_among(
+        &mut self,
+        root: PathBuf,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
+        self.open_library_marked(root, false, project_paths)
     }
 
     /// Mount the library at `root` read-only — the stock library that
@@ -286,7 +367,7 @@ impl LibraryState {
     /// with `LibraryError::ReadOnly` whatever the install directory's
     /// permissions are. Idempotent like [`Self::open_library`].
     pub fn open_library_read_only(&mut self, root: PathBuf) -> Result<(), LibraryError> {
-        self.open_library_marked(root, true)
+        self.open_library_marked(root, true, &[])
     }
 
     /// True when the library mounted at `root` is read-only.
@@ -325,6 +406,21 @@ impl LibraryState {
             .is_some_and(|root| resolved_path(root) == resolved_path(path))
     }
 
+    /// A shared handle on the adapter mounted for the library at `root`,
+    /// for a read that leaves the UI thread.
+    pub(crate) fn shared_adapter_at(&self, root: &Path) -> Option<Arc<dyn LibraryAdapter>> {
+        let id = self.library_at(root)?.library_id;
+        self.set.get_shared(id)
+    }
+
+    /// Shared handles on every mounted adapter, by library id.
+    pub(crate) fn shared_adapters(&self) -> Vec<(Uuid, Arc<dyn LibraryAdapter>)> {
+        self.open_libraries
+            .iter()
+            .filter_map(|lib| Some((lib.library_id, self.set.get_shared(lib.library_id)?)))
+            .collect()
+    }
+
     /// Whether `path` is the bundled stock library's file.
     pub(crate) fn is_stock_root(&self, path: &Path) -> bool {
         self.stock_library_root
@@ -339,7 +435,12 @@ impl LibraryState {
         !self.stock_editable && self.is_stock_root(path)
     }
 
-    fn open_library_marked(&mut self, root: PathBuf, read_only: bool) -> Result<(), LibraryError> {
+    fn open_library_marked(
+        &mut self,
+        root: PathBuf,
+        read_only: bool,
+        project_paths: &[PathBuf],
+    ) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
             self.cancel_pending_close(&root, "it was opened again");
             return Ok(());
@@ -352,9 +453,8 @@ impl LibraryState {
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
         self.refuse_stock_copy(&root, library_id)?;
-        // `LibrarySet::mount` refuses this path if it is already mounted,
-        // or if another mounted library has the same `library_id` (a
-        // copied library folder, #1894); the `Conflict` names both.
+        self.resolve_id_clash(&root, library_id, project_paths)?;
+        // `LibrarySet::mount` refuses this path if it is already mounted.
         let read_only = read_only || self.is_locked_stock_root(&root);
         if read_only {
             self.set.mount_read_only(Box::new(adapter))?;
@@ -487,6 +587,12 @@ impl LibraryState {
         self.collect_dirty_editors(|key| key.library_path == root)
     }
 
+    /// Dirty editors whose library path `in_library` accepts; for a caller
+    /// that compares paths by its own case policy.
+    pub fn dirty_editors_matching(&self, in_library: impl Fn(&Path) -> bool) -> Vec<EditorAddress> {
+        self.collect_dirty_editors(|key| in_library(&key.library_path))
+    }
+
     /// Every dirty editor address across all open libraries — the rows
     /// an app-quit prompt has to account for.
     pub fn dirty_editors(&self) -> Vec<EditorAddress> {
@@ -532,11 +638,11 @@ impl LibraryState {
         path: &Path,
         project_paths: &[PathBuf],
     ) -> ComponentsMountSource {
+        if self.is_stock_root(path) {
+            return ComponentsMountSource::Stock;
+        }
         if project_paths.iter().any(|p| p == path) {
             return ComponentsMountSource::Project;
-        }
-        if self.stock_library.as_deref() == Some(path) {
-            return ComponentsMountSource::Stock;
         }
         if self.installed_libraries.iter().any(|p| p == path) {
             return ComponentsMountSource::Installed;

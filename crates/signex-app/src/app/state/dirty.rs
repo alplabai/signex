@@ -71,14 +71,22 @@ impl DocumentState {
             .collect()
     }
 
-    /// Paths of the symbol and footprint editors with unsaved edits. The one
-    /// collector the quit, Close Project and Close Library prompts share.
+    /// Paths of the symbol and footprint editors with unsaved edits, plus
+    /// those whose save is in flight (the snapshot reset the editor flag, the
+    /// write has not landed, and a failed write leaves the draft dirty). The
+    /// one collector the quit, Close Project and Close Library prompts share.
     pub fn dirty_primitive_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
         let symbols = self.symbol_editors.iter().filter(|(_, e)| e.is_dirty());
         let footprints = self.footprint_editors.iter().filter(|(_, e)| e.is_dirty());
-        symbols
+        let saving = self.dirty_docs.paths.iter().filter(|path| {
+            self.symbol_editors.contains_key(*path) || self.footprint_editors.contains_key(*path)
+        });
+        let paths: HashSet<PathBuf> = symbols
             .map(|(path, _)| path.clone())
             .chain(footprints.map(|(path, _)| path.clone()))
+            .chain(saving.cloned())
+            .collect();
+        paths.into_iter()
     }
 
     /// Record unsaved edits for `path`. A draft open at `path` owns the flag;
@@ -132,6 +140,16 @@ impl DocumentState {
         }
     }
 
+    /// Where a newly opened symbol editor's `history_generation` starts. Each
+    /// editor gets its own 2^32-step range, so a generation never repeats
+    /// across editor instances and a delete warning raised on a closed editor
+    /// reads stale on the reopened one (#1903).
+    pub fn next_symbol_history_base(&mut self) -> u64 {
+        let base = self.symbol_editors_opened << 32;
+        self.symbol_editors_opened += 1;
+        base
+    }
+
     /// A schematic sheet changed: ERC results taken earlier no longer describe it.
     pub fn note_sheet_edit(&mut self) {
         self.sheet_edit_epoch += 1;
@@ -175,11 +193,31 @@ impl DocumentState {
     /// point undo and redo return to as clean. A discard uses
     /// [`Self::clear_document_dirty`] instead: any engine left at `path`
     /// need not equal the file there.
+    ///
+    /// A symbol or footprint draft at `path` takes its CURRENT history depth
+    /// as the save point, as an engine does: "matches the disk" names the
+    /// content on screen, so a later Undo must not read clean at an older
+    /// depth. A landed draft save, whose snapshot already set the point and
+    /// whose editor may have moved on since, uses
+    /// [`Self::mark_landed_draft_clean`].
     pub fn mark_document_clean(&mut self, path: &Path) {
         self.clear_document_dirty(path);
         if let Some(engine) = self.engines.get_mut(path) {
             engine.mark_saved();
         }
+        if let Some(editor) = self.symbol_editors.get_mut(path) {
+            editor.mark_saved();
+        }
+        if let Some(editor) = self.footprint_editors.get_mut(path) {
+            editor.mark_saved();
+        }
+    }
+
+    /// A draft save landed: clear every stored dirty mark and leave the
+    /// draft's save point where the save snapshot put it (edits made while
+    /// the write ran are past it and stay unsaved).
+    pub fn mark_landed_draft_clean(&mut self, path: &Path) {
+        self.clear_document_dirty(path);
     }
 
     /// Clear every stored dirty mark of `path` without touching the engine's

@@ -153,6 +153,7 @@ impl Signex {
     pub(super) fn window_document_command(
         &mut self,
         command: &AppCommandId,
+        args: &super::CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Option<Task<Message>> {
         if !is_window_document_command(command) {
@@ -162,7 +163,7 @@ impl Signex {
             WindowDocument::Tab(index) if self.tab_takes_window_command(index, command) => {
                 let window = window?;
                 self.run_in_window_document(window, |app| {
-                    app.dispatch_command(command, super::CommandArgs::none(), None)
+                    app.dispatch_command(command, args.clone(), None)
                 })
             }
             WindowDocument::Tab(index) => {

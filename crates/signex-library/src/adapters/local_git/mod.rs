@@ -529,6 +529,7 @@ mod row_edit;
 mod uncommitted;
 #[cfg(test)]
 mod uncommitted_tests;
+mod walk_error;
 mod write_lock;
 
 use helpers::*;
