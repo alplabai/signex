@@ -307,8 +307,6 @@ pub(crate) fn acts_on_window_document(id: OverlayId) -> bool {
             | OverlayId::TextEdit
             | OverlayId::ActiveBarMenu
             | OverlayId::ContextMenu
-            | OverlayId::TabContextMenu
-            | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
             | OverlayId::GridPicker
             | OverlayId::FindReplace

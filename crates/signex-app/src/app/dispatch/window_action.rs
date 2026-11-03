@@ -10,6 +10,32 @@ use iced::Task;
 use crate::app::state::WindowKind;
 use crate::app::{Message, Signex, WindowMsg};
 
+/// A message a scoped handler returned as a follow-up `Task`. One that edits
+/// or reads the document keeps the window it came from; the rest (opening a
+/// library tab, file results) run on the main window as they always did.
+/// Switching or opening tabs inside the window swap would load the wrong
+/// canvas, so those are never tagged.
+pub(super) fn tag_followup(window: iced::window::Id, message: Message) -> Message {
+    let acts_on_document = matches!(
+        message,
+        Message::ActiveBar(_)
+            | Message::ContextMenu(_)
+            | Message::Tool(_)
+            | Message::TextEdit(_)
+            | Message::Edit(_)
+            | Message::Selection(_)
+            | Message::MoveSelection(_)
+            | Message::FindReplaceMsg(_)
+    );
+    if !acts_on_document {
+        return message;
+    }
+    Message::Window(WindowMsg::ActionTakenInWindow {
+        window,
+        message: Box::new(message),
+    })
+}
+
 impl Signex {
     /// Whether `window` is an undocked tab window with a canvas of its own,
     /// so an action from it can run against the document it shows.
@@ -55,7 +81,41 @@ impl Signex {
         if !self.is_document_window(window) {
             return Task::none();
         }
-        self.run_in_window_document(window, |app| app.update(message))
+        let task = self.run_in_window_document(window, |app| app.update(message));
+        task.map(move |followup| tag_followup(window, followup))
+    }
+
+    /// Close what was opened in `window`, which is gone: a Find, a Move
+    /// Selection, a menu or a Components drag stamped with its id would
+    /// otherwise stay open where nothing paints them.
+    pub(crate) fn close_surfaces_of_window(&mut self, window: iced::window::Id) {
+        let stamped = Some(window);
+        if self.ui_state.find_replace.window == stamped {
+            self.ui_state.find_replace.open = false;
+            self.ui_state.find_replace.window = None;
+        }
+        if self.ui_state.move_selection.window == stamped {
+            self.ui_state.move_selection.open = false;
+            self.ui_state.move_selection.window = None;
+        }
+        if self
+            .library
+            .components_panel
+            .drag
+            .as_ref()
+            .is_some_and(|d| d.window == stamped)
+        {
+            self.library.components_panel.drag = None;
+        }
+        if self.interaction_state.menu_window == stamped {
+            let interaction = &mut self.interaction_state;
+            interaction.menu_window = None;
+            interaction.active_bar_menu = None;
+            interaction.context_menu = None;
+            interaction.project_tree_context_menu = None;
+            interaction.tab_context_menu = None;
+            self.library.components_panel.row_menu = None;
+        }
     }
 
     /// Whether the surface stamped with `origin` (an undocked window, or

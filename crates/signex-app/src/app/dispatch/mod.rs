@@ -194,6 +194,7 @@ impl Signex {
                 // reattaching a phantom copy to the main window on the
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
+                self.close_surfaces_of_window(id);
                 let owner = self.ui_state.library_modal_owners.remove(&id);
                 self.ui_state.modal_window_sizes.remove(&id);
                 if let Some(kind) = self.ui_state.windows.remove(&id) {

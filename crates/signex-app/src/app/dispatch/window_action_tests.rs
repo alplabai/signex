@@ -339,17 +339,100 @@ fn move_selection_by_xy_moves_the_sheet_of_the_window_it_was_opened_in() {
 }
 
 #[test]
-fn a_dock_panel_message_from_an_undocked_window_runs_in_that_window() {
+fn the_menu_bar_and_docks_of_an_undocked_window_are_never_scoped() {
+    // Scoping them runs a tab switch inside the window swap and loads the
+    // wrong sheet into the window's canvas, so they send plain messages.
     let f = fixture();
-    let message = f.app.scope_to_window(
-        f.window,
-        Message::Dock(crate::dock::DockMessage::TabMenuDismissed),
+    let mut sent = Vec::new();
+    for y in (8..SIZE.height as i32).step_by(12) {
+        for x in [8, 40, 80, 140, 220, SIZE.width as i32 - 40] {
+            sent.extend(messages_on_click_at(
+                f.app.view(f.window),
+                SIZE,
+                None,
+                iced::Point::new(x as f32, y as f32),
+            ));
+        }
+    }
+    let chrome: Vec<_> = sent
+        .iter()
+        .filter(|m| matches!(m, Message::Menu(_) | Message::Dock(_)) || is_scoped(m, f.window))
+        .collect();
+    assert!(
+        chrome
+            .iter()
+            .any(|m| matches!(m, Message::Menu(_) | Message::Dock(_))),
+        "no menu or dock message was sent: {sent:?}"
     );
-    assert!(is_scoped(&message, f.window));
-    let menu = f
+    assert!(
+        chrome.iter().all(|m| !is_scoped(m, f.window)),
+        "a menu or dock message from an undocked window was scoped: {chrome:?}"
+    );
+}
+
+#[test]
+fn a_follow_up_that_edits_the_document_keeps_the_window_it_came_from() {
+    use futures::StreamExt as _;
+    let f = fixture();
+    let select_all = || {
+        Message::ActiveBar(crate::active_bar::ActiveBarMsg::Action(
+            crate::active_bar::ActiveBarAction::SelectAll,
+        ))
+    };
+    let task = Task::batch([
+        Task::done(select_all()).map({
+            let window = f.window;
+            move |m| tag_followup(window, m)
+        }),
+        Task::done(Message::Library(
+            crate::library::LibraryMessage::ComponentsPanelRowPressed(
+                crate::library::state::ComponentsPanelRowKey {
+                    library_path: PathBuf::from("l.snxlib"),
+                    table: "t".to_string(),
+                    row_id: signex_library::RowId(uuid::Uuid::nil()),
+                },
+            ),
+        ))
+        .map({
+            let window = f.window;
+            move |m| tag_followup(window, m)
+        }),
+    ]);
+    let mut stream = iced_runtime::task::into_stream(task).expect("a stream");
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut out = Vec::new();
+    runtime.block_on(async {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(m) = action {
+                out.push(m);
+            }
+        }
+    });
+    assert_eq!(out.len(), 2);
+    assert!(is_scoped(&out[0], f.window), "{:?}", out[0]);
+    assert!(
+        matches!(out[1], Message::Library(_)),
+        "a library follow-up must stay on the main window"
+    );
+}
+
+#[test]
+fn closing_an_undocked_window_closes_the_surfaces_opened_in_it() {
+    let mut f = fixture();
+    let open = f
         .app
-        .scope_to_window(f.window, Message::Menu(crate::menu_bar::MenuMessage::Find));
-    assert!(is_scoped(&menu, f.window));
+        .scope_to_window(f.window, Message::Overlay(crate::app::OverlayMsg::OpenFind));
+    let _ = f.app.update(open);
+    assert!(f.app.ui_state.find_replace.open);
+
+    let _ = f
+        .app
+        .update(Message::Window(WindowMsg::SecondaryWindowClosed(f.window)));
+
+    assert!(
+        !f.app.ui_state.find_replace.open,
+        "a Find nobody can see stayed open"
+    );
 }
 
 #[test]
@@ -365,7 +448,7 @@ fn a_project_tree_menu_belongs_to_the_window_it_was_raised_in() {
 }
 
 #[test]
-fn a_components_row_pressed_in_an_undocked_window_drops_into_that_window() {
+fn a_components_row_pressed_in_an_undocked_window_remembers_that_window() {
     let mut f = fixture();
     let key = crate::library::state::ComponentsPanelRowKey {
         library_path: PathBuf::from("l.snxlib"),
