@@ -21,12 +21,16 @@ impl Signex {
         if kind != PrimitiveKind::Symbol {
             return Task::none();
         }
-        // A file under a mounted library's directory is left out even when it
-        // is outside that library's `symbols/` folder: this is the same rule
-        // `containing_library` applies everywhere, and `push_loose` hides
-        // the same files once the library is open.
-        let files: Vec<PathBuf> = self
-            .document_state
+        read_loose_task(self.loose_symbol_candidates(), false)
+    }
+
+    /// The project-listed `.snxsym` files outside every mounted library. A
+    /// file under a mounted library's directory is left out even when it is
+    /// outside that library's `symbols/` folder, or when several libraries
+    /// share the folder: this is the rule `deepest_libraries` applies
+    /// everywhere, and `push_loose` hides the same files once it is open.
+    pub(super) fn loose_symbol_candidates(&self) -> Vec<PathBuf> {
+        self.document_state
             .projects
             .iter()
             .flat_map(|project| {
@@ -37,9 +41,12 @@ impl Signex {
                     .map(|entry| project.data.resolve_library_path(entry))
             })
             .filter(|path| has_extension(path, "snxsym"))
-            .filter(|path| self.library.containing_library(path).is_none())
-            .collect();
-        read_loose_task(files, false)
+            .filter(|path| {
+                !self
+                    .library
+                    .is_in_mounted_library(path, self.identity_fold_for(path))
+            })
+            .collect()
     }
 
     /// A file outside every library, picked with Browse.
@@ -59,10 +66,11 @@ impl Signex {
         // the directory-form route does; it is never offered as a copy.
         if from_browse
             && let [only] = read.symbols.as_slice()
-            && let Some(lib) = only
-                .library
-                .as_deref()
-                .and_then(|path| self.library.library_at(path))
+            && let Some(lib) = self.library.library_holding_with(
+                &only.file,
+                PrimitiveKind::Symbol,
+                self.identity_fold_for(&only.file),
+            )
         {
             let reference = signex_library::PrimitiveRef::new(lib.library_id, only.uuid);
             return Task::done(Message::Library(LibraryMessage::PrimitivePicker(

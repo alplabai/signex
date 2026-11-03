@@ -33,7 +33,8 @@ impl Signex {
                 crate::diagnostics::log_warning(format!(
                     "Finish the Copy to Library dialog for {} before opening {}.",
                     open.label,
-                    self.library.stock_primitive_label(&path, kind)
+                    self.library
+                        .stock_primitive_label(&path, kind, self.identity_fold_for(&path))
                 ));
             }
             return Task::none();
@@ -48,7 +49,9 @@ impl Signex {
                 false,
             );
         }
-        let label = self.library.stock_primitive_label(&path, kind);
+        let label = self
+            .library
+            .stock_primitive_label(&path, kind, self.identity_fold_for(&path));
         self.library.stock_copy = Some(StockCopyState {
             source: path,
             kind,
@@ -131,7 +134,7 @@ impl Signex {
             .map(Path::to_path_buf);
         let library = self
             .library
-            .containing_library(&copy_path)
+            .containing_library_with(&copy_path, self.identity_fold_for(&copy_path))
             .map(|lib| lib.root.clone());
         let (Some(uuid), Some(stock_dir), Some(library)) = (copied_from, stock_dir, library) else {
             crate::diagnostics::log_warning(
@@ -162,7 +165,7 @@ impl Signex {
         let source_library_dir = match &source {
             StockSource::File(path) => self
                 .library
-                .library_dir_of(path)
+                .library_dir_of(path, self.identity_fold_for(path))
                 .or_else(|| path.parent().and_then(Path::parent).map(Path::to_path_buf))
                 .unwrap_or_default(),
             StockSource::ByUuid { stock_dir, .. } => stock_dir.clone(),

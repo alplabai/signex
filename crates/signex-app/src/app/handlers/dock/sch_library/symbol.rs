@@ -44,7 +44,8 @@ impl Signex {
         else {
             return true;
         };
-        if let Some(lib) = self.library.containing_library_mut(&path) {
+        let fold = self.identity_fold_for(&path);
+        if let Some(lib) = self.library.containing_library_mut_with(&path, fold) {
             mutator(&mut lib.display);
         }
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
@@ -604,12 +605,18 @@ impl Signex {
             .engines
             .iter()
             .map(|(p, e)| (p.as_path(), e.document()));
-        match self.library.containing_library(path) {
+        let fold = self.identity_fold_for(path);
+        match self.library.containing_library_with(path, fold) {
             Some(lib) => {
                 let reference = signex_library::PrimitiveRef::new(lib.library_id, symbol);
                 usage_lines(&self.library.open_libraries, sheets, &reference)
             }
-            None => usage_outside_library(path, sheets, symbol),
+            None => usage_outside_library(
+                path,
+                sheets,
+                symbol,
+                self.library.libraries_share_folder_of(path, fold),
+            ),
         }
     }
 

@@ -314,7 +314,11 @@ mod tests {
             crate::library::state::ComponentsMountSource::Stock
         );
         let symbol = path.parent().unwrap().join("symbols").join("R.snxsym");
-        assert_eq!(lib.stock_primitive_kind(&symbol), None, "no copy detour");
+        assert_eq!(
+            lib.stock_primitive_kind(&symbol, crate::app::CaseFold::host_default()),
+            None,
+            "no copy detour"
+        );
         assert!(
             lib.is_read_only_target(&path),
             "recovery flows (git re-init, binding repair) still never run on it"
