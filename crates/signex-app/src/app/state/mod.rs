@@ -362,6 +362,8 @@ pub struct DocumentState {
     pub autosave: crate::autosave::AutosaveState,
     /// Disk facts behind the project tree's `(missing)` marks (#111).
     pub project_fs: project_fs::ProjectFsCache,
+    /// Idle check of open documents against the disk (#1877).
+    pub disk_poll: crate::app::handlers::document_files::DiskPoll,
     /// Off-thread Navigator hierarchy assembly (#1470).
     pub navigator_job: navigator_job::NavigatorJob,
     /// Cached sheet-path -> owning-project index, rebuilt when its inputs

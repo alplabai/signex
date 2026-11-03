@@ -106,24 +106,20 @@ fn generate_bom_is_not_a_stub() {
     assert!(!keys.iter().any(|k| k == "Generate BOM"));
 }
 
-/// Rows whose feature already works are wired to its message.
+/// Rows whose feature already works are wired: a row with a command id runs
+/// that command (what each one does is pinned by `tests/`), the rest send
+/// their own message.
 #[test]
-fn working_rows_send_their_messages() {
-    let source = include_str!("model/menus.rs");
-    for (label, message) in [
-        ("zoom_in_at_cursor", "MenuMessage::ZoomIn"),
-        ("zoom_out_at_cursor", "MenuMessage::ZoomOut"),
-        ("\"Power Port\"", "MenuMessage::PlacePowerPort"),
-        ("\"Text\"", "MenuMessage::PlaceText"),
-        ("\"No Connect\"", "MenuMessage::PlaceNoConnect"),
-        ("\"Generate BOM\"", "MenuMessage::ExportBom"),
+fn working_rows_are_wired() {
+    let source: String = include_str!("model/menus.rs").split_whitespace().collect();
+    for call in [
+        "cmd_item_gated(ctx,cmd(\"zoom_in_at_cursor\",\"ZoomIn\",\"Ctrl+=\"))",
+        "cmd_item_gated(ctx,cmd(\"zoom_out_at_cursor\",\"ZoomOut\",\"Ctrl+-\"))",
+        "cmd_item_gated(ctx,cmd(\"place_power_symbol\",\"PowerPort\",\"P\"))",
+        "item_if(\"Text\",MenuMessage::PlaceText,",
+        "item_if(\"NoConnect\",MenuMessage::PlaceNoConnect,",
+        "item_if(\"GenerateBOM\",MenuMessage::ExportBom,",
     ] {
-        let at = source.find(label).unwrap_or_else(|| panic!("{label} row"));
-        // Zoom's label call spans the row; the message follows within it.
-        let call = &source[at..(at + 200).min(source.len())];
-        assert!(
-            call.contains(message),
-            "{label} must send {message}: {call}"
-        );
+        assert!(source.contains(call), "the row is not wired as `{call}`");
     }
 }

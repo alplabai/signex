@@ -228,6 +228,9 @@ fn load_sheet_with(
         Err(e) => return Err(format!("could not be read ({e})")),
     };
     match signex_types::format::SnxSchematic::parse(&text) {
+        // The repairs stay on the sheet: a pass that writes it reports them
+        // (`sheet_repairs::take_and_log`); a scan that only reads says nothing,
+        // and the project walk names the sheet once per session.
         Ok(parsed) => Ok(Some(parsed.sheet)),
         Err(e) => Err(format!("could not be parsed ({e})")),
     }

@@ -36,9 +36,10 @@ Only `DocumentState` writes the set; the editor flag is private to
 - `release_save_hold(path)`: the write landed for an older snapshot while
   the draft has newer edits; the editor flag carries the dirt, so only the
   hold is released.
-- `FootprintDocument::set_dirty` / `SymbolDocument::set_dirty` (public, on
-  the editor): the rejected-edit paths (`updates/attempt.rs`,
-  `updates/sketch/solved.rs`) give the flag back as it was before the edit.
+- `FootprintDocument::give_back_rejected_edit`: the rejected-edit paths
+  (`updates/attempt.rs`, `updates/sketch/solved.rs`) give the flag and the
+  save point back as they were before the edit. `set_dirty` is the plain
+  flag setter for a save or a discard.
   The flag is the draft's only stored state once the hold is released, so
   that really makes the draft clean. While a save is still in flight the
   hold keeps it dirty until the write lands.
@@ -118,8 +119,50 @@ save clears it. This stays inside the one dirty owner: one query, one
 writer set. When #661 moves the flag into the engine, the save point and
 this split move with it.
 
-Symbol and footprint drafts keep their editor-local snapshot undo and do not
-use the save point yet.
+## Draft save point (#1854)
+
+A symbol or footprint draft keeps its snapshot undo, and records a save
+point in it (`app/history_save_point.rs`): the undo depth at which its content
+last equalled its file. Depth counts from the oldest step ever recorded, so a
+full stack dropping its oldest step keeps every depth meaning the same state.
+A draft is built at depth 0 and clean, except a footprint whose load was
+repaired, which has no save point. After Undo or Redo the flag is "away from
+the save point, or rows still owed", so undoing back to the file reads clean
+and redoing reads dirty; `restore` no longer marks the draft dirty itself.
+
+The save point is set where a save snapshot is taken (`mark_saved`, the same
+place that resets the flag), not when the write lands. The in-flight rule is
+unchanged: the path rides in the set until the completion, so an Undo to the
+snapshot during the write still reads dirty, and the completion clears it
+only if the flag is clean (the draft is at the snapshot). A failed write
+forgets the save point (the snapshot's depth named content that never reached
+disk), so the draft stays dirty through any Undo or Redo until the next save.
+
+The save point is forgotten, and the draft stays dirty until the next save,
+when no step can reproduce the file:
+
+- `mark_dirty` at the saved depth: an edit with no step of its own, or one
+  coalesced into the newest step (the keystroke run); a recorded edit gets
+  its snapshot's point back in `commit_history`, so its own `mark_dirty`
+  cannot cost it;
+- an edit after undoing below the point (it clears the redo branch);
+- the saved step evicted at depth 100, or a capped redo stack losing it;
+- a footprint drag batch collapsing after it pushed steps off a full history;
+- a failed write (`fail_primitive_save`), and a landed write that applied
+  version bumps while the draft was edited since (older steps hold the
+  pre-bump version);
+- anything built from content not known to be on disk: an autosave recovery
+  copy (`mark_dirty` after construction) and a repaired load.
+
+A rejected edit (`attempt.rs`, a rejected drag batch) gives the save point back
+together with the flag.
+
+Known limit: an accepted footprint drag whose ticks evicted steps from a full
+history forgets the point; a rejected one forgets it only when it pushed its
+own first step off the history.
+
+Undo and Redo own the flag: the symbol canvas's Ctrl+Z / Ctrl+Y
+(`SymbolEditorMsg::Undo`) must not call `mark_dirty` afterwards.
 
 ## Why a draft can also sit in the set
 

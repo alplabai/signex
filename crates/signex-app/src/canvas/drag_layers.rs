@@ -662,7 +662,7 @@ mod tests {
         // Along the wire the attached end stretches; across it a bend is added.
         for (dx, dy) in [(5.0, 0.0), (0.0, 10.0)] {
             let mut ghosts = GhostState::default();
-            let ghost = ghosts.refresh(&sheet, 1, &selection, dx, dy);
+            let ghost = ghosts.refresh_with(&sheet, 1, &selection, dx, dy, &Default::default());
             let frame = split_ghost(&sheet, &ghost, &moved_item_ids(&sheet, &selection));
 
             assert!(!frame.skip.contains(&far.uuid), "{dx},{dy}");

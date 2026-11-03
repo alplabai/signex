@@ -10,12 +10,27 @@ impl Signex {
     /// Close the library at `root` now, or record that the close waits for
     /// its writes and say so in Messages.
     pub(super) fn close_library_or_defer(&mut self, root: &Path) {
+        self.drop_symbol_delete_held_by(root);
         self.library.close_library(root);
         if self.library.is_closing(root) {
             crate::diagnostics::log_info(format!(
                 "Close Library waits for the writes of {}; it closes once they are done.",
                 self.library.library_label(root)
             ));
+        }
+    }
+
+    /// [`LibraryState::drop_symbol_delete_held_by`] under the pending
+    /// symbol's own identity rule.
+    fn drop_symbol_delete_held_by(&mut self, root: &Path) {
+        if let Some(path) = self
+            .library
+            .pending_symbol_delete
+            .as_ref()
+            .map(|d| d.path.clone())
+        {
+            let fold = self.identity_fold_for(&path);
+            self.library.drop_symbol_delete_held_by(root, fold);
         }
     }
 
@@ -68,6 +83,7 @@ impl Signex {
         let dirty = self.library.dirty_editors_for_library(root);
         let dirty_files = self.dirty_primitive_paths_of_library(root);
         if dirty.is_empty() && dirty_files.is_empty() {
+            self.drop_symbol_delete_held_by(root);
             self.library.close_library(root);
             crate::diagnostics::log_info(format!("Library {name} closed: its writes are done."));
             return;

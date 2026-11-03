@@ -16,6 +16,7 @@ pub fn build_renderer_snapshot(
     let mut labels = Vec::new();
     let mut reference_value_texts = Vec::new();
     let mut parameter_texts = Vec::new();
+    let mut pin_texts = Vec::new();
     let document_family = snapshot.font_family.as_deref();
 
     for wire in &snapshot.wires {
@@ -207,6 +208,15 @@ pub fn build_renderer_snapshot(
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
         }
+        pin_texts.extend(symbol::pin_text_inputs(
+            snapshot.lib_symbols.get(&symbol.lib_id),
+            symbol,
+            &symbol::PinTextStyle {
+                name: style.pin,
+                number: focus_color(to_iced(&colors.reference), focus_set, symbol.uuid),
+                family: style.family.clone(),
+            },
+        ));
 
         let value_color = focus_color(to_iced(&colors.value), focus_set, symbol.uuid);
         let reference = overrides
@@ -410,7 +420,7 @@ pub fn build_renderer_snapshot(
         arcs,
         polygons,
         labels,
-        pin_texts: Vec::new(),
+        pin_texts,
         reference_value_texts,
         parameter_texts,
         overlays: OverlayInputs::default(),
