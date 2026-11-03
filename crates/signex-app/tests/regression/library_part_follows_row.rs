@@ -237,3 +237,38 @@ fn a_part_from_before_mpn_stamping_is_offered_the_row_mpn() {
         "an empty MPN / Manufacturer is read as the user's override, so the row's TWO-1 / Acme is never offered"
     );
 }
+
+#[test]
+fn a_mount_rescan_after_a_row_footprint_edit_keeps_the_drift() {
+    let f = fixture();
+    bind_footprint(&f, "SOIC-8");
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+
+    bind_footprint(&f, "TSSOP-8");
+    // The sheet reopens while its library is not mounted, then mounts.
+    app.library.close_library(&f.snxlib);
+    let path = app.document_state.active_path.clone().unwrap();
+    let document = doc(&app).clone();
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new_with_path(document, Some(path.clone())).unwrap(),
+    );
+    app.scan_library_updates_for_open_schematic(path.clone());
+    let task = app.update(Message::Library(LibraryMessage::OpenLibraryBrowser(
+        f.snxlib.clone(),
+    )));
+    crate::drive::drive(&mut app, task);
+    assert!(app.library.library_at(&f.snxlib).is_some(), "mounted again");
+    // Opening the browser made its tab active; the sheet is the subject.
+    app.document_state.active_path = Some(path);
+
+    select_first(&mut app);
+    check_drift(&mut app);
+    let s = &doc(&app).symbols[0];
+    assert!(
+        is_drifted(&app) || s.footprint == "TSSOP-8",
+        "the mount rescan restamped the part but left {}; the row's TSSOP-8 is no longer offered",
+        s.footprint
+    );
+}
