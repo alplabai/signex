@@ -97,6 +97,13 @@ pub struct PendingDescent {
     generation: Option<u64>,
 }
 
+impl PendingDescent {
+    /// Parked on an untracked read (File > Open) rather than a tracked one.
+    pub(crate) fn is_untracked(&self) -> bool {
+        self.generation.is_none()
+    }
+}
+
 impl Signex {
     /// Show the sheet at `path`. Returns the task that reads it when it is not
     /// open yet; the request in `open` runs when the sheet is showing.
@@ -231,7 +238,7 @@ impl Signex {
             .ui_state
             .pending_descents
             .get(path)
-            .is_some_and(|d| d.generation.is_none());
+            .is_some_and(|d| d.is_untracked());
         if !waits {
             return Task::none();
         }

@@ -966,3 +966,36 @@ fn a_descent_deduplicated_against_an_untracked_open_arrives_when_it_succeeds() {
         "the placement it came through"
     );
 }
+
+#[test]
+fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _parent, id) = parent_with_symbol(dir.path());
+    // A file the open path refuses outright (unsupported type).
+    let child = dir.path().join("sheet1.txt");
+    assert!(app.document_state.pending_opens.insert(child.clone()));
+    let _ = app.descend_through_sheet_symbol(id, "sheet1.txt");
+    assert!(
+        app.ui_state
+            .pending_descents
+            .get(&child)
+            .is_some_and(|d| d.is_untracked()),
+        "parked on the untracked claim"
+    );
+
+    // The deferred File > Open runs and is refused: no SchematicOpened follows.
+    let task = app.reopen_deferred(child.clone());
+    crate::app::path_ops::settle_task(&mut app, task);
+
+    assert!(
+        !app.ui_state
+            .pending_descents
+            .get(&child)
+            .is_some_and(|d| d.is_untracked()),
+        "the descent answered instead of waiting for an open that never comes"
+    );
+    assert!(
+        app.document_state.error_notice.is_some(),
+        "the refusal shows"
+    );
+}

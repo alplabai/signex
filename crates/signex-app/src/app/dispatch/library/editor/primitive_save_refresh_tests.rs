@@ -265,6 +265,10 @@ fn the_blocking_save_is_refused_when_a_read_does_not_release_in_time() {
         "{refused}"
     );
     assert!(!path.exists(), "nothing was written");
+    assert!(
+        !app.document_state.document_saves.is_saving(&path),
+        "the refused save left no save bookkeeping behind"
+    );
 }
 
 /// #1756: a library nested in another one's directory owns the paths under
