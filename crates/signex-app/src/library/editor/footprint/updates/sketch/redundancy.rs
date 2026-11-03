@@ -6,6 +6,7 @@
 //! applied only if that generation is still current.
 
 use crate::app::FootprintDocument;
+use crate::library::editor::footprint::sketch_dispatch::take_unlogged_warnings;
 use crate::library::messages::FootprintEditorMsg;
 
 pub(in crate::library::editor::footprint::updates) fn apply(
@@ -29,6 +30,13 @@ pub(in crate::library::editor::footprint::updates) fn apply(
         return;
     }
     editor.state.sketch_solve.clear_redundancy_owed();
+    let report = match report {
+        Ok(report) => report,
+        Err(failure) => {
+            crate::diagnostics::log_warning(format!("Sketch redundancy check: {failure}"));
+            return;
+        }
+    };
     let Some(solve) = editor.state.last_solve.as_mut() else {
         return;
     };
@@ -38,6 +46,13 @@ pub(in crate::library::editor::footprint::updates) fn apply(
         if !editor.state.solve_warnings.contains(warning) {
             editor.state.solve_warnings.push(warning.clone());
         }
+    }
+    // The Messages panel, like every other solve warning (the bake does the same).
+    for warning in take_unlogged_warnings(
+        &editor.state.solve_warnings,
+        &mut editor.state.logged_solve_warnings,
+    ) {
+        crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
     }
     editor.canvas_cache.clear();
 }

@@ -55,18 +55,26 @@ fn checked_message(request: &RedundancyRequest, report: RedundancyReport) -> Foo
         instance: request.instance,
         generation: request.generation,
         footprint_idx: request.footprint_idx,
-        report: Arc::new(report),
+        report: Ok(Arc::new(report)),
     }
 }
 
-/// [`run_redundancy`] on tokio's blocking pool. A task that failed to run
-/// answers with an empty report, so the slot is freed and the editor never
-/// waits for it.
+/// [`run_redundancy`] on tokio's blocking pool. A task that panicked or was
+/// cancelled answers with the failure, so the slot is freed and the editor
+/// never waits for it, and the failure is shown rather than read as "no
+/// redundant constraints".
 async fn run_redundancy_blocking(request: RedundancyRequest) -> FootprintEditorMsg {
-    let fallback = checked_message(&request, RedundancyReport::default());
-    tokio::task::spawn_blocking(move || run_redundancy(request))
-        .await
-        .unwrap_or(fallback)
+    let (instance, generation, footprint_idx) =
+        (request.instance, request.generation, request.footprint_idx);
+    match tokio::task::spawn_blocking(move || run_redundancy(request)).await {
+        Ok(msg) => msg,
+        Err(e) => FootprintEditorMsg::RedundancyChecked {
+            instance,
+            generation,
+            footprint_idx,
+            report: Err(format!("the redundancy check did not complete: {e}")),
+        },
+    }
 }
 
 /// The snapshot a pass would run on right now, or `None` when the editor

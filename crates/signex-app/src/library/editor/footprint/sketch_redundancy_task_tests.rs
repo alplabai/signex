@@ -113,3 +113,48 @@ fn a_redundancy_answer_for_an_older_sketch_is_dropped() {
         "the landed answer frees the slot"
     );
 }
+
+#[test]
+fn an_undo_while_the_pass_runs_does_not_start_one_on_the_old_solve() {
+    let (mut editor, path, _redundant) = editor_with_a_redundant_constraint();
+    apply_footprint_primitive_edit(&mut editor, inline_edit());
+    let _task = dispatch_redundancy(&mut editor, &path);
+    let stale = run_redundancy(snapshot_redundancy_request(&editor).expect("a solved sketch"));
+
+    assert!(editor.undo(), "the edit is an undo step");
+    apply_footprint_primitive_edit(&mut editor, stale);
+    let _task = dispatch_redundancy(&mut editor, &path);
+
+    assert!(
+        !editor.state.sketch_solve.is_redundancy_owed(),
+        "the restored sketch has no solve of its own to owe a pass for"
+    );
+    assert!(
+        !editor.state.sketch_solve.is_redundancy_running(),
+        "no pass may pair the restored sketch with the solved state from before the undo"
+    );
+}
+
+#[test]
+fn a_redundancy_pass_that_did_not_complete_marks_nothing_redundant() {
+    let (mut editor, path, _redundant) = editor_with_a_redundant_constraint();
+    apply_footprint_primitive_edit(&mut editor, inline_edit());
+    let _task = dispatch_redundancy(&mut editor, &path);
+    let generation = editor.state.sketch_solve.generation();
+    let failed = FootprintEditorMsg::RedundancyChecked {
+        instance: editor.state.sketch_solve.instance(),
+        generation,
+        footprint_idx: editor.active_idx,
+        report: Err("the redundancy check did not complete: panicked".into()),
+    };
+
+    apply_footprint_primitive_edit(&mut editor, failed);
+
+    let solve = editor.state.last_solve.as_ref().expect("still solved");
+    assert!(
+        solve.redundancy_pending,
+        "a failed pass is not an answer: the solve still shows its check as pending"
+    );
+    assert!(!editor.state.sketch_solve.is_redundancy_running());
+    assert!(!editor.state.sketch_solve.is_redundancy_owed());
+}

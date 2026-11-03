@@ -918,6 +918,10 @@ impl FootprintDocument {
         // the one that is gone. History holds only solved states: a drag's
         // steps are collapsed to one solved step when its result lands.
         self.state.sketch_solve.supersede();
+        // A redundancy pass owed to the sketch that was replaced would pair
+        // the restored sketch with the old solved state. A re-solve that
+        // follows owes its own.
+        self.state.sketch_solve.clear_redundancy_owed();
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from

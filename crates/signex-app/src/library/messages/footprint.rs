@@ -493,11 +493,12 @@ pub enum FootprintEditorMsg {
 
     /// #1685 — the redundancy pass of a solve, run off the UI thread.
     /// Applied only if `generation` is still the editor's current one.
+    /// `Err` is a pass that never completed (its task panicked).
     RedundancyChecked {
         instance: uuid::Uuid,
         generation: u64,
         footprint_idx: usize,
-        report: std::sync::Arc<signex_sketch::solver::RedundancyReport>,
+        report: Result<std::sync::Arc<signex_sketch::solver::RedundancyReport>, String>,
     },
 
     /// v0.27 — pick the rubber-band selection mode (Inside /
