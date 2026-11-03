@@ -188,3 +188,28 @@ fn a_save_landing_during_a_poll_read_raises_no_card() {
         "a stale read is dropped, not reported"
     );
 }
+
+#[test]
+fn a_same_length_rewrite_of_an_old_polled_file_is_still_reported() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("PollStamp1877.snxsch");
+    fs::write(&path, sheet_text("A4")).unwrap();
+    // Old enough that the poll trusts (and caches) its stamp.
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    let (mut app, _boot) = Signex::new();
+    open(&mut app, &path);
+    poll(&mut app);
+    assert!(card_title(&app).is_none(), "an untouched file is quiet");
+
+    // Same byte length, new mtime: the stamp no longer matches, so it is read.
+    fs::write(&path, sheet_text("A3")).unwrap();
+    poll(&mut app);
+
+    assert_eq!(card_title(&app).as_deref(), Some("File Changed on Disk"));
+}

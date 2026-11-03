@@ -182,6 +182,11 @@ impl Signex {
             ));
             self.document_state.error_notice = Some(ErrorNotice::disk_changed(path, drift));
         }
+        // A closed tab's bookkeeping goes with it.
+        let d = &mut self.document_state;
+        let open: HashSet<&PathBuf> = d.tabs.iter().map(|tab| &tab.path).collect();
+        d.disk_poll.stamps.retain(|p, _| open.contains(p));
+        d.disk_poll.reported.retain(|p, _| open.contains(p));
         Task::none()
     }
 }
