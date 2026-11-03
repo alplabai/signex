@@ -1,5 +1,6 @@
 //! Grid renderer — dot grid with configurable spacing, visibility, snap.
 
+use iced::advanced::graphics::geometry::Renderer as GeometryRenderer;
 use iced::widget::canvas;
 use iced::{Color, Point};
 
@@ -61,8 +62,8 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
     clippy::too_many_arguments,
     reason = "9 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale, all per-frame draw inputs"
 )]
-pub fn draw_grid(
-    frame: &mut canvas::Frame,
+pub fn draw_grid<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
     camera: &Camera,
     grid_mm: f32,
     bounds: iced::Rectangle,
@@ -77,11 +78,12 @@ pub fn draw_grid(
     let Some(clip) = paper_clip(camera, bounds, page_w, page_h, device_px_per_logical_px) else {
         return;
     };
-    frame.with_clip(clip, |frame| {
-        draw_grid_clipped(
-            frame, camera, grid_mm, bounds, clip, color, page_w, page_h, style,
-        );
-    });
+    // No `Frame::with_clip` here: iced_wgpu pastes a clipped draft's meshes
+    // ahead of the parent's pending buffer, which put the grid under the
+    // paper fill (#1993). Every glyph already stays inside `clip`.
+    draw_grid_clipped(
+        frame, camera, grid_mm, bounds, clip, color, page_w, page_h, style,
+    );
 }
 
 /// The paper rectangle in screen px, shrunk inward to whole device pixels
@@ -134,8 +136,8 @@ pub(crate) fn axis_stops(lo: f32, hi: f32, step: f32) -> impl Iterator<Item = f3
     clippy::too_many_arguments,
     reason = "the draw inputs of `draw_grid`, with the device scale already spent on `clip`"
 )]
-fn draw_grid_clipped(
-    frame: &mut canvas::Frame,
+fn draw_grid_clipped<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
     camera: &Camera,
     grid_mm: f32,
     bounds: iced::Rectangle,

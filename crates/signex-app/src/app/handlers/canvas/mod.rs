@@ -7,6 +7,8 @@ mod child_sheet_create;
 #[cfg(test)]
 mod child_sheet_create_tests;
 mod child_sheet_path;
+#[cfg(test)]
+mod cursor_moved_tests;
 pub(crate) use child_sheet_path::relative_within;
 mod break_wire_tool;
 mod clicked;
@@ -207,7 +209,8 @@ impl Signex {
                 );
             }
             CanvasEvent::CursorMoved => {
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                // The sheet background (paper, grid, frame) does not depend on
+                // the cursor, so its cache stays (#1993).
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_overlay_cache();

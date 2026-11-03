@@ -916,6 +916,8 @@ mod gpu_mount_drag_tests;
 #[cfg(test)]
 mod gpu_mount_tests;
 #[cfg(test)]
+mod grid_order_tests;
+#[cfg(test)]
 mod rotated_label_pixel_tests;
 
 #[cfg(test)]
