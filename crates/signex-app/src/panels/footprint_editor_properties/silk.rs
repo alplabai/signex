@@ -1,7 +1,7 @@
 //! Silk graphic geometry rows of the footprint Properties panel.
 
 use iced::widget::{Column, container, text};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Widget};
 
 use super::super::{PanelMsg, SilkKindGeometry};
 use super::pad::pad_input_row;
@@ -107,7 +107,7 @@ pub(super) fn silk_geometry_rows<'a>(
                 )
                 .padding([SP.s, SP.m])
                 .width(Length::Fill)
-                .into(),
+                .boxed(),
             );
         }
     }

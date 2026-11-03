@@ -1,7 +1,7 @@
 //! Keepout role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, text};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Widget as _};
 
 use super::super::super::{FootprintEditorPanelContext, KeepoutKindFlag, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -27,7 +27,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_keepout_subform<'a>
     col = col.push(
         container(text("Keepout kinds").size(TS.caption).color(primary))
             .padding([SP.s, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
 
     // v0.18.25 — keepout kinds use the schematic's `form_check_row`

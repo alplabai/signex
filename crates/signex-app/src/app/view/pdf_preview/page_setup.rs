@@ -22,7 +22,7 @@ impl Signex {
         value: &str,
         on_input: impl Fn(String) -> PrintPreviewMsg + 'static,
     ) -> Element<'static, Message> {
-        iced::widget::text_input("", value)
+        iced::widget::text_input("", value.to_owned())
             .on_input(move |v| Message::PrintPreview(on_input(v)))
             .padding([SP.s, SP.m])
             .size(FIELD_TEXT + 1.0)
@@ -77,8 +77,8 @@ impl Signex {
             };
 
         let mut controls = row![
-            text("Page").size(FIELD_TEXT).color(text_muted),
-            size_picker,
+            text("Page").size(FIELD_TEXT).color(text_muted).boxed(),
+            size_picker.boxed(),
             orientation_control,
         ]
         .spacing(SP.m)
@@ -168,15 +168,18 @@ impl Signex {
                 column![
                     text("Margins are measured from the page edge.")
                         .size(FIELD_TEXT)
-                        .color(text_muted),
-                    Space::new().height(6),
-                    margins,
-                    Space::new().height(6),
+                        .color(text_muted)
+                        .boxed(),
+                    Space::new().height(6).boxed(),
+                    margins.boxed(),
+                    Space::new().height(6).boxed(),
                     self.view_pdf_page_setup_notice(preview),
                 ]
-                .spacing(SP.xs),
+                .spacing(SP.xs)
+                .boxed(),
             )
-            .padding([SP.m, SP.l]),
+            .padding([SP.m, SP.l])
+            .boxed(),
         ]
         .boxed()
     }

@@ -114,7 +114,7 @@ pub fn collapsible_section<'a>(
     let is_collapsed = collapsed.contains(key);
     let mut col = collapsible_section_header(key, title, collapsed, header_color, border_c);
     if !is_collapsed {
-        col = col.push(content());
+        col = col.push(content().boxed());
     }
     col
 }
@@ -293,6 +293,7 @@ pub fn shape_fill_row<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: Color::from_rgb(0.28, 0.28, 0.32),
+                    ..iced::Border::default()
                 },
                 text_color: if active {
                     Color::from_rgb(1.0, 1.0, 1.0)

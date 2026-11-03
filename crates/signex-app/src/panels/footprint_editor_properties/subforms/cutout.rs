@@ -1,7 +1,7 @@
 //! BoardCutout role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, row, text, text_input};
-use iced::{Color, Element, Length, Theme};
+use iced::{Color, Element, Length, Theme, Widget as _};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
@@ -28,7 +28,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
         container(text("Cutout properties").size(TS.caption).color(primary))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
-            .into(),
+            .boxed(),
     );
 
     let radius_buf = c.edge_radius_expr.clone().unwrap_or_default();
@@ -39,7 +39,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text_input("(sharp)", &radius_buf)
+                text_input("(sharp)", radius_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
                     .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -50,6 +50,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
                             width: 1.0,
                             radius: 2.0.into(),
                             color: border_c,
+                            ..Default::default()
                         },
                         placeholder: muted,
                         value: primary,
@@ -62,7 +63,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_cutout_subform<'a>(
         )
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
-        .into(),
+        .boxed(),
     );
 
     col = col.push(super::super::super::form_check_row(

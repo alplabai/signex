@@ -8,7 +8,7 @@ use super::*;
 use crate::fonts;
 use crate::render_config::{GridStyle, PinSelectionMode};
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Background, Border, Element, Length, Theme};
+use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeId;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -32,11 +32,11 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         theme_status,
         ..
     } = v;
-    let mut col = column![].spacing(0).padding([SP.xl, 20.0]);
+    let mut col: iced::widget::Column<Element<'a, PrefMsg>> = column![].spacing(0).padding([SP.xl, 20.0]);
 
     // ── Section: Theme ──
     col = col.push(section_title("Theme"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
 
     // Built-in theme data: (id, display name, description)
     let builtins: &[(ThemeId, &str, &str)] = &[
@@ -96,19 +96,19 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             let card_b = theme_card(id_b, name_b, desc_b, draft_theme);
             row![card_a, Space::new().width(12), card_b]
                 .width(Length::Fill)
-                .into()
+                .boxed()
         } else {
             row![card_a, Space::new().width(Length::Fill)]
                 .width(Length::Fill)
-                .into()
+                .boxed()
         };
         col = col.push(row_elem);
-        col = col.push(Space::new().height(10));
+        col = col.push(Space::new().height(10).boxed());
         i += 2;
     }
 
     // ── Custom theme import/export ──
-    col = col.push(Space::new().height(4));
+    col = col.push(Space::new().height(4).boxed());
     col = col.push(
         row![
             import_btn(),
@@ -116,7 +116,8 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             export_btn(),
             Space::new().width(Length::Fill),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
 
     // Export writes a file the user picked in a save dialog; the write
@@ -125,18 +126,18 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     // user assume the theme was saved (#533). Empty = nothing painted,
     // so the row keeps its old height until there is something to say.
     if !theme_status.is_empty() {
-        col = col.push(Space::new().height(6));
-        col = col.push(text(theme_status).size(TS.caption).style(text_muted));
+        col = col.push(Space::new().height(6).boxed());
+        col = col.push(text(theme_status).size(TS.caption).style(text_muted).boxed());
     }
 
     // ── Divider ──
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(h_sep());
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
 
     // ── Section: UI Font ──
     col = col.push(section_title("Font"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
             column![
@@ -151,35 +152,35 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             {
                 let families = fonts::system_font_families();
                 let current_owned = draft_font.to_string();
-                iced::widget::pick_list(
-                    families.as_slice(),
-                    Some(current_owned),
-                    PrefMsg::DraftFont,
-                )
+                iced::widget::pick_list(Some(current_owned), families.as_slice(), |s: &String| {
+                    s.clone()
+                })
+                .on_select(PrefMsg::DraftFont)
                 .text_size(12)
                 .width(200)
             },
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Window controls ──
     col = col.push(h_sep());
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(section_title("Window controls"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(window_controls_row(
         draft_window_controls_placement,
         window_controls_restart_note,
     ));
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Schematic Editor ──
     col = col.push(h_sep());
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(section_title("Schematic Editor"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
             column![
@@ -191,23 +192,23 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .spacing(3)
             .width(200),
             Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                GridStyle::ALL,
-                Some(draft_grid_style),
-                PrefMsg::DraftGridStyle,
-            )
+            iced::widget::pick_list(Some(draft_grid_style), GridStyle::ALL, |v: &GridStyle| {
+                v.to_string()
+            })
+            .on_select(PrefMsg::DraftGridStyle)
             .text_size(12)
             .width(200),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
     // ── Section: PCB Editor ──
     col = col.push(h_sep());
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(section_title("PCB Editor"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
             column![
@@ -231,15 +232,16 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 .size(16)
                 .on_toggle(PrefMsg::DraftPcbGpuRender),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Symbol Editor ──
     col = col.push(h_sep());
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(section_title("Symbol Editor"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
             column![
@@ -255,28 +257,30 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::pick_list(
-                crate::canvas::grid::GRID_SIZE_LABELS,
                 crate::canvas::grid::GRID_SIZES_MM
                     .iter()
                     .zip(crate::canvas::grid::GRID_SIZE_LABELS.iter())
                     .find(|(sz, _)| (**sz - draft_symbol_grid_size_mm).abs() < 0.001)
                     .map(|(_, lbl)| *lbl),
-                |lbl: &'static str| {
-                    let mm = crate::canvas::grid::GRID_SIZES_MM
-                        .iter()
-                        .zip(crate::canvas::grid::GRID_SIZE_LABELS.iter())
-                        .find(|(_, l)| **l == lbl)
-                        .map(|(sz, _)| *sz)
-                        .unwrap_or(1.27);
-                    PrefMsg::DraftSymbolGridSize(mm)
-                },
+                crate::canvas::grid::GRID_SIZE_LABELS,
+                |lbl: &&'static str| lbl.to_string(),
             )
+            .on_select(|lbl: &'static str| {
+                let mm = crate::canvas::grid::GRID_SIZES_MM
+                    .iter()
+                    .zip(crate::canvas::grid::GRID_SIZE_LABELS.iter())
+                    .find(|(_, l)| **l == lbl)
+                    .map(|(sz, _)| *sz)
+                    .unwrap_or(1.27);
+                PrefMsg::DraftSymbolGridSize(mm)
+            })
             .text_size(12)
             .width(200),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(
         row![
             column![
@@ -289,16 +293,18 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::pick_list(
-                GridStyle::ALL,
                 Some(draft_symbol_grid_style),
-                PrefMsg::DraftSymbolGridStyle,
+                GridStyle::ALL,
+                |v: &GridStyle| v.to_string(),
             )
+            .on_select(PrefMsg::DraftSymbolGridStyle)
             .text_size(12)
             .width(200),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(16));
+    col = col.push(Space::new().height(16).boxed());
     col = col.push(
         row![
             column![
@@ -311,20 +317,22 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::pick_list(
-                PinSelectionMode::ALL,
                 Some(draft_symbol_pin_selection),
-                PrefMsg::DraftSymbolPinSelection,
+                PinSelectionMode::ALL,
+                |v: &PinSelectionMode| v.to_string(),
             )
+            .on_select(PrefMsg::DraftSymbolPinSelection)
             .text_size(12)
             .width(200),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Interface scale ──
     col = col.push(section_title("Interface scale"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
             column![
@@ -353,13 +361,14 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 .align_x(iced::alignment::Horizontal::Right),
         ]
         .spacing(10)
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
     // ── Section: Navigation ──
     col = col.push(section_title("Navigation"));
-    col = col.push(Space::new().height(10));
+    col = col.push(Space::new().height(10).boxed());
     col = col.push(
         row![
             column![
@@ -388,11 +397,12 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
                 .align_x(iced::alignment::Horizontal::Right),
         ]
         .spacing(10)
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(Space::new().height(20));
+    col = col.push(Space::new().height(20).boxed());
 
-    col.into()
+    col.boxed()
 }
 
 fn theme_card<'a>(
@@ -411,17 +421,19 @@ fn theme_card<'a>(
     // the weak background surface.
     let title_style = move |theme: &Theme| text::Style {
         color: Some(if is_active {
-            theme.extended_palette().primary.weak.text
+            theme.palette().primary.weak.text
         } else {
-            theme.extended_palette().background.base.text
+            theme.palette().background.base.text
         }),
+        ..text::Style::default()
     };
     let desc_style = move |theme: &Theme| text::Style {
         color: Some(if is_active {
-            theme.extended_palette().primary.weak.text
+            theme.palette().primary.weak.text
         } else {
-            theme.extended_palette().secondary.base.color
+            theme.palette().secondary.base.color
         }),
+        ..text::Style::default()
     };
 
     button(
@@ -442,7 +454,7 @@ fn theme_card<'a>(
     .width(Length::Fill)
     .on_press(msg)
     .style(move |theme: &Theme, status: button::Status| {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         let bg = if is_active {
             palette.primary.weak.color
         } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
@@ -460,11 +472,12 @@ fn theme_card<'a>(
                 } else {
                     palette.background.strong.color
                 },
+                ..Border::default()
             },
             ..button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 fn import_btn<'a>() -> Element<'a, PrefMsg> {
@@ -472,7 +485,7 @@ fn import_btn<'a>() -> Element<'a, PrefMsg> {
         .padding([5.0, SP.l])
         .on_press(PrefMsg::ImportTheme)
         .style(primary_button_style)
-        .into()
+        .boxed()
 }
 
 fn export_btn<'a>() -> Element<'a, PrefMsg> {
@@ -480,7 +493,7 @@ fn export_btn<'a>() -> Element<'a, PrefMsg> {
         .padding([5.0, SP.l])
         .on_press(PrefMsg::ExportTheme)
         .style(primary_button_style)
-        .into()
+        .boxed()
 }
 
 /// Where the minimize / maximize / close buttons go, with a restart note
@@ -501,20 +514,22 @@ fn window_controls_row<'a>(
         help = help.push(
             text("Takes effect after restart.")
                 .size(TS.caption)
-                .style(text_muted),
+                .style(text_muted)
+                .boxed(),
         );
     }
     row![
         help,
         Space::new().width(Length::Fill),
         iced::widget::pick_list(
-            crate::chrome::controls::WindowControlsPlacement::ALL,
             Some(draft),
-            PrefMsg::DraftWindowControlsPlacement,
+            crate::chrome::controls::WindowControlsPlacement::ALL,
+            |v: &crate::chrome::controls::WindowControlsPlacement| v.to_string(),
         )
+        .on_select(PrefMsg::DraftWindowControlsPlacement)
         .text_size(12)
         .width(200),
     ]
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }

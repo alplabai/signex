@@ -591,11 +591,11 @@ impl Signex {
         let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);
         Some(
             column![
-                iced::widget::Space::new().height(abs_y.max(0.0)),
+                iced::widget::Space::new().height(abs_y.max(0.0)).boxed(),
                 row![
-                    iced::widget::Space::new().width(abs_x.max(0.0)),
+                    iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
                     container(
-                        iced::widget::text_input(placeholder, &text)
+                        iced::widget::text_input(placeholder, text)
                             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
@@ -616,8 +616,10 @@ impl Signex {
                                     selection: accent_c,
                                 }
                             }),
-                    ),
-                ],
+                    )
+                    .boxed(),
+                ]
+                .boxed(),
             ]
             .boxed(),
         )

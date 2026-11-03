@@ -376,7 +376,7 @@ pub(super) fn view_grid<'a>(
                 let library_for_submit = lib_pb.clone();
                 let table_for_submit = table.to_string();
                 let column_for_submit = column_key.clone();
-                let input = text_input("", &cell_value)
+                let input = text_input("", cell_value)
                     .on_input(move |s| LibraryMessage::BrowserCellEdit {
                         library_path: library_for_input.clone(),
                         row_id,

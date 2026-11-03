@@ -3,7 +3,7 @@
 //! standing warning listing SMD pads that have no paste opening.
 
 use iced::widget::{Column, button, container, row, text};
-use iced::{Background, Color, Element, Length, Theme};
+use iced::{Background, Color, Element, Length, Theme, Widget};
 
 use super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PanelPalette};
 use super::{fp_is_collapsed, props_section_header};
@@ -35,7 +35,7 @@ pub(super) fn view_pad_stack_check<'a>(
         collapsed_sections,
         primary,
         border,
-    ));
+    ).boxed());
     if fp_is_collapsed("fp_pad_stack_check", collapsed_sections) {
         return col;
     }
@@ -52,7 +52,8 @@ pub(super) fn view_pad_stack_check<'a>(
                 .color(warn),
             )
             .padding([SP.s, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
         col = col.push(
             container(
@@ -69,7 +70,8 @@ pub(super) fn view_pad_stack_check<'a>(
                 .spacing(6),
             )
             .padding([SP.xs, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
     if !fp.paste_disabled_smd_pads.is_empty() {
@@ -94,7 +96,8 @@ pub(super) fn view_pad_stack_check<'a>(
                 .color(warn),
             )
             .padding([SP.s, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
     col
@@ -109,5 +112,5 @@ fn action_button<'a>(label: String, msg: PanelMsg) -> Element<'a, PanelMsg> {
             text_color: Color::WHITE,
             ..iced::widget::button::Style::default()
         })
-        .into()
+        .boxed()
 }

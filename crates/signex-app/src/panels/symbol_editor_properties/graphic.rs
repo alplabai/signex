@@ -1,6 +1,6 @@
 //! Graphic-selection Properties rows for the symbol editor.
 
-use iced::widget::{Column, container, row, text};
+use iced::widget::{Column, Widget, container, row, text};
 use iced::{Color, Element, Length};
 
 use super::super::{
@@ -47,7 +47,7 @@ pub(super) fn view_graphic_selection<'a>(
             )
             .padding([3.0, SP.m])
             .width(Length::Fill)
-            .into()
+            .boxed()
         };
 
     match &g.kind {
@@ -126,7 +126,7 @@ pub(super) fn view_graphic_selection<'a>(
             )
             .padding([3.0, SP.m])
             .width(Length::Fill)
-            .into();
+            .boxed();
             col = col.push(content_row);
         }
         GraphicKindSummary::Polygon { vertex_count } => {
@@ -149,7 +149,7 @@ pub(super) fn view_graphic_selection<'a>(
             )
             .padding([3.0, SP.m])
             .width(Length::Fill)
-            .into();
+            .boxed();
             col = col.push(vertices_row);
             col = col.push(graphic_fill_field(
                 g_idx,

@@ -1,6 +1,6 @@
 //! Pour role sub-form. Split from `subforms.rs`.
 
-use iced::widget::{Column, container, pick_list, row, text, text_input};
+use iced::widget::{Column, Widget, container, pick_list, row, text, text_input};
 use iced::{Color, Element, Length, Theme};
 
 use super::super::super::{FootprintEditorPanelContext, PanelMsg};
@@ -27,7 +27,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         container(text("Pour properties").size(TS.caption).color(primary))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
-            .into(),
+            .boxed(),
     );
 
     // Net (text input — empty = unassigned)
@@ -39,7 +39,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text_input("(none)", &net_buf)
+                text_input("(none)", net_buf)
                     .size(TS.caption)
                     .padding(SP.xs)
                     .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -50,6 +50,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                             width: 1.0,
                             radius: 2.0.into(),
                             color: border_c,
+                            ..Default::default()
                         },
                         placeholder: muted,
                         value: primary,
@@ -62,7 +63,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         )
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
-        .into(),
+        .boxed(),
     );
 
     // Fill type (Solid / Hatched / Outline)
@@ -88,7 +89,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         )
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
-        .into(),
+        .boxed(),
     );
 
     // Priority (u32 text input)
@@ -99,7 +100,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                     .size(TS.caption)
                     .color(muted)
                     .width(Length::Fixed(80.0)),
-                text_input("0", &pour.priority.to_string())
+                text_input("0", pour.priority.to_string())
                     .size(TS.caption)
                     .padding(SP.xs)
                     .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -110,6 +111,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
                             width: 1.0,
                             radius: 2.0.into(),
                             color: border_c,
+                            ..Default::default()
                         },
                         placeholder: muted,
                         value: primary,
@@ -122,7 +124,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pour_subform<'a>(
         )
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
-        .into(),
+        .boxed(),
     );
 
     col

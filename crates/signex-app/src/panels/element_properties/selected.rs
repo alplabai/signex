@@ -113,7 +113,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 ));
                 c
             },
-        ));
+        ).boxed());
 
         // ── Properties (Name, Style) ──
         let name_val = value.clone();
@@ -170,7 +170,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     input_bdr,
                 )
             },
-        ));
+        ).boxed());
 
         // Add Font + B/I/U/T row to Properties section via a second collapsible
         col = col.push(collapsible_section(
@@ -212,7 +212,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
                 c
             },
-        ));
+        ).boxed());
 
         // ── General (Net) — informational ──
         let phys_name = value.clone();
@@ -260,7 +260,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 ));
                 c
             },
-        ));
+        ).boxed());
 
         // ── Parameters (Net) — placeholder (no parameters/rules/classes yet) ──
         col = col.push(collapsible_section(
@@ -279,9 +279,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 c = c.push(net_params_add_bar(muted, input_bg, input_bdr));
                 c
             },
-        ));
+        ).boxed());
 
-        return scrollable(col).width(Length::Fill).into();
+        return scrollable(col).width(Length::Fill).boxed();
     }
 
     match selected_kind {
@@ -397,7 +397,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         c = super::library_rows::push_part_actions(c);
                         super::body_row::push_body_row(c, id, &body, muted, input_bg, input_bdr)
                     },
-                ));
+                ).boxed());
 
                 // Location section — read-only for now
                 col = col.push(collapsible_section(
@@ -416,7 +416,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         ));
                         c
                     },
-                ));
+                ).boxed());
 
                 // Graphical section — checkboxes
                 col = col.push(collapsible_section(
@@ -457,7 +457,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         ));
                         c
                     },
-                ));
+                ).boxed());
 
                 // Parameters section — custom fields carried on the symbol
                 // instance. Read-only for v0.6; editing per-field lands in
@@ -493,7 +493,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         }
                         c
                     },
-                ));
+                ).boxed());
             }
         }
         Some(signex_types::schematic::SelectedKind::SymbolRefField)
@@ -547,7 +547,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         ));
                         c
                     },
-                ));
+                ).boxed());
 
                 col = col.push(collapsible_section(
                     "sel_text",
@@ -599,7 +599,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         ));
                         c
                     },
-                ));
+                ).boxed());
             }
         }
         Some(signex_types::schematic::SelectedKind::Label) => {
@@ -653,7 +653,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         ));
                         c
                     },
-                ));
+                ).boxed());
 
                 // ── Properties (Net Name, Font, Justification) ──
                 let net_name = label_text.clone();
@@ -738,7 +738,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         );
                         c
                     },
-                ));
+                ).boxed());
             }
         }
         Some(signex_types::schematic::SelectedKind::TextNote) => {
@@ -764,7 +764,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         }));
                         c
                     },
-                ));
+                ).boxed());
 
                 col = col.push(collapsible_section(
                     "sel_text",
@@ -814,7 +814,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         ));
                         c
                     },
-                ));
+                ).boxed());
             }
         }
         Some(signex_types::schematic::SelectedKind::Drawing) => {
@@ -845,7 +845,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     }
                     c
                 },
-            ));
+            ).boxed());
         }
     }
 
@@ -879,7 +879,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                         panel_bg,
                     ))
             },
-        ));
+        ).boxed());
     }
 
     // ── Status bar ──

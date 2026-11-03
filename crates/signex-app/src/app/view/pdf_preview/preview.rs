@@ -11,10 +11,10 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 impl Signex {
     /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
     /// rail on the left, pan/zoom viewport on the right.
-    pub(in crate::app::view) fn view_pdf_preview_tab(
-        &self,
-        preview: &crate::app::state::PreviewState,
-    ) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_pdf_preview_tab<'a>(
+        &'a self,
+        preview: &'a crate::app::state::PreviewState,
+    ) -> Element<'a, Message> {
         use iced::widget::{
             Space, Widget as _, button, checkbox, column, container, image, mouse_area, row, scrollable, text,
             text_input,

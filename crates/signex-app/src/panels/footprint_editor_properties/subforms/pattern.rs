@@ -45,7 +45,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
         collapsed_sections,
         primary,
         border_c,
-    ));
+    ).boxed());
     if fp_is_collapsed("fp_pattern", collapsed_sections) {
         return col;
     }

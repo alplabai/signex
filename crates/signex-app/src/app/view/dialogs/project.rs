@@ -332,8 +332,6 @@ impl Signex {
     }
 
     pub(in crate::app::view) fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
-        use iced::widget::text_input;
-
         let Some(ref st) = self.ui_state.grid_properties else {
             return container(Space::new()).boxed();
         };
@@ -366,10 +364,12 @@ impl Signex {
             super::super::super::state::ModalId::GridProperties,
         );
 
-        let mk_input = |placeholder: &'static str,
-                        value: &str,
-                        on_input: fn(String) -> Message|
-         -> Element<'_, Message> {
+        fn mk_input<'a>(
+            placeholder: &'static str,
+            value: &'a str,
+            on_input: fn(String) -> Message,
+        ) -> Element<'a, Message> {
+            use iced::widget::text_input;
             text_input(placeholder, value)
                 .size(TS.label)
                 .padding(6)
@@ -377,7 +377,7 @@ impl Signex {
                 .on_input(on_input)
                 .on_submit(Message::GridProperties(GridPropertiesMsg::Apply))
                 .boxed()
-        };
+        }
 
         // Display style + multiplier rows.
         use crate::library::editor::footprint::state::GridDisplay as Gd;

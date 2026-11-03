@@ -25,7 +25,8 @@ impl Signex {
         let ms = &self.ui_state.move_selection;
         let selection_count = self.interaction_state.active_canvas().selected.len();
 
-        let field = |label: &'static str, value: &str, msg: fn(String) -> Message| {
+        let field = |label: &'static str, value: &str, msg: fn(String) -> Message| -> Element<'static, Message> {
+            let value = value.to_owned();
             column![
                 text(label).size(TS.caption).color(text_muted),
                 text_input("0.00", value)
@@ -34,6 +35,7 @@ impl Signex {
                     .size(TS.label),
             ]
             .spacing(SP.s)
+            .boxed()
         };
 
         let body = container(
@@ -440,7 +442,7 @@ impl Signex {
                         .size(TS.body)
                         .color(text_muted)
                         .width(iced::Length::Fixed(16.0)),
-                    text_input("0", &v255.to_string())
+                    text_input("0", v255.to_string())
                         .size(TS.body)
                         .padding([3.0, SP.m])
                         .width(iced::Length::Fixed(70.0))

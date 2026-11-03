@@ -92,6 +92,7 @@ pub fn form_input_row<'a, M: 'a>(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_border,
+                    ..Border::default()
                 },
                 ..container::Style::default()
             }),
@@ -147,7 +148,7 @@ pub fn form_mm_edit_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            iced::widget::text_input("", &text_value)
+            iced::widget::text_input("", text_value)
                 .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
                 .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
                 .size(TS.body)
@@ -159,6 +160,7 @@ pub fn form_mm_edit_row<'a>(
                         width: 1.0,
                         radius: 2.0.into(),
                         color: input_border,
+                        ..Border::default()
                     },
                     placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
                     value: text_on(input_bg),
@@ -478,6 +480,7 @@ pub fn canvas_font_popup<'a>(
             color: input_bdr,
             width: 1.0,
             radius: 4.0.into(),
+            ..Border::default()
         },
         ..Default::default()
     })
@@ -495,7 +498,7 @@ pub fn form_edit_row<'a>(
     container(
         row![
             property_label(label.to_string(), label_c),
-            iced::widget::text_input("", value)
+            iced::widget::text_input("", value.to_string())
                 .on_input(on_input)
                 .size(TS.body)
                 .padding(SP.s)
@@ -550,6 +553,7 @@ pub fn font_style_row<'a>(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_bdr,
+                    ..Border::default()
                 },
                 text_color: primary,
                 ..iced::widget::button::Style::default()

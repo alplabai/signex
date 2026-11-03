@@ -85,7 +85,7 @@ pub fn view_move_by_modal<'a>(
     });
 
     let mk_field = |label: &'static str,
-                    value: &str,
+                    value: &'a str,
                     field_path: PathBuf,
                     ctor: fn(String) -> FootprintEditorMsg|
      -> Element<'a, LibraryMessage> {

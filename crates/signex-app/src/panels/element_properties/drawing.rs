@@ -416,7 +416,7 @@ fn drawing_num_row<'a>(
             .size(TS.caption)
             .color(muted)
             .width(Length::FillPortion(2)),
-        text_input("", &display)
+        text_input("", display)
             .size(TS.body)
             .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
             .width(Length::FillPortion(3)),

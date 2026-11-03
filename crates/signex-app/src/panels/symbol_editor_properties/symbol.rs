@@ -1,6 +1,6 @@
 //! Symbol-level (nothing-selected) Properties rows + local-colour swatches.
 
-use iced::widget::{Column, container, row, text};
+use iced::widget::{Column, Widget, container, row, text};
 use iced::{Color, Element, Length};
 
 use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
@@ -89,12 +89,12 @@ pub(super) fn view_symbol_selection<'a>(
         )
         .padding([3.0, SP.m])
         .width(Length::Fill)
-        .into()
+        .boxed()
     };
 
     // ── ▾ Symbol ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Symbol").size(TS.body).color(primary)).padding([6.0, SP.m]));
+    col = col.push(container(text("Symbol").size(TS.body).color(primary)).padding([6.0, SP.m]).boxed());
     col = col.push(text_field(
         "Design Item ID",
         sym.symbol_name.as_str(),
@@ -135,7 +135,7 @@ pub(super) fn view_symbol_selection<'a>(
 
     // ── ▾ Graphical ──
     col = col.push(super::super::thin_sep(border_c));
-    col = col.push(container(text("Graphical").size(TS.body).color(primary)).padding([6.0, SP.m]));
+    col = col.push(container(text("Graphical").size(TS.body).color(primary)).padding([6.0, SP.m]).boxed());
     let mirrored_row: Element<'a, PanelMsg> = container(
         row![
             text("Mirrored")
@@ -151,13 +151,13 @@ pub(super) fn view_symbol_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(mirrored_row);
 
     // ── Local Colors (Fills / Lines / Pins) ──
     col = col.push(super::super::thin_sep(border_c));
     col =
-        col.push(container(text("Local Colors").size(TS.body).color(primary)).padding([6.0, SP.m]));
+        col.push(container(text("Local Colors").size(TS.body).color(primary)).padding([6.0, SP.m]).boxed());
     col = col.push(local_color_field(
         "Fills",
         crate::app::LocalColorSlot::Fill,

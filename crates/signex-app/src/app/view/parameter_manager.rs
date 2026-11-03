@@ -142,7 +142,7 @@ impl Signex {
                 let sym_uuid = sym.uuid;
                 let k_str = k.clone();
                 r = r.push(
-                    text_input("", &shown)
+                    text_input("", shown)
                         .on_input(move |text| {
                             Message::ParameterManager(ParameterManagerMsg::Edit {
                                 symbol_uuid: sym_uuid,

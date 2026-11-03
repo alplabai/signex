@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::annotate_undo::AnnotateUndo;
-use iced::widget::{Space, column, pick_list, row, text};
+use iced::widget::{Space, Widget, column, pick_list, row, text};
 use iced::{Element, Length};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -20,7 +20,9 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
         .spacing(3)
         .width(320),
         Space::new().width(Length::Fill),
-        pick_list(AnnotateUndo::ALL, Some(draft), PrefMsg::DraftAnnotateUndo).text_size(12),
+        pick_list(Some(draft), AnnotateUndo::ALL, |v: &AnnotateUndo| v.to_string())
+            .on_select(PrefMsg::DraftAnnotateUndo)
+            .text_size(12),
     ]
     .align_y(iced::Alignment::Center);
 
@@ -30,7 +32,7 @@ pub(super) fn content_annotation<'a>(draft: AnnotateUndo) -> Element<'a, PrefMsg
         setting,
     ]
     .padding([SP.xl, 20.0])
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

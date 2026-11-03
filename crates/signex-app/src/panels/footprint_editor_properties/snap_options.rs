@@ -58,17 +58,18 @@ pub(super) fn render_snapping_mode_row<'a>(
                         width: 1.0,
                         radius: 2.0.into(),
                         color: chip_border,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }
             })
-            ._boxed()
+            .boxed()
         };
     col = col.push(
         container(text("Snap layers").size(TS.caption).color(muted))
             .padding([SP.s, SP.m])
             .width(Length::Fill)
-            ._boxed(),
+            .boxed(),
     );
     col = col.push(
         container(
@@ -82,7 +83,7 @@ pub(super) fn render_snapping_mode_row<'a>(
         )
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
-        ._boxed(),
+        .boxed(),
     );
     col
 }

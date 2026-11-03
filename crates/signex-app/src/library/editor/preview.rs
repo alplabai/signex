@@ -573,7 +573,7 @@ fn override_action_btn<'a>(
 
 fn override_editor_row<'a>(
     pin_number: &str,
-    buf: &str,
+    buf: &'a str,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {

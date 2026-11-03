@@ -280,7 +280,7 @@ fn pin_node_row<'a>(
     let lib_path_for_input = address.library_path.clone();
     let table_for_input = address.table.clone();
     let row_id = address.row_id;
-    let input = text_input("net", &buf)
+    let input = text_input("net", buf)
         .padding([3, 6])
         .size(TS.body)
         .on_input(move |s| LibraryMessage::EditorEvent {

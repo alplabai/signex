@@ -104,14 +104,16 @@ pub fn view_custom_selection_filters_section<'a>(
                 let included: std::collections::HashSet<SelectionFilter> =
                     preset.filters.iter().copied().collect();
                 let header = row![
-                    iced::widget::text_input("Preset name", &preset.name)
+                    iced::widget::text_input("Preset name", preset.name.clone())
                         .size(TS.body)
                         .padding([3, 6])
                         .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                     iced::widget::button(text("Delete").size(TS.caption).color(primary_c))
                         .padding([3.0, SP.m])
-                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab)),
+                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab))
+                        .boxed(),
                 ]
                 .spacing(SP.s)
                 .align_y(iced::Alignment::Center);
@@ -127,7 +129,7 @@ pub fn view_custom_selection_filters_section<'a>(
                     ));
                 }
                 c = c.push(
-                    container(column![header, container(wrap).padding([SP.s, 0.0])].spacing(SP.s))
+                    container(column![header.boxed(), container(wrap).padding([SP.s, 0.0]).boxed()].spacing(SP.s))
                         .padding([6.0, SP.m])
                         .boxed(),
                 );
@@ -552,11 +554,13 @@ pub fn view_properties_parameters<'a>(
                 text("Name")
                     .size(TS.caption)
                     .color(muted)
-                    .width(Length::FillPortion(3)),
+                    .width(Length::FillPortion(3))
+                    .boxed(),
                 text("Value")
                     .size(TS.caption)
                     .color(muted)
-                    .width(Length::FillPortion(2)),
+                    .width(Length::FillPortion(2))
+                    .boxed(),
             ]
             .spacing(SP.s),
         )
@@ -611,16 +615,19 @@ pub fn param_table_row<'a, M: 'a>(
                     .size(TS.body)
                     .color(name_c)
                     .width(Length::FillPortion(3))
-                    .wrapping(iced::widget::text::Wrapping::None),
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .boxed(),
                 text(value.to_string())
                     .size(TS.body)
                     .color(val_c)
-                    .width(Length::FillPortion(2)),
+                    .width(Length::FillPortion(2))
+                    .boxed(),
             ]
             .spacing(SP.s),
         )
         .padding([SP.s, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
         thin_sep(border_c),
     ]
     .spacing(0)
@@ -653,6 +660,7 @@ pub fn props_tab_btn(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: border_c,
+                    ..Default::default()
                 },
                 ..iced::widget::button::Style::default()
             }
@@ -693,6 +701,7 @@ pub fn custom_filter_tab(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border_c,
+                ..Default::default()
             },
             text_color: if active { text_on } else { text_off },
             ..iced::widget::button::Style::default()
@@ -735,6 +744,7 @@ pub fn preset_chip(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border_c,
+                ..Default::default()
             },
             text_color: if enabled { text_on } else { text_off },
             ..iced::widget::button::Style::default()
@@ -838,6 +848,7 @@ pub fn seg_btn<'a>(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: seg_border,
+                ..Default::default()
             },
             ..iced::widget::button::Style::default()
         }

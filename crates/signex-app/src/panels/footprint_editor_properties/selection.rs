@@ -1,5 +1,5 @@
 use iced::widget::{Column, container, pick_list, row, text};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Widget as _};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -86,7 +86,7 @@ pub(super) fn view_selection<'a>(
                 collapsed_sections,
                 primary,
                 border_c,
-            ));
+            ).boxed());
             if !fp_is_collapsed("fp_sketch_entity", collapsed_sections) {
                 col = props_kv_row(
                     col,
@@ -157,7 +157,8 @@ pub(super) fn view_selection<'a>(
                             .align_y(iced::Alignment::Center),
                         )
                         .padding([3.0, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                     );
                 }
             } // end if !fp_sketch_entity collapsed
@@ -184,7 +185,8 @@ pub(super) fn view_selection<'a>(
                         .style(iced::widget::button::secondary),
                     )
                     .padding([6.0, SP.m])
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
                 );
             }
 
@@ -197,7 +199,7 @@ pub(super) fn view_selection<'a>(
                 collapsed_sections,
                 primary,
                 border_c,
-            ));
+            ).boxed());
             if !fp_is_collapsed("fp_role", collapsed_sections)
                 && let Some(id) = fp.selected_sketch_entity_id
             {
@@ -211,13 +213,15 @@ pub(super) fn view_selection<'a>(
                 col = col.push(
                     container(dropdown)
                         .padding([SP.s, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
                 if !fp.selected_sketch_is_point {
                     col = col.push(
                         container(text("Pad role applies to Points only").size(9).color(muted))
                             .padding([0.0, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                     );
                 }
 
@@ -252,7 +256,7 @@ pub(super) fn view_selection<'a>(
                     collapsed_sections,
                     primary,
                     border_c,
-                ));
+                ).boxed());
                 if !fp_is_collapsed("fp_silk_graphic", collapsed_sections) {
                     col = props_kv_row(
                         col,
@@ -281,7 +285,8 @@ pub(super) fn view_selection<'a>(
                                     .color(muted),
                             )
                             .padding([SP.s, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                         );
                     } else {
                         col = silk_geometry_rows(col, &silk.kind, muted, primary, border_c);
@@ -318,7 +323,8 @@ pub(super) fn view_selection<'a>(
                                 .align_y(iced::Alignment::Center),
                             )
                             .padding([SP.s, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                         );
                     }
                 } // end if !fp_silk_graphic collapsed
@@ -338,14 +344,14 @@ pub(super) fn view_selection<'a>(
                     active_custom_filter_tab,
                     collapsed_sections,
                     palette,
-                ));
+                ).boxed());
                 col = col.push(props_section_header(
                     "Footprint",
                     "fp_footprint",
                     collapsed_sections,
                     primary,
                     border_c,
-                ));
+                ).boxed());
                 if !fp_is_collapsed("fp_footprint", collapsed_sections) {
                     // Editable Name — text_input bound to the active
                     // internal footprint's `name` field via

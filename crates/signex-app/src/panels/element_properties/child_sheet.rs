@@ -233,8 +233,7 @@ fn child_sheet_stroke_width_row<'a>(
             .trim_end_matches('.')
             .to_string(),
     };
-    let display_for_input = display.clone();
-    let input = iced::widget::text_input("0.1524", &display_for_input)
+    let input = iced::widget::text_input("0.1524", display)
         .size(TS.body)
         .padding(SP.s)
         .width(120)
@@ -289,7 +288,7 @@ fn child_sheet_text_row<'a>(
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let input = iced::widget::text_input("", value)
+    let input = iced::widget::text_input("", value.to_string())
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)

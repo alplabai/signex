@@ -2,7 +2,7 @@
 
 use iced::widget::scrollable::{Direction, RelativeOffset, Scrollbar};
 use iced::widget::{Row, button, container, mouse_area, row, scrollable, text, tooltip};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
@@ -158,7 +158,8 @@ pub fn view<'a>(
             content = content.push(
                 text(READ_ONLY_LABEL)
                     .size(TAB_FONT_SIZE)
-                    .color(styles::ti(tokens.text_secondary)),
+                    .color(styles::ti(tokens.text_secondary))
+                    .boxed(),
             );
         }
         let close_x = button(
@@ -175,8 +176,8 @@ pub fn view<'a>(
         .on_press(TabMessage::CloseClicked(i));
         let inner = container(
             content
-                .push(text(label).size(TAB_FONT_SIZE).color(text_c))
-                .push(close_x),
+                .push(text(label).size(TAB_FONT_SIZE).color(text_c).boxed())
+                .push(close_x.boxed()),
         )
         .padding([SP.s, 10.0]);
         // Cursor: default Pointer on hover so the bar reads as
@@ -189,12 +190,12 @@ pub fn view<'a>(
         } else {
             iced::mouse::Interaction::Pointer
         };
-        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner, pill_style))
+        let tab_el: Element<'_, TabMessage> = mouse_area(TabPill::new(inner.boxed(), pill_style))
             .on_press(TabMessage::StartDrag(i))
             .on_release(TabMessage::Select(i))
             .on_right_press(TabMessage::ContextMenu(i))
             .interaction(cursor)
-            .into();
+            .boxed();
         // The pill shows an ellipsized title; hovering names the full path.
         let tab_el: Element<'_, TabMessage> =
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled) {
@@ -204,7 +205,7 @@ pub fn view<'a>(
                     tooltip::Position::Bottom,
                 )
                 .style(styles::context_menu(tokens))
-                .into(),
+                .boxed(),
                 None => tab_el,
             };
         bar = bar.push(tab_el);
@@ -249,7 +250,7 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(TAB_STRIP_HEIGHT)
     .style(styles::toolbar_strip(tokens))
-    .into()
+    .boxed()
 }
 
 /// Height of the document tab strip: the close-x hit box plus the pill's
@@ -273,7 +274,7 @@ pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
         .width(Length::Fill)
         .height(TAB_STRIP_HEIGHT)
         .style(styles::toolbar_strip(tokens))
-        .into()
+        .boxed()
 }
 
 /// Muted marker before the title of a read-only sheet (#1402).
@@ -372,7 +373,7 @@ fn dirty_dot<'a>(tokens: &ThemeTokens) -> Element<'a, TabMessage> {
             },
             ..iced::widget::container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Longest tab title drawn in full; longer ones are cut and end in `…`.

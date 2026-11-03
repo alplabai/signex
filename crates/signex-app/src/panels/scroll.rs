@@ -7,14 +7,14 @@
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Scrollable, scrollable};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 
 /// Space kept between the content and the embedded scrollbar, in pixels.
 const SCROLLBAR_GAP: f32 = 2.0;
 
 /// A panel body in a full-width vertical scroller with a scrollbar gutter.
 pub(crate) fn panel_scrollable<'a, M: 'a>(content: impl Into<Element<'a, M>>) -> Scrollable<'a, M> {
-    scrollable(content)
+    scrollable(content.into())
         .direction(Direction::Vertical(Scrollbar::new().spacing(SCROLLBAR_GAP)))
         .width(Length::Fill)
 }
@@ -39,12 +39,12 @@ mod tests {
         // out twice inside: the gutter is decided after the first pass.
         let row = || {
             iced::widget::column![
-                text("row").width(Length::Fill),
-                iced::widget::Space::new().height(900)
+                text("row").width(Length::Fill).boxed(),
+                iced::widget::Space::new().height(900).boxed()
             ]
         };
-        let plain = content_width(scrollable(row()).width(Length::Fill).into());
-        let panel = content_width(panel_scrollable(row()).into());
+        let plain = content_width(scrollable(row().boxed()).width(Length::Fill).boxed());
+        let panel = content_width(panel_scrollable(row().boxed()).boxed());
         assert!(
             plain > 390.0,
             "control case: the default bar floats, {plain}"

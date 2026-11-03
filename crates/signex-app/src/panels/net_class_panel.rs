@@ -194,7 +194,8 @@ pub fn view_net_classes_section<'a>(
                             .size(TS.body)
                             .color(muted),
                     )
-                    .padding([SP.s, SP.m]),
+                    .padding([SP.s, SP.m])
+                    .boxed(),
                 );
             }
             let wrap = |m: NetClassMsg| PanelMsg::NetClass(m);
@@ -222,7 +223,8 @@ pub fn view_net_classes_section<'a>(
                     ]
                     .spacing(SP.s),
                 )
-                .padding([SP.s, SP.m]),
+                .padding([SP.s, SP.m])
+                .boxed(),
             );
             if panel.classes.is_empty() {
                 return c.push(
@@ -231,7 +233,8 @@ pub fn view_net_classes_section<'a>(
                             .size(TS.body)
                             .color(muted),
                     )
-                    .padding([SP.s, SP.m]),
+                    .padding([SP.s, SP.m])
+                    .boxed(),
                 );
             }
 
@@ -242,20 +245,24 @@ pub fn view_net_classes_section<'a>(
                     .padding([SP.xs, SP.m])
                     .width(Length::Fill)
                     .on_press(wrap(NetClassMsg::Select(idx)));
-                list = list.push(if idx == selected {
-                    btn.style(iced::widget::button::primary)
-                } else {
-                    btn.style(iced::widget::button::secondary)
-                });
+                list = list.push(
+                    if idx == selected {
+                        btn.style(iced::widget::button::primary)
+                    } else {
+                        btn.style(iced::widget::button::secondary)
+                    }
+                    .boxed(),
+                );
             }
-            c = c.push(container(list).padding([SP.xs, SP.m]));
+            c = c.push(container(list).padding([SP.xs, SP.m]).boxed());
             c = c.push(
                 container(
                     text("The first matching class wins; reorder to change it.")
                         .size(TS.caption)
                         .color(muted),
                 )
-                .padding([0.0, SP.m]),
+                .padding([0.0, SP.m])
+                .boxed(),
             );
             c = c.push(
                 container(
@@ -275,7 +282,8 @@ pub fn view_net_classes_section<'a>(
                     ]
                     .spacing(SP.s),
                 )
-                .padding([SP.s, SP.m]),
+                .padding([SP.s, SP.m])
+                .boxed(),
             );
 
             let field = |label: &str, hint: &str, f: NetClassField, value: &str| {
@@ -325,7 +333,8 @@ pub fn view_net_classes_section<'a>(
                             .size(TS.caption)
                             .color(theme_ext::warning_color(&ctx.tokens)),
                     )
-                    .padding([SP.xs, SP.m]),
+                    .padding([SP.xs, SP.m])
+                    .boxed(),
                 );
             }
             c
@@ -344,7 +353,7 @@ fn commit_row<'a>(
     container(
         row![
             widgets::property_label(label.to_string(), label_c),
-            iced::widget::text_input(hint, value)
+            iced::widget::text_input(hint.to_string(), value.to_string())
                 .on_input(move |s| PanelMsg::NetClass(NetClassMsg::Draft(field, s)))
                 .on_submit(PanelMsg::NetClass(NetClassMsg::Commit(field)))
                 .size(TS.body)
@@ -356,7 +365,7 @@ fn commit_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

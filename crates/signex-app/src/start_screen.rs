@@ -15,7 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use iced::widget::{Space, button, column, container, scrollable, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::Message;
@@ -130,10 +130,11 @@ fn recent_section<'a>(
             .width(button_w)
             .padding([BASE * 0.5, BASE])
             .on_press(recent_message(path))
-            .style(styles::start_action(tokens, false)),
+            .style(styles::start_action(tokens, false))
+            .boxed(),
         );
     }
-    Some(list.into())
+    Some(list.boxed())
 }
 
 pub fn view<'a>(
@@ -151,7 +152,7 @@ pub fn view<'a>(
     for action in Action::ALL {
         let primary = action == Action::NewProject;
         if action == Action::KeyboardShortcuts {
-            actions = actions.push(Space::new().height(BASE));
+            actions = actions.push(Space::new().height(BASE).boxed());
         }
         actions = actions.push(
             button(
@@ -163,7 +164,8 @@ pub fn view<'a>(
             .width(button_w)
             .padding([BASE * 0.5, BASE])
             .on_press(action.message())
-            .style(styles::start_action(tokens, primary)),
+            .style(styles::start_action(tokens, primary))
+            .boxed(),
         );
     }
 
@@ -178,13 +180,15 @@ pub fn view<'a>(
     .spacing(BASE * 0.25)
     .align_x(iced::Alignment::Center);
     if let Some(section) = recent_section(tokens, recent, button_w) {
-        content = content.push(Space::new().height(BASE * 1.5)).push(section);
+        content = content
+            .push(Space::new().height(BASE * 1.5).boxed())
+            .push(section);
     }
 
     // Scrolls rather than clips when the window is too short for it all.
     region(
         tokens,
-        scrollable(container(content).center_x(Length::Fill)),
+        scrollable(container(content).center_x(Length::Fill)).boxed(),
     )
 }
 
@@ -200,17 +204,17 @@ pub fn hint_view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
     ]
     .spacing(BASE * 0.65)
     .align_x(iced::Alignment::Center);
-    region(tokens, content)
+    region(tokens, content.boxed())
 }
 
 fn region<'a>(
     tokens: &'a ThemeTokens,
-    content: impl Into<Element<'a, Message>>,
+    content: Element<'a, Message>,
 ) -> Element<'a, Message> {
     container(content)
         .center(Length::Fill)
         .style(styles::panel_region(tokens))
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]
@@ -299,7 +303,7 @@ mod tests {
             for label in &labels {
                 let bounds = find(&texts, label).bounds;
                 let natural = crate::layout_probe::natural::<()>(
-                    text(label.clone()).size(BASE).into(),
+                    text(label.clone()).size(BASE).boxed(),
                     label,
                 );
                 assert!(

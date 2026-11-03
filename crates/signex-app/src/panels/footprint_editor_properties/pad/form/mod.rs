@@ -231,7 +231,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
-            text_input(placeholder, &value)
+            text_input(placeholder, value)
                 .size(TS.caption)
                 .padding(SP.xs)
                 .style(move |_: &Theme, _| iced::widget::text_input::Style {

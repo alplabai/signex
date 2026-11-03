@@ -90,7 +90,7 @@ impl Signex {
                 });
         let palette_input = text_input(
             "Search files, symbols, commands…",
-            &self.ui_state.command_palette.query,
+            self.ui_state.command_palette.query.clone(),
         )
         .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))

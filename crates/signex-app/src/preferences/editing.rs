@@ -2,7 +2,7 @@
 
 use super::*;
 use iced::widget::{Space, checkbox, column, pick_list, row, slider, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -114,10 +114,11 @@ pub(super) fn content_editing<'a>(
         .width(320),
         Space::new().width(Length::Fill),
         pick_list(
-            crate::paste_prefs::PasteDesignators::ALL,
             Some(draft_paste_designators),
-            PrefMsg::DraftPasteDesignators,
+            crate::paste_prefs::PasteDesignators::ALL,
+            ToString::to_string,
         )
+        .on_select(PrefMsg::DraftPasteDesignators)
         .text_size(12),
     ]
     .align_y(iced::Alignment::Center);
@@ -154,5 +155,5 @@ pub(super) fn content_editing<'a>(
         autosave,
     ]
     .padding([SP.xl, 20.0])
-    .into()
+    .boxed()
 }

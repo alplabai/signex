@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -239,7 +240,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .padding(SP.m),
         )
         .width(Length::Fill)
-        .into();
+        .boxed();
     }
 
     // ── Pre-placement properties (TAB pressed during tool) ──
@@ -259,12 +260,13 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 
     // ── Nothing selected: show Document Options (Altium default) ──
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     col = col.push(
         container(text("Document Options").size(TS.body).color(primary))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
 
     // ── General | Parameters tab bar ──
@@ -295,13 +297,14 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ]
             .spacing(SP.xs),
         )
-        .padding([SP.s, SP.m]),
+        .padding([SP.s, SP.m])
+        .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
     // ── Tab content ──
     if tab == 0 {
-        col = col.push(view_properties_general(ctx, muted, primary, border_c));
+        col = col.push(view_properties_general(ctx, muted, primary, border_c).boxed());
     } else {
         col = col.push(view_properties_parameters(
             muted,
@@ -310,19 +313,20 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             crate::styles::ti(ctx.tokens.selection),
             crate::styles::ti(ctx.tokens.accent),
             crate::styles::ti(ctx.tokens.hover),
-        ));
+        ).boxed());
     }
 
     // ── Status: Nothing selected ──
-    col = col.push(Space::new().height(8.0));
+    col = col.push(Space::new().height(8.0).boxed());
     col = col.push(thin_sep(border_c));
     col = col.push(
         container(text("Nothing selected").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
 
-    scrollable(col).width(Length::Fill).into()
+    scrollable(col).width(Length::Fill).boxed()
 }
 
 /// Pre-placement properties — shown when TAB pressed during a placement tool.
@@ -346,7 +350,7 @@ fn view_pre_placement<'a>(
     let font_size_pt = pp.font_size_pt;
     let justify_h = pp.justify_h;
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     // Header — kind-labelled, Altium style.
     col = col.push(
@@ -362,15 +366,20 @@ fn view_pre_placement<'a>(
             .align_y(iced::Alignment::Center),
         )
         .padding([6.0, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
 
-    col = col.push(container(Space::new()).height(1).width(Length::Fill).style(
-        move |_: &Theme| container::Style {
-            background: Some(Background::Color(border_c)),
-            ..container::Style::default()
-        },
-    ));
+    col = col.push(
+        container(Space::new())
+            .height(1)
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(border_c)),
+                ..container::Style::default()
+            })
+            .boxed(),
+    );
 
     // ── Location ──
     col = col.push(collapsible_section(
@@ -406,7 +415,7 @@ fn view_pre_placement<'a>(
             ));
             c
         },
-    ));
+    ).boxed());
 
     // ── Properties (kind-specific) ──
     let text_label_for_kind = match kind {
@@ -486,12 +495,13 @@ fn view_pre_placement<'a>(
                             primary,
                             ctx.theme_id,
                         ))
-                        .padding([SP.s, SP.m]),
+                        .padding([SP.s, SP.m])
+                        .boxed(),
                     );
                 }
                 c
             },
-        ));
+        ).boxed());
     } else if matches!(
         kind,
         PrePlacementKind::Line
@@ -526,7 +536,7 @@ fn view_pre_placement<'a>(
                 }
                 c
             },
-        ));
+        ).boxed());
     } else {
         col = col.push(
             container(
@@ -534,11 +544,12 @@ fn view_pre_placement<'a>(
                     .size(TS.caption)
                     .color(muted),
             )
-            .padding([8, PROPERTY_ROW_PAD_X]),
+            .padding([8, PROPERTY_ROW_PAD_X])
+            .boxed(),
         );
     }
 
     container(scrollable(col).width(Length::Fill))
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
