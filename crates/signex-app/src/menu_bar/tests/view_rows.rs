@@ -141,3 +141,19 @@ fn toggle_grid_row_saves_the_choice() {
     let task = click(&mut app, "View/Toggle Grid");
     assert!(has_work(&task), "the menu row saved nothing");
 }
+
+/// #1922: Zoom In / Out step the schematic or PCB canvas, so they are greyed
+/// where there is none: no document, a project alone, and the editors.
+#[test]
+fn zoom_rows_are_greyed_without_a_canvas() {
+    for app in [bare_app(), symbol_editor_app(), footprint_editor_app()] {
+        assert!(!row_is_live(&app, "View/Zoom In"));
+        assert!(!row_is_live(&app, "View/Zoom Out"));
+    }
+    let mut project = bare_app();
+    open_project(&mut project, "P.snxprj");
+    assert!(!row_is_live(&project, "View/Zoom In"));
+    let schematic = one_symbol_selected();
+    assert!(row_is_live(&schematic, "View/Zoom In"));
+    assert!(row_is_live(&schematic, "View/Zoom Out"));
+}

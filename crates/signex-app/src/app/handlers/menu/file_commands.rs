@@ -115,27 +115,9 @@ impl Signex {
                 crate::library::messages::SymbolEditorMsg::RemovePart,
             ),
             MenuMessage::ToolsDocumentOptions => {
-                // Resolve the active tab's containing `.snxlib` and
-                // open the modal against its library_path. No-op on
-                // non-primitive tabs (Altium-style "menu greys out
-                // when not applicable" — modeled here as silent
-                // no-op since MenuContext doesn't carry a SchLib
-                // flag yet).
-                let path = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .and_then(|t| match &t.kind {
-                        crate::app::TabKind::SymbolEditor(p)
-                        | crate::app::TabKind::FootprintEditor(p) => Some(p.clone()),
-                        _ => None,
-                    });
-                let library_path = path.and_then(|p| {
-                    self.library
-                        .containing_library(&p)
-                        .map(|lib| lib.root.clone())
-                });
-                library_path.map(|library_path| {
+                // The row is greyed unless the active tab is an editor inside
+                // an open library (`CommandContext::has_library_editor`).
+                self.active_editor_library_root().map(|library_path| {
                     self.update(Message::Library(
                         crate::library::LibraryMessage::OpenDocumentOptions { library_path },
                     ))
@@ -143,6 +125,23 @@ impl Signex {
             }
             _ => None,
         }
+    }
+
+    /// The root of the open library containing the active symbol or footprint
+    /// editor tab. The one answer behind Tools ▸ Document Options and its
+    /// enablement.
+    pub(crate) fn active_editor_library_root(&self) -> Option<std::path::PathBuf> {
+        let tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let path = match &tab.kind {
+            crate::app::TabKind::SymbolEditor(p) | crate::app::TabKind::FootprintEditor(p) => p,
+            _ => return None,
+        };
+        self.library
+            .containing_library(path)
+            .map(|lib| lib.root.clone())
     }
 
     /// Resolve the active tab; if it's a `.snxsym` standalone editor

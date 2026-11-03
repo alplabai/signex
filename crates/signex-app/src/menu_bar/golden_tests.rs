@@ -40,6 +40,7 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
             has_document: true,
             has_open_project: true,
             has_parent_sheet: true,
+            has_active_path: true,
             ..base
         }),
         with(CommandContext {
@@ -89,6 +90,7 @@ fn eval_gate(gate: &str, ctx: &MenuContext) -> bool {
         "newpart" => new_part_menu_enabled(&ctx.commands),
         "removepart" => remove_part_menu_enabled(&ctx.commands),
         "cyclegrid" => cycle_grid_menu_enabled(&ctx.commands),
+        "libeditor" => ctx.commands.has_library_editor,
         other => {
             let id = other.strip_prefix("cmd:").expect("known gate");
             enabled(ctx, id)

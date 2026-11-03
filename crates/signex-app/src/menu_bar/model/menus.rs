@@ -343,7 +343,12 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
             remove_part_menu_enabled(&ctx.commands),
         ),
         SEP,
-        item("Document Options...", MenuMessage::ToolsDocumentOptions),
+        // Opens the options of the library the active editor tab is in.
+        item_if(
+            "Document Options...",
+            MenuMessage::ToolsDocumentOptions,
+            ctx.commands.has_library_editor,
+        ),
         SEP,
         item(
             "Passive Network Calculator...",

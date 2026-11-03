@@ -25,6 +25,8 @@ pub(crate) enum Needs {
     DeleteTarget,
     VertexTarget,
     Sheets,
+    ActiveSheet,
+    Canvas,
     FitTarget,
     FootprintEditor,
 }
@@ -63,6 +65,11 @@ impl Needs {
             Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,
+            // Annotate acts from the active document's path; with none open it
+            // only reports that there is nothing to do.
+            Self::ActiveSheet => ctx.has_active_path,
+            // Zoom steps the main window's schematic or PCB canvas.
+            Self::Canvas => ctx.has_schematic || ctx.has_pcb,
             Self::FitTarget => ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas,
             // The keystroke opens the footprint editor's grid picker and does
             // nothing elsewhere. The View menu row shares the label but
@@ -76,7 +83,9 @@ impl Needs {
     pub(crate) fn reason(self) -> &'static str {
         match self {
             Self::Planned => "Planned, not available yet",
-            Self::SaveTarget => "Save needs a document with unsaved changes",
+            Self::SaveTarget => {
+                "Save needs a schematic or editor document, or a project with unsaved changes"
+            }
             Self::SaveAsTarget => "Save As needs a schematic, symbol or footprint document",
             Self::PrintTarget => "Print needs an open schematic",
             Self::Document => "No document is open",
@@ -90,6 +99,8 @@ impl Needs {
             Self::DeleteTarget => "Nothing is selected to delete",
             Self::VertexTarget => "Nothing is selected and no wire is being drawn",
             Self::Sheets => "No schematic or project is open",
+            Self::ActiveSheet => "No sheet is open",
+            Self::Canvas => "No schematic or PCB is open",
             Self::FitTarget => "No schematic or PCB is open",
             Self::FootprintEditor => "No footprint editor is open",
         }
@@ -146,7 +157,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "break_wire"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager" => Needs::Schematic,
-        "annotate_schematic_quietly" | "force_annotate_all_schematics" | "run_erc" => Needs::Sheets,
+        "run_erc" => Needs::Sheets,
+        "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
+        "zoom_in_at_cursor" | "zoom_out_at_cursor" => Needs::Canvas,
         "zoom_to_fit" | "zoom_to_all_objects" | "show_all_design_objects" => Needs::FitTarget,
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
         _ => return None,

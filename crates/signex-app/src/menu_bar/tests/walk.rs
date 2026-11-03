@@ -152,104 +152,66 @@ fn a_live_command_row_runs_and_a_greyed_one_is_disabled_in_every_state() {
 
 #[test]
 fn the_same_holds_in_an_undocked_windows_own_bar() {
-    let undocked: fn() -> Signex =
-        || super::window_native_rows::with_undocked_window(schematic_with_history()).0;
-    check_command_rows("undocked window", undocked, |app| {
-        app.ui_state.windows.keys().next().copied()
-    });
+    check_command_rows("undocked window", undocked_schematic, the_undocked_window);
 }
-
-/// Rows that are live in a state where their click only reports in the
-/// Messages panel: `(row, state, the line)`.
-const LOG_ONLY: &[(&str, &str, &str)] = &[
-    (
-        "Design/Annotation/Annotate Schematics Quietly",
-        "project, no document",
-        "no sheet is open, nothing to do",
-    ),
-    (
-        "Design/Annotation/Force Annotate All Schematics",
-        "project, no document",
-        "no sheet is open, nothing to do",
-    ),
-];
 
 /// Rows that are live where their click does nothing and says nothing,
 /// found by [`every_live_row_does_something`] and left as they are (menu
-/// content is the maintainer's call): `(row, states)`. The list may only
-/// shrink.
-const KNOWN_INERT: &[(&str, &[&str])] = &[
-    // Acts on the schematic or PCB canvas only.
-    (
-        "View/Zoom In",
-        &[
-            "no document",
-            "project, no document",
-            "symbol editor",
-            "symbol editor, second part",
-            "footprint editor, history",
-        ],
-    ),
-    (
-        "View/Zoom Out",
-        &[
-            "no document",
-            "project, no document",
-            "symbol editor",
-            "symbol editor, second part",
-            "footprint editor, history",
-        ],
-    ),
-    // Acts only in a symbol or footprint editor inside an open library.
-    (
-        "Tools/Document Options...",
-        &[
-            "no document",
-            "project, no document",
-            "schematic, nothing selected",
-            "schematic, selection and history",
-            "schematic, unsaved",
-            "symbol editor",
-            "symbol editor, second part",
-            "footprint editor, history",
-        ],
-    ),
-];
+/// content is the maintainer's call): `(row, states)`. Empty: no button is
+/// dead. The list may only shrink.
+const KNOWN_INERT: &[(&str, &[&str])] = &[];
+
+/// Live rows of `build`'s app whose click moved nothing, as `(row, state)`.
+fn inert_rows(
+    state: &'static str,
+    build: fn() -> Signex,
+    window_of: impl Fn(&mut Signex) -> Option<iced::window::Id>,
+) -> Vec<(String, &'static str)> {
+    let mut probe_app = build();
+    let window = window_of(&mut probe_app);
+    let mut inert = Vec::new();
+    for (path, item) in all_rows(&probe_app, window) {
+        // A panel row shows its panel; with the panel already open there
+        // is nothing to do, and its check mark says so.
+        if !is_live(&item) || item.checked == Some(true) {
+            continue;
+        }
+        let mut app = build();
+        let window = window_of(&mut app);
+        let before = probe(&app);
+        let task = match window {
+            Some(window) => super::window_native_rows::click_in_window(&mut app, window, &path),
+            None => click(&mut app, &path),
+        };
+        if probe(&app) == before && !has_work(&task) {
+            inert.push((path, state));
+        }
+    }
+    inert
+}
+
+fn undocked_schematic() -> Signex {
+    super::window_native_rows::with_undocked_window(schematic_with_history()).0
+}
+
+fn the_undocked_window(app: &mut Signex) -> Option<iced::window::Id> {
+    app.ui_state.windows.keys().next().copied()
+}
 
 #[test]
 fn every_live_row_does_something() {
-    let _ = crate::diagnostics::init_logging();
-    let mut inert: std::collections::BTreeMap<String, Vec<&str>> = Default::default();
+    let mut inert = Vec::new();
     for (state, build) in FIXTURES {
-        let probe_app = build();
-        for (path, item) in all_rows(&probe_app, None) {
-            // A panel row shows its panel; with the panel already open there
-            // is nothing to do, and its check mark says so.
-            if !is_live(&item) || item.checked == Some(true) {
-                continue;
-            }
-            let log_only = LOG_ONLY.iter().find(|(p, s, _)| *p == path && s == state);
-            let logged_before =
-                log_only.map(|(_, _, needle)| crate::diagnostics::logged_count(needle));
-            let mut app = build();
-            let before = probe(&app);
-            let task = click(&mut app, &path);
-            if probe(&app) != before || has_work(&task) {
-                assert!(log_only.is_none(), "{path} in {state} no longer only logs");
-                continue;
-            }
-            match (log_only, logged_before) {
-                (Some((_, _, needle)), Some(count)) => assert!(
-                    crate::diagnostics::logged_count(needle) > count,
-                    "{path} in {state}: nothing logged"
-                ),
-                _ => inert.entry(path).or_default().push(state),
-            }
-        }
+        inert.extend(inert_rows(state, *build, |_| None));
     }
-    let known: std::collections::BTreeMap<String, Vec<&str>> = KNOWN_INERT
+    inert.extend(inert_rows(
+        "undocked window",
+        undocked_schematic,
+        the_undocked_window,
+    ));
+    let known: Vec<(String, &str)> = KNOWN_INERT
         .iter()
-        .map(|(path, states)| (path.to_string(), states.to_vec()))
+        .flat_map(|(path, states)| states.iter().map(move |s| (path.to_string(), *s)))
         .collect();
     assert_eq!(inert, known, "live rows whose click does nothing");
 }

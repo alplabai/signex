@@ -105,22 +105,56 @@ fn part_rows_are_greyed_outside_a_symbol_editor() {
     assert!(!row_is_live(&app, "Tools/Remove Part"));
 }
 
-/// KNOWN-INERT (#1922): the row is live in every tab, but its handler only
-/// acts when the active tab is a symbol or footprint editor inside an open
-/// `.snxlib`; anywhere else the click does nothing and reports nothing.
+/// #1922: Tools ▸ Document Options is greyed unless the active tab is a symbol
+/// or footprint editor inside an open library, the one case its handler acts in.
 #[test]
-fn document_options_row_is_live_but_inert_outside_a_library_editor() {
-    for mut app in [
+fn document_options_is_greyed_outside_a_library_editor() {
+    for app in [
+        bare_app(),
         one_symbol_selected(),
         symbol_editor_app(),
         footprint_editor_app(),
     ] {
-        assert!(row_is_live(&app, "Tools/Document Options..."));
-        let before = probe(&app);
-        let task = click(&mut app, "Tools/Document Options...");
-        assert!(!has_work(&task));
-        assert_eq!(probe(&app), before);
+        assert!(!row_is_live(&app, "Tools/Document Options..."));
+    }
+}
+
+#[test]
+fn document_options_opens_the_modal_for_an_editor_in_a_mounted_library() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path().join("menu-rows.snxlib");
+    crate::library::commands::create_library_file(&root, &Default::default()).expect("library");
+    for kind in ["symbol", "footprint"] {
+        let mut app = bare_app();
+        app.library.open_library(root.clone()).expect("mounts");
+        let file = root
+            .join(format!("{kind}s"))
+            .join(format!("part.snx{}", &kind[..3]));
+        let tab_kind = if kind == "symbol" {
+            TabKind::SymbolEditor(file.clone())
+        } else {
+            TabKind::FootprintEditor(file.clone())
+        };
+        app.document_state.tabs.push(TabInfo {
+            title: "part".into(),
+            path: file,
+            cached_document: None,
+            project_id: None,
+            kind: tab_kind,
+        });
+        app.document_state.active_tab = 0;
+        assert!(row_is_live(&app, "Tools/Document Options..."), "{kind}");
         assert!(app.library.document_options.is_none());
+        let before = probe(&app);
+        let _ = click(&mut app, "Tools/Document Options...");
+        let modal = app.library.document_options.as_ref().expect("the modal");
+        assert_eq!(
+            app.library
+                .library_at(&modal.library_path)
+                .map(|l| l.root.clone()),
+            Some(root.clone())
+        );
+        assert_eq!(probe(&app), before, "nothing else moves");
     }
 }
 

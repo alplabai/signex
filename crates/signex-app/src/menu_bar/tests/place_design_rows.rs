@@ -245,3 +245,23 @@ fn design_rows_without_a_schematic_are_greyed() {
         assert!(!row_is_live(&app, path), "{path}");
     }
 }
+
+/// #1922: Annotate Quietly and Force Annotate are greyed when no sheet is open
+/// (a project alone), where their click used to only log "nothing to do".
+#[test]
+fn quiet_annotate_rows_are_greyed_with_a_project_but_no_sheet() {
+    let mut app = bare_app();
+    open_project(&mut app, "P.snxprj");
+    for path in [
+        "Design/Annotation/Annotate Schematics Quietly",
+        "Design/Annotation/Force Annotate All Schematics",
+    ] {
+        assert!(!row_is_live(&app, path), "{path}");
+    }
+    // Electrical Rules Check still works from a project alone.
+    assert!(row_is_live(&app, "Design/Electrical Rules Check"));
+    assert!(row_is_live(
+        &one_symbol_selected(),
+        "Design/Annotation/Annotate Schematics Quietly"
+    ));
+}

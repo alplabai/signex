@@ -154,10 +154,11 @@ fn push_tab(app: &mut Signex, path: &std::path::Path, kind: TabKind) {
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
 }
 
-/// The menu context the main window's bar is built from.
-pub(super) fn menu_context(app: &Signex) -> MenuContext<'_> {
+/// The menu context the bar of `window` (`None`: the main window) is built
+/// from.
+pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) -> MenuContext<'_> {
     MenuContext {
-        commands: app.command_context(None),
+        commands: app.command_context(window),
         has_project: app.document_state.active_project.is_some(),
         scale_factor: 1.0,
         active_keymap: Some(std::sync::Arc::clone(&app.ui_state.active_keymap)),
@@ -166,7 +167,12 @@ pub(super) fn menu_context(app: &Signex) -> MenuContext<'_> {
     }
 }
 
-pub(super) fn find_in<'a>(menu: &'a Menu, rest: &[&str]) -> Option<&'a MenuItem> {
+/// The menu context the main window's bar is built from.
+pub(super) fn menu_context(app: &Signex) -> MenuContext<'_> {
+    menu_context_in(app, None)
+}
+
+fn find_in<'a>(menu: &'a Menu, rest: &[&str]) -> Option<&'a MenuItem> {
     let (head, tail) = rest.split_first()?;
     menu.entries.iter().find_map(|entry| match entry {
         MenuEntry::Item(item) if tail.is_empty() && item.label == *head => Some(item),
@@ -175,10 +181,15 @@ pub(super) fn find_in<'a>(menu: &'a Menu, rest: &[&str]) -> Option<&'a MenuItem>
     })
 }
 
-/// The row at `path` ("File/Save", "File/Export/PDF…") of the bar the app
-/// would draw now.
-pub(super) fn with_row<R>(app: &Signex, path: &str, read: impl FnOnce(&MenuItem) -> R) -> R {
-    let ctx = menu_context(app);
+/// The row at `path` ("File/Save", "File/Export/PDF…") of the bar of `window`
+/// the app would draw now.
+pub(super) fn with_row_in<R>(
+    app: &Signex,
+    window: Option<iced::window::Id>,
+    path: &str,
+    read: impl FnOnce(&MenuItem) -> R,
+) -> R {
+    let ctx = menu_context_in(app, window);
     let model = menu_bar_model(&ctx);
     let parts: Vec<&str> = path.split('/').collect();
     let (root, rest) = parts.split_first().expect("a path");
@@ -189,6 +200,10 @@ pub(super) fn with_row<R>(app: &Signex, path: &str, read: impl FnOnce(&MenuItem)
         .unwrap_or_else(|| panic!("no menu {root}"));
     let item = find_in(menu, rest).unwrap_or_else(|| panic!("no row {path}"));
     read(item)
+}
+
+pub(super) fn with_row<R>(app: &Signex, path: &str, read: impl FnOnce(&MenuItem) -> R) -> R {
+    with_row_in(app, None, path, read)
 }
 
 pub(super) fn row_is_live(app: &Signex, path: &str) -> bool {
@@ -245,6 +260,7 @@ pub(super) struct Probe {
     pub zoom_percent: f64,
     pub context_menu: bool,
     pub fit_queued: bool,
+    pub window_fit_queued: bool,
     pub error_notice: bool,
     pub refs: Vec<String>,
 }
@@ -296,6 +312,11 @@ pub(super) fn probe(app: &Signex) -> Probe {
         zoom_percent: canvas.zoom_percent(),
         context_menu: app.interaction_state.context_menu.is_some(),
         fit_queued: canvas.pending_fit.get().is_some(),
+        window_fit_queued: app
+            .interaction_state
+            .canvases
+            .values()
+            .any(|c| c.pending_fit.get().is_some()),
         error_notice: app.document_state.error_notice.is_some(),
         refs: app
             .document_state

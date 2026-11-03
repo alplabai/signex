@@ -87,7 +87,8 @@ fn every_live_row_has_the_same_effect_from_the_native_bar() {
 /// window's tab placed after it.
 pub(super) fn with_undocked_window(mut app: Signex) -> (Signex, iced::window::Id) {
     let path = std::path::PathBuf::from("/w/undocked.snxsch");
-    let engine = signex_engine::Engine::new(sheet_of(Vec::new())).expect("engine");
+    let sheet = sheet_of(vec![symbol(5, "R5", 50.0, 50.0)]);
+    let engine = signex_engine::Engine::new(sheet.clone()).expect("engine");
     app.document_state.engines.insert(path.clone(), engine);
     let main_tab = app.document_state.active_tab;
     app.document_state.tabs.insert(
@@ -109,9 +110,19 @@ pub(super) fn with_undocked_window(mut app: Signex) -> (Signex, iced::window::Id
             title: "undocked".into(),
         },
     );
+    let slot = crate::canvas::CanvasSlot::new();
+    slot.set_viewport(iced::Rectangle::new(
+        iced::Point::ORIGIN,
+        iced::Size::new(800.0, 600.0),
+    ));
+    app.interaction_state.canvases.insert(window, slot);
     app.interaction_state
         .canvases
-        .insert(window, crate::canvas::CanvasSlot::new());
+        .get_mut(&window)
+        .expect("canvas")
+        .set_render_cache(Some(
+            crate::schematic_runtime::SchematicRenderCache::from_sheet(&sheet),
+        ));
     (app, window)
 }
 
@@ -125,8 +136,13 @@ fn window_message(window: iced::window::Id, msg: crate::menu_bar::MenuMessage) -
     }
 }
 
-fn click_in_window(app: &mut Signex, window: iced::window::Id, path: &str) -> Task<Message> {
-    let msg = with_row(app, path, |item| {
+/// Press the live row `path` of `window`'s own bar.
+pub(super) fn click_in_window(
+    app: &mut Signex,
+    window: iced::window::Id,
+    path: &str,
+) -> Task<Message> {
+    let msg = with_row_in(app, Some(window), path, |item| {
         item.dispatches()
             .unwrap_or_else(|| panic!("{path} is not live"))
             .clone()
@@ -199,12 +215,5 @@ fn undocked_fit_all_fits_its_own_canvas_not_the_main_one() {
 }
 
 fn row_is_live_in(app: &Signex, window: iced::window::Id, path: &str) -> bool {
-    let ctx = MenuContext {
-        commands: app.command_context(Some(window)),
-        ..menu_context(app)
-    };
-    let model = menu_bar_model(&ctx);
-    let parts: Vec<&str> = path.split('/').collect();
-    let menu = model.menus.iter().find(|m| m.title == parts[0]).unwrap();
-    super::find_in(menu, &parts[1..]).is_some_and(|item| item.is_enabled())
+    with_row_in(app, Some(window), path, |item| item.is_enabled())
 }

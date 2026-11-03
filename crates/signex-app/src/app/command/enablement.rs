@@ -82,6 +82,12 @@ pub(crate) struct CommandContext {
     /// Navigator's hierarchy, which Up Hierarchy opens. A top-level page has
     /// none.
     pub has_parent_sheet: bool,
+    /// Some document is the active one (it has a path), which the annotate
+    /// commands run from.
+    pub has_active_path: bool,
+    /// The active tab is a symbol or footprint editor inside an open library,
+    /// which Tools ▸ Document Options opens the options of.
+    pub has_library_editor: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.
     pub can_remove_part: bool,
@@ -127,7 +133,12 @@ pub(crate) fn remove_part_menu_enabled(ctx: &CommandContext) -> bool {
 pub(crate) fn explains_when_unavailable(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
-        "save_document_as" | "print" | "leave_sheet" | "navigate_up_hierarchy"
+        "save_document_as"
+            | "print"
+            | "leave_sheet"
+            | "navigate_up_hierarchy"
+            | "annotate_schematic_quietly"
+            | "force_annotate_all_schematics"
     ) || is_planned_command(command)
 }
 
@@ -213,6 +224,8 @@ impl Signex {
             has_document: !document.tabs.is_empty(),
             has_open_project: document.active_project.is_some(),
             has_parent_sheet: self.active_sheet_has_parent(),
+            has_active_path: document.active_path.is_some(),
+            has_library_editor: self.active_editor_library_root().is_some(),
             can_remove_part: self.active_symbol_part_is_removable(),
         }
     }
