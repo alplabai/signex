@@ -87,6 +87,16 @@ pub struct PartChange {
 }
 
 impl PartChange {
+    /// Only the values for fields `have` holds nothing in.
+    pub fn only_empty_in(self, have: &PartIdentity) -> Self {
+        let blank = |v: &str| v.trim().is_empty();
+        Self {
+            footprint: self.footprint.filter(|_| blank(&have.footprint)),
+            manufacturer: self.manufacturer.filter(|_| blank(&have.manufacturer)),
+            mpn: self.mpn.filter(|_| blank(&have.mpn)),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.footprint.is_none() && self.manufacturer.is_none() && self.mpn.is_none()
     }

@@ -182,3 +182,58 @@ fn an_in_app_footprint_edit_on_the_row_is_flagged_as_drift() {
     check_drift(&mut app);
     assert!(is_drifted(&app), "the part follows the edited row");
 }
+
+#[test]
+fn an_open_time_scan_after_a_row_footprint_edit_keeps_the_drift() {
+    let f = fixture();
+    bind_footprint(&f, "SOIC-8");
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let placed = doc(&app).symbols[0].library_version.clone();
+
+    bind_footprint(&f, "TSSOP-8");
+    // Reopen the sheet: a fresh engine over the same document, no history.
+    let path = app.document_state.active_path.clone().unwrap();
+    let document = doc(&app).clone();
+    app.document_state.engines.insert(
+        path.clone(),
+        signex_engine::Engine::new_with_path(document, Some(path.clone())).unwrap(),
+    );
+    app.scan_library_updates_for_open_schematic(path);
+    select_first(&mut app);
+    check_drift(&mut app);
+    let s = &doc(&app).symbols[0];
+    assert!(
+        is_drifted(&app) || s.footprint == "TSSOP-8",
+        "the scan restamped the part ({placed} -> {}) but left {}; the row's TSSOP-8 is no longer offered",
+        s.library_version,
+        s.footprint
+    );
+}
+
+#[test]
+fn a_part_from_before_mpn_stamping_is_offered_the_row_mpn() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    let path = app.document_state.active_path.clone().unwrap();
+    let uuid = doc(&app).symbols[0].uuid;
+    // A part placed before this change: no Manufacturer / MPN, same stamp.
+    for key in ["MPN", "Manufacturer"] {
+        app.document_state
+            .engines
+            .get_mut(&path)
+            .unwrap()
+            .execute(signex_engine::Command::RemoveSymbolField {
+                symbol_id: uuid,
+                key: key.into(),
+            })
+            .unwrap();
+    }
+    select_first(&mut app);
+    check_drift(&mut app);
+    assert!(
+        is_drifted(&app),
+        "an empty MPN / Manufacturer is read as the user's override, so the row's TWO-1 / Acme is never offered"
+    );
+}

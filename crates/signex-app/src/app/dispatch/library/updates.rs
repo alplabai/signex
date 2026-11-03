@@ -196,9 +196,13 @@ impl Signex {
                 any_failed = true;
             } else {
                 for (symbol, row) in stale {
+                    // A part that does not hold its row's footprint /
+                    // Manufacturer / MPN yet keeps its old stamp: restamping
+                    // would read as "row unchanged" and hide that drift.
+                    let restamp = !self.has_pending_part_sync(&schematic_path, symbol, row);
                     any_failed |= !self.collect_personal_update(
                         symbol.clone(),
-                        &row.row.version,
+                        restamp.then_some(row.row.version.as_str()),
                         &mut read_cache,
                         &mut personal_apply,
                     );
@@ -371,12 +375,36 @@ impl Signex {
         })
     }
 
+    /// Whether `symbol` differs from `row` in footprint, Manufacturer or MPN,
+    /// which only "Update from library" may rewrite.
+    fn has_pending_part_sync(
+        &self,
+        sheet: &std::path::Path,
+        symbol: &PlacedLibrarySymbol,
+        row: &InstanceRow,
+    ) -> bool {
+        let Some(engine) = self.document_state.engines.get(sheet) else {
+            return false;
+        };
+        let stamps = crate::library::drift::instance_stamps(
+            engine.document(),
+            &symbol.lib_id,
+            &std::collections::HashMap::new(),
+        );
+        stamps
+            .iter()
+            .find(|w| w.symbol == symbol.uuid)
+            .is_some_and(|w| {
+                crate::library::drift::part_sync_pending(w, &row.row, &self.mounted_libraries())
+            })
+    }
+
     /// Queue `symbol` for the silent Personal-mode update, reading the
     /// library's symbol once per `lib_id`. `false` when it was unreadable.
     fn collect_personal_update(
         &self,
         symbol: PlacedLibrarySymbol,
-        latest_version: &str,
+        latest_version: Option<&str>,
         read_cache: &mut std::collections::HashMap<String, Result<LibSymbol, String>>,
         queue: &mut PersonalUpdates,
     ) -> bool {
@@ -385,11 +413,12 @@ impl Signex {
             .or_insert_with(|| self.read_library_symbol(&symbol.lib_id));
         match read {
             Ok(fresh) => {
-                queue
+                let entry = queue
                     .entry(symbol.lib_id.clone())
-                    .or_insert_with(|| (fresh.clone(), Vec::new()))
-                    .1
-                    .push((symbol.uuid, latest_version.to_string()));
+                    .or_insert_with(|| (fresh.clone(), Vec::new()));
+                if let Some(version) = latest_version {
+                    entry.1.push((symbol.uuid, version.to_string()));
+                }
                 true
             }
             Err(why) => {

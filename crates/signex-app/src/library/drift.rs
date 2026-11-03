@@ -489,6 +489,16 @@ fn stamp_or_reason(
     }
 }
 
+/// Whether `w` has a sync pending against `row` (see [`part_sync_of`]).
+pub(crate) fn part_sync_pending(
+    w: &ApplyStamp,
+    row: &signex_library::ComponentRow,
+    libs: &[MountedLibrary],
+) -> bool {
+    open_library(libs, w.library_id)
+        .is_ok_and(|opened| part_sync_of(w, &opened, row, libs).is_some())
+}
+
 /// The sync for `w` when its row's footprint, manufacturer or MPN differs.
 fn part_sync_of(
     w: &ApplyStamp,
@@ -496,13 +506,14 @@ fn part_sync_of(
     row: &signex_library::ComponentRow,
     libs: &[MountedLibrary],
 ) -> Option<PartSync> {
-    // A row that has not moved since the stamp leaves a differing field as
-    // the user's override. No stamp (empty) counts as moved.
-    if !w.stamped_version.is_empty() && w.stamped_version == row.version {
-        return None;
-    }
     let want = row_identity(opened, row, libs);
-    let change = w.have.changes_to(&want);
+    let mut change = w.have.changes_to(&want);
+    // A row that has not moved since the stamp leaves a differing value as
+    // the user's override; a field the part holds nothing in is no override.
+    // No stamp (empty) counts as moved.
+    if !w.stamped_version.is_empty() && w.stamped_version == row.version {
+        change = change.only_empty_in(&w.have);
+    }
     (!change.is_empty()).then(|| PartSync {
         symbol: w.symbol,
         reference: w.reference.clone(),
