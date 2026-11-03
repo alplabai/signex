@@ -24,6 +24,7 @@
 pub mod bom_prices;
 pub mod browser;
 pub mod close_prompt;
+pub mod closed_sheets;
 pub mod commands;
 pub mod component_preview;
 pub mod create_options;

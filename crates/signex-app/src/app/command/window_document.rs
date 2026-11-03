@@ -8,6 +8,7 @@
 
 use iced::Task;
 
+use super::CommandOutcome;
 use crate::app::Message;
 use crate::app::Signex;
 use crate::app::state::WindowKind;
@@ -35,12 +36,19 @@ pub(super) fn is_window_document_command(command: &AppCommandId) -> bool {
     )
 }
 
+const DETACHED_WINDOW_CLOSE_MESSAGE: &str =
+    "Close Document does nothing in a detached panel or modal window.";
+
 pub(super) const DOCUMENT_GONE_MESSAGE: &str =
     "This window's document is no longer open, so the command did nothing.";
 
 /// Say why a command typed in a window whose tab is gone did nothing.
-fn explain_document_gone() {
+fn explain_document_gone() -> (CommandOutcome, Task<Message>) {
     crate::diagnostics::log_info(DOCUMENT_GONE_MESSAGE);
+    (
+        CommandOutcome::disabled(DOCUMENT_GONE_MESSAGE),
+        Task::none(),
+    )
 }
 
 fn is_tab_stepper(command: &AppCommandId) -> bool {
@@ -107,7 +115,7 @@ impl Signex {
     pub(super) fn close_document_in_window(
         &mut self,
         window: Option<iced::window::Id>,
-    ) -> Option<Task<Message>> {
+    ) -> Option<(CommandOutcome, Task<Message>)> {
         let id = window?;
         // Close Document in a detached panel or modal does nothing (#1792):
         // closing the main window's tab from a tool window is surprising.
@@ -116,24 +124,29 @@ impl Signex {
             Some(WindowKind::DetachedModal(_) | WindowKind::DetachedPanel(_))
         ) && self.ui_state.main_window_id != Some(id)
         {
-            return Some(Task::none());
+            return Some((
+                CommandOutcome::disabled(DETACHED_WINDOW_CLOSE_MESSAGE),
+                Task::none(),
+            ));
         }
         Some(match self.document_of_window(window)? {
-            WindowDocument::Tab(index) => self.close_tab_parking_dirty(index),
+            WindowDocument::Tab(index) => {
+                (CommandOutcome::Ran, self.close_tab_parking_dirty(index))
+            }
             WindowDocument::NoTab
                 if matches!(
                     self.ui_state.windows.get(&id),
                     Some(WindowKind::ComponentEditor { .. })
                 ) =>
             {
-                self.dispatch_update(Message::Window(
-                    crate::app::WindowMsg::WindowCloseRequested(id),
-                ))
+                (
+                    CommandOutcome::Ran,
+                    self.dispatch_update(Message::Window(
+                        crate::app::WindowMsg::WindowCloseRequested(id),
+                    )),
+                )
             }
-            WindowDocument::NoTab => {
-                explain_document_gone();
-                Task::none()
-            }
+            WindowDocument::NoTab => explain_document_gone(),
         })
     }
 
@@ -155,47 +168,50 @@ impl Signex {
         command: &AppCommandId,
         args: &super::CommandArgs,
         window: Option<iced::window::Id>,
-    ) -> Option<Task<Message>> {
+    ) -> Option<(CommandOutcome, Task<Message>)> {
         if !is_window_document_command(command) {
             return None;
         }
         Some(match self.document_of_window(window)? {
             WindowDocument::Tab(index) if self.tab_takes_window_command(index, command) => {
                 let window = window?;
-                self.run_in_window_document(window, |app| {
-                    app.dispatch_command(command, args.clone(), None)
-                })
+                let mut outcome = CommandOutcome::Ran;
+                let task = self.run_in_window_document(window, |app| {
+                    let (inner, task) = app.dispatch_command_reporting(command, args.clone(), None);
+                    outcome = inner;
+                    task
+                });
+                (outcome, task)
             }
-            WindowDocument::Tab(index) => {
-                self.explain_window_refusal(index, command);
-                Task::none()
-            }
-            WindowDocument::NoTab => {
-                explain_document_gone();
-                Task::none()
-            }
+            WindowDocument::Tab(index) => (
+                CommandOutcome::disabled(self.explain_window_refusal(index, command)),
+                Task::none(),
+            ),
+            WindowDocument::NoTab => explain_document_gone(),
         })
     }
 
     /// Say why a window-document command did nothing instead of leaving the
     /// keystroke silent: a Component Preview has no file for Save, Save As or
     /// Print, and a single-document window has no tab to step to.
-    fn explain_window_refusal(&self, index: usize, command: &AppCommandId) {
+    fn explain_window_refusal(&self, index: usize, command: &AppCommandId) -> &'static str {
         let is_preview = self
             .document_state
             .tabs
             .get(index)
             .is_some_and(|tab| tab.kind.is_component_editor());
         if is_tab_stepper(command) {
-            crate::diagnostics::log_info(
-                "This window shows one document, so there is no tab to step to; \
-                 use the main window's tab strip.",
-            );
+            let reason = "This window shows one document, so there is no tab to step to; \
+                 use the main window's tab strip.";
+            crate::diagnostics::log_info(reason);
+            reason
         } else if is_preview {
-            crate::diagnostics::log_info(
-                "A Component Preview has no file of its own: Save, Save As and Print \
-                 do nothing here. Save the component from the library table.",
-            );
+            let reason = "A Component Preview has no file of its own: Save, Save As and Print \
+                 do nothing here. Save the component from the library table.";
+            crate::diagnostics::log_info(reason);
+            reason
+        } else {
+            "The window's document does not take this command."
         }
     }
 

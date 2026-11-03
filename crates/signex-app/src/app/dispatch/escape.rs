@@ -40,7 +40,10 @@ impl Signex {
             return Task::none();
         }
         // Esc mid-drag of a Components panel row drops nothing.
-        if self.library.components_panel.drag.take().is_some() {
+        if let Some(drag) = self.library.components_panel.drag.take() {
+            if drag.armed {
+                self.cancel_placement_session();
+            }
             return Task::none();
         }
         match self.input_target(window) {

@@ -582,6 +582,12 @@ pub enum LibraryMessage {
     /// The off-thread drift pass finished (#912): which embedded library
     /// symbols differ from the mounted libraries' current ones.
     DriftChecked(Box<crate::library::drift::DriftReport>),
+    /// The off-thread read of the project's closed sheets finished for a
+    /// pending symbol Delete (#1903).
+    SymbolDeleteClosedSheetsScanned(Box<crate::library::closed_sheets::ClosedSheetsReport>),
+    /// The closed sheets a clean scan read were stated again before the
+    /// delete ran (#1903): which of them changed since.
+    SymbolDeleteClosedSheetsVerified(Box<crate::library::closed_sheets::ClosedSheetsVerdict>),
     /// The off-thread library read behind the Library Updates modal's Apply
     /// finished; the update itself is applied from this result.
     LibraryUpdateSymbolsRead(Box<crate::library::drift::SymbolsRead>),

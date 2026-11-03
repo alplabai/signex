@@ -12,7 +12,7 @@ use signex_app::panels::PanelMsg;
 use signex_library::{Symbol, SymbolFile};
 use std::path::PathBuf;
 
-fn container_path(f: &crate::library_place_symbol::Fixture) -> PathBuf {
+pub(crate) fn container_path(f: &crate::library_place_symbol::Fixture) -> PathBuf {
     f.snxlib
         .parent()
         .unwrap()
@@ -22,7 +22,10 @@ fn container_path(f: &crate::library_place_symbol::Fixture) -> PathBuf {
 
 /// Rewrite the library's container so it also holds a sibling symbol, and
 /// open it in a symbol editor tab (the SCH Library panel's Delete target).
-fn open_container_editor(app: &mut Signex, f: &crate::library_place_symbol::Fixture) -> PathBuf {
+pub(crate) fn open_container_editor(
+    app: &mut Signex,
+    f: &crate::library_place_symbol::Fixture,
+) -> PathBuf {
     let path = container_path(f);
     let mut file = SymbolFile::from_toml_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     file.symbols.push(Symbol::empty("SIBLING"));
@@ -41,11 +44,11 @@ fn open_container_editor(app: &mut Signex, f: &crate::library_place_symbol::Fixt
     path
 }
 
-fn panel(app: &mut Signex, msg: PanelMsg) {
+pub(crate) fn panel(app: &mut Signex, msg: PanelMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
 }
 
-fn symbol_count(app: &Signex, path: &PathBuf) -> usize {
+pub(crate) fn symbol_count(app: &Signex, path: &PathBuf) -> usize {
     app.document_state.symbol_editors[path].file.symbols.len()
 }
 
@@ -113,9 +116,17 @@ fn an_unused_symbol_is_deleted_at_once() {
     let path = open_container_editor(&mut app, &f);
 
     // The sibling is bound by no row and placed nowhere.
+    let _ = signex_app::diagnostics::init_logging();
     panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(1));
 
     assert_eq!(symbol_count(&app, &path), 1);
+    assert!(
+        logged(&[
+            "SIBLING deleted",
+            "closed sheets were not checked (no project is open)"
+        ]) >= 1,
+        "with no project open the closed sheets were not checked, and the log says so"
+    );
 }
 
 #[test]
@@ -564,5 +575,52 @@ fn a_symbol_outside_any_mounted_library_is_not_deleted_silently() {
     assert!(
         lines.contains("Open sheets with placed parts"),
         "the open sheet is still found by symbol uuid: {lines}"
+    );
+}
+
+/// The browser marks a row's symbol cell from `dangling.marks_row`.
+fn row_reads_missing(app: &Signex, f: &crate::library_place_symbol::Fixture) -> bool {
+    app.library
+        .library_at(&f.snxlib)
+        .unwrap()
+        .dangling
+        .marks_row(f.row_id, signex_library::RefSlot::Symbol)
+}
+
+fn save_active(app: &mut Signex) {
+    crate::settle_support::settle(app, Message::File(signex_app::app::FileMsg::Save));
+}
+
+#[test]
+fn a_row_bound_to_a_deleted_symbol_reads_missing_until_the_symbol_returns() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    // Bootstrap queued the stock mounts; a sweep waits for them.
+    app.library.pending_mounts.clear();
+    let path = open_container_editor(&mut app, &f);
+    assert!(!row_reads_missing(&app, &f));
+
+    panel(&mut app, PanelMsg::SchLibraryDeleteSymbol(0));
+    panel(&mut app, PanelMsg::SchLibraryDeleteConfirmed(0));
+    save_active(&mut app);
+    assert!(
+        row_reads_missing(&app, &f),
+        "the row keeps a broken state after the delete is saved"
+    );
+
+    // A library refresh derives the same state from the listing.
+    app.library.refresh_components(&f.snxlib).unwrap();
+    assert!(row_reads_missing(&app, &f), "survives a reload");
+
+    // Undo brings the symbol back; saving it clears the state.
+    app.document_state
+        .symbol_editors
+        .get_mut(&path)
+        .unwrap()
+        .undo();
+    save_active(&mut app);
+    assert!(
+        !row_reads_missing(&app, &f),
+        "cleared when the symbol is back"
     );
 }

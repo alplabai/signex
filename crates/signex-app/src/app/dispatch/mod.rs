@@ -7,6 +7,8 @@ mod command_palette;
 mod document;
 mod escape;
 #[cfg(test)]
+mod first_run_tour_tests;
+#[cfg(test)]
 mod grid_properties_tests;
 pub(crate) mod input;
 mod keyboard;
@@ -15,6 +17,7 @@ pub(crate) mod library;
 #[cfg(test)]
 mod net_color_tests;
 mod overlay;
+pub(in crate::app) use overlay::dismiss_first_run_tour_task;
 #[cfg(test)]
 mod prefs_async_tests;
 mod text_edit;
@@ -58,26 +61,19 @@ impl Signex {
             }
             Message::Ui(msg) => self.dispatch_ui_message(msg),
             // Canvas events keep their own top-level variants (hot path,
-            // many emit sites). Both dismiss the first-run tour card on
-            // the first gesture (UX §4.3) before running the handler.
+            // many emit sites). A deliberate pointer gesture dismisses the
+            // first-run tour card (UX §4.3); a hover, and the fit and centre
+            // commands a key or the menu sends, do not (#1994).
             Message::CanvasEvent(event) => {
-                if self.ui_state.first_run_tour_open {
-                    self.ui_state.first_run_tour_open = false;
-                    let save = overlay::dismiss_first_run_tour_task();
-                    return Task::batch([save, self.handle_canvas_interaction_event(event)]);
-                }
-                self.handle_canvas_interaction_event(event)
+                let dismissal = self.dismiss_first_run_tour_on(&event);
+                Task::batch([dismissal, self.handle_canvas_interaction_event(event)])
             }
             Message::CanvasEventInWindow { window_id, event } => {
-                if self.ui_state.first_run_tour_open {
-                    self.ui_state.first_run_tour_open = false;
-                    let save = overlay::dismiss_first_run_tour_task();
-                    return Task::batch([
-                        save,
-                        self.handle_canvas_event_in_window(window_id, event),
-                    ]);
-                }
-                self.handle_canvas_event_in_window(window_id, event)
+                let dismissal = self.dismiss_first_run_tour_on(&event);
+                Task::batch([
+                    dismissal,
+                    self.handle_canvas_event_in_window(window_id, event),
+                ])
             }
             Message::GridProperties(msg) => self.dispatch_grid_properties_message(msg),
             Message::SelectionFilter(msg) => self.dispatch_selection_filter_message(msg),
@@ -95,7 +91,14 @@ impl Signex {
                 let task = self.dispatch_project_message(msg);
                 Task::batch([task, self.finish_update()])
             }
-            Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
+            Message::ContextMenu(msg) => {
+                // A right-click on the canvas is a gesture too (#1994).
+                let dismissal = match msg {
+                    ContextMenuMsg::Show(..) => self.dismiss_first_run_tour(),
+                    _ => Task::none(),
+                };
+                Task::batch([dismissal, self.dispatch_context_menu_message(msg)])
+            }
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),
             Message::Preferences(msg) => self.dispatch_preferences_message(msg),
