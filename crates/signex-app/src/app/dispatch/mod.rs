@@ -430,7 +430,7 @@ impl Signex {
                 );
                 per_window.special_strings = self.special_strings_for_path(&path);
                 per_window.designators = self.designators_for_path(&path);
-                per_window.fit_to_content();
+                per_window.fit_to_sheet();
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
                 // window no longer moves the other (#494).
