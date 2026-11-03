@@ -281,7 +281,7 @@ mod tests {
     /// lengths move with the type scale, not with a fixed pixel count.
     #[test]
     fn matrix_lengths_are_proportional_to_the_type_scale() {
-        assert!(CELL_W >= 4.8 * TS.caption);
+        const { assert!(CELL_W >= 4.8 * TS.caption) };
         assert!((CELL_W / TS.body - 52.0 / 11.0).abs() < 1e-4);
         assert!((COL_HEADER_H / TS.body - 24.0 / 11.0).abs() < 1e-4);
         assert!((ROW_HEADER_W / TS.body - 80.0 / 11.0).abs() < 1e-4);
