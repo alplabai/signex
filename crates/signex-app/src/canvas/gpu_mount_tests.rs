@@ -820,22 +820,24 @@ fn luma(px: [u8; 4]) -> u32 {
 }
 
 /// `stack!` draws children i>0 inside `renderer.with_layer`, so the overlay's
-/// selection highlight lands above the GPU primitive. If that ever stopped
-/// holding, the wire pixel would read the same selected or not.
+/// selection outline lands above the GPU primitive. If that ever stopped
+/// holding, the frame would read the same selected or not (the outline has
+/// no fill, so it is told apart by its pixels, not by a brighter wire).
 #[test]
 fn the_selection_highlight_draws_above_the_gpu_content() {
     let mut gpu = gpu();
     let sheet = fixture();
-    let (wx, wy) = world(12.5, 5.0);
-    let plain = frame_of(&mut gpu, Layer::Stack, &sheet).px(wx, wy);
+    let plain = frame_of(&mut gpu, Layer::Stack, &sheet);
     let look = Look {
         select_wire: true,
         ..Look::default()
     };
-    let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look).px(wx, wy);
+    let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
+    let changed = selected.changed_vs(&plain, (0, 0, WIDTH, HEIGHT));
     assert!(
-        (0..3).all(|c| selected[c] >= plain[c]) && luma(selected) > luma(plain) + 8,
-        "wire pixel {selected:?} shows no highlight over the unselected {plain:?}"
+        changed.len() > 20,
+        "the selection outline is missing: {} pixels changed",
+        changed.len()
     );
 }
 

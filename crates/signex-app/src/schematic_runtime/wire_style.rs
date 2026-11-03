@@ -14,7 +14,9 @@
 use std::collections::HashMap;
 
 use signex_types::net_class::NetClassStyle;
-use signex_types::schematic::{SCHEMATIC_RENDER_MIN_STROKE_MM, Wire};
+use signex_types::schematic::{
+    SCHEMATIC_DEFAULT_WIRE_STROKE_MM, SCHEMATIC_RENDER_MIN_STROKE_MM, Wire,
+};
 use signex_types::theme::Color as ThemeColor;
 use uuid::Uuid;
 
@@ -99,10 +101,14 @@ pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Optio
 /// The width in mm a wire is drawn at, and so the width it is hit at.
 #[must_use]
 pub fn drawn_wire_width_mm(wire: &Wire, class: Option<&NetClassStyle>) -> f64 {
-    class
+    let width = class
         .and_then(|style| style.wire_width_mm)
-        .unwrap_or(wire.stroke_width)
-        .max(SCHEMATIC_RENDER_MIN_STROKE_MM)
+        .unwrap_or(wire.stroke_width);
+    if width > 0.0 {
+        width.max(SCHEMATIC_RENDER_MIN_STROKE_MM)
+    } else {
+        SCHEMATIC_DEFAULT_WIRE_STROKE_MM
+    }
 }
 
 #[cfg(test)]
@@ -110,6 +116,41 @@ mod tests {
     use signex_types::net_class::NetLineStyle;
 
     use super::*;
+
+    /// The width every stock symbol's graphics are stored at, which its pins
+    /// draw at (`symbol_stroke_mm`).
+    fn stock_pin_width_mm() -> f64 {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/stock-library/symbols");
+        let mut widths = Vec::new();
+        for entry in std::fs::read_dir(dir).expect("stock symbols") {
+            let text = std::fs::read_to_string(entry.expect("entry").path()).expect("symbol");
+            for line in text.lines() {
+                if let Some(v) = line.trim().strip_prefix("stroke_width = ") {
+                    widths.push(v.parse::<f64>().expect("width"));
+                }
+            }
+        }
+        assert!(!widths.is_empty(), "no stock graphic widths found");
+        signex_types::schematic::symbol_stroke_mm(widths)
+    }
+
+    #[test]
+    fn a_default_wire_draws_as_wide_as_a_stock_pin() {
+        let wire = Wire::default();
+        assert_eq!(wire.stroke_width, 0.0);
+        assert_eq!(drawn_wire_width_mm(&wire, None), stock_pin_width_mm());
+        // An explicit width and a class width keep their values.
+        let wide = Wire {
+            stroke_width: 0.5,
+            ..Wire::default()
+        };
+        assert_eq!(drawn_wire_width_mm(&wide, None), 0.5);
+        assert_eq!(
+            drawn_wire_width_mm(&wide, Some(&style(None, Some(0.4)))),
+            0.4
+        );
+    }
 
     fn style(color: Option<ThemeColor>, width: Option<f64>) -> NetClassStyle {
         NetClassStyle {

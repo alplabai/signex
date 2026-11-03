@@ -10,6 +10,11 @@
 /// graphic stored with width `0` ("default") draws at (mm).
 pub const SCHEMATIC_RENDER_MIN_STROKE_MM: f64 = 0.15;
 
+/// Width a wire stored with width `0` ("default") is drawn and exported at
+/// (mm): 10 mil, the width of the stock symbols' graphics and so of their
+/// pins. Nothing is written to the file; an explicit width keeps its value.
+pub const SCHEMATIC_DEFAULT_WIRE_STROKE_MM: f64 = 0.254;
+
 /// Bus stroke width (mm).
 pub const SCHEMATIC_RENDER_BUS_STROKE_MM: f64 = 0.45;
 

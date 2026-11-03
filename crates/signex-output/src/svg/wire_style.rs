@@ -5,7 +5,7 @@
 //!
 //! - **colour** - the sheet's per-net colour override, else the net class
 //!   colour, else the palette's wire colour;
-//! - **width** - the class width, else the wire's own width, else 0.15 mm;
+//! - **width** - the class width, else the wire's own width, else 0.254 mm;
 //! - **line style** - the class line style, else solid.
 //!
 //! A dashed or dotted wire is emitted as a run of short sub-paths in one
@@ -19,8 +19,9 @@ use signex_types::schematic::{Junction, Wire};
 use signex_types::theme::Color;
 use uuid::Uuid;
 
-/// Default wire width in mm when neither the wire nor its class sets one.
-const DEFAULT_WIRE_MM: f64 = 0.15;
+/// Default wire width in mm when neither the wire nor its class sets one: the
+/// width the canvas draws it at.
+const DEFAULT_WIRE_MM: f64 = signex_types::schematic::SCHEMATIC_DEFAULT_WIRE_STROKE_MM;
 
 /// `(mark, gap)` in units of the stroke width. The numbers are the canvas's
 /// screen-pixel pattern (`LineSegment::DASH_PX` / `DASH_GAP_PX` and `DOT_PX` /
@@ -152,7 +153,8 @@ mod tests {
 
     #[test]
     fn class_width_replaces_own_and_default_width() {
-        assert_eq!(wire_width_mm(&wire(1, 0.0), None), 0.15);
+        // A default wire exports at the width the canvas draws it at (#1946).
+        assert_eq!(wire_width_mm(&wire(1, 0.0), None), 0.254);
         assert_eq!(wire_width_mm(&wire(1, 0.3), None), 0.3);
         assert_eq!(
             wire_width_mm(&wire(1, 0.3), Some(&style(None, Some(0.8)))),
