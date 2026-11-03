@@ -13,7 +13,7 @@
 //! [`compute_drift`] does the IO and runs in `spawn_blocking`; the
 //! `update`-side half is `app/handlers/library_drift.rs`.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use signex_library::LibraryError;
@@ -58,6 +58,9 @@ pub struct DriftReport {
     /// Per sheet: the `lib_id`s whose library is mounted but no longer has
     /// the symbol (#1845). The sheet keeps rendering its embedded copy.
     pub missing: HashMap<PathBuf, BTreeSet<String>>,
+    /// Mounted libraries whose symbols could not be read this pass, with a
+    /// short reason: one entry per library, not per placed symbol.
+    pub unreadable_libs: BTreeMap<Uuid, (String, String)>,
     /// Failures to surface in the Messages panel.
     pub problems: Vec<String>,
     /// The [`DriftState::generation`] this pass was started under; a report
@@ -130,20 +133,18 @@ pub fn compute_drift(
                         Some((symbol.to_lib_symbol(lib_id.clone()), name))
                     }
                     Err(e) => {
-                        // A symbol the library no longer has is a real
-                        // removal (its row goes); anything else is a failed
-                        // read, which says nothing about drift.
-                        // A removal is reported once per change as "library
-                        // symbol missing"; only a failed read is a problem
-                        // on every pass.
+                        // `NotFound` is a real removal (its row goes); any
+                        // other failure says nothing about drift. It is
+                        // kept per library, so 40 placed parts do not log
+                        // 40 lines.
                         if matches!(e, LibraryError::NotFound(_)) {
                             removed.insert(lib_id.clone());
                         } else {
                             report.unreadable.insert(lib_id.clone());
-                            report.problems.push(format!(
-                                "Could not check library symbol {lib_id} in {}: {e}",
-                                lib.display_name
-                            ));
+                            report
+                                .unreadable_libs
+                                .entry(lib.id)
+                                .or_insert_with(|| (lib.display_name.clone(), short_reason(&e)));
                         }
                         None
                     }
@@ -206,6 +207,39 @@ fn drifted_parts(
         }
     }
     drifted
+}
+
+/// The last `": "` segment of an error (the OS reason, not the paths before
+/// it) with paths cut to their last component, cut to a short length for a Messages line.
+fn short_reason(error: &LibraryError) -> String {
+    const MAX: usize = 60;
+    let text = error.to_string();
+    let tail = text.rsplit(": ").next().unwrap_or(&text);
+    // A path in the reason is cut to its last component.
+    let short: Vec<&str> = tail
+        .split_whitespace()
+        .map(|w| w.rsplit(['/', '\\']).next().unwrap_or(w))
+        .collect();
+    let reason = short.join(" ");
+    // A lookup the scan could not decide names only the container files.
+    if !short.is_empty()
+        && short
+            .iter()
+            .all(|w| w.trim_end_matches(',').ends_with(".snxsym"))
+    {
+        return format!("{reason} could not be read or parsed")
+            .chars()
+            .take(MAX)
+            .collect();
+    }
+    reason.chars().take(MAX).collect()
+}
+
+/// The Messages line for a library whose symbols could not be read.
+pub(crate) fn unreadable_library_warning(library: &str, reason: &str) -> String {
+    format!(
+        "Library {library}: symbols could not be read ({reason}); placed parts keep their state."
+    )
 }
 
 /// Whether the row still offers the symbol `lib_id` names, as its default
@@ -721,6 +755,10 @@ pub struct DriftState {
     pub missing: HashMap<PathBuf, BTreeSet<String>>,
     /// `lib_id` -> `"<Library>/<Symbol>"` where the library is mounted.
     pub names: HashMap<String, String>,
+    /// Libraries already reported as unreadable, with the reason given; a
+    /// different reason is reported again, and a good pass or an unmount
+    /// clears the entry.
+    pub unreadable_libs: BTreeMap<Uuid, String>,
 }
 
 impl DriftState {
@@ -808,5 +846,49 @@ mod tests {
         state.names.insert("L:S".into(), "Passives/R".into());
         assert_eq!(state.display_name("L:S", &[]), "Passives/R");
         assert_eq!(state.display_name("X:Y", &[]), "X:Y");
+    }
+
+    #[test]
+    fn an_unopenable_library_is_reported_once_for_all_its_placed_parts() {
+        let library = Uuid::now_v7();
+        let entries: Vec<(String, LibSymbol)> = (0..40)
+            .map(|_| (format!("{library}:{}", Uuid::now_v7()), sym("a")))
+            .collect();
+        let sheets = vec![(PathBuf::from("/tmp/a.snxsch"), entries)];
+        let libs = vec![MountedLibrary {
+            id: library,
+            path: PathBuf::from("/nonexistent/for/1903/lib.snxlib"),
+            display_name: "Passives".into(),
+        }];
+
+        let report = compute_drift(&sheets, &[], &libs);
+
+        assert_eq!(report.unreadable.len(), 40, "every part keeps its state");
+        assert_eq!(report.unreadable_libs.len(), 1, "one report per library");
+        assert!(report.problems.is_empty(), "{:?}", report.problems);
+        let (name, reason) = &report.unreadable_libs[&library];
+        let line = unreadable_library_warning(name, reason);
+        assert!(line.len() < 160, "{} bytes: {line}", line.len());
+        assert!(!line.contains("/nonexistent"), "{line}");
+    }
+
+    #[test]
+    fn an_unparsed_container_is_described_not_just_named() {
+        let error = LibraryError::Backend(
+            "symbol 0190 not found; 1 symbol file(s) could not be read: \
+             /libs/lib/symbols/two-unit.snxsym"
+                .into(),
+        );
+        assert_eq!(
+            short_reason(&error),
+            "two-unit.snxsym could not be read or parsed"
+        );
+    }
+
+    #[test]
+    fn an_os_reason_is_kept_as_is() {
+        let error =
+            LibraryError::Backend("list /libs/lib/symbols: Permission denied (os error 13)".into());
+        assert_eq!(short_reason(&error), "Permission denied (os error 13)");
     }
 }

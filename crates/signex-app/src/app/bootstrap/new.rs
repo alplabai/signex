@@ -454,6 +454,7 @@ impl Signex {
                 instance_note_due: false,
                 recovery_check_due: Vec::new(),
                 sheet_edit_epoch: 0,
+                symbol_editors_opened: 0,
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
                 project_tabs: std::collections::HashMap::new(),
