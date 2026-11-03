@@ -91,7 +91,9 @@ pub struct PendingDescent {
     /// creation only while that sheet is still the focused one.
     parent: Option<PathBuf>,
     /// The read this open waits for; any other completion for the path (a
-    /// stale one) must leave it alone.
+    /// stale one) must leave it alone. `None` when the path was claimed by an
+    /// untracked read (File > Open): [`Signex::settle_untracked_descent`]
+    /// answers it when that read ends.
     generation: Option<u64>,
 }
 
@@ -218,6 +220,34 @@ impl Signex {
         } else {
             None
         }
+    }
+
+    /// An untracked read of the schematic at `path` (File > Open) ended. An
+    /// open that was deduplicated against its claim has no read of its own to
+    /// wait on: run it now when the tab is up, otherwise read the file again
+    /// under a tracked claim so a missing child still offers Create Sheet.
+    pub(crate) fn settle_untracked_descent(&mut self, path: &Path) -> Task<Message> {
+        let waits = self
+            .ui_state
+            .pending_descents
+            .get(path)
+            .is_some_and(|d| d.generation.is_none());
+        if !waits {
+            return Task::none();
+        }
+        let Some(descent) = self.ui_state.pending_descents.remove(path) else {
+            return Task::none();
+        };
+        if self.has_tab_for(path) {
+            return self.arrive_at_sheet(path, descent.open);
+        }
+        let parent = descent.parent;
+        let (task, refused) = self.open_sheet_outcome(path.to_path_buf(), descent.open);
+        if !refused && let Some(pending) = self.ui_state.pending_descents.get_mut(path) {
+            // The Create offer is still tied to the sheet it was entered from.
+            pending.parent = parent;
+        }
+        task
     }
 
     /// Whether the open waiting on read `generation` of `path` is a history

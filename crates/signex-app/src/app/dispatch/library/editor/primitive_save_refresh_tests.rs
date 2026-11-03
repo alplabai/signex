@@ -242,3 +242,59 @@ fn the_blocking_save_is_still_refused_while_a_write_is_pending() {
         "{refused}"
     );
 }
+
+/// #1756: the blocking save waits for a read only for a bounded time; past
+/// it the save is refused and nothing is written.
+#[test]
+fn the_blocking_save_is_refused_when_a_read_does_not_release_in_time() {
+    let Fixture {
+        mut app,
+        file,
+        path,
+        _dir,
+        ..
+    } = fixture();
+    let _read = app.library.writes.read_turn(&file);
+
+    let refused = app
+        .save_primitive_tab_blocking_within(&path, std::time::Duration::from_millis(30))
+        .expect_err("refused");
+
+    assert!(
+        refused.to_string().contains("still busy reading"),
+        "{refused}"
+    );
+    assert!(!path.exists(), "nothing was written");
+}
+
+/// #1756: a library nested in another one's directory owns the paths under
+/// it, so its write order is the one a write there takes a turn on.
+#[test]
+fn a_nested_library_owns_the_paths_under_it() {
+    let Fixture { mut app, file, .. } = fixture();
+    let dir = file.parent().expect("dir").to_path_buf();
+    let inner_root = dir.join("Inner").join("Inner.snxlib");
+    // The outer one is listed first: the first match must not win.
+    app.library.open_libraries.push(OpenLibrary {
+        root: inner_root.clone(),
+        display_name: "Inner".into(),
+        library_id: Uuid::now_v7(),
+        tables: std::collections::HashMap::new(),
+        cached_components: Vec::new(),
+        cached_symbols: Vec::new(),
+        cached_footprints: Vec::new(),
+        cached_sims: Vec::new(),
+        cached_classes: Vec::new(),
+        observed_stamp: None,
+        dangling: Default::default(),
+        pricing: Default::default(),
+        own_edit_stamp: None,
+        display: LibraryDisplaySettings::default(),
+    });
+    let inside = dir.join("Inner").join("symbols").join("S.snxsym");
+    let beside = dir.join("symbols").join("S.snxsym");
+
+    let owner = |p: &std::path::Path| app.library.library_containing(p).map(|l| l.root.clone());
+    assert_eq!(owner(&inside), Some(inner_root));
+    assert_eq!(owner(&beside), Some(file));
+}
