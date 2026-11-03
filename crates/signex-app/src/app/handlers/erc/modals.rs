@@ -158,6 +158,9 @@ impl Signex {
                 title,
             },
         );
+        // The first resize event comes later; until then it has this size.
+        self.ui_state
+            .set_undocked_window_size(id, (size.width, size.height));
         open_task.map(move |settled_id| {
             Message::Window(WindowMsg::UndockedTabOpened {
                 path: path.clone(),

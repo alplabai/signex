@@ -113,7 +113,10 @@ impl Signex {
         if self.document_state.active_path.as_deref() == Some(path) {
             return None;
         }
+        // A window whose canvas is not there yet (or is gone) cannot take the
+        // paste; the stale check then says so in the Messages panel.
         self.undocked_schematic_window(path)
+            .filter(|window| self.interaction_state.canvases.contains_key(window))
     }
 
     pub(crate) fn handle_paste_text_read(

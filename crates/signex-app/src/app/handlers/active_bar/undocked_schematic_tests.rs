@@ -388,6 +388,32 @@ fn smart_paste_from_an_undocked_windows_menu_lands_on_its_sheet() {
 }
 
 #[test]
+fn a_paste_follow_up_for_a_window_without_a_canvas_is_cancelled_not_applied() {
+    let mut f = fixture();
+    let _ = f
+        .app
+        .update(scoped_menu(f.window, ContextMenuMsg::Show(5.0, 5.0)));
+    let _ = f.app.update(scoped_menu(
+        f.window,
+        ContextMenuMsg::Action(ContextAction::Copy),
+    ));
+    f.app.interaction_state.canvases.remove(&f.window);
+    let (a_before, b_before) = (wire_ends(&f.app, &f.a), wire_ends(&f.app, &f.b));
+    let request = PasteRequest {
+        intent: PasteIntent::SmartPaste,
+        epoch: f.app.interaction_state.placement_epoch,
+        path: Some(f.a.clone()),
+        dialog: 0,
+    };
+    let _ = f.app.update(Message::Edit(EditMsg::PasteTextRead {
+        request,
+        text: None,
+    }));
+    assert_eq!(wire_ends(&f.app, &f.a), a_before);
+    assert_eq!(wire_ends(&f.app, &f.b), b_before);
+}
+
+#[test]
 fn a_paste_numbering_read_for_an_undocked_window_is_kept_for_its_sheet() {
     let mut f = fixture();
     let request = PasteRequest {
@@ -518,4 +544,66 @@ fn the_view_tags_overlay_and_canvas_messages_with_their_window() {
     ));
     let other = scope_canvas_message(window, Message::ContextMenu(ContextMenuMsg::Close));
     assert!(matches!(other, Message::ContextMenu(ContextMenuMsg::Close)));
+}
+
+#[test]
+fn a_newly_undocked_window_has_its_opening_size_before_any_resize_event() {
+    let mut f = fixture();
+    f.app.ui_state.window_size = (1000.0, 700.0);
+    f.app.ui_state.windows.remove(&f.window);
+    f.app.ui_state.forget_undocked_window_size(f.window);
+    let _ = f.app.update(Message::Window(WindowMsg::UndockTab(1)));
+    let opened = f
+        .app
+        .ui_state
+        .windows
+        .iter()
+        .find_map(|(id, kind)| {
+            matches!(kind, WindowKind::UndockedTab { path, .. } if *path == f.b).then_some(*id)
+        })
+        .expect("the tab undocked");
+    assert_eq!(f.app.ui_state.size_of_window(opened), (1400.0, 900.0));
+}
+
+#[test]
+fn a_right_press_in_an_undocked_window_hits_the_button_drawn_for_its_width() {
+    use iced::widget::canvas::Program as _;
+    use iced::{Rectangle, mouse};
+    let mut f = fixture();
+    f.app.ui_state.window_size = (1400.0, 900.0);
+    f.app
+        .ui_state
+        .set_undocked_window_size(f.window, (600.0, 500.0));
+    let tool = crate::app::Tool::Select;
+    let slot = crate::canvas::CanvasSlot::new();
+    let mut prefs = f.app.canvas_view_prefs(f.window);
+    prefs.current_tool = tool;
+    assert_eq!(prefs.window_width, 600.0);
+    let view = crate::canvas::SchematicCanvas::new(&slot, prefs);
+    let bounds = Rectangle {
+        x: 0.0,
+        y: 60.0,
+        width: 600.0,
+        height: 600.0,
+    };
+    for (menu, centre) in crate::active_bar::drawn_trigger_centres(tool, 600.0) {
+        let event = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right));
+        let at = iced::Point::new(centre, bounds.y + 20.0);
+        let action = view
+            .update(
+                &mut crate::canvas::CanvasState::default(),
+                &event,
+                bounds,
+                mouse::Cursor::Available(at),
+            )
+            .expect("an action");
+        let (message, _, _) = action.into_inner();
+        assert!(
+            matches!(
+                message,
+                Some(Message::ActiveBar(ActiveBarMsg::ToggleMenu(m))) if m == menu
+            ),
+            "drawn {menu:?} button centre x={centre} resolved to {message:?}"
+        );
+    }
 }

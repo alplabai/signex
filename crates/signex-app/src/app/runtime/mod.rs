@@ -454,7 +454,7 @@ impl Signex {
             move_keeps_wires: self.ui_state.move_keeps_wires,
             draw_mode: self.interaction_state.draw_mode,
             current_tool: self.interaction_state.current_tool,
-            window_width: self.ui_state.window_size.0,
+            window_width: self.ui_state.size_of_window(window).0,
             wire_color_overrides: &self.ui_state.wire_color_overrides,
             wire_class_styles: self.ui_state.net_class_styles.styles(),
             wire_class_revision: self.ui_state.net_class_styles.revision(),
