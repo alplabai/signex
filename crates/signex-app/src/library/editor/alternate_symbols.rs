@@ -1,64 +1,71 @@
-//! Alternate symbols subsection of the Component Preview tab (#1230).
+//! Alternate symbols section of the Component Preview tab (#1230).
 //!
-//! One line per alternate drawing of the row (label field, move up / down,
-//! remove) and an "Add alternate symbol" button that opens the symbol
-//! picker. A refused add shows its reason under the list; so do label
-//! problems that save would refuse.
+//! One table line per alternate drawing of the row (label field, move up /
+//! down, remove) and an "Add alternate symbol" button in the section
+//! header that opens the symbol picker. A refused add shows its reason
+//! under the table; so do label problems that save would refuse.
 
-use iced::widget::{Space, column, row, text, text_input};
+use iced::widget::{column, text, text_input};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, PrimitivePickerTarget};
+use super::kit::{self, SP, TS};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// Shown when the row has no alternate drawings.
+const EMPTY_MESSAGE: &str = "No alternate drawings; the row uses its default symbol only.";
+
+const COLUMNS: [Length; 3] = [
+    Length::FillPortion(3),
+    Length::FillPortion(2),
+    Length::FillPortion(2),
+];
 
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
     let warning = theme_ext::warning_color(tokens);
 
-    let mut col = column![
-        text("Alternate symbols").size(TS.body).color(muted),
-        Space::new().height(6),
-    ]
-    .spacing(0)
-    .width(Length::Fill);
-
-    if state.row.alternate_symbols.is_empty() {
-        col = col.push(
-            text("No alternate drawings; the row uses its default symbol only.")
-                .size(TS.body)
-                .color(muted),
-        );
-    }
-    let count = state.row.alternate_symbols.len();
-    for (idx, alt) in state.row.alternate_symbols.iter().enumerate() {
-        col = col.push(alternate_row(idx, count, alt, tokens, address));
-    }
-
-    col = col.push(Space::new().height(6)).push(small_btn(
-        "Add alternate symbol…",
+    let add = kit::secondary_button(
+        "Add alternate symbol",
         Some(LibraryMessage::OpenPrimitivePicker {
             kind: signex_library::PrimitiveKind::Symbol,
             target: PrimitivePickerTarget::PreviewAlternate(address.clone()),
         }),
         tokens,
-    ));
+    );
+    let mut col = column![kit::section_header("Alternate symbols", Some(add), tokens)]
+        .spacing(SP.s)
+        .width(Length::Fill);
+
+    let count = state.row.alternate_symbols.len();
+    if count == 0 {
+        col = col.push(kit::empty_state(EMPTY_MESSAGE, None, tokens));
+    } else {
+        let mut table = column![kit::table_header(
+            &[
+                ("Label", COLUMNS[0]),
+                ("Symbol", COLUMNS[1]),
+                ("", COLUMNS[2])
+            ],
+            tokens,
+        )]
+        .width(Length::Fill);
+        for (idx, alt) in state.row.alternate_symbols.iter().enumerate() {
+            table = table.push(alternate_row(idx, count, alt, tokens, address));
+        }
+        col = col.push(kit::card(table, tokens));
+    }
 
     let issues: Vec<String> = signex_library::alternate_symbol_issues(&state.row)
         .iter()
         .map(ToString::to_string)
         .collect();
-    let problems = state.alternate_error.iter().chain(issues.iter());
-    for problem in problems {
+    for problem in state.alternate_error.iter().chain(issues.iter()) {
         col = col.push(text(problem.clone()).size(TS.body).color(warning));
     }
     col.into()
@@ -68,7 +75,7 @@ fn alternate_row<'a>(
     idx: usize,
     count: usize,
     alt: &'a signex_library::AlternateSymbol,
-    tokens: &'a ThemeTokens,
+    tokens: &ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -85,7 +92,7 @@ fn alternate_row<'a>(
     let label = text_input("Label (e.g. IEC)", &alt.label)
         .padding([SP.s, SP.m])
         .size(TS.label)
-        .width(Length::FillPortion(3))
+        .width(Length::Fill)
         .on_input(move |label| on_label(EditorMsg::AlternateSymbolRelabeled { idx, label }));
     let short = signex_types::object_id::short_id(&alt.symbol_ref.uuid);
     let up = (idx > 0).then(|| {
@@ -100,32 +107,42 @@ fn alternate_row<'a>(
             to: idx + 1,
         })
     });
-    row![
-        label,
-        Space::new().width(8),
-        text(format!("symbol {}", short))
-            .size(TS.body)
-            .color(muted)
-            .width(Length::FillPortion(2)),
-        small_btn("↑", up, tokens),
-        Space::new().width(4),
-        small_btn("↓", down, tokens),
-        Space::new().width(4),
-        small_btn(
+    let actions = iced::widget::row![
+        kit::secondary_button("↑", up, tokens),
+        kit::secondary_button("↓", down, tokens),
+        kit::secondary_button(
             "×",
             Some(event(EditorMsg::AlternateSymbolRemoved { idx })),
             tokens
         ),
     ]
-    .align_y(iced::Alignment::Center)
-    .padding([SP.xs, 0.0])
-    .into()
+    .spacing(SP.s);
+
+    kit::table_row(
+        vec![
+            (label.into(), COLUMNS[0]),
+            (
+                text(format!("symbol {short}"))
+                    .size(TS.body)
+                    .color(muted)
+                    .into(),
+                COLUMNS[1],
+            ),
+            (actions.into(), COLUMNS[2]),
+        ],
+        idx,
+        None,
+        tokens,
+    )
 }
 
-fn small_btn<'a>(
-    label: &'a str,
-    msg: Option<LibraryMessage>,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    super::kit::secondary_button(label, msg, tokens)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_message_is_plain_language() {
+        assert!(EMPTY_MESSAGE.starts_with("No alternate"));
+        assert!(!EMPTY_MESSAGE.contains("uuid"));
+    }
 }
