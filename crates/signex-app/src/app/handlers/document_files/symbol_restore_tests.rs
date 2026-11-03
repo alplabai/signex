@@ -22,13 +22,17 @@ fn app_with_warning() -> (Signex, PathBuf, SymbolFile) {
         path: path.clone(),
         symbol,
         history: editor.history_generation,
+        serial: 1,
         rows: 1,
         sheets: 0,
+        closed: 0,
+        base_lines: 1,
         unchecked: 0,
         warning: SymbolDeleteWarning {
             idx: 0,
             name: "A".into(),
             only_unknown: false,
+            checking: false,
             lines: vec!["Component rows: R1".into()],
         },
     });

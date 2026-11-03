@@ -498,6 +498,8 @@ pub struct LibraryState {
     pub drift: super::drift::DriftState,
     /// A symbol Delete waiting for the user's answer (#1845).
     pub pending_symbol_delete: Option<super::symbol_delete::PendingSymbolDelete>,
+    /// Last serial handed to a symbol-Delete warning (#1903).
+    pub symbol_delete_serial: u64,
     /// Latest switch request per placed symbol (#1230).
     pub symbol_choice_requests: SymbolChoiceRequests,
     /// Cross-library resolver — maps `library_id → adapter`. New in

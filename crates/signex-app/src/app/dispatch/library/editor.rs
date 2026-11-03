@@ -464,6 +464,8 @@ impl Signex {
             lib.reload_primitives(adapter);
         }
         self.library.refresh_loaded_previews(path);
+        // Rows bound to a symbol this save removed now read as missing.
+        self.library.sweep_dangling_refs();
         self.library.drift.check_pending = true;
     }
 }

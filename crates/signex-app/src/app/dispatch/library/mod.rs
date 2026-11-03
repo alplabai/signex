@@ -226,6 +226,9 @@ impl Signex {
                 row_id,
             } => self.handle_place_library_component(library_path, table, row_id),
             LibraryMessage::DriftChecked(report) => self.handle_library_drift_checked(*report),
+            LibraryMessage::SymbolDeleteClosedSheetsScanned(report) => {
+                self.handle_symbol_delete_closed_sheets_scanned(*report)
+            }
             LibraryMessage::LibraryUpdateSymbolsRead(read) => {
                 self.handle_library_update_symbols_read(*read)
             }

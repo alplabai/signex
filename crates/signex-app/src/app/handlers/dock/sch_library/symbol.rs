@@ -8,6 +8,10 @@
 //! (ADR-0001 #163); zero behaviour change.
 
 use super::*;
+use crate::library::LibraryMessage;
+use crate::library::closed_sheets::{
+    ClosedSheetScan, ClosedSheetsReport, SymbolMatch, scan_closed_sheets,
+};
 use crate::library::symbol_delete::PendingSymbolDelete;
 use crate::panels::SymbolDeleteWarning;
 
@@ -492,19 +496,19 @@ impl Signex {
         true
     }
 
-    pub(super) fn sch_library_delete_symbol(&mut self, idx: usize) -> bool {
+    pub(super) fn sch_library_delete_symbol(&mut self, idx: usize) -> Task<Message> {
         let Some(editor) = self.active_symbol_editor_mut() else {
             crate::diagnostics::log_warning(
                 "SCH Library: delete fired without an active Symbol editor",
             );
-            return true;
+            return Task::none();
         };
         if editor.file.symbols.len() <= 1 {
             crate::diagnostics::log_warning(format!(
                 "{}: refused to delete the last symbol in the file",
                 editor.path.display()
             ));
-            return true;
+            return Task::none();
         }
         if idx >= editor.file.symbols.len() {
             crate::diagnostics::log_warning(format!(
@@ -512,38 +516,106 @@ impl Signex {
                 editor.path.display(),
                 editor.file.symbols.len()
             ));
-            return true;
+            return Task::none();
         }
         let (path, symbol) = (editor.path.clone(), editor.file.symbols[idx].uuid);
         let history = editor.history_generation;
         let name = editor.file.symbols[idx].name.clone();
-        // A symbol rows or open sheets still use is not deleted until the
-        // user has seen who (#1845).
-        let usage = self.symbol_usage_lines(&path, symbol);
-        match usage {
-            usage if !usage.lines.is_empty() => {
-                self.library.pending_symbol_delete = Some(PendingSymbolDelete {
-                    path,
-                    symbol,
-                    history,
-                    rows: usage.rows,
-                    sheets: usage.sheets,
-                    unchecked: usage.unchecked,
-                    warning: SymbolDeleteWarning {
-                        idx,
-                        name,
-                        only_unknown: usage.rows == 0 && usage.sheets == 0,
-                        lines: usage.lines,
-                    },
-                });
-                self.refresh_panel_ctx();
-                return true;
-            }
-            _ => crate::diagnostics::log_info(format!(
-                "{name} deleted. Not used by open sheets or mounted libraries; closed sheets were not checked."
-            )),
+        // A symbol rows or sheets still use is not deleted until the user
+        // has seen who (#1845). Open sheets and mounted rows are read from
+        // memory; the closed sheets of the open projects are read from disk
+        // by a Task, and the warning stands until it answers (#1903).
+        let (mut usage, target) = self.symbol_usage_lines(&path, symbol);
+        let closed = self.closed_sheet_paths();
+        if usage.lines.is_empty() && closed.is_empty() {
+            crate::diagnostics::log_info(format!(
+                "{name} deleted. Not used by open sheets or mounted libraries."
+            ));
+            self.delete_symbol_from_container(idx);
+            return Task::none();
         }
-        self.delete_symbol_from_container(idx)
+        let checking = !closed.is_empty();
+        let base_lines = usage.lines.len();
+        if checking {
+            usage
+                .lines
+                .push("Checking closed sheets of the open projects…".into());
+        }
+        self.library.symbol_delete_serial += 1;
+        let serial = self.library.symbol_delete_serial;
+        self.library.pending_symbol_delete = Some(PendingSymbolDelete {
+            path,
+            symbol,
+            history,
+            serial,
+            rows: usage.rows,
+            sheets: usage.sheets,
+            closed: 0,
+            base_lines,
+            unchecked: usage.unchecked,
+            warning: SymbolDeleteWarning {
+                idx,
+                name,
+                only_unknown: usage.rows == 0 && usage.sheets == 0,
+                checking,
+                lines: usage.lines,
+            },
+        });
+        self.refresh_panel_ctx();
+        if !checking {
+            return Task::none();
+        }
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || scan_closed_sheets(&closed, target))
+                    .await
+                    .unwrap_or_else(|e| ClosedSheetScan::unfinished(&e.to_string()))
+            },
+            move |scan| {
+                Message::Library(LibraryMessage::SymbolDeleteClosedSheetsScanned(Box::new(
+                    ClosedSheetsReport { serial, scan },
+                )))
+            },
+        )
+    }
+
+    /// The closed-sheet scan answered. A result for a warning that was
+    /// replaced, answered or closed, or whose symbol file changed since, is
+    /// dropped: it describes something else.
+    pub(crate) fn handle_symbol_delete_closed_sheets_scanned(
+        &mut self,
+        report: ClosedSheetsReport,
+    ) -> Task<Message> {
+        let Some(pending) = self.library.pending_symbol_delete.as_mut() else {
+            return Task::none();
+        };
+        if pending.serial != report.serial {
+            return Task::none();
+        }
+        let current = self
+            .document_state
+            .symbol_editors
+            .get(&pending.path)
+            .is_some_and(|e| pending.is_current(e));
+        if !current {
+            self.library.pending_symbol_delete = None;
+            self.refresh_panel_ctx();
+            return Task::none();
+        }
+        pending.apply_closed_scan(&report.scan);
+        if pending.warning.lines.is_empty() {
+            // Nothing uses it and every sheet was read: the Delete the user
+            // asked for goes ahead.
+            let pending = self.library.pending_symbol_delete.take().expect("pending");
+            crate::diagnostics::log_info(format!(
+                "{} deleted. Not used by open or closed sheets or mounted libraries.",
+                pending.warning.name
+            ));
+            self.delete_symbol_from_container(pending.warning.idx);
+            return Task::none();
+        }
+        self.refresh_panel_ctx();
+        Task::none()
     }
 
     /// The user answered "Delete anyway" to the in-use warning.
@@ -566,19 +638,32 @@ impl Signex {
         }
         let name = &pending.warning.name;
         let unchecked = pending.unchecked;
+        let skipped = if pending.warning.checking {
+            " Closed sheets were not checked."
+        } else {
+            ""
+        };
+        let sheets = if pending.closed > 0 {
+            format!(
+                "{} open sheet(s) and {} closed sheet(s)",
+                pending.sheets, pending.closed
+            )
+        } else {
+            format!("{} open sheet(s)", pending.sheets)
+        };
         crate::diagnostics::log_warning(if pending.warning.only_unknown {
             format!(
-                "{name} deleted; {unchecked} table(s) or table list(s) could not be read, so whether anything used it is unknown."
+                "{name} deleted; {unchecked} table(s), table list(s) or sheet(s) could not be read, so whether anything used it is unknown.{skipped}"
             )
         } else if unchecked > 0 {
             format!(
-                "{name} deleted: {} component row(s) and {} open sheet(s) now point at a missing library symbol, plus {unchecked} table(s) or table list(s) that could not be read.",
-                pending.rows, pending.sheets
+                "{name} deleted: {} component row(s) and {sheets} now point at a missing library symbol, plus {unchecked} table(s), table list(s) or sheet(s) that could not be read.{skipped}",
+                pending.rows
             )
         } else {
             format!(
-                "{name} deleted: {} component row(s) and {} open sheet(s) now point at a missing library symbol.",
-                pending.rows, pending.sheets
+                "{name} deleted: {} component row(s) and {sheets} now point at a missing library symbol.{skipped}",
+                pending.rows
             )
         });
         self.delete_symbol_from_container(idx)
@@ -597,7 +682,7 @@ impl Signex {
         &self,
         path: &std::path::Path,
         symbol: uuid::Uuid,
-    ) -> crate::library::symbol_delete::SymbolUsage {
+    ) -> (crate::library::symbol_delete::SymbolUsage, SymbolMatch) {
         use crate::library::symbol_delete::{usage_lines, usage_outside_library};
         let sheets = self
             .document_state
@@ -607,10 +692,32 @@ impl Signex {
         match self.library.containing_library(path) {
             Some(lib) => {
                 let reference = signex_library::PrimitiveRef::new(lib.library_id, symbol);
-                usage_lines(&self.library.open_libraries, sheets, &reference)
+                let usage = usage_lines(&self.library.open_libraries, sheets, &reference);
+                (usage, SymbolMatch::InLibrary(lib.library_id, symbol))
             }
-            None => usage_outside_library(path, sheets, symbol),
+            None => (
+                usage_outside_library(path, sheets, symbol),
+                SymbolMatch::AnyLibrary(symbol),
+            ),
         }
+    }
+
+    /// Declared sheets of every open project that are not open as a tab:
+    /// what only the disk can say about (#1903).
+    fn closed_sheet_paths(&self) -> Vec<std::path::PathBuf> {
+        let mut paths: Vec<_> = self
+            .document_state
+            .projects
+            .iter()
+            .flat_map(|p| {
+                let dir = p.dir();
+                p.data.sheets.iter().map(move |s| dir.join(&s.filename))
+            })
+            .filter(|p| !self.document_state.engines.contains_key(p))
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
     }
 
     fn delete_symbol_from_container(&mut self, idx: usize) -> bool {

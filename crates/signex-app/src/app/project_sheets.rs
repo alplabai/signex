@@ -212,6 +212,11 @@ pub(crate) fn load_sheet(
     )
 }
 
+/// A disk parse of one sheet, ignoring open tabs (a worker has no engines).
+pub(crate) fn load_sheet_disk(path: &Path) -> Result<Option<SchematicSheet>, String> {
+    load_sheet_with(&|_| None, path)
+}
+
 /// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
 /// can read from a snapshot of the open sheets instead of borrowing the live
 /// [`DocumentState`].
