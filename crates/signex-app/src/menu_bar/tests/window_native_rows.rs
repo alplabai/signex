@@ -43,7 +43,7 @@ fn rich() -> Signex {
     app
 }
 
-fn states() -> Vec<(&'static str, fn() -> Signex)> {
+fn states() -> Vec<Fixture> {
     vec![
         ("schematic", rich),
         ("symbol editor", symbol_editor_app),

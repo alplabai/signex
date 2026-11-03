@@ -22,7 +22,7 @@ use crate::app::{Message, Signex, TabInfo, TabKind};
 use crate::menu_bar::MenuContext;
 use crate::menu_bar::model::{ItemState, Menu, MenuEntry, MenuItem, menu_bar_model};
 use iced::Task;
-use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol, Wire};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, Symbol};
 use uuid::Uuid;
 
 pub(super) fn symbol(n: u128, reference: &str, x: f64, y: f64) -> Symbol {
@@ -36,17 +36,6 @@ pub(super) fn symbol(n: u128, reference: &str, x: f64, y: f64) -> Symbol {
     }
 }
 
-pub(super) fn wire(n: u128) -> Wire {
-    Wire {
-        uuid: Uuid::from_u128(n),
-        start: Point::new(0.0, 20.0),
-        end: Point::new(10.0, 20.0),
-        stroke_width: 0.0,
-        unknown_columns: Default::default(),
-        locked: false,
-    }
-}
-
 pub(super) fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
     SchematicSheet {
         uuid: Uuid::now_v7(),
@@ -55,6 +44,9 @@ pub(super) fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
         ..Default::default()
     }
 }
+
+/// A named way to build an app in one state.
+pub(super) type Fixture = (&'static str, fn() -> Signex);
 
 /// A fresh app on the Altium keymap with the first-run tour closed.
 pub(super) fn bare_app() -> Signex {
@@ -201,18 +193,6 @@ pub(super) fn with_row<R>(app: &Signex, path: &str, read: impl FnOnce(&MenuItem)
 
 pub(super) fn row_is_live(app: &Signex, path: &str) -> bool {
     with_row(app, path, |item| item.is_enabled())
-}
-
-pub(super) fn row_is_greyed_live(app: &Signex, path: &str) -> bool {
-    with_row(app, path, |item| {
-        matches!(
-            item.state,
-            ItemState::Live {
-                is_enabled: false,
-                ..
-            }
-        )
-    })
 }
 
 /// Click the live row at `path`, as the main window's bar does.

@@ -11,8 +11,6 @@ use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::menu_bar::MenuMessage;
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
-type Fixture = (&'static str, fn() -> Signex);
-
 fn schematic_without_selection() -> Signex {
     app_with(sheet_of(vec![symbol(1, "R1", 10.0, 10.0)]))
 }
