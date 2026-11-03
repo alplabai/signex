@@ -15,7 +15,7 @@ fn write_sheet(dir: &Path, name: &str, lib_id: &str, reference: &str) -> PathBuf
 }
 
 fn lib_id(lib: Uuid, sym: Uuid) -> String {
-    format!("[{lib}:{sym}]")
+    format!("{lib}:{sym}")
 }
 
 #[test]
