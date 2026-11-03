@@ -35,6 +35,7 @@ impl AlternatePlan {
             generation: self.generation,
             picked: self.picked,
             epoch_at_plan: self.epoch_at_plan,
+            default_ref: self.default_ref,
         }
     }
 }
@@ -46,6 +47,8 @@ pub struct AlternateOutcome {
     generation: u64,
     picked: PrimitiveRef,
     epoch_at_plan: u64,
+    /// The default symbol the pin check ran against.
+    default_ref: PrimitiveRef,
     default: Result<Symbol, String>,
     alternate: Result<Symbol, String>,
 }
@@ -105,6 +108,7 @@ impl LibraryState {
             generation,
             picked,
             epoch_at_plan,
+            default_ref,
             default,
             alternate,
         } = outcome;
@@ -117,19 +121,25 @@ impl LibraryState {
             );
             return;
         }
+        // Closing a preview forgets its generation too, so the closed preview
+        // is looked for first or the pick would vanish without a word.
+        if !self.editors.contains_key(&address) {
+            self.alternate_generations.remove(&address);
+            crate::diagnostics::log_warning(
+                "Alternate symbol not added: the component preview was closed while the symbols were read",
+            );
+            return;
+        }
         // A newer pick superseded this one: it owns the outcome.
         if self.alternate_generations.get(&address) != Some(&generation) {
             return;
         }
         self.alternate_generations.remove(&address);
         let Some(state) = self.editors.get_mut(&address) else {
-            crate::diagnostics::log_warning(
-                "Alternate symbol not added: the component preview was closed while the symbols were read",
-            );
             return;
         };
         let pn = state.row.internal_pn.to_string();
-        let outcome = if state.edit_epoch != epoch_at_plan {
+        let outcome = if state.edit_epoch != epoch_at_plan || state.row.symbol_ref != default_ref {
             // The pin check ran against a row that has since changed.
             Err(
                 "this row was edited while the symbols were read; pick the alternate again"

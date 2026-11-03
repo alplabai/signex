@@ -14,7 +14,7 @@ mod descend;
 mod sheet_open;
 #[cfg(test)]
 pub(crate) mod sheet_open_tests;
-pub use sheet_open::{AfterOpen, PendingDescent, SheetOpen};
+pub use sheet_open::{AfterOpen, PendingSheetOpen, SheetOpen};
 mod double_clicked;
 mod field_edit;
 pub(crate) use field_edit::editor_placeholder;

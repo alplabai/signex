@@ -304,7 +304,10 @@ fn an_alternate_pick_for_a_preview_closed_while_it_was_read_says_so() {
         f.address.clone(),
         PrimitiveRef::new(library_id, Uuid::now_v7()),
     );
-    f.app.library.editors.remove(&f.address);
+    // A real close also forgets the pick's generation.
+    let address = f.address.clone();
+    let close = f.app.close_component_preview(&address);
+    settle_task(&mut f.app, close);
     settle_task(&mut f.app, pick);
 
     assert_eq!(
@@ -417,4 +420,40 @@ fn a_close_waiting_behind_a_tab_lookup_finishes_when_it_lands() {
     let mut f = fixture();
     let task = f.event(EditorMsg::SelectTab(PreviewTab::Preview));
     assert_close_finishes_when_the_read_lands(f, task);
+}
+
+#[test]
+fn an_alternate_symbol_picked_after_the_confirm_survives_the_reload() {
+    let mut f = fixture();
+    edit(&mut f, LifecycleState::Deprecated);
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    settle_task(&mut f.app, task);
+    settle_task(&mut f.app, pick);
+    assert_eq!(f.preview().row.alternate_symbols.len(), 1);
+}
+
+#[test]
+fn an_alternate_pick_planned_against_another_default_symbol_is_refused() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    // The row's default symbol changes under the read (a reload or a rebase).
+    f.app
+        .library
+        .editors
+        .get_mut(&f.address)
+        .expect("preview")
+        .row
+        .symbol_ref = PrimitiveRef::new(library_id, Uuid::now_v7());
+    settle_task(&mut f.app, pick);
+    assert!(f.preview().row.alternate_symbols.is_empty());
+    assert!(f.preview().alternate_error.is_some());
 }

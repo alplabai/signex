@@ -196,7 +196,7 @@ impl Signex {
                 let task = self.schematic_open_finished(path.clone(), title, result, disk);
                 // An open of this sheet that was deduplicated against this
                 // read answers now (#1756).
-                Task::batch([task, self.settle_untracked_descent(&path)])
+                Task::batch([task, self.settle_untracked_open(&path)])
             }
             FileMsg::InstanceNoteReady(note) => {
                 match note {

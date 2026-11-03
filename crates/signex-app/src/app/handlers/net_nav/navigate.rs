@@ -134,10 +134,15 @@ impl Signex {
             crate::diagnostics::log_warning(messages::partner_has_no_file(&name, &sheet));
             return Task::none();
         };
+        let was_open = self.has_tab_for(&self.resolve_held_spelling(path.clone()));
         let Some(task) = self.go_to_member(data, &path, &member) else {
             return Task::none();
         };
-        crate::diagnostics::log_info(messages::jumped(&name, total, &sheet));
+        crate::diagnostics::log_info(if was_open {
+            messages::jumped(&name, total, &sheet)
+        } else {
+            messages::opening_for_jump(&name, total, &sheet)
+        });
         task
     }
 
@@ -183,6 +188,14 @@ impl Signex {
             crate::diagnostics::log_info(messages::no_history(forward));
             return Task::none();
         };
+        // A second press before the first step's sheet is read would only
+        // ask for the same sheet again; the first one is still on its way.
+        if self.ui_state.pending_sheet_opens.get(&path).is_some_and(|d| {
+            matches!(d.requested_then(), AfterOpen::ArriveHistory { forward: f } if *f == forward)
+        }) {
+            crate::diagnostics::log_info(messages::step_in_progress(&path));
+            return Task::none();
+        }
         self.open_sheet(
             path,
             SheetOpen::plain().then(AfterOpen::ArriveHistory { forward }),

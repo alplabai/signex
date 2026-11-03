@@ -218,7 +218,7 @@ impl Signex {
             let dir = project.dir().to_path_buf();
             self.document_state.pending_opens.cancel_under(&dir);
             self.ui_state
-                .pending_descents
+                .pending_sheet_opens
                 .retain(|path, _| !path.starts_with(&dir));
             if self
                 .ui_state

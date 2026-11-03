@@ -434,6 +434,10 @@ impl LibraryState {
             row,
         );
         fresh.active_tab = current_tab;
+        // The epoch counts the edits made to this preview, whatever row it
+        // shows; a read planned on the old row is checked against the new row
+        // itself (`apply_alternate_symbol`), not reset to 0.
+        fresh.edit_epoch = old.edit_epoch;
         let resolve_tab = if current_tab == tab {
             reads.apply_to(&needs, &mut fresh);
             None

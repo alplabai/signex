@@ -97,7 +97,7 @@ fn a_failed_history_read_leaves_an_entry_that_is_no_longer_the_one_asked_for() {
         Some(root.as_path())
     );
 
-    let _ = p.app.descent_read_failed(&mid, generation, true);
+    let _ = p.app.sheet_read_failed(&mid, generation, true);
 
     let history = &p.app.document_state.net_nav.history;
     assert_eq!(
@@ -115,4 +115,63 @@ fn a_second_open_of_a_sheet_being_read_says_it_replaced_the_first() {
     start_back_to_deleted_mid(&mut p);
     let _ = p.app.open_sheet_with_placement(mid, None);
     assert!(logged(&["asked to open again", "history step"]));
+}
+
+#[test]
+fn a_history_read_landing_after_the_user_moved_on_keeps_the_stacks() {
+    use crate::app::{Message, UiMsg};
+    let mut p = project();
+    let (mid, third, root) = (p.mid.clone(), p.third.clone(), p.root.clone());
+    let tab = p
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == mid)
+        .expect("mid tab");
+    p.app.document_state.tabs.remove(tab);
+    p.app.document_state.engines.remove(&mid);
+    let step = p
+        .app
+        .update(Message::Ui(UiMsg::NetNav(NetNavMsg::SheetBackRequested)));
+    p.focus(&third);
+    assert_eq!(
+        p.app.document_state.net_nav.history.peek(false),
+        Some(root.as_path())
+    );
+
+    crate::app::path_ops::settle_task(&mut p.app, step);
+
+    assert_eq!(
+        p.app.document_state.net_nav.history.peek(false),
+        Some(root.as_path()),
+        "root's back entry survives the late step"
+    );
+    assert_eq!(p.active(), Some(third), "and the view stays put");
+}
+
+#[test]
+fn a_second_back_before_the_first_is_read_does_not_replace_it() {
+    let mut p = project();
+    let mid = p.mid.clone();
+    let tab = p
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == mid)
+        .expect("mid tab");
+    p.app.document_state.tabs.remove(tab);
+    p.app.document_state.engines.remove(&mid);
+    p.send(NetNavMsg::SheetBackRequested);
+    let first = p.app.document_state.pending_opens.generation_of(&mid);
+    assert!(first.is_some());
+
+    p.send(NetNavMsg::SheetBackRequested);
+
+    assert_eq!(
+        p.app.document_state.pending_opens.generation_of(&mid),
+        first
+    );
+    assert_eq!(p.app.ui_state.pending_sheet_opens.len(), 1);
 }

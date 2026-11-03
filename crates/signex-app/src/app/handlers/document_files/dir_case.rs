@@ -266,7 +266,7 @@ impl Signex {
                     Some(crate::app::state::ErrorNotice::open(format!("{error:#}")));
                 // No SchematicOpened will come: a descent parked on this
                 // claim must still answer (#1756).
-                self.settle_untracked_descent(&request)
+                self.settle_untracked_open(&request)
             }
         }
     }

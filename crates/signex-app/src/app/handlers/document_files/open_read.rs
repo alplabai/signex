@@ -48,11 +48,20 @@ impl Signex {
             .is_current(&path, generation);
         // A back / forward step installs its tab without making a visit.
         let stepping = current && self.is_history_step_read(&path, generation);
-        if stepping {
+        // A read overtaken by a newer request installs its tab but leaves the
+        // view, and the history, where the user put them.
+        let overtaken = current && self.is_superseded_sheet_open(&path, generation);
+        let kept_view = overtaken.then(|| self.active_tab_path()).flatten();
+        if stepping || overtaken {
             self.document_state.net_nav.history.hold(true);
         }
         let task = self.finish_document_read(request, result);
-        if stepping {
+        if let Some(kept) = kept_view
+            && self.active_tab_path().as_deref() != Some(kept.as_path())
+        {
+            self.activate_tab_for_path(&kept);
+        }
+        if stepping || overtaken {
             self.document_state.net_nav.history.hold(false);
         }
         // A Create Sheet request from the Projects tree was waiting on it.
@@ -60,7 +69,7 @@ impl Signex {
         // So was a sheet open, which records its placement and runs what it
         // asked for now.
         if current {
-            return Task::batch([task, self.finish_descent(&path, generation)]);
+            return Task::batch([task, self.finish_sheet_open(&path, generation)]);
         }
         task
     }
@@ -101,7 +110,7 @@ impl Signex {
                 // create the file (#1275).
                 let missing = matches!(failure, OpenFailure::Missing(_));
                 self.report_read_failure(failure);
-                self.descent_read_failed(&request.path, request.generation, missing)
+                self.sheet_read_failed(&request.path, request.generation, missing)
             }
         }
     }
@@ -124,7 +133,7 @@ impl Signex {
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
         self.ui_state.pending_create_sheet = None;
-        self.ui_state.pending_descents.clear();
+        self.ui_state.pending_sheet_opens.clear();
         self.document_state.pending_restores.cancel_all_retaining();
     }
 

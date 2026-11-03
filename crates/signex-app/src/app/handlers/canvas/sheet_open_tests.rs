@@ -87,14 +87,14 @@ fn an_unopened_sheet_is_read_on_a_worker_not_in_update() {
     let task = app.open_sheet(path.clone(), SheetOpen::plain());
 
     assert!(!has_tab(&app, &path), "update opened no tab");
-    assert!(app.ui_state.pending_descents.contains_key(&path));
+    assert!(app.ui_state.pending_sheet_opens.contains_key(&path));
     settle_task(&mut app, task);
     assert!(has_tab(&app, &path));
     assert_eq!(
         app.document_state.active_path.as_deref(),
         Some(path.as_path())
     );
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn a_sheet_read_in_flight_does_not_open_after_every_document_closed() {
     settle_task(&mut app, task);
 
     assert!(!has_tab(&app, &path), "the stale read installed nothing");
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn a_missing_sheet_opens_nothing_and_leaves_no_pending_open() {
     settle_task(&mut app, task);
 
     assert!(!has_tab(&app, &path));
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert!(
         crate::diagnostics::recent_entries()
             .iter()
@@ -213,4 +213,47 @@ fn a_history_step_to_a_sheet_that_cannot_be_read_drops_the_entry() {
             .any(|e| Some(e.id) > since && e.message.contains("history skipped")),
         "said in Messages"
     );
+}
+
+#[test]
+fn the_later_of_two_jumps_wins_whichever_read_lands_last() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let x = write_sheet(dir.path(), "x.snxsch", "NET_X");
+    let y = write_sheet(dir.path(), "y.snxsch", "NET_Y");
+    let (mut app, _task) = Signex::new();
+    let jump = |a: f64| AfterOpen::FocusAt {
+        x: a,
+        y: a,
+        item: None,
+    };
+    let first = app.open_sheet(x.clone(), SheetOpen::plain().then(jump(1.0)));
+    let second = app.open_sheet(y.clone(), SheetOpen::plain().then(jump(2.0)));
+    settle_task(&mut app, second);
+    settle_task(&mut app, first);
+    assert_eq!(app.document_state.active_path.as_deref(), Some(y.as_path()));
+    assert!(has_tab(&app, &x), "the older sheet still opened");
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
+}
+
+/// A jump on a sheet File > Open is still reading waits for that read and
+/// runs when it ends; it is not lost.
+#[test]
+fn a_jump_on_a_sheet_another_route_is_reading_runs_when_that_read_ends() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_sheet(dir.path(), "child.snxsch", "NET_A");
+    let (mut app, _task) = Signex::new();
+    let file_open = app.open_document_path(path.clone()).expect("File > Open");
+    let then = AfterOpen::FocusAt {
+        x: 12.0,
+        y: 34.0,
+        item: None,
+    };
+    let jump = app.open_sheet(path.clone(), SheetOpen::plain().then(then));
+    assert!(app.ui_state.pending_sheet_opens.contains_key(&path));
+
+    settle_task(&mut app, file_open);
+    settle_task(&mut app, jump);
+
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
+    assert!(app.interaction_state.canvas.pending_fit.get().is_some());
 }

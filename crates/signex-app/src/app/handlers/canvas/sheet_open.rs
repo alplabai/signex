@@ -85,19 +85,34 @@ impl SheetOpen {
 /// A sheet open whose file is being read on a worker: the request, the sheet it
 /// came from, and the read it waits for.
 #[derive(Debug)]
-pub struct PendingDescent {
+pub struct PendingSheetOpen {
     open: SheetOpen,
     /// The sheet the request started on: a missing child is offered for
     /// creation only while that sheet is still the focused one.
     parent: Option<PathBuf>,
     /// The read this open waits for; any other completion for the path (a
     /// stale one) must leave it alone. `None` when the path was claimed by an
-    /// untracked read (File > Open): [`Signex::settle_untracked_descent`]
+    /// untracked read (File > Open): [`Signex::settle_untracked_open`]
     /// answers it when that read ends.
     generation: Option<u64>,
+    /// `UiState::sheet_open_seq` when requested.
+    seq: u64,
+    /// The tab that showed this file under another path (a link): where the
+    /// request's jump runs.
+    aliased_to: Option<PathBuf>,
 }
 
-impl PendingDescent {
+impl PendingSheetOpen {
+    /// What the request runs once its sheet is showing.
+    pub(crate) fn requested_then(&self) -> &AfterOpen {
+        &self.open.then
+    }
+
+    /// Record that the file turned out to be the open tab `held`.
+    pub(crate) fn aliased(&mut self, held: PathBuf) {
+        self.aliased_to = Some(held);
+    }
+
     /// Parked on an untracked read (File > Open) rather than a tracked one.
     pub(crate) fn is_untracked(&self) -> bool {
         self.generation.is_none()
@@ -122,6 +137,8 @@ impl Signex {
         // Record under the spelling the tab is held at (#1149), not the
         // spelling the hierarchy resolved.
         let path = self.resolve_held_spelling_now(path);
+        self.ui_state.sheet_open_seq += 1;
+        let seq = self.ui_state.sheet_open_seq;
         let stepping = matches!(open.then, AfterOpen::ArriveHistory { .. });
         // A back / forward step's own focus change is not a visit.
         self.document_state.net_nav.history.hold(stepping);
@@ -150,14 +167,22 @@ impl Signex {
         // The read this open rides on: the one just started, or the one
         // already in flight for the file.
         let generation = self.document_state.pending_opens.generation_of(&path);
+        if generation.is_none() {
+            crate::diagnostics::log_info(format!(
+                "{} is already being opened by another route; the request waits for it",
+                path.display()
+            ));
+        }
         // One request per path: a later open of a sheet still being read
         // replaces the earlier one (the later request wins).
-        if let Some(replaced) = self.ui_state.pending_descents.insert(
+        if let Some(replaced) = self.ui_state.pending_sheet_opens.insert(
             path.clone(),
-            PendingDescent {
+            PendingSheetOpen {
                 open,
                 parent,
                 generation,
+                seq,
+                aliased_to: None,
             },
         ) {
             crate::diagnostics::log_warning(format!(
@@ -216,14 +241,14 @@ impl Signex {
     }
 
     /// The pending open for `path`, only when it waits for read `generation`.
-    fn take_descent(&mut self, path: &Path, generation: u64) -> Option<PendingDescent> {
+    fn take_sheet_open(&mut self, path: &Path, generation: u64) -> Option<PendingSheetOpen> {
         let waits = self
             .ui_state
-            .pending_descents
+            .pending_sheet_opens
             .get(path)
             .is_some_and(|d| d.generation == Some(generation));
         if waits {
-            self.ui_state.pending_descents.remove(path)
+            self.ui_state.pending_sheet_opens.remove(path)
         } else {
             None
         }
@@ -233,24 +258,31 @@ impl Signex {
     /// open that was deduplicated against its claim has no read of its own to
     /// wait on: run it now when the tab is up, otherwise read the file again
     /// under a tracked claim so a missing child still offers Create Sheet.
-    pub(crate) fn settle_untracked_descent(&mut self, path: &Path) -> Task<Message> {
+    pub(crate) fn settle_untracked_open(&mut self, path: &Path) -> Task<Message> {
         let waits = self
             .ui_state
-            .pending_descents
+            .pending_sheet_opens
             .get(path)
             .is_some_and(|d| d.is_untracked());
         if !waits {
             return Task::none();
         }
-        let Some(descent) = self.ui_state.pending_descents.remove(path) else {
+        let Some(descent) = self.ui_state.pending_sheet_opens.remove(path) else {
             return Task::none();
         };
+        if self.is_overtaken(&descent, path) {
+            crate::diagnostics::log_warning(format!(
+                "{} was opened by another route; the request for it was dropped: a newer request or a history move overtook it",
+                path.display()
+            ));
+            return Task::none();
+        }
         if self.has_tab_for(path) {
             return self.arrive_at_sheet(path, descent.open);
         }
         let parent = descent.parent;
         let (task, refused) = self.open_sheet_outcome(path.to_path_buf(), descent.open);
-        if !refused && let Some(pending) = self.ui_state.pending_descents.get_mut(path) {
+        if !refused && let Some(pending) = self.ui_state.pending_sheet_opens.get_mut(path) {
             // The Create offer is still tied to the sheet it was entered from.
             pending.parent = parent;
         }
@@ -260,35 +292,78 @@ impl Signex {
     /// Whether the open waiting on read `generation` of `path` is a history
     /// step, whose tab install must not count as a visit.
     pub(crate) fn is_history_step_read(&self, path: &Path, generation: u64) -> bool {
-        self.ui_state.pending_descents.get(path).is_some_and(|d| {
-            d.generation == Some(generation)
-                && matches!(d.open.then, AfterOpen::ArriveHistory { .. })
-        })
+        self.ui_state
+            .pending_sheet_opens
+            .get(path)
+            .is_some_and(|d| {
+                d.generation == Some(generation)
+                    && matches!(d.open.then, AfterOpen::ArriveHistory { .. })
+            })
+    }
+
+    /// Whether the open waiting on read `generation` of `path` was overtaken
+    /// while it ran: a newer sheet-open request exists, or a history step's
+    /// entry is no longer the one the stack would step to. Its tab still
+    /// installs, but it neither takes the view nor runs its follow-up.
+    pub(crate) fn is_superseded_sheet_open(&self, path: &Path, generation: u64) -> bool {
+        let Some(open) = self
+            .ui_state
+            .pending_sheet_opens
+            .get(path)
+            .filter(|d| d.generation == Some(generation))
+        else {
+            return false;
+        };
+        self.is_overtaken(open, path)
+    }
+
+    fn is_overtaken(&self, open: &PendingSheetOpen, path: &Path) -> bool {
+        if open.seq != self.ui_state.sheet_open_seq {
+            return true;
+        }
+        match open.open.then {
+            AfterOpen::ArriveHistory { forward } => {
+                self.document_state.net_nav.history.peek(forward) != Some(path)
+            }
+            _ => false,
+        }
     }
 
     /// The read of `path` ended: when its tab is up, record the placement and
     /// run what the open asked. Anything else (a failed or stale read) leaves
     /// nothing to do.
-    pub(crate) fn finish_descent(&mut self, path: &Path, generation: u64) -> Task<Message> {
-        let Some(descent) = self.take_descent(path, generation) else {
+    pub(crate) fn finish_sheet_open(&mut self, path: &Path, generation: u64) -> Task<Message> {
+        let superseded = self.is_superseded_sheet_open(path, generation);
+        let Some(descent) = self.take_sheet_open(path, generation) else {
             return Task::none();
         };
-        if !self.has_tab_for(path) {
+        let shown = descent.aliased_to.unwrap_or_else(|| path.to_path_buf());
+        if !self.has_tab_for(&shown) {
             return Task::none();
         }
-        self.arrive_at_sheet(path, descent.open)
+        if superseded {
+            if let PlacementOnOpen::Record(placement) = descent.open.placement {
+                self.record_descent_placement(shown, placement);
+            }
+            crate::diagnostics::log_warning(format!(
+                "{} opened after a newer request for a sheet; the view was left where it was",
+                path.display()
+            ));
+            return Task::none();
+        }
+        self.arrive_at_sheet(&shown, descent.open)
     }
 
     /// The read of `path` failed (`missing` when the file is not there): a
     /// descent through a sheet symbol offers to create the sheet, a history
     /// step forgets the entry it could not reach.
-    pub(crate) fn descent_read_failed(
+    pub(crate) fn sheet_read_failed(
         &mut self,
         path: &Path,
         generation: u64,
         missing: bool,
     ) -> Task<Message> {
-        let Some(descent) = self.take_descent(path, generation) else {
+        let Some(descent) = self.take_sheet_open(path, generation) else {
             return Task::none();
         };
         match descent.open.then {

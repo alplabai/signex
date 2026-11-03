@@ -698,7 +698,7 @@ fn descending_into_an_unopened_child_opens_it_when_the_worker_has_read_it() {
         2
     );
     assert!(!app.document_state.pending_opens.contains(&child));
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert_eq!(
         app.document_state.tab_placements.get(&child),
         Some(&root.child(id)),
@@ -719,7 +719,7 @@ fn a_child_that_goes_missing_meanwhile_still_offers_to_create_it() {
     );
     crate::app::path_ops::settle_task(&mut app, task);
     assert_eq!(confirm(&app).symbol, id);
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
 }
 
 #[test]
@@ -776,7 +776,7 @@ fn closing_the_documents_while_the_child_is_read_opens_nothing() {
         app.document_state.tab_placements.get(&child).is_none(),
         "no placement for a tab that never opened"
     );
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert!(app.ui_state.create_child_sheet_confirm.is_none());
 }
 
@@ -814,7 +814,7 @@ fn an_unreadable_child_is_reported_and_opens_nothing() {
     crate::app::path_ops::settle_task(&mut app, task);
 
     assert!(!app.has_tab_for(&child));
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert!(crate::diagnostics::recent_entries().iter().any(|e| {
         Some(e.id) > since && e.message.contains("Failed to open project tree document")
     }));
@@ -838,7 +838,7 @@ fn a_stale_read_of_the_same_file_does_not_settle_the_new_descent() {
     // The old completion arrives first and must leave the new descent alone.
     crate::app::path_ops::settle_task(&mut app, old_read);
     assert!(
-        app.ui_state.pending_descents.contains_key(&child),
+        app.ui_state.pending_sheet_opens.contains_key(&child),
         "the old completion settled the new descent"
     );
     crate::app::path_ops::settle_task(&mut app, new_read);
@@ -852,12 +852,12 @@ fn a_stale_read_of_the_same_file_does_not_settle_the_new_descent() {
 }
 
 #[test]
-fn closing_the_project_drops_its_pending_descents() {
+fn closing_the_project_drops_its_pending_sheet_opens() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _parent, id) = parent_with_symbol(dir.path());
     write_child_file(dir.path(), 0);
     let _read = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
-    assert!(!app.ui_state.pending_descents.is_empty());
+    assert!(!app.ui_state.pending_sheet_opens.is_empty());
 
     let project_id = app.document_state.projects[0].id;
     let refs = app.resolve_sheet_refs_blocking().expect("sheet refs");
@@ -869,7 +869,7 @@ fn closing_the_project_drops_its_pending_descents() {
     ));
     assert!(app.document_state.projects.is_empty(), "the project closed");
 
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
 }
 
 #[test]
@@ -899,7 +899,7 @@ fn a_missing_child_is_not_offered_against_another_sheet_after_a_tab_switch() {
             .iter()
             .any(|e| { Some(e.id) > since && e.message.contains("Create Sheet was not offered") })
     );
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
     drop(parent);
 }
 
@@ -929,7 +929,7 @@ fn a_descent_deduplicated_against_an_untracked_open_still_offers_create_when_it_
     assert!(app.document_state.pending_opens.insert(child.clone()));
 
     let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
-    assert!(app.ui_state.pending_descents.contains_key(&child));
+    assert!(app.ui_state.pending_sheet_opens.contains_key(&child));
 
     // That open fails (the file is not there): the descent must not strand.
     let task = iced::Task::batch([
@@ -939,7 +939,7 @@ fn a_descent_deduplicated_against_an_untracked_open_still_offers_create_when_it_
     crate::app::path_ops::settle_task(&mut app, task);
 
     assert_eq!(confirm(&app).symbol, id, "the Create offer fires");
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
 }
 
 #[test]
@@ -959,7 +959,7 @@ fn a_descent_deduplicated_against_an_untracked_open_arrives_when_it_succeeds() {
     crate::app::path_ops::settle_task(&mut app, task);
 
     assert!(app.has_tab_for(&child));
-    assert!(app.ui_state.pending_descents.is_empty());
+    assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert_eq!(
         app.document_state.tab_placements.get(&child),
         Some(&root.child(id)),
@@ -977,7 +977,7 @@ fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
     let _ = app.descend_through_sheet_symbol(id, "sheet1.txt");
     assert!(
         app.ui_state
-            .pending_descents
+            .pending_sheet_opens
             .get(&child)
             .is_some_and(|d| d.is_untracked()),
         "parked on the untracked claim"
@@ -989,7 +989,7 @@ fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
 
     assert!(
         !app.ui_state
-            .pending_descents
+            .pending_sheet_opens
             .get(&child)
             .is_some_and(|d| d.is_untracked()),
         "the descent answered instead of waiting for an open that never comes"
