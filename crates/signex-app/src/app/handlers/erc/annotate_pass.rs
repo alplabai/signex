@@ -379,7 +379,11 @@ impl Signex {
         // The active sheet is in no `newly_dirty` (the pass marks it only
         // after it succeeds), so without this it would read clean.
         for path in &not_rolled_back {
-            self.document_state.mark_document_dirty(path);
+            if self.document_state.active_path.as_ref() == Some(path) {
+                self.mark_active_document_dirty();
+            } else {
+                self.document_state.mark_document_dirty(path);
+            }
         }
         if not_rolled_back.is_empty() {
             crate::diagnostics::log_warning(format!(

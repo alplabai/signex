@@ -311,22 +311,38 @@ fn a_part_added_later_to_a_child_placed_twice_is_numbered_per_placement() {
 #[test]
 fn the_preview_numbers_a_child_placed_twice_as_the_run_applies_it() {
     let (mut app, dir, [a, b]) = placed_twice(&[("Q1", 1), ("Q2", 1)], sheet(&[], &[("Q?", 1)]));
-    let rows: Vec<_> = app
-        .preview_project_annotations()
-        .into_iter()
-        .filter(|row| row.sheet.starts_with("m_child"))
-        .map(|row| row.proposed)
-        .collect();
+    // Sorts after `m_child`: it must be numbered past both placements.
+    write(&dir, "z_other.snxsch", sheet(&[], &[("Q?", 1)]));
+    let pages = &mut app.document_state.projects[0].data.sheets;
+    let mut extra = pages[0].clone();
+    extra.filename = "z_other.snxsch".to_string();
+    pages.push(extra);
+    let rows_of = |app: &Signex, prefix: &str| -> Vec<String> {
+        app.preview_project_annotations()
+            .into_iter()
+            .filter(|row| row.sheet.starts_with(prefix))
+            .map(|row| row.proposed)
+            .collect()
+    };
+    let rows = rows_of(&app, "m_child");
+    let other_row = rows_of(&app, "z_other");
 
     let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
     settle_task(&mut app, task);
     let text = std::fs::read_to_string(dir.join("m_child.snxsch")).expect("child on disk");
     let child = SnxSchematic::parse(&text).expect("parse").sheet;
+    let text = std::fs::read_to_string(dir.join("z_other.snxsch")).expect("other on disk");
+    let other = SnxSchematic::parse(&text).expect("parse").sheet;
     std::fs::remove_dir_all(&dir).ok();
 
     let applied = [designators_at(&child, a), designators_at(&child, b)].concat();
     assert_eq!(applied, ["Q3", "Q4"]);
     assert_eq!(rows, applied, "one preview row per placement");
+    assert_eq!(
+        other.symbols[0].reference, "Q5",
+        "the run numbers it past both"
+    );
+    assert_eq!(other_row, ["Q5"], "a later sheet is not shifted by one");
 }
 
 #[test]

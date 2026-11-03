@@ -168,6 +168,29 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
     }
 }
 
+/// One title per numbering unit: the sheet's own, or `title (placement n of m)`
+/// for a sheet file placed more than once.
+fn unit_titles(
+    sheets: &[PreviewSheet],
+    placements: &[Vec<signex_engine::AnnotatePlacement>],
+) -> Vec<String> {
+    let mut titles = Vec::new();
+    for (sheet, places) in sheets.iter().zip(placements) {
+        if places.is_empty() {
+            titles.push(sheet.title.clone());
+        }
+        for n in 0..places.len() {
+            titles.push(format!(
+                "{} (placement {} of {})",
+                sheet.title,
+                n + 1,
+                places.len()
+            ));
+        }
+    }
+    titles
+}
+
 /// The proposed `(current, new)` reference designators Annotate would hand
 /// out across the project. One row per symbol per numbering unit, so a sheet
 /// file placed more than once lists its symbols once per placement, as the
@@ -190,20 +213,7 @@ fn compute_entries(
         |path| symbols_of.get(path).copied().unwrap_or(&[]),
         &walked.multi,
     );
-    let mut titles: Vec<String> = Vec::with_capacity(walk.docs.len());
-    for (sheet, places) in walked.sheets.iter().zip(&walk.placements) {
-        if places.is_empty() {
-            titles.push(sheet.title.clone());
-        }
-        for (n, _) in places.iter().enumerate() {
-            titles.push(format!(
-                "{} (placement {} of {})",
-                sheet.title,
-                n + 1,
-                places.len()
-            ));
-        }
-    }
+    let titles = unit_titles(&walked.sheets, &walk.placements);
     let mut next = signex_types::designator::seed_counters(
         walk.docs
             .iter()
@@ -284,9 +294,13 @@ fn fingerprint(state: &crate::app::state::DocumentState) -> u64 {
                 sym.position.y.to_bits(),
             )
                 .hash(&mut h);
+            // Per-placement designators (#1919) live here, not in `reference`.
+            for instance in &sym.instances {
+                (&instance.path, &instance.reference).hash(&mut h);
+            }
         }
         for child in &doc.child_sheets {
-            child.filename.hash(&mut h);
+            (child.uuid, &child.filename).hash(&mut h);
         }
     }
     h.finish()
