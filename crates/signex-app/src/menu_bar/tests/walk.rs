@@ -58,6 +58,45 @@ fn footprint_editor_with_history() -> Signex {
     app
 }
 
+/// A PCB tab with an empty board, the active document.
+fn pcb_tab() -> Signex {
+    let mut app = bare_app();
+    let path = std::path::PathBuf::from("/w/menu-rows.snxpcb");
+    let board = signex_types::pcb::PcbBoard {
+        unknown: Default::default(),
+        uuid: Uuid::now_v7(),
+        version: 1,
+        generator: "signex-test".into(),
+        thickness: 1.6,
+        outline: vec![],
+        layers: vec![],
+        setup: None,
+        nets: vec![],
+        footprints: vec![],
+        segments: vec![],
+        vias: vec![],
+        zones: vec![],
+        graphics: vec![],
+        texts: vec![],
+    };
+    app.document_state.tabs.push(TabInfo {
+        title: "board".into(),
+        path,
+        cached_document: Some(crate::app::TabDocument::Pcb(board)),
+        project_id: None,
+        kind: TabKind::Pcb,
+    });
+    app.document_state.active_tab = 0;
+    app.interaction_state
+        .pcb_canvas
+        .set_viewport(iced::Rectangle::new(
+            iced::Point::ORIGIN,
+            iced::Size::new(800.0, 600.0),
+        ));
+    assert!(app.has_active_pcb(), "the fixture shows a board");
+    app
+}
+
 fn project_without_document() -> Signex {
     let mut app = bare_app();
     open_project(&mut app, "P.snxprj");
@@ -73,6 +112,7 @@ const FIXTURES: &[Fixture] = &[
     ("symbol editor", symbol_editor_app),
     ("symbol editor, second part", symbol_editor_on_part_two),
     ("footprint editor, history", footprint_editor_with_history),
+    ("PCB tab", pcb_tab),
 ];
 
 /// Every row of the bar as `(path, row)`, submenus included.
@@ -198,6 +238,11 @@ fn the_undocked_window(app: &mut Signex) -> Option<iced::window::Id> {
     app.ui_state.windows.keys().next().copied()
 }
 
+/// Rows that cannot show an effect in a fixture because it lacks what a load
+/// leaves behind, not because the row is dead: a PCB fit needs the renderer
+/// snapshot a real board load builds.
+const FIXTURE_LIMITS: &[(&str, &str)] = &[("View/Fit All", "PCB tab")];
+
 #[test]
 fn every_live_row_does_something() {
     let mut inert = Vec::new();
@@ -209,6 +254,7 @@ fn every_live_row_does_something() {
         undocked_schematic,
         the_undocked_window,
     ));
+    inert.retain(|(path, state)| !FIXTURE_LIMITS.contains(&(path.as_str(), state)));
     let known: Vec<(String, &str)> = KNOWN_INERT
         .iter()
         .flat_map(|(path, states)| states.iter().map(move |s| (path.to_string(), *s)))

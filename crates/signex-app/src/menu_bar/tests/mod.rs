@@ -262,6 +262,8 @@ pub(super) struct Probe {
     pub fit_queued: bool,
     pub window_fit_queued: bool,
     pub tour_open: bool,
+    pub pcb_camera: (f32, f32, f32),
+    pub pcb_fit_queued: bool,
     pub error_notice: bool,
     pub refs: Vec<String>,
 }
@@ -314,6 +316,8 @@ pub(super) fn probe(app: &Signex) -> Probe {
         context_menu: app.interaction_state.context_menu.is_some(),
         fit_queued: canvas.pending_fit.get().is_some(),
         tour_open: app.ui_state.first_run_tour_open,
+        pcb_camera: app.interaction_state.pcb_canvas.live_camera(),
+        pcb_fit_queued: app.interaction_state.pcb_canvas.pending_fit.get().is_some(),
         window_fit_queued: app
             .interaction_state
             .canvases
