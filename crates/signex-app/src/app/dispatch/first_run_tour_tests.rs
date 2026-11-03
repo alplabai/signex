@@ -147,14 +147,15 @@ fn a_launch_with_no_pref_opens_the_card_and_saves_that_it_was_shown() {
 }
 
 /// The boot write is built when the runtime runs the task, so constructing the
-/// app (as every test does) leaves the in-flight write count alone; a raised
-/// count would make the quit path wait out its whole limit.
+/// app (as every test does) takes no in-flight preference-write slot; a raised
+/// count would make the quit path wait out its whole limit. Counted on this
+/// thread, so tests running at the same time cannot disturb it.
 #[test]
 fn building_the_app_takes_no_preference_write_slot() {
-    let before = crate::fonts::pref_writes_in_flight();
+    let before = crate::fonts::pref_slots_taken_on_this_thread();
     let (_app, _task) = Signex::new();
     let (_open, _task) = crate::app::bootstrap::first_run_tour_boot(None);
-    assert_eq!(crate::fonts::pref_writes_in_flight(), before);
+    assert_eq!(crate::fonts::pref_slots_taken_on_this_thread(), before);
 }
 
 #[test]

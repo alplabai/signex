@@ -733,7 +733,7 @@ pub mod measure;
 mod misc;
 mod ordered_write;
 #[cfg(test)]
-pub(crate) use ordered_write::pref_writes_in_flight;
+pub(crate) use ordered_write::pref_slots_taken_on_this_thread;
 mod prefs_file;
 mod presets;
 mod recent;
