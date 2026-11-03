@@ -212,8 +212,9 @@ impl Signex {
     }
 
     /// Stamp the changed primitives and the save `generation`, then clone
-    /// the editor's container. Clears the editor's dirty flag: any edit from
-    /// here on sets it again.
+    /// the editor's container. Clears the editor's dirty flag and makes the
+    /// snapshot's undo depth its save point: any edit from here on sets the
+    /// flag again, and Undo back to the depth clears it (#1854).
     fn snapshot_primitive(
         &mut self,
         path: &std::path::Path,
@@ -233,7 +234,7 @@ impl Signex {
             if !changed.is_empty() {
                 editor.file.updated = now;
             }
-            editor.set_dirty(false);
+            editor.mark_saved();
             editor.save_generation = generation;
             let snapshot = Snapshot::Symbol {
                 file: editor.file.clone(),
@@ -268,7 +269,7 @@ impl Signex {
             if !changed.is_empty() {
                 editor.file.updated = now;
             }
-            editor.set_dirty(false);
+            editor.mark_saved();
             editor.save_generation = generation;
             let snapshot = Snapshot::Footprint {
                 file: editor.file.clone(),

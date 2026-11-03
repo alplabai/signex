@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use signex_library::{Symbol, SymbolFile};
 
+use super::SavePoint;
 use super::documents::{FieldEditKey, SymbolDocument};
 
 /// One undo / redo step: the container and which symbol was active.
@@ -23,6 +24,9 @@ pub struct SymbolHistorySnapshot {
     /// The file's symbols, structurally shared with neighbouring steps.
     pub symbols: Vec<Arc<Symbol>>,
     pub active_idx: usize,
+    /// The save point when the step was captured; see
+    /// [`SymbolDocument::commit_history`].
+    point: SavePoint,
 }
 
 impl SymbolHistorySnapshot {
@@ -72,6 +76,7 @@ impl SymbolDocument {
             },
             symbols,
             active_idx: self.active_idx,
+            point: self.save_point,
         }
     }
 
@@ -79,7 +84,7 @@ impl SymbolDocument {
     /// in the snapshot: they are cleared, and when the step lands on a
     /// different symbol the unit and viewport reset as a symbol switch
     /// does, so new pins cannot land on a unit the symbol lacks.
-    pub fn restore(&mut self, snap: SymbolHistorySnapshot) {
+    fn restore(&mut self, snap: SymbolHistorySnapshot) {
         let previous_idx = self.active_idx;
         self.file = SymbolFile {
             symbols: snap.symbols.into_iter().map(Arc::unwrap_or_clone).collect(),
@@ -98,7 +103,14 @@ impl SymbolDocument {
         } else {
             self.reset_view_for_symbol_switch();
         }
-        self.mark_dirty();
+    }
+
+    /// Dirty exactly when the history is away from the saved depth (or rows
+    /// are still owed): the flag after an Undo or Redo (#1854).
+    fn sync_dirty_to_history(&mut self) {
+        let (undo, redo) = (self.undo_snapshots.len(), self.redo_snapshots.len());
+        self.save_point.limit_to(undo, redo);
+        self.set_dirty(!self.save_point.is_at(undo) || !self.cascade_owed.is_empty());
     }
 
     /// Start the newly active symbol on unit 1 with a fresh viewport, so
@@ -113,11 +125,17 @@ impl SymbolDocument {
     }
 
     /// Record `snap` as an undo step: clears redo, evicts the oldest step
-    /// past [`Self::HISTORY_DEPTH`] and ends any coalescing run.
+    /// past [`Self::HISTORY_DEPTH`] and ends any coalescing run. The save
+    /// point is the one `snap` captured, so an edit's own `mark_dirty`
+    /// between the capture and this call cannot cost it; a point on the
+    /// cleared redo branch or on the evicted step is forgotten.
     pub fn commit_history(&mut self, snap: SymbolHistorySnapshot) {
+        self.save_point = snap.point;
+        self.save_point.redo_cleared(self.undo_snapshots.len());
         self.undo_snapshots.push(snap);
         if self.undo_snapshots.len() > Self::HISTORY_DEPTH {
             self.undo_snapshots.remove(0);
+            self.save_point.evicted_oldest();
         }
         self.redo_snapshots.clear();
         self.last_edit_key = None;
@@ -154,6 +172,7 @@ impl SymbolDocument {
         };
         self.redo_snapshots.push(self.snapshot());
         self.restore(snap);
+        self.sync_dirty_to_history();
         true
     }
 
@@ -164,6 +183,7 @@ impl SymbolDocument {
         };
         self.undo_snapshots.push(self.snapshot());
         self.restore(snap);
+        self.sync_dirty_to_history();
         true
     }
 }

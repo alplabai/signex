@@ -4,7 +4,9 @@
 //!
 //! - a symbol or footprint draft stores it in its own editor, which flips it
 //!   on every edit (the editor update modules hold no workspace state); a
-//!   save snapshot resets that flag, so the path then rides in the set
+//!   save snapshot resets that flag and records its undo depth as the
+//!   draft's save point (`SavePoint`), so Undo back to it reads clean and
+//!   Redo away from it dirty (#1854), and the path then rides in the set
 //!   until the write lands;
 //! - every other document (a schematic sheet, a PCB, a project file, a
 //!   library manifest) is a path in [`DirtyDocuments`], whether or not a

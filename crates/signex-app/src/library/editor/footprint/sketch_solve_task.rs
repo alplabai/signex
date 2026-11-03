@@ -168,6 +168,8 @@ pub(crate) struct UnsolvedEdits {
     /// `history_len_before - evictions`.
     pub(crate) evictions: usize,
     pub(crate) dirty_before: Option<bool>,
+    /// The save point before the first tick, given back with the flag.
+    pub(crate) point_before: Option<crate::app::SavePoint>,
     /// The redo stack the first tick would have cleared, parked here so a
     /// rejection can give it back.
     pub(crate) redo_before: Option<Vec<FootprintHistorySnapshot>>,
@@ -179,6 +181,7 @@ pub(crate) struct UnsolvedEdits {
 /// What one settled message left behind while a drag batch was pending.
 pub(crate) struct SettledTick {
     pub(crate) dirty_before: bool,
+    pub(crate) point_before: crate::app::SavePoint,
     /// The message moved the sketch and owes a solve (as opposed to a drag
     /// tick that changed nothing).
     pub(crate) deferred: bool,
@@ -258,6 +261,7 @@ impl SketchSolveSlot {
                 history_len_before: 0,
                 evictions: 0,
                 dirty_before: None,
+                point_before: None,
                 redo_before: None,
                 evicted: Vec::new(),
             });
@@ -284,6 +288,7 @@ impl SketchSolveSlot {
         };
         if tick.deferred {
             unsolved.dirty_before.get_or_insert(tick.dirty_before);
+            unsolved.point_before.get_or_insert(tick.point_before);
             unsolved.redo_before.get_or_insert(tick.redo);
         }
         if !tick.kept {

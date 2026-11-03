@@ -283,6 +283,9 @@ pub struct SymbolDocument {
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
+    /// The undo depth at which this draft last equalled its file, so Undo
+    /// back to it reads clean (#1854). Unknown stays dirty.
+    pub(crate) save_point: super::SavePoint,
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
@@ -380,15 +383,25 @@ impl SymbolDocument {
         self.dirty
     }
 
-    /// An edit changed the draft.
+    /// An edit changed the draft. A change at the saved depth that no
+    /// undo step records leaves no step that reproduces the file, so the
+    /// save point is forgotten; a recorded edit has already moved the depth.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.save_point.forget_if_at(self.undo_snapshots.len());
     }
 
     /// Set the flag outright: a save or discard clears it, a rejected edit
     /// gives back the value it held before.
     pub fn set_dirty(&mut self, dirty: bool) {
         self.dirty = dirty;
+    }
+
+    /// A save is writing the current content: it is the state Undo and Redo
+    /// return to as clean, and the flag clears until the next edit.
+    pub fn mark_saved(&mut self) {
+        self.save_point.mark_saved(self.undo_snapshots.len());
+        self.dirty = false;
     }
 
     /// The unit and body the editor currently shows.
@@ -415,6 +428,7 @@ impl SymbolDocument {
             ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
+            save_point: super::SavePoint::at_start(),
             save_generation: 0,
             cascade_owed: Vec::new(),
             camera: crate::canvas::Camera::default(),
@@ -515,6 +529,9 @@ pub struct FootprintDocument {
     /// Unsaved edits in this draft. Private: edits call [`Self::mark_dirty`];
     /// the workspace reads and clears it through `DocumentState`.
     dirty: bool,
+    /// The undo depth at which this draft last equalled its file, so Undo
+    /// back to it reads clean (#1854). Unknown stays dirty.
+    pub(crate) save_point: super::SavePoint,
     /// The stamp of the last container save started from this editor
     /// (`DocumentSaves::mint_generation`); `0` until one starts.
     pub save_generation: u64,
@@ -570,6 +587,10 @@ pub struct FootprintHistorySnapshot {
     pub selected_pad: Option<usize>,
     pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
+    /// The save point when the step was captured, i.e. before the edit it
+    /// precedes: [`FootprintDocument::commit_history`] gives it back, so an
+    /// edit's own `mark_dirty` cannot cost the point.
+    pub(in crate::app) point: super::SavePoint,
 }
 
 impl FootprintDocument {
@@ -578,15 +599,40 @@ impl FootprintDocument {
         self.dirty
     }
 
-    /// An edit changed the draft.
+    /// An edit changed the draft. A change at the saved depth that no
+    /// undo step records leaves no step that reproduces the file, so the
+    /// save point is forgotten; a recorded edit has already moved the depth
+    /// (or restores the point from its snapshot, see [`Self::commit_history`]).
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+        self.save_point.forget_if_at(self.history.len());
     }
 
-    /// Set the flag outright: a save or discard clears it, a rejected edit
-    /// gives back the value it held before.
+    /// Set the flag outright: a save or discard clears it.
     pub fn set_dirty(&mut self, dirty: bool) {
         self.dirty = dirty;
+    }
+
+    /// A save is writing the current content: it is the state Undo and Redo
+    /// return to as clean, and the flag clears until the next edit.
+    pub fn mark_saved(&mut self) {
+        self.save_point.mark_saved(self.history.len());
+        self.dirty = false;
+    }
+
+    /// An edit was rejected and the document is as `snap` captured it: give
+    /// back the save point and the flag the edit's `mark_dirty` disturbed.
+    pub(crate) fn give_back_rejected_edit(&mut self, point: super::SavePoint, dirty_before: bool) {
+        self.save_point = point;
+        self.dirty = dirty_before || !self.cascade_owed.is_empty();
+    }
+
+    /// Dirty exactly when the history is away from the saved depth (or rows
+    /// are still owed): the flag after an Undo or Redo.
+    fn sync_dirty_to_history(&mut self) {
+        self.save_point
+            .limit_to(self.history.len(), self.redo.len());
+        self.dirty = !self.save_point.is_at(self.history.len()) || !self.cascade_owed.is_empty();
     }
 
     /// Build a fresh standalone editor state from a `FootprintFile`
@@ -638,6 +684,11 @@ impl FootprintDocument {
             // An arc repaired on load differs from what is on disk, so the
             // document opens dirty and a save persists the repair.
             dirty: repaired,
+            save_point: if repaired {
+                super::SavePoint::unknown()
+            } else {
+                super::SavePoint::at_start()
+            },
             save_generation: 0,
             cascade_owed: Vec::new(),
             history: Vec::new(),
@@ -735,8 +786,13 @@ impl FootprintDocument {
         &mut self,
         snap: FootprintHistorySnapshot,
     ) -> Option<FootprintHistorySnapshot> {
+        self.save_point = snap.point;
+        self.save_point.redo_cleared(self.history.len());
         self.history.push(snap);
         let evicted = (self.history.len() > Self::HISTORY_DEPTH).then(|| self.history.remove(0));
+        if evicted.is_some() {
+            self.save_point.evicted_oldest();
+        }
         self.redo.clear();
         self.last_edit_key = None;
         evicted
@@ -776,11 +832,7 @@ impl FootprintDocument {
             return false;
         }
         if let Some(snap) = snap {
-            self.history.push(snap);
-            if self.history.len() > Self::HISTORY_DEPTH {
-                self.history.remove(0);
-            }
-            self.redo.clear();
+            self.commit_history(snap);
         }
         self.last_edit_key = key;
         true
@@ -804,6 +856,7 @@ impl FootprintDocument {
             self.redo.remove(0);
         }
         self.restore(snap);
+        self.sync_dirty_to_history();
         true
     }
 
@@ -820,8 +873,10 @@ impl FootprintDocument {
         self.history.push(current);
         if self.history.len() > Self::HISTORY_DEPTH {
             self.history.remove(0);
+            self.save_point.evicted_oldest();
         }
         self.restore(snap);
+        self.sync_dirty_to_history();
         true
     }
 
@@ -836,6 +891,7 @@ impl FootprintDocument {
             selected_pad: self.state.selected_pad,
             selected_sketch: self.state.selected_sketch,
             selected_sketch_secondary: self.state.selected_sketch_secondary,
+            point: self.save_point,
         }
     }
 
@@ -853,7 +909,6 @@ impl FootprintDocument {
         // selection, so a stale index would point at another entry.
         self.state.clear_silk_selection();
         self.canvas_cache.clear();
-        self.mark_dirty();
         // The sketch was just replaced: a drag solve still in flight ran on
         // the one that is gone. History holds only solved states: a drag's
         // steps are collapsed to one solved step when its result lands.

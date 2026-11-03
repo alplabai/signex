@@ -51,6 +51,9 @@ pub(crate) use state::library_entry;
 pub(crate) use state::rule_profile_ui;
 pub(crate) use state::scope::path_key_with;
 pub(crate) use state::volume_case::probe_directory_case;
+#[cfg(test)]
+mod draft_save_point_tests;
+mod history_save_point;
 pub(crate) mod stitched_netlist;
 mod symbol_history;
 mod undo_groups;
@@ -76,6 +79,7 @@ pub use documents::{
     TabDocument, TabInfo, TabKind, Tool,
 };
 pub(crate) use handlers::selection_workflow::passes_filter;
+pub(crate) use history_save_point::SavePoint;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
