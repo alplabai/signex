@@ -595,6 +595,34 @@ mod tests {
         assert!(enabled(&app, "force_annotate_all_schematics"));
     }
 
+    /// The quiet annotate commands are greyed with a project but no sheet, but
+    /// the key still reaches the handler, which says there is nothing to do
+    /// (#1922), and the outcome reports it as disabled.
+    #[test]
+    fn quiet_annotate_with_no_sheet_still_reaches_the_handler_and_says_so() {
+        let _ = crate::diagnostics::init_logging();
+        for name in [
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ] {
+            let (mut app, _task) = Signex::new();
+            app.document_state.active_project = Some(app.document_state.mint_project_id());
+            let since = crate::diagnostics::newest_entry_id().unwrap_or(0);
+
+            let (outcome, _task) =
+                app.dispatch_command_reporting(&id(name), CommandArgs::none(), None);
+
+            assert!(
+                matches!(outcome, super::super::CommandOutcome::Disabled { .. }),
+                "{name}"
+            );
+            let said = crate::diagnostics::recent_entries()
+                .iter()
+                .any(|e| e.id > since && e.message.contains("no sheet is open, nothing to do"));
+            assert!(said, "{name}: the handler did not run and explain");
+        }
+    }
+
     #[test]
     fn a_disabled_command_dispatches_to_a_no_op() {
         let (mut app, _task) = Signex::new();
