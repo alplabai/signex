@@ -50,7 +50,7 @@ have this section and drifted six versions away from reality as a result.
 | Fact | State (2026-11-04) |
 |------|--------------------|
 | Latest tagged release | **v1.0.0-rc.1** (2026-10-29), the first release candidate of the Community Preview and the **last SemVer tag**. It published as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 (2026-07-23) until the first stable CalVer release |
-| Next tag | The first CalVer release, `vYY.MM.MICRO` (or `-rc.N`), dated by the month it ships (§3). `1.0.0` final is never cut |
+| Next tag | The first CalVer release, `vYY.MM.MICRO` (or `-rc.N`), dated per §3 (the month of its first release candidate, or the month it ships if there is none). `1.0.0` final is never cut |
 | `workspace.package.version` | **1.0.0-rc.1** until the first CalVer release-prep PR sets it |
 | Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
 | Current work | Command Registry & Symbol Units milestone: one open issue left, #271 (menu rows keyed off one label/shortcut table). Community Preview milestone: #859 (synchronous IO still in `update`), #661 (one document model epic), #322 (this user guide). Release prep for the first CalVer release follows |
@@ -92,8 +92,9 @@ v1.0.0-rc.1) keep their numbers as history.
 Ordering stays monotonic because every CalVer major (26 and up) is above
 the last SemVer major (1).
 
-The version is dated by the month the release **ships**, not by the month
-the work started. The first CalVer release-prep PR sets
+The version is dated by the month its first release candidate is cut, or,
+for a release with no candidate, the month it ships; never by the month the
+work started. The first CalVer release-prep PR sets
 `workspace.package.version` (still `1.0.0-rc.1`).
 
 **File-format compatibility is not carried by the app version.** It is
@@ -690,7 +691,7 @@ calendar versioning, `YY.MM.MICRO` (§3). What that changed:
   tiers, exit criteria and scope are unchanged; only the labels moved.
   The gates are the former v1.0, v2.0, v2.2, v3.0, v4.0 and v5.0.
 - **`v1.0.0-rc.1` (2026-10-29) is the last SemVer tag**; `1.0.0` final is
-  never cut. The next release is CalVer, dated by the month it ships.
+  never cut. The next release is CalVer, dated per §3.
 - **GitHub milestones were renamed** to the plan names via `aliases` in
   `.github/milestones.yml`, so issues kept their milestone. Milestones of
   shipped versions keep their version titles.

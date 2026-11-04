@@ -327,7 +327,7 @@ synced automatically on merge to `trunk`. Five families plus a few signal labels
 |---|---|---|
 | `type:` | Kind of change — `feature`, `bug`, `refactor`, `docs`, `ci`, `chore`, `test`, `performance` | Author / triager |
 | `area:` | Subsystem touched — `sketch`, `footprint-editor`, `library`, … | **Auto** (path labeler) |
-| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for the Community Preview), `p1` (Advanced Schematic through PCB Viewer), `p2` (PCB Routing through Pro Release), `p3` (after the Pro Release (Signal AI Core onward)) | Triager |
+| `tier:` | The scope gate from [docs/ROADMAP.md](docs/ROADMAP.md) §4 — `p0` (required for the Community Preview), `p1` (Advanced Schematic through PCB Viewer), `p2` (PCB Routing through Pro Release), `p3` (after the Pro Release, Signal AI Core onward) | Triager |
 | `priority:` | `critical` / `high` / `medium` / `low` | Triager |
 | `status:` | `needs-triage`, `in-progress`, `blocked`, `needs-review`, `on-hold` | Whoever moves it |
 
