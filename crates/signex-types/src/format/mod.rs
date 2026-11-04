@@ -39,6 +39,7 @@ mod pcb_footprints;
 mod pcb_rows;
 mod pcb_uuid_repair;
 mod sch_rows;
+mod text_size_repair;
 mod tsv;
 mod units;
 mod unknown;
@@ -88,6 +89,7 @@ mod version_tests;
 pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
+pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
 pub use units::{NonFiniteField, mm_as_stored_nm};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
@@ -595,6 +597,8 @@ impl SnxSchematic {
             },
         };
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
+        let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
+        sheet.unknown.load_repairs.extend(size_repairs);
 
         Ok(SnxSchematic {
             format: raw.format,

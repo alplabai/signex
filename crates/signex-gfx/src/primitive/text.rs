@@ -49,10 +49,12 @@ pub const MIN_VISIBLE_TEXT_DEVICE_PX: f32 = 0.5;
 // Reachable: 100 mm text at the 48 px/mm zoom limit is about 6500 px.
 pub const MAX_RASTER_TEXT_DEVICE_PX: f32 = 4096.0;
 
-// shortcut: sanity cap on outline text, far outside any reachable size (a
-// page is at most a few metres, 48 px/mm gives about 5e5 px). A file-supplied
-// size past it is hostile data, not drawing, and is skipped.
-pub const MAX_OUTLINE_TEXT_DEVICE_PX: f32 = 1.0e6;
+// shortcut: ceiling on outline text, sized to the largest real case: 100 mm
+// text (`signex_types::format::MAX_TEXT_SIZE_MM`, what a sheet keeps on load)
+// is 136 mm of em, times the 48 px/mm zoom limit times a 3x display is about
+// 19600 px; this is that with headroom. Past it the size is hostile data, not
+// drawing, and the item is skipped, so tessellation cost stays bounded.
+pub const MAX_OUTLINE_TEXT_DEVICE_PX: f32 = 32_768.0;
 
 /// How a text of a given em size is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,6 +223,8 @@ mod size_tests {
         assert_eq!(text_raster(f32::NAN), TextRaster::Skip);
         assert_eq!(text_raster(f32::INFINITY), TextRaster::Skip);
         assert_eq!(text_raster(0.1), TextRaster::Skip);
+        assert_eq!(text_raster(MAX_OUTLINE_TEXT_DEVICE_PX), TextRaster::Outline);
+        assert_eq!(text_raster(40_000.0), TextRaster::Skip);
         assert_eq!(text_raster(1.0e9), TextRaster::Skip);
     }
 
@@ -246,6 +250,27 @@ mod size_tests {
                 TextRaster::Bitmap
             );
         }
+    }
+
+    /// Many absurd file-supplied sizes at the zoom limit on a 3x display cost
+    /// nothing: every one is skipped before any shaping or tessellation, and
+    /// the largest real text still draws.
+    #[test]
+    fn a_hostile_file_of_huge_texts_is_skipped_at_max_zoom() {
+        let (zoom_limit, dpr) = (48.0, 3.0);
+        let hostile = (0..10_000)
+            .filter(|_| {
+                text_raster(text_px_in(1.0e5, zoom_limit, TextSizePolicy::UNCLAMPED, None) * dpr)
+                    != TextRaster::Skip
+            })
+            .count();
+        assert_eq!(hostile, 0);
+        let largest_real = text_px_in(100.0, zoom_limit, TextSizePolicy::UNCLAMPED, None) * dpr;
+        assert_eq!(
+            text_raster(largest_real),
+            TextRaster::Outline,
+            "{largest_real}"
+        );
     }
 }
 
