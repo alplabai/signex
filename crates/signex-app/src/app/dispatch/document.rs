@@ -194,32 +194,10 @@ impl Signex {
                 result,
                 disk,
             } => {
-                // #478 review — clear the in-flight guard before acting
-                // on the result so a duplicate open fired while this one
-                // was in flight is free to spawn again from here on.
-                self.document_state.pending_opens.remove_untracked(&path);
-                if self.is_open_result_superseded(&path, &result) {
-                    self.attach_parked_tab_for_superseded_open(&path, title);
-                    self.activate_tab_for_path(&path);
-                    return self.finish_update();
-                }
-                match result {
-                    Ok(_) if self.has_tab_for(&path) => Self::log_duplicate_open(&path),
-                    Ok(sheet) => {
-                        if let Some(disk) = &disk
-                            && self.focus_alias_if_open(&path, disk)
-                        {
-                            return self.finish_update();
-                        }
-                        // `update` starts the recovery check of every tab opened.
-                        self.open_schematic_tab(path.clone(), title, *sheet);
-                        if let Some(disk) = disk {
-                            self.record_disk_read(&path, disk);
-                        }
-                    }
-                    Err(message) => self.report_open_failure(message),
-                }
-                self.finish_update()
+                let task = self.schematic_open_finished(path.clone(), title, result, disk);
+                // An open of this sheet that was deduplicated against this
+                // read answers now (#1756).
+                Task::batch([task, self.settle_untracked_open(&path)])
             }
             FileMsg::InstanceNoteReady(note) => {
                 match note {

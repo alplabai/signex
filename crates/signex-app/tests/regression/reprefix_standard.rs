@@ -138,10 +138,14 @@ fn lookup(w: &World, generation: u64) -> ReprefixLookup {
 }
 
 fn deliver(app: &mut Signex, generation: u64, lookup: ReprefixLookup) {
-    let _ = app.update(Message::Annotate(AnnotateMsg::ReprefixRowsResolved {
-        generation,
-        result: Arc::new(Ok(lookup)),
-    }));
+    // The plan reads the project's sheets on a worker (#1756): settle it.
+    crate::settle_support::settle(
+        app,
+        Message::Annotate(AnnotateMsg::ReprefixRowsResolved {
+            generation,
+            result: Arc::new(Ok(lookup)),
+        }),
+    );
 }
 
 /// Press and let the libraries answer: the confirm is open, nothing changed.
@@ -152,7 +156,8 @@ fn open_confirm(w: &mut World) {
 }
 
 fn confirm(app: &mut Signex) {
-    let _ = app.update(Message::Annotate(AnnotateMsg::ReprefixConfirmed));
+    // The apply reads the project's sheets on a worker (#1756): settle it.
+    crate::settle_support::settle(app, Message::Annotate(AnnotateMsg::ReprefixConfirmed));
 }
 
 /// The whole flow: press, answer, Confirm.
@@ -675,4 +680,83 @@ fn reprefix_does_not_number_parts_the_confirm_never_showed() {
     let root_refs = refs(&w, ROOT);
     assert!(root_refs[0].starts_with('V'), "{root_refs:?}");
     assert_eq!(root_refs[1], "R?", "{root_refs:?}");
+}
+
+/// The sheet read is a task, not part of `update` (#1756): right after Confirm
+/// nothing has changed, and the task's answer is what applies the plan.
+#[test]
+fn confirm_reads_the_sheets_off_the_update_loop() {
+    let (mut w, _dir, root_path, _child_path, _bytes) = disk_world();
+    open_confirm(&mut w);
+
+    let task = w
+        .app
+        .update(Message::Annotate(AnnotateMsg::ReprefixConfirmed));
+    assert_eq!(
+        w.app.document_state.engines[&root_path].document().symbols[0].reference,
+        "D1",
+        "update applied nothing before the read answered"
+    );
+    crate::settle_support::settle_task(&mut w.app, task);
+    assert!(
+        w.app.document_state.engines[&root_path].document().symbols[0]
+            .reference
+            .starts_with('V')
+    );
+}
+
+/// A read that lands after the request was replaced (here: the dialog closed
+/// while the worker read) applies nothing and says so.
+#[test]
+fn a_sheet_read_overtaken_by_a_newer_request_applies_nothing() {
+    let (mut w, _dir, root_path, child_path, _bytes) = disk_world();
+    open_confirm(&mut w);
+    let task = w
+        .app
+        .update(Message::Annotate(AnnotateMsg::ReprefixConfirmed));
+    let _ = w.app.update(Message::Annotate(AnnotateMsg::CloseDialog));
+    crate::settle_support::settle_task(&mut w.app, task);
+
+    let engines = &w.app.document_state.engines;
+    assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
+    assert!(!engines.contains_key(&child_path), "no sheet was parked");
+    assert!(messages(&w).contains("out of date"), "{}", messages(&w));
+}
+
+/// A sheet that cannot be read stops the plan: leaving it out would split the
+/// project's parts across two prefixes.
+#[test]
+fn an_unreadable_sheet_refuses_the_plan_and_names_it() {
+    let (mut w, _dir, root_path, child_path, _bytes) = disk_world();
+    std::fs::write(&child_path, b"not a schematic").expect("corrupt the child");
+
+    open_confirm(&mut w);
+
+    assert!(w.app.ui_state.reprefix_confirm.is_none(), "no confirm");
+    assert_eq!(
+        w.app.document_state.engines[&root_path].document().symbols[0].reference,
+        "D1"
+    );
+    assert!(messages(&w).contains("child.snxsch"), "{}", messages(&w));
+    assert!(
+        w.app.document_state.error_notice.is_some(),
+        "a visible notice, not only a log line"
+    );
+}
+
+/// The sheet became unreadable between the list and Confirm: apply nothing
+/// (not even the open sheet), name the sheet.
+#[test]
+fn a_sheet_that_stops_reading_before_confirm_applies_nothing() {
+    let (mut w, _dir, root_path, child_path, _bytes) = disk_world();
+    open_confirm(&mut w);
+    std::fs::write(&child_path, b"not a schematic").expect("corrupt the child");
+
+    confirm(&mut w.app);
+
+    let engines = &w.app.document_state.engines;
+    assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
+    assert!(!engines.contains_key(&child_path), "no sheet was parked");
+    assert!(messages(&w).contains("child.snxsch"), "{}", messages(&w));
+    assert!(w.app.document_state.error_notice.is_some());
 }

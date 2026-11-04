@@ -13,6 +13,12 @@ fn send(app: &mut Signex, msg: FindReplaceMsg) {
     let _ = app.update(crate::app::Message::FindReplaceMsg(msg));
 }
 
+/// [`send`], finishing the sheet read the message starts.
+fn send_opening(app: &mut Signex, msg: FindReplaceMsg) {
+    let task = app.update(crate::app::Message::FindReplaceMsg(msg));
+    crate::app::handlers::canvas::sheet_open_tests::finish_read(app, task);
+}
+
 fn project_search(app: &mut Signex, query: &str) {
     send(app, FindReplaceMsg::ScopeChanged(FindScope::Project));
     send(app, FindReplaceMsg::QueryChanged(query.into()));
@@ -282,7 +288,15 @@ fn selecting_a_result_on_a_closed_sheet_opens_it_and_zooms() {
         Some(top.as_path())
     );
 
-    send(&mut app, FindReplaceMsg::SelectResult(0));
+    let task = app.update(crate::app::Message::FindReplaceMsg(
+        FindReplaceMsg::SelectResult(0),
+    ));
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(top.as_path()),
+        "update reads nothing: the closed sheet is read on a worker"
+    );
+    crate::app::path_ops::settle_task(&mut app, task);
 
     assert_eq!(
         app.document_state.active_path.as_deref(),
@@ -300,9 +314,9 @@ fn find_next_and_previous_step_through_the_results_and_wrap() {
     assert_eq!(app.ui_state.find_replace.matches.len(), 2);
     let active = |app: &Signex| app.document_state.active_path.clone();
 
-    send(&mut app, FindReplaceMsg::NextRequested);
+    send_opening(&mut app, FindReplaceMsg::NextRequested);
     let first = active(&app);
-    send(&mut app, FindReplaceMsg::NextRequested);
+    send_opening(&mut app, FindReplaceMsg::NextRequested);
     let second = active(&app);
     assert_ne!(first, second);
     assert!(
@@ -310,7 +324,7 @@ fn find_next_and_previous_step_through_the_results_and_wrap() {
             .iter()
             .all(|p| [&first, &second].contains(&&Some((*p).clone())))
     );
-    send(&mut app, FindReplaceMsg::PreviousRequested);
+    send_opening(&mut app, FindReplaceMsg::PreviousRequested);
     assert_eq!(active(&app), first);
 }
 

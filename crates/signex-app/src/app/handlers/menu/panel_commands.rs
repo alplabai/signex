@@ -42,10 +42,7 @@ impl Signex {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))
             }
             MenuMessage::OpenSignalPanel => Some(self.show_panel(crate::panels::PanelKind::Signal)),
-            MenuMessage::AscendToParentSheet => {
-                self.ascend_to_parent_sheet();
-                Some(Task::none())
-            }
+            MenuMessage::AscendToParentSheet => Some(self.ascend_to_parent_sheet()),
             MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
             MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),
             MenuMessage::PreviousDocumentTab => Some(self.step_document_tab(false)),

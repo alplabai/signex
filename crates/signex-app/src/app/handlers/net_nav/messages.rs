@@ -93,6 +93,23 @@ pub(super) fn jumped(name: &str, total: usize, sheet: &str) -> String {
     ))
 }
 
+/// The partner's sheet is not open yet: it is read first, so nothing has
+/// been jumped to when this is said.
+pub(super) fn opening_for_jump(name: &str, total: usize, sheet: &str) -> String {
+    cap(format!(
+        "Opening '{}' for the jump; '{}' has {total} partner(s). Run Go to net partner again for the next.",
+        clip(sheet, NAME_CLIP),
+        clip(name, NAME_CLIP)
+    ))
+}
+
+pub(super) fn step_in_progress(path: &Path) -> String {
+    cap(format!(
+        "The step to {} is still being read; it moves on once the sheet is open.",
+        file(path)
+    ))
+}
+
 pub(super) fn cannot_open(path: &Path) -> String {
     cap(format!(
         "Check the file exists and is a valid sheet; could not open {}.",
@@ -220,7 +237,9 @@ mod tests {
             no_partner(&l),
             partner_has_no_file(&l, &l),
             jumped(&l, 99, &l),
+            opening_for_jump(&l, 99, &l),
             cannot_open(&path),
+            step_in_progress(&path),
             no_history(true),
             no_history(false),
             history_skipped(&path),

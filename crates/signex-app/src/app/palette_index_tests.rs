@@ -32,8 +32,10 @@ fn rows(app: &Signex, label: &str) -> Vec<usize> {
         .collect()
 }
 
+/// Select a row and finish the sheet read it starts.
 fn select_row(app: &mut Signex, index: usize) {
-    send(app, CommandPaletteMsg::Select(index));
+    let task = app.update(Message::CommandPalette(CommandPaletteMsg::Select(index)));
+    crate::app::handlers::canvas::sheet_open_tests::finish_read(app, task);
 }
 
 fn logged(fragment: &str) -> bool {
@@ -55,7 +57,13 @@ fn palette_designator_on_another_sheet_opens_and_focuses() {
     search(&mut app, "R101");
     let hit = rows(&app, "R101");
     assert_eq!(hit.len(), 1, "{:?}", app.ui_state.command_palette.results);
-    select_row(&mut app, hit[0]);
+    let task = app.update(Message::CommandPalette(CommandPaletteMsg::Select(hit[0])));
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(root.as_path()),
+        "update reads nothing: the closed sheet is read on a worker"
+    );
+    crate::app::path_ops::settle_task(&mut app, task);
 
     assert_eq!(
         app.document_state.active_path.as_deref(),

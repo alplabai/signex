@@ -95,6 +95,13 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
     },
+    /// The worker read the project's sheets for the Re-prefix plan (#1756).
+    /// `generation` is the request's token; a result a newer request replaced
+    /// is dropped.
+    ReprefixSheetsRead {
+        generation: u64,
+        result: std::sync::Arc<crate::app::handlers::erc::ReprefixSheets>,
+    },
     /// Confirm on the Re-prefix list: re-plan against the state of now and
     /// apply it as one undo step.
     ReprefixConfirmed,

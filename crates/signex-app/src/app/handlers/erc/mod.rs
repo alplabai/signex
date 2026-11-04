@@ -17,6 +17,7 @@ mod erc_run;
 mod erc_run_tests;
 mod reprefix;
 mod reprefix_confirm;
+mod reprefix_job;
 mod reprefix_plan;
 mod reset_duplicates;
 mod stale_findings;
@@ -27,6 +28,7 @@ pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
 pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
 pub(crate) use erc_job::{ErcRunOutcome, WaivedFinding};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
+pub(crate) use reprefix_job::ReprefixSheets;
 mod machine_rules;
 mod modals;
 #[cfg(test)]

@@ -417,10 +417,7 @@ impl Signex {
             .map(|c| c.filename.clone());
         Ok(match filename {
             Some(filename) => self.open_existing_child_sheet(parent, symbol, &filename, path),
-            None => {
-                self.open_sheet_with_placement(path, None);
-                Task::none()
-            }
+            None => self.open_sheet_with_placement(path, None),
         })
     }
 
@@ -452,9 +449,7 @@ impl Signex {
         if current == reference {
             return Ok(());
         }
-        if self.active_tab_path().as_deref() != Some(parent)
-            && !self.open_or_focus_sheet_path(parent.to_path_buf())
-        {
+        if self.active_tab_path().as_deref() != Some(parent) && !self.focus_open_sheet(parent) {
             return Err(format!(
                 "The sheet's File field was not updated: {} could not be focused",
                 parent.display()
@@ -484,8 +479,7 @@ impl Signex {
         if self.active_tab_path().as_deref() == Some(parent) {
             return self.descend_through_sheet_symbol(symbol, filename);
         }
-        self.open_sheet_with_placement(path, None);
-        Task::none()
+        self.open_sheet_with_placement(path, None)
     }
 
     /// List `path` among the project's sheets (relative to the project folder)

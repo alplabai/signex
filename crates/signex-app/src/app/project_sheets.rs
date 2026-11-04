@@ -72,32 +72,16 @@ pub(crate) fn declared_pages(document_state: &DocumentState) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-/// The declared page paths of the project owning the active document, plus
+/// The declared page paths of the project owning `source`, plus
 /// [`assemble_project_sheets`] over them — rooted at that project's root sheet,
-/// or at the active document itself when it belongs to no project.
+/// or at `source` itself when it belongs to no project.
 ///
 /// The entry point every whole-project operation calls: the export scope, the
-/// cached canvas/ERC netlist, the ERC run, annotate and the duplicate-designator
-/// reset. Deriving the page list and the root here, once, is the point — each
-/// of those used to do it slightly differently and they disagreed (#406).
-pub(crate) fn assemble_active_project_sheets(
-    document_state: &DocumentState,
-) -> (Vec<PathBuf>, ProjectSheetSet) {
-    let Some(active_path) = document_state.active_path.as_deref() else {
-        let project = document_state.active_document_project();
-        return (
-            project_pages(project),
-            ProjectSheetSet {
-                fold: crate::app::state::project_case::fold_of(project),
-                ..ProjectSheetSet::empty()
-            },
-        );
-    };
-    assemble_project_sheets_for(document_state, active_path)
-}
-
-/// [`assemble_active_project_sheets`] for an explicit `source` document rather
-/// than the active tab (#852).
+/// cached canvas/ERC netlist and the ERC run (annotate, the duplicate reset and
+/// re-prefix read through a [`ProjectSheetPlan`] on a worker instead). Deriving
+/// the page list and the root here, once, is the point — each of those used to
+/// do it slightly differently and they disagreed (#406). Takes an explicit
+/// `source` document rather than the active tab (#852).
 pub(crate) fn assemble_project_sheets_for(
     document_state: &DocumentState,
     source: &Path,
