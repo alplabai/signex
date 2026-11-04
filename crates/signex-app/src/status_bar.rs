@@ -15,10 +15,10 @@ const SP: Spacing = Spacing::DEFAULT;
 pub const STATUS_BAR_HORIZONTAL_PADDING: f32 = SP.m;
 
 /// Height of the bar: the tallest row item is a button holding one `body`
-/// line (iced's default 1.3 relative line height) plus 1 px padding above
+/// line (iced's default relative line height, `LINE_HEIGHT`) plus 1 px padding above
 /// and below, inside the container's vertical `SP.xs` padding. A layout
 /// probe in `canvas_region` ties it to the laid-out bar.
-pub const STATUS_BAR_HEIGHT: f32 = TS.body * 1.3 + 2.0 + 2.0 * SP.xs;
+pub const STATUS_BAR_HEIGHT: f32 = TS.body * crate::styles::LINE_HEIGHT + 2.0 + 2.0 * SP.xs;
 
 /// Format a one-line breakdown of the active canvas selection.
 /// Returns `None` when the selection is empty (status bar omits the segment).
