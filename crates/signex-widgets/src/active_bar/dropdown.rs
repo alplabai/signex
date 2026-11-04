@@ -200,7 +200,7 @@ where
     let hover_c = crate::theme_ext::to_color(&tokens.hover);
     let accent = theme_ext::to_color(&tokens.accent);
 
-    let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(Length::Shrink);
+    let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(Length::Fit);
     for entry in entries {
         match entry {
             DropdownEntry::Header(label) => {
@@ -246,7 +246,7 @@ where
                 let mut row_w: Row<Element<'a, M>> = Row::new()
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
-                    .width(Length::Shrink);
+                    .width(Length::Fit);
                 // Leading icon column — fixed-width for alignment.
                 if let Some(handle) = icon {
                     // Tint only via `icon_style` (disabled rows); never always.
@@ -273,7 +273,7 @@ where
                 let mut right: Row<Element<'a, M>> = Row::new()
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
-                    .width(Length::Shrink);
+                    .width(Length::Fit);
                 if let Some(s) = shortcut {
                     right = right.push(text(s).size(11).color(muted).boxed());
                 }
@@ -328,7 +328,7 @@ where
     if let Some(w) = width_hint {
         panel = panel.width(Length::Fixed(w));
     } else {
-        panel = panel.width(Length::Shrink);
+        panel = panel.width(Length::Fit);
     }
     panel
         .style(move |_: &Theme| iced::widget::container::Style {
@@ -416,5 +416,16 @@ mod tests {
     fn disabled_icon_is_tinted_muted() {
         let muted = iced::Color::from_rgb(0.5, 0.5, 0.5);
         assert_eq!(icon_style(true, muted).color, Some(muted));
+    }
+
+    /// The fork's `Shrink` compresses contents to their minimum, which
+    /// collapsed menu rows to boxes without labels; the panel sizes to its
+    /// content with `Fit` (#2043).
+    #[test]
+    fn panel_without_a_width_hint_fits_its_content() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
+        let entries = vec![DropdownEntry::Item(DropdownItem::new("Place", ()))];
+        let panel = view(entries, &tokens, None);
+        assert_eq!(panel.as_widget().size().width, Length::Fit);
     }
 }
