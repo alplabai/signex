@@ -172,6 +172,10 @@ pub enum ActiveBarMsg {
     /// `index` (0..N). No-op if the index is out of range or the slot is
     /// empty. Source: shortcut buttons in the Filter dropdown.
     ApplyCustomFilter(usize),
+    /// `message` came from an overlay painted in the undocked window
+    /// `window`: it acts on the sheet that window shows, not on the main
+    /// window's (#1910).
+    ScopedToWindow(iced::window::Id, Box<ActiveBarMsg>),
 }
 
 /// Maximum number of user-defined custom filter presets exposed in the

@@ -40,6 +40,8 @@ mod browser;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
+#[cfg(test)]
+mod datasheet_open_tests;
 mod datasheet_save;
 mod deferred_close;
 mod document_options;

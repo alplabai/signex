@@ -160,7 +160,11 @@ fn app_in_selection(profile: &str, bits: u8) -> (Signex, CanvasSelection, Option
         ));
     }
     app.interaction_state.active_canvas_mut().selected = selected;
-    let (selection, project_key) = app.canvas_menu_inputs();
+    let (selection, project_key) = app.canvas_menu_inputs(
+        app.ui_state
+            .main_window_id
+            .expect("the app opens its main window"),
+    );
     (app, selection, project_key)
 }
 

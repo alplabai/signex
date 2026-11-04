@@ -60,6 +60,20 @@ pub(super) fn store_assets(
     Ok(asset_rel_paths(assets))
 }
 
+/// The row's name in advice lines: its MPN, else its internal part number.
+pub(super) fn part_name(row: &signex_library::ComponentRow) -> String {
+    let mpn = row.primary_mpn.mpn.trim();
+    if !mpn.is_empty() {
+        return mpn.to_string();
+    }
+    let pn = row.internal_pn.to_string();
+    if pn.trim().is_empty() {
+        "this component".to_string()
+    } else {
+        pn
+    }
+}
+
 impl Signex {
     /// Open the file dialog for document `index`; the result carries the
     /// document as it is now, so it finds it again if the list changes
@@ -90,6 +104,43 @@ impl Signex {
                 }))),
             })
         })
+    }
+
+    /// Open document `index` of the row in the browser or the PDF viewer.
+    /// The launch runs on a worker; a refusal comes back as advice.
+    pub(super) fn open_datasheet_document(
+        &mut self,
+        address: &EditorAddress,
+        index: usize,
+    ) -> Task<Message> {
+        let Some(state) = self.library.editors.get(address) else {
+            return Task::none();
+        };
+        let Some(doc) = state.row.documents().into_iter().nth(index) else {
+            return Task::none();
+        };
+        let part = part_name(&state.row);
+        if crate::library::editor::datasheet_picker::is_staged_only(state, &doc.source) {
+            crate::diagnostics::log_warning(format!(
+                "Save {part} first: its datasheet PDF is not stored in the library yet."
+            ));
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        }
+        let Some(location) =
+            crate::library::placed_part::location_of(&doc.source, &address.library_path)
+        else {
+            crate::diagnostics::log_warning(format!(
+                "Fix the datasheet of {part}: it needs an https:// or http:// link or a pinned PDF."
+            ));
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        };
+        crate::library::placed_part::opener::open_task(
+            location,
+            part,
+            self.library.datasheet_opener,
+        )
     }
 
     /// Refuse before anything is written when the library cannot hold the

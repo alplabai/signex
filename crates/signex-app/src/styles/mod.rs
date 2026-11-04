@@ -17,6 +17,9 @@ pub use buttons::{
 };
 pub use typography::{HAIRLINE, Spacing, TypeScale, chrome_px};
 
+/// Corner radius, in px, of buttons, badges and cards.
+pub const RADIUS: f32 = 3.0;
+
 #[cfg(test)]
 mod tests;
 
