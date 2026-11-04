@@ -23,6 +23,7 @@ mod prefs_async_tests;
 mod text_edit;
 mod tool;
 mod ui;
+pub(in crate::app) mod window_action;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
@@ -451,6 +452,7 @@ impl Signex {
                         .pcb_canvases
                         .insert(id, per_window_pcb);
                 }
+                self.refresh_window_panel_ctxs(None);
                 // Raise + focus the undocked tab window — like the
                 // detached modal, it opens at `Level::Normal` and can
                 // land behind the main window otherwise.

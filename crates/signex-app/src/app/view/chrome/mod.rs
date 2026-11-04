@@ -419,6 +419,7 @@ impl Signex {
 
     pub(super) fn view_dock_panel(
         &self,
+        window_id: iced::window::Id,
         pos: PanelPosition,
         has_panels: bool,
         collapsed: bool,
@@ -429,11 +430,11 @@ impl Signex {
             .dock
             .view_region(
                 pos,
-                &self.document_state.panel_ctx,
+                self.panel_ctx_for(window_id),
                 &self.library,
                 self.sheet_grid(),
             )
-            .map(Message::Dock);
+            .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
         let width = if !has_panels {
             0.0
         } else if collapsed {
@@ -452,6 +453,7 @@ impl Signex {
 
     pub(super) fn view_dock_panel_h(
         &self,
+        window_id: iced::window::Id,
         pos: PanelPosition,
         has_panels: bool,
         collapsed: bool,
@@ -462,11 +464,11 @@ impl Signex {
             .dock
             .view_region(
                 pos,
-                &self.document_state.panel_ctx,
+                self.panel_ctx_for(window_id),
                 &self.library,
                 self.sheet_grid(),
             )
-            .map(Message::Dock);
+            .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
         let height = if !has_panels {
             0.0
         } else if collapsed {

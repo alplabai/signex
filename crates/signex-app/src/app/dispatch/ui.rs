@@ -84,8 +84,8 @@ impl Signex {
                 self.ui_state.window_size = (w, h);
                 self.finish_update()
             }
-            UiMsg::DragEnd => {
-                let dropped = self.finish_components_row_drag();
+            UiMsg::DragEnd(released_in) => {
+                let dropped = self.finish_components_row_drag(released_in);
                 self.handle_layout_drag_finished();
                 Task::batch([dropped, self.finish_update()])
             }
@@ -490,6 +490,18 @@ impl Signex {
         if let Some(index) = retargeted_tab {
             self.document_state.active_tab = index;
         }
+        // The window's panel context goes into the main slot with its canvas,
+        // so the panels and the handlers see the sheet the window shows.
+        let fresh_ctx = !self
+            .document_state
+            .window_panel_ctx
+            .contains_key(&window_id);
+        let mut swapped_ctx = self
+            .document_state
+            .window_panel_ctx
+            .remove(&window_id)
+            .unwrap_or_else(|| self.new_window_panel_ctx(window_id));
+        std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
         let saved_active_path = self.document_state.active_path.take();
         let revision_before = self
             .document_state
@@ -503,7 +515,26 @@ impl Signex {
         // that a panicking handler may leave `self` in a partially
         // mutated state, which is fine as long as the swap itself
         // unwinds deterministically below.
-        let task_result = catch_unwind(AssertUnwindSafe(|| handler(self)));
+        let saved_acting = self.interaction_state.acting_window.replace(window_id);
+        let task_result = catch_unwind(AssertUnwindSafe(|| {
+            if fresh_ctx {
+                self.init_window_panel_ctx();
+            }
+            handler(self)
+        }));
+        self.interaction_state.acting_window = saved_acting;
+        std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
+        // The handler may have closed the window (Close Document): its
+        // context and canvas are then dropped, not put back, and the drafts
+        // typed in it move to the main context.
+        let window_alive = self.ui_state.windows.contains_key(&window_id);
+        if window_alive {
+            self.document_state
+                .window_panel_ctx
+                .insert(window_id, swapped_ctx);
+        } else {
+            self.document_state.panel_ctx.take_drafts_from(swapped_ctx);
+        }
 
         // Always-run cleanup (runs on success, error return, or panic
         // via resume_unwind below): swap the canvases back and restore
@@ -511,12 +542,16 @@ impl Signex {
         // main slot) returns to the HashMap; the main canvas (held in
         // `swapped_canvas`) returns to the main slot.
         std::mem::swap(&mut self.interaction_state.canvas, &mut swapped_canvas);
-        self.interaction_state
-            .canvases
-            .insert(window_id, swapped_canvas);
+        if window_alive {
+            self.interaction_state
+                .canvases
+                .insert(window_id, swapped_canvas);
+        }
         if let Some(mut pcb) = swapped_pcb {
             std::mem::swap(&mut self.interaction_state.pcb_canvas, &mut pcb);
-            self.interaction_state.pcb_canvases.insert(window_id, pcb);
+            if window_alive {
+                self.interaction_state.pcb_canvases.insert(window_id, pcb);
+            }
         }
         if retargeted_tab.is_some() {
             let tabs = &self.document_state.tabs;

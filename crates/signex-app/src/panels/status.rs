@@ -11,7 +11,7 @@ const SP: Spacing = Spacing::DEFAULT;
 ///
 /// The app flattens per-sheet ERC caches into this list so the panel can
 /// present one navigable table across the entire project.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ErcDiagnosticEntry {
     pub global_index: usize,
     pub sheet_name: String,
@@ -41,7 +41,7 @@ pub struct ErcDiagnosticEntry {
 }
 
 /// One stored net waiver, shown under the ERC results with a Restore button.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ErcWaiverEntry {
     pub rule_id: String,
     pub net: String,

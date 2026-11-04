@@ -175,7 +175,7 @@ fn dragging_a_floating_panel_previews_and_release_docks_there() {
         Some(PanelPosition::Right)
     );
 
-    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
     let dock = &app.document_state.dock;
     assert_eq!(dock.drop_preview, None);
     assert!(dock.floating.is_empty());
@@ -201,7 +201,7 @@ fn a_tab_dragged_out_of_a_region_previews_from_the_moment_it_floats() {
         Some(PanelPosition::Bottom)
     );
 
-    let _ = app.update(Message::Ui(UiMsg::DragEnd));
+    let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
     let dock = &app.document_state.dock;
     assert_eq!(dock.drop_preview, None);
     assert!(dock.panel_kinds(PanelPosition::Bottom).contains(&kind));
