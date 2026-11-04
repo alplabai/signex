@@ -15,10 +15,14 @@ look at `crates/**`. Review changes here by hand.
 
 ## Fonts
 
-Only one font file is compiled in: `iced_aw/font.ttf` (`ICED_AW_FONT_BYTES`), a Fontello
-build with six glyphs: `cancel`, `down-open`, `left-open`, `right-open`, `up-open`, `ok`.
-Those names match the Fontello Entypo set (CC BY 4.0, Daniel Bruce); the build carries no
-per-glyph licence record, so confirm the source set before shipping a release.
+Only one font file is compiled in: `iced_aw/font.ttf` (`ICED_AW_FONT_BYTES`), with six
+glyphs at U+E800..U+E805: `cancel`, `down-open`, `left-open`, `right-open`, `up-open`, `ok`.
+Signex draws them itself: `iced_aw/tools/build_font.py` builds the file from straight
+strokes, so the font is Signex's own work under Apache-2.0. It replaced the Fontello build
+upstream ships, whose glyph source (likely Entypo, CC BY 4.0) could not be confirmed (#2031).
+The codepoints, the family name `iced_aw` and the advance widths are unchanged, so the
+widgets need no change. Rebuild with `python vendor/iced_aw/tools/build_font.py`
+(needs `fonttools`) after editing a glyph.
 
 `iced_fonts` ships no font files: every `include_bytes!` in its `src/lib.rs` is behind a
 feature (`bootstrap`, `codicon`, `devicon`, `fontawesome`, `lucide`, `nerd`, `octicons`,
