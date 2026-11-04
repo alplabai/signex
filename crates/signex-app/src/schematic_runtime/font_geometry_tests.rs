@@ -309,3 +309,53 @@ fn the_default_face_fallback_equals_its_shaped_advance() {
     let shaped = crate::fonts::measure::shaped_advance_em(TEXT, "Iosevka").expect("measurer");
     assert!((shaped - TEXT.chars().count() as f32 * 0.5).abs() < 1e-4);
 }
+
+/// Release-build timing of hover and box select on a large sheet; run with
+/// `cargo test --release -p signex-app --lib -- --ignored text_box_perf --nocapture`.
+#[test]
+#[ignore]
+fn text_box_perf() {
+    crate::fonts::measure::install_hermetic();
+    let mut sheet = SchematicSheet::default();
+    for i in 0..3000 {
+        sheet.text_notes.push(TextNote {
+            uuid: uuid::Uuid::now_v7(),
+            text: format!("NOTE_{i}_VALUE_{}", i * 7),
+            position: Point::new((i % 60) as f64 * 40.0, (i / 60) as f64 * 8.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Top,
+            locked: false,
+        });
+        let mut l = label(LabelType::Net, None);
+        l.text = format!("NET_{i}_SIG");
+        l.position = Point::new((i % 60) as f64 * 40.0 + 20.0, (i / 60) as f64 * 8.0 + 4.0);
+        sheet.labels.push(l);
+    }
+    let designators = Default::default();
+    let hover = |sheet: &SchematicSheet| {
+        let t = std::time::Instant::now();
+        for i in 0..200 {
+            let _ = hit_test::hit_test(sheet, &designators, (i % 60) as f64 * 40.0 + 1.0, 4.0);
+        }
+        t.elapsed() / 200
+    };
+    let boxed = |sheet: &SchematicSheet| {
+        let t = std::time::Instant::now();
+        let rect = signex_types::schematic::Aabb::new(0.0, 0.0, 1200.0, 200.0);
+        let n = hit_test::hit_test_rect_mode(
+            sheet,
+            &designators,
+            &rect,
+            hit_test::SelectionMode::Touching,
+        )
+        .len();
+        (t.elapsed(), n)
+    };
+    let _ = hover(&sheet);
+    println!("hover per call (cold+warm): {:?}", hover(&sheet));
+    let _ = boxed(&sheet);
+    println!("box select 6000 items: {:?}", boxed(&sheet));
+}
