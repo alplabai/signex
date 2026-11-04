@@ -117,7 +117,10 @@ fn symbol_msg_is_view_only(msg: &SymbolEditorMsg) -> bool {
 /// Footprint editor answers to earlier async work. Dropping one strands the
 /// editor's slot for that work in flight. The symbol editor has none.
 fn footprint_msg_is_completion(msg: &FootprintEditorMsg) -> bool {
-    matches!(msg, FootprintEditorMsg::SketchSolved { .. })
+    matches!(
+        msg,
+        FootprintEditorMsg::SketchSolved { .. } | FootprintEditorMsg::RedundancyChecked { .. }
+    )
 }
 
 /// Footprint editor events that change no document state.
@@ -340,6 +343,24 @@ mod tests {
         assert!(
             app.primitive_edit_refusal(&msg).is_none(),
             "a completion must land, or the solve slot stays in flight"
+        );
+    }
+
+    #[test]
+    fn a_redundancy_answer_during_a_library_rename_is_not_refused() {
+        let app = app_with_library_rename();
+        let msg = LibraryMessage::PrimitiveEditorEvent {
+            path: "/w/a.snxlib/footprints/f.snxfpt".into(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::RedundancyChecked {
+                instance: uuid::Uuid::nil(),
+                generation: 1,
+                footprint_idx: 0,
+                report: Err("task panicked".to_string()),
+            }),
+        };
+        assert!(
+            app.primitive_edit_refusal(&msg).is_none(),
+            "a completion must land, or the redundancy slot stays in flight"
         );
     }
 
