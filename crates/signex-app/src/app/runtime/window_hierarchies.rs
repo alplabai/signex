@@ -175,15 +175,24 @@ impl Signex {
         if key(path) == key(&root) || self.hierarchy_describing(path).is_some() {
             return None;
         }
+        // No job known for the project: fail closed, as if still being read.
         let exhausted = if ds.navigator_job.wanted_root() == Some(root.as_path()) {
             ds.navigator_job.is_exhausted()
         } else {
-            ds.window_hierarchies.is_exhausted(&root)?
+            ds.window_hierarchies.is_exhausted(&root).unwrap_or(false)
         };
         Some(if exhausted {
-            "the sheet's project could not be read, so it is not known which placement this              is, and writing the shared reference could rename every placement of the sheet"
+            concat!(
+                "the sheet's project could not be read, so it is not known which ",
+                "placement this is, and writing the shared reference could rename ",
+                "every placement of the sheet"
+            )
         } else {
-            "the sheet's project is still being read to tell which placement this is, and              writing the shared reference could rename every placement of the sheet; try              again in a moment"
+            concat!(
+                "the sheet's project is still being read to tell which placement ",
+                "this is, and writing the shared reference could rename every ",
+                "placement of the sheet; try again in a moment"
+            )
         })
     }
 }

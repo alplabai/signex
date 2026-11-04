@@ -65,7 +65,11 @@ impl Signex {
         {
             let before = hits.len();
             hits.retain(|hit| hit.kind != signex_engine::FindKind::Designator);
-            if hits.len() != before {
+            // Once per sheet until the Find state resets, not per keystroke.
+            let first_time = path
+                .as_ref()
+                .is_some_and(|p| self.ui_state.find_replace.skips_reported.insert(p.clone()));
+            if hits.len() != before && first_time {
                 crate::diagnostics::log_warning(format!(
                     "Find/Replace skipped this sheet's designators: {why}."
                 ));

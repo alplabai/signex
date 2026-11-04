@@ -272,3 +272,20 @@ fn find_replace_leaves_the_designators_of_a_sheet_it_cannot_place() {
         "{kinds:?}"
     );
 }
+
+#[test]
+fn a_window_of_the_navigators_own_project_keeps_its_designators() {
+    let mut f = fixture_with(Opts {
+        entry_for_a: true,
+        ..Opts::default()
+    });
+    let top = f._dirs[1].path().join("top.snxsch");
+    f.app.open_or_focus_sheet_path(top);
+    f.app.refresh_panel_ctx();
+    f.app.settle_navigator();
+    f.app.refresh_window_designators();
+
+    let id = f.app.document_state.engines[&f.child].document().symbols[0].uuid;
+    let canvas = &f.app.interaction_state.canvases[&f.window];
+    assert_eq!(canvas.designators.get(&id).map(String::as_str), Some("R7"));
+}

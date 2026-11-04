@@ -109,11 +109,12 @@ impl WindowHierarchies {
     }
 
     /// Whether the hierarchy for `root` is the current one and nothing is
-    /// rebuilding it.
+    /// rebuilding it. An entry no window wants (kept only while the Navigator
+    /// takes the project over) may be out of date, so it is never settled.
     pub fn is_settled(&self, root: &Path) -> bool {
-        self.entries
-            .get(root)
-            .is_some_and(|entry| entry.job.is_settled(entry.applied_fingerprint()))
+        self.entries.get(root).is_some_and(|entry| {
+            entry.job.wanted_root().is_some() && entry.job.is_settled(entry.applied_fingerprint())
+        })
     }
 
     /// Forget a running assembly, for tests that run the work inline.
@@ -122,5 +123,61 @@ impl WindowHierarchies {
         self.entries
             .values_mut()
             .for_each(|e| e.job.abandon_running());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::state::scope::CaseFold;
+
+    fn request(root: &Path, fingerprint: &str) -> NavigatorRequest {
+        NavigatorRequest {
+            fingerprint: fingerprint.into(),
+            root: root.to_path_buf(),
+            pages: Vec::new(),
+            fold: CaseFold::host_default(),
+        }
+    }
+
+    fn assembly(fingerprint: &str) -> Result<Box<NavigatorAssembly>, String> {
+        Ok(Box::new(NavigatorAssembly {
+            fingerprint: fingerprint.into(),
+            hierarchy: SheetHierarchy::default(),
+            unreadable: Vec::new(),
+        }))
+    }
+
+    #[test]
+    fn a_late_answer_of_a_dropped_job_does_not_match_the_job_made_after_it() {
+        let root = PathBuf::from("r.snxsch");
+        let mut hierarchies = WindowHierarchies::default();
+        hierarchies.want(vec![request(&root, "a")], &[]);
+        let (first, _) = hierarchies.begin_all().remove(0);
+        hierarchies.want(Vec::new(), &[]);
+        hierarchies.want(vec![request(&root, "a")], &[]);
+        let (second, _) = hierarchies.begin_all().remove(0);
+        assert_ne!(first, second);
+
+        assert!(!hierarchies.finish(&root, first, assembly("a")));
+        assert!(hierarchies.hierarchy_of(&root).is_none());
+        assert!(
+            hierarchies.finish(&root, second, assembly("a")),
+            "the new job's run survived the late answer"
+        );
+    }
+
+    #[test]
+    fn a_hierarchy_the_navigator_took_over_is_kept_but_not_settled() {
+        let root = PathBuf::from("r.snxsch");
+        let mut hierarchies = WindowHierarchies::default();
+        hierarchies.want(vec![request(&root, "a")], &[]);
+        let (generation, _) = hierarchies.begin_all().remove(0);
+        assert!(hierarchies.finish(&root, generation, assembly("a")));
+        assert!(hierarchies.is_settled(&root));
+
+        hierarchies.want(Vec::new(), std::slice::from_ref(&root));
+        assert!(hierarchies.hierarchy_of(&root).is_some(), "kept");
+        assert!(!hierarchies.is_settled(&root), "but possibly out of date");
     }
 }
