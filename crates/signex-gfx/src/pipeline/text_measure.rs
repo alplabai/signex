@@ -245,6 +245,15 @@ mod tests {
         assert!(max_x(&large) > 0.0 && max_x(&large) <= large.size_px[0] + 1.0);
     }
 
+    /// Sheet text is never wrapped at the viewport: one line stays one line
+    /// at any size, which the GPU pipeline relies on (`NO_WRAP_PX`).
+    #[test]
+    fn long_text_at_a_huge_size_stays_on_one_line() {
+        let mut m = measurer();
+        let o = m.outlines("A long note that must not wrap", "Iosevka", 2000.0, 1.2);
+        assert!((o.size_px[1] - 2000.0 * 1.2).abs() < 1.0, "{:?}", o.size_px);
+    }
+
     #[test]
     fn a_proportional_face_does_not() {
         let mut m = measurer();

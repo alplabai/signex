@@ -136,6 +136,12 @@ impl SceneSurface for PcbSurface {
     const MIN_RADIUS_PX: f32 = crate::renderer_scene_canvas::MIN_RADIUS_PX;
 }
 
+/// `S`'s text limits in device pixels at display scale `dpi`; what
+/// `prepare` hands the glyph pipeline.
+fn text_policy_device<S: SceneSurface>(dpi: f32) -> TextSizePolicy {
+    TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi)
+}
+
 /// The schematic editor's scene surface.
 ///
 /// Every value comes from the constants the schematic CPU replay already uses
@@ -390,7 +396,7 @@ impl<S: SceneSurface> shader::Primitive for ScenePrimitive<S> {
         // rotate (`TextItem::is_axis_aligned`). The PCB scene carries no text; the
         // schematic's rotated items get their CPU pass from the overlay canvas
         // in `crate::canvas::gpu_mount`.
-        let text_size = TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi);
+        let text_size = text_policy_device::<S>(dpi);
         let ScenePipeline {
             line,
             circle,
@@ -781,8 +787,7 @@ mod tests {
                 "cpu {scale}"
             );
             for dpi in [1.0_f32, 2.0] {
-                let p = SchematicSurface::TEXT_SIZE;
-                let policy = TextSizePolicy::new(p.min_px * dpi, p.max_px * dpi);
+                let policy = text_policy_device::<SchematicSurface>(dpi);
                 let gpu = text_px_in(1.27, scale * dpi, policy, None);
                 assert!((gpu - expected * dpi).abs() < 1e-3, "gpu {scale}@{dpi}");
             }
