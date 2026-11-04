@@ -331,6 +331,15 @@ pub(crate) fn export_metadata(
     active_engine: &signex_engine::Engine,
     owning_project: Option<&crate::app::state::LoadedProject>,
 ) -> ProjectMetadata {
+    export_metadata_with(owning_project, &active_engine.document().title_block)
+}
+
+/// [`export_metadata`] for a `title_block` that is not the engine's own: the
+/// canvas lays a field's uncommitted draft over it (#2027).
+pub(crate) fn export_metadata_with(
+    owning_project: Option<&crate::app::state::LoadedProject>,
+    title_block: &std::collections::HashMap<String, String>,
+) -> ProjectMetadata {
     let mut base = ProjectMetadata::default();
     let active_variant = owning_project
         .and_then(|p| p.data.active_variant.clone())
@@ -348,7 +357,7 @@ pub(crate) fn export_metadata(
         base.custom_fields
             .insert("project_name".to_string(), project.data.name.clone());
     }
-    base.for_sheet(&active_engine.document().title_block)
+    base.for_sheet(title_block)
 }
 
 /// The export's page set + metadata + project netlist, alongside the stitch

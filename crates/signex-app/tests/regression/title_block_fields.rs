@@ -185,7 +185,46 @@ fn the_sign_off_fields_appear_in_the_drawn_title_block() {
         "B. Reviewer",
         "Approved",
         "C. Lead",
+        "File",
+        "power.snxsch",
     ] {
         assert!(drawn.contains(&wanted), "{wanted} not in {drawn:?}");
     }
+}
+
+/// #2027 - a title-block field previews on the canvas while it is typed; the
+/// document is untouched until Enter commits it.
+#[test]
+fn a_typed_draft_previews_on_the_canvas_before_it_commits() {
+    let (mut app, _t) = Signex::new();
+    let sheet = open_sheet(&mut app, "power");
+    let drawn = |app: &Signex, wanted: &str| {
+        app.interaction_state
+            .active_canvas()
+            .sheet_frame
+            .iter()
+            .any(|p| matches!(p, signex_output::template::FramePrimitive::Text { text, .. } if text == wanted))
+    };
+
+    type_field(&mut app, TitleBlockField::DrawnBy, "A. Eng");
+    assert!(drawn(&app, "A. Eng"), "the draft shows while typing");
+    type_field(&mut app, TitleBlockField::DrawnBy, " A. Engineer ");
+    assert!(drawn(&app, "A. Engineer"), "the preview follows each key");
+    assert!(!drawn(&app, "A. Eng"));
+    assert_eq!(stored(&app, &sheet, "drawn_by"), None, "no document write");
+    assert!(
+        !app.document_state.is_document_dirty(&sheet),
+        "typing does not dirty the sheet"
+    );
+
+    panel(
+        &mut app,
+        PanelMsg::CommitTitleBlockField(TitleBlockField::DrawnBy),
+    );
+    assert!(drawn(&app, "A. Engineer"));
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert!(
+        !drawn(&app, "A. Engineer"),
+        "undo removes it from the sheet"
+    );
 }

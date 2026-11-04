@@ -482,6 +482,7 @@ impl Signex {
                         text: text.clone(),
                     });
                 }
+                self.refresh_canvas_sheet_frame();
             }
             crate::panels::PanelMsg::CommitTitleBlockField(field) => {
                 self.commit_title_block_field(*field);

@@ -489,6 +489,8 @@ mod mirror_axis_entry_points;
 mod rotate_mirror_selection;
 
 // #1080 — the sheet's title block is edited from the Properties panel.
+#[path = "regression/document_options_persist.rs"]
+mod document_options_persist;
 #[path = "regression/title_block_fields.rs"]
 mod title_block_fields;
 
