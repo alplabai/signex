@@ -77,11 +77,28 @@ pub fn run_solve(request: SketchSolveRequest) -> FootprintEditorMsg {
     run_solve_with(request, solve_sketch)
 }
 
+/// [`run_solve`] for the UI thread: the redundancy pass is left out of the
+/// solve and owed to [`super::sketch_redundancy_task`] (#1685).
+pub fn run_solve_inline(request: SketchSolveRequest) -> FootprintEditorMsg {
+    run_solve_with(request, |sketch, solver| {
+        solve_resolved(sketch, |resolved| {
+            solver.solve_deferring_redundancy(sketch, resolved)
+        })
+    })
+}
+
 /// The real solve: resolve the parameters, then run the solver.
 fn solve_sketch(sketch: &SketchData, solver: &Solver) -> SolveOutcome {
+    solve_resolved(sketch, |resolved| solver.solve(sketch, resolved))
+}
+
+fn solve_resolved(
+    sketch: &SketchData,
+    solve: impl FnOnce(&HashMap<String, f64>) -> Result<FullSolveOutput, SolveError>,
+) -> SolveOutcome {
     match parameter::resolve(&sketch.parameters) {
         Err(e) => SolveOutcome::ResolveFailed(e),
-        Ok(resolved) => match solver.solve(sketch, &resolved) {
+        Ok(resolved) => match solve(&resolved) {
             Ok(out) => SolveOutcome::Solved {
                 resolved,
                 out: Box::new(out),
@@ -214,6 +231,11 @@ pub struct SketchSolveSlot {
     /// The next solve re-solves a sketch a rejection just put back, so it
     /// must not wipe the rejection's warning.
     after_revert: bool,
+    /// The last solve left the redundancy pass out (#1685); it is waiting
+    /// for [`super::sketch_redundancy_task::dispatch_redundancy`].
+    redundancy_owed: bool,
+    /// A redundancy pass is running off-thread. At most one at a time.
+    redundancy_running: bool,
 }
 
 impl Default for SketchSolveSlot {
@@ -225,6 +247,8 @@ impl Default for SketchSolveSlot {
             wanted: false,
             unsolved: None,
             after_revert: false,
+            redundancy_owed: false,
+            redundancy_running: false,
         }
     }
 }
@@ -236,6 +260,31 @@ impl SketchSolveSlot {
 
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+
+    pub fn is_redundancy_owed(&self) -> bool {
+        self.redundancy_owed
+    }
+
+    pub fn is_redundancy_running(&self) -> bool {
+        self.redundancy_running
+    }
+
+    /// A solve baked; it owes the pass when it left it out.
+    pub(crate) fn set_redundancy_owed(&mut self, owed: bool) {
+        self.redundancy_owed = owed;
+    }
+
+    pub(crate) fn clear_redundancy_owed(&mut self) {
+        self.redundancy_owed = false;
+    }
+
+    pub(crate) fn start_redundancy(&mut self) {
+        self.redundancy_running = true;
+    }
+
+    pub(crate) fn finish_redundancy(&mut self) {
+        self.redundancy_running = false;
     }
 
     pub fn is_in_flight(&self) -> bool {

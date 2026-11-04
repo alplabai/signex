@@ -37,6 +37,7 @@ mod finite_toml;
 mod load_repair;
 mod pcb_footprints;
 mod pcb_rows;
+mod pcb_uuid_repair;
 mod sch_rows;
 mod tsv;
 mod units;
@@ -67,6 +68,8 @@ mod non_finite_tests;
 mod object_lock_tests;
 #[cfg(test)]
 mod pcb_footprints_tests;
+#[cfg(test)]
+mod pcb_uuid_repair_tests;
 #[cfg(test)]
 mod sheet_frame_tests;
 #[cfg(test)]
@@ -966,7 +969,7 @@ impl SnxPcb {
             None => (Vec::new(), UnknownFields::default()),
         };
 
-        let board = PcbBoard {
+        let mut board = PcbBoard {
             uuid: raw.pcb_id,
             version: raw.version,
             generator: raw.generator,
@@ -989,8 +992,10 @@ impl SnxPcb {
                 extras_root: extras.unknown,
                 newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
                     .then(|| raw.format.clone()),
+                load_repairs: Vec::new(),
             },
         };
+        board.unknown.load_repairs = pcb_uuid_repair::repair_duplicate_uuids(&mut board);
 
         Ok(SnxPcb {
             format: raw.format,

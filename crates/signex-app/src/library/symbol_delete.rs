@@ -11,6 +11,7 @@ use signex_library::PrimitiveRef;
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
+use super::closed_sheets::ClosedSheetScan;
 use super::drift::split_lib_id;
 use super::state::OpenLibrary;
 use crate::panels::SymbolDeleteWarning;
@@ -26,9 +27,15 @@ pub struct PendingSymbolDelete {
     /// The editor's `history_generation` when the warning was raised; any
     /// edit, undo or redo since then makes the warning stale.
     pub history: u64,
-    /// How many rows and open sheets the warning named.
+    /// Names the scan this warning started; a result carrying another serial
+    /// belongs to a warning that was replaced or closed and is dropped.
+    pub serial: u64,
+    /// How many rows, open sheets and closed sheets the warning named.
     pub rows: usize,
     pub sheets: usize,
+    pub closed: usize,
+    /// Warning lines before the closed-sheet scan added its own.
+    pub base_lines: usize,
     /// Tables (or whole table lists) that could not be read.
     pub unchecked: usize,
     pub warning: SymbolDeleteWarning,
@@ -45,6 +52,33 @@ impl PendingSymbolDelete {
                 .symbols
                 .get(self.warning.idx)
                 .is_some_and(|s| s.uuid == self.symbol)
+    }
+
+    /// Fold the closed-sheet scan into the warning, together with the
+    /// in-memory usage read again now: rows and open sheets may have changed
+    /// while the scan ran. Nothing found and nothing unchecked leaves
+    /// `warning.lines` empty: the delete is then safe to run.
+    pub fn apply_closed_scan(&mut self, usage: SymbolUsage, scan: &ClosedSheetScan) {
+        self.rows = usage.rows;
+        self.sheets = usage.sheets;
+        self.base_lines = usage.lines.len();
+        self.warning.lines = usage.lines;
+        if !scan.placed.is_empty() {
+            self.warning.lines.push(format!(
+                "Closed sheets with placed parts: {}",
+                capped(&scan.placed)
+            ));
+        }
+        if !scan.unreadable.is_empty() {
+            self.warning.lines.push(format!(
+                "Closed sheets not checked: {}",
+                capped(&scan.unreadable)
+            ));
+        }
+        self.closed = scan.placed.len();
+        self.unchecked = usage.unchecked + scan.unreadable.len();
+        self.warning.only_unknown = self.rows == 0 && self.sheets == 0 && self.closed == 0;
+        self.warning.checking = false;
     }
 }
 
@@ -119,7 +153,7 @@ pub fn usage_lines<'a>(
 
 /// One entry per open sheet that has parts whose `lib_id` satisfies
 /// `is_symbol`: the sheet file and the references placed from it.
-fn placed_on_sheets<'a>(
+pub(super) fn placed_on_sheets<'a>(
     sheets: impl Iterator<Item = (&'a Path, &'a SchematicSheet)>,
     is_symbol: impl Fn(&str) -> bool,
 ) -> Vec<String> {
@@ -280,13 +314,17 @@ mod tests {
             path: editor.path.clone(),
             symbol: editor.file.symbols[0].uuid,
             history: editor.history_generation,
+            serial: 1,
             rows: 1,
             sheets: 0,
+            closed: 0,
+            base_lines: 0,
             unchecked: 0,
             warning: SymbolDeleteWarning {
                 idx: 0,
                 name: "A".into(),
                 only_unknown: false,
+                checking: false,
                 lines: Vec::new(),
             },
         }
@@ -375,5 +413,48 @@ mod tests {
             false,
         );
         assert_eq!(outside.sheets, 1);
+    }
+
+    #[test]
+    fn a_closed_scan_replaces_the_checking_line_and_counts_unchecked_sheets() {
+        let mut pending = pending_for(&editor());
+        pending.rows = 0;
+        pending.base_lines = 0;
+        pending.warning.only_unknown = true;
+        pending.warning.checking = true;
+        pending.warning.lines = vec!["Checking closed sheets of the open projects…".into()];
+        assert_eq!(
+            pending.warning.heading(),
+            "Checking whether symbol \"A\" is in use"
+        );
+
+        pending.apply_closed_scan(
+            SymbolUsage::default(),
+            &ClosedSheetScan {
+                unreadable: vec!["x.snxsch could not be read".into()],
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(pending.unchecked, 1);
+        assert_eq!(
+            pending.warning.lines,
+            ["Closed sheets not checked: x.snxsch could not be read"]
+        );
+        assert!(pending.warning.only_unknown && !pending.warning.checking);
+        assert_eq!(
+            pending.warning.heading(),
+            "Symbol \"A\" may still be in use"
+        );
+
+        pending.apply_closed_scan(
+            SymbolUsage::default(),
+            &ClosedSheetScan {
+                placed: vec!["y.snxsch: U1".into()],
+                ..Default::default()
+            },
+        );
+        assert!(!pending.warning.only_unknown);
+        assert_eq!(pending.warning.heading(), "Symbol \"A\" is still in use");
     }
 }

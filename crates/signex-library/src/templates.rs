@@ -84,6 +84,17 @@ impl ParameterTemplate {
             .find(|s| s.name == name)
     }
 
+    /// The slots, required first, that `have` holds no value for yet.
+    pub fn missing_slots<'a>(
+        &'a self,
+        have: &'a crate::param::ParamMap,
+    ) -> impl Iterator<Item = &'a ParamSlot> {
+        self.required_params
+            .iter()
+            .chain(self.optional_params.iter())
+            .filter(|s| !have.contains_key(&s.name))
+    }
+
     pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
         toml::from_str(text)
     }
@@ -298,6 +309,19 @@ fn check_slot(slot: &ParamSlot, v: &ParamValue, out: &mut Vec<TemplateViolation>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_slots_skip_the_slots_a_row_holds() {
+        let r = TemplateRegistry::new_with_builtins();
+        let t = r.resolve(Uuid::nil(), "resistor").expect("resistor");
+        let mut have = crate::param::ParamMap::new();
+        let all: Vec<_> = t.missing_slots(&have).map(|s| s.name.clone()).collect();
+        assert_eq!(all.len(), t.required_params.len() + t.optional_params.len());
+        let required: Vec<_> = t.required_params.iter().map(|s| s.name.clone()).collect();
+        assert_eq!(all[..required.len()], required[..]);
+        have.insert("value".into(), crate::param::ParamValue::Number(1.0));
+        assert!(t.missing_slots(&have).all(|s| s.name != "value"));
+    }
 
     #[test]
     fn builtin_registry_resolves_resistor() {

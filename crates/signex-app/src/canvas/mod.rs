@@ -108,6 +108,13 @@ pub struct CanvasSlot {
     pub overlay_cache: canvas::Cache,
     /// Camera state when content_cache was last built — used to compute offset delta.
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>, // (offset_x, offset_y, scale)
+    /// Camera `bg_cache` was last built at; `draw_background` drops the cache
+    /// when it differs, so the paper and grid follow every camera move whatever
+    /// event announced it (#1993).
+    pub bg_cache_camera: std::cell::Cell<Option<(f32, f32, f32)>>,
+    /// Test-only: how often the background was tessellated.
+    #[cfg(test)]
+    pub bg_tessellations: std::cell::Cell<u32>,
     /// Camera-independent content scene: pan frames replay it through the live
     /// transform instead of rebuilding snapshot + scene (#171 item 6).
     /// Dropped with `content_cache` by [`Self::clear_content_cache`].
@@ -260,6 +267,9 @@ impl CanvasSlot {
             content_cache: canvas::Cache::default(),
             overlay_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            bg_cache_camera: std::cell::Cell::new(None),
+            #[cfg(test)]
+            bg_tessellations: std::cell::Cell::new(0),
             content_scene: std::cell::RefCell::new(Default::default()),
             drag_layers: std::cell::RefCell::new(Default::default()),
             published_drag: Default::default(),
@@ -937,6 +947,8 @@ mod active_bar_hit;
 mod gpu_mount_drag_tests;
 #[cfg(test)]
 mod gpu_mount_tests;
+#[cfg(test)]
+mod grid_order_tests;
 #[cfg(test)]
 mod rotated_label_pixel_tests;
 #[cfg(test)]

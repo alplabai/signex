@@ -546,8 +546,9 @@ impl Signex {
         self.note_sheet_focused();
     }
 
-    pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+    pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, mut board: PcbBoard) {
         report_unusable_zone_holes(&path, &board);
+        let repaired = super::sheet_repairs::take_and_log_board(&path, &mut board);
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
@@ -556,6 +557,7 @@ impl Signex {
         // autosave back and let `update` start the check, as for a sheet.
         self.document_state.autosave.begin_check(&path);
         self.document_state.recovery_check_due.push(path.clone());
+        let dirty_path = path.clone();
         self.document_state.tabs.push(TabInfo {
             title,
             path,
@@ -565,6 +567,10 @@ impl Signex {
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
+        if repaired {
+            // The file on disk still holds what was repaired (#1886).
+            self.document_state.mark_document_dirty(&dirty_path);
+        }
     }
 
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {

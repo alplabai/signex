@@ -331,7 +331,7 @@ pub fn form_check_row_shortcut<'a>(
                     .spacing(SP.s),
                 Space::new().width(Length::Fill),
                 text(shortcut_owned)
-                    .size(9)
+                    .size(TS.caption)
                     .color(label_c)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
@@ -462,7 +462,7 @@ pub fn canvas_font_popup<'a>(
             .spacing(SP.l)
             .align_y(iced::Alignment::Center),
             text("Applies immediately to canvas text rendering.")
-                .size(9)
+                .size(TS.caption)
                 .color(label_c),
         ]
         .spacing(6),

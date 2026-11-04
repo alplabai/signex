@@ -56,6 +56,7 @@ impl Default for LibraryState {
             datasheet_opener: crate::library::placed_part::opener::open,
             drift: Default::default(),
             pending_symbol_delete: None,
+            symbol_delete_serial: 0,
             symbol_choice_requests: Default::default(),
             set: LibrarySet::new(),
             open_libraries: Vec::new(),
@@ -889,6 +890,19 @@ impl OpenLibrary {
     /// Total number of rows across every cached table.
     pub fn total_rows(&self) -> usize {
         self.tables.values().map(|v| v.len()).sum()
+    }
+
+    /// The Library panel's expanded tree: each table (by name, empty ones
+    /// included) with its rows in stored order. Read from the cached
+    /// tables; no IO (#1895).
+    pub fn panel_tables(&self) -> Vec<(&str, &[ComponentRow])> {
+        let mut tables: Vec<(&str, &[ComponentRow])> = self
+            .tables
+            .iter()
+            .map(|(name, rows)| (name.as_str(), rows.as_slice()))
+            .collect();
+        tables.sort_by(|a, b| a.0.cmp(b.0));
+        tables
     }
 }
 

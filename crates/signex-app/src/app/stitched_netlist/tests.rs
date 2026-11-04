@@ -68,3 +68,25 @@ fn an_unparsable_root_sheet_says_so_and_names_the_file_first() {
     );
     assert!(line.ends_with(&format!("'{}'", root.display())), "{line}");
 }
+
+fn key_of(root: &str) -> ProjectKey {
+    ProjectKey {
+        connectivity: 0,
+        pages: Vec::new(),
+        root: PathBuf::from(root),
+        fold: CaseFold::default(),
+        classes: Vec::new(),
+    }
+}
+
+#[test]
+fn a_slot_nobody_holds_any_more_is_dropped_from_the_share() {
+    let mut share = StitchShare::default();
+    let gone = share.claim(ProjectId::test_id(1), &key_of("a.snxsch"));
+    let kept = share.claim(ProjectId::test_id(2), &key_of("b.snxsch"));
+    drop(gone);
+    let _ = share.claim(ProjectId::test_id(3), &key_of("c.snxsch"));
+    assert_eq!(share.slots.len(), 2, "the closed project's slot is pruned");
+    assert!(share.slots.contains_key(&ProjectId::test_id(2)));
+    drop(kept);
+}

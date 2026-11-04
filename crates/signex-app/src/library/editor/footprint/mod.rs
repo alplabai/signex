@@ -34,6 +34,9 @@ pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;
 pub mod sketch_mode;
+pub mod sketch_redundancy_task;
+#[cfg(test)]
+mod sketch_redundancy_task_tests;
 pub mod sketch_solve_task;
 #[cfg(test)]
 mod sketch_solve_task_tests;
