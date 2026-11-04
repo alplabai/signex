@@ -8,7 +8,7 @@
 use signex_types::quantity::{MantissaError, SiPrefix, Unit, quantity_from_parts};
 
 use crate::param::ParamValue;
-use crate::templates::{ParamSlot, TemplateViolation, slot_violations};
+use crate::templates::{ParamKind, ParamSlot, TemplateViolation, slot_violations};
 
 /// The three parts an editor shows for a stored measurement.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,6 +86,24 @@ pub fn slot_unit(slot: &ParamSlot) -> Option<Unit> {
     slot.unit
         .as_deref()
         .and_then(|u| Unit::from_alias(u.trim()))
+}
+
+/// The value a freshly added row for `slot` starts with: the slot's own
+/// kind, and for a measurement its unit. Zero and empty are placeholders;
+/// the editor opens the number field empty so the first entry decides.
+pub fn blank_slot_value(slot: &ParamSlot) -> ParamValue {
+    match slot.kind {
+        ParamKind::Text => ParamValue::Text(String::new()),
+        ParamKind::Number => ParamValue::Number(0.0),
+        ParamKind::Bool => ParamValue::Bool(false),
+        ParamKind::Measurement => ParamValue::Measurement {
+            value: 0.0,
+            unit: match slot_unit(slot) {
+                Some(u) => u.token().to_string(),
+                None => slot.unit.clone().unwrap_or_default(),
+            },
+        },
+    }
 }
 
 /// Why `value` does not suit `slot` (zero, negative or wrong unit), in the

@@ -640,6 +640,11 @@ pub enum BrowserEditMsg {
     },
     /// Append a fresh blank parameter row.
     AddParam,
+    /// Add a row for the class template's slot `name`, in the slot's kind
+    /// and unit.
+    AddSlotParam {
+        name: String,
+    },
     /// Drop the parameter row at `key`.
     DeleteParam {
         key: String,
