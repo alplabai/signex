@@ -83,8 +83,16 @@ ignore = [
 ]
 
 [sources]
-# Only crates.io and the official rust-lang git registry are allowed.
+# Only crates.io and the official rust-lang git registry are allowed, plus the
+# git sources the iced 0.15.0-dev line needs (#2017): our own fork
+# (alplabai/iced, pinned by tag in the root Cargo.toml) and the git
+# dependencies that fork itself pins (cosmic-text, cryoglyph, winit).
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+allow-git = [
+    "https://github.com/alplabai/iced",
+    "https://github.com/hecrj/cosmic-text",
+    "https://github.com/iced-rs/cryoglyph",
+    "https://github.com/iced-rs/winit",
+]
