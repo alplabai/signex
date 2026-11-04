@@ -15,6 +15,21 @@
 # release carries it is known only when it ships. Version titles
 # ("vX.Y.Z — Name") remain only on shipped (closed) milestones.
 #
+# Naming convention:
+#   - Title = plan name only: Title Case, unique, no version, no date.
+#     Sub-plans are named by their own content; prefix "<Parent>: " only
+#     when the name alone is ambiguous (e.g. "Router: Walkaround").
+#   - Add a new milestone to docs/ROADMAP.md first (same exact name), then
+#     here, in the same PR.
+#   - description = one user-facing line of what it delivers; a gate's
+#     starts with "Gate:" (applies to new entries).
+#   - Rename = change the title and append the old one to `aliases`; never
+#     edit on GitHub by hand.
+#   - No due dates: milestones are scope, not schedule.
+#   - Shipping: when the last issue closes and the work is in a release, set
+#     `state: closed` and end the description with "Shipped in YY.MM.MICRO."
+#     The title keeps the plan name; milestones closed before 2026-11 keep
+#     their version titles as history.#
 # Fields:
 #   title       — must match the roadmap exactly: the plan name for open
 #                 and planned milestones; "vX.Y.Z — Name" for shipped ones

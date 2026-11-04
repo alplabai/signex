@@ -759,3 +759,21 @@ Planned for a **small team**: 2–3 engineers up to the Community Preview, scali
 - **Quarterly review**, and reconcile against `CHANGELOG.md` + `git tag`
   every time. If this document and the tags disagree, the tags are right
   and this document is broken — fix it the same day and add a line to §9.
+
+### Milestone convention
+
+- **Title = plan name only:** Title Case, unique, no version number, no date.
+  Sub-plans are named by their own content; prefix "<Parent>: " only when
+  the name alone would be ambiguous (e.g. "Router: Walkaround").
+- **Roadmap first:** a new milestone is added here (row or heading with the
+  exact same name), then to `.github/milestones.yml` in the same PR.
+- **Description:** one user-facing line of what it delivers; a gate's starts
+  with "Gate:" (applies to new milestones).
+- **Rename** = change the title and append the old title to `aliases`; never
+  edit on GitHub by hand.
+- **No due dates:** milestones are scope, not schedule; the CalVer version
+  records when it shipped.
+- **Shipping:** when its last issue closes and the work is in a release, set
+  `state: closed` and end the description with "Shipped in YY.MM.MICRO." The
+  title keeps the plan name; milestones closed before 2026-11 keep their
+  version titles as history.
