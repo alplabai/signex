@@ -90,7 +90,8 @@ pub fn slot_unit(slot: &ParamSlot) -> Option<Unit> {
 
 /// The value a freshly added row for `slot` starts with: the slot's own
 /// kind, and for a measurement its unit. Zero and empty are placeholders;
-/// the editor opens the number field empty so the first entry decides.
+/// the editor opens a number field empty so the first entry decides. A
+/// boolean starts `false`, a deliberate default (it has no empty state).
 pub fn blank_slot_value(slot: &ParamSlot) -> ParamValue {
     match slot.kind {
         ParamKind::Text => ParamValue::Text(String::new()),

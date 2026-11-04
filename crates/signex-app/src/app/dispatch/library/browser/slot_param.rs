@@ -30,3 +30,24 @@ pub(super) fn add_slot_param(
     modal.draft.parameters.insert(name.to_string(), value);
     modal.error = None;
 }
+
+/// Why a numeric template slot (a number, or a measurement whose unit is
+/// not a known one) refuses `buf`: it must read as a finite number, so an
+/// empty or non-numeric entry never lands as text. `None` when it fits or
+/// the slot is not numeric.
+pub(super) fn numeric_slot_refusal(
+    template: Option<&ParameterTemplate>,
+    key: &str,
+    buf: &str,
+) -> Option<String> {
+    let slot = template.and_then(|t| t.slot(key))?;
+    if !matches!(slot.kind, ParamKind::Measurement | ParamKind::Number) {
+        return None;
+    }
+    if signex_library::slot_unit(slot).is_some() && slot.kind == ParamKind::Measurement {
+        return None; // the slot's own measurement rules apply
+    }
+    signex_types::numeric::parse_finite_f64(buf)
+        .is_err()
+        .then(|| "a finite number is required".to_string())
+}

@@ -433,6 +433,82 @@ fn saving_a_slot_row_left_empty_is_refused() {
 }
 
 #[test]
+fn saving_a_number_slot_row_left_empty_or_non_numeric_is_refused() {
+    for typed in [None, Some("abc")] {
+        let (mut app, root, row_id) = app_with_browser();
+        with_slot_template(&mut app, &root);
+        open_modal(&mut app, &root, row_id);
+        add_slot(&mut app, &root, "count");
+        if let Some(v) = typed {
+            let _ = app.update(edit(
+                &root,
+                BrowserEditMsg::SetParamValue {
+                    key: "count".into(),
+                    value: v.into(),
+                },
+            ));
+        }
+        let task = app.update(edit(&root, BrowserEditMsg::Save));
+        run_write(&mut app, task);
+        let modal = app.library.library_browsers[&root]
+            .edit_modal
+            .as_ref()
+            .expect("modal stays open");
+        assert!(modal.error.as_deref().is_some_and(|e| e.contains("count")));
+        assert!(stored(&app, &root, row_id).parameters.is_empty());
+    }
+}
+
+#[test]
+fn a_number_slot_row_takes_a_typed_number() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "count");
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamValue {
+            key: "count".into(),
+            value: "4".into(),
+        },
+    ));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+    drop(app.land_pending_refresh(&root));
+    assert_eq!(
+        stored(&app, &root, row_id).parameters.get("count"),
+        Some(&signex_library::ParamValue::Number(4.0))
+    );
+}
+
+#[test]
+fn adding_a_slot_shrinks_the_missing_slot_offer() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    let missing = |app: &Signex| -> Vec<String> {
+        let t = app
+            .library
+            .template_registry
+            .resolve(
+                app.library.library_at(&root).expect("library").library_id,
+                "generic",
+            )
+            .expect("template");
+        let m = app.library.library_browsers[&root]
+            .edit_modal
+            .as_ref()
+            .expect("modal");
+        t.missing_slots(&m.draft.parameters)
+            .map(|s| s.name.clone())
+            .collect()
+    };
+    assert_eq!(missing(&app), ["capacitance", "count", "note"]);
+    add_slot(&mut app, &root, "count");
+    assert_eq!(missing(&app), ["capacitance", "note"]);
+}
+
+#[test]
 fn a_slot_the_row_holds_or_the_template_lacks_is_not_added() {
     let (mut app, root, row_id) = app_with_browser();
     with_slot_template(&mut app, &root);

@@ -317,6 +317,8 @@ mod tests {
         let mut have = crate::param::ParamMap::new();
         let all: Vec<_> = t.missing_slots(&have).map(|s| s.name.clone()).collect();
         assert_eq!(all.len(), t.required_params.len() + t.optional_params.len());
+        let required: Vec<_> = t.required_params.iter().map(|s| s.name.clone()).collect();
+        assert_eq!(all[..required.len()], required[..]);
         have.insert("value".into(), crate::param::ParamValue::Number(1.0));
         assert!(t.missing_slots(&have).all(|s| s.name != "value"));
     }
