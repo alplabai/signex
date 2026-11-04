@@ -80,6 +80,11 @@ impl Signex {
         request: PasteRequest,
         seed: &PasteSeed,
     ) -> Task<Message> {
+        if let Some(window) = self.undocked_window_of_paste(&request) {
+            return self.run_in_window_document(window, |app| {
+                app.handle_paste_counters_seeded(request, seed)
+            });
+        }
         if request.intent == PasteIntent::ArraySeed {
             // Only the dialog that asked is released; an answer for one that
             // closed or was replaced is dropped without a word.
@@ -100,11 +105,29 @@ impl Signex {
         self.continue_paste(request)
     }
 
+    /// The undocked window a paste started in, when the main window's active
+    /// sheet is another one: its follow-ups come back untagged and finish
+    /// there (#1910).
+    fn undocked_window_of_paste(&self, request: &PasteRequest) -> Option<iced::window::Id> {
+        let path = request.path.as_deref()?;
+        if self.document_state.active_path.as_deref() == Some(path) {
+            return None;
+        }
+        // A window whose canvas is not there yet (or is gone) cannot take the
+        // paste; the stale check then says so in the Messages panel.
+        self.undocked_schematic_window(path)
+            .filter(|window| self.interaction_state.canvases.contains_key(window))
+    }
+
     pub(crate) fn handle_paste_text_read(
         &mut self,
         request: PasteRequest,
         text: Option<String>,
     ) -> Task<Message> {
+        if let Some(window) = self.undocked_window_of_paste(&request) {
+            return self
+                .run_in_window_document(window, |app| app.handle_paste_text_read(request, text));
+        }
         if self.paste_request_is_stale(&request) {
             return self.finish_update();
         }

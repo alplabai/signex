@@ -7,6 +7,8 @@ mod filter_controls;
 mod placement_presets;
 #[cfg(test)]
 mod planned_action_tests;
+#[cfg(test)]
+mod undocked_schematic_tests;
 
 impl Signex {
     pub(crate) fn handle_active_bar_message(
@@ -16,8 +18,21 @@ impl Signex {
         use crate::active_bar::ActiveBarMsg;
 
         match msg {
+            ActiveBarMsg::ScopedToWindow(window, inner) => {
+                let opens_menu = matches!(*inner, ActiveBarMsg::ToggleMenu(_));
+                // The owner is recorded inside the closure, so a message the
+                // window drops (it is closing) never re-homes an open dropdown.
+                self.run_in_window_document(window, |app| {
+                    let task = app.handle_active_bar_message(*inner);
+                    if opens_menu {
+                        app.interaction_state.active_bar_menu_window = app.overlay_owner(window);
+                    }
+                    task
+                })
+            }
             ActiveBarMsg::ToggleMenu(menu) => {
                 self.interaction_state.active_bar_menu = Some(menu);
+                self.interaction_state.active_bar_menu_window = None;
                 self.interaction_state.context_menu = None;
                 Task::none()
             }

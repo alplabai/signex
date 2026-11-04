@@ -98,6 +98,11 @@ impl Signex {
         row_id: Uuid,
         result: Result<Box<ResolvedPlacement>, String>,
     ) -> Task<Message> {
+        if let Some(window) = self.undocked_window_of_change(&target) {
+            return self.run_in_window_document(window, |app| {
+                app.show_change_preview(target, row_id, result)
+            });
+        }
         let still_asked = matches!(
             self.library.picker.as_ref().map(|p| &p.mode),
             Some(PickerMode::ChangeComponent(t)) if *t == target
@@ -163,6 +168,9 @@ impl Signex {
         else {
             return Task::none();
         };
+        if let Some(window) = self.undocked_window_of_change(&change.target) {
+            return self.run_in_window_document(window, |app| app.confirm_change_component());
+        }
         let ChangePreview {
             target,
             reference,
@@ -353,6 +361,16 @@ impl Signex {
                 not_open.join(", ")
             )
         })
+    }
+
+    /// The undocked window showing the sheet a Change Component started on,
+    /// when the main window's active sheet is another one: the dialog paints
+    /// in the main window, so its follow-ups come back untagged (#1910).
+    fn undocked_window_of_change(&self, target: &PlacedPartTarget) -> Option<iced::window::Id> {
+        if self.document_state.active_path.as_deref() == Some(target.sheet.as_path()) {
+            return None;
+        }
+        self.undocked_schematic_window(&target.sheet)
     }
 
     /// The sheet of `target`, if it is still the active one on the engine

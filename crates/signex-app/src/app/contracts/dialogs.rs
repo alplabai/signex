@@ -303,6 +303,10 @@ pub enum RemoveMsg {
 /// right-click menu, and the shared submenu hover/open state machine.
 #[derive(Debug, Clone)]
 pub enum ContextMenuMsg {
+    /// `message` came from a menu painted in the undocked window `window`:
+    /// it acts on the sheet that window shows, not on the main window's
+    /// (#1910).
+    ScopedToWindow(iced::window::Id, Box<ContextMenuMsg>),
     Show(f32, f32),
     Close,
     Action(ContextAction),
