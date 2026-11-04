@@ -9,6 +9,7 @@
 
 use super::*;
 use crate::app::path_ops::PathOpKind;
+use crate::library::messages::DatasheetMsg;
 use crate::library::stock_copy::StockCopyMsg;
 
 impl Signex {
@@ -78,6 +79,20 @@ impl Signex {
             "Library {library} is being deleted, so this edit was not applied. \
              Try again if the delete fails."
         ))
+    }
+
+    /// `editor_edit_refusal` for a Component Preview event: its library is the
+    /// preview's address. View-only events (tabs, selection, edit buffers,
+    /// reload prompts) and answers to earlier async work are not refused.
+    pub(super) fn preview_edit_refusal(
+        &self,
+        address: &EditorAddress,
+        msg: &EditorMsg,
+    ) -> Option<String> {
+        if editor_msg_is_view_only(msg) {
+            return None;
+        }
+        self.editor_edit_refusal(&address.library_path)
     }
 
     /// `editor_edit_refusal` for a mutation site outside the message stream:
@@ -150,6 +165,40 @@ pub(crate) fn log_refusal_once(refusal: &str) {
         .is_some_and(|e| e.message == refusal);
     if !repeated {
         crate::diagnostics::log_warning(refusal);
+    }
+}
+
+/// Component Preview events that change neither the row copy nor the library:
+/// navigation, edit buffers, reload prompts and answers to earlier async work.
+/// Anything not listed counts as an edit, so a new variant is refused by default.
+fn editor_msg_is_view_only(msg: &EditorMsg) -> bool {
+    use EditorMsg as E;
+    match msg {
+        E::SelectTab(_)
+        | E::OpenWhereUsedTab
+        | E::CloseEditor
+        | E::ReloadRequested
+        | E::ReloadConfirmed
+        | E::ReloadCancelled
+        | E::SubmitForReview
+        | E::SubmitForReviewNotesChanged(_)
+        | E::SubmitForReviewConfirm
+        | E::SubmitForReviewCancel
+        | E::SubmitForReviewResult(_)
+        | E::PinMapOpenOverrideEdit(_)
+        | E::PinMapOverrideBufChanged { .. }
+        | E::PinMapCancelOverrideEdit
+        | E::ParamSetNumberBuf { .. }
+        | E::ParamSetMeasurementBuf { .. }
+        | E::ParamNewNameChanged(_) => true,
+        E::Datasheet(d) => matches!(
+            d,
+            DatasheetMsg::Open(_)
+                | DatasheetMsg::UploadResult(_)
+                | DatasheetMsg::AssetsStored { .. }
+        ),
+        E::SimBodyAction(action) => !action.is_edit(),
+        _ => false,
     }
 }
 
