@@ -47,6 +47,10 @@ impl Signex {
                 self.interaction_state.acting_window,
                 self.document_state.active_path.clone(),
             ) else {
+                debug_assert!(false, "an acting window always has an active path");
+                crate::diagnostics::log_warning(
+                    "The descent was not done: the window has no sheet shown.",
+                );
                 return Task::none();
             };
             return Task::done(Message::Project(ProjectMsg::DescendRequested {

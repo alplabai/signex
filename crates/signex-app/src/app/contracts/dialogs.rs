@@ -650,6 +650,13 @@ pub enum ProjectMsg {
     /// tabs inside its swap, so the symbol file it resolved is opened here, on
     /// the main window (#1966).
     PrimitiveOpenRequested(std::path::PathBuf),
+    /// A Find hit on another sheet, reached from an undocked window: the
+    /// window cannot switch sheets inside its swap, so the sheet opens here,
+    /// on the main window, and the jump lands there (#2037).
+    SheetOpenRequested {
+        path: std::path::PathBuf,
+        open: Box<crate::app::handlers::canvas::SheetOpen>,
+    },
     /// The off-thread assembly of the hierarchy of the project (by root sheet)
     /// an undocked window shows finished (#2021).
     WindowHierarchyAssembled(

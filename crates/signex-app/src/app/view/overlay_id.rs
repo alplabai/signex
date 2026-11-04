@@ -444,7 +444,7 @@ impl Signex {
             OverlayId::StockCopy => layers.extend(self.stock_copy_overlay()),
             OverlayId::CloseLibraryConfirm => layers.extend(self.close_library_confirm_overlay()),
             OverlayId::LibraryRecovery => layers.extend(self.library_recovery_overlay()),
-            OverlayId::CommandPalette => layers.extend(self.command_palette_overlay()),
+            OverlayId::CommandPalette => layers.extend(self.command_palette_overlay(window_id)),
             OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),
         }

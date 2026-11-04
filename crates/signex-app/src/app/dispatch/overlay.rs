@@ -113,6 +113,10 @@ impl Signex {
                 let task = self.handle_open_primitive(path);
                 Task::batch([task, self.finish_update()])
             }
+            ProjectMsg::SheetOpenRequested { path, open } => {
+                let task = self.open_sheet(path, *open);
+                Task::batch([task, self.finish_update()])
+            }
             ProjectMsg::WindowHierarchyAssembled(root, generation, assembly) => {
                 self.handle_window_hierarchy_assembled(&root, generation, assembly)
             }

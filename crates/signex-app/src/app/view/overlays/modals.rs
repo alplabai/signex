@@ -552,8 +552,14 @@ impl Signex {
     /// above every other modal layer; click-outside dismisses via the
     /// standard dismiss_layer pattern. Pushes the dismiss layer then the
     /// dropdown.
-    pub(in crate::app::view) fn command_palette_overlay(&self) -> Vec<Element<'_, Message>> {
-        if !self.ui_state.command_palette.open {
+    pub(in crate::app::view) fn command_palette_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
+        // Only the window the palette was opened in paints it (#2037).
+        if !self.ui_state.command_palette.open
+            || !self.overlay_belongs_to(self.ui_state.command_palette.window, window_id)
+        {
             return Vec::new();
         }
         vec![

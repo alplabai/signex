@@ -37,8 +37,9 @@ impl Signex {
     }
 
     /// A Find message acts on the sheet of the window the dialog was opened
-    /// in: it runs in that window's swap. The disk answers of a project scan
-    /// or replace hold no sheet, so they stay on the main window.
+    /// in: it runs in that window's swap. A project scan answer holds no
+    /// sheet, so it stays on the main window; a project replace answer applies
+    /// in the window's swap (its project, its visible sheet) while it is open.
     pub(crate) fn handle_find_replace_message(
         &mut self,
         msg: crate::find_replace::FindReplaceMsg,
@@ -49,10 +50,15 @@ impl Signex {
         };
         if matches!(
             msg,
-            FindReplaceMsg::ProjectReplacePrepared { .. }
-                | FindReplaceMsg::ProjectScanFinished { .. }
-                | FindReplaceMsg::Close
+            FindReplaceMsg::ProjectScanFinished { .. } | FindReplaceMsg::Close
         ) {
+            return self.handle_find_replace_message_here(msg);
+        }
+        // A replace answer for a window that has closed is stale (closing
+        // superseded the job): its generation check drops it quietly.
+        if !self.is_document_window(window)
+            && matches!(msg, FindReplaceMsg::ProjectReplacePrepared { .. })
+        {
             return self.handle_find_replace_message_here(msg);
         }
         if !self.is_document_window(window) {
