@@ -192,15 +192,24 @@ impl Signex {
     /// The schematic sheet the pointer is over, when a Components row drop
     /// there would place: the pointer is on the canvas of a schematic tab.
     fn pointer_over_schematic_canvas(&self) -> bool {
+        self.pointer_over_schematic_canvas_of(self.interaction_state.acting_window)
+    }
+
+    /// [`Self::pointer_over_schematic_canvas`] for the canvas of `window`
+    /// (`None`: the main window's), without running inside its swap.
+    fn pointer_over_schematic_canvas_of(&self, window: Option<iced::window::Id>) -> bool {
         let (x, y) = self.interaction_state.last_mouse_pos;
-        let on_schematic = self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-            .is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic));
-        on_schematic
+        let shown_tab = match window.and_then(|w| self.ui_state.windows.get(&w)) {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => self
+                .document_state
+                .tabs
+                .iter()
+                .find(|tab| tab.path == *path),
+            _ => self.document_state.tabs.get(self.document_state.active_tab),
+        };
+        shown_tab.is_some_and(|tab| matches!(tab.kind, crate::app::TabKind::Schematic))
             && self
-                .canvas_bounds_in(self.interaction_state.acting_window)
+                .canvas_bounds_in(window)
                 .contains(iced::Point::new(x, y))
     }
 
@@ -212,13 +221,41 @@ impl Signex {
         let Some(drag) = self.library.components_panel.drag.as_ref() else {
             return Task::none();
         };
-        // Undocked-window drags skip the ghost: the pointer maths here is the
-        // main window's. Their drop still places on release.
-        if !drag.started
-            || drag.armed
-            || drag.window.is_some()
-            || !self.pointer_over_schematic_canvas()
-        {
+        if !drag.started || drag.armed {
+            return Task::none();
+        }
+        let started_in = drag.window;
+        // The pointer position is in the coordinates of the window it is in:
+        // the ghost follows it only inside the window the row was pressed in.
+        let pointer_in_start_window = self
+            .interaction_state
+            .pointer_window
+            .is_none_or(|w| self.overlay_owner(w) == started_in);
+        if !pointer_in_start_window {
+            return Task::none();
+        }
+        // A row dragged in an undocked window arms on that window's sheet,
+        // the one its canvas shows (#2037).
+        match started_in {
+            None => self.arm_components_row_drag_here(),
+            // Cheap test first: the swap runs only once the pointer is over
+            // the window's schematic canvas.
+            Some(window)
+                if self.is_document_window(window)
+                    && self.pointer_over_schematic_canvas_of(Some(window)) =>
+            {
+                self.run_in_window_document(window, |app| app.arm_components_row_drag_here())
+            }
+            Some(_) => Task::none(),
+        }
+    }
+
+    /// The ghost, against the active document of the window this runs in.
+    fn arm_components_row_drag_here(&mut self) -> Task<Message> {
+        let Some(drag) = self.library.components_panel.drag.as_ref() else {
+            return Task::none();
+        };
+        if !self.pointer_over_schematic_canvas() {
             return Task::none();
         }
         let k = drag.key.clone();

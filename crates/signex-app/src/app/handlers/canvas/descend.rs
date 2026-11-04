@@ -43,13 +43,90 @@ impl Signex {
                 ));
                 return Task::none();
             }
+            let (Some(window), Some(from)) = (
+                self.interaction_state.acting_window,
+                self.document_state.active_path.clone(),
+            ) else {
+                return Task::none();
+            };
             return Task::done(Message::Project(ProjectMsg::DescendRequested {
+                window,
+                from,
                 symbol: sheet_symbol,
                 path,
                 placement,
             }));
         }
         self.descend_to_child_sheet(sheet_symbol, path, placement)
+    }
+
+    /// A descent an undocked window queued, landing on the main window. The
+    /// window or its sheet can have changed since the click (closed, shows
+    /// another sheet, the symbol edited away or re-pointed, the sheet entered
+    /// through another placement): then nothing is opened, and the Messages
+    /// panel says why.
+    pub(crate) fn descend_requested(
+        &mut self,
+        window: iced::window::Id,
+        from: &std::path::Path,
+        symbol: Uuid,
+        path: PathBuf,
+        placement: Option<InstancePath>,
+    ) -> Task<Message> {
+        if let Some(why) = self.descent_no_longer_applies(window, from, symbol, &path, &placement) {
+            crate::diagnostics::log_warning(format!(
+                "The descent into {} was not done: {why}. Repeat it in the window that shows the sheet.",
+                path.display()
+            ));
+            return Task::none();
+        }
+        self.descend_to_child_sheet(symbol, path, placement)
+    }
+
+    /// Why a queued descent no longer applies, `None` while it still does.
+    fn descent_no_longer_applies(
+        &self,
+        window: iced::window::Id,
+        from: &std::path::Path,
+        symbol: Uuid,
+        path: &std::path::Path,
+        placement: &Option<InstancePath>,
+    ) -> Option<&'static str> {
+        use crate::app::state::WindowKind;
+        if !self.is_document_window(window) {
+            return Some("the window it started in has closed");
+        }
+        if !matches!(
+            self.ui_state.windows.get(&window),
+            Some(WindowKind::UndockedTab { path, .. }) if path == from
+        ) {
+            return Some("the window shows another sheet now");
+        }
+        let child = self
+            .document_state
+            .engines
+            .get(from)?
+            .document()
+            .child_sheets
+            .iter()
+            .find(|child| child.uuid == symbol);
+        let Some(child) = child else {
+            return Some("the sheet symbol is gone from the sheet");
+        };
+        let resolved = from
+            .parent()
+            .and_then(|dir| {
+                crate::app::project_sheets::resolve_child_reference(dir, &child.filename)
+            })
+            .map(|resolved| self.resolve_held_spelling(resolved));
+        if resolved.as_deref() != Some(path) {
+            return Some("the sheet symbol references another file now");
+        }
+        let shown = self.shown_placement_of(from, self.panel_ctx_for(window));
+        if shown.map(|p| p.child(symbol)) != *placement {
+            return Some("the sheet is entered through another placement now");
+        }
+        None
     }
 
     /// The rest of a descent once the child's path and placement are known:
@@ -95,10 +172,22 @@ impl Signex {
             .active_path
             .clone()
             .or_else(|| self.active_tab_path())?;
-        if let Some(recorded) = self.document_state.tab_placements.get(&active) {
+        self.shown_placement_of(&active, &self.document_state.panel_ctx)
+    }
+
+    /// The placement the sheet at `active` is shown through (see
+    /// [`Self::focused_sheet_placement`]).
+    /// The Navigator hierarchy is read from `ctx`, the panel context of the
+    /// window the sheet is shown in.
+    fn shown_placement_of(
+        &self,
+        active: &std::path::Path,
+        ctx: &crate::panels::PanelContext,
+    ) -> Option<InstancePath> {
+        if let Some(recorded) = self.document_state.tab_placements.get(active) {
             return Some(recorded.clone());
         }
-        let hierarchy = self.document_state.panel_ctx.navigator.hierarchy.as_ref()?;
-        hierarchy.starts_a_walk(&active).then(InstancePath::root)
+        let hierarchy = ctx.navigator.hierarchy.as_ref()?;
+        hierarchy.starts_a_walk(active).then(InstancePath::root)
     }
 }

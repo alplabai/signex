@@ -70,9 +70,16 @@ impl Signex {
     }
 
     /// Find & Replace dialog.
-    pub(in crate::app::view) fn find_replace_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn find_replace_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.find_replace.open || self.modal_detached(crate::app::state::ModalId::FindReplace) {
+            return None;
+        }
+        // Only the window Find was opened in paints it (#2037).
+        if !self.overlay_belongs_to(ui.find_replace.window, window_id) {
             return None;
         }
         Some(

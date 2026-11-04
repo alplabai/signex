@@ -19,15 +19,52 @@ impl Signex {
         &mut self,
         replace_mode: bool,
     ) -> Task<Message> {
-        self.ui_state.find_replace.open = true;
-        self.ui_state.find_replace.replace_mode = replace_mode;
+        // Opened from an undocked window (its swap is on), Find searches that
+        // window's sheet; a list read from another window's sheet is dropped.
+        let window = self.interaction_state.acting_window;
+        let find = &mut self.ui_state.find_replace;
+        if find.window != window {
+            find.matches.clear();
+            find.selected_index = None;
+            find.window = window;
+        }
+        find.open = true;
+        find.replace_mode = replace_mode;
         self.interaction_state.context_menu = None;
         self.ui_state.panel_list_open = false;
         self.ui_state.find_replace.skips_reported.clear();
         self.refresh_find_matches()
     }
 
+    /// A Find message acts on the sheet of the window the dialog was opened
+    /// in: it runs in that window's swap. The disk answers of a project scan
+    /// or replace hold no sheet, so they stay on the main window.
     pub(crate) fn handle_find_replace_message(
+        &mut self,
+        msg: crate::find_replace::FindReplaceMsg,
+    ) -> Task<Message> {
+        use crate::find_replace::FindReplaceMsg;
+        let Some(window) = self.ui_state.find_replace.window else {
+            return self.handle_find_replace_message_here(msg);
+        };
+        if matches!(
+            msg,
+            FindReplaceMsg::ProjectReplacePrepared { .. }
+                | FindReplaceMsg::ProjectScanFinished { .. }
+                | FindReplaceMsg::Close
+        ) {
+            return self.handle_find_replace_message_here(msg);
+        }
+        if !self.is_document_window(window) {
+            crate::diagnostics::log_warning(
+                "Find was dropped: the window it searches has closed; open Find again.",
+            );
+            return Task::none();
+        }
+        self.run_in_window_document(window, |app| app.handle_find_replace_message_here(msg))
+    }
+
+    fn handle_find_replace_message_here(
         &mut self,
         msg: crate::find_replace::FindReplaceMsg,
     ) -> Task<Message> {

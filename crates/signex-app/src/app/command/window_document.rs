@@ -268,6 +268,7 @@ impl Signex {
     /// when it closes or reattaches: nothing else would clear them (#1910).
     pub(crate) fn close_overlays_owned_by(&mut self, window: iced::window::Id) {
         self.retire_window_panel_ctx(window);
+        self.close_surfaces_owned_by(window);
         if self
             .library
             .components_panel
