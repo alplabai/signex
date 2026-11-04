@@ -7,6 +7,8 @@ mod child_sheet_create;
 #[cfg(test)]
 mod child_sheet_create_tests;
 mod child_sheet_path;
+#[cfg(test)]
+mod cursor_moved_tests;
 pub(crate) use child_sheet_path::relative_within;
 mod break_wire_tool;
 mod clicked;
@@ -207,7 +209,12 @@ impl Signex {
                 );
             }
             CanvasEvent::CursorMoved | CanvasEvent::ViewMoved => {
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                // The sheet background (paper, grid, frame) follows the camera
+                // alone, so a hover keeps its cache; a pan or zoom drops it
+                // (and `draw_background` re-checks the camera, #1993).
+                if matches!(event, CanvasEvent::ViewMoved) {
+                    self.interaction_state.active_canvas_mut().clear_bg_cache();
+                }
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_overlay_cache();
