@@ -99,12 +99,11 @@ impl Signex {
             return None;
         }
         // The answer to a file dialog opened before the delete: name the
-        // dropped pick instead of the generic line.
+        // dropped pick. A cancelled dialog picked nothing and the preview
+        // does nothing with it, so it goes through unlogged.
         if let EditorMsg::StepAttachResult(pick) = msg {
+            let (_, file) = pick.as_ref()?;
             let library = self.deleting_library_name(&address.library_path)?;
-            let file = pick
-                .as_ref()
-                .map_or("The picked file", |(_, name)| name.as_str());
             return Some(format!(
                 "{file} was not attached: library {library} is being deleted. \
                  Pick it again if the delete fails."
