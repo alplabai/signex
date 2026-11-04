@@ -401,7 +401,7 @@ impl GlyphonTextPipeline {
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
         for text in atlas_drawable(texts) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            if font_px < crate::primitive::text::MIN_VISIBLE_TEXT_DEVICE_PX {
+            if !crate::primitive::text::is_rasterisable_text_px(font_px) {
                 continue;
             }
             let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);

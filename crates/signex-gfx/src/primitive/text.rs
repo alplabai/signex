@@ -43,6 +43,21 @@ impl TextSizePolicy {
 /// seen and a zero-size glyph run is not worth shaping.
 pub const MIN_VISIBLE_TEXT_DEVICE_PX: f32 = 0.5;
 
+// shortcut: fixed ceiling, not read from the device. A glyph this tall cannot
+// fit the glyph atlas (8192 px textures) with its neighbours and a file-supplied
+// size must not drive an unbounded raster; read `max_texture_dimension_2d` if
+// a real sheet ever needs more (a 100 mm text at the 48 px/mm zoom limit is
+// still under it on a 1x display).
+pub const MAX_RASTER_TEXT_DEVICE_PX: f32 = 4096.0;
+
+/// Whether a text of em `device_px` can and should be rasterised: finite,
+/// visible, and within the raster ceiling. The one guard of the CPU canvas
+/// and the GPU glyph pipeline; it culls, it never resizes.
+pub fn is_rasterisable_text_px(device_px: f32) -> bool {
+    device_px.is_finite()
+        && (MIN_VISIBLE_TEXT_DEVICE_PX..=MAX_RASTER_TEXT_DEVICE_PX).contains(&device_px)
+}
+
 /// Rendered em size in logical pixels for `size_mm` at `scale_px_per_mm`.
 ///
 /// The single sizing rule: convert world millimetres to em through the
@@ -55,7 +70,13 @@ pub fn text_px_in(
     policy: TextSizePolicy,
     family: Option<&str>,
 ) -> f32 {
-    let em_mm = size_mm.max(0.1) / signex_types::font::mm_per_em(family);
+    // `f32::max` swallows NaN; keep it so the raster guard culls the item.
+    let size_mm = if size_mm.is_nan() {
+        size_mm
+    } else {
+        size_mm.max(0.1)
+    };
+    let em_mm = size_mm / signex_types::font::mm_per_em(family);
     (em_mm * scale_px_per_mm).clamp(policy.min_px, policy.max_px)
 }
 
@@ -169,6 +190,31 @@ mod size_tests {
         assert!(at(-0.0).is_axis_aligned());
         assert!(!at(std::f32::consts::FRAC_PI_2).is_axis_aligned());
         assert!(!at(-std::f32::consts::FRAC_PI_2).is_axis_aligned());
+    }
+
+    #[test]
+    fn the_raster_guard_culls_only_unrasterisable_sizes() {
+        assert!(is_rasterisable_text_px(1.8));
+        assert!(is_rasterisable_text_px(MAX_RASTER_TEXT_DEVICE_PX));
+        assert!(!is_rasterisable_text_px(f32::NAN));
+        assert!(!is_rasterisable_text_px(f32::INFINITY));
+        assert!(!is_rasterisable_text_px(0.1));
+        assert!(!is_rasterisable_text_px(1.0e9));
+    }
+
+    #[test]
+    fn a_hostile_file_size_is_culled_and_normal_zoom_is_untouched() {
+        let policy = TextSizePolicy::UNCLAMPED;
+        for size_mm in [f32::NAN, f32::INFINITY, 1.0e30] {
+            let px = text_px_in(size_mm, 48.0, policy, None);
+            assert!(!is_rasterisable_text_px(px), "{size_mm} -> {px}");
+        }
+        // 1.27 mm text from fit-all to the zoom limit is always drawn.
+        for scale in [0.75_f32, 1.75, 3.0, 48.0] {
+            assert!(is_rasterisable_text_px(text_px_in(
+                1.27, scale, policy, None
+            )));
+        }
     }
 }
 

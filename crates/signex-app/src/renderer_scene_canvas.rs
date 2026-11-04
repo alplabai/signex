@@ -571,9 +571,9 @@ fn draw_text_items<'a, F>(
         }
 
         let size_px = options.text_px(text.size_mm, text.family.as_deref());
-        if size_px * options.device_px_per_logical_px
-            < signex_gfx::primitive::text::MIN_VISIBLE_TEXT_DEVICE_PX
-        {
+        if !signex_gfx::primitive::text::is_rasterisable_text_px(
+            size_px * options.device_px_per_logical_px,
+        ) {
             continue;
         }
         let position = world_to_screen(text.position);
