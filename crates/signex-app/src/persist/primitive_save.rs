@@ -31,6 +31,9 @@ pub struct PrimitiveWritten {
     /// Saved primitives whose rows the cascade could not move and a retry
     /// can: the editor keeps them and the next Save cascades them again.
     pub cascade_owed: Vec<Uuid>,
+    /// Rows the cascade moved in the other open libraries (#2004), by
+    /// library: their open Component Previews are stale too.
+    pub cascaded_elsewhere: Vec<(PathBuf, Vec<RowId>)>,
 }
 
 /// Where a Save As came from: the old path and tab title, to put back if
