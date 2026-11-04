@@ -7,7 +7,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-wgpu = "30"
+# Exact pin: signex-gfx shares the wgpu Device/Queue with iced, so this must be
+# the same wgpu version that the fork's iced_wgpu resolves (30.0.1 in Cargo.lock,
+# fork requires "30"). A mismatch yields two incompatible wgpu crates and the
+# shared device types would not unify. Bump together with iced_wgpu.
+wgpu = "=30.0.1"
 glam = "0.32.1"
 bytemuck = { version = "1", features = ["derive"] }
 cryoglyph = { git = "https://github.com/iced-rs/cryoglyph.git", rev = "cf38ed5ea0cfe95270b31ced2910560a7fcc5003" }
