@@ -451,6 +451,13 @@ pub fn build_schematic_scene(
             | DirtyFlags::TEXT,
         &mut scene,
     );
+    // Text above the atlas ceiling becomes polygons both replays draw.
+    crate::scene_outline_text::convert_oversize_texts(
+        &mut scene,
+        schematic_draw_options(transform),
+        |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+        bounds,
+    );
     Some(scene)
 }
 
@@ -842,6 +849,7 @@ fn label_color(label: &Label, colors: &CanvasColors) -> Color {
 /// which of its texts.
 type WidthSlot<'a> = Option<(&'a TextWidths, uuid::Uuid, TextField)>;
 
+#[cfg(test)]
 fn text_prop_aabb(
     text: &str,
     prop: &TextProp,
@@ -902,6 +910,7 @@ fn drawn_text_aabb(
     text_aabb_with_width(width, font_size, anchor, rotation_deg, h_align, v_align)
 }
 
+#[cfg(test)]
 fn note_aabb(note: &TextNote, document_family: Option<&str>) -> Aabb {
     note_aabb_with(None, note, document_family)
 }
@@ -926,6 +935,7 @@ fn note_aabb_with(
 /// Hit/selection box of a label, derived from the same geometry the draw
 /// path uses so the two cannot disagree: the flag outline for global and
 /// hierarchical labels, the justified text box for the rest.
+#[cfg(test)]
 fn label_aabb(label: &Label, document_family: Option<&str>) -> Aabb {
     label_aabb_with(None, label, document_family)
 }

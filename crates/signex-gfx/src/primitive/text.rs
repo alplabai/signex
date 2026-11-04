@@ -63,7 +63,8 @@ pub enum TextRaster {
     Skip,
     /// Glyph bitmaps from the atlas (GPU) or the canvas text path (CPU).
     Bitmap,
-    /// Too large for the atlas: filled vector outlines on the CPU canvas.
+    /// Too large for the atlas: the scene build turns it into filled glyph
+    /// polygons, which the CPU replay and the GPU polygon pipeline both draw.
     Outline,
 }
 

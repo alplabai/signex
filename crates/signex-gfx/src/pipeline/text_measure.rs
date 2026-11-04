@@ -90,8 +90,18 @@ pub enum OutlineCmd {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextOutlines {
     pub size_px: [f32; 2],
-    pub cmds: Vec<OutlineCmd>,
+    /// The outline of each glyph, in text order. Glyph by glyph so a caller
+    /// never relates the contours of one glyph to another's.
+    pub glyphs: Vec<Vec<OutlineCmd>>,
+    /// The caps below stopped the conversion; the glyphs after it are missing.
+    pub truncated: bool,
 }
+
+/// Most glyphs outlined per text, and most drawing commands over all of
+/// them. Far above any real label; a string past them is data meant to cost,
+/// and the rest of it is left out.
+pub const MAX_OUTLINE_GLYPHS: usize = 512;
+pub const MAX_OUTLINE_CMDS: usize = 60_000;
 
 /// Collects a `ttf_parser` outline at a glyph's position and scale.
 struct GlyphPath<'a> {
@@ -157,9 +167,16 @@ impl TextMeasurer {
             [NO_WRAP_PX, NO_WRAP_PX],
         );
         let size_px = measure_text_bounds_px(&buffer);
-        let mut cmds = Vec::new();
-        for run in buffer.layout_runs() {
+        let mut glyphs: Vec<Vec<OutlineCmd>> = Vec::new();
+        let mut total = 0;
+        let mut truncated = false;
+        'runs: for run in buffer.layout_runs() {
             for glyph in run.glyphs {
+                if glyphs.len() >= MAX_OUTLINE_GLYPHS || total >= MAX_OUTLINE_CMDS {
+                    truncated = true;
+                    break 'runs;
+                }
+                let mut cmds = Vec::new();
                 let origin = [
                     glyph.x + glyph.x_offset * glyph.font_size,
                     run.line_y + glyph.y - glyph.y_offset * glyph.font_size,
@@ -181,9 +198,17 @@ impl TextMeasurer {
                         };
                         face.outline_glyph(ttf_parser::GlyphId(glyph.glyph_id), &mut path);
                     });
+                total += cmds.len();
+                if !cmds.is_empty() {
+                    glyphs.push(cmds);
+                }
             }
         }
-        TextOutlines { size_px, cmds }
+        TextOutlines {
+            size_px,
+            glyphs,
+            truncated,
+        }
     }
 }
 
@@ -231,11 +256,12 @@ mod tests {
         let mut m = measurer();
         let small = m.outlines("H", "Iosevka", 100.0, 1.2);
         let large = m.outlines("H", "Iosevka", 5000.0, 1.2);
-        assert!(!small.cmds.is_empty() && small.cmds.contains(&OutlineCmd::Close));
+        assert!(small.glyphs.len() == 1 && small.glyphs[0].contains(&OutlineCmd::Close));
         assert!((large.size_px[0] / small.size_px[0] - 50.0).abs() < 0.5);
         let max_x = |o: &TextOutlines| {
-            o.cmds
+            o.glyphs
                 .iter()
+                .flatten()
                 .filter_map(|c| match c {
                     OutlineCmd::Move(p) | OutlineCmd::Line(p) => Some(p[0]),
                     _ => None,

@@ -173,7 +173,7 @@ impl SceneDrawOptions {
         self.text_px(size_mm, None)
     }
 
-    fn text_px(self, size_mm: f32, family: Option<&str>) -> f32 {
+    pub(crate) fn text_px(self, size_mm: f32, family: Option<&str>) -> f32 {
         signex_gfx::primitive::text::text_px_in(
             size_mm,
             self.scale_px_per_mm,
@@ -562,19 +562,7 @@ pub fn draw_rotated_texts<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    // Text past the atlas ceiling is drawn here too, as outlines: the GPU
-    // pipeline skips it (`text_raster` is the one rule both read).
-    let cpu_texts = scene
-        .texts
-        .iter()
-        .filter(|text| cpu_draws_beside_gpu(text, options));
-    draw_text_items(frame, cpu_texts, world_to_screen, options);
-}
-
-/// Whether the CPU canvas draws `text` of a GPU-mounted scene: what the
-/// glyph atlas cannot, a rotated item or one past its size ceiling.
-fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
-    !text.is_axis_aligned() || options.text_raster(text) == TextRaster::Outline
+    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
 }
 
 fn draw_text_items<'a, F>(
@@ -585,7 +573,6 @@ fn draw_text_items<'a, F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    let mut outlines_drawn = 0;
     for text in texts {
         if text.content.is_empty() {
             continue;
@@ -593,16 +580,10 @@ fn draw_text_items<'a, F>(
 
         let size_px = options.text_px(text.size_mm, text.family.as_deref());
         let position = world_to_screen(text.position);
-        match options.text_raster(text) {
-            TextRaster::Skip => continue,
-            TextRaster::Outline => {
-                if outlines_drawn < crate::scene_outline_text::MAX_OUTLINE_TEXTS_PER_FRAME {
-                    outlines_drawn += 1;
-                    crate::scene_outline_text::draw(frame, text, position, size_px);
-                }
-                continue;
-            }
-            TextRaster::Bitmap => {}
+        // Text above the atlas ceiling is already polygons in the scene
+        // (`scene_outline_text::convert_oversize_texts`).
+        if options.text_raster(text) != TextRaster::Bitmap {
+            continue;
         }
         let draw_text = canvas::Text {
             content: text.content.clone(),
@@ -1151,42 +1132,5 @@ mod line_geometry_tests {
                 assert_eq!(ring, wire, "ring at {scale} px/mm, {dpr}x");
             }
         }
-    }
-
-    fn item(size_mm: f32, rotation: f32) -> TextItem {
-        TextItem {
-            content: "R1".into(),
-            size_mm,
-            rotation,
-            ..Default::default()
-        }
-    }
-
-    /// #2022 - text past the atlas ceiling is not lost on a GPU-mounted
-    /// sheet: the CPU canvas takes it, and draws it as outlines.
-    #[test]
-    fn oversize_text_goes_to_the_cpu_canvas_beside_the_gpu() {
-        let options = SceneDrawOptions {
-            scale_px_per_mm: 96.0,
-            device_px_per_logical_px: 1.0,
-            text_min_px: 0.0,
-            text_max_px: f32::INFINITY,
-        };
-        assert!(cpu_draws_beside_gpu(&item(40.0, 0.0), options), "oversize");
-        assert!(cpu_draws_beside_gpu(&item(1.27, 1.0), options), "rotated");
-        assert!(!cpu_draws_beside_gpu(&item(1.27, 0.0), options), "ordinary");
-        assert_eq!(options.text_raster(&item(40.0, 0.0)), TextRaster::Outline);
-    }
-
-    #[test]
-    fn oversize_text_has_outlines_to_draw() {
-        crate::fonts::measure::install_hermetic();
-        let outlines =
-            crate::fonts::measure::text_outlines("R1", "Iosevka", 5224.0, 1.2).expect("measurer");
-        assert!(!outlines.cmds.is_empty());
-        assert!(
-            (outlines.size_px[0] - 5224.0).abs() < 1.0,
-            "two 0.5 em glyphs wide"
-        );
     }
 }
