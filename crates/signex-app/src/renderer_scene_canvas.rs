@@ -577,6 +577,51 @@ fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
     !text.is_axis_aligned() || options.text_raster(text) == TextRaster::Oversize
 }
 
+// shortcut: fixed per-frame bounds on text iced draws as vector outlines. The
+// fork re-shapes and re-tessellates it every frame (a cache belongs in
+// alplabai/iced's `draw_with`, follow-up on iced#21), so a hostile file of many
+// or very long oversize texts is cut here: far above any real sheet, which has
+// a handful of short titles. Past either bound the rest is not drawn and one
+// warning reaches Messages.
+const MAX_OVERSIZE_TEXTS_PER_FRAME: usize = 64;
+const MAX_OVERSIZE_TEXT_CHARS: usize = 256;
+
+/// What one frame has spent of the oversize-text bounds.
+#[derive(Default)]
+struct OversizeBudget {
+    drawn: usize,
+}
+
+/// Messages warnings issued; one per run, not one per frame.
+static OVERSIZE_WARNINGS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+impl OversizeBudget {
+    /// The content to draw for the next oversize text, cut to the length
+    /// bound, or `None` once the per-frame count is spent.
+    fn admit<'a>(&mut self, content: &'a str) -> Option<&'a str> {
+        if self.drawn >= MAX_OVERSIZE_TEXTS_PER_FRAME {
+            warn_oversize_capped_once();
+            return None;
+        }
+        self.drawn += 1;
+        match content.char_indices().nth(MAX_OVERSIZE_TEXT_CHARS) {
+            Some((end, _)) => {
+                warn_oversize_capped_once();
+                Some(&content[..end])
+            }
+            None => Some(content),
+        }
+    }
+}
+
+fn warn_oversize_capped_once() {
+    if OVERSIZE_WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
+        crate::diagnostics::log_warning(
+            "This sheet has more or longer oversize text than can be drawn; the rest is left out",
+        );
+    }
+}
+
 /// Whether an oversize text can touch the frame, from its cached advance (no
 /// shaping): its corners rotated about the anchor. Off-screen oversize text is
 /// never handed to iced, so a hostile file cannot make a frame cost more.
@@ -644,6 +689,7 @@ fn draw_text_items<'a, F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
+    let mut budget = OversizeBudget::default();
     for text in texts {
         if text.content.is_empty() {
             continue;
@@ -651,17 +697,23 @@ fn draw_text_items<'a, F>(
 
         let size_px = options.text_px(text.size_mm, text.family.as_deref());
         let position = world_to_screen(text.position);
-        match options.text_raster(text) {
+        let content = match options.text_raster(text) {
             TextRaster::Skip => continue,
             // iced draws it as outlines past its own atlas limit; nothing
-            // reaches it that cannot be seen.
-            TextRaster::Oversize if !oversize_text_on_screen(frame, text, position, size_px) => {
-                continue;
+            // reaches it that cannot be seen, and what does is bounded.
+            TextRaster::Oversize => {
+                if !oversize_text_on_screen(frame, text, position, size_px) {
+                    continue;
+                }
+                match budget.admit(&text.content) {
+                    Some(content) => content.to_string(),
+                    None => continue,
+                }
             }
-            TextRaster::Oversize | TextRaster::Bitmap => {}
-        }
+            TextRaster::Bitmap => text.content.clone(),
+        };
         let draw_text = canvas::Text {
-            content: text.content.clone(),
+            content,
             position: Point::ORIGIN,
             color: color_from_rgba(text.color),
             size: iced::Pixels(size_px),
@@ -1241,6 +1293,34 @@ mod line_geometry_tests {
         assert!(
             !cpu_draws_beside_gpu(&text_item(1.27, 0.0), options),
             "ordinary"
+        );
+    }
+
+    /// A hostile sheet of 10 000 on-screen oversize texts of 10 000 characters
+    /// each asks iced for at most the per-frame count, each at most the length
+    /// bound, and warns once.
+    #[test]
+    fn a_flood_of_long_oversize_texts_is_bounded_and_warns_once() {
+        let long = "W".repeat(10_000);
+        let mut budget = OversizeBudget::default();
+        let before = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
+        let drawn: Vec<&str> = (0..10_000).filter_map(|_| budget.admit(&long)).collect();
+        assert_eq!(drawn.len(), MAX_OVERSIZE_TEXTS_PER_FRAME);
+        assert!(
+            drawn
+                .iter()
+                .all(|c| c.chars().count() <= MAX_OVERSIZE_TEXT_CHARS)
+        );
+        let after = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(after > before, "the bound was hit");
+        // One Messages line per run: only the first request logs.
+        assert!(after - before >= 1);
+        let short = "R1";
+        let mut next_frame = OversizeBudget::default();
+        assert_eq!(
+            next_frame.admit(short),
+            Some(short),
+            "a new frame starts clean"
         );
     }
 }
