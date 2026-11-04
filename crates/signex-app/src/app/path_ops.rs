@@ -21,10 +21,11 @@ pub enum PathOpKind {
     Rename,
     RenameLibrary,
     Delete,
-    /// Annotate or Reset Duplicate Designators reading or rewriting the
-    /// project's sheets.
+    /// Annotate, Reset Duplicate Designators or Re-prefix reading or
+    /// rewriting the project's sheets.
     ProjectRewrite,
-    /// Annotate or Reset Duplicate Designators reading the project's sheets.
+    /// Annotate, Reset Duplicate Designators or Re-prefix reading the
+    /// project's sheets.
     /// Saving an open sheet is allowed meanwhile: the save moves
     /// `documents_epoch` and the run cancels itself (#1753).
     ProjectRead,

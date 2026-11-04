@@ -1,17 +1,6 @@
 //! Re-prefix to standard without sheet reads in `update` (#1756).
 //!
-//! Both halves ask a worker for the project's sheets first. The plan half
-//! (`start_reprefix_plan_read`) reads them to build the confirm. The apply
-//! half is an Annotate-style run (`begin_run(PassKind::Reprefix, ..)`): the
-//! worker reads, then ONE `update` re-plans over those sheets (open ones from
-//! their live engines), compares the plan with what the user was shown, and
-//! numbers it.
-//!
-//! All or nothing: a sheet that cannot be read stops the run before anything is
-//! changed, and a sheet that fails while numbering is rolled back whole by
-//! `roll_back_reprefix`. Either way the Messages panel and a notice name why.
-//! Re-prefix writes no file (unopened sheets are parked dirty, #669), so there
-//! is no half-written disk state to restore.
+//! Policy: see docs/architecture/path-ops.md, "Re-prefix to standard".
 
 use std::sync::Arc;
 

@@ -126,9 +126,10 @@ struct AnnotateJob {
     reprefix: Option<ReprefixConfirm>,
 }
 
-/// The run in flight. One at a time: a second request is refused with a notice
-/// rather than queued, because a queued run would number the project as it was
-/// when the first one started.
+/// The run in flight (Annotate, Reset Duplicate Designators or Re-prefix). One
+/// at a time: a second request is refused with a notice rather than queued,
+/// because a queued run would number the project as it was when the first one
+/// started.
 #[derive(Debug, Default)]
 pub struct AnnotateRuns {
     generation: u64,
@@ -178,11 +179,10 @@ impl Signex {
             );
             return Task::none();
         }
-        let Some(active) = self.document_state.active_path.clone() else {
+        let Some((read_stage, plan)) = self.capture_sheet_read() else {
             crate::diagnostics::log_info(format!("{label}: no sheet is open, nothing to do"));
             return Task::none();
         };
-        let plan = project_sheets::plan_project_sheets_for(&self.document_state, &active);
         let mut known: Vec<PathBuf> = plan.pages().to_vec();
         known.push(plan.root().to_path_buf());
         if self.refuse_annotate_while_project_moves(known.iter().map(PathBuf::as_path), label)
@@ -191,12 +191,7 @@ impl Signex {
             return Task::none();
         }
         let guard = self.guard_run_paths(PathOpKind::ProjectRead, &known, plan.fold());
-        let stage = Stage::Reading(ReadStage {
-            epoch: self.document_state.documents_epoch,
-            child_sheets: self.child_sheet_signature(),
-            project: self.document_state.document_project(&active).map(|p| p.id),
-            root: plan.root().to_path_buf(),
-        });
+        let stage = Stage::Reading(read_stage);
         let runs = &mut self.ui_state.annotate_runs;
         runs.generation += 1;
         let generation = runs.generation;

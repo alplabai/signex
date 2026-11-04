@@ -186,7 +186,8 @@ impl Signex {
             },
         ) {
             crate::diagnostics::log_warning(format!(
-                "{} was asked to open again while it was being read; the earlier request                  ({}) was replaced",
+                "{} was asked to open again while it was being read; the earlier request \
+                 ({}) was replaced",
                 path.display(),
                 if matches!(replaced.open.then, AfterOpen::ArriveHistory { .. }) {
                     "a history step"
@@ -372,7 +373,8 @@ impl Signex {
             AfterOpen::ArriveHistory { forward } => {
                 if !self.drop_unreadable_history_entry(forward, path) {
                     crate::diagnostics::log_warning(format!(
-                        "History step to {} failed, but the history moved on while it was                          read; the step was not retried",
+                        "History step to {} failed, but the history moved on while it was \
+                         read; the step was not retried",
                         path.display()
                     ));
                     return Task::none();
