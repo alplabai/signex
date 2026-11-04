@@ -400,15 +400,15 @@ impl Signex {
                 layers.extend(self.project_tree_context_menu_overlay())
             }
             OverlayId::ComponentsRowContextMenu => {
-                layers.extend(self.components_row_context_menu_overlay())
+                layers.extend(self.components_row_context_menu_overlay(window_id))
             }
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
-                layers.extend(self.components_row_drag_label_overlay())
+                layers.extend(self.components_row_drag_label_overlay(window_id))
             }
-            OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay()),
+            OverlayId::FloatingPanels => layers.extend(self.floating_panels_overlay(window_id)),
             OverlayId::Preferences => layers.extend(self.preferences_overlay()),
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay()),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),

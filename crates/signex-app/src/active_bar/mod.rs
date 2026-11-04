@@ -185,7 +185,7 @@ pub const CUSTOM_FILTER_PRESET_LIMIT: usize = 4;
 /// A user-defined named selection-filter preset. Persisted to
 /// `~/.config/signex/prefs.json` under `custom_filter_presets` and
 /// surfaced as a shortcut button in the Active Bar's filter dropdown.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CustomFilterPreset {
     pub name: String,
     /// Stored as `Vec` (not `HashSet`) so the on-disk representation
@@ -217,7 +217,7 @@ impl CustomFilterPreset {
 /// `CustomFilterPreset` but keyed on `SelectionFilterKind` (footprint
 /// categories) instead of the schematic `SelectionFilter`. Persisted to
 /// `prefs.json` under `footprint_filter_presets` (Task 6).
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FootprintFilterPreset {
     pub name: String,
     pub kinds: Vec<crate::library::editor::footprint::state::selection_filter::SelectionFilterKind>,

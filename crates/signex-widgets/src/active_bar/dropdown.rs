@@ -203,7 +203,15 @@ where
     let hover_c = crate::theme_ext::to_color(&tokens.hover);
     let accent = theme_ext::to_color(&tokens.accent);
 
-    let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(Length::Fit);
+    // Fill children inside a Shrink column lay out at zero width in the
+    // fork, so a fixed-width panel gets a Fill column (buttons stay clickable)
+    // and an unsized panel fits its content.
+    let col_width = if width_hint.is_some() {
+        Length::Fill
+    } else {
+        Length::Fit
+    };
+    let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(col_width);
     for entry in entries {
         match entry {
             DropdownEntry::Header(label) => {

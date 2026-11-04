@@ -90,6 +90,9 @@ impl Signex {
         // Already open? Just activate the existing tab.
         if let Some(idx) = self.document_state.tabs.iter().position(|t| t.path == path) {
             if idx != self.document_state.active_tab {
+                if self.sheet_switch_refused_in_window("Opening a symbol or footprint") {
+                    return Ok(Task::none());
+                }
                 self.park_active_schematic_session();
                 self.document_state.active_tab = idx;
                 self.sync_active_tab();

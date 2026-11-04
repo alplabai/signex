@@ -54,6 +54,72 @@ pub(crate) fn lay_out_texts<M>(
     collect.0
 }
 
+/// The messages a left click on the centre of the text `label` publishes,
+/// from a press and a release delivered to the laid-out `element`.
+pub(crate) fn messages_on_click<M>(
+    element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    label: &str,
+) -> Vec<M> {
+    messages_on_click_at(element, window, Some(label), iced::Point::ORIGIN)
+}
+
+/// [`messages_on_click`] at the centre of `label`, or at `point` when no
+/// label is given.
+pub(crate) fn messages_on_click_at<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    label: Option<&str>,
+    point: iced::Point,
+) -> Vec<M> {
+    use iced::advanced::Shell;
+    use iced::advanced::mouse;
+    use iced::advanced::shell::{Bus, Waker};
+    let renderer = headless_renderer();
+    let mut tree = Tree::new(&element);
+    // The fork's widgets build their child trees in `diff`, not in
+    // `Tree::new`: lay out only after reconciling.
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(Size::ZERO, window),
+    );
+    let size = tree.size;
+    let layout = Layout::new(size);
+    let mut collect = CollectTexts(Vec::new());
+    element.operate(
+        &mut tree,
+        layout,
+        &Rectangle::with_size(size),
+        &renderer,
+        &mut collect,
+    );
+    let at = label.map_or(point, |label| find(&collect.0, label).bounds.center());
+    let cursor = mouse::Cursor::Available(at);
+    let mut bus = Bus::new();
+    let viewport = Rectangle::with_size(window);
+    for event in [
+        mouse::Event::CursorMoved { position: at },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        // One shell per event, as the runtime does: a captured press would
+        // otherwise mask the release.
+        let mut shell = Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
+        element.update(
+            &mut tree,
+            &iced::Event::Mouse(event),
+            layout,
+            cursor,
+            &renderer,
+            &mut shell,
+            &viewport,
+        );
+    }
+    bus.drain().map(|(message, _)| message).collect()
+}
+
 /// The size the root of `element` lays out to in a window of `window`.
 pub(crate) fn root_size<M>(
     mut element: Element<'_, M, Theme, iced::Renderer>,

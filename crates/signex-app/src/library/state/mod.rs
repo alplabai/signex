@@ -852,6 +852,9 @@ pub struct ComponentsRowDrag {
     pub key: ComponentsPanelRowKey,
     pub start: (f32, f32),
     pub started: bool,
+    /// The undocked window the press happened in (`None`: the main window):
+    /// the drag label paints there and the drop lands on its sheet.
+    pub window: Option<iced::window::Id>,
     /// The part was read for the cursor ghost: the pointer reached the
     /// schematic canvas while dragging, so the part is (or is being) attached.
     pub armed: bool,
@@ -872,6 +875,8 @@ pub struct ComponentsRowMenu {
     pub key: ComponentsPanelRowKey,
     pub x: f32,
     pub y: f32,
+    /// The undocked window that opened the menu (`None`: the main window).
+    pub window: Option<iced::window::Id>,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the

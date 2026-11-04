@@ -150,19 +150,15 @@ pub(super) fn click_in_window(
     app.update(window_message(window, msg))
 }
 
-/// Rows that act on the main window's document do the same from an
-/// undocked window's bar.
+/// App-wide rows do the same from an undocked window's bar as from the main
+/// bar: the app state they touch is the same, whichever window is clicked.
 #[test]
-fn undocked_window_rows_act_on_the_main_document_like_the_main_bar() {
+fn undocked_window_app_wide_rows_act_like_the_main_bar() {
     for path in [
-        "Edit/Copy",
-        "Edit/Select All",
         "Edit/Find",
-        "View/Zoom In",
         "View/Toggle Grid",
         "View/AutoFocus (dim unselected)",
         "Place/Wire",
-        "Place/Net Label",
         "Place/Junction",
         "Tools/Preferences...",
         "Help/Keyboard Shortcuts",
@@ -173,6 +169,25 @@ fn undocked_window_rows_act_on_the_main_document_like_the_main_bar() {
         let _ = click(&mut from_main, path);
         assert_eq!(probe(&from_window), probe(&from_main), "{path}");
     }
+}
+
+/// Select every symbol on the sheet `window` shows.
+pub(super) fn select_window_symbols(app: &mut Signex, window: iced::window::Id) {
+    let Some(crate::app::WindowKind::UndockedTab { path, .. }) = app.ui_state.windows.get(&window)
+    else {
+        panic!("not an undocked tab window");
+    };
+    let items = app.document_state.engines[path]
+        .document()
+        .symbols
+        .iter()
+        .map(|s| SelectedItem::new(s.uuid, SelectedKind::Symbol))
+        .collect();
+    app.interaction_state
+        .canvases
+        .get_mut(&window)
+        .expect("canvas")
+        .selected = items;
 }
 
 /// #1922: View ▸ Fit All is enabled by the undocked window's own canvas and
@@ -216,4 +231,81 @@ fn undocked_fit_all_fits_its_own_canvas_not_the_main_one() {
 
 fn row_is_live_in(app: &Signex, window: iced::window::Id, path: &str) -> bool {
     with_row_in(app, Some(window), path, |item| item.is_enabled())
+}
+
+/// An app whose main sheet holds R1 (selected in the main canvas) and whose
+/// undocked window shows a different sheet holding R5.
+fn main_with_r1_window_with_r5() -> (Signex, iced::window::Id) {
+    with_undocked_window(one_symbol_selected())
+}
+
+/// Copy from the window's bar carries the window's R5 (at 50, 50), not the
+/// main sheet's R1 (at 10, 10), and leaves the main selection alone.
+#[test]
+fn copy_from_a_windows_bar_carries_the_windows_symbol() {
+    let (mut app, window) = main_with_r1_window_with_r5();
+    select_window_symbols(&mut app, window);
+    let main_selection = app.interaction_state.canvas.selected.clone();
+    let _ = click_in_window(&mut app, window, "Edit/Copy");
+
+    let copied = app.interaction_state.clipboard.as_ref().expect("copied");
+    assert!(copied.origin.x > 40.0, "carried R1: {:?}", copied.origin);
+    assert_eq!(app.interaction_state.canvas.selected, main_selection);
+}
+
+/// Select All from the window's bar selects the window sheet's symbol in the
+/// window's canvas and leaves the main selection alone.
+#[test]
+fn select_all_from_a_windows_bar_selects_in_the_window() {
+    let (mut app, window) = main_with_r1_window_with_r5();
+    let main_selection = app.interaction_state.canvas.selected.clone();
+    let _ = click_in_window(&mut app, window, "Edit/Select All");
+
+    let in_window = app
+        .interaction_state
+        .canvas_for_window(window)
+        .selected
+        .clone();
+    let r5 = app.document_state.engines[std::path::Path::new("/w/undocked.snxsch")]
+        .document()
+        .symbols[0]
+        .uuid;
+    assert_eq!(in_window, vec![SelectedItem::new(r5, SelectedKind::Symbol)]);
+    assert_eq!(app.interaction_state.canvas.selected, main_selection);
+}
+
+/// Zoom In from the window's bar zooms the window's canvas, not the main one.
+#[test]
+fn zoom_in_from_a_windows_bar_zooms_the_windows_canvas() {
+    let (mut app, window) = main_with_r1_window_with_r5();
+    let main_before = app.interaction_state.canvas.zoom_percent();
+    let window_before = app
+        .interaction_state
+        .canvas_for_window(window)
+        .zoom_percent();
+    let _ = click_in_window(&mut app, window, "View/Zoom In");
+
+    assert!(
+        app.interaction_state
+            .canvas_for_window(window)
+            .zoom_percent()
+            > window_before
+    );
+    assert_eq!(app.interaction_state.canvas.zoom_percent(), main_before);
+}
+
+/// Net Label from the window's bar puts the label ghost on the window's
+/// canvas.
+#[test]
+fn net_label_from_a_windows_bar_ghosts_on_the_windows_canvas() {
+    let (mut app, window) = main_with_r1_window_with_r5();
+    let _ = click_in_window(&mut app, window, "Place/Net Label");
+
+    assert!(
+        app.interaction_state
+            .canvas_for_window(window)
+            .ghost_label
+            .is_some()
+    );
+    assert!(app.interaction_state.canvas.ghost_label.is_none());
 }

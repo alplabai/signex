@@ -193,6 +193,8 @@ impl DockArea {
 
     pub fn update(&mut self, msg: DockMessage) {
         match msg {
+            // Unwrapped by `handle_dock_message` before it gets here.
+            DockMessage::ScopedToWindow(..) => {}
             DockMessage::SelectTab(pos, idx) => {
                 let region = match pos {
                     PanelPosition::Left => &mut self.left,

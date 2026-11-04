@@ -106,6 +106,10 @@ pub struct InteractionState {
     /// The undocked window `active_bar_menu` was opened in; `None` for the
     /// main window. Only that window paints the dropdown (#1910).
     pub active_bar_menu_window: Option<iced::window::Id>,
+    /// The undocked window whose action is running inside `run_in_window`;
+    /// `None` for the main window. Stamps what the action opens (a Components
+    /// drag) and keeps the app-wide refreshes on the main window.
+    pub acting_window: Option<iced::window::Id>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
