@@ -411,10 +411,10 @@ fn an_edited_body_under_the_same_id_refits() {
     assert_eq!(state.camera.scale, fitted.scale);
     assert_eq!(state.fitted_for, Some(second.fit_key()));
     assert_ne!(first.fit_key(), second.fit_key());
+}
 
-    #[test]
-    fn the_preview_keeps_its_text_clamp() {
-        assert_eq!(PREVIEW_TEXT_SIZE.min_px, 6.0);
-        assert_eq!(PREVIEW_TEXT_SIZE.max_px, 64.0);
-    }
+#[test]
+fn the_preview_keeps_its_text_clamp() {
+    assert_eq!(PREVIEW_TEXT_SIZE.min_px, 6.0);
+    assert_eq!(PREVIEW_TEXT_SIZE.max_px, 64.0);
 }
