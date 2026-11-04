@@ -292,7 +292,8 @@ impl Signex {
             RestoredDocument::Footprint(file) => {
                 self.restore_footprint_copy(&path, *file);
             }
-            RestoredDocument::Pcb(board) => {
+            RestoredDocument::Pcb(mut board) => {
+                crate::app::sheet_repairs::take_and_log_board(&path, &mut board);
                 self.restore_pcb_copy(&path, *board);
             }
         }
@@ -420,5 +421,68 @@ mod tests {
             crate::diagnostics::logged_count("closed, so its recovery copy"),
             before + 1
         );
+    }
+
+    /// #1886 — a recovery copy of a board with a repeated id is repaired in
+    /// memory, so Messages says so and the tab does not keep the report.
+    #[test]
+    fn restoring_a_board_copy_logs_and_clears_its_repairs() {
+        use signex_types::format::{RepairedObject, SheetLoadRepair};
+        let needle = "restore-board-needle-1886";
+        let path = PathBuf::from("restore-1886.snxpcb");
+        let mut board = signex_types::pcb::PcbBoard {
+            unknown: Default::default(),
+            uuid: uuid::Uuid::now_v7(),
+            version: 1,
+            generator: "signex-test".into(),
+            thickness: 1.6,
+            outline: vec![],
+            layers: vec![],
+            setup: None,
+            nets: vec![],
+            footprints: vec![],
+            segments: vec![],
+            vias: vec![],
+            zones: vec![],
+            graphics: vec![],
+            texts: vec![],
+        };
+        board
+            .unknown
+            .load_repairs
+            .push(SheetLoadRepair::CopyDropped {
+                object: RepairedObject {
+                    kind: "track",
+                    name: needle.into(),
+                    position: 1,
+                },
+                uuid: uuid::Uuid::now_v7(),
+            });
+        let (mut app, _boot) = Signex::new();
+        app.open_pcb_tab(path.clone(), "board".into(), {
+            let mut b = board.clone();
+            b.unknown.load_repairs.clear();
+            b
+        });
+        let before = crate::diagnostics::logged_count(needle);
+        let _task = app.restore_loaded(RestoreLoaded {
+            path: path.clone(),
+            offer: RecoveryOffer {
+                path: path.clone(),
+                age_secs: 0,
+                older_than_file: false,
+            },
+            result: Ok(RestoredDocument::Pcb(Box::new(board))),
+        });
+        assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+        let Some(crate::app::TabDocument::Pcb(restored)) = app
+            .document_state
+            .tabs
+            .last()
+            .and_then(|tab| tab.cached_document.as_ref())
+        else {
+            panic!("pcb tab holds the restored board");
+        };
+        assert!(restored.unknown.load_repairs.is_empty());
     }
 }

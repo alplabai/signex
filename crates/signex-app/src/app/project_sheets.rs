@@ -212,6 +212,16 @@ pub(crate) fn load_sheet(
     )
 }
 
+/// The identity of a sheet path under `fold`, the owning project's key rules.
+pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
+    path_key_with(path, fold)
+}
+
+/// A disk parse of one sheet, ignoring open tabs (a worker has no engines).
+pub(crate) fn load_sheet_disk(path: &Path) -> Result<Option<SchematicSheet>, String> {
+    load_sheet_with(&|_| None, path)
+}
+
 /// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
 /// can read from a snapshot of the open sheets instead of borrowing the live
 /// [`DocumentState`].

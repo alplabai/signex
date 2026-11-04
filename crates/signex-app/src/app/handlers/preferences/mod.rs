@@ -498,8 +498,11 @@ impl Signex {
             }
             PrefMsg::DraftGridStyle(style) => {
                 self.ui_state.preferences_draft_grid_style = style;
-                // Live preview — `set_grid_style` also drops the bg cache
-                // on every window's canvas.
+                // Live preview: the grid sits in the camera-keyed bg layer,
+                // so drop that cache on every schematic canvas.
+                for canvas in self.interaction_state.all_schematic_canvases_mut() {
+                    canvas.clear_bg_cache();
+                }
                 self.recompute_preferences_dirty();
             }
             PrefMsg::DraftAnnotateUndo(scope) => {

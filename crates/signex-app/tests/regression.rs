@@ -372,6 +372,8 @@ mod library_stock_copy;
 mod library_stock_editable;
 #[path = "regression/library_stock_place.rs"]
 mod library_stock_place;
+#[path = "regression/library_symbol_delete_closed.rs"]
+mod library_symbol_delete_closed;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/library_symbol_missing.rs"]

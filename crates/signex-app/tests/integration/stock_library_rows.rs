@@ -113,3 +113,51 @@ fn every_row_content_hash_verifies() {
         );
     }
 }
+
+/// #1961 — a placed stock symbol draws pin text on the sheet. Two-terminal
+/// parts and diodes draw none, transistors draw only pin numbers (names
+/// would sit on the transistor graphics), and an IC draws numbers and names.
+#[test]
+fn placed_stock_parts_show_the_pin_text_a_schematic_expects() {
+    use signex_types::schematic::{PinLabelKind, Symbol, lower_pin_labels};
+    let adapter = open_stock();
+    let rows = stock_rows(&adapter);
+    let kinds = |pn: &str| -> Vec<PinLabelKind> {
+        let row = rows
+            .iter()
+            .find(|r| r.internal_pn.as_str() == pn)
+            .unwrap_or_else(|| panic!("{pn} row"));
+        let symbol = adapter.get_symbol(row.symbol_ref.uuid).expect("symbol");
+        let lib = symbol.to_lib_symbol(format!("Stock:{pn}"));
+        let placed = Symbol {
+            lib_id: lib.id.clone(),
+            ..Symbol::default()
+        };
+        lower_pin_labels(&lib, &placed)
+            .iter()
+            .map(|l| l.kind)
+            .collect()
+    };
+    for pn in [
+        "STOCK-R",
+        "STOCK-C",
+        "STOCK-C_Polarized",
+        "STOCK-L",
+        "STOCK-D",
+        "STOCK-D_Zener",
+        "STOCK-D_Schottky",
+        "STOCK-LED",
+        "STOCK-Crystal",
+        "STOCK-Fuse",
+        "STOCK-Ferrite",
+    ] {
+        assert!(kinds(pn).is_empty(), "{pn} draws pin text: {:?}", kinds(pn));
+    }
+    for pn in ["STOCK-Q_NPN", "STOCK-Q_PNP", "STOCK-Q_NMOS", "STOCK-Q_PMOS"] {
+        let got = kinds(pn);
+        assert_eq!(got.len(), 3, "{pn}: {got:?}");
+        assert!(got.iter().all(|k| *k == PinLabelKind::Number), "{pn}");
+    }
+    let ic = kinds("STOCK-IC_Generic");
+    assert!(ic.contains(&PinLabelKind::Number) && ic.contains(&PinLabelKind::Name));
+}

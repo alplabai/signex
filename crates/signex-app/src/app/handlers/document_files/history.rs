@@ -440,8 +440,10 @@ impl Signex {
                 (document_installed, document_repaired) =
                     self.install_reloaded_schematic(idx, &path, *sheet, commit, restored_bytes);
             }
-            Ok(RestoreJobDocument::Pcb(board)) => {
+            Ok(RestoreJobDocument::Pcb(mut board)) => {
                 crate::app::load_gateway::report_unusable_zone_holes(&path, &board);
+                let repaired = crate::app::sheet_repairs::take_and_log_board(&path, &mut board);
+                document_repaired = repaired;
                 self.document_state.set_pcb_board(idx, *board);
                 if idx == self.document_state.active_tab {
                     // Refresh canvas; preserve camera (don't fit-to-board).
@@ -450,8 +452,10 @@ impl Signex {
                 // The tab now matches disk. Leaving it dirty would let Ctrl+S
                 // re-encode the board and drop the restored file's comments
                 // and formatting, so commit the on-disk bytes as they are.
-                self.set_reloaded_dirty(&path, false);
-                if commit {
+                // A board repaired on load (#1886) is the exception: the file
+                // does not hold the repair, so the tab stays modified.
+                self.set_reloaded_dirty(&path, repaired);
+                if commit && !repaired {
                     self.commit_restore(&path, restored_bytes);
                 }
             }

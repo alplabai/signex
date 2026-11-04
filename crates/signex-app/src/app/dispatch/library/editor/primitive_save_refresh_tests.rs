@@ -242,3 +242,34 @@ fn the_blocking_save_is_still_refused_while_a_write_is_pending() {
         "{refused}"
     );
 }
+
+/// Project close saves symbols on this thread; a row bound to a symbol the
+/// library does not hold must read as missing right after (#1903).
+#[test]
+fn the_blocking_save_marks_rows_bound_to_a_missing_symbol() {
+    let Fixture {
+        mut app,
+        path,
+        file,
+        ..
+    } = fixture();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    app.library.pending_mounts.clear();
+    let library_id = app.library.open_libraries[0].library_id;
+    let mut orphan = test_row();
+    orphan.symbol_ref = PrimitiveRef::new(library_id, Uuid::now_v7());
+    let row_id = orphan.row_id;
+    app.library.open_libraries[0]
+        .tables
+        .insert("R".into(), vec![orphan]);
+
+    app.save_primitive_tab_blocking(&path).expect("save");
+
+    let lib = app.library.library_at(&file).expect("library");
+    assert!(
+        lib.dangling
+            .marks_row(row_id, signex_library::RefSlot::Symbol),
+        "{:?}",
+        lib.dangling.refs
+    );
+}

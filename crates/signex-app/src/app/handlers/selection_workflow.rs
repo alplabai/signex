@@ -174,7 +174,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.ui_state.net_class_styles.styles(),
+                        self.active_class_styles(),
                     );
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
@@ -223,7 +223,7 @@ impl Signex {
                         &self.interaction_state.active_canvas().designators,
                         world_x,
                         world_y,
-                        self.ui_state.net_class_styles.styles(),
+                        self.active_class_styles(),
                     );
                     if let Some(item) = hit {
                         self.interaction_state.active_canvas_mut().selected =
