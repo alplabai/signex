@@ -33,7 +33,7 @@ rendering and an Altium Designer-quality UI. Today it is a **schematic
 editor** with symbol, footprint and component-library editors, ERC,
 annotation, and PDF / BOM / netlist export. The PCB editor, 3D viewer,
 simulation and plugin system are on the [roadmap](docs/ROADMAP.md), not in
-the v1.0 Community Preview. Native file formats (`.snxsch`, `.snxpcb`) are
+the Community Preview. Native file formats (`.snxsch`, `.snxpcb`) are
 line-diffable in git and ~5× smaller than the equivalent JSON.
 
 **New here?** Install a package (see [Download](#download)), then follow the
@@ -57,19 +57,21 @@ board.
 **Two editions from one codebase:**
 
 - **Signex Community** (Apache-2.0, free forever) — the schematic editor
-  today; the PCB editor follows in v2.x (see the [roadmap](docs/ROADMAP.md))
-- **Signex Pro** (subscription, planned for v3.0) — adds Signal AI
+  today; the PCB editor follows (PCB Viewer, then PCB Routing and Community Release; see the [roadmap](docs/ROADMAP.md))
+- **Signex Pro** (subscription, planned for the Pro Release) — adds Signal AI
   (Claude-powered design copilot), plugins, real-time collaboration, and
   Signex 365 cloud PLM
 
-> **Status:** Early development, heading for the first release candidate.
-> **v0.15.0** (2026-07-23) is the latest tagged release; **v1.0.0-rc.1**, the
-> first release candidate of the **v1.0.0 Community Preview** (schematic-only),
-> is next. `trunk` already carries work past v0.15.0 that no release contains
-> yet: a stock library with placeable parts, typed component values with a
+> **Status:** Early development. **v1.0.0-rc.1** (2026-10-29), the first
+> release candidate of the **Community Preview** (schematic-only), is the
+> latest tag and the last one numbered with SemVer; **v0.15.0** (2026-07-23)
+> is the latest stable release. From the next release on, versions are
+> calendar-based, `YY.MM.MICRO` (for example `v26.11.0`; see
+> [docs/ROADMAP.md](docs/ROADMAP.md) §3). `trunk` carries work past v0.15.0
+> that may not be in a release yet: a stock library with placeable parts, typed component values with a
 > range filter, ERC completeness rules with waivers and an ERC report,
 > cross-sheet net navigation, project-wide Find and Replace, and in-place
-> text editing. The version axis and the v1.0 exit criteria are in
+> text editing. The release plan and the Community Preview exit criteria are in
 > [docs/ROADMAP.md](docs/ROADMAP.md). Release candidates are published as
 > GitHub **pre-releases**; see [Download](#download).
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
@@ -148,14 +150,14 @@ board.
 
 **What's next:**
 
-| Version | Milestone |
+| Plan | Milestone |
 |---|---|
-| **v1.0** | **Community Preview** — schematic-only release |
-| **v2.0–v2.2** | **Community Release** — full PCB editor (viewer, routing, DRC, output) |
-| **v2.3–v2.5** | 3D Viewer, Advanced PCB, High-Speed Design |
-| **v3.0** | **Pro Release** — Signal AI + plugins + collaboration |
-| **v4.0** | Unified simulation view with SPICE, EM, thermal |
-| **v5.0** | Signex 365 cloud PLM |
+| **Community Preview** | Schematic-only release |
+| **PCB Viewer → Community Release** | Full PCB editor (viewer, routing, DRC, output) |
+| **3D Viewer → High-Speed Design** | 3D Viewer, Advanced PCB, High-Speed Design |
+| **Pro Release** | Signal AI + plugins + collaboration |
+| **Simulation** | Unified simulation view with SPICE, EM, thermal |
+| **Signex 365** | Cloud PLM |
 
 ## Screenshots
 
@@ -325,7 +327,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 
 ## Roadmap
 
-| Milestone | Version | Status |
+| Milestone | Version / gate | Status |
 |---|---|---|
 | Scaffold — Iced shell, panels, themes, dock system | v0.1 | Done |
 | Parser — external format read/write, domain types | v0.2 | Done |
@@ -341,17 +343,17 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings  # Lint
 | Symbol & Library — clean-room schematic renderer, unified Active Bar in symbol editor, `.snxsym` TOML envelope | v0.13 | Done |
 | Footprint Editor — `.snxfpt` pad + parametric-sketch editor, Newton-LM solver (19 constraints), Align/Distribute/Move/Fill/Text tooling | v0.14 | Done |
 | Editor Fixes — footprint/symbol editor correctness, order-independent netlist, crash-safe persistence, pinned toolchain | v0.15 | Done |
-| Command Registry & Symbol Units | v0.16 | In progress |
-| **Community Preview** — schematic-only editor | **v1.0** | Release candidate `v1.0.0-rc.1` next |
-| PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
-| PCB Routing + DRC + Output | v2.1–v2.2 | |
-| **Community Release** — full schematic + PCB editor | **v2.2** | |
-| 3D Viewer, Advanced PCB, High-Speed Design | v2.3–v2.5 | |
-| **Pro Release** — Signal AI + plugins + collaboration | **v3.0** | |
-| Simulation — SPICE, EM, thermal, simulation wizards | v4.0–v4.1 | |
-| **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **v5.0** | |
+| Command Registry & Symbol Units | Planned | In progress |
+| **Community Preview** — schematic-only editor | **Gate** | `v1.0.0-rc.1` shipped 2026-10-29 (last SemVer tag); next release is CalVer |
+| PCB Viewer — GPU rendering, layers, cross-probe | **Gate** | |
+| PCB Routing + DRC + Output | Planned | |
+| **Community Release** — full schematic + PCB editor | **Gate** | |
+| 3D Viewer, Advanced PCB, High-Speed Design | Planned | |
+| **Pro Release** — Signal AI + plugins + collaboration | **Gate** | |
+| Simulation — SPICE, EM, thermal, simulation wizards | Planned | |
+| **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **Gate** | |
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed release plan.
 
 ## Documentation
 

@@ -83,5 +83,5 @@ UPDATE component_rows
   row. Anyone holding the token can read and write every library on the
   server. Treat it like a shared password, rotate it by restarting with a new
   value, and keep the server on a network you trust. Per-client credentials
-  are planned after v1.0.
+  are planned after the Community Preview.
 - **No built-in TLS** (see Deploying).

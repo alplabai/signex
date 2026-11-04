@@ -306,11 +306,11 @@ The most likely additions are:
 - `signex-erc` — schematic rule check engine *(landed in v0.7)*
 - `signex-sketch` — 2D parametric sketch mode for footprint editor + PCB
   outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
-- `signex-drc` — PCB design rule check engine (v2.0+)
+- `signex-drc` — PCB design rule check engine (PCB Viewer and later)
 - `pcb-geom` — geometry primitives for PCB (polygon offset, R-tree,
-  Delaunay, boolean ops) shared by router, DRC, and render. Added in v2.0.
+  Delaunay, boolean ops) shared by router, DRC, and render. Added with the PCB Viewer.
 - `pcb-router` — interactive router (walkaround, shove, diff pair,
-  tuning, pour). Added in v2.1. See `internal/docs/PCB_ROUTER_PLAN.md`.
+  tuning, pour). Added with PCB Routing. See `internal/docs/PCB_ROUTER_PLAN.md`.
 
 These should be added only when their responsibility is real and clear, not as
 speculative abstraction.
