@@ -95,8 +95,7 @@ pub(crate) fn messages_on_click_at<M>(
         &renderer,
         &mut collect,
     );
-    let at = label.map_or(point, |label| find(&collect.0, label).bounds.center() + iced::Vector::new(100.0, 0.0));
-    eprintln!("DBG at={at:?} texts={:?}", collect.0.iter().filter(|t| t.bounds.y < 100.0 && t.bounds.x < 400.0).collect::<Vec<_>>());
+    let at = label.map_or(point, |label| find(&collect.0, label).bounds.center());
     let cursor = mouse::Cursor::Available(at);
     let mut bus = Bus::new();
     let viewport = Rectangle::with_size(window);
@@ -117,7 +116,6 @@ pub(crate) fn messages_on_click_at<M>(
             &mut shell,
             &viewport,
         );
-        let cap = shell.is_event_captured(); drop(shell); eprintln!("DBG ev={event:?} captured={cap} bus={}", bus.len());
     }
     bus.drain().map(|(message, _)| message).collect()
 }
