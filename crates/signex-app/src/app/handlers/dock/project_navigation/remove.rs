@@ -289,7 +289,10 @@ impl Signex {
                 }
                 // The unmount below drops dirty previews either way; an
                 // orphan only words it differently.
-                if matches!(io, DeleteIo::DeletedLibrary { .. } | DeleteIo::Orphan) {
+                if matches!(io, DeleteIo::DeletedLibrary { .. })
+                    || (matches!(io, DeleteIo::Orphan)
+                        && crate::app::file_extension::has_extension(target, "snxlib"))
+                {
                     let deleted = matches!(io, DeleteIo::DeletedLibrary { .. });
                     self.report_editors_lost_to_delete(target, request.fold, deleted);
                 }

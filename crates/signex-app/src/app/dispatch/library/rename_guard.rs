@@ -47,6 +47,7 @@ impl Signex {
         }
         let edits = match msg {
             PrimitiveEdit::Save => true,
+            PrimitiveEdit::Footprint(m) if footprint_msg_is_completion(m) => false,
             PrimitiveEdit::Symbol(m) => !symbol_msg_is_view_only(m),
             PrimitiveEdit::Footprint(m) => !footprint_msg_is_view_only(m),
         };
@@ -111,6 +112,12 @@ fn symbol_msg_is_view_only(msg: &SymbolEditorMsg) -> bool {
             | S::CloseContextMenu
             | S::ContextMenuOpenSubmenu(_)
     )
+}
+
+/// Footprint editor answers to earlier async work. Dropping one strands the
+/// editor's slot for that work in flight. The symbol editor has none.
+fn footprint_msg_is_completion(msg: &FootprintEditorMsg) -> bool {
+    matches!(msg, FootprintEditorMsg::SketchSolved { .. })
 }
 
 /// Footprint editor events that change no document state.
@@ -308,6 +315,31 @@ mod tests {
                 _ => unreachable!(),
             })
             .is_none()
+        );
+    }
+
+    #[test]
+    fn a_sketch_solve_answer_during_a_library_rename_is_not_refused() {
+        let app = app_with_library_rename();
+        let msg = LibraryMessage::PrimitiveEditorEvent {
+            path: "/w/a.snxlib/footprints/f.snxfpt".into(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSolved {
+                instance: uuid::Uuid::nil(),
+                generation: 1,
+                footprint_idx: 0,
+                outcome: std::sync::Arc::new(
+                    crate::library::editor::footprint::sketch_solve_task::SolveOutcome::SolveFailed(
+                        signex_sketch::SolveError::DidNotConverge {
+                            iters: 0,
+                            final_residual_norm: 0.0,
+                        },
+                    ),
+                ),
+            }),
+        };
+        assert!(
+            app.primitive_edit_refusal(&msg).is_none(),
+            "a completion must land, or the solve slot stays in flight"
         );
     }
 
