@@ -75,6 +75,8 @@ mod row_summary;
 mod row_summary_tests;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 #[cfg(test)]
+mod component_save_point_tests;
+#[cfg(test)]
 mod save_all_cascade_tests;
 mod settings;
 #[cfg(test)]

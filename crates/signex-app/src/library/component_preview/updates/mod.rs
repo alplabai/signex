@@ -31,6 +31,12 @@ use crate::library::messages::EditorMsg;
 /// mutations across the datasheet, pin-map, supply, parameters, and
 /// simulation field groups.
 pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
+    let scope = state.begin_edit();
+    route_inline_edit(state, msg);
+    state.finish_edit(scope);
+}
+
+fn route_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
     match msg {
         // ── Component-level ──────────────────────────────────────────
         EditorMsg::SelectTab(tab) => state.active_tab = tab,

@@ -930,6 +930,7 @@ mod picker_cache;
 mod picker_cache_tests;
 mod placed_part;
 mod preview;
+mod preview_history;
 mod refresh;
 #[cfg(test)]
 mod refresh_tests;
@@ -949,6 +950,7 @@ pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
+pub use preview_history::{EditScope, RowHistory};
 pub use refresh::{LibrarySnapshot, RefreshFinish, RefreshStart};
 pub use relocate::rebase_path;
 pub use stock_copy::STOCK_LIBRARY_ID;
