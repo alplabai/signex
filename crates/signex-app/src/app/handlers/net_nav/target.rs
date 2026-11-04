@@ -104,7 +104,7 @@ impl Signex {
             &canvas.designators,
             x,
             y,
-            self.ui_state.net_class_styles.styles(),
+            self.active_class_styles(),
         )
     }
 

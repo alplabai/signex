@@ -9,10 +9,13 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock, Weak};
 
 use signex_types::net::Netlist;
 
 use super::project_sheets::{OpenSheets, ProjectSheetSet, stitch_issue_message};
+use super::state::ProjectId;
+use super::state::net_class_styles::ProjectKey;
 use super::state::scope::CaseFold;
 
 /// A stitched netlist and what went wrong while assembling it.
@@ -41,9 +44,9 @@ impl Stitched {
     }
 }
 
-/// The project netlist rooted at `root`, over a snapshot of the open sheets,
-/// so it can run on a blocking thread (it must not run inside `update`): only
-/// the sheets absent from `open` are read from disk.
+/// The project netlist rooted at `root`, without the net index. Test seam for
+/// the cases that read only the netlist.
+#[cfg(test)]
 pub(crate) fn stitched_project_netlist_from(
     open: &OpenSheets,
     pages: &[PathBuf],
@@ -55,8 +58,10 @@ pub(crate) fn stitched_project_netlist_from(
     netlist_of_set(&set, project_dir)
 }
 
-/// [`stitched_project_netlist_from`] that also indexes what sits on each net,
-/// for navigation, highlight and hover. Blocking, like it.
+/// The project netlist rooted at `root` and an index of what sits on each net
+/// (navigation, highlight, hover), over a snapshot of the open sheets, so it
+/// can run on a blocking thread (it must not run inside `update`): only the
+/// sheets absent from `open` are read from disk.
 pub(crate) fn stitched_index_from(
     open: &OpenSheets,
     pages: &[PathBuf],
@@ -66,6 +71,41 @@ pub(crate) fn stitched_index_from(
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
     stitch_set(&set, project_dir, true)
+}
+
+/// One project's stitch, computed by whichever of the net-class style job and
+/// the net index job runs first; the other waits for it and reads the same
+/// answer, so one connectivity commit stitches a project once.
+pub(crate) type StitchSlot = Arc<OnceLock<Stitched>>;
+
+/// The slot each project's in-flight jobs share, by the key they resolve.
+/// Holds the slot weakly: it lives as long as a job holds it, so a request
+/// made after both finished stitches again and reads current disk content.
+/// Sharing therefore needs both jobs planned before either finishes: the net
+/// index job is planned on demand (hover, highlight, jump), the style job
+/// after each commit, and a job planned after the other finished stitches
+/// again. Entries whose jobs are gone are dropped on the next claim.
+#[derive(Default)]
+pub struct StitchShare {
+    slots: HashMap<ProjectId, (ProjectKey, Weak<OnceLock<Stitched>>)>,
+}
+
+impl StitchShare {
+    /// The slot for `project` at `key`: the live one when a job already holds
+    /// it, else a new empty one.
+    pub(crate) fn claim(&mut self, project: ProjectId, key: &ProjectKey) -> StitchSlot {
+        self.slots.retain(|_, (_, weak)| weak.strong_count() > 0);
+        if let Some((held, weak)) = self.slots.get(&project)
+            && held == key
+            && let Some(slot) = weak.upgrade()
+        {
+            return slot;
+        }
+        let slot = StitchSlot::default();
+        self.slots
+            .insert(project, (key.clone(), Arc::downgrade(&slot)));
+        slot
+    }
 }
 
 /// The Messages line for a sheet that exists but would not read or parse. The
@@ -85,7 +125,15 @@ pub(crate) fn netlist_of_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>
     stitch_set(set, project_dir, false)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many project stitches this test thread ran.
+    pub(crate) static STITCH_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn stitch_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>, want_index: bool) -> Stitched {
+    #[cfg(test)]
+    STITCH_RUNS.with(|runs| runs.set(runs.get() + 1));
     let mut warnings: Vec<String> = set
         .unreadable
         .iter()
@@ -140,8 +188,8 @@ fn stitch_set(set: &ProjectSheetSet, project_dir: Option<PathBuf>, want_index: b
     }
 }
 
-/// Test seam: stitch the project of the active document the way the
-/// net-class job plans it (declared root, open tabs live, no extra pages).
+/// Test seam: the netlist of the project of the active document, planned like
+/// the net-class job does (declared root, open tabs live, no extra pages).
 #[cfg(test)]
 pub(crate) fn stitched_for_active_project(document: &super::state::DocumentState) -> Stitched {
     let root = super::project_sheets::resolve_netlist_root(document).expect("an active document");
