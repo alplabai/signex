@@ -360,6 +360,17 @@ fn text_box_perf() {
     println!("box select 6000 items: {:?}", boxed(&sheet));
 }
 
+/// An uninstalled family's flag is the default face's flag: canvas and export
+/// both pick the face that draws, not the unavailable one.
+#[test]
+fn a_missing_family_flag_is_the_default_face_flag() {
+    roboto_em();
+    assert_eq!(
+        flag_body_width(&label(LabelType::Global, Some("No Such Face 9f2")), None),
+        flag_body_width(&label(LabelType::Global, None), None)
+    );
+}
+
 /// The stored widths of a sheet (`SchematicSheet::text_widths`) answer with the
 /// new width at once after every kind of change, undo and redo included: an
 /// entry is checked against the text, face and size it was measured from.

@@ -43,8 +43,9 @@ impl MeasuredText {
 /// (stale entries of deleted items are the only way to get there).
 const MAX_ENTRIES: usize = 200_000;
 
-/// The widths of one sheet. Clones share the table: an undo snapshot reads
-/// the same entries, each checked against its own inputs.
+/// The widths of one sheet. Clones share ONE table (an `Arc<Mutex>`): an undo
+/// snapshot, a render snapshot and the engine's document all read and write the
+/// same entries, each checked against its own inputs.
 #[derive(Clone, Default)]
 pub struct TextWidths(Arc<Mutex<HashMap<(Uuid, TextField), MeasuredText>>>);
 
@@ -58,7 +59,9 @@ impl std::fmt::Debug for TextWidths {
 
 impl TextWidths {
     /// The width of `text` for item `id`'s `field`: the stored one when it
-    /// was measured from these inputs, else `measure()`, stored.
+    /// was measured from these inputs, else `measure()`, stored. `measure`
+    /// says whether its answer is final; a stand-in (the shaper was not ready)
+    /// is returned but not stored, so it is measured again later.
     pub fn width_mm(
         &self,
         id: Uuid,
@@ -66,7 +69,7 @@ impl TextWidths {
         text: &str,
         family: Option<&str>,
         size_mm: f64,
-        measure: impl FnOnce() -> f64,
+        measure: impl FnOnce() -> (f64, bool),
     ) -> f64 {
         let mut table = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(hit) = table
@@ -75,7 +78,10 @@ impl TextWidths {
         {
             return hit.width_mm;
         }
-        let width_mm = measure();
+        let (width_mm, final_width) = measure();
+        if !final_width {
+            return width_mm;
+        }
         if table.len() >= MAX_ENTRIES {
             table.clear();
         }
@@ -113,7 +119,7 @@ mod tests {
         let get = |text: &str, family: Option<&str>, size: f64| {
             widths.width_mm(id, TextField::Note, text, family, size, || {
                 calls.set(calls.get() + 1);
-                text.len() as f64
+                (text.len() as f64, true)
             })
         };
         assert_eq!(get("abc", None, 1.27), 3.0);
@@ -125,18 +131,32 @@ mod tests {
         assert_eq!(calls.get(), 4, "text, face and size each re-measure");
     }
 
+    /// A width measured before the shaper exists is a stand-in: it is not
+    /// stored, so the first read after the shaper is installed measures again.
+    #[test]
+    fn a_stand_in_width_is_not_stored() {
+        let widths = TextWidths::default();
+        let id = Uuid::now_v7();
+        let before = widths.width_mm(id, TextField::Note, "abc", None, 1.0, || (1.0, false));
+        assert_eq!(before, 1.0);
+        assert!(widths.is_empty(), "nothing stored for a stand-in");
+        let after = widths.width_mm(id, TextField::Note, "abc", None, 1.0, || (2.0, true));
+        assert_eq!(after, 2.0, "measured again once final");
+        assert_eq!(widths.len(), 1);
+    }
+
     #[test]
     fn clones_share_entries_and_each_field_has_its_own() {
         let widths = TextWidths::default();
         let id = Uuid::now_v7();
-        widths.width_mm(id, TextField::Label, "x", None, 1.0, || 5.0);
+        widths.width_mm(id, TextField::Label, "x", None, 1.0, || (5.0, true));
         let clone = widths.clone();
         assert_eq!(
-            clone.width_mm(id, TextField::Label, "x", None, 1.0, || 9.0),
+            clone.width_mm(id, TextField::Label, "x", None, 1.0, || (9.0, true)),
             5.0
         );
         assert_eq!(
-            clone.width_mm(id, TextField::Note, "x", None, 1.0, || 9.0),
+            clone.width_mm(id, TextField::Note, "x", None, 1.0, || (9.0, true)),
             9.0
         );
     }

@@ -399,7 +399,7 @@ impl GlyphonTextPipeline {
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
         for text in atlas_drawable(texts) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            if crate::primitive::text::text_raster(font_px)
+            if crate::primitive::text::text_raster(font_px, size_policy.atlas_limit_px)
                 != crate::primitive::text::TextRaster::Bitmap
             {
                 continue;

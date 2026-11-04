@@ -160,7 +160,7 @@ impl SchematicCanvas<'_> {
                 }
                 // The GPU shader beneath draws everything else.
                 ContentMode::GpuOverlay => {
-                    crate::schematic_runtime::draw_rotated_text_fallback(frame, scene, transform);
+                    crate::schematic_runtime::draw_canvas_text_fallback(frame, scene, transform);
                 }
             }
         }

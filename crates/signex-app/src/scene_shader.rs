@@ -140,6 +140,7 @@ impl SceneSurface for PcbSurface {
 /// `prepare` hands the glyph pipeline.
 fn text_policy_device<S: SceneSurface>(dpi: f32) -> TextSizePolicy {
     TextSizePolicy::new(S::TEXT_SIZE.min_px * dpi, S::TEXT_SIZE.max_px * dpi)
+        .with_atlas_limit(crate::renderer_scene_canvas::ATLAS_TEXT_LIMIT_PX * dpi)
 }
 
 /// The schematic editor's scene surface.

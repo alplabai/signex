@@ -217,10 +217,11 @@ impl SvgRenderContext {
                     &label.text,
                     label.font_size,
                     spin,
-                    signex_types::font::requested_family(
+                    signex_types::font::resolve_family(
                         label.font_family.as_deref(),
                         document_family,
-                    ),
+                    )
+                    .as_deref(),
                 ),
                 LabelType::Power => (0.0, 0.0),
             };

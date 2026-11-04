@@ -24,7 +24,7 @@ use signex_gfx::scene::Scene;
 
 use super::gpu_mount_tests::{Frame, HEIGHT, WIDTH, gpu, render};
 use crate::renderer_scene_canvas::{
-    SceneDrawOptions, draw_rotated_texts, draw_scene_with_world_to_screen,
+    SceneDrawOptions, draw_canvas_texts, draw_scene_with_world_to_screen,
 };
 
 /// Glyph height in logical pixels. Large so the measurements dwarf the slack.
@@ -64,7 +64,7 @@ impl canvas::Program<crate::app::Message> for OneLabel {
         if self.0.is_axis_aligned() {
             draw_scene_with_world_to_screen(&mut frame, &scene, to_screen, options);
         } else {
-            draw_rotated_texts(&mut frame, &scene, to_screen, options);
+            draw_canvas_texts(&mut frame, &scene, to_screen, options);
         }
         vec![frame.into_geometry()]
     }

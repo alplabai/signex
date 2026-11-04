@@ -503,14 +503,15 @@ pub(crate) fn draw_built_scene_with(
     );
 }
 
-/// The CPU half of a GPU-mounted sheet: only the texts the GPU glyph atlas
-/// cannot rotate, through the same transform and options as the full replay.
-pub(crate) fn draw_rotated_text_fallback(
+/// The canvas half of a GPU-mounted sheet: only the texts the GPU glyph atlas
+/// cannot draw, the rotated and the oversize ones, through the same transform
+/// and options as the full replay.
+pub(crate) fn draw_canvas_text_fallback(
     frame: &mut canvas::Frame,
     scene: &Scene,
     transform: &ScreenTransform,
 ) {
-    crate::renderer_scene_canvas::draw_rotated_texts(
+    crate::renderer_scene_canvas::draw_canvas_texts(
         frame,
         scene,
         |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
@@ -895,10 +896,10 @@ fn drawn_text_aabb(
     v_align: VAlign,
 ) -> Aabb {
     let size_mm = text_height_mm(font_size);
-    let measure = || signex_types::font::family_width_mm(text, family, size_mm);
+    let measure = || signex_types::font::family_width_mm_checked(text, family, size_mm);
     let width = match slot {
         Some((widths, id, field)) => widths.width_mm(id, field, text, family, size_mm, measure),
-        None => measure(),
+        None => measure().0,
     };
     text_aabb_with_width(width, font_size, anchor, rotation_deg, h_align, v_align)
 }

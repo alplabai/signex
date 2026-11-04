@@ -219,4 +219,16 @@ mod tests {
         assert!(matches!(align, SvgTextAlign::Left));
         assert!(matches!(v_align, SvgTextVAlign::Top));
     }
+
+    /// An uninstalled font draws in the bundled face, so the export offsets
+    /// the flag text by that face's width, not by the unavailable font's.
+    #[test]
+    fn a_missing_family_offsets_by_the_face_that_draws() {
+        const DEFAULT: f64 = signex_types::schematic::SCHEMATIC_TEXT_MM;
+        let resolved = signex_types::font::resolve_family(Some("No Such Face 9f2"), None);
+        let missing =
+            schematic_text_offset_hier("SIGNAL", DEFAULT, SpinStyle::Right, resolved.as_deref());
+        let default = schematic_text_offset_hier("SIGNAL", DEFAULT, SpinStyle::Right, None);
+        assert_eq!(missing, default);
+    }
 }

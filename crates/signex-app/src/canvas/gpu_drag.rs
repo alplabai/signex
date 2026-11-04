@@ -253,9 +253,9 @@ impl SchematicCanvas<'_> {
         })
     }
 
-    /// The rotated texts of the moving items, which the GPU glyph atlas cannot
-    /// draw. Above the drag shader, as the moving items are above the rest.
-    pub(in crate::canvas) fn draw_moving_rotated_texts(
+    /// The rotated and oversize texts of the moving items, which the GPU glyph
+    /// atlas cannot draw. Above the drag shader, as the moving items are above the rest.
+    pub(in crate::canvas) fn draw_moving_canvas_texts(
         &self,
         renderer: &Renderer,
         bounds: Rectangle,
@@ -267,20 +267,16 @@ impl SchematicCanvas<'_> {
             .drag_moving_scene(&transform, bounds)
             .and_then(|moving| moving.scene)
         {
-            crate::schematic_runtime::draw_rotated_text_fallback(&mut frame, &scene, &transform);
+            crate::schematic_runtime::draw_canvas_text_fallback(&mut frame, &scene, &transform);
         }
         frame.into_geometry()
     }
 
-    /// The rotated texts of everything that is not moving: the whole sheet when
+    /// The rotated and oversize texts of everything that is not moving: the whole sheet when
     /// idle, the static layer during a drag. Drawn between the content shader
     /// and the drag shader, so a moving item passes over them like over the
     /// rest of the static layer.
-    fn draw_static_rotated_texts(
-        &self,
-        renderer: &Renderer,
-        bounds: Rectangle,
-    ) -> canvas::Geometry {
+    fn draw_static_canvas_texts(&self, renderer: &Renderer, bounds: Rectangle) -> canvas::Geometry {
         let local = crate::schematic_runtime::frame_local_bounds(bounds);
         match self.live_drag() {
             Some(drag) => self.draw_drag_static_texts(renderer, local, &drag),
@@ -288,7 +284,7 @@ impl SchematicCanvas<'_> {
         }
     }
 
-    /// Idle: the content scene's rotated texts, retained like the CPU content
+    /// Idle: the content scene's rotated and oversize texts, retained like the CPU content
     /// layer until the camera moves.
     fn draw_idle_texts(&self, renderer: &Renderer, local: Rectangle) -> canvas::Geometry {
         if !self.content_cache_fits_camera() {
@@ -306,7 +302,7 @@ impl SchematicCanvas<'_> {
         })
     }
 
-    /// During a drag: the static layer's rotated texts, retained with it.
+    /// During a drag: the static layer's rotated and oversize texts, retained with it.
     fn draw_drag_static_texts(
         &self,
         renderer: &Renderer,
@@ -333,13 +329,13 @@ impl SchematicCanvas<'_> {
         );
         layers.static_cache.draw(renderer, local.size(), |target| {
             if let Some(scene) = &static_scene {
-                crate::schematic_runtime::draw_rotated_text_fallback(target, scene, &transform);
+                crate::schematic_runtime::draw_canvas_text_fallback(target, scene, &transform);
             }
         })
     }
 }
 
-/// The rotated texts of the static layer, on a canvas of their own between the
+/// The rotated and oversize texts of the static layer, on a canvas of their own between the
 /// content shader and the drag shader. No `update`.
 pub(crate) struct SchematicStaticTextLayer<'a>(SchematicCanvas<'a>);
 
@@ -360,7 +356,7 @@ impl canvas::Program<Message> for SchematicStaticTextLayer<'_> {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        vec![self.0.draw_static_rotated_texts(renderer, bounds)]
+        vec![self.0.draw_static_canvas_texts(renderer, bounds)]
     }
 }
 

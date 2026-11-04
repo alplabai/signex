@@ -54,6 +54,7 @@ pub mod library;
 pub(crate) mod log_probe;
 pub mod menu_bar;
 mod numeric_field;
+mod oversize_text;
 pub mod panels;
 pub mod passive_calculator_modal;
 pub mod pcb_canvas;

@@ -20,11 +20,18 @@ fn clamp(size: &mut f64, object: impl FnOnce() -> RepairedObject, made: &mut Vec
         return;
     }
     let old = *size;
-    *size = MAX_TEXT_SIZE_MM;
+    // A size that is not a number has no real size to keep; the default is the
+    // safe reading, not the largest one.
+    let new = if old.is_finite() {
+        MAX_TEXT_SIZE_MM
+    } else {
+        crate::schematic::SCHEMATIC_TEXT_MM
+    };
+    *size = new;
     made.push(SheetLoadRepair::TextSizeClamped {
         object: object(),
         old,
-        new: MAX_TEXT_SIZE_MM,
+        new,
     });
 }
 
@@ -98,13 +105,29 @@ mod tests {
     #[test]
     fn an_absurd_size_is_clamped_and_reported_and_real_sizes_are_kept() {
         let mut sheet = SchematicSheet {
-            text_notes: vec![note(1.27), note(25.0), note(1.0e5), note(f64::MAX)],
+            text_notes: vec![
+                note(1.27),
+                note(25.0),
+                note(1.0e5),
+                note(f64::MAX),
+                note(f64::NAN),
+            ],
             ..Default::default()
         };
         let repairs = clamp_oversize_text(&mut sheet);
         let sizes: Vec<f64> = sheet.text_notes.iter().map(|n| n.font_size).collect();
-        assert_eq!(sizes, [1.27, 25.0, MAX_TEXT_SIZE_MM, MAX_TEXT_SIZE_MM]);
-        assert_eq!(repairs.len(), 2);
+        assert_eq!(
+            sizes,
+            [
+                1.27,
+                25.0,
+                MAX_TEXT_SIZE_MM,
+                MAX_TEXT_SIZE_MM,
+                crate::schematic::SCHEMATIC_TEXT_MM
+            ],
+            "an oversize size is capped, a non-finite one reads as the default"
+        );
+        assert_eq!(repairs.len(), 3);
         assert!(repairs[0].describe().contains("text note big #3"));
     }
 

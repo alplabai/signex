@@ -58,6 +58,41 @@ impl Signex {
         );
     }
 
+    /// Commit every pending title-block draft, so what the canvas shows is
+    /// what a save, an export or a print writes (#2027). Drafts of the active
+    /// sheet go through the usual undoable edit; another sheet's are written to
+    /// its own engine and mark it modified.
+    pub(crate) fn commit_pending_title_block_drafts(&mut self) {
+        if self.document_state.panel_ctx.title_block_drafts.is_empty() {
+            return;
+        }
+        let active = self.document_state.active_path.clone();
+        let drafts = std::mem::take(&mut self.document_state.panel_ctx.title_block_drafts);
+        let (mine, others): (Vec<_>, Vec<_>) = drafts
+            .into_iter()
+            .partition(|d| Some(&d.sheet) == active.as_ref());
+        for draft in others {
+            let command = signex_engine::Command::SetTitleBlockField {
+                key: draft.field.key().to_string(),
+                value: draft.text.trim().to_string(),
+            };
+            if let Some(engine) = self.document_state.engines.get_mut(&draft.sheet) {
+                match engine.execute(command) {
+                    Ok(_) => self.document_state.mark_document_dirty(&draft.sheet),
+                    Err(error) => crate::diagnostics::log_warning(format!(
+                        "A title-block edit on {} could not be applied: {error}",
+                        draft.sheet.display()
+                    )),
+                }
+            }
+        }
+        let fields: Vec<_> = mine.iter().map(|d| d.field).collect();
+        self.document_state.panel_ctx.title_block_drafts = mine;
+        for field in fields {
+            self.commit_title_block_field(field);
+        }
+    }
+
     /// Write the active sheet's custom width/height draft as one undoable
     /// `SetPaperSize`. Text that is not a number keeps the current edge.
     pub(crate) fn commit_custom_paper_edge(&mut self, edge: crate::panels::PaperEdge) {

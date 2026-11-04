@@ -81,8 +81,13 @@ pub fn mm_per_em(family: Option<&str>) -> f32 {
         .get()
         .and_then(|resolve| resolve(name))
         .filter(|ratio| ratio.is_finite() && *ratio > 0.0)
-        .unwrap_or(FALLBACK_MM_PER_EM)
+        .map_or(FALLBACK_MM_PER_EM, |ratio| ratio.max(MIN_MM_PER_EM))
 }
+
+/// Floor on [`mm_per_em`]: no face is read as having a cap height under a
+/// quarter of its em, so the em in mm, and every size derived from it, is
+/// bounded for any size a sheet may hold.
+pub const MIN_MM_PER_EM: f32 = 0.25;
 
 /// Width in mm of `text` at cap height `size_mm` in `family`: the shaped
 /// advance, or a monospace advance before the shaper is ready. `family` is the
@@ -90,11 +95,61 @@ pub fn mm_per_em(family: Option<&str>) -> f32 {
 /// resolved by the caller to the face the renderer substitutes, so the box
 /// matches the drawn glyphs.
 pub fn family_width_mm(text: &str, family: Option<&str>, size_mm: f64) -> f64 {
+    family_width_mm_checked(text, family, size_mm).0
+}
+
+/// [`family_width_mm`] and whether it is final: false while the shaper (or,
+/// for a system family, the cap-height reader) is not installed yet, so a
+/// caller that stores widths does not keep a stand-in.
+pub fn family_width_mm_checked(text: &str, family: Option<&str>, size_mm: f64) -> (f64, bool) {
     // Empty text keeps a one-glyph box so it can still be picked.
     let probe = if text.is_empty() { "0" } else { text };
-    let em = shaped_advance_em(probe, family)
-        .unwrap_or_else(|| probe.chars().count() as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
-    f64::from(em) * size_mm / f64::from(mm_per_em(family))
+    let shaped = shaped_advance_em(probe, family);
+    let em = shaped.unwrap_or_else(|| probe.chars().count() as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
+    let name = family.map_or(BUNDLED_DEFAULT_FAMILY, str::trim);
+    let ratio_known = BUNDLED_CAP_HEIGHT_PER_EM
+        .iter()
+        .any(|(bundled, _)| bundled.eq_ignore_ascii_case(name))
+        || CAP_HEIGHT_RESOLVER
+            .get()
+            .and_then(|resolve| resolve(name))
+            .is_some();
+    (
+        f64::from(em) * size_mm / f64::from(mm_per_em(family)),
+        shaped.is_some() && ratio_known,
+    )
+}
+
+/// Picks the face a text draws in: `(item family, document family)` to the
+/// installed family, `None` for the bundled default.
+pub type FamilyResolver = fn(Option<&str>, Option<&str>) -> Option<String>;
+
+static FAMILY_RESOLVER: OnceLock<FamilyResolver> = OnceLock::new();
+
+/// Register the resolver that knows which families are installed (the app
+/// owns the font catalog), so the canvas and every export pick the same face
+/// for the same text. First registration wins.
+pub fn set_family_resolver(resolver: FamilyResolver) {
+    let _ = FAMILY_RESOLVER.set(resolver);
+}
+
+/// The face a text draws in: its own family, else the document's, checked
+/// against the installed fonts; `None` is the bundled default (a family that
+/// is not installed draws in it). Without a registered resolver only the
+/// bundled families count as installed, as in the app before its font scan
+/// has finished.
+pub fn resolve_family(item: Option<&str>, document: Option<&str>) -> Option<String> {
+    if let Some(resolve) = FAMILY_RESOLVER.get() {
+        return resolve(item, document);
+    }
+    let requested = requested_family(item, document)?;
+    if requested.eq_ignore_ascii_case(BUNDLED_DEFAULT_FAMILY) {
+        return None;
+    }
+    BUNDLED_CAP_HEIGHT_PER_EM
+        .iter()
+        .find(|(bundled, _)| bundled.eq_ignore_ascii_case(requested))
+        .map(|(bundled, _)| (*bundled).to_string())
 }
 
 /// Cap-height ratio of the bundled `family`, for tests that pin the table.
@@ -151,5 +206,27 @@ mod tests {
         assert_eq!(requested_family(Some("  "), Some("B")), Some("B"));
         assert_eq!(normalize_family(Some(" \t".into())), None);
         assert_eq!(normalize_family(Some(" X ".into())), Some("X".into()));
+    }
+
+    #[test]
+    fn an_uninstalled_family_resolves_to_the_bundled_default() {
+        assert_eq!(resolve_family(Some("No Such Face 9f2"), None), None);
+        assert_eq!(resolve_family(None, Some("No Such Face 9f2")), None);
+        assert_eq!(resolve_family(Some("Iosevka"), None), None);
+        assert_eq!(
+            resolve_family(Some("roboto"), None).as_deref(),
+            Some("Roboto")
+        );
+        assert_eq!(resolve_family(None, None), None);
+    }
+
+    /// A text of the same inputs measures the same in the face it resolves to.
+    #[test]
+    fn an_unavailable_family_is_measured_in_the_default_face() {
+        let missing = resolve_family(Some("No Such Face 9f2"), None);
+        assert_eq!(
+            family_width_mm("SIGNAL", missing.as_deref(), 1.27),
+            family_width_mm("SIGNAL", None, 1.27)
+        );
     }
 }

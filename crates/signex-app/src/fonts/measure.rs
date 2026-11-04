@@ -27,6 +27,7 @@ pub fn install_blocking() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, true)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);
     signex_types::font::set_advance_resolver(shaped_advance_em);
+    signex_types::font::set_family_resolver(resolve_for_export);
 }
 
 /// Cap height over em of an installed family, read once per family from the
@@ -45,6 +46,11 @@ pub fn cap_height_per_em(family: &str) -> Option<f32> {
         .cap_height_per_em(family);
     map.insert(family.to_string(), ratio);
     ratio
+}
+
+/// The face the canvas draws a text in, as the exports pick it too.
+fn resolve_for_export(item: Option<&str>, document: Option<&str>) -> Option<String> {
+    super::resolve::resolve_installed(item, document).map(|family| family.to_string())
 }
 
 /// Whether the measurer exists yet.
@@ -82,4 +88,5 @@ pub fn install_hermetic() {
     MEASURER.get_or_init(|| Mutex::new(TextMeasurer::new(&super::bundled::BUNDLED_FONTS, false)));
     signex_types::font::set_cap_height_resolver(cap_height_per_em);
     signex_types::font::set_advance_resolver(shaped_advance_em);
+    signex_types::font::set_family_resolver(resolve_for_export);
 }

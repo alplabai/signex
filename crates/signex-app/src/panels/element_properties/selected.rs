@@ -958,9 +958,20 @@ fn pick_list_degrees(label: &str) -> f64 {
     rotation_degrees(label.split_whitespace().next().unwrap_or(""))
 }
 
+/// The justification a Properties row reports (`info_keys::JUSTIFY_H`).
+fn h_align_from_row(row: &str) -> signex_types::schematic::HAlign {
+    use signex_types::schematic::HAlign;
+    match row {
+        "Left" => HAlign::Left,
+        "Right" => HAlign::Right,
+        _ => HAlign::Center,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{pick_list_degrees, rotation_degrees};
+    use super::{h_align_from_row, pick_list_degrees, rotation_degrees};
+    use signex_types::schematic::HAlign;
 
     /// #828 -- a non-finite rotation text never reaches the element.
     #[test]
@@ -978,22 +989,6 @@ mod tests {
         assert_eq!(pick_list_degrees("180 Degrees"), 180.0);
         assert_eq!(pick_list_degrees(""), 0.0);
     }
-}
-
-/// The justification a Properties row reports (`info_keys::JUSTIFY_H`).
-fn h_align_from_row(row: &str) -> signex_types::schematic::HAlign {
-    use signex_types::schematic::HAlign;
-    match row {
-        "Left" => HAlign::Left,
-        "Right" => HAlign::Right,
-        _ => HAlign::Center,
-    }
-}
-
-#[cfg(test)]
-mod justify_tests {
-    use super::*;
-    use signex_types::schematic::HAlign;
 
     /// #2024 - a left-justified label shows Left: its row, as the engine
     /// writes it, reads back as `HAlign::Left` through the shared key.

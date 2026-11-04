@@ -11,6 +11,10 @@ use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextRaster, TextVAlign};
 use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
 
+/// The largest text, in logical pixels, iced draws from the glyph atlas; past
+/// it iced draws vector outlines. The one atlas limit: signex reads iced's.
+pub(crate) const ATLAS_TEXT_LIMIT_PX: f32 = iced::advanced::graphics::geometry::MAX_ATLAS_TEXT_SIZE;
+
 #[derive(Debug, Clone, Copy)]
 pub struct SceneDrawOptions {
     pub scale_px_per_mm: f32,
@@ -163,8 +167,10 @@ impl SceneDrawOptions {
     /// How `text` draws at this scale and display (the one rule the GPU
     /// glyph pipeline reads as well).
     pub(crate) fn text_raster(self, text: &TextItem) -> TextRaster {
+        let dpr = self.device_px_per_logical_px;
         signex_gfx::primitive::text::text_raster(
-            self.text_px(text.size_mm, text.family.as_deref()) * self.device_px_per_logical_px,
+            self.text_px(text.size_mm, text.family.as_deref()) * dpr,
+            ATLAS_TEXT_LIMIT_PX * dpr,
         )
     }
 
@@ -543,18 +549,11 @@ fn draw_text_bucket<F>(
     draw_text_items(frame, texts.iter(), world_to_screen, options);
 }
 
-/// The texts of `scene` the GPU glyph atlas cannot draw: every item that is
-/// not [`TextItem::is_axis_aligned`], the same predicate the GPU text pipeline
-/// stages by. Together with the axis-aligned rest they are exactly
-/// `scene.texts`.
-pub fn rotated_texts(scene: &Scene) -> impl Iterator<Item = &TextItem> {
-    scene.texts.iter().filter(|text| !text.is_axis_aligned())
-}
-
-/// CPU fallback for a scene whose axis-aligned text draws on the GPU: paints
-/// only the rotated items, through the same path as the full replay so they
-/// match it pixel for pixel.
-pub fn draw_rotated_texts<F>(
+/// Canvas pass for a scene whose atlas text draws on the GPU: paints only what
+/// the glyph atlas cannot, the rotated and the oversize texts
+/// ([`cpu_draws_beside_gpu`]), through the same path as the full replay so
+/// they match it pixel for pixel.
+pub fn draw_canvas_texts<F>(
     frame: &mut canvas::Frame,
     scene: &Scene,
     world_to_screen: F,
@@ -571,114 +570,16 @@ pub fn draw_rotated_texts<F>(
     draw_text_items(frame, cpu_texts, world_to_screen, options);
 }
 
-/// Whether the CPU canvas draws `text` of a GPU-mounted scene: what the glyph
-/// atlas cannot, a rotated item or one past its size ceiling.
-fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
-    !text.is_axis_aligned() || options.text_raster(text) == TextRaster::Oversize
+/// Whether signex's GPU glyph pipeline stages `text`: axis-aligned (the atlas
+/// cannot rotate) and within the atlas limit.
+pub(crate) fn gpu_stages_text(text: &TextItem, options: SceneDrawOptions) -> bool {
+    text.is_axis_aligned() && options.text_raster(text) == TextRaster::Bitmap
 }
 
-// shortcut: fixed per-frame bounds on text iced draws as vector outlines. The
-// fork re-shapes and re-tessellates it every frame (a cache belongs in
-// alplabai/iced's `draw_with`, follow-up on iced#21), so a hostile file of many
-// or very long oversize texts is cut here: far above any real sheet, which has
-// a handful of short titles. Past either bound the rest is not drawn and one
-// warning reaches Messages.
-const MAX_OVERSIZE_TEXTS_PER_FRAME: usize = 64;
-const MAX_OVERSIZE_TEXT_CHARS: usize = 256;
-
-/// What one frame has spent of the oversize-text bounds.
-#[derive(Default)]
-struct OversizeBudget {
-    drawn: usize,
-}
-
-/// Messages warnings issued; one per run, not one per frame.
-static OVERSIZE_WARNINGS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
-impl OversizeBudget {
-    /// The content to draw for the next oversize text, cut to the length
-    /// bound, or `None` once the per-frame count is spent.
-    fn admit<'a>(&mut self, content: &'a str) -> Option<&'a str> {
-        if self.drawn >= MAX_OVERSIZE_TEXTS_PER_FRAME {
-            warn_oversize_capped_once();
-            return None;
-        }
-        self.drawn += 1;
-        match content.char_indices().nth(MAX_OVERSIZE_TEXT_CHARS) {
-            Some((end, _)) => {
-                warn_oversize_capped_once();
-                Some(&content[..end])
-            }
-            None => Some(content),
-        }
-    }
-}
-
-fn warn_oversize_capped_once() {
-    if OVERSIZE_WARNINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
-        crate::diagnostics::log_warning(
-            "This sheet has more or longer oversize text than can be drawn; the rest is left out",
-        );
-    }
-}
-
-/// Whether an oversize text can touch the frame, from its cached advance (no
-/// shaping): its corners rotated about the anchor. Off-screen oversize text is
-/// never handed to iced, so a hostile file cannot make a frame cost more.
-fn oversize_text_on_screen(
-    frame: &canvas::Frame,
-    text: &TextItem,
-    position: Point,
-    size_px: f32,
-) -> bool {
-    let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
-    let width = text
-        .content
-        .split('\n')
-        .map(|line| {
-            signex_types::font::shaped_advance_em(line, Some(family))
-                .unwrap_or(line.chars().count() as f32 * 0.5)
-        })
-        .fold(0.0_f32, f32::max)
-        * size_px;
-    let height = text.content.split('\n').count() as f32
-        * size_px
-        * signex_gfx::primitive::text::LINE_HEIGHT_EM;
-    let x0 = match text.h_align {
-        TextHAlign::Left => 0.0,
-        TextHAlign::Center => -0.5 * width,
-        TextHAlign::Right => -width,
-    };
-    let y0 = match text.v_align {
-        TextVAlign::Top => 0.0,
-        TextVAlign::Center => -0.5 * height,
-        TextVAlign::Bottom => -height,
-    };
-    let (sin, cos) = text.rotation.sin_cos();
-    let corners = [
-        (x0, y0),
-        (x0 + width, y0),
-        (x0, y0 + height),
-        (x0 + width, y0 + height),
-    ]
-    .map(|(x, y)| {
-        (
-            position.x + x * cos - y * sin,
-            position.y + x * sin + y * cos,
-        )
-    });
-    let (min_x, max_x) = corners
-        .iter()
-        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), c| {
-            (lo.min(c.0), hi.max(c.0))
-        });
-    let (min_y, max_y) = corners
-        .iter()
-        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), c| {
-            (lo.min(c.1), hi.max(c.1))
-        });
-    let size = frame.size();
-    max_x >= 0.0 && min_x <= size.width && max_y >= 0.0 && min_y <= size.height
+/// Whether the canvas draws `text` of a GPU-mounted scene: everything that is
+/// drawn at all and not staged on the GPU, so each text is drawn exactly once.
+pub(crate) fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
+    options.text_raster(text) != TextRaster::Skip && !gpu_stages_text(text, options)
 }
 
 fn draw_text_items<'a, F>(
@@ -689,7 +590,7 @@ fn draw_text_items<'a, F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    let mut budget = OversizeBudget::default();
+    let mut budget = crate::oversize_text::OversizeBudget::default();
     for text in texts {
         if text.content.is_empty() {
             continue;
@@ -702,7 +603,7 @@ fn draw_text_items<'a, F>(
             // iced draws it as outlines past its own atlas limit; nothing
             // reaches it that cannot be seen, and what does is bounded.
             TextRaster::Oversize => {
-                if !oversize_text_on_screen(frame, text, position, size_px) {
+                if !crate::oversize_text::on_screen(frame, text, position, size_px) {
                     continue;
                 }
                 match budget.admit(&text.content) {
@@ -1109,41 +1010,51 @@ mod rotated_text_tests {
         }
     }
 
-    /// The GPU stages `is_axis_aligned` items and this fallback draws the rest,
-    /// so a text is never lost and never drawn twice (#199 S1).
+    /// The GPU stages what the atlas can draw and the canvas draws the rest,
+    /// so a text that is drawn at all is never lost and never drawn twice
+    /// (#199 S1), over the real predicates: rotated, oversize and tiny items
+    /// included.
     #[test]
-    fn gpu_staged_plus_fallback_is_exactly_the_scene_texts() {
-        let scene = Scene {
-            texts: vec![
-                text("horizontal", 0.0),
-                text("vertical", std::f32::consts::FRAC_PI_2),
-                text("negative-zero", -0.0),
-                text("arbitrary", 0.61),
-                text("vertical-down", -std::f32::consts::FRAC_PI_2),
-                text("flipped", std::f32::consts::PI),
-            ],
-            ..Scene::default()
+    fn gpu_staged_plus_canvas_is_exactly_the_drawn_texts() {
+        let options = SceneDrawOptions {
+            scale_px_per_mm: 30.0,
+            device_px_per_logical_px: 1.0,
+            text_min_px: 0.0,
+            text_max_px: f32::INFINITY,
         };
-
-        let staged: Vec<&str> = scene
-            .texts
+        let sized = |content: &str, size_mm: f32, rotation: f32| TextItem {
+            size_mm,
+            ..text(content, rotation)
+        };
+        let texts = [
+            sized("horizontal", 1.27, 0.0),
+            sized("negative-zero", 1.27, -0.0),
+            sized("vertical", 1.27, std::f32::consts::FRAC_PI_2),
+            sized("arbitrary", 1.27, 0.61),
+            sized("oversize", 40.0, 0.0),
+            sized("oversize-rotated", 40.0, 0.61),
+            sized("invisible", f32::NAN, 0.0),
+        ];
+        let staged: Vec<&str> = texts
             .iter()
-            .filter(|t| t.is_axis_aligned())
+            .filter(|t| gpu_stages_text(t, options))
             .map(|t| t.content.as_str())
             .collect();
-        let fallback: Vec<&str> = rotated_texts(&scene).map(|t| t.content.as_str()).collect();
-
+        let canvas: Vec<&str> = texts
+            .iter()
+            .filter(|t| cpu_draws_beside_gpu(t, options))
+            .map(|t| t.content.as_str())
+            .collect();
         assert_eq!(staged, ["horizontal", "negative-zero"]);
         assert_eq!(
-            fallback,
-            ["vertical", "arbitrary", "vertical-down", "flipped"]
+            canvas,
+            ["vertical", "arbitrary", "oversize", "oversize-rotated"]
         );
-        assert!(staged.iter().all(|c| !fallback.contains(c)), "disjoint");
-        let mut all: Vec<&str> = staged.iter().chain(&fallback).copied().collect();
-        let mut expected: Vec<&str> = scene.texts.iter().map(|t| t.content.as_str()).collect();
-        all.sort_unstable();
-        expected.sort_unstable();
-        assert_eq!(all, expected, "nothing missed, nothing duplicated");
+        assert!(staged.iter().all(|c| !canvas.contains(c)), "disjoint");
+        assert!(
+            !staged.contains(&"invisible") && !canvas.contains(&"invisible"),
+            "an invisible text is drawn by neither"
+        );
     }
 
     #[test]
@@ -1260,6 +1171,11 @@ mod line_geometry_tests {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod oversize_text_tests {
+    use super::*;
 
     fn text_item(size_mm: f32, rotation: f32) -> TextItem {
         TextItem {
@@ -1296,31 +1212,21 @@ mod line_geometry_tests {
         );
     }
 
-    /// A hostile sheet of 10 000 on-screen oversize texts of 10 000 characters
-    /// each asks iced for at most the per-frame count, each at most the length
-    /// bound, and warns once.
+    /// One atlas limit: iced's own constant, in logical px, times the display
+    /// scale for the GPU staging, decides `Oversize`.
     #[test]
-    fn a_flood_of_long_oversize_texts_is_bounded_and_warns_once() {
-        let long = "W".repeat(10_000);
-        let mut budget = OversizeBudget::default();
-        let before = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
-        let drawn: Vec<&str> = (0..10_000).filter_map(|_| budget.admit(&long)).collect();
-        assert_eq!(drawn.len(), MAX_OVERSIZE_TEXTS_PER_FRAME);
-        assert!(
-            drawn
-                .iter()
-                .all(|c| c.chars().count() <= MAX_OVERSIZE_TEXT_CHARS)
-        );
-        let after = OVERSIZE_WARNINGS.load(std::sync::atomic::Ordering::Relaxed);
-        assert!(after > before, "the bound was hit");
-        // One Messages line per run: only the first request logs.
-        assert!(after - before >= 1);
-        let short = "R1";
-        let mut next_frame = OversizeBudget::default();
-        assert_eq!(
-            next_frame.admit(short),
-            Some(short),
-            "a new frame starts clean"
-        );
+    fn oversize_starts_just_past_the_iced_atlas_limit_at_every_display_scale() {
+        use iced::advanced::graphics::geometry::MAX_ATLAS_TEXT_SIZE;
+        use signex_gfx::primitive::text::text_raster;
+        for dpr in [1.0_f32, 2.0, 3.0] {
+            let limit = MAX_ATLAS_TEXT_SIZE * dpr;
+            assert_eq!(text_raster(limit, limit), TextRaster::Bitmap, "{dpr}x");
+            assert_eq!(
+                text_raster(limit + 1.0, limit),
+                TextRaster::Oversize,
+                "{dpr}x"
+            );
+        }
+        assert_eq!(ATLAS_TEXT_LIMIT_PX, MAX_ATLAS_TEXT_SIZE);
     }
 }
