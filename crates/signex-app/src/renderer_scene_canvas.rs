@@ -1035,6 +1035,8 @@ mod rotated_text_tests {
             sized("negative-zero", 1.27, -0.0),
             sized("vertical", 1.27, std::f32::consts::FRAC_PI_2),
             sized("arbitrary", 1.27, 0.61),
+            sized("vertical-down", 1.27, -std::f32::consts::FRAC_PI_2),
+            sized("flipped", 1.27, std::f32::consts::PI),
             sized("oversize", 40.0, 0.0),
             sized("oversize-rotated", 40.0, 0.61),
             sized("invisible", f32::NAN, 0.0),
@@ -1052,9 +1054,25 @@ mod rotated_text_tests {
         assert_eq!(staged, ["horizontal", "negative-zero"]);
         assert_eq!(
             canvas,
-            ["vertical", "arbitrary", "oversize", "oversize-rotated"]
+            [
+                "vertical",
+                "arbitrary",
+                "vertical-down",
+                "flipped",
+                "oversize",
+                "oversize-rotated"
+            ]
         );
         assert!(staged.iter().all(|c| !canvas.contains(c)), "disjoint");
+        let mut union: Vec<&str> = staged.iter().chain(&canvas).copied().collect();
+        let mut drawn: Vec<&str> = texts
+            .iter()
+            .map(|t| t.content.as_str())
+            .filter(|c| *c != "invisible")
+            .collect();
+        union.sort_unstable();
+        drawn.sort_unstable();
+        assert_eq!(union, drawn, "nothing missed, nothing duplicated");
         assert!(
             !staged.contains(&"invisible") && !canvas.contains(&"invisible"),
             "an invisible text is drawn by neither"

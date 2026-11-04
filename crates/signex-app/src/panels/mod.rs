@@ -23,6 +23,8 @@ mod symbol_editor_properties;
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod color_field;
 mod context;
+mod drafts;
+pub use drafts::PanelDrafts;
 mod erc_waivers;
 mod footprint_context;
 mod library;

@@ -213,6 +213,10 @@ pub(crate) fn measure_text_bounds_px(buffer: &cryoglyph::Buffer) -> [f32; 2] {
 }
 
 /// Shape `item`'s content into a buffer.
+/// Sheet text is one line per source line: wrapping at the viewport would
+/// break a deep-zoom note on the GPU only.
+const SHEET_TEXT_WRAP_PX: [f32; 2] = [super::text_measure::NO_WRAP_PX; 2];
+
 pub(crate) fn shaped_buffer(
     font_system: &mut cryoglyph::FontSystem,
     item: &TextItem,
@@ -407,9 +411,7 @@ impl GlyphonTextPipeline {
             }
             let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
-            // Sheet text is one line per source line: wrapping at the viewport would
-            // break a deep-zoom note on the GPU only.
-            let wrap_px = [super::text_measure::NO_WRAP_PX; 2];
+            let wrap_px = SHEET_TEXT_WRAP_PX;
             let key = ShapedKey::new(text, family, font_px, line_height_px, wrap_px);
             let buffer = self.shaped.get_or_shape(font_system, key, |font_system| {
                 shaped_buffer(font_system, text, metrics, &attrs, wrap_px)
@@ -500,11 +502,36 @@ impl GlyphonTextPipeline {
 mod tests {
     use super::TextSizePolicy;
     use super::{
-        alignment_offset_px, anchored_top_left_px, attrs_for_item, overlap_ratio_by_smaller_area,
-        rect_from_top_left_size, rect_intersects_viewport, shaped_buffer, text_position_px,
-        text_size_px, to_glyphon_color, viewport_bounds,
+        SHEET_TEXT_WRAP_PX, alignment_offset_px, anchored_top_left_px, attrs_for_item,
+        overlap_ratio_by_smaller_area, rect_from_top_left_size, rect_intersects_viewport,
+        shaped_buffer, text_position_px, text_size_px, to_glyphon_color, viewport_bounds,
     };
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
+
+    /// A note longer than the viewport stays one line on the GPU, as it is
+    /// on the canvas: the wrap width the pipeline shapes with never breaks it.
+    #[test]
+    fn a_long_note_is_not_wrapped_at_the_viewport() {
+        let mut fs = test_font_system();
+        let item = TextItem {
+            content: "w".repeat(400),
+            size_mm: 1.0,
+            color: [1.0; 4],
+            ..Default::default()
+        };
+        let attrs = attrs_for_item(&item, "Iosevka");
+        let metrics = cryoglyph::Metrics::new(16.0, 19.0);
+        let lines = |wrap: [f32; 2], fs: &mut cryoglyph::FontSystem| {
+            shaped_buffer(fs, &item, metrics, &attrs, wrap)
+                .layout_runs()
+                .count()
+        };
+        assert!(
+            lines([800.0, 600.0], &mut fs) > 1,
+            "the viewport would wrap"
+        );
+        assert_eq!(lines(SHEET_TEXT_WRAP_PX, &mut fs), 1);
+    }
 
     #[test]
     fn pre_shaping_cull_never_drops_an_item_shaping_would_keep() {

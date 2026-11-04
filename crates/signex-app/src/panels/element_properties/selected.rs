@@ -534,8 +534,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get(signex_engine::info_keys::JUSTIFY_H);
-            let justify_v = get(signex_engine::info_keys::JUSTIFY_V);
+            let justify_h = justify_h_row(&ctx.selection_info);
+            let justify_v = justify_v_row(&ctx.selection_info);
             let visible = get("Visible");
             let fields_autoplaced = get("Fields Autoplaced");
             let font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
@@ -645,7 +645,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation_str = get("Rotation");
             let text_size_str = get("Text Size");
-            let justify_h_str = get(signex_engine::info_keys::JUSTIFY_H);
+            let justify_h_str = justify_h_row(&ctx.selection_info);
             let label_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             // Parse numeric values for edit controls (with fallbacks).
@@ -786,8 +786,8 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             let position = get("Position");
             let rotation = get("Rotation");
             let text_size = get("Text Size");
-            let justify_h = get(signex_engine::info_keys::JUSTIFY_H);
-            let justify_v = get(signex_engine::info_keys::JUSTIFY_V);
+            let justify_h = justify_h_row(&ctx.selection_info);
+            let justify_v = justify_v_row(&ctx.selection_info);
             let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
 
             if let Some(id) = uuid {
@@ -958,6 +958,25 @@ fn pick_list_degrees(label: &str) -> f64 {
     rotation_degrees(label.split_whitespace().next().unwrap_or(""))
 }
 
+/// The row `key` of a selection's info, empty when the selection has none.
+fn info_row(info: &[(String, String)], key: &str) -> String {
+    info.iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.clone())
+        .unwrap_or_default()
+}
+
+/// The horizontal justification row of a selection (#2024): the one lookup
+/// every label, text note and symbol field panel shows it from.
+fn justify_h_row(info: &[(String, String)]) -> String {
+    info_row(info, signex_engine::info_keys::JUSTIFY_H)
+}
+
+/// The vertical justification row of a selection (#2024).
+fn justify_v_row(info: &[(String, String)]) -> String {
+    info_row(info, signex_engine::info_keys::JUSTIFY_V)
+}
+
 /// The justification a Properties row reports (`info_keys::JUSTIFY_H`).
 fn h_align_from_row(row: &str) -> signex_types::schematic::HAlign {
     use signex_types::schematic::HAlign;
@@ -970,7 +989,9 @@ fn h_align_from_row(row: &str) -> signex_types::schematic::HAlign {
 
 #[cfg(test)]
 mod tests {
-    use super::{h_align_from_row, pick_list_degrees, rotation_degrees};
+    use super::{
+        h_align_from_row, justify_h_row, justify_v_row, pick_list_degrees, rotation_degrees,
+    };
     use signex_types::schematic::HAlign;
 
     /// #828 -- a non-finite rotation text never reaches the element.
@@ -1020,14 +1041,41 @@ mod tests {
         let details = engine
             .describe_single_selection(&[SelectedItem::new(id, SelectedKind::Label)])
             .expect("details");
-        let row = details
-            .info
-            .iter()
-            .find(|(k, _)| k == signex_engine::info_keys::JUSTIFY_H)
-            .map(|(_, v)| v.as_str())
-            .unwrap_or_default();
-        assert_eq!(h_align_from_row(row), HAlign::Left);
+        let row = justify_h_row(&details.info);
+        assert_eq!(row, "Left", "the row the panel shows");
+        assert_eq!(h_align_from_row(&row), HAlign::Left);
         assert_eq!(h_align_from_row("Right"), HAlign::Right);
         assert_eq!(h_align_from_row("Center"), HAlign::Center);
+    }
+
+    /// #2024 - a text note's Properties rows carry its justification, read
+    /// from the same keys the engine writes them under.
+    #[test]
+    fn a_text_note_row_carries_its_justification() {
+        use signex_types::schematic::{
+            Point, SchematicSheet, SelectedItem, SelectedKind, TextNote, VAlign,
+        };
+        let note = TextNote {
+            uuid: uuid::Uuid::now_v7(),
+            text: "note".into(),
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            font_family: None,
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Top,
+            locked: false,
+        };
+        let id = note.uuid;
+        let engine = signex_engine::Engine::new(SchematicSheet {
+            text_notes: vec![note],
+            ..Default::default()
+        })
+        .expect("engine");
+        let details = engine
+            .describe_single_selection(&[SelectedItem::new(id, SelectedKind::TextNote)])
+            .expect("details");
+        assert_eq!(justify_h_row(&details.info), "Left");
+        assert_eq!(justify_v_row(&details.info), "Top");
     }
 }

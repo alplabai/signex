@@ -14,7 +14,8 @@ impl Signex {
     /// options. The user adjusts grouping / include flags / format
     /// in the modal and clicks Export to drive the file dialog.
     pub(crate) fn handle_bom_preview_open(&mut self) -> Task<Message> {
-        self.commit_pending_title_block_drafts();
+        let anchor = self.document_state.active_path.clone();
+        self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.document_state.has_active_engine() {
             log::warn!("BOM preview: no active schematic");
             return Task::none();

@@ -239,6 +239,7 @@ impl Signex {
         // the first open.
         let keymap_editor = crate::keymap::KeymapEditorModel::new(keymap_profiles.clone());
 
+        let drafts = crate::panels::PanelDrafts::default();
         let mut app = Self {
             ui_state: UiState {
                 // Persisted user-toggleable state (UX §1.5). Reads
@@ -431,6 +432,7 @@ impl Signex {
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
             document_state: DocumentState {
+                drafts: drafts.clone(),
                 dock,
                 dock_layout_sync,
                 search_prefs,
@@ -539,8 +541,7 @@ impl Signex {
                     child_sheet_file_buf: None,
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
-                    title_block_drafts: Vec::new(),
-                    paper_edge_drafts: Vec::new(),
+                    drafts: drafts.clone(),
                     numeric_draft: None,
                     title_block_sheet: None,
                     collapsed_sections: std::collections::HashSet::new(),

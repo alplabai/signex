@@ -131,7 +131,7 @@ fn the_quit_prompt_counts_a_draft_only_sheet() {
 /// and closing the sheet's view cannot prune it.
 #[test]
 fn close_project_commits_the_draft_before_anything_else() {
-    let (mut app, sheet, _recorder) = app_with_draft();
+    let (mut app, sheet, _id, _recorder) = project_with_draft();
     let _ = app.close_active_project();
     let stored = app.document_state.engines[&sheet]
         .document()
@@ -140,11 +140,11 @@ fn close_project_commits_the_draft_before_anything_else() {
         .cloned();
     assert_eq!(stored.as_deref(), Some("X"));
     assert!(app.document_state.is_document_dirty(&sheet));
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
 }
 
-/// A draft on another sheet goes through the same read-only guard as any
-/// edit: a newer-minor sheet refuses it, stays clean and unchanged, and the
+/// A draft on another sheet, committed by Quit, goes through the same
+/// read-only guard as any edit: a newer-minor sheet refuses it, stays clean and unchanged, and the
 /// refusal is logged.
 #[test]
 fn a_draft_on_a_read_only_sheet_is_refused_when_another_sheet_saves() {
@@ -159,8 +159,7 @@ fn a_draft_on_a_read_only_sheet_is_refused_when_another_sheet_saves() {
     let recorder = Arc::new(Recorder::default());
     app.document_state.document_saves = DocumentSaves::new(recorder);
 
-    let task = app.update(Message::Menu(MenuMessage::command("save_document")));
-    settle(&mut app, task);
+    let _ = app.handle_app_quit_requested();
 
     let doc = app.document_state.engines[&b].document();
     assert!(!doc.title_block.contains_key("drawn_by"), "unchanged");
@@ -246,7 +245,7 @@ fn discard_all_closes_a_draft_only_project_and_writes_nothing() {
     assert!(!app.document_state.engines.contains_key(&sheet));
     assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.dirty_document_paths().is_empty());
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
 }
 
 /// Closing an unrelated tab, by the user or by a discard path, does not
@@ -274,7 +273,7 @@ fn closing_an_unrelated_tab_leaves_another_sheets_draft_alone() {
             !app.document_state.is_document_dirty(&a),
             "user_route={user_route}"
         );
-        assert_eq!(app.document_state.panel_ctx.title_block_drafts.len(), 1);
+        assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
     }
 }
 
@@ -298,7 +297,7 @@ fn closing_the_sheet_commits_on_the_users_route_and_drops_on_a_discard() {
     let a = open(&mut app, "a", SchematicSheet::default());
     type_drawn_by(&mut app, "X");
     let _ = app.close_tab_now(0);
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
     assert!(
         !app.document_state.engines.contains_key(&a),
         "clean, so dropped"
@@ -375,7 +374,7 @@ fn cancel_on_remove_leaves_the_draft_pending_and_the_sheet_clean() {
     let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
     let _ = app.update(Message::Remove(RemoveMsg::Close));
     assert!(app.ui_state.remove_dialog.is_none());
-    assert_eq!(app.document_state.panel_ctx.title_block_drafts.len(), 1);
+    assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
     assert_eq!(drawn_by_in_engine(&app, &sheet), None);
     assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(
@@ -402,7 +401,7 @@ fn save_on_the_remove_prompt_writes_the_draft() {
         saved.title_block.get("drawn_by").map(String::as_str),
         Some("X")
     );
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
 }
 
 /// Discard drops the draft with the sheet's edits.
@@ -415,7 +414,7 @@ fn discard_on_the_remove_prompt_drops_the_draft() {
         ExcludeDirtyChoice::Discard,
     )));
     settle(&mut app, task);
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
     assert!(
         recorder.0.lock().unwrap().is_empty(),
         "nothing was written for it"
@@ -430,37 +429,52 @@ fn a_rename_keeps_the_pending_drafts() {
     let (mut app, old, recorder) = app_with_draft();
     let new = PathBuf::from("renamed.snxsch");
     app.rekey_open_document(&old, &new);
-    let drafts = &app.document_state.panel_ctx.title_block_drafts;
+    let drafts = app.document_state.drafts.title_blocks();
     assert_eq!(drafts.len(), 1);
     assert_eq!(drafts[0].sheet, new, "the draft follows the sheet");
 
     let task = app.update(Message::Menu(MenuMessage::command("save_document")));
     settle(&mut app, task);
     assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
 }
 
-/// A draft typed in an undocked window: moved by `app_with_draft`'s typing
-/// into the window's own context.
-fn app_with_window_draft() -> (Signex, PathBuf, Arc<Recorder>, iced::window::Id) {
-    let (mut app, sheet, recorder) = app_with_draft();
+/// An undocked window showing `sheet`, registered the way `UndockTab` does.
+fn undocked_window(app: &mut Signex, sheet: &Path) -> iced::window::Id {
     let window = iced::window::Id::unique();
-    let mut ctx = app.document_state.panel_ctx.clone();
-    app.document_state.panel_ctx.title_block_drafts.clear();
-    ctx.title_block_drafts = vec![crate::panels::TitleBlockDraft {
-        sheet: sheet.clone(),
-        field: TitleBlockField::DrawnBy,
-        text: "X".into(),
-    }];
-    app.document_state.window_panel_ctx.insert(window, ctx);
-    (app, sheet, recorder, window)
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: sheet.to_path_buf(),
+            title: "w".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    window
+}
+
+fn type_in_window(app: &mut Signex, window: iced::window::Id, text: &str) {
+    let text = text.to_string();
+    drop(app.run_in_window(window, true, move |app| {
+        type_drawn_by(app, &text);
+        Task::none()
+    }));
 }
 
 /// Quit, from the main window, counts a sheet whose only change is a draft
 /// typed in an undocked window, and Save writes it.
 #[test]
 fn a_window_draft_counts_as_unsaved_at_quit_and_is_saved() {
-    let (mut app, sheet, recorder, window) = app_with_window_draft();
+    let (mut app, _t) = Signex::new();
+    let sheet = open(&mut app, "power", SchematicSheet::default());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder.clone());
+    let _other = open(&mut app, "other", SchematicSheet::default());
+    let window = undocked_window(&mut app, &sheet);
+    type_in_window(&mut app, window, "X");
+
     let _ = app.handle_app_quit_requested();
     let confirm = app.ui_state.app_quit_confirm.as_ref().expect("a prompt");
     assert!(
@@ -468,55 +482,55 @@ fn a_window_draft_counts_as_unsaved_at_quit_and_is_saved() {
         "{:?}",
         confirm.dirty_paths
     );
-
-    let task = app.update(Message::Menu(MenuMessage::command("save_document")));
+    let id = crate::keymap::AppCommandId::new("save_document").expect("id");
+    let task = app.dispatch_command(&id, crate::app::command::CommandArgs::none(), Some(window));
     settle(&mut app, task);
     assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
-    assert!(
-        app.document_state.window_panel_ctx[&window]
-            .title_block_drafts
-            .is_empty()
-    );
+    assert!(app.document_state.drafts.is_empty());
 }
 
-/// Renaming the sheet re-keys the drafts in every context, paper-edge drafts
-/// included.
+/// Renaming the sheet re-keys the title-block and the paper-edge drafts,
+/// whichever window typed them.
 #[test]
-fn a_rename_re_keys_drafts_in_every_context() {
-    use crate::panels::{PaperEdge, PaperEdgeDraft};
-    let (mut app, old, _recorder, window) = app_with_window_draft();
-    let edge = |sheet: &PathBuf| PaperEdgeDraft {
-        sheet: sheet.clone(),
-        edge: PaperEdge::Width,
-        text: "250".into(),
-    };
+fn a_rename_re_keys_title_block_and_paper_edge_drafts() {
+    use crate::panels::PaperEdge;
+    let (mut app, _t) = Signex::new();
+    let old = open(&mut app, "power", SchematicSheet::default());
+    let _other = open(&mut app, "other", SchematicSheet::default());
+    let window = undocked_window(&mut app, &old);
+    type_in_window(&mut app, window, "X");
     app.document_state
-        .panel_ctx
-        .paper_edge_drafts
-        .push(edge(&old));
-    app.document_state
-        .window_panel_ctx
-        .get_mut(&window)
-        .expect("window")
-        .paper_edge_drafts
-        .push(edge(&old));
+        .drafts
+        .set_paper_edge(&old, PaperEdge::Width, "250");
     let new = PathBuf::from("renamed.snxsch");
     app.rekey_open_document(&old, &new);
-    let window_ctx = &app.document_state.window_panel_ctx[&window];
-    assert_eq!(window_ctx.title_block_drafts[0].sheet, new);
-    assert_eq!(window_ctx.paper_edge_drafts[0].sheet, new);
-    assert_eq!(app.document_state.panel_ctx.paper_edge_drafts[0].sheet, new);
+    let drafts = &app.document_state.drafts;
+    assert_eq!(
+        drafts
+            .title_block_text(&new, TitleBlockField::DrawnBy)
+            .as_deref(),
+        Some("X")
+    );
+    assert_eq!(
+        drafts.paper_edge_text(&new, PaperEdge::Width).as_deref(),
+        Some("250")
+    );
+    assert!(
+        drafts
+            .title_block_text(&old, TitleBlockField::DrawnBy)
+            .is_none()
+    );
+    assert!(drafts.paper_edge_text(&old, PaperEdge::Width).is_none());
 }
 
 /// The project tree's Close Project prompts for a sheet whose only change is
 /// a draft typed in an undocked window.
 #[test]
 fn tree_close_project_prompts_for_a_window_draft() {
-    let (mut app, _sheet, id, _recorder) = project_with_draft();
-    let window = iced::window::Id::unique();
-    let mut ctx = app.document_state.panel_ctx.clone();
-    ctx.title_block_drafts = std::mem::take(&mut app.document_state.panel_ctx.title_block_drafts);
-    app.document_state.window_panel_ctx.insert(window, ctx);
+    let (mut app, sheet, id, _recorder) = project_with_draft();
+    let window = undocked_window(&mut app, &sheet);
+    app.document_state.drafts.drop_sheet(&sheet);
+    type_in_window(&mut app, window, "X");
     close_project_to_gate(&mut app, id);
     assert!(app.ui_state.project_close_confirm.is_some());
 }
@@ -526,7 +540,7 @@ fn tree_close_project_prompts_for_a_window_draft() {
 #[test]
 fn unsaved_documents_lists_a_case_variant_once() {
     use crate::app::state::scope::CaseFold;
-    let (mut app, _t) = Signex::new();
+    let (app, _t) = Signex::new();
     let fold = CaseFold {
         fold_case: true,
         backslash_is_separator: false,
@@ -534,14 +548,149 @@ fn unsaved_documents_lists_a_case_variant_once() {
     };
     for name in ["/w/A.snxsch", "/w/a.snxsch"] {
         app.document_state
-            .panel_ctx
-            .title_block_drafts
-            .push(crate::panels::TitleBlockDraft {
-                sheet: PathBuf::from(name),
-                field: TitleBlockField::DrawnBy,
-                text: "X".into(),
-            });
+            .drafts
+            .set_title_block(Path::new(name), TitleBlockField::DrawnBy, "X");
     }
     let found = app.unsaved_documents(Path::new("/w"), fold);
     assert_eq!(found.len(), 1, "{found:?}");
+}
+
+/// A draft typed before a window was undocked is not copied into it: the
+/// field retyped and committed in the window leaves nothing stale to
+/// overwrite it at the next save.
+#[test]
+fn a_draft_typed_before_undocking_cannot_overwrite_a_later_commit() {
+    let (mut app, sheet, _recorder) = app_with_draft(); // power DrawnBy "X"
+    let window = undocked_window(&mut app, &sheet);
+    let _other = open(&mut app, "other", SchematicSheet::default());
+    drop(app.run_in_window(window, true, |app| {
+        type_drawn_by(app, "Y");
+        let _ = app.update(Message::Dock(DockMessage::Panel(
+            PanelMsg::CommitTitleBlockField(TitleBlockField::DrawnBy),
+        )));
+        Task::none()
+    }));
+    assert_eq!(drawn_by_in_engine(&app, &sheet).as_deref(), Some("Y"));
+    app.commit_pending_title_block_drafts();
+    assert_eq!(drawn_by_in_engine(&app, &sheet).as_deref(), Some("Y"));
+}
+
+/// The same, committed in the main window after a window context cloned the
+/// main one: Save writes the committed value.
+#[test]
+fn a_window_context_cloned_from_main_cannot_overwrite_a_main_commit() {
+    let (mut app, sheet, recorder) = app_with_draft(); // power DrawnBy "X"
+    let other = open(&mut app, "other", SchematicSheet::default());
+    let window = undocked_window(&mut app, &other);
+    drop(app.run_in_window(window, true, |_| Task::none()));
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet);
+    type_drawn_by(&mut app, "Y");
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::CommitTitleBlockField(TitleBlockField::DrawnBy),
+    )));
+    let task = app.update(Message::Menu(MenuMessage::command("save_document")));
+    settle(&mut app, task);
+    assert_eq!(written_drawn_by(&recorder).as_deref(), Some("Y"));
+}
+
+/// Save run from an undocked window writes a draft typed in the main window
+/// for the sheet the window shows: `run_in_window` swaps the main context out
+/// and the draft must not go with it.
+#[test]
+fn a_save_run_from_a_window_writes_the_main_windows_draft() {
+    let (mut app, _t) = Signex::new();
+    let sheet = open(&mut app, "power", SchematicSheet::default());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder.clone());
+    let window = undocked_window(&mut app, &sheet);
+    drop(app.run_in_window(window, true, |_| Task::none()));
+    type_drawn_by(&mut app, "X"); // typed in the main window
+    let id = crate::keymap::AppCommandId::new("save_document").expect("id");
+    let task = app.dispatch_command(&id, crate::app::command::CommandArgs::none(), Some(window));
+    settle(&mut app, task);
+    assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
+}
+
+/// A second project Q with its sheet open and a draft pending on it, next to
+/// `project_with_draft`'s P.
+fn add_project_q(app: &mut Signex) -> (PathBuf, crate::app::ProjectId) {
+    let mut q = app.document_state.projects[0].clone();
+    q.id = app.document_state.mint_project_id();
+    q.path = PathBuf::from("/w/q/ProjectQ.snxprj");
+    q.data.name = "ProjectQ".to_string();
+    q.data.dir = "/w/q".to_string();
+    q.data.schematic_root = Some("q.snxsch".to_string());
+    q.data.sheets[0].name = "q.snxsch".to_string();
+    q.data.sheets[0].filename = "q.snxsch".to_string();
+    let id = q.id;
+    app.document_state.projects.push(q);
+    let sheet = PathBuf::from("/w/q/q.snxsch");
+    crate::app::handlers::menu::export::tests::open_with(
+        &mut app.document_state,
+        &sheet,
+        SchematicSheet::default(),
+    );
+    app.document_state.tabs.push(TabInfo {
+        title: "q".to_string(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: TabKind::Schematic,
+    });
+    app.document_state
+        .drafts
+        .set_title_block(&sheet, TitleBlockField::DrawnBy, "Q");
+    (sheet, id)
+}
+
+/// Closing project P does not touch project Q: Q's draft stays pending, Q is
+/// not dirty, and Save All still writes it afterwards.
+#[test]
+fn closing_one_project_leaves_another_projects_draft_pending() {
+    let (mut app, _p_sheet, p, _recorder) = project_with_draft();
+    let (q_sheet, _q) = add_project_q(&mut app);
+    close_project_to_gate(&mut app, p);
+    assert!(app.ui_state.project_close_confirm.is_some(), "P prompts");
+    assert_eq!(
+        app.document_state
+            .drafts
+            .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
+            .as_deref(),
+        Some("Q"),
+        "Q's draft is still a draft"
+    );
+    assert!(!app.document_state.is_document_dirty(&q_sheet));
+    assert_eq!(drawn_by_in_engine(&app, &q_sheet), None);
+}
+
+/// A BOM preview of project P (an export) leaves Q's draft and Q's sheet
+/// alone, while P's own draft is committed so the export shows it.
+#[test]
+fn exporting_one_project_leaves_another_projects_draft_pending() {
+    let (mut app, p_sheet, _p, _recorder) = project_with_draft();
+    let (q_sheet, _q) = add_project_q(&mut app);
+    let _ = app.handle_bom_preview_open();
+    assert_eq!(drawn_by_in_engine(&app, &p_sheet).as_deref(), Some("X"));
+    assert_eq!(
+        app.document_state
+            .drafts
+            .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
+            .as_deref(),
+        Some("Q")
+    );
+    assert!(!app.document_state.is_document_dirty(&q_sheet));
+    assert_eq!(drawn_by_in_engine(&app, &q_sheet), None);
+}
+
+/// Save writes the document being saved; another sheet's draft stays pending.
+#[test]
+fn save_commits_only_the_saved_documents_draft() {
+    let (mut app, p_sheet, _p, _recorder) = project_with_draft();
+    let (q_sheet, _q) = add_project_q(&mut app);
+    let task = app.update(Message::Menu(MenuMessage::command("save_document")));
+    settle(&mut app, task);
+    assert_eq!(drawn_by_in_engine(&app, &p_sheet).as_deref(), Some("X"));
+    assert_eq!(drawn_by_in_engine(&app, &q_sheet), None);
+    assert!(!app.document_state.is_document_dirty(&q_sheet));
 }

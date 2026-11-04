@@ -68,8 +68,7 @@ impl Signex {
             .chain(
                 // A sheet whose only change is a pending title-block draft is
                 // unsaved too: the draft is what Save would write (#2027).
-                doc.title_block_drafts_all()
-                    .map(|draft| draft.sheet.clone()),
+                doc.drafts.title_block_sheets(),
             )
             .filter(|p| path_is_under(p, target, fold))
             // A project file's own dirty marker is metadata, not a document
@@ -304,10 +303,9 @@ impl Signex {
                     return iced::Task::none();
                 }
                 // Discard drops the drafts with the rest of the edits.
-                for ctx in self.document_state.panel_ctxs_mut() {
-                    ctx.title_block_drafts
-                        .retain(|draft| !path_is_under(&draft.sheet, &state.target_path, fold));
-                }
+                self.document_state
+                    .drafts
+                    .retain_sheets(|sheet| !path_is_under(sheet, &state.target_path, fold));
                 let mut tasks: Vec<iced::Task<Message>> = docs
                     .iter()
                     .flat_map(|p| self.close_tabs_of_removed(p, false, fold))

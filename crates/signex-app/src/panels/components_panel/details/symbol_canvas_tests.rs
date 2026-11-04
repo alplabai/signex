@@ -413,8 +413,19 @@ fn an_edited_body_under_the_same_id_refits() {
     assert_ne!(first.fit_key(), second.fit_key());
 }
 
+/// The preview draws its text through a readability clamp the sheet no
+/// longer has: past 64 px it stops growing and under 6 px it stops shrinking.
 #[test]
-fn the_preview_keeps_its_text_clamp() {
-    assert_eq!(PREVIEW_TEXT_SIZE.min_px, 6.0);
-    assert_eq!(PREVIEW_TEXT_SIZE.max_px, 64.0);
+fn the_preview_draws_text_inside_its_clamp() {
+    let at = |scale: f32| {
+        let transform = ScreenTransform {
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale,
+            device_px_per_logical_px: UNSCALED,
+        };
+        preview_draw_options(&transform).text_px_for_test(TEXT_HEIGHT_MM)
+    };
+    assert_eq!(at(10_000.0), 64.0, "far past the ceiling");
+    assert_eq!(at(0.01), 6.0, "far under the floor");
 }

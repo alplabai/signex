@@ -14,8 +14,9 @@ impl Signex {
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
             .document_state
-            .title_block_drafts_all()
-            .map(|d| d.sheet.clone())
+            .drafts
+            .title_block_sheets()
+            .into_iter()
             .filter(|sheet| {
                 self.document_state
                     .document_project(sheet)
@@ -28,8 +29,10 @@ impl Signex {
     /// File ▸ Close Project: close the active project through the same gate
     /// as the project tree's Close Project; nothing when none is open.
     pub(crate) fn close_active_project(&mut self) -> Task<Message> {
-        self.commit_pending_title_block_drafts();
         let active = self.document_state.active_project;
+        if let Some(id) = active {
+            self.commit_drafts_of_project(id);
+        }
         let index = self
             .document_state
             .projects
@@ -300,9 +303,6 @@ impl Signex {
             for path in sweep {
                 self.forget_net_colors_of(&path);
                 self.document_state.remove_engine(&path);
-                // No dirty mark outlives the engine it described.
-                self.document_state.clear_document_dirty(&path);
-                self.drop_title_block_drafts_of(&path);
                 self.document_state
                     .document_saves
                     .forget_disk_records(&path);

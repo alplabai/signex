@@ -390,13 +390,12 @@ pub fn view_properties_general<'a>(
                             c = c.push(form_mm_edit_row(
                                 "Width",
                                 w,
-                                ctx.paper_edge_drafts
-                                    .iter()
-                                    .find(|d| {
-                                        d.edge == PaperEdge::Width
-                                            && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
+                                ctx.title_block_sheet
+                                    .as_deref()
+                                    .and_then(|sheet| {
+                                        ctx.drafts.paper_edge_text(sheet, PaperEdge::Width)
                                     })
-                                    .map(|d| d.text.as_str()),
+                                    .as_deref(),
                                 PaperEdge::Width,
                                 muted,
                                 input_bg,
@@ -405,13 +404,12 @@ pub fn view_properties_general<'a>(
                             c = c.push(form_mm_edit_row(
                                 "Height",
                                 h,
-                                ctx.paper_edge_drafts
-                                    .iter()
-                                    .find(|d| {
-                                        d.edge == PaperEdge::Height
-                                            && ctx.title_block_sheet.as_ref() == Some(&d.sheet)
+                                ctx.title_block_sheet
+                                    .as_deref()
+                                    .and_then(|sheet| {
+                                        ctx.drafts.paper_edge_text(sheet, PaperEdge::Height)
                                     })
-                                    .map(|d| d.text.as_str()),
+                                    .as_deref(),
                                 PaperEdge::Height,
                                 muted,
                                 input_bg,

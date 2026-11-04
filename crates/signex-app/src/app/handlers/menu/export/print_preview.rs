@@ -10,7 +10,8 @@ use super::super::super::super::*;
 
 impl Signex {
     pub(crate) fn handle_print_preview_requested(&mut self) -> iced::Task<Message> {
-        self.commit_pending_title_block_drafts();
+        let anchor = self.document_state.active_path.clone();
+        self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.document_state.has_active_engine() {
             log::warn!("Print preview: no active schematic");
             return iced::Task::none();
@@ -225,7 +226,9 @@ impl Signex {
     }
 
     pub(crate) fn handle_print_preview_export(&mut self) -> Option<Task<Message>> {
-        self.commit_pending_title_block_drafts();
+        // No commit here: the preview was built from a snapshot taken when it
+        // opened (after its own commit), so a later one could not reach what
+        // this export writes, and the document on screen may not be its own.
         // The last outcome is stale the moment Export is clicked again, also
         // when validation refuses below.
         if let Some(preview) = self.document_state.preview.as_mut() {

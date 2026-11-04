@@ -70,7 +70,7 @@ fn a_field_commits_on_enter_as_one_undo_step() {
         Some("A. Engineer"),
         "the panel shows the stored value"
     );
-    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(app.document_state.drafts.is_empty());
     assert!(
         app.document_state
             .is_document_dirty(&app.document_state.tabs[0].path),
@@ -296,7 +296,7 @@ mod drafts_before_persist {
             reopened.title_block.get("drawn_by").map(String::as_str),
             Some("A. Engineer")
         );
-        assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+        assert!(app.document_state.drafts.is_empty());
         let _ = app.update(Message::Edit(EditMsg::Undo));
         assert_eq!(stored(&app, &sheet, "drawn_by"), None, "one undo step");
     }

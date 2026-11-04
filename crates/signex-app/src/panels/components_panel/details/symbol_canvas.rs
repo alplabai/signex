@@ -17,7 +17,8 @@ use crate::canvas::Camera;
 use crate::canvas::paper::{PaperLook, paint_paper_and_grid};
 use crate::render_config::{GridStyle, to_iced};
 use crate::schematic_runtime::{
-    SceneOverrides, ScreenTransform, build_schematic_scene, draw_built_scene_with, symbol_bounds,
+    SceneOverrides, ScreenTransform, build_schematic_scene, schematic_draw_options_with,
+    symbol_bounds,
 };
 
 /// Share of the box the symbol's extent fills; the rest is margin.
@@ -32,6 +33,14 @@ const MAX_SCALE_TEXT_HEIGHTS: f32 = 4.0;
 /// The preview is a thumbnail, so its text keeps a readability clamp the sheet no longer has.
 const PREVIEW_TEXT_SIZE: signex_gfx::primitive::text::TextSizePolicy =
     signex_gfx::primitive::text::TextSizePolicy::new(6.0, 64.0);
+/// The replay options of the preview: the sheet's, with the thumbnail's text
+/// clamp.
+fn preview_draw_options(
+    transform: &ScreenTransform,
+) -> crate::renderer_scene_canvas::SceneDrawOptions {
+    schematic_draw_options_with(transform, PREVIEW_TEXT_SIZE)
+}
+
 /// The part is placed on a multiple of this, mm, near the paper's centre.
 const PLACEMENT_GRID_MM: f64 = 2.54;
 
@@ -209,7 +218,12 @@ impl SymbolSheetPreview {
             None,
             SceneOverrides::default(),
         ) {
-            draw_built_scene_with(frame, &scene, &transform, PREVIEW_TEXT_SIZE);
+            crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
+                frame,
+                &scene,
+                |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
+                preview_draw_options(&transform),
+            );
         }
     }
 }

@@ -172,10 +172,6 @@ impl Signex {
                 // so the sheet parks dirty like any other edit. Another
                 // sheet's drafts stay pending.
                 self.commit_title_block_drafts_where(|sheet| sheet == path);
-            } else {
-                // A close that already settled the unsaved work (Discard,
-                // Remove, a library close) drops this sheet's drafts.
-                self.drop_title_block_drafts_of(&path);
             }
         }
         if idx >= self.document_state.tabs.len() {
