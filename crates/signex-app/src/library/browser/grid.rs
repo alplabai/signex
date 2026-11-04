@@ -12,7 +12,6 @@ use super::window::{
 };
 use super::*;
 use crate::library::dangling::DanglingSweep;
-use iced::Widget as _;
 use iced::widget::column;
 use signex_library::RefSlot;
 

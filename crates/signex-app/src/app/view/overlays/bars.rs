@@ -10,7 +10,7 @@
 //! the same `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{Widget as _, column, container, row};
+use iced::widget::{column, container, row};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;

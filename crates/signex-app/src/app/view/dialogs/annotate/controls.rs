@@ -9,7 +9,7 @@
 
 use super::super::*;
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Theme, Widget as _};
+use iced::{Background, Border, Color, Element, Theme};
 
 use crate::app::state::AnnotateOrder;
 

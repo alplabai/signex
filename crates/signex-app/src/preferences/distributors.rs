@@ -5,7 +5,7 @@
 //! single-file `preferences` module.
 
 use super::*;
-use iced::widget::{Space, Widget as _, column, container};
+use iced::widget::{Space, column, container};
 use iced::{Element, Length};
 
 /// Default type / spacing scales; equal to the old literals at the default size.

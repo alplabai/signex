@@ -7,7 +7,7 @@
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Scrollable, scrollable};
-use iced::{Element, Length, Widget};
+use iced::{Element, Length};
 
 /// Space kept between the content and the embedded scrollbar, in pixels.
 const SCROLLBAR_GAP: f32 = 2.0;
@@ -23,6 +23,7 @@ pub(crate) fn panel_scrollable<'a, M: 'a>(content: impl Into<Element<'a, M>>) ->
 mod tests {
     use super::*;
     use crate::layout_probe::{find, lay_out_texts};
+    use iced::Widget;
     use iced::widget::text;
 
     /// The default scrollbar width; the gutter must be at least this.

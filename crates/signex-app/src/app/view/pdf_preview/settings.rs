@@ -3,7 +3,6 @@
 //! `view/pdf_preview.rs` as pure code motion.
 
 use super::super::*;
-use iced::widget::Widget as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;

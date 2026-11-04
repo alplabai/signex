@@ -10,7 +10,6 @@
 
 use super::canvas_region;
 use super::*;
-use iced::Widget as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;

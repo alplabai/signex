@@ -8,7 +8,6 @@
 use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Color, Element, Length};
-use iced::Widget as _;
 
 use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};

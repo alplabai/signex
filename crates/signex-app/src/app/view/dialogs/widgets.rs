@@ -6,7 +6,6 @@
 //! code motion — no behaviour change.
 
 use super::*;
-use iced::Widget as _;
 use iced::widget::{Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 

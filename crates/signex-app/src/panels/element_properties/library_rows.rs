@@ -2,7 +2,6 @@
 //! Properties views (#912).
 
 use super::super::*;
-use iced::Widget as _;
 use crate::styles::{Spacing, TypeScale};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
