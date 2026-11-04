@@ -10,7 +10,7 @@
 //! `LibraryState::document_options.is_some()`.
 
 use iced::widget::{Space, button, column, container, pick_list, row, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -58,22 +58,23 @@ pub fn view<'a>(
             )
             .padding([sp.s, sp.l])
             .width(Length::Fill)
-            .into()
+            .boxed()
         };
 
     let sheet_picker: Element<'a, LibraryMessage> = pick_list(
-        SheetColor::ALL.to_vec(),
         Some(state.draft.sheet_color),
-        LibraryMessage::DocumentOptionsSetSheetColor,
+        SheetColor::ALL.to_vec(),
+        |c: &SheetColor| c.to_string(),
     )
+    .on_select(LibraryMessage::DocumentOptionsSetSheetColor)
     .padding([sp.xs, sp.s])
     .text_size(ts.body)
-    .into();
+    .boxed();
 
     let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)
         .size(ts.heading)
         .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
-        .into();
+        .boxed();
 
     let grid_label = format!("{:.3} mm", state.draft.grid_size_mm);
     let grid_size_btn: Element<'a, LibraryMessage> =
@@ -81,7 +82,7 @@ pub fn view<'a>(
             .padding([sp.xs, sp.m])
             .on_press(LibraryMessage::DocumentOptionsCycleGridSize)
             .style(crate::styles::outline_button(tokens))
-            .into();
+            .boxed();
 
     let unit_label = format!("{}", state.draft.unit);
     let unit_btn: Element<'a, LibraryMessage> =
@@ -89,7 +90,7 @@ pub fn view<'a>(
             .padding([sp.xs, sp.m])
             .on_press(LibraryMessage::DocumentOptionsCycleUnit)
             .style(crate::styles::outline_button(tokens))
-            .into();
+            .boxed();
 
     let body = column![
         row_field("Sheet Color", sheet_picker),
@@ -132,5 +133,5 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }

@@ -13,7 +13,7 @@
 //! across the Library subsystem.
 
 use iced::widget::{Space, column, container, row, scrollable, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -94,7 +94,7 @@ pub fn view<'a>(
         rows.push(
             container(text(label).size(ts.body).color(text_c))
                 .padding([sp.s, sp.m])
-                .into(),
+                .boxed(),
         );
     }
     let library_dir = confirm.library_path.parent();
@@ -106,7 +106,7 @@ pub fn view<'a>(
                     .color(text_c),
             )
             .padding([sp.s, sp.m])
-            .into(),
+            .boxed(),
         );
     }
     let list = scrollable(column(rows).spacing(0))
@@ -158,5 +158,5 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }

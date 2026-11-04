@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -63,11 +64,12 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
         container(text("SCH Library").size(TS.body).color(primary))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -82,9 +84,10 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .color(muted),
             )
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
-        return scrollable(col).width(Length::Fill).into();
+        return scrollable(col).width(Length::Fill).boxed();
     };
 
     // ── Breadcrumb header — F28 (2026-05-03) ──
@@ -119,7 +122,11 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         ),
         None => format!("{}  ({} symbols)", symbol_file, sym.symbols_in_file.len()),
     };
-    col = col.push(container(text(breadcrumb).size(TS.caption).color(muted)).padding([SP.s, SP.m]));
+    col = col.push(
+        container(text(breadcrumb).size(TS.caption).color(muted))
+            .padding([SP.s, SP.m])
+            .boxed(),
+    );
     col = col.push(thin_sep(border_c));
 
     // ── Column header — Altium SCH Library parity. Two columns:
@@ -139,7 +146,8 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .spacing(6),
         )
         .padding([SP.s, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -188,7 +196,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 }
             },
         );
-        col = col.push(row_btn);
+        col = col.push(row_btn.boxed());
 
         // Part tree-expander under the active multi-part symbol.
         if is_active && (sym.active_max_part > 1 || sym.active_has_part_zero) {
@@ -249,6 +257,7 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border_c,
+                    ..Default::default()
                 },
                 text_color,
                 ..iced::widget::button::Style::default()
@@ -297,14 +306,15 @@ pub fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             ]
             .align_y(iced::Alignment::Center),
         )
-        .padding([6.0, SP.m]),
+        .padding([6.0, SP.m])
+        .boxed(),
     );
 
     if let Some(warning) = sym.delete_warning.as_ref() {
         col = col.push(delete_warning_block(warning, primary, muted));
     }
 
-    scrollable(col).width(Length::Fill).into()
+    scrollable(col).width(Length::Fill).boxed()
 }
 
 /// The in-use warning shown instead of deleting at once (#1845): names the
@@ -314,16 +324,17 @@ fn delete_warning_block<'a>(
     primary: Color,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
-    let mut block: Column<'a, PanelMsg> = Column::new()
+    let mut block: Column<Element<'a, PanelMsg>> = Column::new()
         .spacing(SP.xs)
-        .push(text(warning.heading()).size(TS.body).color(primary));
+        .push(text(warning.heading()).size(TS.body).color(primary).boxed());
     for line in &warning.lines {
-        block = block.push(text(line.as_str()).size(TS.caption).color(muted));
+        block = block.push(text(line.as_str()).size(TS.caption).color(muted).boxed());
     }
     block = block.push(
         text("Deleting it leaves placed parts on their embedded copy; the library symbol will be missing.")
             .size(TS.caption)
-            .color(muted),
+            .color(muted)
+            .boxed(),
     );
     let confirm = iced::widget::button(text("Delete anyway").size(TS.body))
         .padding([SP.xs, SP.m])
@@ -331,11 +342,11 @@ fn delete_warning_block<'a>(
     let cancel = iced::widget::button(text("Cancel").size(TS.body))
         .padding([SP.xs, SP.m])
         .on_press(PanelMsg::SchLibraryDeleteCancelled);
-    block = block.push(row![confirm, cancel].spacing(SP.m));
+    block = block.push(row![confirm, cancel].spacing(SP.m).boxed());
     container(block)
         .padding([6.0, SP.m])
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// v0.18.8 — Footprint Library panel. Mirror of Altium's PCB Library
@@ -353,11 +364,12 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
     let border_c = theme_ext::border_color(&ctx.tokens);
     let bg_active = crate::styles::ti(ctx.tokens.selection);
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
         container(text("Footprint Library").size(TS.body).color(primary))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -373,9 +385,10 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
                 .color(muted),
             )
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
-        return scrollable(col).width(Length::Fill).into();
+        return scrollable(col).width(Length::Fill).boxed();
     };
 
     // Breadcrumb — file name + footprint count.
@@ -395,7 +408,11 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
             "s"
         },
     );
-    col = col.push(container(text(breadcrumb).size(TS.caption).color(muted)).padding([SP.s, SP.m]));
+    col = col.push(
+        container(text(breadcrumb).size(TS.caption).color(muted))
+            .padding([SP.s, SP.m])
+            .boxed(),
+    );
     col = col.push(thin_sep(border_c));
 
     // Two-column header: Name + Pads (right-aligned count).
@@ -412,7 +429,8 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
             .align_y(iced::Alignment::Center),
         )
         .padding([SP.s, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
     col = col.push(thin_sep(border_c));
 
@@ -459,11 +477,12 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
                 width: 0.0,
                 radius: 0.0.into(),
                 color: iced::Color::TRANSPARENT,
+                ..Default::default()
             },
             ..iced::widget::button::Style::default()
         })
         .width(Length::Fill);
-        col = col.push(row_btn);
+        col = col.push(row_btn.boxed());
     }
 
     // Place / Add / Delete / Edit button row pinned at the bottom of
@@ -478,7 +497,7 @@ pub fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg
         thin_sep(border_c),
         footer,
     ]
-    .into()
+    .boxed()
 }
 
 /// Bottom button row for the Footprint Library panel — Altium's
@@ -515,6 +534,7 @@ fn view_footprint_library_button_row<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border_c,
+                    ..Default::default()
                 },
                 ..iced::widget::button::Style::default()
             }
@@ -522,7 +542,7 @@ fn view_footprint_library_button_row<'a>(
         if let Some(msg) = on_press {
             btn = btn.on_press(msg);
         }
-        btn.into()
+        btn.boxed()
     };
 
     let place = mk_btn(
@@ -544,7 +564,7 @@ fn view_footprint_library_button_row<'a>(
     )
     .padding([6.0, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// F15 — Library Browser row detail in the Properties panel. Shows
@@ -579,6 +599,7 @@ pub fn view_library_row_properties<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border_c,
+                ..Default::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -595,6 +616,7 @@ pub fn view_library_row_properties<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border_c,
+                ..Default::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -634,5 +656,5 @@ pub fn view_library_row_properties<'a>(
     .spacing(0)
     .padding(10);
 
-    container(body).width(Length::Fill).into()
+    container(body).width(Length::Fill).boxed()
 }

@@ -16,6 +16,7 @@
 //! pixel-scale slack for glyph side bearings and anti-aliasing, so they hold on
 //! any adapter and font rasteriser.
 
+use iced::widget::Widget as _;
 use iced::widget::canvas;
 use iced::{Point, Rectangle, Renderer, Theme, mouse};
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
@@ -121,7 +122,7 @@ fn quarter_turn_labels_land_on_their_anchor_and_keep_their_orientation() {
         let element = canvas(OneLabel(label_at(degrees)))
             .width(iced::Length::Fill)
             .height(iced::Length::Fill)
-            .into();
+            .boxed();
         let frame = render(&mut gpu, element);
         let lit = in_label_frame(&frame, degrees);
         assert!(

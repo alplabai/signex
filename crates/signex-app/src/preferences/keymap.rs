@@ -4,7 +4,7 @@
 //! single-file `preferences` module.
 
 use super::*;
-use iced::widget::{Column, Space, button, column, container, row, text, text_input};
+use iced::widget::{Column, Space, Widget, button, column, container, row, text, text_input};
 use iced::{Background, Border, Element, Length, Theme};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -72,7 +72,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         ))
         .size(TS.caption)
         .style(text_warning)
-        .into()
+        .boxed()
     });
 
     // #603 — the backup outlives the failure that produced it, so this
@@ -103,7 +103,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(
             .spacing(SP.m),
         ]
         .spacing(6)
-        .into()
+        .boxed()
     });
 
     // Profile picker + recorder stay ABOVE the search box and groups.
@@ -114,9 +114,12 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         ]
         .spacing(3)
         .width(160),
-        iced::widget::pick_list(profile_options, active_option, |profile| {
-            PrefMsg::KeymapProfileSelected(profile.id)
-        })
+        iced::widget::pick_list(
+            active_option,
+            profile_options,
+            |profile: &KeymapProfileOption| { profile.to_string() }
+        )
+        .on_select(|profile: KeymapProfileOption| PrefMsg::KeymapProfileSelected(profile.id))
         .text_size(12)
         .width(180),
         button(container(text("Create").size(TS.body)).padding([5.0, SP.l]))
@@ -172,14 +175,14 @@ pub(super) fn content_keyboard_shortcuts<'a>(
     let mut content = column![header].spacing(10).padding(20);
     content = content.extend(load_error_banner);
     content = content.extend(backup_row);
-    content = content.push(profile_row);
-    content = content.push(text(status_line).size(TS.caption).style(text_muted));
+    content = content.push(profile_row.boxed());
+    content = content.push(text(status_line).size(TS.caption).style(text_muted).boxed());
 
     if let Some(recorder) = recorder {
         content = content.push(keymap_recorder_control(recorder));
     }
 
-    content = content.push(search_box);
+    content = content.push(search_box.boxed());
     content = content.push(h_sep());
 
     if filtered.is_empty() {
@@ -188,11 +191,11 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         } else {
             format!("No shortcuts match “{}”.", search.trim())
         };
-        content = content.push(text(empty).size(TS.body).style(text_muted));
-        return content.into();
+        content = content.push(text(empty).size(TS.body).style(text_muted).boxed());
+        return content.boxed();
     }
 
-    content = content.push(table_header);
+    content = content.push(table_header.boxed());
 
     // One block per group, in the fixed CommandGroup::ALL display order.
     // Groups with no matching rows are skipped entirely.
@@ -205,12 +208,12 @@ pub(super) fn content_keyboard_shortcuts<'a>(
         if group_rows.is_empty() {
             continue;
         }
-        content = content.push(Space::new().height(6));
+        content = content.push(Space::new().height(6).boxed());
         content = content.push(section_title(group.display_name()));
-        content = content.push(Column::with_children(group_rows).spacing(SP.xs));
+        content = content.push(Column::with_children(group_rows).spacing(SP.xs).boxed());
     }
 
-    content.into()
+    content.boxed()
 }
 
 /// Render one shortcut table row. Extracted so the grouped view can build
@@ -255,12 +258,13 @@ fn keymap_table_row<'a>(
     let state_unbound = row_model.unbound || row_model.trigger.trim().is_empty();
     let state_style = move |theme: &Theme| text::Style {
         color: Some(if state_warn {
-            theme.palette().warning
+            theme.palette().warning.base.color
         } else if state_unbound {
-            theme.extended_palette().secondary.base.color
+            theme.palette().secondary.base.color
         } else {
-            theme.extended_palette().background.base.text
+            theme.palette().background.base.text
         }),
+        ..text::Style::default()
     };
 
     // Keyboard-editable rows in a custom profile get an inline Edit button
@@ -291,12 +295,12 @@ fn keymap_table_row<'a>(
                 ]
                 .spacing(6)
                 .align_y(iced::Alignment::Center)
-                .into()
+                .boxed()
             } else {
                 text(row_model.trigger.clone())
                     .size(TS.body)
                     .style(text_muted)
-                    .into()
+                    .boxed()
             }
         } else {
             shortcut_chip(&row_model.trigger, ChipTone::Neutral)
@@ -327,7 +331,7 @@ fn keymap_table_row<'a>(
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
     .padding([5, 0])
-    .into()
+    .boxed()
 }
 
 /// Colour intent for a shortcut chip. Resolved against the active theme
@@ -352,26 +356,28 @@ fn shortcut_chip<'a>(label: &str, tone: ChipTone) -> Element<'a, PrefMsg> {
             .size(TS.body)
             .style(move |theme: &Theme| text::Style {
                 color: Some(match tone {
-                    ChipTone::Neutral => theme.extended_palette().background.weak.text,
-                    ChipTone::Warning => theme.palette().warning,
+                    ChipTone::Neutral => theme.palette().background.weak.text,
+                    ChipTone::Warning => theme.palette().warning.base.color,
                 }),
+                ..text::Style::default()
             }),
     )
     .padding([3.0, SP.m])
     .width(Length::Shrink)
     .style(move |theme: &Theme| {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         container::Style {
             background: Some(Background::Color(palette.background.weak.color)),
             border: Border {
                 width: 1.0,
                 color: palette.background.strong.color,
                 radius: 3.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 /// The "overridden by <fixed action>" note for a binding whose stroke a
@@ -400,12 +406,12 @@ fn keymap_recorder_control<'a>(
         text("Press Record, then type a shortcut")
             .size(TS.label)
             .style(iced::widget::text::secondary)
-            .into()
+            .boxed()
     } else {
         row(recorded_shortcut_chips(recorder))
             .spacing(6)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
     };
 
     let transient_modifiers = if recorder.recording
@@ -423,12 +429,12 @@ fn keymap_recorder_control<'a>(
         text("Recording")
             .size(TS.body)
             .style(iced::widget::text::warning)
-            .into()
+            .boxed()
     } else {
         text("Recorded")
             .size(TS.body)
             .style(iced::widget::text::secondary)
-            .into()
+            .boxed()
     };
     let mut capture_row = row![capture_status, recorded]
         .spacing(SP.m)
@@ -442,10 +448,11 @@ fn keymap_recorder_control<'a>(
             Some(message) if !recorder.strokes.is_empty() => text(message)
                 .size(TS.body)
                 .style(|theme: &Theme| text::Style {
-                    color: Some(theme.palette().warning),
+                    color: Some(theme.palette().warning.base.color),
+                    ..text::Style::default()
                 })
-                .into(),
-            _ => Space::new().into(),
+                .boxed(),
+            _ => Space::new().boxed(),
         };
 
     let record_button = if recorder.recording {
@@ -492,13 +499,14 @@ fn keymap_recorder_control<'a>(
             .padding(SP.l)
             .width(Length::Fill)
             .style(move |theme: &Theme| {
-                let palette = theme.extended_palette();
+                let palette = theme.palette();
                 container::Style {
                     background: Some(Background::Color(palette.background.weak.color)),
                     border: Border {
                         width: 1.0,
                         color: palette.background.strong.color,
                         radius: 4.0.into(),
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 }
@@ -525,18 +533,19 @@ fn keymap_recorder_control<'a>(
     .padding(SP.xl)
     .width(Length::Fill)
     .style(move |theme: &Theme| {
-        let palette = theme.extended_palette();
+        let palette = theme.palette();
         container::Style {
             background: Some(Background::Color(palette.background.base.color)),
             border: Border {
                 width: 1.0,
                 color: palette.primary.base.color,
                 radius: 6.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 fn recorded_shortcut_chips<'a>(

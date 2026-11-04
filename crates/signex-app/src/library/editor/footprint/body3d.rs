@@ -6,7 +6,7 @@
 //! primitive — the procedural 3D render in `preview3d.rs` rebuilds off
 //! these values on every frame.
 
-use iced::widget::{Space, button, column, container, pick_list, row, text};
+use iced::widget::{Space, Widget, button, column, container, pick_list, row, text};
 use iced::{Border, Element, Length, Theme};
 use iced_aw::NumberInput;
 use signex_library::{Body3D, BodyShape};
@@ -56,16 +56,15 @@ pub fn view<'a>(
         ShapePick(BodyShape::Custom),
     ];
     let shape_addr = address.clone();
-    let shape_picker = pick_list(opts, Some(ShapePick(body.shape)), move |ShapePick(s)| {
-        LibraryMessage::EditorEvent {
+    let shape_picker = pick_list(Some(ShapePick(body.shape)), opts, ShapePick::to_string)
+        .on_select(move |ShapePick(s)| LibraryMessage::EditorEvent {
             library_path: shape_addr.library_path.clone(),
             table: shape_addr.table.clone(),
             row_id: shape_addr.row_id,
             msg: EditorMsg::SetBodyShape(s),
-        }
-    })
-    .text_size(TS.body)
-    .padding([SP.s, SP.m]);
+        })
+        .text_size(TS.body)
+        .padding([SP.s, SP.m]);
 
     // Numeric inputs — height_mm / offset_z_mm.
     let height_addr = address.clone();
@@ -116,39 +115,40 @@ pub fn view<'a>(
 
     let body_col = column![
         header,
-        Space::new().height(SP.m),
-        labeled_field("Shape", shape_picker, muted),
-        Space::new().height(SP.m),
-        labeled_field("Height (mm)", height_input, muted),
-        Space::new().height(SP.m),
-        labeled_field("Offset Z (mm)", offset_input, muted),
-        Space::new().height(SP.m),
+        Space::new().height(SP.m).boxed(),
+        labeled_field("Shape", shape_picker.boxed(), muted),
+        Space::new().height(SP.m).boxed(),
+        labeled_field("Height (mm)", height_input.boxed(), muted),
+        Space::new().height(SP.m).boxed(),
+        labeled_field("Offset Z (mm)", offset_input.boxed(), muted),
+        Space::new().height(SP.m).boxed(),
         top_row,
-        Space::new().height(SP.m),
+        Space::new().height(SP.m).boxed(),
         side_row,
     ]
     .spacing(0)
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .boxed();
 
     container(body_col)
         .padding(SP.l)
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn labeled_field<'a>(
     label: &'static str,
-    field: impl Into<Element<'a, LibraryMessage>>,
+    field: Element<'a, LibraryMessage>,
     muted: iced::Color,
 ) -> Element<'a, LibraryMessage> {
     column![
-        text(label).size(TS.caption).color(muted),
-        Space::new().height(SP.xs),
-        field.into(),
+        text(label).size(TS.caption).color(muted).boxed(),
+        Space::new().height(SP.xs).boxed(),
+        field,
     ]
     .spacing(0)
-    .into()
+    .boxed()
 }
 
 /// Render one color row — preview swatch + 4 numeric inputs (R/G/B/A
@@ -175,6 +175,7 @@ fn color_row<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::container::Style::default()
         });
@@ -227,7 +228,7 @@ fn color_row<'a>(
         .align_y(iced::Alignment::Center),
     ]
     .spacing(0)
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

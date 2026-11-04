@@ -54,7 +54,7 @@ impl Signex {
         // over without the user clearing the previous query manually.
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
-            operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            operation::text_input::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
             // The project-wide rows come from an index built off-thread.
             self.start_palette_index(),
         ])
@@ -253,6 +253,24 @@ mod tests {
         assert!(app.ui_state.command_palette.results.is_empty());
     }
 
+    /// The messages `task` hands back to `update`, in order.
+    fn output_messages(task: Task<Message>) -> Vec<Message> {
+        use futures::StreamExt as _;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mut out = Vec::new();
+        runtime.block_on(async {
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+        });
+        out
+    }
+
     fn symbol_row(reference: &str) -> (String, String, String, String) {
         (
             reference.into(),
@@ -280,7 +298,17 @@ mod tests {
 
         let task = app.execute_command_palette_selected();
 
-        assert_eq!(task.units(), 1, "the cached row's action must run");
+        // Exactly one message comes out, and it is the cached row's action.
+        let messages = output_messages(task);
+        assert!(
+            matches!(
+                messages.as_slice(),
+                [Message::Overlay(OverlayMsg::OpenPanel(
+                    crate::panels::PanelKind::Erc
+                ))]
+            ),
+            "the cached row's action must run, got {messages:?}"
+        );
         assert!(!app.ui_state.command_palette.open);
     }
 

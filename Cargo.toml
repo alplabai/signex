@@ -1,7 +1,8 @@
 [workspace]
 resolver = "2"
 # cargo-fuzz crate: standalone (own [workspace]), needs nightly to run.
-exclude = ["fuzz"]
+# vendor/iced_aw: patched third-party crate, a path dependency only; not linted.
+exclude = ["fuzz", "vendor/iced_aw"]
 members = [
     "crates/signex-app",
     "crates/signex-engine",
@@ -57,8 +58,8 @@ repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]
 # UI framework
-iced = { version = "0.14", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio"] }
-iced_aw = { version = "0.13", default-features = false, features = [
+iced = { version = "0.15.0-dev", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio"] }
+iced_aw = { path = "vendor/iced_aw", version = "0.13.1", default-features = false, features = [
     "tabs", "tab_bar", "card", "context_menu", "number_input",
     "color_picker", "menu", "drop_down", "selection_list",
     "wrap", "spinner", "sidebar", "labeled_frame", "badge",
@@ -171,6 +172,23 @@ unused_must_use = "deny"
 # `workspace = true`. A lint added above does NOT reach it automatically —
 # it must be hand-copied into crates/signex-app/Cargo.toml at the same
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
+
+# Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
+# Tag iced-signex-v0.15.0-alpha.2 = commit 04ca92e06. Pinned by rev, not tag: a tag can be moved.
+[patch.crates-io]
+iced_fonts = { path = "vendor/iced_fonts" }
+iced = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_core = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_futures = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_graphics = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_program = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_renderer = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_runtime = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_tiny_skia = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_widget = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_winit = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
+iced_debug = { git = "https://github.com/alplabai/iced", rev = "04ca92e064f5c869bb858c686526d46a506a1293" }
 
 [profile.release]
 lto = "thin"

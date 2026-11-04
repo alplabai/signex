@@ -2,7 +2,7 @@
 //! enums (PadShapeChoice / HoleShapeChoice / ExpansionMode) used by
 //! the pick_list rows in `pad_form`.
 
-use iced::widget::{container, row, text};
+use iced::widget::{Widget, container, row, text};
 use iced::{Color, Length, Theme};
 
 use super::super::super::PanelMsg;
@@ -438,7 +438,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.20 — Pad Stack tab strip (Simple / Top-Middle-Bottom / Full
@@ -483,11 +483,12 @@ pub(super) fn pad_stack_tab_strip<'a>(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: chip_border,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
     };
     container(
         row![
@@ -500,7 +501,7 @@ pub(super) fn pad_stack_tab_strip<'a>(
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.20 — pick_list-friendly proxy for `signex_library::PadShape`.

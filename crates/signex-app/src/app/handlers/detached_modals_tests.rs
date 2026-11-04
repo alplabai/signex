@@ -652,7 +652,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
             let theme = app.theme(id).expect("theme");
             assert!(crate::styles::is_dialog_window(&theme));
             assert_eq!(
-                theme.palette().background,
+                theme.palette().background.base.color,
                 paper,
                 "{modal:?} in {theme_id:?}: the window background is not the surface token"
             );

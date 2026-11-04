@@ -5,7 +5,7 @@
 //! Closes UX_IMPROVEMENTS_OVER_ALTIUM §4.2 ("Hotkey discoverability").
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
 use crate::app::view::dialogs::{
@@ -130,7 +130,8 @@ fn build<'a>(
     )
     .padding([6, 0]);
 
-    let mut body = Column::new().spacing(0).push(column_header);
+    let mut body: Column<Element<'a, Message>> =
+        Column::new().spacing(0).push(column_header.boxed());
     body = body.push(thin_divider(border));
 
     let mut first_section = true;
@@ -155,11 +156,12 @@ fn build<'a>(
                 right: 0.0,
                 bottom: 4.0,
                 left: 0.0,
-            }),
+            })
+            .boxed(),
         );
 
         let last_idx = section_shortcuts.len().saturating_sub(1);
-        let mut section_col = Column::new().spacing(0);
+        let mut section_col: Column<Element<'a, Message>> = Column::new().spacing(0);
         for (idx, (label, trigger)) in section_shortcuts.iter().enumerate() {
             let row_el: Element<'a, Message> = row![
                 text(label.clone()).size(TS.body).color(text_primary),
@@ -170,7 +172,7 @@ fn build<'a>(
                     .width(Length::Fixed(KEY_COL_W)),
             ]
             .padding([3, 0])
-            .into();
+            .boxed();
             section_col = section_col.push(row_el);
             // Subtle row divider between rows (not after the last row
             // in a section — section divider handles that gap).
@@ -178,7 +180,7 @@ fn build<'a>(
                 section_col = section_col.push(thin_divider(row_divider_color));
             }
         }
-        body = body.push(section_col);
+        body = body.push(section_col.boxed());
     }
 
     let body_container = container(scrollable(body).height(Length::Fill))
@@ -192,7 +194,7 @@ fn build<'a>(
             .width(Length::Fill)
             .height(Length::Fill)
             .style(styles::modal_card(tokens))
-            .into();
+            .boxed();
     }
     let card = container(column![header, body_container].spacing(0))
         .width(Length::Fixed(MODAL_W))
@@ -205,7 +207,7 @@ fn build<'a>(
         .height(Length::Fill)
         .center_x(Length::Fill)
         .center_y(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Whether the reference sheet may list `row` as a working shortcut.
@@ -245,7 +247,7 @@ fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {
             border: Border::default(),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

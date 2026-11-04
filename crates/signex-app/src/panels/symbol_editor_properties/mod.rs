@@ -7,7 +7,7 @@
 //! numeric fields, field selected → field properties, nothing selected
 //! → symbol-level defaults (Name / UUID / pin count) with Name editable.
 
-use iced::widget::{Column, container, row, scrollable, text};
+use iced::widget::{Column, Widget, container, row, scrollable, text};
 use iced::{Color, Element, Length};
 
 use super::{
@@ -32,7 +32,7 @@ pub(super) fn view_symbol_editor_properties<'a>(
     primary: Color,
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     let header_label = match &sym.selected {
         SymbolEditorSelection::None => "Symbol",
@@ -51,7 +51,8 @@ pub(super) fn view_symbol_editor_properties<'a>(
     col = col.push(
         container(text(header_label).size(TS.body).color(primary))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(super::thin_sep(border_c));
 
@@ -85,7 +86,8 @@ pub(super) fn view_symbol_editor_properties<'a>(
                         .size(TS.caption)
                         .color(muted),
                 )
-                .padding([SP.s, SP.m]),
+                .padding([SP.s, SP.m])
+                .boxed(),
             );
         }
         SymbolEditorSelection::FieldValue => {
@@ -101,7 +103,8 @@ pub(super) fn view_symbol_editor_properties<'a>(
                         .size(TS.caption)
                         .color(muted),
                 )
-                .padding([SP.s, SP.m]),
+                .padding([SP.s, SP.m])
+                .boxed(),
             );
         }
     }
@@ -115,10 +118,11 @@ pub(super) fn view_symbol_editor_properties<'a>(
             .size(TS.caption)
             .color(muted),
         )
-        .padding([6.0, SP.m]),
+        .padding([6.0, SP.m])
+        .boxed(),
     );
 
-    scrollable(col).width(Length::Fill).into()
+    scrollable(col).width(Length::Fill).boxed()
 }
 
 /// Read-only label + value Properties row shared by the symbol-level
@@ -144,5 +148,5 @@ fn prop_row_static<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }

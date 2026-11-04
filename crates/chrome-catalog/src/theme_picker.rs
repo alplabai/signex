@@ -1,5 +1,5 @@
 use iced::widget::{Row, container, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
 use crate::catalog::Message;
@@ -9,8 +9,8 @@ use crate::theme_pill;
 pub(crate) fn view<'a>(selected_theme: ThemeId, tokens: &ThemeTokens) -> Element<'a, Message> {
     let toolbar_bg = theme::color(tokens.toolbar_bg);
     let text_color = theme::color(tokens.text);
-    let mut pills: Row<'a, Message> = Row::new().spacing(6);
-    pills = pills.push(text("Theme:").size(11).color(text_color));
+    let mut pills: Row<Element<'a, Message>> = Row::new().spacing(6);
+    pills = pills.push(text("Theme:").size(11).color(text_color).boxed());
     for &theme_id in ThemeId::BUILTINS {
         pills = pills.push(theme_pill::view(
             theme_id,
@@ -27,8 +27,9 @@ pub(crate) fn view<'a>(selected_theme: ThemeId, tokens: &ThemeTokens) -> Element
                 width: 0.0,
                 radius: 0.0.into(),
                 color: Color::TRANSPARENT,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }

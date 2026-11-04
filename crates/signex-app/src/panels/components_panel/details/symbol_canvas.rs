@@ -7,7 +7,7 @@ use std::cell::RefCell;
 
 use iced::widget::canvas::{self, Geometry};
 use iced::widget::container;
-use iced::{Element, Length, Rectangle, Size, Theme};
+use iced::{Element, Length, Rectangle, Size, Theme, Widget};
 use signex_types::schematic::{Aabb, LibSymbol, SchematicSheet, Symbol};
 use signex_types::theme::CanvasColors;
 
@@ -153,11 +153,11 @@ pub(crate) fn symbol_preview(
     })
     .width(Length::Fill)
     .height(height);
-    container(canvas)
+    container::<_, Theme>(canvas)
         .width(Length::Fill)
         .height(height)
         .clip(true)
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

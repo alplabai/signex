@@ -1,6 +1,6 @@
 use chrono::{Datelike, Local};
 use iced::widget::{button, column, container, pick_list, row, text};
-use iced::{Alignment, Background, Border, Element, Length};
+use iced::{Alignment, Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::color_code::ComponentColorCode;
@@ -148,29 +148,28 @@ impl RkmEncoder {
         let inputs = row![
             labeled(
                 "Component",
-                pick_list(
-                    ComponentKind::ALL,
-                    Some(self.kind),
-                    RkmEncoderMessage::KindChanged,
-                )
-                .width(WIDE_PICK_W),
+                pick_list(Some(self.kind), ComponentKind::ALL, ToString::to_string)
+                    .on_select(RkmEncoderMessage::KindChanged)
+                    .width(WIDE_PICK_W),
             ),
             labeled(
                 "Value",
                 pick_list(
-                    self.value_options.as_slice(),
                     Some(self.value),
-                    RkmEncoderMessage::ValueChanged,
+                    self.value_options.as_slice(),
+                    ToString::to_string
                 )
+                .on_select(RkmEncoderMessage::ValueChanged)
                 .width(130),
             ),
             labeled(
                 "Unit",
                 pick_list(
-                    SiPrefix::for_kind(self.kind),
                     Some(self.prefix),
-                    RkmEncoderMessage::PrefixChanged,
+                    SiPrefix::for_kind(self.kind),
+                    ToString::to_string
                 )
+                .on_select(RkmEncoderMessage::PrefixChanged)
                 .width(100),
             ),
             text(self.prefix.unit(self.kind))
@@ -178,12 +177,9 @@ impl RkmEncoder {
                 .color(token_color(tokens.text_secondary)),
             labeled(
                 "Tolerance",
-                pick_list(
-                    Tolerance::ALL,
-                    Some(self.tolerance),
-                    RkmEncoderMessage::ToleranceChanged,
-                )
-                .width(WIDE_PICK_W),
+                pick_list(Some(self.tolerance), Tolerance::ALL, ToString::to_string)
+                    .on_select(RkmEncoderMessage::ToleranceChanged)
+                    .width(WIDE_PICK_W),
             ),
         ]
         .spacing(12)
@@ -195,22 +191,20 @@ impl RkmEncoder {
                 labeled(
                     "Temperature coefficient",
                     pick_list(
-                        TemperatureCoefficient::ALL,
                         self.temperature_coefficient,
-                        RkmEncoderMessage::TemperatureCoefficientChanged,
+                        TemperatureCoefficient::ALL,
+                        ToString::to_string
                     )
+                    .on_select(RkmEncoderMessage::TemperatureCoefficientChanged)
                     .placeholder("Not specified")
                     .width(165),
                 ),
                 labeled(
                     "Rated power",
-                    pick_list(
-                        RatedPower::ALL,
-                        self.rated_power,
-                        RkmEncoderMessage::RatedPowerChanged,
-                    )
-                    .placeholder("Not specified")
-                    .width(135),
+                    pick_list(self.rated_power, RatedPower::ALL, ToString::to_string)
+                        .on_select(RkmEncoderMessage::RatedPowerChanged)
+                        .placeholder("Not specified")
+                        .width(135),
                 ),
                 button(text("Clear optional fields"))
                     .padding([9, 14])
@@ -218,37 +212,40 @@ impl RkmEncoder {
             ]
             .spacing(12)
             .align_y(Alignment::End);
-            content = content.push(optional_fields);
+            content = content.push(optional_fields.boxed());
         }
 
         let production_date_fields = row![
             labeled(
                 "Production date cycle",
                 pick_list(
-                    ProductionDateCycle::ALL,
                     self.production_date_cycle,
-                    RkmEncoderMessage::ProductionDateCycleChanged,
+                    ProductionDateCycle::ALL,
+                    ToString::to_string
                 )
+                .on_select(RkmEncoderMessage::ProductionDateCycleChanged)
                 .placeholder("Not specified")
                 .width(150),
             ),
             labeled(
                 "Production year",
                 pick_list(
-                    self.production_year_options.as_slice(),
                     self.production_year,
-                    RkmEncoderMessage::ProductionYearChanged,
+                    self.production_year_options.as_slice(),
+                    ToString::to_string
                 )
+                .on_select(RkmEncoderMessage::ProductionYearChanged)
                 .placeholder("Not specified")
                 .width(130),
             ),
             labeled(
                 "Production month",
                 pick_list(
-                    ProductionMonth::ALL,
                     self.production_month,
-                    RkmEncoderMessage::ProductionMonthChanged,
+                    ProductionMonth::ALL,
+                    ToString::to_string
                 )
+                .on_select(RkmEncoderMessage::ProductionMonthChanged)
                 .placeholder("Not specified")
                 .width(145),
             ),
@@ -258,7 +255,7 @@ impl RkmEncoder {
         ]
         .spacing(12)
         .align_y(Alignment::End);
-        content = content.push(production_date_fields);
+        content = content.push(production_date_fields.boxed());
 
         let component = self.component();
         let mut specification = format!(
@@ -300,7 +297,8 @@ impl RkmEncoder {
             output = output.push(
                 text("Select a production-date cycle, year, and month to generate the code.")
                     .size(12)
-                    .color(token_color(tokens.text_secondary)),
+                    .color(token_color(tokens.text_secondary))
+                    .boxed(),
             );
         }
         output = output.push(color_codes);
@@ -308,10 +306,10 @@ impl RkmEncoder {
             .padding(14)
             .width(Length::Fill)
             .style(move |_theme| panel_style(tokens))
-            .into();
+            .boxed();
         content = content.push(output);
 
-        content.into()
+        content.boxed()
     }
 
     fn component(&self) -> PreferredComponent {
@@ -330,10 +328,8 @@ fn production_year_options(current_year: u16) -> Vec<u16> {
     (FIRST_DOCUMENTED_YEAR..=current_year).rev().collect()
 }
 
-fn labeled<'a, M: 'a>(label: &'a str, control: impl Into<Element<'a, M>>) -> Element<'a, M> {
-    column![text(label).size(12), control.into()]
-        .spacing(4)
-        .into()
+fn labeled<'a, M: 'a>(label: &'a str, control: impl Widget<M> + 'a) -> Element<'a, M> {
+    column![text(label).size(12), control].spacing(4).boxed()
 }
 
 fn metric<'a>(
@@ -348,7 +344,7 @@ fn metric<'a>(
         text(value).size(16).color(token_color(tokens.text)),
     ]
     .spacing(2)
-    .into()
+    .boxed()
 }
 
 fn token_color(color: signex_types::theme::Color) -> iced::Color {
@@ -362,6 +358,7 @@ fn panel_style(tokens: &ThemeTokens) -> container::Style {
             width: 1.0,
             radius: 4.0.into(),
             color: token_color(tokens.border),
+            ..Border::default()
         },
         ..container::Style::default()
     }

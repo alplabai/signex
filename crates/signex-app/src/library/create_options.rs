@@ -15,7 +15,7 @@
 //! owns that guard.
 
 use iced::widget::{Space, button, checkbox, column, container, row, text};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -59,7 +59,7 @@ pub fn view<'a>(
     let git_check: Element<'a, LibraryMessage> = checkbox(state.enable_git)
         .size(TS.heading)
         .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
-        .into();
+        .boxed();
 
     let git_label = text("Enable version control (Git)")
         .size(TS.label)
@@ -89,10 +89,10 @@ pub fn view<'a>(
         checkbox(state.use_lfs)
             .size(TS.heading)
             .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleLfs)
-            .into()
+            .boxed()
     } else {
         // Inert checkbox — same footprint, can't be clicked.
-        checkbox(false).size(TS.heading).into()
+        checkbox(false).size(TS.heading).boxed()
     };
 
     let lfs_text_color = if state.enable_git { text_c } else { muted };
@@ -127,7 +127,8 @@ pub fn view<'a>(
                     .color(theme_ext::error_color(tokens)),
             )
             .padding([6, 14])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
 
@@ -143,6 +144,7 @@ pub fn view<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         });
@@ -186,5 +188,5 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }

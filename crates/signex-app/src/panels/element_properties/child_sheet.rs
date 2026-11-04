@@ -5,6 +5,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -22,7 +23,9 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     let Some(child_sheet) = ctx.selected_child_sheet.as_ref() else {
-        return Column::new().width(Length::Fill).into();
+        return Column::<Element<'a, PanelMsg>>::new()
+            .width(Length::Fill)
+            .boxed();
     };
 
     let id = child_sheet.uuid;
@@ -44,92 +47,101 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
     let palette = PanelPalette::from_tokens(&ctx.tokens);
 
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
     // ── Properties (editable identity, read-only geometry) ──
-    col = col.push(collapsible_section(
-        "sel_child_sheet_props",
-        "Properties",
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(child_sheet_text_row(
-                "Name",
-                &name,
-                border_c,
-                muted,
-                move |s| PanelMsg::ChildSheetNameTyping(id, s),
-                PanelMsg::CommitChildSheetName(id),
-            ));
-            c = c.push(child_sheet_text_row(
-                "File",
-                &filename,
-                border_c,
-                muted,
-                move |s| PanelMsg::ChildSheetFileTyping(id, s),
-                PanelMsg::CommitChildSheetFile(id),
-            ));
-            c = c.push(prop_kv_row("Position", &position, muted, primary));
-            c = c.push(prop_kv_row("Size", &size, muted, primary));
-            c
-        },
-    ));
+    col = col.push(
+        collapsible_section(
+            "sel_child_sheet_props",
+            "Properties",
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                let mut c: Column<Element<'a, PanelMsg>> =
+                    Column::new().spacing(0).width(Length::Fill);
+                c = c.push(child_sheet_text_row(
+                    "Name",
+                    &name,
+                    border_c,
+                    muted,
+                    move |s| PanelMsg::ChildSheetNameTyping(id, s),
+                    PanelMsg::CommitChildSheetName(id),
+                ));
+                c = c.push(child_sheet_text_row(
+                    "File",
+                    &filename,
+                    border_c,
+                    muted,
+                    move |s| PanelMsg::ChildSheetFileTyping(id, s),
+                    PanelMsg::CommitChildSheetFile(id),
+                ));
+                c = c.push(prop_kv_row("Position", &position, muted, primary));
+                c = c.push(prop_kv_row("Size", &size, muted, primary));
+                c
+            },
+        )
+        .boxed(),
+    );
 
     // ── Style (editable) ──
-    col = col.push(collapsible_section(
-        "sel_child_sheet_style",
-        "Style",
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(child_sheet_color_row(
-                "Border Colour",
-                id,
-                stroke_color,
-                border_picker_open,
-                border_advanced_open,
-                palette,
-                /* is_border */ true,
-            ));
-            c = c.push(child_sheet_color_row(
-                "Fill Colour",
-                id,
-                fill_color,
-                fill_picker_open,
-                fill_advanced_open,
-                palette,
-                /* is_border */ false,
-            ));
-            c = c.push(child_sheet_stroke_width_row(
-                id,
-                stroke_width,
-                stroke_width_buf,
-                muted,
-                border_c,
-            ));
-            c = c.push(
-                container(
-                    iced::widget::button(
-                        text("Reset to Default")
-                            .size(TS.caption)
-                            .color(Color::from_rgb(0.92, 0.92, 0.94)),
+    col = col.push(
+        collapsible_section(
+            "sel_child_sheet_style",
+            "Style",
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                let mut c: Column<Element<'a, PanelMsg>> =
+                    Column::new().spacing(0).width(Length::Fill);
+                c = c.push(child_sheet_color_row(
+                    "Border Colour",
+                    id,
+                    stroke_color,
+                    border_picker_open,
+                    border_advanced_open,
+                    palette,
+                    /* is_border */ true,
+                ));
+                c = c.push(child_sheet_color_row(
+                    "Fill Colour",
+                    id,
+                    fill_color,
+                    fill_picker_open,
+                    fill_advanced_open,
+                    palette,
+                    /* is_border */ false,
+                ));
+                c = c.push(child_sheet_stroke_width_row(
+                    id,
+                    stroke_width,
+                    stroke_width_buf,
+                    muted,
+                    border_c,
+                ));
+                c = c.push(
+                    container(
+                        iced::widget::button(
+                            text("Reset to Default")
+                                .size(TS.caption)
+                                .color(Color::from_rgb(0.92, 0.92, 0.94)),
+                        )
+                        .padding([SP.s, 10.0])
+                        .on_press(PanelMsg::ResetChildSheetStyle(id))
+                        .style(iced::widget::button::secondary),
                     )
-                    .padding([SP.s, 10.0])
-                    .on_press(PanelMsg::ResetChildSheetStyle(id))
-                    .style(iced::widget::button::secondary),
-                )
-                .padding([6.0, SP.m])
-                .width(Length::Fill),
-            );
-            c
-        },
-    ));
+                    .padding([6.0, SP.m])
+                    .width(Length::Fill)
+                    .boxed(),
+                );
+                c
+            },
+        )
+        .boxed(),
+    );
 
-    col.into()
+    col.boxed()
 }
 
 /// One swatch row in the child-sheet Style section.
@@ -223,8 +235,7 @@ fn child_sheet_stroke_width_row<'a>(
             .trim_end_matches('.')
             .to_string(),
     };
-    let display_for_input = display.clone();
-    let input = iced::widget::text_input("0.1524", &display_for_input)
+    let input = iced::widget::text_input("0.1524", display)
         .size(TS.body)
         .padding(SP.s)
         .width(120)
@@ -237,8 +248,8 @@ fn child_sheet_stroke_width_row<'a>(
                     width: 1.0,
                     color: border_c,
                     radius: 2.0.into(),
+                    ..Border::default()
                 },
-                icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
                 placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
                 value: Color::from_rgb(0.95, 0.95, 0.96),
                 selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
@@ -258,7 +269,7 @@ fn child_sheet_stroke_width_row<'a>(
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// The in-progress text for sheet `id`, else the live value.
@@ -279,7 +290,7 @@ fn child_sheet_text_row<'a>(
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let input = iced::widget::text_input("", value)
+    let input = iced::widget::text_input("", value.to_string())
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)
@@ -292,8 +303,8 @@ fn child_sheet_text_row<'a>(
                     width: 1.0,
                     color: border_c,
                     radius: 2.0.into(),
+                    ..Border::default()
                 },
-                icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
                 placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
                 value: Color::from_rgb(0.95, 0.95, 0.96),
                 selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
@@ -306,5 +317,5 @@ fn child_sheet_text_row<'a>(
     )
     .padding([SP.s, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }

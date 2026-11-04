@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -322,7 +323,7 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .spacing(SP.xs)
         .padding(6)
         .width(Length::Fill)
-        .into()
+        .boxed()
     } else {
         // Render the persistent tree — toggle state is preserved.
         // Wrap in a container with a small top inset so the tree's
@@ -343,16 +344,17 @@ pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             left: 0.0,
         })
         .width(Length::Fill)
-        .into()
+        .boxed()
     }
 }
 
 // ─── Navigator Panel ──────────────────────────────────────────
 
 pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
-    col = col.push(section_title("Sheets", &ctx.tokens));
-    col = col.push(separator(&ctx.tokens));
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    col = col.push(section_title("Sheets", &ctx.tokens).boxed());
+    col = col.push(separator(&ctx.tokens).boxed());
 
     // The tree is the whole project hierarchy, built from the project's root
     // sheet — it does not depend on which sheet is focused.
@@ -360,7 +362,8 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             text("No project")
                 .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
+                .color(theme_ext::text_secondary(&ctx.tokens))
+                .boxed(),
         );
     } else {
         let mut tree = TreeView::new(&ctx.navigator.tree, &ctx.tokens);
@@ -372,7 +375,7 @@ pub fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         if let Some(sel) = selected_key.as_deref() {
             tree = tree.selected(sel);
         }
-        col = col.push(tree.view().map(PanelMsg::Navigator));
+        col = col.push(tree.view().map(PanelMsg::Navigator).boxed());
     }
-    container(col).width(Length::Fill).into()
+    container(col).width(Length::Fill).boxed()
 }

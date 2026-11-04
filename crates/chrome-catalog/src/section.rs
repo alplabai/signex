@@ -1,5 +1,5 @@
 use iced::widget::{Space, column, container, text};
-use iced::{Background, Border, Element, Length, Theme};
+use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::catalog::Message;
@@ -26,6 +26,7 @@ pub(crate) fn view<'a>(
                     width: 1.0,
                     radius: 4.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..container::Style::default()
             }),
@@ -35,5 +36,5 @@ pub(crate) fn view<'a>(
         text_color: Some(muted),
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }

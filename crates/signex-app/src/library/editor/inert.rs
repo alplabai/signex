@@ -8,9 +8,9 @@
 //! tab later is read-only by construction instead of by remembering to
 //! thread a flag through it. The dispatcher guard stays as the backstop.
 
-use iced::advanced::layout::{Limits, Node};
+use iced::advanced::layout::Limits;
 use iced::advanced::widget::{self, Tree, Widget};
-use iced::advanced::{Clipboard, Layout, Shell, renderer};
+use iced::advanced::{Layout, Shell, renderer};
 use iced::mouse::{self, Cursor};
 use iced::{Background, Color, Element, Event, Length, Rectangle, Size};
 
@@ -40,13 +40,21 @@ where
 pub fn unless_read_only_veiled<'a, Message: 'a>(
     read_only: bool,
     veil: Color,
-    content: impl Into<Element<'a, Message>>,
+    content: Element<'a, Message>,
 ) -> Element<'a, Message> {
-    let content = content.into();
     if read_only {
         Inert::new(content, veil).into()
     } else {
         content
+    }
+}
+
+impl<Message, Theme, Renderer> widget::Meta for Inert<'_, Message, Theme, Renderer>
+where
+    Renderer: iced::advanced::Renderer,
+{
+    fn is_void(&self) -> bool {
+        widget::Meta::is_void(&self.content)
     }
 }
 
@@ -56,51 +64,45 @@ where
     Renderer: iced::advanced::Renderer,
 {
     fn tag(&self) -> widget::tree::Tag {
-        self.content.as_widget().tag()
+        self.content.tag()
     }
 
     fn state(&self) -> widget::tree::State {
-        self.content.as_widget().state()
+        self.content.state()
     }
 
-    fn children(&self) -> Vec<Tree> {
-        self.content.as_widget().children()
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        self.content.as_widget().diff(tree);
+    fn diff(&mut self, tree: &mut Tree) {
+        self.content.diff(tree);
     }
 
     fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
+        self.content.size()
     }
 
-    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) -> Node {
-        self.content.as_widget_mut().layout(tree, renderer, limits)
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        self.content.layout(tree, renderer, limits);
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: Cursor,
         renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
         if matches!(event, Event::Mouse(mouse::Event::WheelScrolled { .. })) {
-            self.content.as_widget_mut().update(
-                tree, event, layout, cursor, renderer, clipboard, shell, viewport,
-            );
+            self.content
+                .update(tree, event, layout, cursor, renderer, shell, viewport);
         }
     }
 
     fn mouse_interaction(
         &self,
         _tree: &Tree,
-        _layout: Layout<'_>,
+        _layout: Layout,
         _cursor: Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
@@ -114,12 +116,12 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: Cursor,
         viewport: &Rectangle,
     ) {
         // `Cursor::Unavailable` so no hover or pressed styling shows.
-        self.content.as_widget().draw(
+        self.content.draw(
             tree,
             renderer,
             theme,
@@ -146,15 +148,17 @@ where
     Renderer: iced::advanced::Renderer + 'a,
 {
     fn from(w: Inert<'a, Message, Theme, Renderer>) -> Self {
-        Self::new(w)
+        Widget::_boxed(w)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced::advanced::layout::Layout;
+    use iced::Widget as _;
+    use iced::advanced::shell::{Bus, Waker};
     use iced::widget::{Space, button};
+    use iced::window::Headless;
     use iced::{Point, Theme};
 
     /// Click the middle of a button built by `wrap` and return the
@@ -162,34 +166,36 @@ mod tests {
     fn click(
         wrap: impl FnOnce(Element<'static, u8, Theme, ()>) -> Element<'static, u8, Theme, ()>,
     ) -> Vec<u8> {
-        let pressable: Element<'static, u8, Theme, ()> =
-            button(Space::new().width(40).height(20)).on_press(7).into();
+        let pressable: Element<'static, u8, Theme, ()> = button(Space::new().width(40).height(20))
+            .on_press(7)
+            .boxed();
         let mut element = wrap(pressable);
-        let mut tree = Tree::new(element.as_widget());
+        let mut tree = Tree::new(&element);
+        tree.diff(&mut element);
         let limits = Limits::new(Size::ZERO, Size::new(200.0, 100.0));
-        let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+        element.layout(&mut tree, &(), &limits);
+        let layout = Layout::new(tree.size);
         let viewport = Rectangle::with_size(Size::new(200.0, 100.0));
         let cursor = Cursor::Available(Point::new(5.0, 5.0));
-        let mut messages = Vec::new();
+        let mut messages = Bus::new();
         for event in [
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
         ] {
             // One shell per event, as the runtime does: a captured
             // press would otherwise mask the release.
-            let mut shell = Shell::new(&mut messages);
-            element.as_widget_mut().update(
+            let mut shell = Shell::new(&Headless, Waker::noop(), &mut messages);
+            element.update(
                 &mut tree,
                 &event,
-                Layout::new(&node),
+                layout,
                 cursor,
                 &(),
-                &mut iced::advanced::clipboard::Null,
                 &mut shell,
                 &viewport,
             );
         }
-        messages
+        messages.drain().map(|(message, _)| message).collect()
     }
 
     #[test]

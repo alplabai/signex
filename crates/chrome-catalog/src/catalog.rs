@@ -1,7 +1,7 @@
 //! Chrome catalog MVU composition root.
 
 use iced::widget::{column, container, scrollable};
-use iced::{Background, Element, Length, Theme};
+use iced::{Background, Element, Length, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::passive_calculator::{CalculatorControl, CalculatorMessage};
 
@@ -90,7 +90,8 @@ impl Catalog {
                 tokens,
                 self.passive_calculator
                     .view(tokens)
-                    .map(Message::PassiveCalculator),
+                    .map(Message::PassiveCalculator)
+                    .boxed(),
             ),
         ]
         .spacing(20)
@@ -107,6 +108,6 @@ impl Catalog {
                 background: Some(Background::Color(theme::color(tokens.bg))),
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
     }
 }

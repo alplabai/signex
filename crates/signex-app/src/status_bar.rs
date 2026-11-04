@@ -1,6 +1,6 @@
 //! Bottom status bar — cursor position, grid, snap, layer, zoom, units.
 
-use iced::widget::{button, container, row, space, text};
+use iced::widget::{Widget, button, container, row, space, text};
 use iced::{Element, Length};
 use signex_types::coord::Unit;
 use signex_types::schematic::{SelectedItem, SelectedKind};
@@ -15,10 +15,10 @@ const SP: Spacing = Spacing::DEFAULT;
 pub const STATUS_BAR_HORIZONTAL_PADDING: f32 = SP.m;
 
 /// Height of the bar: the tallest row item is a button holding one `body`
-/// line (iced's default 1.3 relative line height) plus 1 px padding above
+/// line (iced's default relative line height, `LINE_HEIGHT`) plus 1 px padding above
 /// and below, inside the container's vertical `SP.xs` padding. A layout
 /// probe in `canvas_region` ties it to the laid-out bar.
-pub const STATUS_BAR_HEIGHT: f32 = TS.body * 1.3 + 2.0 + 2.0 * SP.xs;
+pub const STATUS_BAR_HEIGHT: f32 = TS.body * crate::styles::LINE_HEIGHT + 2.0 + 2.0 * SP.xs;
 
 /// Format a one-line breakdown of the active canvas selection.
 /// Returns `None` when the selection is empty (status bar omits the segment).
@@ -121,16 +121,22 @@ pub fn view<'a>(
     // What the active tool wants said: the Measure prompt or result (#1256),
     // the drag behaviour (#1266).
     if let Some(activity) = activity {
-        bar = bar.push(sep());
-        bar = bar.push(text(activity.to_owned()).size(TS.body).color(muted_c));
+        bar = bar.push(sep().boxed());
+        bar = bar.push(
+            text(activity.to_owned())
+                .size(TS.body)
+                .color(muted_c)
+                .boxed(),
+        );
     }
     if let Some(summary) = selection_summary(selected) {
-        bar = bar.push(sep());
+        bar = bar.push(sep().boxed());
         bar = bar.push(
             button(text(summary).size(TS.body).color(text_c))
                 .padding([1.0, SP.s])
                 .style(button::text)
-                .on_press(StatusBarRequest::OpenPropertiesForSelection),
+                .on_press(StatusBarRequest::OpenPropertiesForSelection)
+                .boxed(),
         );
     }
     // v0.23 — async git commit "Saving…" pill. Renders only when at
@@ -142,13 +148,13 @@ pub fn view<'a>(
         } else {
             format!("Saving {pending_git_commits}…")
         };
-        bar = bar.push(sep());
-        bar = bar.push(text(label).size(TS.body).color(muted_c));
+        bar = bar.push(sep().boxed());
+        bar = bar.push(text(label).size(TS.body).color(muted_c).boxed());
     }
     // A running Altium import is shown until it finishes; clicking it
     // cancels (#1123).
     if let Some(name) = altium_import {
-        bar = bar.push(sep());
+        bar = bar.push(sep().boxed());
         bar = bar.push(
             button(
                 text(format!("Importing {name}… ✕"))
@@ -157,25 +163,28 @@ pub fn view<'a>(
             )
             .padding([1.0, SP.s])
             .style(button::text)
-            .on_press(StatusBarRequest::CancelAltiumImport),
+            .on_press(StatusBarRequest::CancelAltiumImport)
+            .boxed(),
         );
     }
     let bar = bar
-        .push(space::horizontal())
-        .push(lbl(format!("{zoom:.0}%")))
-        .push(sep())
+        .push(space::horizontal().boxed())
+        .push(lbl(format!("{zoom:.0}%")).boxed())
+        .push(sep().boxed())
         .push(
             button(text(format!("{unit}")).size(TS.body).color(text_c))
                 .padding([1.0, SP.s])
                 .style(button::text)
-                .on_press(StatusBarRequest::CycleUnit),
+                .on_press(StatusBarRequest::CycleUnit)
+                .boxed(),
         )
-        .push(sep())
+        .push(sep().boxed())
         .push(
             button(text("Panels").size(TS.body).color(text_c))
                 .padding([1, 6])
                 .style(button::text)
-                .on_press(StatusBarRequest::TogglePanelList),
+                .on_press(StatusBarRequest::TogglePanelList)
+                .boxed(),
         )
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
@@ -184,5 +193,5 @@ pub fn view<'a>(
         .width(Length::Fill)
         .padding([SP.xs, STATUS_BAR_HORIZONTAL_PADDING])
         .style(styles::status_bar(tokens))
-        .into()
+        .boxed()
 }

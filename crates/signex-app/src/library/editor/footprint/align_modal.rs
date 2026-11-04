@@ -21,7 +21,7 @@
 use std::path::Path;
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length};
+use iced::{Background, Border, Color, Element, Length, Widget};
 
 use signex_types::theme::ThemeTokens;
 
@@ -92,6 +92,7 @@ pub fn view_align_modal<'a>(
                 .top_left(crate::styles::MODAL_CORNER_RADIUS)
                 .top_right(crate::styles::MODAL_CORNER_RADIUS),
             color: border_c,
+            ..Border::default()
         },
         ..container::Style::default()
     });
@@ -119,7 +120,7 @@ pub fn view_align_modal<'a>(
         }
         column![text(caption).size(ts.body).color(text_muted), chips,]
             .spacing(sp.s)
-            .into()
+            .boxed()
     };
 
     let body = column![
@@ -164,7 +165,7 @@ pub fn view_align_modal<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true);
 
-    Some(card.into())
+    Some(card.boxed())
 }
 
 /// The `AlignCancel` message for the editor at `path` — reused by the
@@ -195,9 +196,9 @@ fn option_chip<'a>(
         button(container(text(label.to_string()).size(ts.body).color(fg)).padding([sp.s, sp.m]))
             .on_press(message);
     if selected {
-        chip.style(crate::styles::accent_button(tokens)).into()
+        chip.style(crate::styles::accent_button(tokens)).boxed()
     } else {
-        chip.style(crate::styles::outline_button(tokens)).into()
+        chip.style(crate::styles::outline_button(tokens)).boxed()
     }
 }
 
@@ -212,7 +213,7 @@ fn close_x<'a>(
         .padding(sp.xs)
         .on_press(message)
         .style(crate::styles::subtle_button(tokens))
-        .into()
+        .boxed()
 }
 
 fn secondary_button<'a>(
@@ -228,7 +229,7 @@ fn secondary_button<'a>(
     )
     .on_press(message)
     .style(crate::styles::outline_button(tokens))
-    .into()
+    .boxed()
 }
 
 fn primary_button<'a>(
@@ -248,5 +249,5 @@ fn primary_button<'a>(
     )
     .on_press(message)
     .style(crate::styles::accent_button(tokens))
-    .into()
+    .boxed()
 }

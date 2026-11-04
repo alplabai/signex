@@ -13,7 +13,7 @@
 //! `EditorMsg::Supply*` → the library dispatcher's `dispatch/library/`
 //! handlers, which write to the editor's draft row and mark it dirty.
 
-use iced::widget::{column, pick_list, scrollable, text, text_input};
+use iced::widget::{Column, Widget, column, pick_list, scrollable, text, text_input};
 use iced::{Element, Length};
 use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
 use signex_types::theme::ThemeTokens;
@@ -41,35 +41,20 @@ const DISTRIBUTOR_OPTS: [DistributorSource; 7] = [
     DistributorSource::Other,
 ];
 
-/// Wrapper so the pick_list `Display` impl prints a friendly label
-/// instead of the bare debug variant name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct StatusPick(AlternateStatus);
-
-impl std::fmt::Display for StatusPick {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self.0 {
-            AlternateStatus::Primary => "Primary",
-            AlternateStatus::Approved => "Approved",
-            AlternateStatus::Conditional => "Conditional",
-            AlternateStatus::Disqualified => "Disqualified",
-            // `AlternateStatus` is `#[non_exhaustive]` — fall back to debug
-            // for any future variants rather than failing to compile.
-            other => return write!(f, "{other:?}"),
-        };
-        f.write_str(s)
+fn status_label(s: &AlternateStatus) -> String {
+    match s {
+        AlternateStatus::Primary => "Primary".to_string(),
+        AlternateStatus::Approved => "Approved".to_string(),
+        AlternateStatus::Conditional => "Conditional".to_string(),
+        AlternateStatus::Disqualified => "Disqualified".to_string(),
+        // `AlternateStatus` is `#[non_exhaustive]` — fall back to debug
+        // for any future variants rather than failing to compile.
+        other => format!("{other:?}"),
     }
 }
 
-/// Wrapper so the pick_list `Display` impl prints a friendly label
-/// instead of the bare debug variant name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct DistributorPick(DistributorSource);
-
-impl std::fmt::Display for DistributorPick {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(distributor_label(self.0))
-    }
+fn distributor_pick_label(s: &DistributorSource) -> String {
+    distributor_label(*s).to_string()
 }
 
 fn distributor_label(s: DistributorSource) -> &'static str {
@@ -149,12 +134,13 @@ pub fn view<'a>(
         listings_section(state, tokens, &address),
     ]
     .spacing(SP.xl)
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .boxed();
 
     scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 // ─────────────────────────── Cell builders ─────────────────────────────
@@ -170,7 +156,7 @@ fn input<'a>(
         .on_input(move |s| editor_event(&address, make(s)))
         .padding([SP.s, SP.m])
         .size(TS.label)
-        .into()
+        .boxed()
 }
 
 fn status_picker<'a>(
@@ -179,15 +165,12 @@ fn status_picker<'a>(
     make: impl Fn(AlternateStatus) -> EditorMsg + 'a,
 ) -> Element<'a, LibraryMessage> {
     let address = address.clone();
-    pick_list(
-        STATUS_OPTS.map(StatusPick),
-        Some(StatusPick(current)),
-        move |StatusPick(s)| editor_event(&address, make(s)),
-    )
-    .text_size(TS.label)
-    .padding([SP.s, SP.m])
-    .width(Length::Fill)
-    .into()
+    pick_list(Some(current), STATUS_OPTS, status_label)
+        .on_select(move |s| editor_event(&address, make(s)))
+        .text_size(TS.label)
+        .padding([SP.s, SP.m])
+        .width(Length::Fill)
+        .boxed()
 }
 
 fn role_cell<'a>(
@@ -200,11 +183,11 @@ fn role_cell<'a>(
     } else {
         theme_ext::text_secondary(tokens)
     };
-    text(label).size(TS.body).color(color).into()
+    text(label).size(TS.body).color(color).boxed()
 }
 
 fn blank<'a>() -> Element<'a, LibraryMessage> {
-    text("").size(TS.body).into()
+    text("").size(TS.body).boxed()
 }
 
 // ─────────────────────── Manufacturer parts grid ───────────────────────
@@ -263,7 +246,8 @@ fn parts_section<'a>(
         tokens,
     );
 
-    let mut grid = column![kit::table_header(&PART_COLS, tokens), primary_row];
+    let mut grid: Column<Element<'a, LibraryMessage>> =
+        column![kit::table_header(&PART_COLS, tokens), primary_row];
     for (idx, alt) in state.row.alternates.iter().enumerate() {
         grid = grid.push(alternate_row(idx, alt, tokens, address));
     }
@@ -273,10 +257,10 @@ fn parts_section<'a>(
 
     column![
         kit::section_header("Manufacturer parts", Some(add), tokens),
-        kit::card(grid, tokens),
+        kit::card(grid.boxed(), tokens),
     ]
     .spacing(SP.m)
-    .into()
+    .boxed()
 }
 
 fn alternate_row<'a>(
@@ -346,7 +330,8 @@ fn listings_section<'a>(
         Some(editor_event(address, EditorMsg::SupplyListingAdd)),
         tokens,
     );
-    let mut grid = column![kit::table_header(&LISTING_COLS, tokens)];
+    let mut grid: Column<Element<'a, LibraryMessage>> =
+        column![kit::table_header(&LISTING_COLS, tokens)];
     for (idx, listing) in state.row.supply.iter().enumerate() {
         grid = grid.push(listing_row(
             idx,
@@ -360,13 +345,12 @@ fn listings_section<'a>(
     if state.row.supply.is_empty() {
         grid = grid.push(kit::empty_state(empty_text(true), None, tokens));
     }
-
     column![
         kit::section_header("Distributor listings", Some(add), tokens),
-        kit::card(grid, tokens),
+        kit::card(grid.boxed(), tokens),
     ]
     .spacing(SP.m)
-    .into()
+    .boxed()
 }
 
 fn listing_row<'a>(
@@ -380,22 +364,23 @@ fn listing_row<'a>(
     let [dist_w, sku_w, url_w, action_w] = LISTING_COLS.map(|(_, w)| w);
     let picker_address = address.clone();
     let distributor_picker = pick_list(
-        DISTRIBUTOR_OPTS.map(DistributorPick),
-        Some(DistributorPick(distributor_from_label(distributor_str))),
-        move |DistributorPick(value)| {
-            editor_event(
-                &picker_address,
-                EditorMsg::SupplyListingSetDistributor { idx, value },
-            )
-        },
+        Some(distributor_from_label(distributor_str)),
+        DISTRIBUTOR_OPTS,
+        distributor_pick_label,
     )
+    .on_select(move |value| {
+        editor_event(
+            &picker_address,
+            EditorMsg::SupplyListingSetDistributor { idx, value },
+        )
+    })
     .text_size(TS.label)
     .padding([SP.s, SP.m])
     .width(Length::Fill);
 
     kit::table_row(
         vec![
-            (distributor_picker.into(), dist_w),
+            (distributor_picker.boxed(), dist_w),
             (
                 input("296-1395-1-ND", sku, address, move |value| {
                     EditorMsg::SupplyListingSetSku { idx, value }

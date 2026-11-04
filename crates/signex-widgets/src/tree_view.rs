@@ -12,7 +12,7 @@
 use std::sync::OnceLock;
 
 use iced::widget::{Column, Row, Space, button, container, mouse_area, scrollable, svg, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 // ─── SVG Chevron Icons (cached handles) ──────────────────────
@@ -34,7 +34,6 @@ fn chevron_down_handle() -> svg::Handle {
         .clone()
 }
 
-use crate::PushIf;
 use crate::theme_ext;
 
 // ─── Data Model ───────────────────────────────────────────────
@@ -391,7 +390,8 @@ impl<'a> TreeView<'a> {
 
     /// Build the tree into a scrollable Element.
     pub fn view(self) -> Element<'static, TreeMsg> {
-        let mut col: Column<'static, TreeMsg> = Column::new().spacing(0.0).width(Length::Fill);
+        let mut col: Column<Element<'static, TreeMsg>> =
+            Column::new().spacing(0.0).width(Length::Fill);
         for node in self.roots {
             col = render_node(
                 col,
@@ -409,20 +409,20 @@ impl<'a> TreeView<'a> {
         // take priority — they never propagate to this outer handler.
         mouse_area(scrollable(col).width(Length::Fill))
             .on_right_press(TreeMsg::BackgroundContextMenu)
-            .into()
+            .boxed()
     }
 }
 
 // ─── Row Rendering ────────────────────────────────────────────
 
 fn render_node(
-    mut col: Column<'static, TreeMsg>,
+    mut col: Column<Element<'static, TreeMsg>>,
     node: &TreeNode,
     depth: usize,
     key: &[String],
     selected: Option<&[String]>,
     tokens: &ThemeTokens,
-) -> Column<'static, TreeMsg> {
+) -> Column<Element<'static, TreeMsg>> {
     let is_sel = selected.is_some_and(|s| s == key);
     let has_kids = !node.children.is_empty();
     let is_expandable = has_kids || node.is_folder;
@@ -450,12 +450,14 @@ fn render_node(
     // --- Assemble row ---
     let pad_left = (depth as f32) * INDENT_PER_DEPTH + BASE_PAD_LEFT;
 
-    let mut r: Row<'static, TreeMsg> = Row::new()
+    let mut r: Row<Element<'static, TreeMsg>> = Row::new()
         .spacing(ELEM_GAP)
         .align_y(iced::Alignment::Center);
 
     // Left indent
-    r = r.push_if(pad_left > 0.0, || Space::new().width(pad_left));
+    if pad_left > 0.0 {
+        r = r.push(Space::new().width(pad_left).boxed());
+    }
 
     // Chevron — SVG icon (Unicode triangles render as colored emoji on Windows)
     if is_expandable {
@@ -470,10 +472,11 @@ fn render_node(
                 .height(CHEVRON_W)
                 .style(|_: &Theme, _| svg::Style {
                     color: Some(FG_ON_SELECTION),
-                }),
+                })
+                .boxed(),
         );
     } else {
-        r = r.push(Space::new().width(CHEVRON_W));
+        r = r.push(Space::new().width(CHEVRON_W).boxed());
     }
 
     // Icon — full-colour bundled SVG. Cached per variant; render via
@@ -495,12 +498,12 @@ fn render_node(
     } else {
         icon_w
     };
-    r = r.push(icon_w);
+    r = r.push(icon_w.boxed());
     // Dedicated icon → label gap. `ELEM_GAP` alone (2 px) leaves the
     // label visually kerned into the icon; a wider spacer just after
     // the icon opens the gap without affecting the chevron→icon
     // alignment that's already tight-on-purpose.
-    r = r.push(Space::new().width(ICON_LABEL_GAP));
+    r = r.push(Space::new().width(ICON_LABEL_GAP).boxed());
 
     // Label (flex, no wrap — truncation handled by scrollable parent).
     // Accented root nodes (active project in a multi-project workspace)
@@ -517,16 +520,17 @@ fn render_node(
             ..iced::Font::DEFAULT
         });
     }
-    r = r.push(label);
+    r = r.push(label.boxed());
 
     // Badge (right-aligned, very muted, single line)
     if let Some(badge) = &node.badge {
-        r = r.push(iced::widget::space::horizontal());
+        r = r.push(iced::widget::space::horizontal().boxed());
         r = r.push(
             text(badge.clone())
                 .size(BADGE_SZ)
                 .color(badge_c)
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
         );
     }
 
@@ -539,9 +543,9 @@ fn render_node(
     // of width fits comfortably in narrow Projects panels.
     if node.is_open || node.is_dirty {
         if node.badge.is_none() {
-            r = r.push(iced::widget::space::horizontal());
+            r = r.push(iced::widget::space::horizontal().boxed());
         } else {
-            r = r.push(Space::new().width(RIGHT_INDICATOR_GAP));
+            r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
         }
         let dot_color = if node.is_dirty {
             // Theme error colour: the unsaved-changes dot follows the
@@ -570,7 +574,8 @@ fn render_node(
                         ..iced::Border::default()
                     },
                     ..container::Style::default()
-                }),
+                })
+                .boxed(),
         );
     }
 
@@ -618,7 +623,7 @@ fn render_node(
     // button so left-press still reaches the button's `on_press`; only
     // `on_right_press` is intercepted here.
     let row_element = mouse_area(row_btn).on_right_press(TreeMsg::ContextMenu(key.to_vec()));
-    col = col.push(row_element);
+    col = col.push(row_element.boxed());
 
     // Expanded children
     if is_expandable && node.expanded {
@@ -646,7 +651,8 @@ fn render_node(
                     right: 0.0,
                     bottom: 2.0,
                     left: empty_pad,
-                }),
+                })
+                .boxed(),
             );
         }
     }

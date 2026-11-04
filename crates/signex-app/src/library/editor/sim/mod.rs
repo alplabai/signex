@@ -14,7 +14,9 @@
 
 pub mod state;
 
-use iced::widget::{column, container, pick_list, row, scrollable, text, text_editor, text_input};
+use iced::widget::{
+    Widget, column, container, pick_list, row, scrollable, text, text_editor, text_input,
+};
 use iced::{Element, Length};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
@@ -116,17 +118,18 @@ fn event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
 /// the same.
 fn labelled<'a>(
     label: &'a str,
-    control: impl Into<Element<'a, LibraryMessage>>,
+    control: Element<'a, LibraryMessage>,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     column![
         text(label)
             .size(TS.caption)
-            .color(theme_ext::text_secondary(tokens)),
-        control.into(),
+            .color(theme_ext::text_secondary(tokens))
+            .boxed(),
+        control,
     ]
     .spacing(SP.s)
-    .into()
+    .boxed()
 }
 
 pub fn view<'a>(
@@ -146,11 +149,12 @@ pub fn view<'a>(
             kit::card(kit::empty_state(EMPTY_MESSAGE, Some(add), tokens), tokens),
         ]
         .spacing(SP.m)
-        .width(Length::Fill);
+        .width(Length::Fill)
+        .boxed();
         return scrollable(body)
             .width(Length::Fill)
             .height(Length::Fill)
-            .into();
+            .boxed();
     };
 
     let remove = kit::danger_button(
@@ -161,18 +165,21 @@ pub fn view<'a>(
 
     let kind_address = address.clone();
     let kind_picker = pick_list(
-        SIM_KIND_OPTS.map(SimKindPick),
         Some(SimKindPick(sim.kind)),
-        move |SimKindPick(k)| event(&kind_address, EditorMsg::SimSetKind(k)),
+        SIM_KIND_OPTS.map(SimKindPick),
+        |k: &SimKindPick| k.to_string(),
     )
+    .on_select(move |SimKindPick(k)| event(&kind_address, EditorMsg::SimSetKind(k)))
     .text_size(TS.body)
-    .padding([SP.s, SP.m]);
+    .padding([SP.s, SP.m])
+    .boxed();
 
     let name_address = address.clone();
     let name_input = text_input("LM358_DUAL", sim.name.as_str())
         .on_input(move |s| event(&name_address, EditorMsg::SimSetName(s)))
         .padding([SP.s, SP.m])
-        .size(TS.body);
+        .size(TS.body)
+        .boxed();
 
     // SPICE deck — multi-line text_editor backed by state.sim_body.
     let deck: Element<'a, LibraryMessage> = if let Some(content) = state.sim_body.as_ref() {
@@ -183,33 +190,38 @@ pub fn view<'a>(
             .size(TS.body)
             .height(Length::Fixed(TS.body * DECK_LINES))
             .on_action(move |a| event(&deck_address, EditorMsg::SimBodyAction(a)))
-            .into()
+            .boxed()
     } else {
         // sim_body is seeded by the SelectTab(Sim) arm; this is the
         // safety fallback for a tab reached without it.
         text(sim.body.clone())
             .size(TS.body)
             .color(theme_ext::text_primary(tokens))
-            .into()
+            .boxed()
     };
 
     let model_card = kit::card(
         column![
             row![
                 container(labelled("Model kind", kind_picker, tokens))
-                    .width(Length::FillPortion(1)),
-                container(labelled("Model name", name_input, tokens)).width(Length::FillPortion(2)),
+                    .width(Length::FillPortion(1))
+                    .boxed(),
+                container(labelled("Model name", name_input, tokens))
+                    .width(Length::FillPortion(2))
+                    .boxed(),
             ]
-            .spacing(SP.m),
+            .spacing(SP.m)
+            .boxed(),
             labelled("SPICE deck", deck, tokens),
         ]
-        .spacing(SP.m),
+        .spacing(SP.m)
+        .boxed(),
         tokens,
     );
 
     let table: Element<'a, LibraryMessage> = match state.symbol.as_ref() {
         Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, &address),
-        None => kit::empty_state(SYMBOL_PENDING, None, tokens),
+        None => kit::empty_state(SYMBOL_PENDING, None, tokens).boxed(),
     };
 
     scrollable(
@@ -220,11 +232,12 @@ pub fn view<'a>(
             table,
         ]
         .spacing(SP.m)
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }
 
 fn view_pin_node_table<'a>(
@@ -239,11 +252,12 @@ fn view_pin_node_table<'a>(
 
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
-    let mut col = column![kit::table_header(&PIN_COLUMNS, tokens)];
+    let mut col: iced::widget::Column<Element<'a, LibraryMessage>> =
+        column![kit::table_header(&PIN_COLUMNS, tokens)];
     for (index, line) in pin_node_lines(sim, pins).into_iter().enumerate() {
         let pin_number = line.number.clone();
         let node_address = address.clone();
-        let input = text_input("net", &line.node)
+        let input = text_input("net", line.node.clone())
             .padding([SP.xs, SP.s])
             .size(TS.body)
             .on_input(move |s| {
@@ -257,18 +271,18 @@ fn view_pin_node_table<'a>(
             });
         let cells: Vec<(Element<'a, LibraryMessage>, Length)> = vec![
             (
-                text(line.number).size(TS.body).color(text_c).into(),
+                text(line.number).size(TS.body).color(text_c).boxed(),
                 PIN_COLUMNS[0].1,
             ),
             (
-                text(line.name).size(TS.body).color(muted).into(),
+                text(line.name).size(TS.body).color(muted).boxed(),
                 PIN_COLUMNS[1].1,
             ),
-            (input.into(), PIN_COLUMNS[2].1),
+            (input.boxed(), PIN_COLUMNS[2].1),
         ];
         col = col.push(kit::table_row(cells, index, None, tokens));
     }
-    kit::card(col, tokens)
+    kit::card(col.boxed(), tokens)
 }
 
 #[cfg(test)]

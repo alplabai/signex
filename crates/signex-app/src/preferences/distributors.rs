@@ -28,18 +28,19 @@ pub(super) fn content_library_distributors<'a>(
         Space::new().height(8),
     ]
     .padding([SP.xl, 20.0])
-    .into();
+    .boxed();
 
     // The library panel returns `Element<'a, LibraryMessage>`. We
     // map to `PrefMsg::LibrarySettings` for every Settings sub-
     // variant; non-Settings library messages are ignored (they're
     // never produced by `distributor_apis::view`).
     let pane = crate::library::settings::distributor_apis::view(settings, tokens)
-        .map(wrap_library_message);
+        .map(wrap_library_message)
+        .boxed();
 
     column![header, container(pane).padding([0, 20]).width(Length::Fill)]
         .spacing(0)
-        .into()
+        .boxed()
 }
 
 /// Wrap a library-panel message for the Preferences modal. Anything that

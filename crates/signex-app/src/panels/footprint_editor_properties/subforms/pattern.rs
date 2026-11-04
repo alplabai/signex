@@ -1,7 +1,7 @@
 //! Pattern (array) role sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, button, container, pick_list, row, text};
-use iced::{Color, Length};
+use iced::{Color, Element, Length, Widget};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row};
@@ -26,26 +26,29 @@ const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
 /// centre button (Polar only) emits
 /// [`PanelMsg::FpEditorBeginRepickPolarCenter`].
 pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     use crate::panels::{ArrayKindSummary, ArrayParamField, NumberingSchemeKindUi};
     let Some(arr) = fp.selected_array.as_ref() else {
         return col;
     };
     let array_id = arr.array_id;
 
-    col = col.push(props_section_header(
-        "Pattern",
-        "fp_pattern",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header(
+            "Pattern",
+            "fp_pattern",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pattern", collapsed_sections) {
         return col;
     }
@@ -68,7 +71,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             .align_y(iced::Alignment::Center),
         )
         .padding([SP.xs, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
 
     match &arr.kind {
@@ -202,11 +206,15 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 col = col.push(
                     container(text("Instances").size(TS.caption).color(muted))
                         .padding([6.0, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
-                let mut grid_col = Column::new().spacing(SP.xs).padding([0.0, SP.m]);
+                let mut grid_col = Column::<Element<'a, PanelMsg>>::new()
+                    .spacing(SP.xs)
+                    .padding([0.0, SP.m]);
                 for j in 0..ny {
-                    let mut grid_row = iced::widget::Row::new().spacing(SP.xs);
+                    let mut grid_row =
+                        iced::widget::Row::<Element<'a, PanelMsg>>::new().spacing(SP.xs);
                     for i in 0..nx {
                         let suppressed = suppressed_instances
                             .iter()
@@ -221,11 +229,11 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                                 j,
                                 value: checked,
                             });
-                        grid_row = grid_row.push(cb);
+                        grid_row = grid_row.push(cb.boxed());
                     }
-                    grid_col = grid_col.push(grid_row);
+                    grid_col = grid_col.push(grid_row.boxed());
                 }
-                col = col.push(grid_col);
+                col = col.push(grid_col.boxed());
             }
         }
         ArrayKindSummary::Polar {
@@ -282,7 +290,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     .align_y(iced::Alignment::Center),
                 )
                 .padding([SP.xs, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
             );
             let repick_label = if arr.repicking_polar_center {
                 "Click a Point on canvas… (Esc to cancel)"
@@ -302,7 +311,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                         .on_press(PanelMsg::FpEditorBeginRepickPolarCenter { array_id }),
                 )
                 .padding([SP.xs, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
             );
             col = col.push(pad_input_row(
                 "Mask",
@@ -324,9 +334,12 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 col = col.push(
                     container(text("Instances").size(TS.caption).color(muted))
                         .padding([6.0, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
-                let mut grid_row = iced::widget::Row::new().spacing(SP.xs).padding([0.0, SP.m]);
+                let mut grid_row = iced::widget::Row::<Element<'a, PanelMsg>>::new()
+                    .spacing(SP.xs)
+                    .padding([0.0, SP.m]);
                 for i in 0..count {
                     let suppressed = suppressed_instances.contains(&i);
                     let on = !suppressed;
@@ -339,9 +352,9 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                             j: 0,
                             value: checked,
                         });
-                    grid_row = grid_row.push(cb);
+                    grid_row = grid_row.push(cb.boxed());
                 }
-                col = col.push(grid_row);
+                col = col.push(grid_row.boxed());
             }
         }
     }
@@ -355,10 +368,14 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                     .color(muted)
                     .width(Length::Fixed(80.0)),
                 pick_list(
-                    NumberingSchemeKindUi::ALL.as_slice(),
                     Some(arr.numbering),
-                    move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme }
+                    NumberingSchemeKindUi::ALL.as_slice(),
+                    |scheme: &NumberingSchemeKindUi| scheme.to_string(),
                 )
+                .on_select(move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme {
+                    array_id,
+                    scheme,
+                })
                 .text_size(10)
                 .padding([3.0, SP.m])
                 .width(Length::Fill),
@@ -367,7 +384,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
             .align_y(iced::Alignment::Center),
         )
         .padding([SP.xs, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
 
     // v0.25 polish — BGA-specific config rows. Surface only when the
@@ -410,7 +428,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pattern_subform<'a>
                 .on_press(PanelMsg::FpEditorDeleteArray { array_id }),
         )
         .padding([SP.s, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
 
     col

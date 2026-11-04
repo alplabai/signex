@@ -102,7 +102,7 @@ impl Signex {
                     let t = &c.tokens;
                     Theme::custom(
                         c.name.clone(),
-                        iced::theme::Palette {
+                        iced::theme::palette::Seed {
                             background: to_iced(&t.bg),
                             text: to_iced(&t.text),
                             primary: to_iced(&t.accent),
@@ -118,7 +118,7 @@ impl Signex {
             ThemeId::CatppuccinMocha => Theme::CatppuccinMocha,
             ThemeId::VsCodeDark => Theme::custom(
                 "VS Code Dark".to_string(),
-                iced::theme::Palette {
+                iced::theme::palette::Seed {
                     background: iced::Color::from_rgb(0.118, 0.118, 0.118),
                     text: iced::Color::from_rgb(0.831, 0.831, 0.831),
                     primary: iced::Color::from_rgb(0.000, 0.478, 0.800),
@@ -129,7 +129,7 @@ impl Signex {
             ),
             ThemeId::Signex => Theme::custom(
                 "Altium Dark".to_string(),
-                iced::theme::Palette {
+                iced::theme::palette::Seed {
                     background: iced::Color::from_rgb(0.18, 0.18, 0.19),
                     text: iced::Color::from_rgb(0.86, 0.86, 0.86),
                     primary: iced::Color::from_rgb(0.91, 0.57, 0.18),
@@ -140,7 +140,7 @@ impl Signex {
             ),
             ThemeId::Alplab => Theme::custom(
                 "Alp Lab".to_string(),
-                iced::theme::Palette {
+                iced::theme::palette::Seed {
                     background: iced::Color::from_rgb(0.18, 0.18, 0.19),
                     text: iced::Color::from_rgb(0.86, 0.86, 0.86),
                     // Alp Lab cyan #0891b2 as primary accent.
@@ -152,7 +152,7 @@ impl Signex {
             ),
             ThemeId::GitHubDark => Theme::custom(
                 "GitHub Dark".to_string(),
-                iced::theme::Palette {
+                iced::theme::palette::Seed {
                     background: iced::Color::from_rgb(0.051, 0.067, 0.090),
                     text: iced::Color::from_rgb(0.902, 0.929, 0.953),
                     primary: iced::Color::from_rgb(0.345, 0.651, 1.000),

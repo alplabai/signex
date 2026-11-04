@@ -3,7 +3,7 @@
 //! like the other tool dialogs (docs/DETACHED_MODALS.md); the in-window card
 //! below is the fallback when that window is not available.
 
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{Space, Widget as _, column, container, row, text};
 use iced::{Element, Length};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::passive_calculator::CalculatorControl;
@@ -71,7 +71,7 @@ fn build<'a>(
     // The control already scrolls its own body, so this wrapper only
     // bounds it — nesting a second scrollable would swallow wheel
     // events before the inner one sees them.
-    let body = container(control.view(tokens).map(Message::PassiveCalculator))
+    let body = container(control.view(tokens).map(Message::PassiveCalculator).boxed())
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -80,7 +80,7 @@ fn build<'a>(
             .width(Length::Fill)
             .height(Length::Fill)
             .style(styles::modal_card(tokens))
-            .into();
+            .boxed();
     }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(MODAL_W))
@@ -93,5 +93,5 @@ fn build<'a>(
         .height(Length::Fill)
         .center_x(Length::Fill)
         .center_y(Length::Fill)
-        .into()
+        .boxed()
 }

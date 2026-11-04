@@ -6,7 +6,7 @@
 //! theme tokens ([`Overlay`] steps over `tokens.text`), so it reads on
 //! light and dark themes alike.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, Widget, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -31,6 +31,7 @@ pub(crate) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::
             width: HAIRLINE,
             radius: RADIUS.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -100,6 +101,7 @@ pub(crate) fn danger_button_style(
                 width: HAIRLINE,
                 radius: RADIUS.into(),
                 color: ink,
+                ..Border::default()
             },
             ..button::Style::default()
         }
@@ -113,7 +115,7 @@ fn rule<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
         .width(Length::Fill)
         .height(HAIRLINE)
         .style(rule_style(tokens))
-        .into()
+        .boxed()
 }
 
 /// Section title with an optional trailing element (a button, a count)
@@ -123,31 +125,29 @@ pub(crate) fn section_header<'a, M: 'a>(
     trailing: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let mut line = row![
+    let mut line: iced::widget::Row<Element<'a, M>> = row![
         text(title)
             .size(TS.title)
-            .color(theme_ext::text_primary(tokens)),
-        Space::new().width(Length::Fill),
+            .color(theme_ext::text_primary(tokens))
+            .boxed(),
+        Space::new().width(Length::Fill).boxed(),
     ]
     .align_y(iced::Alignment::Center);
     if let Some(t) = trailing {
         line = line.push(t);
     }
-    column![container(line).padding([SP.s, 0.0]), rule(tokens)]
+    column![container(line).padding([SP.s, 0.0]).boxed(), rule(tokens)]
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Bordered card around `content`.
-pub(crate) fn card<'a, M: 'a>(
-    content: impl Into<Element<'a, M>>,
-    tokens: &ThemeTokens,
-) -> Element<'a, M> {
+pub(crate) fn card<'a, M: 'a>(content: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
     container(content)
         .padding(SP.l)
         .width(Length::Fill)
         .style(card_style(tokens))
-        .into()
+        .boxed()
 }
 
 /// Table header: muted column titles over a header rule. Each column is
@@ -157,13 +157,20 @@ pub(crate) fn table_header<'a, M: 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     let muted = theme_ext::text_secondary(tokens);
-    let mut line = row![].spacing(SP.m).align_y(iced::Alignment::Center);
+    let mut line: iced::widget::Row<Element<'a, M>> =
+        row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (title, width) in columns {
-        line = line.push(text(*title).size(TS.caption).color(muted).width(*width));
+        line = line.push(
+            text(*title)
+                .size(TS.caption)
+                .color(muted)
+                .width(*width)
+                .boxed(),
+        );
     }
-    column![container(line).padding([SP.s, SP.m]), rule(tokens)]
+    column![container(line).padding([SP.s, SP.m]).boxed(), rule(tokens)]
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Table body row. `index` drives zebra striping; with `on_press` the row
@@ -174,11 +181,14 @@ pub(crate) fn table_row<'a, M: Clone + 'a>(
     on_press: Option<M>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let mut line = row![].spacing(SP.m).align_y(iced::Alignment::Center);
+    let mut line: iced::widget::Row<Element<'a, M>> =
+        row![].spacing(SP.m).align_y(iced::Alignment::Center);
     for (cell, width) in cells {
-        line = line.push(container(cell).width(width));
+        line = line.push(container(cell).width(width).boxed());
     }
-    let body = container(line).padding([SP.s, SP.m]).width(Length::Fill);
+    let body = container(line.boxed())
+        .padding([SP.s, SP.m])
+        .width(Length::Fill);
     if on_press.is_none() {
         let fill = row_background(tokens, index, button::Status::Active);
         return body
@@ -186,14 +196,14 @@ pub(crate) fn table_row<'a, M: Clone + 'a>(
                 background: fill,
                 ..container::Style::default()
             })
-            .into();
+            .boxed();
     }
     button(body)
         .padding(0)
         .width(Length::Fill)
         .on_press_maybe(on_press)
         .style(row_style(tokens, index))
-        .into()
+        .boxed()
 }
 
 // ─── Buttons ─────────────────────────────────────────────────
@@ -203,11 +213,11 @@ fn labelled<'a, M: Clone + 'a>(
     on_press: Option<M>,
     style: impl Fn(&Theme, button::Status) -> button::Style + 'a,
 ) -> Element<'a, M> {
-    button(text(label).size(TS.body))
+    button(text(label).size(TS.body).boxed())
         .padding([SP.xs, SP.m])
         .on_press_maybe(on_press)
         .style(style)
-        .into()
+        .boxed()
 }
 
 /// Primary action (accent fill). `None` disables it.
@@ -240,7 +250,7 @@ pub(crate) fn danger_button<'a, M: Clone + 'a>(
 /// Small filled label (role / source badge, tab count): `fill` behind
 /// `ink` text, corners at [`RADIUS`].
 pub(crate) fn pill<'a, M: 'a>(label: String, fill: Color, ink: Color) -> Element<'a, M> {
-    container(text(label).size(TS.caption).color(ink))
+    container(text(label).size(TS.caption).color(ink).boxed())
         .padding([SP.xs, SP.s])
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
@@ -250,7 +260,7 @@ pub(crate) fn pill<'a, M: 'a>(label: String, fill: Color, ink: Color) -> Element
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// The one row-action convention: ↑ / ↓ (disabled when `None`, i.e. at
@@ -268,7 +278,7 @@ pub(crate) fn reorder_remove<'a, M: Clone + 'a>(
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 // ─── Empty state ─────────────────────────────────────────────
@@ -279,17 +289,21 @@ pub(crate) fn empty_state<'a, M: 'a>(
     action: Option<Element<'a, M>>,
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
-    let mut col = column![
+    let mut col: iced::widget::Column<Element<'a, M>> = column![
         text(message)
             .size(TS.label)
             .color(theme_ext::text_secondary(tokens))
+            .boxed()
     ]
     .spacing(SP.m)
     .align_x(iced::Alignment::Center);
     if let Some(a) = action {
         col = col.push(a);
     }
-    container(col).padding(SP.xl).center_x(Length::Fill).into()
+    container(col.boxed())
+        .padding(SP.xl)
+        .center_x(Length::Fill)
+        .boxed()
 }
 
 #[cfg(test)]

@@ -402,8 +402,9 @@ fn bound_row_ids(
     count: usize,
 ) -> HashMap<usize, Uuid> {
     let range = visible_rows(scroll, count);
-    // The grid column sits three levels under the container (sensor, key, scrollable).
-    let grid = &tree.children[0].children[0].children[0];
+    // The grid column sits four levels under the container (key, sensor,
+    // scrollable, column).
+    let grid = &tree.children[0].children[0].children[0].children[0];
     let lead = 1 + usize::from(range.start > 0);
     range
         .clone()
@@ -432,8 +433,8 @@ fn a_rows_widget_state_never_follows_another_row_when_the_window_shifts() {
     for step in [1, 7, 30, 500] {
         let shifted = scrolled(BROWSER_HEADER_HEIGHT + step as f32 * H, 700.0);
         {
-            let element = grid_element(&state, &root, shifted, &tokens, &mut browser);
-            tree.diff(&element);
+            let mut element = grid_element(&state, &root, shifted, &tokens, &mut browser);
+            tree.diff(&mut element);
         }
         for (i, bound) in bound_row_ids(&tree, shifted, 10_000) {
             assert_eq!(bound, ids[i].as_uuid(), "row {i} after a {step}-row shift");
@@ -464,19 +465,62 @@ fn the_fixed_row_height_fits_the_tallest_cell() {
 
 // ── focus does not migrate ───────────────────────────────────────
 
-type InputState =
-    iced::widget::text_input::State<<iced::Renderer as iced::advanced::text::Renderer>::Paragraph>;
+/// Visits every focusable widget under an element, tagging each with the
+/// index of the visual row it sits in (focusables are grouped by their
+/// vertical position, in tree order).
+struct VisitInputs<'f> {
+    f: &'f mut (dyn FnMut(usize, &mut dyn iced::advanced::widget::operation::Focusable) + Send),
+    last_y: Option<f32>,
+    row: usize,
+}
 
-/// Apply `f` to every text-input state under `tree`.
-fn each_input(tree: &mut iced::advanced::widget::Tree, f: &mut dyn FnMut(&mut InputState)) {
-    if let iced::advanced::widget::tree::State::Some(state) = &mut tree.state
-        && let Some(input) = state.downcast_mut::<InputState>()
-    {
-        f(input);
+impl iced::advanced::widget::Operation for VisitInputs<'_> {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation)) {
+        operate(self);
     }
-    for child in &mut tree.children {
-        each_input(child, f);
+
+    fn focusable(
+        &mut self,
+        _id: Option<&iced::advanced::widget::Id>,
+        bounds: iced::Rectangle,
+        state: &mut dyn iced::advanced::widget::operation::Focusable,
+    ) {
+        match self.last_y {
+            None => {}
+            Some(y) if (bounds.y - y).abs() > H / 2.0 => self.row += 1,
+            Some(_) => {}
+        }
+        self.last_y = Some(bounds.y);
+        (self.f)(self.row, state);
     }
+}
+
+/// Apply `f` to every focusable under `element`, with its row offset.
+fn each_input(
+    element: &mut iced::Element<'_, crate::library::messages::LibraryMessage>,
+    tree: &mut iced::advanced::widget::Tree,
+    f: &mut (dyn FnMut(usize, &mut dyn iced::advanced::widget::operation::Focusable) + Send),
+) {
+    let renderer = crate::layout_probe::headless_renderer();
+    let size = iced::Size::new(1200.0, 800.0);
+    use iced::advanced::Widget as _;
+    element.layout(
+        tree,
+        &renderer,
+        &iced::advanced::layout::Limits::new(iced::Size::ZERO, size),
+    );
+    let mut visit = VisitInputs {
+        f,
+        last_y: None,
+        row: 0,
+    };
+    element.operate(
+        tree,
+        iced::advanced::Layout::new(tree.size),
+        &iced::Rectangle::with_size(size),
+        &renderer,
+        &mut visit,
+    );
 }
 
 #[test]
@@ -486,44 +530,48 @@ fn a_focused_cell_editor_never_appears_on_another_row_after_a_shift() {
     let mut browser = state.library_browsers[&root].clone();
 
     let start = scrolled(BROWSER_HEADER_HEIGHT + 100.0 * H, 700.0);
-    let mut tree = {
-        let element = grid_element(&state, &root, start, &tokens, &mut browser);
-        iced::advanced::widget::Tree::new(&element)
-    };
+    let element = grid_element(&state, &root, start, &tokens, &mut browser);
+    let mut tree = iced::advanced::widget::Tree::new(&element);
+    drop(element);
     let focused_row = 110;
     let range = visible_rows(start, 10_000);
-    let lead = 1 + usize::from(range.start > 0);
     let mut focused_any = false;
-    each_input(
-        &mut tree.children[0].children[0].children[0].children[lead + focused_row - range.start],
-        &mut |input| {
-            input.focus();
-            focused_any = true;
-        },
-    );
+    {
+        let mut element = grid_element(&state, &root, start, &tokens, &mut browser);
+        tree.diff(&mut element);
+        each_input(&mut element, &mut tree, &mut |row, input| {
+            if row == focused_row - range.start {
+                input.focus();
+                focused_any = true;
+            }
+        });
+    }
     assert!(focused_any, "the row has a cell editor to focus");
 
     for step in [1, 3, 13, 40] {
         let shifted = scrolled(BROWSER_HEADER_HEIGHT + (100 + step) as f32 * H, 700.0);
-        {
-            let element = grid_element(&state, &root, shifted, &tokens, &mut browser);
-            tree.diff(&element);
-        }
         let range = visible_rows(shifted, 10_000);
-        let lead = 1 + usize::from(range.start > 0);
-        for i in range.clone() {
-            let slot =
-                &mut tree.children[0].children[0].children[0].children[lead + i - range.start];
-            let mut focused = false;
-            each_input(slot, &mut |input| focused |= input.is_focused());
+        let mut element = grid_element(&state, &root, shifted, &tokens, &mut browser);
+        tree.diff(&mut element);
+        let mut rows_seen = std::collections::BTreeSet::new();
+        each_input(&mut element, &mut tree, &mut |row, input| {
+            rows_seen.insert(row);
+            let i = range.start + row;
             if i != focused_row {
                 assert!(
-                    !focused,
+                    !input.is_focused(),
                     "row {i} ({}) holds the focus after a {step}-row shift",
                     ids[i].as_uuid()
                 );
             }
-        }
+        });
+        assert_eq!(
+            rows_seen.len(),
+            range.len(),
+            "visited {} rows of {} after a {step}-row shift",
+            rows_seen.len(),
+            range.len()
+        );
     }
 }
 
@@ -538,7 +586,6 @@ fn resize_reports(
     cache: iced_runtime::user_interface::Cache,
 ) -> (Vec<f32>, iced_runtime::user_interface::Cache) {
     use crate::library::messages::LibraryMessage;
-    use iced::advanced::clipboard;
     use iced::{Size, mouse, window};
 
     let tokens = theme_tokens(ThemeId::Signex);
@@ -546,13 +593,14 @@ fn resize_reports(
     let element = grid_element(state, root, browser.grid_scroll, &tokens, browser);
     let mut ui =
         iced_runtime::UserInterface::build(element, Size::new(1200.0, 800.0), cache, &mut renderer);
-    let mut published: Vec<LibraryMessage> = Vec::new();
+    let mut published = iced::advanced::shell::Bus::<LibraryMessage>::new();
     let redraw = iced::Event::Window(window::Event::RedrawRequested(std::time::Instant::now()));
     let _ = ui.update(
+        &window::Headless,
+        &iced::advanced::shell::Waker::noop(),
         &[redraw.clone(), redraw],
         mouse::Cursor::Unavailable,
         &mut renderer,
-        &mut clipboard::Null,
         &mut published,
     );
     let heights = published

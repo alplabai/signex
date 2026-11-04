@@ -2,7 +2,7 @@
 //! library Options surfaces below the Pad form.
 
 use iced::widget::{Column, Space, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 
 use super::super::{FootprintEditorPanelContext, PanelMsg, PanelPalette};
 use crate::styles::{Spacing, TypeScale};
@@ -16,12 +16,12 @@ const SP: Spacing = Spacing::DEFAULT;
 /// step / display style onto `snap_options`). The footer's Add /
 /// Properties / Delete operate on the active row.
 pub(super) fn render_grid_manager<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     primary: Color,
     muted: Color,
     border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     // Header row — Altium PCB Library editor columns: Prior / Name /
     // Color / Origin / Enabled. "Step" stays as a sub-row info line
     // since Altium puts it in the Properties dialog, not the grid row.
@@ -53,7 +53,8 @@ pub(super) fn render_grid_manager<'a>(
             .align_y(iced::Alignment::Center),
         )
         .padding([SP.xs, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
     col = col.push(super::super::thin_sep(border_c));
 
@@ -62,7 +63,8 @@ pub(super) fn render_grid_manager<'a>(
         col = col.push(
             container(text("(no grids)").size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
     } else {
         for (idx, g) in fp.grids.iter().enumerate() {
@@ -83,6 +85,7 @@ pub(super) fn render_grid_manager<'a>(
                         width: 1.0,
                         radius: 2.0.into(),
                         color: border_c,
+                        ..Default::default()
                     },
                     ..Default::default()
                 });
@@ -119,7 +122,8 @@ pub(super) fn render_grid_manager<'a>(
                 .style(move |_: &Theme| iced::widget::container::Style {
                     background: Some(iced::Background::Color(row_bg)),
                     ..Default::default()
-                }),
+                })
+                .boxed(),
             );
         }
     }
@@ -158,7 +162,8 @@ pub(super) fn render_grid_manager<'a>(
             .align_y(iced::Alignment::Center),
         )
         .padding([SP.s, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
     col
 }
@@ -166,11 +171,11 @@ pub(super) fn render_grid_manager<'a>(
 /// v0.18.13 — Other section. Today carries only a Units toggle;
 /// future home for additional document-level options.
 pub(super) fn render_other_section<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     _fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
     unit: signex_types::coord::Unit,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
@@ -211,7 +216,8 @@ pub(super) fn render_other_section<'a>(
             .spacing(0.0)
             .width(Length::Fill),
         )
-        .padding([SP.xs, SP.m]),
+        .padding([SP.xs, SP.m])
+        .boxed(),
     );
     col
 }
@@ -232,5 +238,5 @@ pub(super) fn grid_manager_btn<'a>(
     if let Some(msg) = on_press {
         btn = btn.on_press(msg);
     }
-    btn.into()
+    btn.boxed()
 }

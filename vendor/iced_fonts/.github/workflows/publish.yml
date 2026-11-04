@@ -1,0 +1,22 @@
+on:
+  push:
+    tags:
+      - '*'
+
+name: Publish
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo login
+        run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: cargo publish
+        run: cargo publish --workspace

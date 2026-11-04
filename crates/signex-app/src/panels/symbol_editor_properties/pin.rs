@@ -1,7 +1,7 @@
 //! Pin-selection Properties rows for the symbol editor.
 
 use iced::widget::{Column, column, container, row, text};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Widget};
 
 use super::super::{NumericDraft, NumericFieldKey, PanelMsg, SymbolPinSummary, numeric_input};
 use crate::styles::{Spacing, TypeScale};
@@ -38,25 +38,19 @@ fn view_pin_symbol_picker<'a>(
         ("Open emitter", K::OpenEmitter),
         ("Hi-Z (tri-state)", K::HiZ),
     ];
-    let labels: Vec<String> = options.iter().map(|(l, _)| l.to_string()).collect();
-    let lookup: Vec<(String, K)> = options.iter().map(|(l, v)| (l.to_string(), *v)).collect();
-    let current_label = options
-        .iter()
-        .find(|(_, v)| *v == current)
-        .map(|(l, _)| l.to_string())
-        .unwrap_or_else(|| "None".to_string());
-    let picker = iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
-        let value = lookup
-            .iter()
-            .find(|(l, _)| l == &chosen)
-            .map(|(_, v)| *v)
-            .unwrap_or(K::None);
-        PanelMsg::SymEditorSetPinSymbol {
+    let selected = options.iter().find(|(_, v)| *v == current).copied();
+    let picker = iced::widget::pick_list(
+        selected,
+        options.to_vec(),
+        |(label, _): &(&'static str, K)| label.to_string(),
+    )
+    .on_select(
+        move |(_, value): (&'static str, K)| PanelMsg::SymEditorSetPinSymbol {
             pin_idx,
             slot,
             value,
-        }
-    })
+        },
+    )
     .padding([SP.xs, SP.s])
     .text_size(10);
     container(
@@ -72,19 +66,19 @@ fn view_pin_symbol_picker<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Pin Properties rows — Designator / Name / Electrical / Position /
 /// Orientation / Length / metadata toggles / IEEE symbols.
 pub(super) fn view_pin_selection<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     pin: &'a SymbolPinSummary,
     draft: Option<&NumericDraft>,
     muted: Color,
     primary: Color,
     border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let pin_idx = pin.idx;
 
     // ── Designator (text) ──
@@ -105,7 +99,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(designator_row);
 
     // ── Name (text) ──
@@ -126,7 +120,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(name_row);
 
     // ── Electrical Type (pick_list) ──
@@ -145,30 +139,23 @@ pub(super) fn view_pin_selection<'a>(
         ("Not Connected", signex_library::PinDirection::NotConnected),
         ("Unspecified", signex_library::PinDirection::Unspecified),
     ];
-    let current_label = electrical_options
+    let electrical_selected = electrical_options
         .iter()
         .find(|(_, v)| format!("{:?}", v) == pin.electrical)
-        .map(|(label, _)| label.to_string())
-        .unwrap_or_else(|| pin.electrical.clone());
-    let labels: Vec<String> = electrical_options
-        .iter()
-        .map(|(label, _)| label.to_string())
-        .collect();
-    let labels_for_msg: Vec<(String, signex_library::PinDirection)> = electrical_options
-        .iter()
-        .map(|(label, v)| (label.to_string(), *v))
-        .collect();
-    let electrical_picker =
-        iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
-            let value = labels_for_msg
-                .iter()
-                .find(|(label, _)| label == &chosen)
-                .map(|(_, v)| *v)
-                .unwrap_or(signex_library::PinDirection::Unspecified);
+        .copied();
+    let electrical_picker = iced::widget::pick_list(
+        electrical_selected,
+        electrical_options.to_vec(),
+        |(label, _): &(&'static str, signex_library::PinDirection)| label.to_string(),
+    )
+    .placeholder(pin.electrical.clone())
+    .on_select(
+        move |(_, value): (&'static str, signex_library::PinDirection)| {
             PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
-        })
-        .padding([SP.xs, SP.s])
-        .text_size(11);
+        },
+    )
+    .padding([SP.xs, SP.s])
+    .text_size(11);
     let electrical_row: Element<'a, PanelMsg> = container(
         row![
             text("Electrical")
@@ -182,7 +169,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(electrical_row);
 
     // ── Position (X, Y) ──
@@ -203,7 +190,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(pos_x_row);
 
     let pos_y_row: Element<'a, PanelMsg> = container(
@@ -221,7 +208,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(pos_y_row);
 
     // ── Orientation (pick_list) ──
@@ -231,28 +218,18 @@ pub(super) fn view_pin_selection<'a>(
         ("Left", signex_library::PinOrientation::Left),
         ("Down", signex_library::PinOrientation::Down),
     ];
-    let current_orient = orientation_options
+    let orientation_selected = orientation_options
         .iter()
         .find(|(_, v)| format!("{:?}", v) == pin.orientation)
-        .map(|(label, _)| label.to_string())
-        .unwrap_or_else(|| pin.orientation.clone());
-    let orient_labels: Vec<String> = orientation_options
-        .iter()
-        .map(|(label, _)| label.to_string())
-        .collect();
-    let orient_msg_lookup: Vec<(String, signex_library::PinOrientation)> = orientation_options
-        .iter()
-        .map(|(label, v)| (label.to_string(), *v))
-        .collect();
+        .copied();
     let orientation_picker = iced::widget::pick_list(
-        orient_labels,
-        Some(current_orient),
-        move |chosen: String| {
-            let value = orient_msg_lookup
-                .iter()
-                .find(|(label, _)| label == &chosen)
-                .map(|(_, v)| *v)
-                .unwrap_or(signex_library::PinOrientation::Right);
+        orientation_selected,
+        orientation_options.to_vec(),
+        |(label, _): &(&'static str, signex_library::PinOrientation)| label.to_string(),
+    )
+    .placeholder(pin.orientation.clone())
+    .on_select(
+        move |(_, value): (&'static str, signex_library::PinOrientation)| {
             PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
         },
     )
@@ -271,7 +248,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(orientation_row);
 
     // ── Length (numeric) ──
@@ -290,7 +267,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(length_row);
 
     // ── Part Number (multi-part components) ──
@@ -301,7 +278,7 @@ pub(super) fn view_pin_selection<'a>(
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("1, or 0 for shared", &part_now.to_string(),)
+            iced::widget::text_input("1, or 0 for shared", part_now.to_string())
                 .padding([SP.xs, SP.s])
                 .size(TS.body)
                 .on_input(move |s| {
@@ -318,7 +295,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(part_row);
 
     // ── Description (text) ──
@@ -339,7 +316,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(description_row);
 
     // ── Function (comma-separated alt-names) ──
@@ -350,7 +327,7 @@ pub(super) fn view_pin_selection<'a>(
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(2)),
-            iced::widget::text_input("alt-names, comma-separated", &function_csv)
+            iced::widget::text_input("alt-names, comma-separated", function_csv)
                 .padding([SP.xs, SP.s])
                 .size(TS.body)
                 .on_input(move |s| PanelMsg::SymEditorSetPinFunctionCsv { pin_idx, value: s })
@@ -361,7 +338,7 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([3.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(function_row);
 
     // ── Visibility / state toggles ──
@@ -369,12 +346,13 @@ pub(super) fn view_pin_selection<'a>(
         row![
             iced::widget::checkbox(value)
                 .size(TS.heading)
-                .on_toggle(move |_| msg.clone()),
+                .on_toggle(move |_| msg.clone())
+                .boxed(),
             text(label.to_string()).size(TS.caption).color(muted),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     };
     let toggles_row: Element<'a, PanelMsg> = container(
         column![
@@ -403,13 +381,16 @@ pub(super) fn view_pin_selection<'a>(
     )
     .padding([6.0, SP.m])
     .width(Length::Fill)
-    .into();
+    .boxed();
     col = col.push(toggles_row);
 
     // ── IEEE Symbols (Inside / Inside Edge / Outside Edge / Outside) ──
     col = col.push(super::super::thin_sep(border_c));
-    col =
-        col.push(container(text("Symbols").size(TS.caption).color(primary)).padding([SP.s, SP.m]));
+    col = col.push(
+        container(text("Symbols").size(TS.caption).color(primary))
+            .padding([SP.s, SP.m])
+            .boxed(),
+    );
     col = col.push(view_pin_symbol_picker(
         "Inside",
         pin.details.inside_symbol,

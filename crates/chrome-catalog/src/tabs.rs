@@ -1,3 +1,4 @@
+use iced::advanced::Widget;
 use iced::widget::{Column, Row, Space, column, container, text};
 use iced::{Background, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
@@ -40,7 +41,7 @@ pub(crate) fn document_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 }
 
 pub(crate) fn state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let mut tabs: Row<'a, Message> = Row::new().spacing(0);
+    let mut tabs: Row<Element<'a, Message>> = Row::new().spacing(0);
     for (label, active, dragging, hovered, last) in [
         ("Inactive", false, false, false, false),
         ("Hovered", false, false, true, false),
@@ -62,7 +63,7 @@ pub(crate) fn state_matrix<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 }
 
 pub(crate) fn panel_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let mut tabs: Row<'a, Message> = Row::new().spacing(0);
+    let mut tabs: Row<Element<'a, Message>> = Row::new().spacing(0);
     for (index, label) in [
         "Components",
         "Manufacturer Part Search",
@@ -87,7 +88,7 @@ pub(crate) fn panel_strip<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 }
 
 fn strip_with_baseline<'a>(
-    tabs: Row<'a, Message>,
+    tabs: Row<Element<'a, Message>>,
     accent_position: AccentPosition,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -115,7 +116,7 @@ fn strip_with_baseline<'a>(
         },
     };
     let row_container = container(tabs).width(Length::Fill).padding(row_padding);
-    let inner: Column<'a, Message> = match accent_position {
+    let inner: Column<Element<'a, Message>> = match accent_position {
         AccentPosition::Bottom => column![row_container, baseline],
         AccentPosition::Top => column![baseline, row_container],
     };
@@ -125,7 +126,7 @@ fn strip_with_baseline<'a>(
             background: Some(Background::Color(toolbar_bg)),
             ..container::Style::default()
         })
-        .into()
+        ._boxed()
 }
 
 fn tab<'a>(
@@ -166,5 +167,5 @@ fn tab<'a>(
     };
     let text_color = if is_active { text_primary } else { text_muted };
     let content = container(text(label.to_string()).size(11).color(text_color)).padding([4, 10]);
-    TabPill::new(content, pill_style).into()
+    TabPill::new(content._boxed(), pill_style)._boxed()
 }
