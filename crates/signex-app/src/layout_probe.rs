@@ -72,40 +72,54 @@ pub(crate) fn messages_on_click_at<M>(
     label: Option<&str>,
     point: iced::Point,
 ) -> Vec<M> {
-    use iced::advanced::{Shell, clipboard, mouse};
+    use iced::advanced::Shell;
+    use iced::advanced::mouse;
+    use iced::advanced::shell::{Bus, Waker};
     let renderer = headless_renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let widget = element.as_widget_mut();
-    let node = widget.layout(
+    let mut tree = Tree::new(&element);
+    // The fork's widgets build their child trees in `diff`, not in
+    // `Tree::new`: lay out only after reconciling.
+    tree.diff(&mut element);
+    element.layout(
         &mut tree,
         &renderer,
         &layout::Limits::new(Size::ZERO, window),
     );
+    let size = tree.size;
+    let layout = Layout::new(size);
     let mut collect = CollectTexts(Vec::new());
-    widget.operate(&mut tree, Layout::new(&node), &renderer, &mut collect);
-    let at = label.map_or(point, |label| find(&collect.0, label).bounds.center());
+    element.operate(
+        &mut tree,
+        layout,
+        &Rectangle::with_size(size),
+        &renderer,
+        &mut collect,
+    );
+    let at = label.map_or(point, |label| find(&collect.0, label).bounds.center() + iced::Vector::new(100.0, 0.0));
+    eprintln!("DBG at={at:?} texts={:?}", collect.0.iter().filter(|t| t.bounds.y < 100.0 && t.bounds.x < 400.0).collect::<Vec<_>>());
     let cursor = mouse::Cursor::Available(at);
-    let mut messages = Vec::new();
-    let mut shell = Shell::new(&mut messages);
+    let mut bus = Bus::new();
     let viewport = Rectangle::with_size(window);
     for event in [
         mouse::Event::CursorMoved { position: at },
         mouse::Event::ButtonPressed(mouse::Button::Left),
         mouse::Event::ButtonReleased(mouse::Button::Left),
     ] {
-        widget.update(
+        // One shell per event, as the runtime does: a captured press would
+        // otherwise mask the release.
+        let mut shell = Shell::new(&iced::window::Headless, Waker::noop(), &mut bus);
+        element.update(
             &mut tree,
             &iced::Event::Mouse(event),
-            Layout::new(&node),
+            layout,
             cursor,
             &renderer,
-            &mut clipboard::Null,
             &mut shell,
             &viewport,
         );
+        let cap = shell.is_event_captured(); drop(shell); eprintln!("DBG ev={event:?} captured={cap} bus={}", bus.len());
     }
-    drop(shell);
-    messages
+    bus.drain().map(|(message, _)| message).collect()
 }
 
 /// The size the root of `element` lays out to in a window of `window`.

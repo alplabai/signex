@@ -2,10 +2,10 @@
 
 use super::*;
 
-#[derive(Clone)]
 /// Collapse key of the Pins section of a placed symbol's Properties.
 pub const PINS_SECTION_KEY: &str = "sel_pins";
 
+#[derive(Clone)]
 pub struct PanelContext {
     /// Multi-project workspace — one entry per `LoadedProject`. Every
     /// project-aware panel reads from this Vec; the active project is

@@ -791,11 +791,11 @@ fn enter_on_a_sheet_symbol_in_a_window_descends_on_the_main_window_child_not_ope
     );
     // Nothing was read for the window: no descent waits with the window's
     // sheet as its parent.
-    assert!(d.app.ui_state.pending_descents.is_empty());
+    assert!(d.app.ui_state.pending_sheet_opens.is_empty());
     crate::app::path_ops::settle_task(&mut d.app, task);
     window_still_shows_top(&d);
     assert_eq!(d.app.document_state.active_path, Some(d.child.clone()));
-    assert!(d.app.ui_state.pending_descents.is_empty());
+    assert!(d.app.ui_state.pending_sheet_opens.is_empty());
 }
 
 #[test]
