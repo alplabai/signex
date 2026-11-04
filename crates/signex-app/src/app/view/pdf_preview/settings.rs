@@ -32,7 +32,7 @@ impl Signex {
         scrollable(body)
             .height(Length::Fill)
             .width(Length::Fill)
-            .into()
+            .boxed()
     }
 
     /// Section header strip — accent panel-bg with a 1 px border.
@@ -55,10 +55,11 @@ impl Signex {
                     color: border_c,
                     width: 1.0,
                     radius: iced::border::Radius::default(),
+                    ..iced::Border::default()
                 },
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
     }
 
     /// Settings → Choose Project Files.
@@ -78,13 +79,14 @@ impl Signex {
         // emit, project-scoped or loose.
         let sheet_files = &preview.sheet_files;
 
-        let mut file_list: iced::widget::Column<'_, Message> =
+        let mut file_list: iced::widget::Column<Element<'_, Message>> =
             column![].spacing(SP.xs).padding([SP.m, SP.l]);
         if sheet_files.is_empty() {
             file_list = file_list.push(
                 text("No sheets to export — open a schematic first.")
                     .size(TS.body)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
             );
         } else {
             for (page, name) in sheet_files {
@@ -103,7 +105,7 @@ impl Signex {
                 ]
                 .spacing(SP.m)
                 .align_y(iced::Alignment::Center);
-                file_list = file_list.push(row_el);
+                file_list = file_list.push(row_el.boxed());
             }
         }
         let secondary_btn_style = move |_: &iced::Theme, _status| iced::widget::button::Style {
@@ -113,6 +115,7 @@ impl Signex {
                 color: border_c,
                 width: 1.0,
                 radius: iced::border::Radius::from(3.0),
+                ..iced::Border::default()
             },
             ..iced::widget::button::Style::default()
         };
@@ -143,6 +146,7 @@ impl Signex {
                                 color: border_c,
                                 width: 1.0,
                                 radius: iced::border::Radius::default(),
+                                ..iced::Border::default()
                             },
                             ..container::Style::default()
                         }),
@@ -153,7 +157,7 @@ impl Signex {
             ),
         ]
         .spacing(0)
-        .into()
+        .boxed()
     }
 
     /// Settings → Structure Settings.
@@ -171,20 +175,22 @@ impl Signex {
         let mut variant_options: Vec<String> = vec!["Base".to_string()];
         variant_options.extend(preview.variants.clone());
         variant_options.dedup();
-        let variant_picker = iced::widget::pick_list(variant_options, Some(variant_label), |s| {
-            if s.eq_ignore_ascii_case("Base") {
-                Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
-            } else {
-                Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
-            }
-        })
-        .text_size(11)
-        .width(220);
+        let variant_picker =
+            iced::widget::pick_list(Some(variant_label), variant_options, |s: &String| s.clone())
+                .on_select(|s: String| {
+                    if s.eq_ignore_ascii_case("Base") {
+                        Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
+                    } else {
+                        Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
+                    }
+                })
+                .text_size(11)
+                .width(220);
 
         let labelled_check = |label: &'static str,
                               value: bool,
                               on: fn(bool) -> Message|
-         -> iced::widget::Row<'_, Message> {
+         -> iced::widget::Row<Element<'_, Message>> {
             row![
                 text(label).size(TS.body).color(text_muted).width(150),
                 checkbox(value).on_toggle(on),
@@ -227,7 +233,7 @@ impl Signex {
             ),
         ]
         .spacing(0)
-        .into()
+        .boxed()
     }
 
     /// Settings → Additional PDF Settings.
@@ -343,14 +349,15 @@ impl Signex {
             Space::new().height(8),
             text("Quality").size(TS.body).color(text_c),
             iced::widget::pick_list(
+                Some(preview.quality),
                 vec![
                     PdfQuality::Draft72,
                     PdfQuality::Medium300,
                     PdfQuality::High600
                 ],
-                Some(preview.quality),
-                |v| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)),
+                |q: &PdfQuality| q.to_string(),
             )
+            .on_select(|v: PdfQuality| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)))
             .text_size(11)
             .width(180),
         ]
@@ -426,6 +433,6 @@ impl Signex {
             ),
         ]
         .spacing(0)
-        .into()
+        .boxed()
     }
 }

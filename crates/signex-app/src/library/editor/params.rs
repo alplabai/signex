@@ -19,7 +19,7 @@
 
 use std::collections::BTreeSet;
 
-use iced::widget::{column, row, scrollable, text, text_input};
+use iced::widget::{Column, Widget, column, row, scrollable, text, text_input};
 use iced::{Element, Length};
 use signex_library::{
     ParamKind, ParamMap, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation,
@@ -206,7 +206,8 @@ pub fn view<'a>(
         .color(theme_ext::text_secondary(tokens));
 
     let specs = row_specs(template, &state.row.parameters);
-    let mut grid = column![kit::table_header(&COLUMNS, tokens)];
+    let mut grid: Column<Element<'a, LibraryMessage>> =
+        column![kit::table_header(&COLUMNS, tokens)];
     if specs.is_empty() {
         grid = grid.push(kit::empty_state(
             empty_text(template.is_some()),
@@ -226,17 +227,18 @@ pub fn view<'a>(
     }
 
     let body = column![
-        kit::section_header("Parameters", Some(class_note.into()), tokens),
-        kit::card(grid, tokens),
+        kit::section_header("Parameters", Some(class_note.boxed()), tokens),
+        kit::card(grid.boxed(), tokens),
         add_custom_card(state, tokens, &address),
     ]
     .spacing(SP.l)
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .boxed();
 
     scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Layout one grid row: scope, name, value editor, unit, status, remove.
@@ -267,9 +269,9 @@ fn param_row<'a>(
     let scope_cell: Element<'a, LibraryMessage> = text(spec.scope.label())
         .size(TS.body)
         .color(scope_color)
-        .into();
+        .boxed();
     let name_cell: Element<'a, LibraryMessage> =
-        text(name.to_string()).size(TS.body).color(text_c).into();
+        text(name.to_string()).size(TS.body).color(text_c).boxed();
 
     let editor = slot_input(state, name, kind, unit.clone(), spec.slot, tokens, address);
     let unit_cell = unit_cell(spec.scope, kind, unit, name, tokens, address);
@@ -279,12 +281,12 @@ fn param_row<'a>(
             Some(StatusNote::Missing) => text("Missing value")
                 .size(TS.body)
                 .color(theme_ext::warning_color(tokens))
-                .into(),
+                .boxed(),
             Some(StatusNote::Problem(why)) => text(why)
                 .size(TS.body)
                 .color(theme_ext::error_color(tokens))
-                .into(),
-            None => text("").size(TS.body).into(),
+                .boxed(),
+            None => text("").size(TS.body).boxed(),
         };
 
     let action_cell: Element<'a, LibraryMessage> = if spec.scope == Scope::Custom {
@@ -299,7 +301,7 @@ fn param_row<'a>(
             tokens,
         )
     } else {
-        text("").size(TS.body).into()
+        text("").size(TS.body).boxed()
     };
 
     let [scope_w, name_w, value_w, unit_w, status_w, action_w] = COLUMNS.map(|(_, w)| w);
@@ -340,10 +342,10 @@ fn unit_cell<'a>(
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let (Some(u), ParamKind::Measurement) = (unit, kind) else {
-        return text("").size(TS.body).into();
+        return text("").size(TS.body).boxed();
     };
     if scope != Scope::Custom {
-        return text(u).size(TS.body).color(muted).into();
+        return text(u).size(TS.body).color(muted).boxed();
     }
     match unit_of_token(&u) {
         Ok(selected) => {
@@ -360,7 +362,7 @@ fn unit_cell<'a>(
                 )
             })
         }
-        Err(raw) => text(raw.to_string()).size(TS.body).color(muted).into(),
+        Err(raw) => text(raw.to_string()).size(TS.body).color(muted).boxed(),
     }
 }
 
@@ -409,7 +411,7 @@ fn text_cell<'a>(
     };
     let address = address.clone();
     let name = name.to_string();
-    text_input("", &value)
+    text_input("", value)
         .on_input(move |s| {
             editor_event(
                 &address,
@@ -421,7 +423,7 @@ fn text_cell<'a>(
         })
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn number_cell<'a>(
@@ -440,7 +442,7 @@ fn number_cell<'a>(
     });
     let (input_address, input_name) = (address.clone(), name.to_string());
     let (submit_address, submit_name) = (address.clone(), name.to_string());
-    text_input("", &buf)
+    text_input("", buf)
         .on_input(move |s| {
             editor_event(
                 &input_address,
@@ -456,7 +458,7 @@ fn number_cell<'a>(
         ))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn bool_cell<'a>(
@@ -479,7 +481,7 @@ fn bool_cell<'a>(
         })
         .size(TS.heading)
         .spacing(SP.s)
-        .into()
+        .boxed()
 }
 
 /// Cheap text view of a `ParamValue` for fallback rendering when the
@@ -504,6 +506,7 @@ fn add_custom_card<'a>(
             .padding([SP.s, SP.m])
             .size(TS.body)
             .width(Length::FillPortion(3))
+            .boxed()
     };
     let enabled = can_add(&state.new_param_name);
     let kind_button = |label: &'static str, kind: ParamKindMsg| -> Element<'a, LibraryMessage> {
@@ -522,14 +525,15 @@ fn add_custom_card<'a>(
         kind_button("Measurement", ParamKindMsg::Measurement(String::new())),
     ]
     .spacing(SP.m)
-    .align_y(iced::Alignment::Center);
+    .align_y(iced::Alignment::Center)
+    .boxed();
 
     column![
         kit::section_header("Add custom parameter", None, tokens),
         kit::card(controls, tokens),
     ]
     .spacing(SP.m)
-    .into()
+    .boxed()
 }
 
 /// Build the validation list for a draft — wraps

@@ -344,6 +344,11 @@ impl Signex {
                 self.close_libraries_whose_writes_are_done();
                 Task::none()
             }
+            LibraryMessage::AlternateSymbolResolved { readout } => {
+                self.handle_alternate_symbol_resolved(readout);
+                self.close_libraries_whose_writes_are_done();
+                Task::none()
+            }
             LibraryMessage::RowSummariesRead {
                 generation,
                 readout,

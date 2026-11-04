@@ -78,6 +78,7 @@ pub fn panel_bg(tokens: &ThemeTokens) -> container::Style {
             width: 1.0,
             radius: 0.0.into(),
             color: to_color(&tokens.border),
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -92,6 +93,7 @@ pub fn toolbar_bg(tokens: &ThemeTokens) -> container::Style {
             width: 0.0,
             radius: 0.0.into(),
             color: to_color(&tokens.border),
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -106,6 +108,7 @@ pub fn status_bar_bg(tokens: &ThemeTokens) -> container::Style {
             width: 1.0,
             radius: 0.0.into(),
             color: to_color(&tokens.border),
+            ..Border::default()
         },
         ..container::Style::default()
     }

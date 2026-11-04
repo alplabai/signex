@@ -6,7 +6,7 @@
 
 use super::super::*;
 use iced::widget::{Row, Space, column, container, row, scrollable, text};
-use iced::{Background, Color, Element, Length, Theme};
+use iced::{Background, Color, Element, Length, Theme, Widget};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -136,7 +136,7 @@ impl Signex {
     pub(super) fn bom_table(&self) -> Element<'_, Message> {
         use signex_output::BomColumn;
         let Some(ref preview) = self.document_state.bom_preview else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -192,20 +192,24 @@ impl Signex {
         let num_header: Element<'_, Message> = container(text(""))
             .width(Length::Fixed(NUM_COL_WIDTH))
             .height(HEADER_ROW_H)
-            .into();
+            .boxed();
 
-        let mut header_row: Row<'_, Message> = Row::new()
+        let mut header_row: Row<Element<'_, Message>> = Row::new()
             .spacing(0)
             .align_y(iced::Alignment::Center)
             .push(num_header);
         // Vertical divider between row-number column and the data
         // columns so the gutter is visibly its own zone.
-        header_row = header_row.push(container(Space::new()).width(1).height(HEADER_ROW_H).style(
-            move |_: &Theme| container::Style {
-                background: Some(Background::Color(border_c)),
-                ..container::Style::default()
-            },
-        ));
+        header_row = header_row.push(
+            container(Space::new())
+                .width(1)
+                .height(HEADER_ROW_H)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(border_c)),
+                    ..container::Style::default()
+                })
+                .boxed(),
+        );
         // Only treat the press as a "real" drag once the cursor
         // has moved past 6 px from where it pressed — same
         // threshold the tab drag-ghost uses. A press-and-release
@@ -272,25 +276,29 @@ impl Signex {
                 .on_enter(Message::BomPreview(BomPreviewMsg::ColumnHoverEnter(idx)))
                 .on_exit(Message::BomPreview(BomPreviewMsg::ColumnHoverExit(idx)))
                 .interaction(iced::mouse::Interaction::Pointer)
-                .into();
+                .boxed();
             header_row = header_row.push(header_cell);
             if idx + 1 < preview.options.columns.len() {
                 // 1 px theme-border vertical divider + 4 px
                 // transparent resize handle. No accent bg in
                 // either — they sit between columns and shouldn't
                 // bleed sort highlights into neighbouring cells.
-                header_row = header_row.push(container(Space::new()).width(1).height(24).style(
-                    move |_: &Theme| container::Style {
-                        background: Some(Background::Color(border_c)),
-                        ..container::Style::default()
-                    },
-                ));
+                header_row = header_row.push(
+                    container(Space::new())
+                        .width(1)
+                        .height(24)
+                        .style(move |_: &Theme| container::Style {
+                            background: Some(Background::Color(border_c)),
+                            ..container::Style::default()
+                        })
+                        .boxed(),
+                );
                 let resize_handle: Element<'_, Message> =
                     iced::widget::mouse_area(container(Space::new()).width(4).height(HEADER_ROW_H))
                         .on_press(Message::BomPreview(BomPreviewMsg::ColumnResizeStart(idx)))
                         .on_release(Message::BomPreview(BomPreviewMsg::ColumnResizeEnd))
                         .interaction(iced::mouse::Interaction::ResizingHorizontally)
-                        .into();
+                        .boxed();
                 header_row = header_row.push(resize_handle);
             }
         }
@@ -300,7 +308,7 @@ impl Signex {
         let table_header_el: Element<'_, Message> = container(header_row)
             .style(crate::styles::toolbar_strip(tokens))
             .width(Length::Fixed(table_width.max(100.0)))
-            .into();
+            .boxed();
 
         // Display order is computed in `update` (`BomPreviewState::row_order`),
         // never here.
@@ -339,7 +347,7 @@ impl Signex {
                 .padding([0, 6])
                 .align_y(iced::alignment::Vertical::Center)
                 .clip(true)
-                .into()
+                .boxed()
             };
             // Leftmost row-number gutter cell — muted text, right-aligned.
             let num_cell: Element<'_, Message> = container(
@@ -352,7 +360,7 @@ impl Signex {
             .padding([0, 6])
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Center)
-            .into();
+            .boxed();
             // Body rows: subtle 1 px vertical column dividers —
             // theme-border at 30 % alpha so they read as faint
             // groove lines without competing with the header
@@ -367,9 +375,9 @@ impl Signex {
                         background: Some(Background::Color(subtle_divider_color)),
                         ..container::Style::default()
                     })
-                    .into()
+                    .boxed()
             };
-            let mut row_inner: Row<'_, Message> = Row::new().spacing(0).push(num_cell);
+            let mut row_inner: Row<Element<'_, Message>> = Row::new().spacing(0).push(num_cell);
             row_inner = row_inner.push(body_divider());
             for (col_idx, c) in preview.options.columns.iter().enumerate() {
                 // Every column uses Fixed widths so the
@@ -384,7 +392,7 @@ impl Signex {
                     // 4 px transparent spacer to mirror the
                     // header's resize-handle width — keeps
                     // columns pixel-aligned with the header.
-                    row_inner = row_inner.push(Space::new().width(4));
+                    row_inner = row_inner.push(Space::new().width(4).boxed());
                 }
             }
             let row_el = container(row_inner)
@@ -393,7 +401,7 @@ impl Signex {
                     background: Some(Background::Color(alt_bg)),
                     ..container::Style::default()
                 });
-            rows.push(row_el.into());
+            rows.push(row_el.boxed());
         }
         // Header + rows live inside the same vertical column so the
         // horizontal scroll moves them together. Without this, the
@@ -413,7 +421,7 @@ impl Signex {
             Space::new().height(16),
         ]
         .width(Length::Fixed(table_width.max(100.0)))
-        .into();
+        .boxed();
         let body = scrollable(table_inner)
             .direction(iced::widget::scrollable::Direction::Both {
                 vertical: iced::widget::scrollable::Scrollbar::default(),
@@ -421,7 +429,7 @@ impl Signex {
             })
             .width(Length::Fill)
             .height(Length::Fill);
-        body.into()
+        body.boxed()
     }
 }
 

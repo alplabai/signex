@@ -43,6 +43,7 @@ impl ResolvedTheme {
         resolved.set_slot(ColorSlot::Ghost, to_rgba(canvas.body_fill));
         resolved.set_slot(ColorSlot::LassoStroke, to_rgba(canvas.selection));
         resolved.set_slot(ColorSlot::LassoFill, to_rgba(canvas.selection));
+        resolved.set_slot(ColorSlot::Ratsnest, to_rgba(canvas.ratsnest_color()));
 
         resolved
     }
@@ -104,6 +105,7 @@ fn load_builtin_theme() -> ResolvedTheme {
     resolved.set_slot(ColorSlot::SymbolBody, palette.slots.symbol_body);
     resolved.set_slot(ColorSlot::Pin, palette.slots.pin);
     resolved.set_slot(ColorSlot::Selection, palette.slots.selection);
+    resolved.set_slot(ColorSlot::Ratsnest, palette.slots.selection);
     resolved.set_slot(ColorSlot::Grid, palette.slots.grid);
     resolved.set_slot(ColorSlot::Snap, palette.slots.snap);
     resolved.set_slot(ColorSlot::ErcError, palette.slots.erc_error);
@@ -149,6 +151,21 @@ mod tests {
         assert_eq!(wire[1], 0.0);
         assert!(wire[2] > 0.49);
         assert_eq!(wire[3], 1.0);
+    }
+
+    #[test]
+    fn the_ratsnest_has_its_own_slot_apart_from_the_selection() {
+        let theme = ResolvedTheme::from_theme_id(ThemeId::Signex);
+        let px = |v: u8| f32::from(v) / 255.0;
+        assert_eq!(theme.color(ColorSlot::Ratsnest)[2], px(0xD4));
+        assert_ne!(
+            theme.color(ColorSlot::Ratsnest),
+            theme.color(ColorSlot::Selection)
+        );
+        assert_eq!(
+            ResolvedTheme::builtin_default().color(ColorSlot::Ratsnest),
+            ResolvedTheme::builtin_default().color(ColorSlot::Selection)
+        );
     }
 
     #[test]

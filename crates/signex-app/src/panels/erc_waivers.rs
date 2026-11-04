@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use signex_erc::waivers::violation::WaiverKey;
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -76,7 +77,7 @@ pub(super) fn waive_chip<'a>(
     tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PanelMsg> {
     let Some(key) = entry.waiver_key.clone() else {
-        return Space::new().width(0).height(0).into();
+        return Space::new().width(0).height(0).boxed();
     };
     row![
         Space::new().width(6).height(Length::Shrink),
@@ -93,7 +94,7 @@ pub(super) fn waive_chip<'a>(
         }))
         .style(crate::styles::menu_item(tokens)),
     ]
-    .into()
+    .boxed()
 }
 
 /// The reason / author editor under the row being waived, if it is this one.
@@ -106,7 +107,7 @@ pub(super) fn waive_editor<'a>(
         return None;
     }
     let wrap = PanelMsg::ErcWaiver;
-    let input = |hint: &'a str, value: &str, on: fn(String) -> ErcWaiverMsg| {
+    let input = |hint: &'a str, value: &'a str, on: fn(String) -> ErcWaiverMsg| {
         iced::widget::text_input(hint, value)
             .on_input(move |s| wrap(on(s)))
             .on_submit(wrap(ErcWaiverMsg::Confirmed))
@@ -124,51 +125,62 @@ pub(super) fn waive_editor<'a>(
         .on_press(wrap(msg))
         .style(crate::styles::menu_item(&ctx.tokens))
     };
-    let mut col: Column<'a, PanelMsg> = Column::new()
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new()
         .spacing(SP.xs)
         .padding([SP.xs, 18.0])
         .width(Length::Fill);
-    col = col.push(input(
-        "Reason (required)",
-        &draft.reason,
-        ErcWaiverMsg::ReasonChanged,
-    ));
-    col = col.push(input(
-        "Author (required)",
-        &draft.author,
-        ErcWaiverMsg::AuthorChanged,
-    ));
+    col = col.push(
+        input(
+            "Reason (required)",
+            &draft.reason,
+            ErcWaiverMsg::ReasonChanged,
+        )
+        .boxed(),
+    );
+    col = col.push(
+        input(
+            "Author (required)",
+            &draft.author,
+            ErcWaiverMsg::AuthorChanged,
+        )
+        .boxed(),
+    );
     if let Some(error) = &draft.error {
         col = col.push(
             text(error.clone())
                 .size(TS.caption)
-                .color(theme_ext::error_color(&ctx.tokens)),
+                .color(theme_ext::error_color(&ctx.tokens))
+                .boxed(),
         );
     }
-    col = col.push(row![
-        button("Waive", ErcWaiverMsg::Confirmed),
-        Space::new().width(6).height(Length::Shrink),
-        button("Cancel", ErcWaiverMsg::Cancelled),
-    ]);
-    Some(col.into())
+    col = col.push(
+        row![
+            button("Waive", ErcWaiverMsg::Confirmed),
+            Space::new().width(6).height(Length::Shrink),
+            button("Cancel", ErcWaiverMsg::Cancelled),
+        ]
+        .boxed(),
+    );
+    Some(col.boxed())
 }
 
 /// The project's per-finding waivers, dimmed, each with its reason, author,
 /// status and a Restore button. Shown even when every finding is waived.
 pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).width(Length::Fill);
     if ctx.erc_violation_waivers.is_empty() {
-        return col.into();
+        return col.boxed();
     }
-    col = col.push(separator(&ctx.tokens));
+    col = col.push(separator(&ctx.tokens).boxed());
     col = col.push(
         text(format!(
             "{} findings waived",
             ctx.erc_violation_waivers.len()
         ))
         .size(TS.caption)
-        .color(muted),
+        .color(muted)
+        .boxed(),
     );
     for w in &ctx.erc_violation_waivers {
         let status = match w.status {
@@ -207,8 +219,9 @@ pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a
                 .style(crate::styles::menu_item(&ctx.tokens)),
             ]
             .align_y(iced::Alignment::Center)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
-    col.into()
+    col.boxed()
 }

@@ -9,8 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use super::project_rename_fs::{
-    carry_closed_copies, folder_collides, folder_target, journal_closed_copies,
-    rename_project_on_disk, same_path_on_disk, unjournal_closed_copies,
+    carry_closed_copies, folder_target, journal_closed_copies, rename_project_file_on_disk,
+    rename_project_on_disk, unjournal_closed_copies,
 };
 use super::*;
 use crate::app::contracts::ProjectFileRenameJob;
@@ -66,12 +66,8 @@ impl Signex {
             self.set_rename_error(&refusal);
             return Task::none();
         }
-        // A case-only rename on a case-insensitive volume finds the project
-        // itself at the new name; that is not a collision.
-        if new_prj.exists() && !same_path_on_disk(&state.target_path, &new_prj) {
-            self.set_rename_error("A project with that name already exists.");
-            return Task::none();
-        }
+        // Whether the new name is taken is answered on the worker, right
+        // before the move: a stat here would run inside `update`.
         let Some(idx) = state.tree_path.first().copied() else {
             return Task::none();
         };
@@ -157,7 +153,7 @@ impl Signex {
         let (source, target) = (job.from.clone(), job.to.clone());
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || {
-                std::fs::rename(&source, &target).map_err(|e| e.to_string())
+                rename_project_file_on_disk(&source, &target)
             }),
             move |joined| {
                 Message::Project(ProjectMsg::ProjectFileRenamed {
@@ -432,10 +428,8 @@ impl Signex {
             self.set_rename_error(reason);
             return Task::none();
         }
-        if folder_collides(&job.old_dir, &job.new_dir) {
-            self.set_rename_error("A folder with that name already exists.");
-            return Task::none();
-        }
+        // A taken folder or project name is refused by the worker, right
+        // before the move (`rename_project_on_disk`).
         self.document_state
             .project_folder_renames
             .insert(job.project_id);

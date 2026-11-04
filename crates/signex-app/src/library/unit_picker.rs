@@ -7,7 +7,7 @@
 //! read-only label and keep it as written.
 
 use iced::Element;
-use iced::widget::pick_list;
+use iced::widget::{Widget, pick_list};
 use signex_types::quantity::Unit;
 
 /// One entry: a standard unit, or `None` for "no unit" (a plain value).
@@ -52,13 +52,14 @@ pub(crate) fn unit_picker<'a, M: Clone + 'a>(
     on_pick: impl Fn(String) -> M + 'a,
 ) -> Element<'a, M> {
     pick_list(
-        unit_choices(allow_none),
         Some(UnitChoice(selected)),
-        move |c: UnitChoice| on_pick(c.0.map(|u| u.token().to_string()).unwrap_or_default()),
+        unit_choices(allow_none),
+        UnitChoice::to_string,
     )
+    .on_select(move |c: UnitChoice| on_pick(c.0.map(|u| u.token().to_string()).unwrap_or_default()))
     .text_size(text_size)
     .padding([3, 6])
-    .into()
+    .boxed()
 }
 
 /// A one-line notice when a free parameter's unit changed: the number is

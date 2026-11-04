@@ -8,5 +8,6 @@ mod highlight;
 mod history;
 mod hover;
 mod partners;
+mod pin_click;
 mod placements;
 mod robustness;

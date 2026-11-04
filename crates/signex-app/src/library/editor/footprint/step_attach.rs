@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, Widget, button, column, container, row, text};
 use iced::{Element, Length};
 use sha2::{Digest, Sha256};
 use signex_library::{Footprint, StepAttachment};
@@ -82,7 +82,7 @@ pub fn view<'a>(
                 .color(muted),
             ]
             .spacing(0)
-            .into()
+            .boxed()
         }
         None => column![
             row![
@@ -97,14 +97,14 @@ pub fn view<'a>(
                 .color(muted),
         ]
         .spacing(0)
-        .into(),
+        .boxed(),
     };
 
     container(body)
         .padding(sp.l)
         .style(crate::styles::modal_card(tokens))
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// SHA-256 hex of `bytes` — same routine the 3D upload flow uses, but

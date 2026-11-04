@@ -167,5 +167,22 @@ atomic), is not marked clean, and is named in the Messages panel and a notice;
 the open sheets stay numbered and modified, and the other sheets still land.
 Run it again once the cause is fixed. A dead worker releases the guards and
 reports the same way. Reset marks an unopened sheet clean only after its bytes
-landed. Re-prefix still assembles and numbers inline; it is not part of this
-change.
+landed.
+
+## Re-prefix to standard (`handlers/erc/reprefix_job.rs`)
+
+Re-prefix reads through the same path-ops worker as Annotate and Reset
+Duplicate Designators (#1756); no sheet is read in `update`. Both halves ask a
+worker for the project's sheets first. The plan half
+(`start_reprefix_plan_read`) reads them to build the confirm. The apply half is
+an Annotate-style run (`begin_run(PassKind::Reprefix, ..)`, registered as
+`ProjectRead` then `ProjectRewrite` like any other run): the worker reads, then
+ONE `update` re-plans over those sheets (open ones from their live engines),
+compares the plan with what the user was shown, and numbers it.
+
+**All or nothing.** A sheet that exists but cannot be read stops the run before
+anything is changed (it would be left out of the plan and split its parts
+across two prefixes); the Messages panel and a notice name it. A sheet that
+fails while numbering is rolled back whole by `roll_back_reprefix`. Re-prefix
+writes no file (unopened sheets are parked dirty, #669), so there is no
+half-written disk state to restore.

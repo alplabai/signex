@@ -352,7 +352,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             self.draw_touching_line_ghost(frame, cstate);
             self.draw_lasso_ghost(frame, cstate);
             self.draw_rubber_band(frame, cstate);
-            self.draw_sketch_overlays(frame, cstate, theme.palette().danger);
+            self.draw_sketch_overlays(frame, cstate, theme.palette().danger.base.color);
         });
 
         vec![geom]

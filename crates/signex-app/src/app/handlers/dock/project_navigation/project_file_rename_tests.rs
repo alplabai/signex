@@ -179,3 +179,41 @@ fn a_finished_move_does_not_close_a_dialog_reopened_for_another_file() {
         old_file.with_file_name("Bar.snxprj")
     );
 }
+
+/// Whether the new name is taken is answered by the worker, right before the
+/// move, not by a stat in `update`; the project already there is never
+/// overwritten.
+#[test]
+fn a_taken_project_name_is_refused_by_the_worker_and_nothing_is_overwritten() {
+    let _ = crate::diagnostics::init_logging();
+    let root = tempfile::tempdir().expect("tempdir");
+    let (mut fx, old_file) = file_only(root.path());
+    let taken = old_file.with_file_name("Bar.snxprj");
+    std::fs::write(&taken, b"another project").expect("other project");
+
+    let task = submit_rename(&mut fx.app, &old_file, "Bar");
+
+    let said_in_update = fx
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert_eq!(said_in_update, None, "update did not stat the new name");
+    run_task(&mut fx.app, task);
+
+    let dialog_error = fx
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone());
+    assert!(
+        dialog_error.is_some_and(|e| e.contains("already exists")),
+        "the dialog says why"
+    );
+    assert!(old_file.exists(), "the project did not move");
+    assert_eq!(std::fs::read(&taken).expect("kept"), b"another project");
+    assert_eq!(fx.app.document_state.projects[0].path, old_file);
+    assert!(fx.app.document_state.pending_path_ops.is_empty());
+}

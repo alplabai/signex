@@ -1,5 +1,5 @@
 use iced::widget::container;
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::tree_view::{TreeIcon, TreeNode, TreeView};
 
@@ -35,7 +35,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     container(tree)
         .width(Length::Fixed(360.0))
         .height(Length::Fixed(120.0))
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

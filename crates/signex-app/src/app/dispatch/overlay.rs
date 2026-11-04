@@ -31,7 +31,9 @@ impl Signex {
                 self.ui_state.about_open = false;
                 Task::none()
             }
-            OverlayMsg::CopyAboutInfo => iced::clipboard::write(crate::about::version_info_text()),
+            OverlayMsg::CopyAboutInfo => {
+                iced::clipboard::write(crate::about::version_info_text()).discard()
+            }
             OverlayMsg::OpenLink(link) => crate::about::open_link(link, |detail| {
                 Message::Overlay(OverlayMsg::LinkOpenFailed(detail))
             }),
@@ -447,6 +449,11 @@ impl Signex {
             }
             AnnotateMsg::ReprefixRowsResolved { generation, result } => {
                 let task = self.handle_reprefix_rows_resolved(generation, &result);
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::ReprefixSheetsRead { generation, result } => {
+                let task = self.handle_reprefix_sheets_read(generation, &result);
                 self.sync_diagnostics_panel_ctx();
                 task
             }

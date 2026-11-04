@@ -18,7 +18,7 @@
 //! ```
 
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -86,7 +86,8 @@ pub fn view<'a>(
                     .size(TS.body)
                     .color(muted),
             )
-            .padding([14, 14]),
+            .padding([14, 14])
+            .boxed(),
         );
     } else {
         for entry in rows.visible() {
@@ -144,7 +145,7 @@ pub fn view<'a>(
                     ..iced::widget::button::Style::default()
                 }
             });
-            list_col = list_col.push(row_widget);
+            list_col = list_col.push(row_widget.boxed());
         }
     }
 
@@ -207,6 +208,7 @@ pub fn view<'a>(
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 }),
@@ -228,7 +230,7 @@ pub fn view<'a>(
     );
     let mut top = column![container(search).padding([6.0, SP.l])].spacing(0);
     if let Some(bar) = range_bar {
-        top = top.push(container(bar).padding([0.0, SP.l]));
+        top = top.push(container(bar).padding([0.0, SP.l]).boxed());
     }
     let body_pad = container(column![top, body].spacing(0))
         .width(Length::Fill)
@@ -241,5 +243,5 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }

@@ -81,7 +81,8 @@ pub(crate) fn erc_severity_text(tokens: &ThemeTokens, focused: bool, severity: C
 }
 
 pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
             section_title("ERC", &ctx.tokens),
@@ -104,22 +105,25 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .on_press(PanelMsg::ClearErc)
             .style(crate::styles::menu_item(&ctx.tokens)),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(separator(&ctx.tokens));
+    col = col.push(separator(&ctx.tokens).boxed());
 
     if ctx.erc_running {
         col = col.push(
             text("Running…")
                 .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
+                .color(theme_ext::text_secondary(&ctx.tokens))
+                .boxed(),
         );
     }
     if ctx.erc_results_stale {
         col = col.push(
             text(STALE_RESULTS_NOTICE)
                 .size(TS.caption)
-                .color(theme_ext::warning_color(&ctx.tokens)),
+                .color(theme_ext::warning_color(&ctx.tokens))
+                .boxed(),
         );
     }
     if ctx.erc_diagnostics.is_empty() && !ctx.erc_running {
@@ -130,19 +134,21 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 "No ERC diagnostics yet"
             })
             .size(TS.caption)
-            .color(theme_ext::text_secondary(&ctx.tokens)),
+            .color(theme_ext::text_secondary(&ctx.tokens))
+            .boxed(),
         );
         if !ctx.erc_results_stale {
             col = col.push(
                 text("Run ERC to populate project-wide diagnostics")
                     .size(TS.caption)
-                    .color(theme_ext::text_secondary(&ctx.tokens)),
+                    .color(theme_ext::text_secondary(&ctx.tokens))
+                    .boxed(),
             );
         }
         return col
             .push(waived_section(ctx))
             .push(super::erc_waivers::violation_waivers_section(ctx))
-            .into();
+            .boxed();
     }
 
     let errors = ctx
@@ -201,7 +207,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .on_press(PanelMsg::FocusNextErcDiagnostic)
                 .style(crate::styles::menu_item(&ctx.tokens)),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
 
     for v in &ctx.erc_diagnostics {
@@ -286,7 +293,8 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 super::erc_waivers::waive_chip(v, &ctx.tokens),
             ]
             .align_y(iced::Alignment::Center)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
         if let Some(editor) = super::erc_waivers::waive_editor(v, ctx) {
             col = col.push(editor);
@@ -295,7 +303,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     col.push(waived_section(ctx))
         .push(super::erc_waivers::violation_waivers_section(ctx))
-        .into()
+        .boxed()
 }
 
 /// Shown while the document has changed since the newest ERC run.
@@ -315,7 +323,7 @@ fn waive_chip<'a>(
     tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PanelMsg> {
     let Some(net) = v.net.as_ref().filter(|n| !n.name.is_empty()) else {
-        return Space::new().width(0).height(0).into();
+        return Space::new().width(0).height(0).boxed();
     };
     row![
         Space::new().width(6).height(Length::Shrink),
@@ -332,22 +340,23 @@ fn waive_chip<'a>(
         })
         .style(crate::styles::menu_item(tokens)),
     ]
-    .into()
+    .boxed()
 }
 
 /// The project's net waivers, dimmed, each with a Restore button. Shown even
 /// when every finding is waived, so a waiver is never invisible.
 fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).width(Length::Fill);
     if ctx.erc_waivers.is_empty() {
-        return col.into();
+        return col.boxed();
     }
-    col = col.push(separator(&ctx.tokens));
+    col = col.push(separator(&ctx.tokens).boxed());
     col = col.push(
         text(format!("{} waived", ctx.erc_waivers.len()))
             .size(TS.caption)
-            .color(muted),
+            .color(muted)
+            .boxed(),
     );
     for w in &ctx.erc_waivers {
         let note = match w.hidden {
@@ -375,16 +384,18 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .style(crate::styles::menu_item(&ctx.tokens)),
             ]
             .align_y(iced::Alignment::Center)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
     }
-    col.into()
+    col.boxed()
 }
 
 // ─── Messages Panel ───────────────────────────────────────────
 
 pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).padding(6).width(Length::Fill);
     col = col.push(
         row![
             section_title("Messages", &ctx.tokens),
@@ -393,20 +404,23 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
         ]
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     );
-    col = col.push(separator(&ctx.tokens));
+    col = col.push(separator(&ctx.tokens).boxed());
 
     if ctx.diagnostics.is_empty() {
         col = col.push(
             text("No runtime messages yet")
                 .size(TS.caption)
-                .color(theme_ext::success_color(&ctx.tokens)),
+                .color(theme_ext::success_color(&ctx.tokens))
+                .boxed(),
         );
         col = col.push(
             text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
                 .size(TS.caption)
-                .color(theme_ext::text_secondary(&ctx.tokens)),
+                .color(theme_ext::text_secondary(&ctx.tokens))
+                .boxed(),
         );
     } else {
         // Table header — mirrors Altium's Messages panel with fixed
@@ -428,7 +442,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         let th = |label: &str| -> Element<'a, PanelMsg> {
             container(text(label.to_string()).size(TS.body).color(muted))
                 .padding([SP.s, SP.m])
-                .into()
+                .boxed()
         };
         // Header row — background fill, no border (separator line
         // below sits in its own element so the table reads as a grid
@@ -446,7 +460,8 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .style(move |_theme: &Theme| iced::widget::container::Style {
                 background: Some(Background::Color(header_bg)),
                 ..iced::widget::container::Style::default()
-            }),
+            })
+            .boxed(),
         );
         let separator = |bg: Color| -> Element<'a, PanelMsg> {
             container(Space::new())
@@ -456,7 +471,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                     background: Some(Background::Color(bg)),
                     ..iced::widget::container::Style::default()
                 })
-                .into()
+                .boxed()
         };
         col = col.push(separator(border));
         for (i, entry) in ctx.diagnostics.iter().rev().enumerate() {
@@ -475,7 +490,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             let cell = |label: String, color: Color, size: f32| -> Element<'a, PanelMsg> {
                 container(text(label).size(size).color(color))
                     .padding([SP.s, SP.m])
-                    .into()
+                    .boxed()
             };
             col = col.push(
                 container(
@@ -497,7 +512,8 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .style(move |_theme: &Theme| iced::widget::container::Style {
                     background: Some(Background::Color(bg)),
                     ..iced::widget::container::Style::default()
-                }),
+                })
+                .boxed(),
             );
             // One-pixel horizontal rule between rows — no right / left
             // borders so the table reads as a stack of records with
@@ -506,7 +522,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         }
     }
 
-    container(col).width(Length::Fill).into()
+    container(col).width(Length::Fill).boxed()
 }
 
 #[cfg(test)]

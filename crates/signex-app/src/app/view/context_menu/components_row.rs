@@ -3,6 +3,8 @@
 
 use super::*;
 
+use iced::Widget as _;
+
 use super::items::dd_msg;
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsRowAction;
@@ -59,7 +61,7 @@ impl Signex {
                 ]
                 .width(Length::Fill),
             ]
-            .into(),
+            .boxed(),
         ];
         match menu_ctx.window {
             None => layers,
@@ -67,9 +69,11 @@ impl Signex {
             Some(window) => layers
                 .into_iter()
                 .map(|layer| {
-                    layer.map(move |m| {
-                        crate::app::dispatch::window_action::scope_row_menu_message(window, m)
-                    })
+                    layer
+                        .map(move |m| {
+                            crate::app::dispatch::window_action::scope_row_menu_message(window, m)
+                        })
+                        .boxed()
                 })
                 .collect(),
         }
@@ -132,7 +136,7 @@ impl Signex {
                 iced::widget::Space::new().height(y + SP.l),
                 row![iced::widget::Space::new().width(x + SP.l), label],
             ]
-            .into(),
+            .boxed(),
         ]
     }
 }

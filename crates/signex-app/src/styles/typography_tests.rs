@@ -266,3 +266,11 @@ fn no_text_size_literal_survives_anywhere_in_signex_app() {
         bad.join("\n")
     );
 }
+
+#[test]
+fn line_height_is_the_frameworks_default() {
+    use iced::Pixels;
+    use iced::widget::text::LineHeight;
+    let framework = LineHeight::default().to_absolute(Pixels(1.0)).0;
+    assert_eq!(super::typography::LINE_HEIGHT, framework);
+}

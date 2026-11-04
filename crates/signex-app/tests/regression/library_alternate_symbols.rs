@@ -282,9 +282,11 @@ fn pick_alternate(app: &mut Signex, address: &EditorAddress, library_id: Uuid, s
         kind: PrimitiveKind::Symbol,
         target: PrimitivePickerTarget::PreviewAlternate(address.clone()),
     }));
-    let _ = app.update(Message::Library(LibraryMessage::PrimitivePicker(
+    // The two symbols are resolved on a worker (#1756): run it to the end.
+    let task = app.update(Message::Library(LibraryMessage::PrimitivePicker(
         PrimitivePickerMsg::Pick(PrimitiveRef::new(library_id, symbol)),
     )));
+    crate::settle_support::settle_task(app, task);
 }
 
 fn edit(app: &mut Signex, address: &EditorAddress, msg: EditorMsg) {

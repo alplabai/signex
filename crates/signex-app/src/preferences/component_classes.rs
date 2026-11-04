@@ -3,7 +3,7 @@
 //! single-file `preferences` module.
 
 use super::*;
-use iced::widget::{Column, Space, button, column, container, row, text, text_input};
+use iced::widget::{Column, Space, Widget, button, column, container, row, text, text_input};
 use iced::{Element, Length};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -64,7 +64,7 @@ pub(super) fn content_component_classes<'a>(
             row![key_input, label_input, remove_btn]
                 .spacing(SP.m)
                 .align_y(iced::Alignment::Center)
-                .into(),
+                .boxed(),
         );
     }
 
@@ -72,9 +72,9 @@ pub(super) fn content_component_classes<'a>(
         text("No classes defined. Click \"+ Add Class\" to add one or \"Reset to Defaults\" to restore the seed list.")
             .size(TS.body)
             .style(text_muted)
-            .into()
+            .boxed()
     } else {
-        Column::with_children(rows).spacing(6).into()
+        Column::with_children(rows).spacing(6).boxed()
     };
 
     let add_btn = button(container(text("+ Add Class").size(TS.body)).padding([5.0, SP.l]))
@@ -97,5 +97,5 @@ pub(super) fn content_component_classes<'a>(
     column![header, column_header, body, Space::new().height(8), toolbar]
         .spacing(10)
         .padding(20)
-        .into()
+        .boxed()
 }

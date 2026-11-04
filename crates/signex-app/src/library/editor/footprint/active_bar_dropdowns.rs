@@ -217,7 +217,7 @@ fn filter_entries(
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     use SelectionFilterKind as K;
     use iced::widget::{column, container, row};
-    use iced::{Color, Length};
+    use iced::{Color, Length, Widget};
     use signex_widgets::active_bar_dropdown::chip_btn;
 
     let f = state.selection_filter;
@@ -323,7 +323,7 @@ fn filter_entries(
     .spacing(0)
     .width(Length::Shrink);
 
-    vec![DropdownEntry::Custom(layout.into())]
+    vec![DropdownEntry::Custom(layout.boxed())]
 }
 
 fn snap_entries(state: &FootprintEditorState, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {

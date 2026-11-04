@@ -11,6 +11,7 @@ mod label_class_pick;
 mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
+mod pin_focus;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
@@ -203,6 +204,32 @@ impl Signex {
                 .active_canvas_mut()
                 .clear_content_cache();
         }
+        // The clicked pin stays focused through refreshes (an edit, the net
+        // index landing) for as long as its part is the one selected part; any
+        // other selection drops it.
+        let keeps_focus = self
+            .interaction_state
+            .clicked_pin
+            .as_ref()
+            .is_some_and(|c| {
+                let same_sheet = self.document_state.active_path.as_deref()
+                    == Some(c.sheet.as_path())
+                    && placements_agree(self.shown_placement(&c.sheet), &c.placement);
+                same_sheet
+                    && matches!(
+                        self.interaction_state.active_canvas().selected.as_slice(),
+                        [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
+                            && item.uuid == c.symbol
+                    )
+            });
+        if !keeps_focus {
+            self.interaction_state.clicked_pin = None;
+        }
+        let clicked_pin = self
+            .interaction_state
+            .clicked_pin
+            .as_ref()
+            .map(|c| (c.symbol, c.pin.clone()));
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
@@ -242,6 +269,14 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
+            let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
+            pin_focus::add_pin_rows(
+                &mut self.document_state.panel_ctx.selection_info,
+                details.selected_uuid,
+                clicked_pin,
+                nets,
+            );
             // A tab opened through a placement shows, and edits, that
             // placement's designator (#1151).
             if let Some(designator) = self
@@ -492,6 +527,19 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
         }
+    }
+}
+
+/// Whether two placements of a sheet are the same one. An unknown placement
+/// (the hierarchy has not filled in yet, or has gone) agrees with any, so a
+/// pin focus survives the hierarchy arriving; two known ones must be equal.
+fn placements_agree(
+    a: Option<signex_types::schematic::InstancePath>,
+    b: &Option<signex_types::schematic::InstancePath>,
+) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a == *b,
+        _ => true,
     }
 }
 

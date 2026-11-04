@@ -1,0 +1,1142 @@
+//! Displays a [`TabBar`] to select the content to be displayed.
+//!
+//! You have to manage the logic to show the contend by yourself or you may want
+//! to use the [`Tabs`](super::tabs::Tabs) widget instead.
+//!
+//! *This API requires the following crate features to be activated: `tab_bar`*
+
+pub mod tab_label;
+
+use iced_core::{
+    Alignment, Background, Border, Color, Element, Event, Font, Layout, Length, Padding, Pixels,
+    Point, Rectangle, Shadow, Shell, Size, Widget,
+    alignment::{self, Vertical},
+    layout::Limits,
+    mouse::{self, Cursor},
+    renderer,
+    text::{self, Ellipsis, LineHeight, Wrapping},
+    touch,
+    widget::{Meta, Operation, Tree},
+    window,
+};
+use iced_widget::{Column, Row, Text};
+
+use std::marker::PhantomData;
+
+pub use crate::style::{
+    Status, StyleFn,
+    tab_bar::{self, Catalog, Style},
+};
+use crate::{ICED_AW_FONT, iced_aw_font::advanced_text::cancel};
+pub use tab_label::TabLabel;
+
+/// The default icon size.
+const DEFAULT_ICON_SIZE: f32 = 16.0;
+/// The default text size.
+const DEFAULT_TEXT_SIZE: f32 = 16.0;
+/// The default size of the close icon.
+const DEFAULT_CLOSE_SIZE: f32 = 16.0;
+/// The default padding between the tabs.
+const DEFAULT_PADDING: Padding = Padding::new(5.0);
+/// The default spacing around the tabs.
+const DEFAULT_SPACING: Pixels = Pixels::ZERO;
+
+/// A tab bar to show tabs.
+///
+/// # Example
+/// ```ignore
+/// # use iced_aw::{TabLabel, TabBar};
+/// #
+/// #[derive(Debug, Clone)]
+/// enum Message {
+///     TabSelected(TabId),
+/// }
+///
+/// #[derive(PartialEq, Hash)]
+/// enum TabId {
+///    One,
+///    Two,
+///    Three,
+/// }
+///
+/// let tab_bar = TabBar::new(
+///     Message::TabSelected,
+/// )
+/// .push(TabId::One, TabLabel::Text(String::from("One")))
+/// .push(TabId::Two, TabLabel::Text(String::from("Two")))
+/// .push(TabId::Three, TabLabel::Text(String::from("Three")))
+/// .set_active_tab(&TabId::One);
+/// ```
+#[allow(missing_debug_implementations)]
+pub struct TabBar<'a, Message, TabId, Theme = iced_widget::Theme, Renderer = iced_widget::Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog,
+    TabId: Eq + Clone,
+{
+    /// The index of the currently active tab.
+    active_tab: usize,
+    /// The vector containing the labels of the tabs.
+    tab_labels: Vec<TabLabel>,
+    /// The vector containing the indices of the tabs.
+    tab_indices: Vec<TabId>,
+    /// The statuses of the [`TabLabel`] and cross
+    tab_statuses: Vec<(Option<Status>, Option<bool>)>,
+    /// The function that produces the message when a tab is selected.
+    on_select: Box<dyn Fn(TabId) -> Message>,
+    /// The function that produces the message when the close icon was pressed.
+    on_close: Option<Box<dyn Fn(TabId) -> Message>>,
+    /// The width of the [`TabBar`].
+    width: Length,
+    /// The width of the tabs of the [`TabBar`].
+    tab_width: Length,
+    /// The width of the [`TabBar`].
+    height: Length,
+    /// The maximum height of the [`TabBar`].
+    max_height: f32,
+    /// The icon size.
+    icon_size: f32,
+    /// The text size.
+    text_size: f32,
+    /// The size of the close icon.
+    close_size: f32,
+    /// The padding of the tabs of the [`TabBar`].
+    padding: Padding,
+    /// The spacing of the tabs of the [`TabBar`].
+    spacing: Pixels,
+    /// The optional icon font of the [`TabBar`].
+    font: Option<Font>,
+    /// The optional text font of the [`TabBar`].
+    text_font: Option<Font>,
+    /// The style of the [`TabBar`].
+    class: <Theme as Catalog>::Class<'a>,
+    /// Where the icon is placed relative to text
+    position: Position,
+    #[allow(clippy::missing_docs_in_private_items)]
+    _renderer: PhantomData<Renderer>,
+}
+
+#[derive(Clone, Copy, Default)]
+/// The [`Position`] of the icon relative to text, this enum is only relative if [`TabLabel::IconText`] is used.
+pub enum Position {
+    /// Icon is placed above of the text.
+    Top,
+    /// Icon is placed right of the text.
+    Right,
+    /// Icon is placed below of the text.
+    Bottom,
+    #[default]
+    /// Icon is placed left of the text, the default.
+    Left,
+}
+
+impl<'a, Message, TabId, Theme, Renderer> TabBar<'a, Message, TabId, Theme, Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog,
+    TabId: Eq + Clone,
+{
+    /// Creates a new [`TabBar`] with the index of the selected tab and a specified
+    /// message which will be send when a tab is selected by the user.
+    ///
+    /// It expects:
+    ///     * the index of the currently active tab.
+    ///     * the function that will be called if a tab is selected by the user.
+    ///         It takes the index of the selected tab.
+    pub fn new<F>(on_select: F) -> Self
+    where
+        F: 'static + Fn(TabId) -> Message,
+    {
+        Self::with_tab_labels(Vec::new(), on_select)
+    }
+
+    /// Similar to [`new`](Self::new) but with a given Vector of the [`TabLabel`]s.
+    ///
+    /// It expects:
+    ///     * the index of the currently active tab.
+    ///     * a vector containing the [`TabLabel`]s of the [`TabBar`].
+    ///     * the function that will be called if a tab is selected by the user.
+    ///         It takes the index of the selected tab.
+    pub fn with_tab_labels<F>(tab_labels: Vec<(TabId, TabLabel)>, on_select: F) -> Self
+    where
+        F: 'static + Fn(TabId) -> Message,
+    {
+        Self {
+            active_tab: 0,
+            tab_indices: tab_labels.iter().map(|(id, _)| id.clone()).collect(),
+            tab_statuses: tab_labels.iter().map(|_| (None, None)).collect(),
+            tab_labels: tab_labels.into_iter().map(|(_, label)| label).collect(),
+            on_select: Box::new(on_select),
+            on_close: None,
+            width: Length::Fill,
+            tab_width: Length::Fill,
+            height: Length::Shrink,
+            max_height: u32::MAX as f32,
+            icon_size: DEFAULT_ICON_SIZE,
+            text_size: DEFAULT_TEXT_SIZE,
+            close_size: DEFAULT_CLOSE_SIZE,
+            padding: DEFAULT_PADDING,
+            spacing: DEFAULT_SPACING,
+            font: None,
+            text_font: None,
+            class: <Theme as Catalog>::default(),
+            position: Position::default(),
+            _renderer: PhantomData,
+        }
+    }
+
+    /// Sets the size of the close icon of the
+    /// [`TabLabel`]s of the [`TabBar`].
+    #[must_use]
+    pub fn close_size(mut self, close_size: f32) -> Self {
+        self.close_size = close_size;
+        self
+    }
+
+    /// Gets the id of the currently active tab on the [`TabBar`].
+    #[must_use]
+    pub fn get_active_tab_id(&self) -> Option<&TabId> {
+        self.tab_indices.get(self.active_tab)
+    }
+
+    /// Gets the index of the currently active tab on the [`TabBar`].
+    #[must_use]
+    pub fn get_active_tab_idx(&self) -> usize {
+        self.active_tab
+    }
+
+    /// Gets the width of the [`TabBar`].
+    #[must_use]
+    pub fn get_height(&self) -> Length {
+        self.height
+    }
+
+    /// Gets the width of the [`TabBar`].
+    #[must_use]
+    pub fn get_width(&self) -> Length {
+        self.width
+    }
+
+    /// Sets the height of the [`TabBar`].
+    #[must_use]
+    pub fn height(mut self, height: impl Into<Length>) -> Self {
+        self.height = height.into();
+        self
+    }
+
+    /// Sets the font of the icons of the
+    /// [`TabLabel`]s of the [`TabBar`].
+    #[must_use]
+    pub fn icon_font(mut self, font: Font) -> Self {
+        self.font = Some(font);
+        self
+    }
+
+    /// Sets the icon size of the [`TabLabel`]s of the [`TabBar`].
+    #[must_use]
+    pub fn icon_size(mut self, icon_size: f32) -> Self {
+        self.icon_size = icon_size;
+        self
+    }
+
+    /// Sets the maximum height of the [`TabBar`].
+    #[must_use]
+    pub fn max_height(mut self, max_height: f32) -> Self {
+        self.max_height = max_height;
+        self
+    }
+
+    /// Sets the message that will be produced when the close icon of a tab
+    /// on the [`TabBar`] is pressed.
+    ///
+    /// Setting this enables the drawing of a close icon on the tabs.
+    #[must_use]
+    pub fn on_close<F>(mut self, on_close: F) -> Self
+    where
+        F: 'static + Fn(TabId) -> Message,
+    {
+        self.on_close = Some(Box::new(on_close));
+        self
+    }
+
+    /// Sets the padding of the tabs of the [`TabBar`].
+    #[must_use]
+    pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
+        self.padding = padding.into();
+        self
+    }
+
+    /// Pushes a [`TabLabel`] to the [`TabBar`].
+    #[must_use]
+    pub fn push(mut self, id: TabId, tab_label: TabLabel) -> Self {
+        self.tab_labels.push(tab_label);
+        self.tab_indices.push(id);
+        self.tab_statuses.push((None, None));
+        self
+    }
+
+    /// Gets the amount of tabs on the [`TabBar`].
+    #[must_use]
+    pub fn size(&self) -> usize {
+        self.tab_indices.len()
+    }
+
+    /// Sets the spacing between the tabs of the [`TabBar`].
+    #[must_use]
+    pub fn spacing(mut self, spacing: impl Into<Pixels>) -> Self {
+        self.spacing = spacing.into();
+        self
+    }
+
+    /// Sets the font of the text of the
+    /// [`TabLabel`]s of the [`TabBar`].
+    #[must_use]
+    pub fn text_font(mut self, text_font: Font) -> Self {
+        self.text_font = Some(text_font);
+        self
+    }
+
+    /// Sets the text size of the [`TabLabel`]s of the [`TabBar`].
+    #[must_use]
+    pub fn text_size(mut self, text_size: f32) -> Self {
+        self.text_size = text_size;
+        self
+    }
+
+    /// Sets the width of a tab on the [`TabBar`].
+    #[must_use]
+    pub fn tab_width(mut self, width: Length) -> Self {
+        self.tab_width = width;
+        self
+    }
+
+    /// Sets up the active tab on the [`TabBar`].
+    #[must_use]
+    pub fn set_active_tab(mut self, active_tab: &TabId) -> Self {
+        self.active_tab = self
+            .tab_indices
+            .iter()
+            .position(|id| id == active_tab)
+            .map_or(0, |a| a);
+        self
+    }
+
+    #[must_use]
+    /// Sets the [`Position`] of the Icon next to Text, Only used in [`TabLabel::IconText`]
+    pub fn set_position(mut self, position: Position) -> Self {
+        self.position = position;
+        self
+    }
+
+    /// Sets the style of the [`TabBar`].
+    #[must_use]
+    pub fn style(mut self, style: impl Fn(&Theme, Status) -> Style + 'a) -> Self
+    where
+        <Theme as Catalog>::Class<'a>: From<StyleFn<'a, Theme, Style>>,
+    {
+        self.class = (Box::new(style) as StyleFn<'a, Theme, Style>).into();
+        self
+    }
+
+    /// Sets the class of the input of the [`TabBar`].
+    #[must_use]
+    pub fn class(mut self, class: impl Into<<Theme as Catalog>::Class<'a>>) -> Self {
+        self.class = class.into();
+        self
+    }
+
+    /// Sets the width of the [`TabBar`].
+    #[must_use]
+    pub fn width(mut self, width: impl Into<Length>) -> Self {
+        self.width = width.into();
+        self
+    }
+}
+
+/// Boxes a widget into an [`Element`].
+fn boxed<'a, Message, Theme, Renderer>(
+    widget: impl Widget<Message, Theme, Renderer> + 'a,
+) -> Element<'a, Message, Theme, Renderer> {
+    widget._boxed()
+}
+
+/// Creates an icon [`Text`].
+fn layout_icon<Theme>(icon: &char, size: f32, font: Option<Font>) -> Text<'static, Theme>
+where
+    Theme: iced_widget::text::Catalog,
+{
+    Text::<Theme>::new(icon.to_string())
+        .size(size)
+        .font(font.unwrap_or_default())
+        .align_x(alignment::Horizontal::Center)
+        .align_y(alignment::Vertical::Center)
+        .shaping(text::Shaping::Advanced)
+        .width(Length::Shrink)
+}
+
+/// Creates a label [`Text`].
+fn layout_text<Theme>(text: &str, size: f32, font: Option<Font>) -> Text<'_, Theme>
+where
+    Theme: iced_widget::text::Catalog,
+{
+    Text::<Theme>::new(text)
+        .size(size)
+        .font(font.unwrap_or_default())
+        .align_x(alignment::Horizontal::Center)
+        .shaping(text::Shaping::Advanced)
+        .width(Length::Shrink)
+}
+
+/// Creates an empty [`Row`] that shrinks to its content (the old default).
+fn shrink_row<W>() -> Row<W> {
+    Row::new().width(Length::Shrink).height(Length::Shrink)
+}
+
+/// Creates an empty [`Column`] that shrinks to its content (the old default).
+fn shrink_column<W>() -> Column<W> {
+    Column::new().width(Length::Shrink).height(Length::Shrink)
+}
+
+impl<Message, TabId, Theme, Renderer> TabBar<'_, Message, TabId, Theme, Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog + iced_widget::text::Catalog,
+    TabId: Eq + Clone,
+{
+    /// Builds the internal row of tab labels used for layout and operations.
+    fn build_row<'b, M>(&'b self) -> Row<Element<'b, M, Theme, Renderer>>
+    where
+        M: 'b,
+    {
+        let icon = |icon: &char| -> Element<'b, M, Theme, Renderer> {
+            boxed(layout_icon::<Theme>(icon, self.icon_size + 1.0, self.font))
+        };
+        let label = |text: &'b str| -> Element<'b, M, Theme, Renderer> {
+            boxed(layout_text::<Theme>(
+                text,
+                self.text_size + 1.0,
+                self.text_font,
+            ))
+        };
+
+        let mut row = shrink_row::<Element<'b, M, Theme, Renderer>>()
+            .width(self.width)
+            .height(self.height)
+            .spacing(self.spacing)
+            .align_y(Alignment::Center);
+
+        for tab_label in &self.tab_labels {
+            let column: Column<Element<'b, M, Theme, Renderer>> = match tab_label {
+                TabLabel::Icon(ch) => shrink_column().align_x(Alignment::Center).push(icon(ch)),
+
+                TabLabel::Text(text) => shrink_column()
+                    .padding(5.0)
+                    .align_x(Alignment::Center)
+                    .push(label(text)),
+
+                TabLabel::IconText(ch, text) => {
+                    let mut column = shrink_column().align_x(Alignment::Center);
+
+                    match self.position {
+                        Position::Top => {
+                            column = column.push(icon(ch)).push(label(text));
+                        }
+                        Position::Right => {
+                            column = column.push(boxed(
+                                shrink_row()
+                                    .align_y(Alignment::Center)
+                                    .push(label(text))
+                                    .push(icon(ch)),
+                            ));
+                        }
+                        Position::Left => {
+                            column = column.push(boxed(
+                                shrink_row()
+                                    .align_y(Alignment::Center)
+                                    .push(icon(ch))
+                                    .push(label(text)),
+                            ));
+                        }
+                        Position::Bottom => {
+                            column = column.height(Length::Fill).push(label(text)).push(icon(ch));
+                        }
+                    }
+
+                    column
+                }
+            };
+
+            let mut label_row = shrink_row::<Element<'b, M, Theme, Renderer>>()
+                .push(boxed(column.width(self.tab_width).height(self.height)))
+                .align_y(Alignment::Center)
+                .padding(self.padding)
+                .width(self.tab_width);
+
+            if self.on_close.is_some() {
+                label_row = label_row.push(boxed(
+                    shrink_row::<Element<'b, M, Theme, Renderer>>()
+                        .width(Length::Fixed(self.close_size * 1.3 + 1.0))
+                        .height(Length::Fixed(self.close_size * 1.3 + 1.0))
+                        .align_y(Alignment::Center),
+                ));
+            }
+
+            row = row.push(boxed(label_row));
+        }
+
+        row
+    }
+}
+
+impl<Message, TabId, Theme, Renderer> Meta for TabBar<'_, Message, TabId, Theme, Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog,
+    TabId: Eq + Clone,
+{
+}
+
+impl<Message, TabId, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for TabBar<'_, Message, TabId, Theme, Renderer>
+where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog + iced_widget::text::Catalog,
+    TabId: Eq + Clone,
+{
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width, self.height)
+    }
+
+    fn diff(&mut self, _tree: &mut Tree) {
+        // The internal row of tab labels is rebuilt and reconciled in `layout`;
+        // keep the existing child tree untouched here.
+    }
+
+    fn layout(&mut self, tree: &mut Tree, renderer: &Renderer, limits: &Limits) {
+        let mut element: Element<'_, Message, Theme, Renderer> = boxed(self.build_row::<Message>());
+
+        let tab_tree = if let Some(child_tree) = tree.children.get_mut(0) {
+            child_tree.diff(&mut element);
+            child_tree
+        } else {
+            let child_tree = Tree::new(&element);
+            tree.children.insert(0, child_tree);
+            &mut tree.children[0]
+        };
+
+        element.layout(tab_tree, renderer, &limits.loose());
+
+        tab_tree.translation = iced_core::Vector::ZERO;
+        tree.size = tab_tree.size;
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout,
+        cursor: Cursor,
+        _renderer: &Renderer,
+        shell: &mut Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) {
+        let Some((row_layout, row_tree)) = layout.iter(&tree.children).next() else {
+            return;
+        };
+
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+            | Event::Touch(touch::Event::FingerPressed { .. }) => {
+                if cursor
+                    .position()
+                    .is_some_and(|pos| layout.bounds().contains(pos))
+                {
+                    let tabs_map: Vec<bool> = row_layout
+                        .iter(&row_tree.children)
+                        .map(|(layout, _)| {
+                            cursor
+                                .position()
+                                .is_some_and(|pos| layout.bounds().contains(pos))
+                        })
+                        .collect();
+
+                    if let Some(new_selected) = tabs_map.iter().position(|b| *b) {
+                        shell.publish(
+                            self.on_close
+                                .as_ref()
+                                .filter(|_on_close| {
+                                    let (tab_layout, tab_tree) = row_layout.iter(&row_tree.children).nth(new_selected).expect("widget: Layout should have a tab layout at the selected index");
+                                    let (cross_layout, _) = tab_layout.iter(&tab_tree.children).nth(1).expect("widget: Layout should have a close layout");
+
+                                    cursor.position().is_some_and(|pos| cross_layout.bounds().contains(pos))
+                                })
+                                .map_or_else(
+                                    || (self.on_select)(self.tab_indices[new_selected].clone()),
+                                    |on_close| (on_close)(self.tab_indices[new_selected].clone()),
+                                ),
+                        );
+                        shell.capture_event();
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        let mut request_redraw = false;
+        let children = row_layout.iter(&row_tree.children);
+        for ((i, _tab), (layout, tab_tree)) in self.tab_labels.iter().enumerate().zip(children) {
+            let active_idx = self.get_active_tab_idx();
+            let tab_status = self.tab_statuses.get_mut(i).expect("Should have a status.");
+
+            let current_status = if cursor.is_over(layout.bounds()) {
+                Status::Hovered
+            } else if i == active_idx {
+                Status::Active
+            } else {
+                Status::Disabled
+            };
+
+            let mut is_cross_hovered = None;
+            let mut children = layout.iter(&tab_tree.children);
+            if let Some((cross_layout, _)) = children.next_back() {
+                is_cross_hovered = Some(cursor.is_over(cross_layout.bounds()));
+            }
+
+            if let Event::Window(window::Event::RedrawRequested(_now)) = event {
+                *tab_status = (Some(current_status), is_cross_hovered);
+            } else if tab_status.0.is_some_and(|status| status != current_status)
+                || tab_status.1 != is_cross_hovered
+            {
+                request_redraw = true;
+            }
+        }
+
+        if request_redraw {
+            shell.request_redraw();
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout,
+        cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> mouse::Interaction {
+        let mut mouse_interaction = mouse::Interaction::default();
+
+        let Some((row_layout, row_tree)) = layout.iter(&tree.children).next() else {
+            return mouse_interaction;
+        };
+
+        for (layout, _) in row_layout.iter(&row_tree.children) {
+            let is_mouse_over = cursor
+                .position()
+                .is_some_and(|pos| layout.bounds().contains(pos));
+            let new_mouse_interaction = if is_mouse_over {
+                mouse::Interaction::Pointer
+            } else {
+                mouse::Interaction::default()
+            };
+
+            if new_mouse_interaction > mouse_interaction {
+                mouse_interaction = new_mouse_interaction;
+            }
+        }
+
+        mouse_interaction
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        _style: &renderer::Style,
+        layout: Layout,
+        cursor: Cursor,
+        viewport: &Rectangle,
+    ) {
+        let bounds = layout.bounds();
+        let is_mouse_over = cursor.position().is_some_and(|pos| bounds.contains(pos));
+        let style_sheet = if is_mouse_over {
+            tab_bar::Catalog::style(theme, &self.class, Status::Hovered)
+        } else {
+            tab_bar::Catalog::style(theme, &self.class, Status::Disabled)
+        };
+
+        if bounds.intersects(viewport) {
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds,
+                    border: Border {
+                        radius: (0.0).into(),
+                        width: style_sheet.border_width,
+                        color: style_sheet.border_color.unwrap_or(Color::TRANSPARENT),
+                        ..Border::default()
+                    },
+                    shadow: Shadow::default(),
+                    ..renderer::Quad::default()
+                },
+                style_sheet
+                    .background
+                    .unwrap_or_else(|| Color::TRANSPARENT.into()),
+            );
+        }
+
+        let Some((row_layout, row_tree)) = layout.iter(&tree.children).next() else {
+            return;
+        };
+
+        for ((i, tab), (layout, tab_tree)) in self
+            .tab_labels
+            .iter()
+            .enumerate()
+            .zip(row_layout.iter(&row_tree.children))
+        {
+            let tab_status = self.tab_statuses.get(i).expect("Should have a status.");
+
+            draw_tab(
+                renderer,
+                tab,
+                tab_status,
+                layout,
+                tab_tree,
+                self.position,
+                theme,
+                &self.class,
+                cursor,
+                (self.font.unwrap_or(ICED_AW_FONT), self.icon_size),
+                (self.text_font.unwrap_or_default(), self.text_size),
+                self.close_size,
+                viewport,
+            );
+        }
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout,
+        viewport: &Rectangle,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.container(None, layout.bounds(), viewport);
+
+        // Reconstruct the internal structure for operation traversal.
+        // This allows the simulator to find text in tab labels.
+        operation.traverse(&mut |operation| {
+            let Some((row_layout, row_tree)) = layout.iter_mut(&mut tree.children).next() else {
+                return;
+            };
+
+            let mut element: Element<'_, (), Theme, Renderer> = boxed(self.build_row::<()>());
+
+            element.operate(row_tree, row_layout, viewport, renderer, operation);
+        });
+    }
+}
+
+/// Draws a tab.
+#[allow(
+    clippy::borrowed_box,
+    clippy::too_many_lines,
+    clippy::too_many_arguments
+)]
+fn draw_tab<Theme, Renderer>(
+    renderer: &mut Renderer,
+    tab: &TabLabel,
+    tab_status: &(Option<Status>, Option<bool>),
+    layout: Layout,
+    tab_tree: &Tree,
+    position: Position,
+    theme: &Theme,
+    class: &<Theme as Catalog>::Class<'_>,
+    _cursor: Cursor,
+    icon_data: (Font, f32),
+    text_data: (Font, f32),
+    close_size: f32,
+    viewport: &Rectangle,
+) where
+    Renderer: renderer::Renderer + iced_core::text::Renderer,
+    Theme: Catalog + iced_widget::text::Catalog,
+{
+    fn icon_bound_rectangle(item: Option<(Layout, &Tree)>) -> Rectangle {
+        item.expect("Graphics: Layout should have an icons layout for an IconText")
+            .0
+            .bounds()
+    }
+
+    fn text_bound_rectangle(item: Option<(Layout, &Tree)>) -> Rectangle {
+        item.expect("Graphics: Layout should have an texts layout for an IconText")
+            .0
+            .bounds()
+    }
+
+    let bounds = layout.bounds();
+
+    let style = tab_bar::Catalog::style(theme, class, tab_status.0.unwrap_or(Status::Disabled));
+
+    let mut children = layout.iter(&tab_tree.children);
+    let (label_layout, label_tree) = children
+        .next()
+        .expect("Graphics: Layout should have a label layout");
+    let mut label_layout_children = label_layout.iter(&label_tree.children);
+
+    if bounds.intersects(viewport) {
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds,
+                border: Border {
+                    radius: style.tab_border_radius,
+                    width: style.tab_label_border_width,
+                    color: style.tab_label_border_color,
+                    ..Border::default()
+                },
+                shadow: Shadow::default(),
+                ..renderer::Quad::default()
+            },
+            style.tab_label_background,
+        );
+    }
+
+    match tab {
+        TabLabel::Icon(icon) => {
+            let icon_bounds = icon_bound_rectangle(label_layout_children.next());
+
+            renderer.fill_text(
+                iced_core::text::Text {
+                    content: icon.to_string(),
+                    bounds: Size::new(icon_bounds.width, icon_bounds.height),
+                    size: Pixels(icon_data.1),
+                    font: icon_data.0,
+                    align_x: text::Alignment::Center,
+                    align_y: Vertical::Center,
+                    line_height: LineHeight::Relative(1.3),
+                    shaping: iced_core::text::Shaping::Advanced,
+                    wrapping: Wrapping::default(),
+                    ellipsis: Ellipsis::None,
+                    hint_factor: renderer.hint_factor(),
+                },
+                Point::new(icon_bounds.center_x(), icon_bounds.center_y()),
+                style.icon_color,
+                icon_bounds,
+            );
+        }
+
+        TabLabel::Text(text) => {
+            let text_bounds = text_bound_rectangle(label_layout_children.next());
+
+            renderer.fill_text(
+                iced_core::text::Text {
+                    content: text.clone(),
+                    bounds: Size::new(text_bounds.width, text_bounds.height),
+                    size: Pixels(text_data.1),
+                    font: text_data.0,
+                    align_x: text::Alignment::Center,
+                    align_y: Vertical::Center,
+                    line_height: LineHeight::Relative(1.3),
+                    shaping: iced_core::text::Shaping::Advanced,
+                    wrapping: Wrapping::default(),
+                    ellipsis: Ellipsis::None,
+                    hint_factor: renderer.hint_factor(),
+                },
+                Point::new(text_bounds.center_x(), text_bounds.center_y()),
+                style.text_color,
+                text_bounds,
+            );
+        }
+        TabLabel::IconText(icon, text) => {
+            let icon_bounds: Rectangle;
+            let text_bounds: Rectangle;
+
+            match position {
+                Position::Top => {
+                    icon_bounds = icon_bound_rectangle(label_layout_children.next());
+                    text_bounds = text_bound_rectangle(label_layout_children.next());
+                }
+                Position::Right => {
+                    let (row_layout, row_tree) = label_layout_children
+                        .next()
+                        .expect("Graphics: Right Layout should have have a row with one child");
+                    let mut row_childern = row_layout.iter(&row_tree.children);
+                    text_bounds = text_bound_rectangle(row_childern.next());
+                    icon_bounds = icon_bound_rectangle(row_childern.next());
+                }
+                Position::Left => {
+                    let (row_layout, row_tree) = label_layout_children
+                        .next()
+                        .expect("Graphics: Left Layout should have have a row with one child");
+                    let mut row_childern = row_layout.iter(&row_tree.children);
+                    icon_bounds = icon_bound_rectangle(row_childern.next());
+                    text_bounds = text_bound_rectangle(row_childern.next());
+                }
+                Position::Bottom => {
+                    text_bounds = text_bound_rectangle(label_layout_children.next());
+                    icon_bounds = icon_bound_rectangle(label_layout_children.next());
+                }
+            }
+
+            renderer.fill_text(
+                iced_core::text::Text {
+                    content: icon.to_string(),
+                    bounds: Size::new(icon_bounds.width, icon_bounds.height),
+                    size: Pixels(icon_data.1),
+                    font: icon_data.0,
+                    align_x: text::Alignment::Center,
+                    align_y: Vertical::Center,
+                    line_height: LineHeight::Relative(1.3),
+                    shaping: iced_core::text::Shaping::Advanced,
+                    wrapping: Wrapping::default(),
+                    ellipsis: Ellipsis::None,
+                    hint_factor: renderer.hint_factor(),
+                },
+                Point::new(icon_bounds.center_x(), icon_bounds.center_y()),
+                style.icon_color,
+                icon_bounds,
+            );
+
+            renderer.fill_text(
+                iced_core::text::Text {
+                    content: text.clone(),
+                    bounds: Size::new(text_bounds.width, text_bounds.height),
+                    size: Pixels(text_data.1),
+                    font: text_data.0,
+                    align_x: text::Alignment::Center,
+                    align_y: Vertical::Center,
+                    line_height: LineHeight::Relative(1.3),
+                    shaping: iced_core::text::Shaping::Advanced,
+                    wrapping: Wrapping::default(),
+                    ellipsis: Ellipsis::None,
+                    hint_factor: renderer.hint_factor(),
+                },
+                Point::new(text_bounds.center_x(), text_bounds.center_y()),
+                style.text_color,
+                text_bounds,
+            );
+        }
+    }
+
+    if let Some((cross_layout, _)) = children.next() {
+        let cross_bounds = cross_layout.bounds();
+        let is_mouse_over_cross = tab_status.1.unwrap_or(false);
+
+        let (content, font, shaping) = cancel();
+
+        renderer.fill_text(
+            iced_core::text::Text {
+                content,
+                bounds: Size::new(cross_bounds.width, cross_bounds.height),
+                size: Pixels(close_size + if is_mouse_over_cross { 1.0 } else { 0.0 }),
+                font,
+                align_x: text::Alignment::Center,
+                align_y: Vertical::Center,
+                line_height: LineHeight::Relative(1.3),
+                shaping,
+                wrapping: Wrapping::default(),
+                ellipsis: Ellipsis::None,
+                hint_factor: renderer.hint_factor(),
+            },
+            Point::new(cross_bounds.center_x(), cross_bounds.center_y()),
+            style.text_color,
+            cross_bounds,
+        );
+
+        if is_mouse_over_cross && cross_bounds.intersects(viewport) {
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: cross_bounds,
+                    border: Border {
+                        radius: style.icon_border_radius,
+                        width: style.border_width,
+                        color: style.border_color.unwrap_or(Color::TRANSPARENT),
+                        ..Border::default()
+                    },
+                    shadow: Shadow::default(),
+                    ..renderer::Quad::default()
+                },
+                style
+                    .icon_background
+                    .unwrap_or(Background::Color(Color::TRANSPARENT)),
+            );
+        }
+    }
+}
+
+impl<'a, Message, TabId, Theme, Renderer> From<TabBar<'a, Message, TabId, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
+where
+    Renderer: 'a + renderer::Renderer + iced_core::text::Renderer,
+    Theme: 'a + Catalog + iced_widget::text::Catalog,
+    Message: 'a,
+    TabId: 'a + Eq + Clone,
+{
+    fn from(tab_bar: TabBar<'a, Message, TabId, Theme, Renderer>) -> Self {
+        boxed(tab_bar)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum TestTabId {
+        One,
+        Two,
+        Three,
+    }
+
+    #[derive(Clone)]
+    #[allow(dead_code)]
+    enum TestMessage {
+        TabSelected(TestTabId),
+        TabClosed(TestTabId),
+    }
+
+    type TestTabBar<'a> =
+        TabBar<'a, TestMessage, TestTabId, iced_widget::Theme, iced_widget::Renderer>;
+
+    #[test]
+    fn tab_bar_new_has_default_values() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected);
+
+        assert_eq!(tab_bar.active_tab, 0);
+        assert_eq!(tab_bar.tab_labels.len(), 0);
+        assert_eq!(tab_bar.tab_indices.len(), 0);
+        assert_eq!(tab_bar.width, Length::Fill);
+        assert_eq!(tab_bar.height, Length::Shrink);
+        assert!((tab_bar.icon_size - DEFAULT_ICON_SIZE).abs() < f32::EPSILON);
+        assert!((tab_bar.text_size - DEFAULT_TEXT_SIZE).abs() < f32::EPSILON);
+        assert!((tab_bar.close_size - DEFAULT_CLOSE_SIZE).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tab_bar_push_adds_tab() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected)
+            .push(TestTabId::One, TabLabel::Text("Tab 1".to_owned()));
+
+        assert_eq!(tab_bar.tab_labels.len(), 1);
+        assert_eq!(tab_bar.tab_indices.len(), 1);
+        assert_eq!(tab_bar.tab_indices[0], TestTabId::One);
+    }
+
+    #[test]
+    fn tab_bar_push_multiple_tabs() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected)
+            .push(TestTabId::One, TabLabel::Text("Tab 1".to_owned()))
+            .push(TestTabId::Two, TabLabel::Text("Tab 2".to_owned()))
+            .push(TestTabId::Three, TabLabel::Text("Tab 3".to_owned()));
+
+        assert_eq!(tab_bar.tab_labels.len(), 3);
+        assert_eq!(tab_bar.tab_indices.len(), 3);
+    }
+
+    #[test]
+    fn tab_bar_set_active_tab_sets_correct_index() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected)
+            .push(TestTabId::One, TabLabel::Text("Tab 1".to_owned()))
+            .push(TestTabId::Two, TabLabel::Text("Tab 2".to_owned()))
+            .push(TestTabId::Three, TabLabel::Text("Tab 3".to_owned()))
+            .set_active_tab(&TestTabId::Two);
+
+        assert_eq!(tab_bar.active_tab, 1);
+        assert_eq!(tab_bar.get_active_tab_id(), Some(&TestTabId::Two));
+    }
+
+    #[test]
+    fn tab_bar_get_active_tab_idx_returns_index() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected)
+            .push(TestTabId::One, TabLabel::Text("Tab 1".to_owned()))
+            .push(TestTabId::Two, TabLabel::Text("Tab 2".to_owned()))
+            .set_active_tab(&TestTabId::Two);
+
+        assert_eq!(tab_bar.get_active_tab_idx(), 1);
+    }
+
+    #[test]
+    fn tab_bar_size_returns_number_of_tabs() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected)
+            .push(TestTabId::One, TabLabel::Text("Tab 1".to_owned()))
+            .push(TestTabId::Two, TabLabel::Text("Tab 2".to_owned()))
+            .push(TestTabId::Three, TabLabel::Text("Tab 3".to_owned()));
+
+        assert_eq!(tab_bar.size(), 3);
+    }
+
+    #[test]
+    fn tab_bar_width_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).width(200);
+        assert_eq!(tab_bar.width, Length::Fixed(200.0));
+    }
+
+    #[test]
+    fn tab_bar_height_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).height(50);
+        assert_eq!(tab_bar.height, Length::Fixed(50.0));
+    }
+
+    #[test]
+    fn tab_bar_icon_size_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).icon_size(24.0);
+        assert!((tab_bar.icon_size - 24.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tab_bar_text_size_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).text_size(20.0);
+        assert!((tab_bar.text_size - 20.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tab_bar_close_size_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).close_size(18.0);
+        assert!((tab_bar.close_size - 18.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tab_bar_on_close_enables_close_button() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).on_close(TestMessage::TabClosed);
+
+        assert!(tab_bar.on_close.is_some());
+    }
+
+    #[test]
+    fn tab_bar_with_tab_labels_creates_tabs() {
+        let labels = vec![
+            (TestTabId::One, TabLabel::Text("Tab 1".to_owned())),
+            (TestTabId::Two, TabLabel::Text("Tab 2".to_owned())),
+        ];
+
+        let tab_bar = TestTabBar::with_tab_labels(labels, TestMessage::TabSelected);
+
+        assert_eq!(tab_bar.tab_labels.len(), 2);
+        assert_eq!(tab_bar.tab_indices.len(), 2);
+    }
+
+    #[test]
+    fn tab_bar_tab_width_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).tab_width(Length::Fixed(100.0));
+        assert_eq!(tab_bar.tab_width, Length::Fixed(100.0));
+    }
+
+    #[test]
+    fn tab_bar_max_height_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).max_height(200.0);
+        assert!((tab_bar.max_height - 200.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tab_bar_padding_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).padding(10.0);
+        assert_eq!(tab_bar.padding, Padding::from(10.0));
+    }
+
+    #[test]
+    fn tab_bar_spacing_sets_value() {
+        let tab_bar = TestTabBar::new(TestMessage::TabSelected).spacing(5.0);
+        assert_eq!(tab_bar.spacing, Pixels::from(5.0));
+    }
+}

@@ -7,7 +7,7 @@
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
 //! to open the standalone `.snxsym` / `.snxfpt` document tab.
 
-use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, Widget, column, container, row, scrollable, text};
 use iced::{Element, Length};
 use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
@@ -58,12 +58,13 @@ pub fn view<'a>(
         where_used_footer(state, library_state, tokens),
     ]
     .spacing(SP.l)
-    .width(Length::Fill);
+    .width(Length::Fill)
+    .boxed();
 
     scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Manufacturer and MPN as shown in the header; a blank one reads "Not set".
@@ -114,25 +115,34 @@ fn header_row<'a>(row_data: &'a ComponentRow, tokens: &ThemeTokens) -> Element<'
         text_c
     };
 
-    let identity = column![text(description).size(TS.body).color(description_color)]
-        .width(Length::FillPortion(3));
+    let identity = column![
+        text(description)
+            .size(TS.body)
+            .color(description_color)
+            .boxed()
+    ]
+    .width(Length::FillPortion(3))
+    .boxed();
 
     let labelled = |label: &'static str, value: String| {
         let value_color = if value == NOT_SET { muted } else { text_c };
         row![
-            text(label).size(TS.body).color(muted),
-            text(value).size(TS.body).color(value_color),
+            text(label).size(TS.body).color(muted).boxed(),
+            text(value).size(TS.body).color(value_color).boxed(),
         ]
         .spacing(SP.m)
+        .boxed()
     };
     let supplier = column![labelled("Manufacturer", manufacturer), labelled("MPN", mpn)]
         .spacing(SP.xs)
-        .width(Length::FillPortion(2));
+        .width(Length::FillPortion(2))
+        .boxed();
 
     kit::card(
         row![identity, supplier]
             .spacing(SP.l)
-            .align_y(iced::Alignment::Start),
+            .align_y(iced::Alignment::Start)
+            .boxed(),
         tokens,
     )
 }
@@ -236,6 +246,7 @@ fn render_panes<'a>(
                 device_px_per_logical_px,
             )
             .map(|()| LibraryMessage::Noop)
+            .boxed()
         });
     let symbol_pane = render_pane(
         "Symbol",
@@ -257,7 +268,7 @@ fn render_panes<'a>(
             iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into()
+                .boxed()
         });
     let footprint_pane = render_pane(
         "Footprint",
@@ -274,7 +285,7 @@ fn render_panes<'a>(
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Start)
-    .into()
+    .boxed()
 }
 
 fn render_pane<'a>(
@@ -299,13 +310,14 @@ fn render_pane<'a>(
         kit::card(
             container(content)
                 .width(Length::Fill)
-                .height(Length::Fixed(PREVIEW_PANE_HEIGHT)),
+                .height(Length::Fixed(PREVIEW_PANE_HEIGHT))
+                .boxed(),
             tokens,
         ),
     ]
     .spacing(SP.s)
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// The `.snxsym` a row's symbol ref points at, resolved through the
@@ -365,7 +377,7 @@ fn pin_map_subsection<'a>(
             header,
             kit::empty_state("The pin map shows once the symbol is loaded.", None, tokens),
         ]
-        .into();
+        .boxed();
     };
     if sym.pins.is_empty() {
         return column![
@@ -376,7 +388,7 @@ fn pin_map_subsection<'a>(
                 tokens,
             ),
         ]
-        .into();
+        .boxed();
     }
 
     let muted = theme_ext::text_secondary(tokens);
@@ -387,7 +399,7 @@ fn pin_map_subsection<'a>(
         Length::FillPortion(2),
         Length::FillPortion(2),
     ];
-    let mut table = column![kit::table_header(
+    let mut table: Column<Element<'a, LibraryMessage>> = column![kit::table_header(
         &[
             ("Symbol pin", widths[0]),
             ("Symbol name", widths[1]),
@@ -409,14 +421,14 @@ fn pin_map_subsection<'a>(
     {
         let pad_cell: Element<'a, LibraryMessage> = if line.is_override {
             row![
-                text(line.pad.clone()).size(TS.body).color(text_c),
-                text("override").size(TS.caption).color(muted),
+                text(line.pad.clone()).size(TS.body).color(text_c).boxed(),
+                text("override").size(TS.caption).color(muted).boxed(),
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         } else {
-            text(line.pad.clone()).size(TS.body).color(text_c).into()
+            text(line.pad.clone()).size(TS.body).color(text_c).boxed()
         };
         let label = if line.is_override {
             "Edit override"
@@ -434,11 +446,14 @@ fn pin_map_subsection<'a>(
         table = table.push(kit::table_row(
             vec![
                 (
-                    text(line.number.clone()).size(TS.body).color(text_c).into(),
+                    text(line.number.clone())
+                        .size(TS.body)
+                        .color(text_c)
+                        .boxed(),
                     widths[0],
                 ),
                 (
-                    text(line.name.clone()).size(TS.body).color(text_c).into(),
+                    text(line.name.clone()).size(TS.body).color(text_c).boxed(),
                     widths[1],
                 ),
                 (pad_cell, widths[2]),
@@ -460,12 +475,12 @@ fn pin_map_subsection<'a>(
         }
     }
 
-    column![header, kit::card(table, tokens)].into()
+    column![header, kit::card(table.boxed(), tokens)].boxed()
 }
 
 fn override_editor_row<'a>(
     pin_number: &str,
-    buf: &str,
+    buf: &'a str,
     tokens: &ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -485,7 +500,8 @@ fn override_editor_row<'a>(
         })
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .width(Length::FillPortion(2));
+        .width(Length::FillPortion(2))
+        .boxed();
 
     let save = kit::primary_button(
         "Save",
@@ -518,18 +534,20 @@ fn override_editor_row<'a>(
         row![
             text(format!("Override pin {pin_number} →"))
                 .size(TS.body)
-                .color(muted),
+                .color(muted)
+                .boxed(),
             input,
-            Space::new().width(Length::Fill),
+            Space::new().width(Length::Fill).boxed(),
             save,
             cancel,
             remove,
         ]
         .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
+        .align_y(iced::Alignment::Center)
+        .boxed(),
     )
     .padding([SP.s, SP.m])
-    .into()
+    .boxed()
 }
 
 /// "Used by N sheet(s) in M project(s)."
@@ -562,7 +580,8 @@ fn where_used_footer<'a>(
     kit::card(
         text(where_used_label(uses.len(), projects))
             .size(TS.body)
-            .color(color),
+            .color(color)
+            .boxed(),
         tokens,
     )
 }

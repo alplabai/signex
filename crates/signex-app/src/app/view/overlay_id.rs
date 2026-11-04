@@ -300,7 +300,9 @@ fn scoped_to_window<'a>(
         .into_iter()
         .map(|layer| match owner {
             None => layer,
-            Some(window) => layer.map(move |message| scope_overlay_message(window, message)),
+            Some(window) => layer
+                .map(move |message| scope_overlay_message(window, message))
+                .boxed(),
         })
         .collect()
 }

@@ -24,6 +24,27 @@ const MARKER_DISC_ALPHA: f32 = 0.22;
 const MARKER_HALO_ALPHA: f32 = 0.08;
 const _: () = assert!(MARKER_DISC_ALPHA <= 0.3 && MARKER_HALO_ALPHA <= MARKER_DISC_ALPHA);
 
+/// Point-marker sizes: a world size in mm that grows with zoom, floored in
+/// screen px so the marker stays readable zoomed out (as the No-Connect cross
+/// is). The cross reads at normal zoom, and its corners stay inside the ring
+/// at both sizes. The mm sizes alone stay under half the 2.54 mm pin pitch,
+/// so the markers of neighbouring pins stop overlapping only at high zoom,
+/// once the mm size beats the px floor; zoomed out they overlap.
+const MARKER_HALO_RADIUS_MM: f32 = 1.2;
+const MARKER_HALO_RADIUS_MIN_PX: f32 = 18.0;
+const MARKER_RING_RADIUS_MM: f32 = 1.0;
+const MARKER_RING_RADIUS_MIN_PX: f32 = 10.0;
+const MARKER_CROSS_HALF_LEN_MM: f32 = 0.7;
+const MARKER_CROSS_HALF_LEN_MIN_PX: f32 = 6.0;
+const MARKER_STROKE_MM: f32 = 0.2;
+const MARKER_STROKE_MIN_PX: f32 = 2.0;
+const _: () = assert!(
+    MARKER_CROSS_HALF_LEN_MIN_PX * std::f32::consts::SQRT_2 < MARKER_RING_RADIUS_MIN_PX
+        && MARKER_CROSS_HALF_LEN_MM * std::f32::consts::SQRT_2 < MARKER_RING_RADIUS_MM
+        && MARKER_RING_RADIUS_MIN_PX < MARKER_HALO_RADIUS_MIN_PX
+        && MARKER_RING_RADIUS_MM < MARKER_HALO_RADIUS_MM
+);
+
 /// Least contrast (WCAG ratio) a marker's ring and cross keep against the sheet.
 const MARKER_MIN_CONTRAST: f32 = 3.0;
 
@@ -92,41 +113,7 @@ pub fn draw_erc_markers(
             ..stroke
         };
 
-        let center = [marker.x_mm as f32, marker.y_mm as f32];
-        overlays.snap_circles.push(OverlayCircleInput {
-            center,
-            radius_mm: screen_px_to_world_mm(16.0, transform.scale) as f32,
-            stroke_width_mm: 0.0,
-            color: [fill.r, fill.g, fill.b, MARKER_HALO_ALPHA],
-        });
-        overlays.snap_circles.push(OverlayCircleInput {
-            center,
-            radius_mm: screen_px_to_world_mm(7.0, transform.scale) as f32,
-            stroke_width_mm: 0.0,
-            color: to_rgba(fill),
-        });
-        overlays.snap_circles.push(OverlayCircleInput {
-            center,
-            radius_mm: screen_px_to_world_mm(7.0, transform.scale) as f32,
-            stroke_width_mm: screen_px_to_world_mm(2.0, transform.scale) as f32,
-            color: to_rgba(stroke),
-        });
-
-        let cross_len = screen_px_to_world_mm(4.0, transform.scale) as f32;
-        let cx = marker.x_mm as f32;
-        let cy = marker.y_mm as f32;
-        overlays.preview_lines.push(OverlayLineInput {
-            p0: [cx - cross_len, cy - cross_len],
-            p1: [cx + cross_len, cy + cross_len],
-            width_mm: screen_px_to_world_mm(1.5, transform.scale) as f32,
-            color: to_rgba(stroke),
-        });
-        overlays.preview_lines.push(OverlayLineInput {
-            p0: [cx - cross_len, cy + cross_len],
-            p1: [cx + cross_len, cy - cross_len],
-            width_mm: screen_px_to_world_mm(1.5, transform.scale) as f32,
-            color: to_rgba(stroke),
-        });
+        push_point_marker(&mut overlays, marker, transform, stroke, fill);
     }
 
     let snapshot = RendererSnapshot {
@@ -153,6 +140,51 @@ pub fn draw_erc_markers(
         DirtyFlags::OVERLAY,
         transform,
     );
+}
+
+/// A point finding: a faint halo and disc, a severity ring and a cross, all
+/// sized in screen px so they stay readable at any zoom.
+fn push_point_marker(
+    overlays: &mut OverlayInputs,
+    marker: &ErcMarker,
+    transform: &ScreenTransform,
+    stroke: Color,
+    fill: Color,
+) {
+    let size = |mm: f32, min_px: f32| mm.max(screen_px_to_world_mm(min_px, transform.scale) as f32);
+    let center = [marker.x_mm as f32, marker.y_mm as f32];
+    overlays.snap_circles.push(OverlayCircleInput {
+        center,
+        radius_mm: size(MARKER_HALO_RADIUS_MM, MARKER_HALO_RADIUS_MIN_PX),
+        stroke_width_mm: 0.0,
+        color: [fill.r, fill.g, fill.b, MARKER_HALO_ALPHA],
+    });
+    overlays.snap_circles.push(OverlayCircleInput {
+        center,
+        radius_mm: size(MARKER_RING_RADIUS_MM, MARKER_RING_RADIUS_MIN_PX),
+        stroke_width_mm: 0.0,
+        color: to_rgba(fill),
+    });
+    overlays.snap_circles.push(OverlayCircleInput {
+        center,
+        radius_mm: size(MARKER_RING_RADIUS_MM, MARKER_RING_RADIUS_MIN_PX),
+        stroke_width_mm: size(MARKER_STROKE_MM, MARKER_STROKE_MIN_PX),
+        color: to_rgba(stroke),
+    });
+
+    let arm = size(MARKER_CROSS_HALF_LEN_MM, MARKER_CROSS_HALF_LEN_MIN_PX);
+    let (cx, cy) = (center[0], center[1]);
+    for (p0, p1) in [
+        ([cx - arm, cy - arm], [cx + arm, cy + arm]),
+        ([cx - arm, cy + arm], [cx + arm, cy - arm]),
+    ] {
+        overlays.preview_lines.push(OverlayLineInput {
+            p0,
+            p1,
+            width_mm: size(MARKER_STROKE_MM, MARKER_STROKE_MIN_PX),
+            color: to_rgba(stroke),
+        });
+    }
 }
 
 /// The net-level marker: an open ring with a diamond around it, in the
@@ -190,6 +222,45 @@ mod tests {
     use super::*;
     use crate::styles::tokens::contrast_ratio;
     use signex_types::theme::{ThemeId, canvas_colors};
+
+    #[test]
+    fn the_cross_keeps_a_screen_px_floor_and_grows_with_zoom_beyond_it() {
+        let marker = ErcMarker {
+            x_mm: 10.0,
+            y_mm: 10.0,
+            severity: ErcSeverity::Error,
+            net_level: false,
+        };
+        // 3 px/mm is 100 % zoom (`zoom_pct` = scale / 3 * 100).
+        for scale in [1.5_f32, 3.0, 12.0] {
+            let transform = ScreenTransform {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                scale,
+                device_px_per_logical_px: 1.0,
+            };
+            let mut overlays = OverlayInputs::default();
+            push_point_marker(
+                &mut overlays,
+                &marker,
+                &transform,
+                Color::WHITE,
+                Color::WHITE,
+            );
+            assert_eq!(overlays.preview_lines.len(), 2);
+            for line in &overlays.preview_lines {
+                let half_px = ((line.p1[0] - line.p0[0]) * 0.5 * scale).abs();
+                // Never under the px floor; past it, the mm size on screen.
+                let want = MARKER_CROSS_HALF_LEN_MIN_PX.max(MARKER_CROSS_HALF_LEN_MM * scale);
+                assert!((half_px - want).abs() < 1e-3, "@{scale}: arm {half_px} px");
+                assert!(half_px >= MARKER_CROSS_HALF_LEN_MIN_PX - 1e-3);
+                assert!(
+                    line.width_mm * scale >= MARKER_STROKE_MIN_PX - 1e-3,
+                    "@{scale}: thin cross"
+                );
+            }
+        }
+    }
 
     #[test]
     fn a_light_paper_on_a_dark_background_still_reads_on_the_paper() {

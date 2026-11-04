@@ -411,7 +411,8 @@ impl Signex {
                 annotate_preview: Default::default(),
                 annotate_runs: Default::default(),
                 sheet_place: Default::default(),
-                pending_descents: Default::default(),
+                pending_sheet_opens: Default::default(),
+                sheet_open_seq: 0,
                 reprefix_generation: 0,
                 reprefix_confirm: None,
                 reprefix_window_close_pending: false,
@@ -642,6 +643,7 @@ impl Signex {
                 pending_port: None,
                 bus_entry_size: signex_types::schematic::SCHEMATIC_BUS_ENTRY_DEFAULT_SIZE,
                 hover_symbol_uuid: None,
+                clicked_pin: None,
                 hover_started_at: None,
                 hover_screen_pos: None,
             },
@@ -733,7 +735,9 @@ pub(in crate::app) fn first_run_tour_boot(
     // only builds the app must not leave that count raised.
     (
         true,
-        iced::Task::done(()).then(|()| crate::app::dispatch::dismiss_first_run_tour_task()),
+        // `Task::done` reports zero units in the fork; `future` reports one.
+        iced::Task::future(std::future::ready(()))
+            .then(|()| crate::app::dispatch::dismiss_first_run_tour_task()),
     )
 }
 

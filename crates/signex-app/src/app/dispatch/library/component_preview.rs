@@ -575,6 +575,7 @@ impl Signex {
             return self.close_tab_now(idx);
         }
         self.library.editors.remove(address);
+        self.library.alternate_generations.remove(address);
         Task::none()
     }
 

@@ -1,7 +1,7 @@
 //! Sketch-mode Pad Attributes sub-form. Split from `subforms.rs`.
 
 use iced::widget::{Column, container, text};
-use iced::{Color, Length};
+use iced::{Color, Element, Length, Widget as _};
 
 use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg};
 use super::super::pad::{pad_check_row, pad_input_row, pad_pick_row};
@@ -21,25 +21,28 @@ const SP: Spacing = Spacing::DEFAULT;
 /// stay sketch-parameterised — those are authored via the Sketch
 /// parameter editor, not this form.
 pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let Some(p) = fp.selected_sketch_pad.as_ref() else {
         return col;
     };
     let id = p.id;
 
-    col = col.push(props_section_header(
-        "Pad Attributes",
-        "fp_sketch_pad_attrs",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header(
+            "Pad Attributes",
+            "fp_sketch_pad_attrs",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_sketch_pad_attrs", collapsed_sections) {
         return col;
     }
@@ -93,7 +96,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     col = col.push(
         container(text("Pad Features").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(pad_pick_row(
         "Top Side",
@@ -120,7 +124,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     col = col.push(
         container(text("Testpoint").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(pad_check_row(
         "Top Assembly",
@@ -156,7 +161,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
     col = col.push(
         container(text("Pad Stack").size(TS.caption).color(muted))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(pad_check_row(
         "Top paste enabled",
@@ -212,7 +218,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
         col = col.push(
             container(text("Hole Details").size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
         let tol_p_buf = p
             .hole_tolerance_plus_mm
@@ -294,7 +301,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_sketch_pad_subform<
                 .style(iced::widget::button::primary),
         )
         .padding([6.0, SP.m])
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
 
     col

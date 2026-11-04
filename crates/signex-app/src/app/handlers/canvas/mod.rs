@@ -13,7 +13,10 @@ pub(crate) use child_sheet_path::relative_within;
 mod break_wire_tool;
 mod clicked;
 mod descend;
-pub use descend::PendingDescent;
+mod sheet_open;
+#[cfg(test)]
+pub(crate) mod sheet_open_tests;
+pub use sheet_open::{AfterOpen, PendingSheetOpen, SheetOpen};
 mod double_clicked;
 mod field_edit;
 pub(crate) use field_edit::editor_placeholder;
@@ -330,55 +333,6 @@ impl Signex {
             })
             .unwrap_or_default();
         crate::app::project_sheets::resolve_child_reference(&parent_dir, child_filename)
-    }
-
-    /// Focus the tab already showing `path`, or open it as a new schematic tab.
-    /// The Navigator opens sheets by the path its hierarchy resolved; a
-    /// canvas double-click reaches here through `descend_through_sheet_symbol`.
-    /// `true` when the sheet is now the focused tab.
-    pub(crate) fn open_or_focus_sheet_path(&mut self, path: std::path::PathBuf) -> bool {
-        if self.sheet_switch_refused_in_window("Opening a sheet") {
-            return false;
-        }
-        let path = self.resolve_held_spelling_now(path);
-        if !path.exists() {
-            crate::diagnostics::log_info(format!("Child-sheet file not found: {}", path.display()));
-            return false;
-        }
-
-        if self.focus_open_sheet(&path) {
-            return true;
-        }
-
-        let parse_result = std::fs::read_to_string(&path)
-            .map_err(anyhow::Error::from)
-            .and_then(|text| {
-                let disk = crate::persist::DiskRead::of(&path, &text);
-                signex_types::format::SnxSchematic::parse(&text)
-                    .map(|snx| (snx.sheet, disk))
-                    .map_err(anyhow::Error::from)
-            });
-        match parse_result {
-            Ok((sheet, disk)) => {
-                if self.focus_alias_if_open(&path, &disk) {
-                    return true;
-                }
-                let title = path
-                    .file_stem()
-                    .map(|stem| stem.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "Schematic".to_string());
-                self.open_schematic_tab(path.clone(), title, sheet);
-                self.record_disk_read(&path, disk);
-                true
-            }
-            Err(error) => {
-                crate::diagnostics::log_info(format!(
-                    "Failed to open child-sheet schematic from double-click: {}",
-                    error
-                ));
-                false
-            }
-        }
     }
 
     /// Focus the tab already showing `path`, or reattach the dirty engine

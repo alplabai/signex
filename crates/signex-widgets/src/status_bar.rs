@@ -4,7 +4,7 @@
 //! clickable. All colors from `ThemeTokens`.
 
 use iced::widget::{Row, button, container, row, space, text};
-use iced::{Border, Element, Length};
+use iced::{Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
@@ -63,10 +63,10 @@ pub fn status_bar<'a>(
     let border_c = theme_ext::border_color(tokens);
     let success_c = theme_ext::success_color(tokens);
 
-    let sep = || text("|").size(10).color(border_c);
+    let sep = || -> Element<'a, StatusBarMsg> { text("|").size(10).color(border_c).boxed() };
 
     // Build left sections
-    let mut left_row: Row<'_, StatusBarMsg> =
+    let mut left_row: Row<Element<'a, StatusBarMsg>> =
         Row::new().spacing(4).align_y(iced::Alignment::Center);
     for (i, section) in left.iter().enumerate() {
         if i > 0 {
@@ -83,7 +83,7 @@ pub fn status_bar<'a>(
 
     // Build right sections
     let right_offset = left.len();
-    let mut right_row: Row<'_, StatusBarMsg> =
+    let mut right_row: Row<Element<'a, StatusBarMsg>> =
         Row::new().spacing(4).align_y(iced::Alignment::Center);
     for (i, section) in right.iter().enumerate() {
         if i > 0 {
@@ -117,10 +117,11 @@ pub fn status_bar<'a>(
                 width: 1.0,
                 radius: 0.0.into(),
                 color: bar_border_color,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +136,7 @@ fn render_section<'a>(
     success_color: iced::Color,
 ) -> Element<'a, StatusBarMsg> {
     let content: Element<'a, StatusBarMsg> = match &section.content {
-        StatusContent::Text(s) => text(s.clone()).size(11).color(text_color).into(),
+        StatusContent::Text(s) => text(s.clone()).size(11).color(text_color).boxed(),
 
         StatusContent::Label { key, value } => row![
             text(key.clone()).size(11).color(muted_color),
@@ -144,7 +145,7 @@ fn render_section<'a>(
         ]
         .spacing(0)
         .align_y(iced::Alignment::Center)
-        .into(),
+        .boxed(),
 
         StatusContent::Indicator { label, on } => {
             let (dot, dot_color) = if *on {
@@ -159,7 +160,7 @@ fn render_section<'a>(
             ]
             .spacing(0)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         }
     };
 
@@ -168,7 +169,7 @@ fn render_section<'a>(
             .padding([1, 4])
             .style(button::text)
             .on_press(StatusBarMsg::SectionClicked(index))
-            .into()
+            .boxed()
     } else {
         content
     }

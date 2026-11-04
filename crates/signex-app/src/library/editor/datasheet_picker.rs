@@ -9,7 +9,9 @@
 //!
 //! The mode is derived from the document's `DatasheetRef` variant.
 
-use iced::widget::{Space, column, container, pick_list, row, scrollable, text, text_input};
+use iced::widget::{
+    Column, Row, Space, Widget, column, container, pick_list, row, scrollable, text, text_input,
+};
 use iced::{Color, Element, Length};
 use signex_library::{DatasheetDoc, DatasheetRef};
 use signex_types::theme::ThemeTokens;
@@ -83,9 +85,11 @@ pub fn view<'a>(
     let header = kit::section_header("Datasheets", Some(add), tokens);
     let intro = text(INTRO)
         .size(TS.caption)
-        .color(theme_ext::text_secondary(tokens));
+        .color(theme_ext::text_secondary(tokens))
+        .boxed();
 
-    let mut list = column![].spacing(SP.m).width(Length::Fill);
+    let mut list: Column<Element<'a, LibraryMessage>> =
+        Column::new().spacing(SP.m).width(Length::Fill);
     if count == 0 {
         list = list.push(kit::card(
             kit::empty_state(EMPTY_MESSAGE, None, tokens),
@@ -111,13 +115,14 @@ pub fn view<'a>(
     }
 
     scrollable(
-        column![header, intro, list]
+        column![header, intro, list.boxed()]
             .spacing(SP.m)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }
 
 fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
@@ -133,7 +138,7 @@ fn event(address: &EditorAddress, msg: DatasheetMsg) -> LibraryMessage {
 /// the fields of every row line up.
 fn field_row<'a>(
     label: &'a str,
-    field: impl Into<Element<'a, LibraryMessage>>,
+    field: Element<'a, LibraryMessage>,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     row![
@@ -142,12 +147,13 @@ fn field_row<'a>(
                 .size(TS.body)
                 .color(theme_ext::text_secondary(tokens))
         )
-        .width(Length::FillPortion(1)),
-        container(field).width(Length::FillPortion(6)),
+        .width(Length::FillPortion(1))
+        .boxed(),
+        container(field).width(Length::FillPortion(6)).boxed(),
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center)
-    .into()
+    .boxed()
 }
 
 /// Whether `source` pins a PDF that is only staged on this editor: picked,
@@ -218,20 +224,22 @@ fn view_document<'a>(
     let can_open = !doc.source.is_empty() && stored;
 
     let mode_address = address.clone();
-    let mode_picker = pick_list(DatasheetMode::ALL, Some(mode), move |m| {
-        event(&mode_address, DatasheetMsg::SetMode(index, m))
-    })
-    .text_size(TS.body)
-    .padding([SP.s, SP.m]);
+    let mode_picker = pick_list(Some(mode), DatasheetMode::ALL, ToString::to_string)
+        .on_select(move |m| event(&mode_address, DatasheetMsg::SetMode(index, m)))
+        .text_size(TS.body)
+        .padding([SP.s, SP.m])
+        .boxed();
 
     let label_address = address.clone();
-    let label_input = text_input("Datasheet", &doc.label)
+    let label_input = text_input("Datasheet", doc.label.clone())
         .on_input(move |s| event(&label_address, DatasheetMsg::SetLabel(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .width(Length::Fill);
+        .width(Length::Fill)
+        .boxed();
 
-    let mut actions = row![].spacing(SP.s).align_y(iced::Alignment::Center);
+    let mut actions: Row<Element<'a, LibraryMessage>> =
+        row![].spacing(SP.s).align_y(iced::Alignment::Center);
     if index > 0 {
         let to_top = DatasheetMsg::Move { from: index, to: 0 };
         actions = actions.push(kit::secondary_button(
@@ -258,9 +266,9 @@ fn view_document<'a>(
     let header = row![
         pill(role_label(index), index == 0, tokens),
         pill(mode_label(mode), false, tokens),
-        Space::new().width(Length::Fill),
+        Space::new().width(Length::Fill).boxed(),
         open,
-        veiled(read_only, veil, actions),
+        veiled(read_only, veil, actions.boxed()),
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
@@ -281,18 +289,21 @@ fn view_document<'a>(
             field_row("Source", mode_picker, tokens),
             field_row(value_label, value_row, tokens),
         ]
-        .spacing(SP.m),
+        .spacing(SP.m)
+        .boxed(),
     );
-    let mut body = column![header, fields].spacing(SP.m);
+    let mut body: Column<Element<'a, LibraryMessage>> =
+        column![header.boxed(), fields].spacing(SP.m);
     if let Some(reason) = error {
         body = body.push(
             text(reason)
                 .size(TS.body)
-                .color(theme_ext::error_color(tokens)),
+                .color(theme_ext::error_color(tokens))
+                .boxed(),
         );
     }
 
-    kit::card(body, tokens)
+    kit::card(body.boxed(), tokens)
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -308,11 +319,11 @@ fn view_url_input<'a>(
         DatasheetRef::Url { url } => url.clone(),
         _ => String::new(),
     };
-    text_input("https://example.com/datasheet.pdf", &url_value)
+    text_input("https://example.com/datasheet.pdf", url_value)
         .on_input(move |s| event(&address, DatasheetMsg::SetUrl(index, s)))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn view_pinned_input<'a>(
@@ -338,23 +349,23 @@ fn view_pinned_input<'a>(
                 hash.clone()
             };
             row![
-                text(filename.clone()).size(TS.body).color(text_c),
-                Space::new().width(Length::Fill),
-                text(short_hash).size(TS.caption).color(muted),
+                text(filename.clone()).size(TS.body).color(text_c).boxed(),
+                Space::new().width(Length::Fill).boxed(),
+                text(short_hash).size(TS.caption).color(muted).boxed(),
             ]
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         }
         _ => text("No PDF attached yet.")
             .size(TS.body)
             .color(muted)
-            .into(),
+            .boxed(),
     };
 
-    row![container(summary).width(Length::Fill), upload_btn]
+    row![container(summary).width(Length::Fill).boxed(), upload_btn]
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

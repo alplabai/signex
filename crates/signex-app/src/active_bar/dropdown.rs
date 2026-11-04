@@ -7,7 +7,7 @@
 //! needed here.
 
 use iced::widget::{Space, button, column, container, row, svg, text};
-use iced::{Background, Border, Color, Element, Theme};
+use iced::{Background, Border, Color, Element, Theme, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -557,6 +557,7 @@ fn net_color_entries(
                         width: 1.0,
                         radius: 2.0.into(),
                         color: swatch_border,
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 });
@@ -580,7 +581,7 @@ fn net_color_entries(
             .padding([5.0, SP.l])
             .on_press(ActiveBarMsg::Action(action))
             .style(dd_btn_style_f(ac.text, ac.hover))
-            .into()
+            .boxed()
         };
     vec![
         DropdownEntry::Custom(color_item(
@@ -695,12 +696,13 @@ fn filter_entry(
                     width: 1.0,
                     radius: chip_radius.into(),
                     color: chip_border,
+                    ..Border::default()
                 },
                 text_color: if enabled { text_on } else { text_off },
                 ..button::Style::default()
             }
         })
-        .into()
+        .boxed()
     };
     let all_label = if all_on { "All - On" } else { "All - Off" };
     // All-On/Off as a real toggle button (matches chip styling).
@@ -729,6 +731,7 @@ fn filter_entry(
                 width: 1.0,
                 radius: chip_radius.into(),
                 color: chip_border,
+                ..Border::default()
             },
             text_color: if all_on { text_primary } else { all_text_off },
             ..button::Style::default()
@@ -736,10 +739,10 @@ fn filter_entry(
     });
     // Row 1 = All toggle followed by user-defined preset shortcuts
     // (clicking one replaces the active filter set).
-    let mut top_row = iced::widget::Row::new()
+    let mut top_row = iced::widget::Row::<Element<'static, ActiveBarMsg>>::new()
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .push(all_toggle);
+        .push(all_toggle.boxed());
     for (idx, preset) in custom_presets_owned.iter().enumerate() {
         let label = if preset.name.trim().is_empty() {
             format!("Filter {}", idx + 1)
@@ -760,12 +763,13 @@ fn filter_entry(
                         width: 1.0,
                         radius: chip_radius.into(),
                         color: chip_border,
+                        ..Border::default()
                     },
                     text_color: text_primary,
                     ..button::Style::default()
                 }
             });
-        top_row = top_row.push(preset_btn);
+        top_row = top_row.push(preset_btn.boxed());
     }
     // 3-row layout: row 1 = All toggle + presets. Rows 2 & 3 = 6+6 chips.
     let filter_content: Element<'static, ActiveBarMsg> = column![
@@ -832,7 +836,7 @@ fn filter_entry(
         .padding([SP.s, SP.m]),
     ]
     .spacing(SP.xs)
-    .into();
+    .boxed();
     DropdownEntry::Custom(filter_content)
 }
 

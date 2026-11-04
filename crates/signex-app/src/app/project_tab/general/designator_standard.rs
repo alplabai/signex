@@ -6,7 +6,7 @@
 //! description and parameter edits; it flips the `.snxprj` dirty and the
 //! file is written by the normal explicit save (atomic write).
 
-use iced::widget::{column, pick_list, text};
+use iced::widget::{Widget, column, pick_list, text};
 use iced::{Element, Length};
 use signex_types::designator::DesignatorStandard;
 use signex_types::theme::ThemeTokens;
@@ -44,27 +44,29 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
     let ts = TypeScale::default();
     let project_id = project.id;
     let picker: Element<'a, Message> = pick_list(
-        StandardChoice::ALL,
         Some(StandardChoice(project.data.designator_standard())),
-        move |choice: StandardChoice| {
-            tab_message(ProjectTabMsg::DesignatorStandardPicked {
-                project_id,
-                standard: choice.0,
-            })
-        },
+        StandardChoice::ALL,
+        |choice: &StandardChoice| choice.to_string(),
     )
+    .on_select(move |choice: StandardChoice| {
+        tab_message(ProjectTabMsg::DesignatorStandardPicked {
+            project_id,
+            standard: choice.0,
+        })
+    })
     .text_size(ts.label)
     .width(Length::Fill)
-    .into();
-    let field = if project.data.has_unreadable_annotation() {
+    .boxed();
+    let field: Element<'a, Message> = if project.data.has_unreadable_annotation() {
         column![
             picker,
             text("Set by a newer Signex version \u{2014} kept unchanged")
                 .size(ts.caption)
-                .color(crate::styles::ti(tokens.text_secondary)),
+                .color(crate::styles::ti(tokens.text_secondary))
+                .boxed(),
         ]
         .spacing(Spacing::default().s)
-        .into()
+        .boxed()
     } else {
         picker
     };

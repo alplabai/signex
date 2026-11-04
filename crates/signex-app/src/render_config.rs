@@ -18,7 +18,7 @@
 /// schematic text render in the wrong typeface on the GPU path.
 pub const CANVAS_FONT_FAMILY: &str = "Iosevka";
 
-pub const IOSEVKA: iced::Font = iced::Font::with_name(CANVAS_FONT_FAMILY);
+pub const IOSEVKA: iced::Font = iced::Font::new(CANVAS_FONT_FAMILY);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridStyle {

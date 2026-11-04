@@ -23,7 +23,7 @@ iced = { workspace = true }
 iced_aw = { workspace = true }
 # Runs the "unfocus" widget operation when a confirm dialog locks a window;
 # tests also drive an `iced::Task` to completion with it (dock_layout_persist).
-iced_runtime = "0.14"
+iced_runtime = "0.15.0-dev"
 num-traits = "0.2"
 unicode-normalization = "0.1"
 serde = { workspace = true }
@@ -102,10 +102,10 @@ url = "2"
 # A headless renderer for laying a widget tree out in a unit test, so text
 # is measured with real fonts (`layout_probe`, #623). Already in the lock
 # file through `iced`'s default `tiny-skia` feature.
-iced_tiny_skia = "0.14"
+iced_tiny_skia = "0.15.0-dev"
 # The GPU renderer, built headlessly, so a pixel test can run the real
 # `stack!` of the GPU-mounted schematic (`canvas::gpu_mount_tests`, #199).
-iced_wgpu = "0.14"
+iced_wgpu = "0.15.0-dev"
 futures = "0.3"
 
 [target.'cfg(windows)'.build-dependencies]

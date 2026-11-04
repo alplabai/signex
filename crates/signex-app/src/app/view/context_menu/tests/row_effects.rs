@@ -222,7 +222,11 @@ fn settle_answering_clipboard(app: &mut Signex, task: iced::Task<Message>, text:
                     iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Read {
                         channel,
                         ..
-                    }) => assert!(channel.send(Some(text.to_owned())).is_ok()),
+                    }) => assert!(
+                        channel
+                            .send(Ok(iced::clipboard::Content::Text(text.to_owned())))
+                            .is_ok()
+                    ),
                     _ => {}
                 }
             }
@@ -840,7 +844,7 @@ fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
         let (mut app, _tmp, child_path) = app_with_sheet_symbol(Some(sheet_of(Vec::new())));
         let _ = press(&mut app, id);
         assert!(
-            app.ui_state.pending_descents.contains_key(&child_path),
+            app.ui_state.pending_sheet_opens.contains_key(&child_path),
             "{id}: no descent started"
         );
         assert_menu_closed(&app, id);

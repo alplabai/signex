@@ -8,14 +8,14 @@
 
 use super::*;
 use iced::widget::{Space, button, column, container, text};
-use iced::{Background, Border, Element, Length, Theme};
+use iced::{Background, Border, Element, Length, Theme, Widget};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 
 // ─── Theme-aware text styles ──────────────────────────────────
 // The whole modal shell + text now follow the active theme via
-// `theme.extended_palette()` tokens — the same palette source the keymap
+// `theme.palette()` tokens — the same palette source the keymap
 // widget islands (further down) already use — so every section reads
 // correctly on dark AND light palettes. Text colours are resolved at
 // render time through these tiny `.style(|theme| …)` helpers rather than
@@ -25,7 +25,8 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 /// base background surface.
 pub(super) fn text_primary(theme: &Theme) -> text::Style {
     text::Style {
-        color: Some(theme.extended_palette().background.base.text),
+        color: Some(theme.palette().background.base.text),
+        selection: None,
     }
 }
 
@@ -33,7 +34,8 @@ pub(super) fn text_primary(theme: &Theme) -> text::Style {
 /// the base and weak background surfaces used across the modal.
 pub(super) fn text_muted(theme: &Theme) -> text::Style {
     text::Style {
-        color: Some(theme.extended_palette().secondary.base.color),
+        color: Some(theme.palette().secondary.base.color),
+        selection: None,
     }
 }
 
@@ -43,14 +45,15 @@ pub(super) fn text_muted(theme: &Theme) -> text::Style {
 /// both dark and light backgrounds — so we resolve it from there.
 pub(super) fn text_warning(theme: &Theme) -> text::Style {
     text::Style {
-        color: Some(theme.palette().warning),
+        color: Some(theme.palette().warning.base.color),
+        selection: None,
     }
 }
 
 /// Primary action button (Import / Export / Add / Reset-ERC) — theme accent
 /// fill with its guaranteed-contrast text colour.
 pub(super) fn primary_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
     let bg = match status {
         button::Status::Hovered | button::Status::Pressed => palette.primary.strong.color,
         _ => palette.primary.base.color,
@@ -69,7 +72,7 @@ pub(super) fn primary_button_style(theme: &Theme, status: button::Status) -> but
 /// Destructive button (Discard / Delete / Remove / Stop) — theme danger
 /// fill with its guaranteed-contrast text colour.
 pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
     let bg = match status {
         button::Status::Hovered | button::Status::Pressed => palette.danger.strong.color,
         _ => palette.danger.base.color,
@@ -88,7 +91,7 @@ pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> butt
 /// Confirm / commit button (Save) — theme success fill with its
 /// guaranteed-contrast text colour.
 pub(super) fn success_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
     let bg = match status {
         button::Status::Hovered | button::Status::Pressed => palette.success.strong.color,
         _ => palette.success.base.color,
@@ -111,14 +114,12 @@ pub(super) fn section_title<'a>(title: &str) -> Element<'a, PrefMsg> {
             .width(Length::Fill)
             .height(1)
             .style(move |theme: &Theme| container::Style {
-                background: Some(Background::Color(
-                    theme.extended_palette().background.strong.color
-                )),
+                background: Some(Background::Color(theme.palette().background.strong.color)),
                 ..container::Style::default()
             }),
     ]
     .spacing(6)
-    .into()
+    .boxed()
 }
 
 pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {
@@ -126,18 +127,16 @@ pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {
         .width(Length::Fill)
         .height(1)
         .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(
-                theme.extended_palette().background.strong.color,
-            )),
+            background: Some(Background::Color(theme.palette().background.strong.color)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Neutral secondary button (Import / Export / Edit / Cancel / Clear) —
 /// theme-derived so it reads on both light and dark palettes.
 pub(super) fn secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.extended_palette();
+    let palette = theme.palette();
     let bg = match status {
         button::Status::Hovered | button::Status::Pressed => palette.background.strong.color,
         _ => palette.background.weak.color,
@@ -149,6 +148,7 @@ pub(super) fn secondary_button_style(theme: &Theme, status: button::Status) -> b
             width: 1.0,
             color: palette.background.strong.color,
             radius: 3.0.into(),
+            ..Border::default()
         },
         ..button::Style::default()
     }

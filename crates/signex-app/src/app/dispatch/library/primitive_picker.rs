@@ -152,7 +152,7 @@ impl Signex {
                 );
             }
             PrimitivePickerTarget::PreviewAlternate(address) => {
-                self.add_alternate_symbol_from_pick(address, primitive_ref);
+                return self.add_alternate_symbol_from_pick(address, primitive_ref);
             }
         }
         Task::none()

@@ -3,7 +3,7 @@
 //! its own window and locks the main window (docs/DETACHED_MODALS.md).
 
 use iced::widget::{Space, column, container, row, text, text_input};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 
 use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::*;
@@ -23,7 +23,7 @@ impl Signex {
     /// own window (no header; the native title bar has the title).
     pub(in crate::app::view) fn view_create_child_sheet_body(&self) -> Element<'_, Message> {
         let Some(confirm) = self.ui_state.create_child_sheet_confirm.as_ref() else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -53,7 +53,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = self.modal_header(
             header_content,
             super::super::super::state::ModalId::CreateChildSheet,
@@ -82,8 +82,8 @@ impl Signex {
             .size(TS.label)
             .width(Length::Fill);
         let note: Element<'_, Message> = match &confirm.error {
-            Some(error) => text(error.clone()).size(TS.body).color(error_c).into(),
-            None => Space::new().height(0).into(),
+            Some(error) => text(error.clone()).size(TS.body).color(error_c).boxed(),
+            None => Space::new().height(0).boxed(),
         };
         let confirm_button: Element<'_, Message> = if confirm.exists {
             primary_button(
@@ -147,6 +147,6 @@ impl Signex {
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
         .clip(true)
-        .into()
+        .boxed()
     }
 }

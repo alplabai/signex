@@ -49,12 +49,30 @@ impl Signex {
             .document_state
             .pending_opens
             .is_current(&path, generation);
+        // A back / forward step installs its tab without making a visit.
+        let stepping = current && self.is_history_step_read(&path, generation);
+        // A read overtaken by a newer request installs its tab but leaves the
+        // view, and the history, where the user put them.
+        let overtaken = current && self.is_superseded_sheet_open(&path, generation);
+        let kept_view = overtaken.then(|| self.active_tab_path()).flatten();
+        if stepping || overtaken {
+            self.document_state.net_nav.history.hold(true);
+        }
         let task = self.finish_document_read(request, result);
+        if let Some(kept) = kept_view
+            && self.active_tab_path().as_deref() != Some(kept.as_path())
+        {
+            self.activate_tab_for_path(&kept);
+        }
+        if stepping || overtaken {
+            self.document_state.net_nav.history.hold(false);
+        }
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
-        // So was a canvas descent, which records its placement now.
+        // So was a sheet open, which records its placement and runs what it
+        // asked for now.
         if current {
-            self.finish_descent(&path, generation);
+            return Task::batch([task, self.finish_sheet_open(&path, generation)]);
         }
         task
     }
@@ -93,11 +111,9 @@ impl Signex {
             Err(failure) => {
                 // No silent no-op: a descent into a missing child offers to
                 // create the file (#1275).
-                if matches!(failure, OpenFailure::Missing(_)) {
-                    self.offer_to_create_missing_child(&request.path, request.generation);
-                }
+                let missing = matches!(failure, OpenFailure::Missing(_));
                 self.report_read_failure(failure);
-                Task::none()
+                self.sheet_read_failed(&request.path, request.generation, missing)
             }
         }
     }
@@ -120,7 +136,7 @@ impl Signex {
     pub(crate) fn cancel_in_flight_reads(&mut self) {
         self.document_state.pending_opens.cancel_all();
         self.ui_state.pending_create_sheet = None;
-        self.ui_state.pending_descents.clear();
+        self.ui_state.pending_sheet_opens.clear();
         self.document_state.pending_restores.cancel_all_retaining();
     }
 

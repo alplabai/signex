@@ -105,7 +105,8 @@ pub fn dropdown_overlay<'a>(
     window_width: f32,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::Length;
-    use iced::widget::{Space, Stack, container, mouse_area};
+    use iced::Widget as _;
+    use iced::widget::{Space, container, mouse_area, stack};
 
     let menu = editor.state.active_bar_menu?;
 
@@ -167,7 +168,7 @@ pub fn dropdown_overlay<'a>(
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CloseActiveBarMenu),
     });
 
-    Some(Stack::new().push(backstop).push(panel_anchor).into())
+    Some(stack![backstop, panel_anchor].boxed())
 }
 
 /// Build the 8 dropdown trigger buttons matching the schematic's
