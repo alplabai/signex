@@ -63,12 +63,23 @@ impl Signex {
     /// sheet go through the usual undoable edit; another sheet's are written to
     /// its own engine and mark it modified.
     pub(crate) fn commit_pending_title_block_drafts(&mut self) {
+        self.commit_title_block_drafts_where(|_| true);
+    }
+
+    /// [`Self::commit_pending_title_block_drafts`] for the drafts of the
+    /// sheets `matches` picks only; the rest stay pending.
+    pub(crate) fn commit_title_block_drafts_where(
+        &mut self,
+        matches: impl Fn(&std::path::Path) -> bool,
+    ) {
         if self.document_state.panel_ctx.title_block_drafts.is_empty() {
             return;
         }
         let active = self.document_state.active_path.clone();
         let drafts = std::mem::take(&mut self.document_state.panel_ctx.title_block_drafts);
-        let (mine, others): (Vec<_>, Vec<_>) = drafts
+        let (picked, mut kept): (Vec<_>, Vec<_>) =
+            drafts.into_iter().partition(|d| matches(&d.sheet));
+        let (mine, others): (Vec<_>, Vec<_>) = picked
             .into_iter()
             .partition(|d| Some(&d.sheet) == active.as_ref());
         for draft in others {
@@ -79,7 +90,8 @@ impl Signex {
             );
         }
         let fields: Vec<_> = mine.iter().map(|d| d.field).collect();
-        self.document_state.panel_ctx.title_block_drafts = mine;
+        kept.extend(mine);
+        self.document_state.panel_ctx.title_block_drafts = kept;
         for field in fields {
             self.commit_title_block_field(field);
         }
@@ -125,6 +137,15 @@ impl Signex {
                 sheet.display()
             )),
         }
+    }
+
+    /// Drop the pending title-block drafts of the sheet at `path`: a discard
+    /// must not write what it was asked to throw away.
+    pub(crate) fn drop_title_block_drafts_of(&mut self, path: &std::path::Path) {
+        self.document_state
+            .panel_ctx
+            .title_block_drafts
+            .retain(|d| d.sheet != path);
     }
 
     /// Write the active sheet's custom width/height draft as one undoable

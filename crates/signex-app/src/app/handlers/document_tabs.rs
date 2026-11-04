@@ -165,7 +165,19 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool) -> Task<Message> {
-        self.commit_pending_title_block_drafts();
+        if let Some(tab) = self.document_state.tabs.get(idx) {
+            let path = tab.path.clone();
+            if park_dirty {
+                // The user's own close: this sheet's drafts become its edit,
+                // so the sheet parks dirty like any other edit. Another
+                // sheet's drafts stay pending.
+                self.commit_title_block_drafts_where(|sheet| sheet == path);
+            } else {
+                // A close that already settled the unsaved work (Discard,
+                // Remove, a library close) drops this sheet's drafts.
+                self.drop_title_block_drafts_of(&path);
+            }
+        }
         if idx >= self.document_state.tabs.len() {
             tracing::warn!(
                 target: "signex::tabs",

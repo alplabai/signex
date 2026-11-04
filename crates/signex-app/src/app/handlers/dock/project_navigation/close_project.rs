@@ -11,6 +11,24 @@ use crate::app::state::volume_case::directory_ignores_case;
 impl Signex {
     /// File ▸ Close Project: close the active project through the same gate
     /// as the project tree's Close Project; nothing when none is open.
+    /// Commit the pending title-block drafts of the sheets that belong to
+    /// `project_id`, before a gate reads which of them are unsaved (#2027).
+    pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
+        let owned: Vec<std::path::PathBuf> = self
+            .document_state
+            .panel_ctx
+            .title_block_drafts
+            .iter()
+            .map(|d| d.sheet.clone())
+            .filter(|sheet| {
+                self.document_state
+                    .document_project(sheet)
+                    .is_some_and(|project| project.id == project_id)
+            })
+            .collect();
+        self.commit_title_block_drafts_where(|sheet| owned.iter().any(|p| p == sheet));
+    }
+
     pub(crate) fn close_active_project(&mut self) -> Task<Message> {
         self.commit_pending_title_block_drafts();
         let active = self.document_state.active_project;
@@ -48,6 +66,7 @@ impl Signex {
         let Some(project_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
             return Task::none();
         };
+        self.commit_drafts_of_project(project_id);
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
             self.document_state.error_notice =
@@ -99,6 +118,9 @@ impl Signex {
         project_id: ProjectId,
         result: Result<Box<SheetRefs>, String>,
     ) -> Task<Message> {
+        // The gate below reads the dirty marks: a draft typed while the read
+        // ran is an edit of its sheet like any other.
+        self.commit_drafts_of_project(project_id);
         let sheet_refs = match result {
             Ok(refs) => *refs,
             Err(reason) => {
@@ -281,6 +303,9 @@ impl Signex {
             for path in sweep {
                 self.forget_net_colors_of(&path);
                 self.document_state.remove_engine(&path);
+                // No dirty mark outlives the engine it described.
+                self.document_state.clear_document_dirty(&path);
+                self.drop_title_block_drafts_of(&path);
                 self.document_state
                     .document_saves
                     .forget_disk_records(&path);

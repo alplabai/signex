@@ -7,11 +7,6 @@
 //! MSAA_SUFFIX=-snapped MSAA_OUT=/some/dir cargo run -p signex-app --example msaa_compare
 //! ```
 
-#![allow(
-    clippy::let_underscore_must_use,
-    reason = "a tool: it discards Results with `let _ = ...` like the integration tests"
-)]
-
 #[path = "../tests/regression/settle_support.rs"]
 #[allow(dead_code)]
 mod settle_support;
@@ -120,12 +115,12 @@ fn sample_app(theme: ThemeId, renderer: &mut iced::Renderer) -> Signex {
     let (mut app, _t) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     settle_support::settle(&mut app, Message::Menu(MenuMessage::OpenSampleProject));
-    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+    drop(app.update(Message::Preferences(PreferencesMsg::Inner(
         PrefMsg::DraftTheme(theme),
-    )));
-    let _ = app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save)));
+    ))));
+    drop(app.update(Message::Preferences(PreferencesMsg::Inner(PrefMsg::Save))));
     let _ = draw(renderer, &app);
-    let _ = app.update(Message::CanvasEvent(CanvasEvent::FitAll));
+    drop(app.update(Message::CanvasEvent(CanvasEvent::FitAll)));
     app
 }
 

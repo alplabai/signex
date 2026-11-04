@@ -430,6 +430,12 @@ impl Signex {
     ) -> iced::Task<Message> {
         use crate::app::RemoveChoice;
 
+        // A draft on a sheet under the target is an unsaved edit of it.
+        if let Some(dialog) = self.ui_state.remove_dialog.clone() {
+            let target = dialog.target_path;
+            self.commit_title_block_drafts_where(|sheet| sheet.starts_with(&target));
+        }
+
         // Refused before the unsaved-edits prompt, so Discard is never offered
         // for a removal that would not happen.
         if let Some(dialog) = self.ui_state.remove_dialog.clone()

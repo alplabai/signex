@@ -173,3 +173,132 @@ fn a_draft_on_a_read_only_sheet_is_refused_when_another_sheet_saves() {
         "the refusal reached Messages"
     );
 }
+
+/// A workspace with project `ProjectA` and its sheet open and active, a draft
+/// pending on the sheet, and a recorder behind every write.
+fn project_with_draft() -> (Signex, PathBuf, crate::app::ProjectId, Arc<Recorder>) {
+    use crate::app::handlers::menu::export::tests as fx;
+    let mut app = fx::app_workspace("/w/p", &["top.snxsch"]);
+    let id = app.document_state.projects[0].id;
+    let sheet = PathBuf::from("/w/p/top.snxsch");
+    fx::open_with(&mut app.document_state, &sheet, SchematicSheet::default());
+    app.document_state.tabs.push(TabInfo {
+        title: "top".to_string(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet.clone());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder.clone());
+    type_drawn_by(&mut app, "X");
+    (app, sheet, id, recorder)
+}
+
+/// Close Project from the project tree, up to the gate.
+fn close_project_to_gate(app: &mut Signex, id: crate::app::ProjectId) {
+    use crate::app::{ContextMenuMsg, ProjectMsg, ProjectTreeAction};
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::CloseProject(vec![id.to_string()]),
+    )));
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id: id,
+        result,
+    }));
+}
+
+/// The project tree's Close Project reads the dirty marks at its gate, so a
+/// sheet whose only change is a draft must already be dirty there: it gets
+/// the unsaved-changes prompt instead of closing and losing the value.
+#[test]
+fn tree_close_project_prompts_for_a_draft_only_sheet() {
+    let (mut app, sheet, id, _recorder) = project_with_draft();
+    close_project_to_gate(&mut app, id);
+    let prompt = app.ui_state.project_close_confirm.as_ref();
+    assert!(prompt.is_some(), "the draft is an unsaved edit");
+    assert!(
+        app.document_state.projects.iter().any(|p| p.id == id),
+        "still open"
+    );
+    assert!(app.document_state.is_document_dirty(&sheet));
+}
+
+/// Discard drops the draft with the project: nothing is written, no dirty
+/// mark outlives the engines it described, and no draft stays behind.
+#[test]
+fn discard_on_close_drops_the_draft_and_leaves_no_dirty_marks() {
+    use crate::app::{ProjectCloseChoice, ProjectMsg};
+    let (mut app, sheet, id, recorder) = project_with_draft();
+    close_project_to_gate(&mut app, id);
+    let _ = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
+    assert!(app.document_state.projects.is_empty(), "closed");
+    assert!(
+        recorder.0.lock().unwrap().is_empty(),
+        "the file is untouched"
+    );
+    assert!(!app.document_state.engines.contains_key(&sheet));
+    assert!(!app.document_state.is_document_dirty(&sheet));
+    assert!(app.document_state.dirty_document_paths().is_empty());
+    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+}
+
+/// Closing an unrelated tab, by the user or by a discard path, does not
+/// commit another sheet's draft or dirty that sheet.
+#[test]
+fn closing_an_unrelated_tab_leaves_another_sheets_draft_alone() {
+    for user_route in [true, false] {
+        let (mut app, _t) = Signex::new();
+        let a = open(&mut app, "a", SchematicSheet::default());
+        type_drawn_by(&mut app, "X");
+        let _b = open(&mut app, "b", SchematicSheet::default());
+        let index_of_b = app.document_state.tabs.len() - 1;
+        if user_route {
+            let _ = app.close_tab_parking_dirty(index_of_b);
+        } else {
+            let _ = app.close_tab_now(index_of_b);
+        }
+        assert!(
+            !app.document_state.engines[&a]
+                .document()
+                .title_block
+                .contains_key("drawn_by")
+        );
+        assert!(
+            !app.document_state.is_document_dirty(&a),
+            "user_route={user_route}"
+        );
+        assert_eq!(app.document_state.panel_ctx.title_block_drafts.len(), 1);
+    }
+}
+
+/// The user's own close of the sheet commits that sheet's draft (it parks
+/// dirty, like any edit); a discard close drops it.
+#[test]
+fn closing_the_sheet_commits_on_the_users_route_and_drops_on_a_discard() {
+    let (mut app, _t) = Signex::new();
+    let a = open(&mut app, "a", SchematicSheet::default());
+    type_drawn_by(&mut app, "X");
+    let _ = app.close_tab_parking_dirty(0);
+    assert!(
+        app.document_state.engines[&a]
+            .document()
+            .title_block
+            .contains_key("drawn_by")
+    );
+    assert!(app.document_state.is_document_dirty(&a));
+
+    let (mut app, _t) = Signex::new();
+    let a = open(&mut app, "a", SchematicSheet::default());
+    type_drawn_by(&mut app, "X");
+    let _ = app.close_tab_now(0);
+    assert!(app.document_state.panel_ctx.title_block_drafts.is_empty());
+    assert!(
+        !app.document_state.engines.contains_key(&a),
+        "clean, so dropped"
+    );
+}
