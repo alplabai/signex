@@ -3,7 +3,7 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, scrollable, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 
 use super::super::widgets::{
     close_x_button, draggable_header, os_title_bar_slot, primary_button, secondary_button,
@@ -33,7 +33,7 @@ impl Signex {
 
     fn view_reprefix_confirm_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let Some(confirm) = &self.ui_state.reprefix_confirm else {
-            return container(Space::new()).into();
+            return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -57,7 +57,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -124,6 +124,6 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }

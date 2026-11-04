@@ -619,3 +619,27 @@ fn an_undo_while_the_unopened_sheets_are_still_being_written_names_them() {
     std::fs::remove_dir_all(&dir).ok();
     assert!(named && mentions_child, "undo must warn about {child:?}");
 }
+
+#[test]
+fn confirming_a_reprefix_while_a_run_is_going_keeps_the_confirm_open() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
+    let read = app.handle_annotate(ResetAndRenumber);
+    app.ui_state.reprefix_confirm = Some(crate::app::handlers::erc::ReprefixConfirm {
+        generation: app.ui_state.reprefix_generation,
+        project: app.active_project_path(),
+        lookup: Arc::new(Default::default()),
+        standard: signex_types::designator::DesignatorStandard::Ieee315,
+        shown: Default::default(),
+        headline: String::new(),
+        change_lines: Vec::new(),
+        more: 0,
+        skip_lines: Vec::new(),
+        button_label: String::new(),
+    });
+    let _ = app.handle_reprefix_confirmed();
+    let kept = app.ui_state.reprefix_confirm.is_some();
+    settle_task(&mut app, read);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(kept, "a refused run must not discard the user's confirm");
+}

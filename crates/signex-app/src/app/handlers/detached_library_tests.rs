@@ -256,6 +256,14 @@ fn the_per_browser_delete_confirm_fills_its_window_on_the_theme_surface() {
             size.width - right
         );
         let paper = crate::styles::ti(app.document_state.panel_ctx.tokens.paper);
-        assert_eq!(app.theme(id).expect("theme").palette().background, paper);
+        assert_eq!(
+            app.theme(id)
+                .expect("theme")
+                .palette()
+                .background
+                .base
+                .color,
+            paper
+        );
     }
 }

@@ -8,9 +8,9 @@ pub mod load;
 pub(crate) mod symbol_canvas;
 
 use iced::widget::{Column, Space, column, container, row, scrollable, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
-use signex_library::primitive::Footprint;
+use crate::library::editor::footprint::canvas::PreviewFootprint;
 use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -34,7 +34,8 @@ pub struct ComponentDetails {
     /// The row binds a footprint (it may still have failed to read).
     pub has_footprint_ref: bool,
     pub symbol: Option<LibSymbol>,
-    pub footprint: Option<Footprint>,
+    /// The editor's model of the footprint, built once at load.
+    pub footprint: Option<PreviewFootprint>,
     /// `(name, value)` of every row parameter.
     pub parameters: Vec<(String, String)>,
     /// Why the symbol or footprint is missing, one line each.
@@ -124,7 +125,7 @@ pub fn view<'a>(
         container(text(message).size(ROW_TEXT_SIZE).color(color))
             .padding([SP.l, SP.m])
             .width(Length::Fill)
-            .into()
+            .boxed()
     };
     if panel.selected.is_none() {
         return empty("Select a component to see its details.", muted);
@@ -136,22 +137,29 @@ pub fn view<'a>(
         };
     };
 
-    let mut col: Column<'a, LibraryMessage> = column![].spacing(SP.s).width(Length::Fill);
+    let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(SP.s).width(Length::Fill);
     if let Some(why) = &panel.details.error {
         col = col.push(
             text(why.as_str())
                 .size(ROW_TEXT_SIZE)
-                .color(theme_ext::error_color(tokens)),
+                .color(theme_ext::error_color(tokens))
+                .boxed(),
         );
     }
     col = col.push(
         text(d.internal_pn.as_str())
             .size(SECTION_HEADER_TEXT_SIZE)
-            .color(primary),
+            .color(primary)
+            .boxed(),
     );
     let mut facts = vec![d.class.as_str(), d.lifecycle.as_str()];
     facts.retain(|f| !f.is_empty());
-    col = col.push(text(facts.join("  ·  ")).size(ROW_TEXT_SIZE).color(muted));
+    col = col.push(
+        text(facts.join("  ·  "))
+            .size(ROW_TEXT_SIZE)
+            .color(muted)
+            .boxed(),
+    );
     let maker = match (d.manufacturer.trim(), d.mpn.trim()) {
         ("", "") => String::new(),
         (m, "") => m.to_owned(),
@@ -159,13 +167,14 @@ pub fn view<'a>(
         (m, p) => format!("{m} — {p}"),
     };
     if !maker.is_empty() {
-        col = col.push(text(maker).size(ROW_TEXT_SIZE).color(primary));
+        col = col.push(text(maker).size(ROW_TEXT_SIZE).color(primary).boxed());
     }
     if !d.description.trim().is_empty() {
         col = col.push(
             text(d.description.as_str())
                 .size(ROW_TEXT_SIZE)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
 
@@ -179,7 +188,8 @@ pub fn view<'a>(
                 device_px_per_logical_px,
             )
             // The preview canvas publishes nothing.
-            .map(|()| LibraryMessage::ComponentsPanelRowMenuDismissed),
+            .map(|()| LibraryMessage::ComponentsPanelRowMenuDismissed)
+            .boxed(),
             tokens,
         ),
         None => empty("No symbol.", muted),
@@ -187,32 +197,36 @@ pub fn view<'a>(
 
     col = col.push(section_title("Footprint", primary));
     if let Some(fp) = &d.footprint {
-        col = col.push(text(fp.name.as_str()).size(ROW_TEXT_SIZE).color(muted));
+        col = col.push(
+            text(fp.name.as_str())
+                .size(ROW_TEXT_SIZE)
+                .color(muted)
+                .boxed(),
+        );
     }
     col = col.push(match &d.footprint {
         Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(
-                fp.clone(),
-                theme_ext::accent(tokens),
-                primary,
-                muted,
-                primary,
-            );
+            let program = footprint_canvas::FootprintPreview::new(fp);
             let canvas = iced::widget::canvas(program)
                 .width(Length::Fill)
                 .height(PREVIEW_HEIGHT);
-            preview_box(canvas.into(), tokens)
+            preview_box(canvas.boxed(), tokens)
         }
         None if d.has_footprint_ref => empty("Footprint could not be read.", muted),
         None => empty("No footprint.", muted),
     });
     for note in &d.notes {
-        col = col.push(text(note.as_str()).size(ROW_TEXT_SIZE).color(muted));
+        col = col.push(text(note.as_str()).size(ROW_TEXT_SIZE).color(muted).boxed());
     }
 
     col = col.push(section_title("Parameters", primary));
     if d.parameters.is_empty() {
-        col = col.push(text("No parameters.").size(ROW_TEXT_SIZE).color(muted));
+        col = col.push(
+            text("No parameters.")
+                .size(ROW_TEXT_SIZE)
+                .color(muted)
+                .boxed(),
+        );
     }
     for (name, value) in &d.parameters {
         col = col.push(
@@ -227,21 +241,22 @@ pub fn view<'a>(
                     .color(primary)
                     .width(Length::FillPortion(3)),
             ]
-            .spacing(SP.s),
+            .spacing(SP.s)
+            .boxed(),
         );
     }
-    col = col.push(Space::new().height(SP.m));
+    col = col.push(Space::new().height(SP.m).boxed());
 
     scrollable(container(col).padding([SP.s, SP.m]).width(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn section_title<'a>(label: &'a str, color: Color) -> Element<'a, LibraryMessage> {
     container(text(label).size(PANEL_TEXT_SIZE).color(color))
         .padding([SP.s, 0.0])
-        .into()
+        .boxed()
 }
 
 /// Border width of the preview box, px.
@@ -265,10 +280,11 @@ fn preview_box<'a>(
                 width: PREVIEW_BORDER_WIDTH,
                 radius: SP.xs.into(),
                 color: border_c,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

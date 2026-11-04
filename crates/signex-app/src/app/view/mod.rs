@@ -1,5 +1,5 @@
 use iced::widget::{canvas, column, container, row, shader, stack, text_input};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget as _};
 
 /// Detached-modal native window title text.
 pub(crate) mod detached_title;
@@ -101,7 +101,7 @@ impl Signex {
                         .style(crate::styles::modal_card(
                             &self.document_state.panel_ctx.tokens,
                         ))
-                        .into()
+                        .boxed()
                 }
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the
@@ -113,13 +113,16 @@ impl Signex {
                     let panel = if *kind == crate::panels::PanelKind::Components {
                         crate::panels::components_panel::view(&self.library, ctx, &ctx.tokens)
                             .map(crate::dock::DockMessage::Library)
+                            .boxed()
                     } else {
-                        crate::panels::view_panel(*kind, ctx).map(crate::dock::DockMessage::Panel)
+                        crate::panels::view_panel(*kind, ctx)
+                            .map(crate::dock::DockMessage::Panel)
+                            .boxed()
                     }
                     .map(Message::Dock);
                     iced::widget::container(iced::widget::scrollable(panel))
                         .padding(SP.m)
-                        .into()
+                        .boxed()
                 }
                 // Detached Component Preview window — render the same
                 // editor surface as the inline tab. The editor state
@@ -147,13 +150,14 @@ impl Signex {
                             address,
                         )
                         .map(Message::Library)
+                        .boxed()
                     } else {
                         // Window mapping exists but the editor state
                         // has been dropped (rare race during teardown
                         // — the tab close path can run ahead of the
                         // OS window close). Render an empty container
                         // so the daemon doesn't panic.
-                        iced::widget::container(iced::widget::Space::new()).into()
+                        iced::widget::container(iced::widget::Space::new()).boxed()
                     }
                 }
             };
@@ -190,12 +194,13 @@ impl Signex {
             accent_position: AccentPosition::Bottom,
         };
         let inner = container(row![text(title.to_string()).size(TS.body).color(text_c)])
-            .padding([SP.s, 10.0]);
-        let pill = TabPill::new(inner, pill_style);
+            .padding([SP.s, 10.0])
+            .boxed();
+        let pill = TabPill::new(inner, pill_style).boxed();
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
         let (cx, cy) = self.interaction_state.last_mouse_pos;
-        super::view::translate::Translate::new(pill, (cx + 10.0, cy + 6.0)).into()
+        super::view::translate::Translate::new(pill, (cx + 10.0, cy + 6.0)).boxed()
     }
 
     fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -215,15 +220,17 @@ impl Signex {
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
-            menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(move |msg| match msg {
-                msg if undocked && msg.window_command().is_some() => {
-                    Message::Ui(UiMsg::MenuInWindow {
-                        window: window_id,
-                        msg,
-                    })
-                }
-                msg => Message::Menu(msg),
-            })
+            menu_bar::view(&document.panel_ctx.tokens, menu_ctx)
+                .map(move |msg| match msg {
+                    msg if undocked && msg.window_command().is_some() => {
+                        Message::Ui(UiMsg::MenuInWindow {
+                            window: window_id,
+                            msg,
+                        })
+                    }
+                    msg => Message::Menu(msg),
+                })
+                .boxed()
         };
 
         let left_has_panels = document.dock.has_panels(PanelPosition::Left);
@@ -257,7 +264,7 @@ impl Signex {
             ui.right_width,
         );
 
-        let center_row = row![left, left_handle, center, right_handle, right];
+        let center_row = row![left, left_handle, center, right_handle, right].boxed();
         let bottom_handle = self.view_resize_handle(
             DragTarget::BottomPanel,
             bottom_has_panels && !bottom_collapsed,
@@ -293,7 +300,8 @@ impl Signex {
             altium_import_name.as_deref(),
             self.status_activity(window_id).as_deref(),
         )
-        .map(|req| Message::Ui(UiMsg::StatusBar(req)));
+        .map(|req| Message::Ui(UiMsg::StatusBar(req)))
+        .boxed();
 
         // Partition tabs across windows: main owns every tab that isn't
         // currently rendered by an undocked-tab window; each undocked
@@ -347,7 +355,8 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(1)
-                .style(crate::styles::chrome_separator(&document.panel_ctx.tokens)),
+                .style(crate::styles::chrome_separator(&document.panel_ctx.tokens))
+                .boxed(),
         );
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             // Resolve "really dragging" — Some only after the
@@ -385,7 +394,8 @@ impl Signex {
                     },
                     &document.panel_ctx.tokens,
                 )
-                .map(move |msg| Message::Tab { window_id, msg }),
+                .map(move |msg| Message::Tab { window_id, msg })
+                .boxed(),
             );
         } else {
             // Same height as the tab strip (`tab_bar::TAB_STRIP_HEIGHT`), so
@@ -405,7 +415,7 @@ impl Signex {
         // applied later as a Stack layer over `main` so the content
         // keeps its natural origin and overlay y-coordinates stay
         // correct.
-        let main: Element<'_, Message> = main.into();
+        let main: Element<'_, Message> = main.boxed();
 
         // No open-predicate here on purpose. Every overlay builder owns
         // its own "am I open?" guard and returns no layers when closed
@@ -450,12 +460,12 @@ impl Signex {
             for overlay in overlays {
                 stack = stack.push(overlay);
             }
-            stack.into()
+            stack.boxed()
         } else if has_resize_edges {
             iced::widget::Stack::new()
                 .push(main)
                 .push(Self::resize_edges_overlay())
-                .into()
+                .boxed()
         } else {
             main
         }
@@ -485,6 +495,7 @@ impl Signex {
             iced::widget::mouse_area(hint)
                 .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
         )
+        .boxed()
     }
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -518,6 +529,7 @@ impl Signex {
                     address,
                 )
                 .map(Message::Library)
+                .boxed()
             } else {
                 container(
                     column![
@@ -530,7 +542,7 @@ impl Signex {
                 )
                 .center(Length::Fill)
                 .style(crate::styles::panel_region(tokens))
-                .into()
+                .boxed()
             };
         }
 
@@ -563,7 +575,8 @@ impl Signex {
                     path,
                     self.ui_state.device_px_per_logical_px(window_id),
                 )
-                .map(Message::Library);
+                .map(Message::Library)
+                .boxed();
             }
             if let Some(path) = active_tab.kind.as_footprint_editor()
                 && let Some(editor) = self.document_state.footprint_editors.get(path)
@@ -573,7 +586,8 @@ impl Signex {
                 return crate::library::editor::standalone::view_footprint(
                     editor, tokens, theme_id,
                 )
-                .map(Message::Library);
+                .map(Message::Library)
+                .boxed();
             }
             // Library Browser tab — `.snxlib` opened as a main-window
             // tab. Per-tab state lives in
@@ -583,7 +597,8 @@ impl Signex {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 if let Some(browser) = self.library.library_browsers.get(path) {
                     return crate::library::browser::view(path, &self.library, browser, tokens)
-                        .map(Message::Library);
+                        .map(Message::Library)
+                        .boxed();
                 } else {
                     // Fallback when somehow the browser-state map is
                     // out of sync with the tabs vector. Keeps the tab
@@ -595,7 +610,7 @@ impl Signex {
                     )
                     .center(Length::Fill)
                     .style(crate::styles::panel_region(tokens))
-                    .into();
+                    .boxed();
                 }
             }
         }
@@ -631,17 +646,13 @@ impl Signex {
                 canvas(crate::canvas::SchematicCanvas::new(slot, prefs))
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .into()
+                    .boxed()
             };
             let base = if is_main {
                 base
             } else {
-                base.map(move |msg| match msg {
-                    Message::CanvasEvent(event) => {
-                        Message::CanvasEventInWindow { window_id, event }
-                    }
-                    other => other,
-                })
+                base.map(move |msg| overlay_id::scope_canvas_message(window_id, msg))
+                    .boxed()
             };
             // A sheet from a newer Signex is read-only: say so on the canvas
             // (#1402), in the main and in undocked windows alike.
@@ -654,9 +665,9 @@ impl Signex {
             let badge: Element<'_, Message> = if read_only {
                 overlays::read_only_badge::read_only_badge(&self.document_state.panel_ctx.tokens)
             } else {
-                iced::widget::Space::new().into()
+                iced::widget::Space::new().boxed()
             };
-            stack![base, badge].into()
+            stack![base, badge].boxed()
         } else if self.pcb_for_window(window_id).is_some() {
             // Each window reads its own PCB canvas, and an undocked
             // window's events carry its id, as for the schematic (#494).
@@ -664,7 +675,7 @@ impl Signex {
             let base: Element<'_, Message> = canvas(pcb_canvas)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .into();
+                .boxed();
             let base = if is_main {
                 base
             } else {
@@ -674,6 +685,7 @@ impl Signex {
                     }
                     other => other,
                 })
+                .boxed()
             };
             if pcb_canvas.gpu_render {
                 // Stack the GPU shader ABOVE the CPU canvas: the canvas paints
@@ -697,7 +709,7 @@ impl Signex {
                 ))
                 .width(Length::Fill)
                 .height(Length::Fill);
-                stack![base, content_shader].into()
+                stack![base, content_shader].boxed()
             } else {
                 base
             }
@@ -765,10 +777,10 @@ impl Signex {
             // pan (see `dismiss_layer`).
             if overlay_id::swallows_scroll(*id) {
                 for layer in &mut layers[first_new..] {
-                    let inner = std::mem::replace(layer, iced::widget::Space::new().into());
+                    let inner = std::mem::replace(layer, iced::widget::Space::new().boxed());
                     *layer = iced::widget::mouse_area(inner)
                         .on_scroll(|_| Message::noop())
-                        .into();
+                        .boxed();
                 }
             }
         }

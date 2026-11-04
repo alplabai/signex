@@ -86,8 +86,12 @@ impl PreviewReads {
             && state.footprint.is_none()
             && state.row.footprint_ref == Some(r)
         {
-            state.footprint =
-                report_read_failure(result, ResolvedKind::Footprint, &r, "component preview tab");
+            state.set_footprint(report_read_failure(
+                result,
+                ResolvedKind::Footprint,
+                &r,
+                "component preview tab",
+            ));
         }
         if let (Some(r), Some(result)) = (needs.sim, self.sim)
             && state.sim.is_none()
@@ -407,7 +411,7 @@ impl LibraryState {
                 return ReloadApplied::Dropped;
             }
             if let Some(edited) = self.editors.get_mut(&address) {
-                super::preview_rebase::rebase_onto_cascade(&mut edited.row, &row);
+                edited.rebase_onto_cascade(&row);
                 edited.stale_base = false;
             }
             return ReloadApplied::Rebased;
@@ -434,6 +438,10 @@ impl LibraryState {
             row,
         );
         fresh.active_tab = current_tab;
+        // The epoch counts the edits made to this preview, whatever row it
+        // shows; a read planned on the old row is checked against the new row
+        // itself (`apply_alternate_symbol`), not reset to 0.
+        fresh.edit_epoch = old.edit_epoch;
         let resolve_tab = if current_tab == tab {
             reads.apply_to(&needs, &mut fresh);
             None

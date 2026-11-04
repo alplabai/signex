@@ -5,7 +5,7 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 
 use super::widgets::{close_x_button, primary_button, secondary_button, wrap_modal};
 use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
@@ -67,7 +67,7 @@ impl Signex {
         let header: Element<'_, Message> = if windowed {
             super::widgets::os_title_bar_slot()
         } else {
-            header_content.into()
+            header_content.boxed()
         };
 
         let name = offer
@@ -92,7 +92,8 @@ impl Signex {
                      newer saved work in the editor with the older copy."
                 ))
                 .size(TS.label)
-                .color(crate::styles::ti(tokens.warning)),
+                .color(crate::styles::ti(tokens.warning))
+                .boxed(),
             );
         }
         body = body.push(
@@ -104,7 +105,8 @@ impl Signex {
                  session.",
             )
             .size(TS.body)
-            .color(text_muted),
+            .color(text_muted)
+            .boxed(),
         );
 
         let dialog = container(
@@ -144,9 +146,9 @@ impl Signex {
         .style(crate::styles::modal_card(tokens))
         .clip(true);
         if windowed {
-            dialog.width(Length::Fill).height(Length::Fill).into()
+            dialog.width(Length::Fill).height(Length::Fill).boxed()
         } else {
-            dialog.into()
+            dialog.boxed()
         }
     }
 }

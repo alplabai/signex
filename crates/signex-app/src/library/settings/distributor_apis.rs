@@ -9,7 +9,7 @@
 //!   (see `persistence`).
 
 use iced::widget::{Space, button, column, container, row, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::DistributorSource;
 use signex_types::theme::ThemeTokens;
 
@@ -34,7 +34,7 @@ pub fn view<'a>(
     let hover_bg = crate::styles::tokens::hover_overlay(tokens);
 
     let section_title = |title: &'static str| -> Element<'_, LibraryMessage> {
-        text(title).size(ts.body).color(muted).into()
+        text(title).size(ts.body).color(muted).boxed()
     };
 
     // ── DigiKey ──────────────────────────────────────────────
@@ -53,7 +53,7 @@ pub fn view<'a>(
     };
     let mut digikey_actions =
         row![text(digikey_status).size(ts.body).color(text_c)].align_y(iced::Alignment::Center);
-    digikey_actions = digikey_actions.push(Space::new().width(Length::Fill));
+    digikey_actions = digikey_actions.push(Space::new().width(Length::Fill).boxed());
     if settings.digikey_in_flight {
         digikey_actions = digikey_actions.push(secondary_btn(
             "Cancel",
@@ -169,10 +169,11 @@ pub fn view<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..Default::default()
         });
-        order_col = order_col.push(bg_row);
+        order_col = order_col.push(bg_row.boxed());
     }
     order_col = order_col.push(
         text(
@@ -180,7 +181,8 @@ pub fn view<'a>(
              tried first when you paste a distributor URL into the Supply tab.",
         )
         .size(ts.caption)
-        .color(muted),
+        .color(muted)
+        .boxed(),
     );
     // A failed save must be visible here and now — otherwise the reorder
     // looks applied and silently reverts on next launch.
@@ -188,7 +190,8 @@ pub fn view<'a>(
         order_col = order_col.push(
             text(format!("Could not save the order: {error}"))
                 .size(ts.caption)
-                .color(crate::styles::tokens::danger(tokens)),
+                .color(crate::styles::tokens::danger(tokens))
+                .boxed(),
         );
     }
 
@@ -207,7 +210,7 @@ pub fn view<'a>(
     )
     .padding(sp.l)
     .style(crate::styles::modal_card(tokens))
-    .into()
+    .boxed()
 }
 
 fn distributor_label(src: DistributorSource) -> &'static str {
@@ -228,5 +231,5 @@ fn divider(color: iced::Color) -> Element<'static, LibraryMessage> {
             background: Some(iced::Background::Color(color)),
             ..Default::default()
         })
-        .into()
+        .boxed()
 }

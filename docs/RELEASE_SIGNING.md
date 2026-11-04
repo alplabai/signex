@@ -12,12 +12,13 @@ unidentified-developer warning on first launch (README, "First launch").
 ## Tags and pre-releases
 
 The workflow runs on a pushed tag matching `v[0-9]+.[0-9]+.[0-9]+` or
-`v[0-9]+.[0-9]+.[0-9]+-*`, so `v1.0.0` and a release candidate such as
-`v1.0.0-rc.1` both build. Other tags (checkpoint or snapshot tags) do not.
+`v[0-9]+.[0-9]+.[0-9]+-*`, so `v26.11.0` and a release candidate such as
+`v26.11.0-rc.1` both build (versions are CalVer, `YY.MM.MICRO`, with the
+month unpadded; see `docs/ROADMAP.md` §3). Other tags (checkpoint or snapshot tags) do not.
 `scripts/check_release_version.sh` (job `verify-version`) requires the tag
 without its `v`, the root `Cargo.toml` `[workspace.package] version` and a dated
-`## [X.Y.Z...]` CHANGELOG heading to agree, so a `v1.0.0-rc.1` tag needs
-version `1.0.0-rc.1` in `Cargo.toml` and a `## [1.0.0-rc.1] — YYYY-MM-DD`
+`## [X.Y.Z...]` CHANGELOG heading to agree, so a `v26.11.0-rc.1` tag needs
+version `26.11.0-rc.1` in `Cargo.toml` and a `## [26.11.0-rc.1] — YYYY-MM-DD`
 section. The `release` job extracts that section as the Release body and sets
 `prerelease` to true whenever the tag contains a `-`. A pre-release is not what
 `releases/latest` resolves to.

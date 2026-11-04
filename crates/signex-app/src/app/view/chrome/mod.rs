@@ -89,7 +89,7 @@ impl Signex {
                 });
         let palette_input = text_input(
             "Search files, symbols, commands…",
-            &self.ui_state.command_palette.query,
+            self.ui_state.command_palette.query.clone(),
         )
         .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
         .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
@@ -108,8 +108,8 @@ impl Signex {
                     color: Color::TRANSPARENT,
                     width: 0.0,
                     radius: 0.0.into(),
+                    ..Border::default()
                 },
-                icon: text_c,
                 placeholder: muted_c,
                 value: text_c,
                 selection: Color { a: 0.4, ..text_c },
@@ -135,10 +135,11 @@ impl Signex {
                 color: search_border,
                 width: 1.0,
                 radius: 4.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into();
+        .boxed();
 
         // Drag zones on either side of the search bar. Double-click
         // toggles maximize (Windows title-bar convention).
@@ -150,7 +151,7 @@ impl Signex {
             )
             .on_press(Message::Window(WindowMsg::StartMainWindowDrag))
             .on_double_click(Message::Window(WindowMsg::ToggleMaximizeMainWindow))
-            .into()
+            .boxed()
         };
 
         // Two layers. Underneath: menus, controls, and two Fill drag
@@ -164,7 +165,7 @@ impl Signex {
         // bounds it captures nothing, so presses fall straight through
         // to the drag zones below and the whole strip stays draggable.
         let strip = row![leading_controls]
-            .push(menu_padded)
+            .push(menu_padded.boxed())
             .push(drag_zone())
             .push(drag_zone())
             .push(trailing_controls)
@@ -184,13 +185,15 @@ impl Signex {
                 left: search_bar_x,
             })
             .align_y(iced::alignment::Vertical::Center);
-        let inner = iced::widget::Stack::new().push(strip).push(centered_search);
+        let inner = iced::widget::Stack::new()
+            .push(strip.boxed())
+            .push(centered_search.boxed());
 
         container(inner)
             .width(Length::Fill)
             .height(btn_h)
             .style(crate::styles::toolbar_strip(tokens))
-            .into()
+            .boxed()
     }
 
     /// `(x, width)` of the search bar for the current window width and
@@ -253,7 +256,8 @@ impl Signex {
                 keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
                 theme_id: ui.effective_theme_id(),
             })
-            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
+            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
+            .boxed();
 
         dialog
     }
@@ -279,7 +283,8 @@ impl Signex {
                 &self.ui_state.find_replace,
                 &self.document_state.panel_ctx.tokens,
             )
-            .map(Message::FindReplaceMsg),
+            .map(Message::FindReplaceMsg)
+            .boxed(),
             ModalId::RenameDialog => self.view_rename_dialog_body(),
             ModalId::RemoveDialog => self.view_remove_dialog_body(),
             ModalId::EnableVersionControl => self.view_enable_version_control_dialog_body(),
@@ -319,15 +324,15 @@ impl Signex {
                         .style(crate::styles::modal_card(
                             &self.document_state.panel_ctx.tokens,
                         ))
-                        .into(),
-                    None => iced::widget::Space::new().into(),
+                        .boxed(),
+                    None => iced::widget::Space::new().boxed(),
                 }
             }
             ModalId::ErrorNotice => self.view_error_notice(),
             ModalId::NetlistIncompletePrompt => self.view_netlist_incomplete_prompt(),
             ModalId::AutosaveRecovery => match self.document_state.autosave.current_offer() {
                 Some(offer) => self.view_autosave_recovery_window(offer),
-                None => iced::widget::Space::new().into(),
+                None => iced::widget::Space::new().boxed(),
             },
             ModalId::ProjectCloseConfirm => self.view_project_close_confirm_body(),
             ModalId::AppQuitConfirm => self.view_app_quit_confirm_body(),
@@ -364,7 +369,7 @@ impl Signex {
                 mouse_area(Space::new().width(w).height(h))
                     .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
                     .interaction(cursor)
-                    .into()
+                    .boxed()
             };
 
         let corner = |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
@@ -375,7 +380,7 @@ impl Signex {
             )
             .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
             .interaction(cursor)
-            .into()
+            .boxed()
         };
 
         let top = straight(Direction::North, Interaction::ResizingVertically, true);
@@ -409,7 +414,7 @@ impl Signex {
         ]
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
     }
 
     pub(super) fn view_dock_panel(
@@ -437,7 +442,7 @@ impl Signex {
             .style(crate::styles::panel_region(
                 &self.document_state.panel_ctx.tokens,
             ))
-            .into()
+            .boxed()
     }
 
     pub(super) fn view_dock_panel_h(
@@ -465,7 +470,7 @@ impl Signex {
             .style(crate::styles::panel_region(
                 &self.document_state.panel_ctx.tokens,
             ))
-            .into()
+            .boxed()
     }
 
     pub(super) fn view_resize_handle(
@@ -498,7 +503,7 @@ impl Signex {
         iced::widget::mouse_area(handle_container)
             .interaction(interaction)
             .on_press(Message::Ui(UiMsg::DragStart(target)))
-            .into()
+            .boxed()
     }
 }
 
@@ -522,7 +527,7 @@ mod layout_tests {
         let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
 
         let label = find(&texts, RESET).bounds;
-        let one_line = natural::<()>(iced::widget::text(RESET).size(TS.body).into(), RESET);
+        let one_line = natural::<()>(iced::widget::text(RESET).size(TS.body).boxed(), RESET);
         assert!(
             label.height <= one_line.height + 0.5,
             "the button label wraps: {label:?}, one line is {one_line:?}"

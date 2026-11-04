@@ -12,6 +12,7 @@
 //! on a non-lavapipe one.
 
 use iced::advanced::renderer::Style;
+use iced::widget::Widget as _;
 use iced::{Color, Element, Font, Pixels, Size, Theme};
 use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
@@ -46,6 +47,7 @@ pub(super) fn gpu() -> Gpu {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }));
     // A missing adapter fails loudly, as in the other GPU tests: a pixel test
     // that skips itself is a test nobody notices has stopped running.
@@ -87,8 +89,11 @@ pub(super) fn gpu() -> Gpu {
     Gpu {
         renderer: iced::Renderer::Primary(iced_wgpu::Renderer::new(
             engine,
-            Font::DEFAULT,
-            Pixels(16.0),
+            iced::advanced::renderer::Settings {
+                font: Font::DEFAULT,
+                text_size: Pixels(16.0),
+                ..Default::default()
+            },
         )),
         is_lavapipe,
     }
@@ -144,8 +149,13 @@ fn render_at(gpu: &mut Gpu, element: Element<'_, crate::app::Message>, dpi: f32)
         iced::mouse::Cursor::Unavailable,
     );
     let (width, height) = ((WIDTH as f32 * dpi) as u32, (HEIGHT as f32 * dpi) as u32);
-    let viewport =
-        iced::advanced::graphics::Viewport::with_physical_size(Size::new(width, height), dpi);
+    let viewport = iced::advanced::graphics::Viewport::with_physical_size(
+        Size::new(width, height),
+        iced::advanced::renderer::Scale {
+            window: dpi,
+            application: 1.0,
+        },
+    );
     let iced::Renderer::Primary(wgpu_renderer) = &mut gpu.renderer else {
         unreachable!("built as Primary above")
     };
@@ -274,7 +284,7 @@ fn fill<'a, P: canvas::Program<crate::app::Message> + 'a>(
     canvas(program)
         .width(iced::Length::Fill)
         .height(iced::Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Backdrop plus the content and drag shader layers, no interactive canvas.
@@ -291,7 +301,7 @@ fn shaders<'a>(
             .width(iced::Length::Fill)
             .height(iced::Length::Fill),
     ]
-    .into()
+    .boxed()
 }
 
 fn frame_of(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet) -> Frame {
@@ -355,7 +365,7 @@ fn frame_with(gpu: &mut Gpu, layer: Layer, sheet: &SchematicSheet, look: &Look) 
     };
     let element = iced::widget::container(element)
         .padding(look.padding)
-        .into();
+        .boxed();
     render_at(gpu, element, look.dpi)
 }
 
@@ -820,22 +830,35 @@ fn luma(px: [u8; 4]) -> u32 {
 }
 
 /// `stack!` draws children i>0 inside `renderer.with_layer`, so the overlay's
-/// selection highlight lands above the GPU primitive. If that ever stopped
-/// holding, the wire pixel would read the same selected or not.
+/// selection outline lands above the GPU primitive. If that ever stopped
+/// holding, the frame would read the same selected or not (the outline has
+/// no fill, so it is told apart by its pixels, not by a brighter wire).
 #[test]
 fn the_selection_highlight_draws_above_the_gpu_content() {
     let mut gpu = gpu();
     let sheet = fixture();
-    let (wx, wy) = world(12.5, 5.0);
-    let plain = frame_of(&mut gpu, Layer::Stack, &sheet).px(wx, wy);
+    let plain = frame_of(&mut gpu, Layer::Stack, &sheet);
     let look = Look {
         select_wire: true,
         ..Look::default()
     };
-    let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look).px(wx, wy);
+    let selected = frame_with(&mut gpu, Layer::Stack, &sheet, &look);
+    let changed = selected.changed_vs(&plain, (0, 0, WIDTH, HEIGHT));
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let want = to_u8(colors.selection);
+    // An outline pixel reads the theme's selection colour (edge pixels blend
+    // with the sheet, so the best of them is the one to compare).
+    let best = changed
+        .iter()
+        .map(|&(x, y)| {
+            let px = selected.px(x, y);
+            (0..3).map(|c| px[c].abs_diff(want[c])).max().unwrap_or(255)
+        })
+        .min();
     assert!(
-        (0..3).all(|c| selected[c] >= plain[c]) && luma(selected) > luma(plain) + 8,
-        "wire pixel {selected:?} shows no highlight over the unselected {plain:?}"
+        best.is_some_and(|d| d <= 40),
+        "no outline pixel reads the selection colour {want:?} ({} changed, closest off by {best:?})",
+        changed.len()
     );
 }
 

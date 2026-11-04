@@ -1,7 +1,7 @@
 //! Help ▸ About Signex dialog — product name, version, licence and the
 //! "Copy version info" action. Styled from `ThemeTokens` only.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, Widget, button, column, container, row, text};
 use iced::{Element, Length};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
@@ -89,7 +89,7 @@ fn build<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId, windowed: bool) -> Elem
             .width(Length::Fill)
             .height(Length::Fill)
             .style(styles::modal_card(tokens))
-            .into();
+            .boxed();
     }
     let card = container(column![header, body].spacing(0))
         .width(Length::Fixed(MODAL_W))
@@ -101,5 +101,5 @@ fn build<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId, windowed: bool) -> Elem
         .height(Length::Fill)
         .center_x(Length::Fill)
         .center_y(Length::Fill)
-        .into()
+        .boxed()
 }

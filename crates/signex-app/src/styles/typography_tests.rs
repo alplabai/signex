@@ -84,6 +84,20 @@ const SWEPT: &[&str] = &[
     "library/editor/footprint/pads_active_bar.rs",
     "library/editor/footprint/move_by_modal.rs",
     "library/editor/footprint/align_modal.rs",
+    "library/editor/alternate_symbols.rs",
+    "library/editor/datasheet_picker.rs",
+    "library/editor/kit.rs",
+    "library/editor/mod.rs",
+    "library/editor/params.rs",
+    "library/editor/preview.rs",
+    "library/editor/supply.rs",
+    "library/editor/sim/mod.rs",
+    "library/editor/standalone/footprint.rs",
+    "library/editor/standalone/symbol.rs",
+    "library/editor/footprint/body3d.rs",
+    "library/editor/footprint/context_menu.rs",
+    "library/editor/footprint/sketch_mode/inspector.rs",
+    "library/editor/footprint/sketch_mode/active_bar.rs",
 ];
 
 /// Calls whose argument must come from the scale, not a literal.
@@ -251,4 +265,12 @@ fn no_text_size_literal_survives_anywhere_in_signex_app() {
         "hardcoded text size; use a TypeScale step:\n{}",
         bad.join("\n")
     );
+}
+
+#[test]
+fn line_height_is_the_frameworks_default() {
+    use iced::Pixels;
+    use iced::widget::text::LineHeight;
+    let framework = LineHeight::default().to_absolute(Pixels(1.0)).0;
+    assert_eq!(super::typography::LINE_HEIGHT, framework);
 }

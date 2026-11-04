@@ -8,6 +8,7 @@ use crate::app::command_palette::{
     COMMAND_PALETTE_INPUT_ID, CommandAction, MAX_RESULTS, build_catalog, catalog_stamp,
     rank_results,
 };
+use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 
 impl Signex {
     pub(super) fn dispatch_command_palette_message(
@@ -53,7 +54,7 @@ impl Signex {
         // over without the user clearing the previous query manually.
         Task::batch([
             operation::focus(COMMAND_PALETTE_INPUT_ID.clone()),
-            operation::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
+            operation::text_input::select_all(COMMAND_PALETTE_INPUT_ID.clone()),
             // The project-wide rows come from an index built off-thread.
             self.start_palette_index(),
         ])
@@ -154,28 +155,30 @@ impl Signex {
     /// row never opens a different file, and a missing item opens the sheet
     /// and says so. Nothing in any document is changed.
     ///
-    /// Opening a sheet nobody holds goes through the normal open path, which
-    /// reads that one file on the UI thread, exactly as descending into a
-    /// child sheet does.
+    /// A sheet nobody holds is read on a worker; the item is selected when it
+    /// arrives.
     fn reveal_in_project(
         &mut self,
         path: std::path::PathBuf,
         placement: Option<signex_types::schematic::InstancePath>,
         select: Option<signex_types::schematic::SelectedItem>,
     ) -> Task<Message> {
-        self.open_sheet_with_placement(path.clone(), placement);
-        let opened = self.resolve_held_spelling(path.clone());
-        if self.document_state.active_path.as_deref() != Some(opened.as_path()) {
-            crate::diagnostics::log_warning(format!(
-                "Search: could not open {}; the list may be out of date.",
-                path.display()
-            ));
-            return Task::none();
-        }
+        self.open_sheet(
+            path,
+            SheetOpen::at(placement).then(AfterOpen::Reveal { item: select }),
+        )
+    }
+
+    /// Select `item` where it is now on the sheet at `path`, which is showing
+    /// (not where it was when the index was built).
+    pub(crate) fn reveal_item_on_active_sheet(
+        &mut self,
+        path: &std::path::Path,
+        select: Option<signex_types::schematic::SelectedItem>,
+    ) -> Task<Message> {
         let Some(item) = select else {
             return Task::none();
         };
-        // Where the symbol is now, not where it was when the index was built.
         let position = self.document_state.active_engine().and_then(|engine| {
             engine
                 .document()
@@ -250,6 +253,24 @@ mod tests {
         assert!(app.ui_state.command_palette.results.is_empty());
     }
 
+    /// The messages `task` hands back to `update`, in order.
+    fn output_messages(task: Task<Message>) -> Vec<Message> {
+        use futures::StreamExt as _;
+        let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+            return Vec::new();
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let mut out = Vec::new();
+        runtime.block_on(async {
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    out.push(message);
+                }
+            }
+        });
+        out
+    }
+
     fn symbol_row(reference: &str) -> (String, String, String, String) {
         (
             reference.into(),
@@ -277,7 +298,17 @@ mod tests {
 
         let task = app.execute_command_palette_selected();
 
-        assert_eq!(task.units(), 1, "the cached row's action must run");
+        // Exactly one message comes out, and it is the cached row's action.
+        let messages = output_messages(task);
+        assert!(
+            matches!(
+                messages.as_slice(),
+                [Message::Overlay(OverlayMsg::OpenPanel(
+                    crate::panels::PanelKind::Erc
+                ))]
+            ),
+            "the cached row's action must run, got {messages:?}"
+        );
         assert!(!app.ui_state.command_palette.open);
     }
 

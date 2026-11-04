@@ -166,7 +166,7 @@ pub fn numeric_input<'a>(
     value: f64,
     draft: Option<&NumericDraft>,
 ) -> TextInput<'a, PanelMsg> {
-    text_input(placeholder, &shown_text(draft, key, value))
+    text_input(placeholder.to_string(), shown_text(draft, key, value))
         .on_input(move |s| PanelMsg::NumericFieldTyped(key, s))
         .on_submit(PanelMsg::NumericFieldSubmitted(key))
         .width(Length::FillPortion(3))

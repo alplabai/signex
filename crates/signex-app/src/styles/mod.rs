@@ -15,7 +15,10 @@ pub mod typography;
 pub use buttons::{
     accent_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
 };
-pub use typography::{HAIRLINE, Spacing, TypeScale, chrome_px};
+pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
+
+/// Corner radius, in px, of buttons, badges and cards.
+pub const RADIUS: f32 = 3.0;
 
 #[cfg(test)]
 mod tests;
@@ -45,6 +48,7 @@ pub fn panel_region(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
             width: 1.0,
             radius: 0.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -73,6 +77,7 @@ pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
             width: 0.0,
             radius: 0.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -97,6 +102,7 @@ pub fn modal_header_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
                 .top_left(MODAL_CORNER_RADIUS)
                 .top_right(MODAL_CORNER_RADIUS),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -121,6 +127,7 @@ pub fn modal_footer_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
                 .bottom_left(MODAL_CORNER_RADIUS)
                 .bottom_right(MODAL_CORNER_RADIUS),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -147,6 +154,7 @@ pub fn status_bar(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style +
             width: 1.0,
             radius: 0.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -164,6 +172,7 @@ pub fn tab_bar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
             width: 1.0,
             radius: 0.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -179,6 +188,7 @@ pub fn collapsed_rail(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Sty
             width: 1.0,
             radius: 0.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -217,6 +227,7 @@ pub fn context_menu(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
             width: 1.0,
             radius: 4.0.into(),
             color: border,
+            ..Border::default()
         },
         shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
@@ -245,9 +256,9 @@ const DIALOG_WINDOW_MARK: &str = "\u{200B}dialog-window";
 /// dialog surface (`paper`) of the active theme, so no strip of another colour
 /// can show around the content.
 pub fn dialog_window_theme(base: &Theme, paper: Color) -> Theme {
-    let mut palette = base.palette();
-    palette.background = paper;
-    Theme::custom(format!("{base}{DIALOG_WINDOW_MARK}"), palette)
+    let mut seed = base.seed();
+    seed.background = paper;
+    Theme::custom(format!("{base}{DIALOG_WINDOW_MARK}"), seed)
 }
 
 /// Whether `theme` is a dialog window's theme.
@@ -282,6 +293,7 @@ fn card_style(bg: Color, text: Color, border: Color) -> container::Style {
             width: 1.0,
             radius: MODAL_CORNER_RADIUS.into(),
             color: border,
+            ..Border::default()
         },
         shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
@@ -302,6 +314,7 @@ pub fn floating_title_bar(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container:
             width: 1.0,
             radius: 6.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -317,6 +330,7 @@ pub fn floating_panel_body(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
             width: 1.0,
             radius: 6.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -348,6 +362,7 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
             width: 2.0,
             radius: 4.0.into(),
             color: Color::from_rgba(accent.r, accent.g, accent.b, 0.4),
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -382,6 +397,7 @@ pub fn dock_tab_container(
             width: 1.0,
             radius: 0.0.into(),
             color: border_c,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -406,6 +422,7 @@ pub fn rail_tab(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..button::Style::default()
         }
@@ -437,6 +454,7 @@ pub fn start_action(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             text_color: text,
             ..button::Style::default()

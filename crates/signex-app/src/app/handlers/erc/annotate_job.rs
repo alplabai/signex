@@ -12,6 +12,7 @@ use std::sync::Arc;
 use iced::Task;
 
 use super::super::super::*;
+use super::reprefix_confirm::ReprefixConfirm;
 use crate::app::path_ops::{PathOpId, PathOpKind};
 use crate::app::project_sheets::{self, ProjectSheetSet};
 use crate::app::state::scope::CaseFold;
@@ -23,6 +24,9 @@ use crate::persist::{DocumentSaveJob, SaveOutcome};
 pub(crate) enum PassKind {
     Annotate(signex_engine::AnnotateMode),
     ResetDuplicates,
+    /// Re-prefix to standard (#1756): read here, planned and applied by
+    /// `reprefix_job`. Its confirm rides in the job, not in this `Copy` tag.
+    Reprefix,
 }
 
 impl PassKind {
@@ -31,6 +35,7 @@ impl PassKind {
         match self {
             Self::Annotate(_) => "Annotate",
             Self::ResetDuplicates => "Reset Duplicate Designators",
+            Self::Reprefix => "Re-prefix to standard",
         }
     }
 }
@@ -68,6 +73,13 @@ impl PassApplied {
 /// What the read worker found. Only `Debug`: the completion clones what it uses.
 pub struct SheetsRead(ProjectSheetSet);
 
+impl SheetsRead {
+    /// Read `plan`'s sheets. Runs on a worker.
+    pub(super) fn assemble(plan: &project_sheets::ProjectSheetPlan) -> Self {
+        Self(plan.assemble())
+    }
+}
+
 impl std::fmt::Debug for SheetsRead {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SheetsRead")
@@ -86,7 +98,7 @@ pub struct SheetWrite {
 /// What the run captured before its read began; the result is applied only if
 /// all of it still holds.
 #[derive(Debug)]
-struct ReadStage {
+pub(super) struct ReadStage {
     epoch: u64,
     child_sheets: ChildSheetSignature,
     project: Option<ProjectId>,
@@ -110,11 +122,14 @@ struct AnnotateJob {
     /// opens and saves of the run's sheets until it ends.
     guard: PathOpId,
     stage: Stage,
+    /// The confirm a Re-prefix run applies once its sheets are read.
+    reprefix: Option<ReprefixConfirm>,
 }
 
-/// The run in flight. One at a time: a second request is refused with a notice
-/// rather than queued, because a queued run would number the project as it was
-/// when the first one started.
+/// The run in flight (Annotate, Reset Duplicate Designators or Re-prefix). One
+/// at a time: a second request is refused with a notice rather than queued,
+/// because a queued run would number the project as it was when the first one
+/// started.
 #[derive(Debug, Default)]
 pub struct AnnotateRuns {
     generation: u64,
@@ -122,7 +137,7 @@ pub struct AnnotateRuns {
 }
 
 /// Why a read result was not applied.
-enum Refused {
+pub(super) enum Refused {
     /// The refusal already put its own notice and Messages line out.
     Reported,
     Because(String),
@@ -145,6 +160,16 @@ impl Signex {
     /// Start a project-wide run: refuse what cannot run, register the guard
     /// and return the task that reads the sheets. Nothing is read in `update`.
     pub(super) fn begin_project_run(&mut self, kind: PassKind) -> Task<Message> {
+        self.begin_run(kind, None)
+    }
+
+    /// [`Self::begin_project_run`], carrying the Re-prefix confirm the run
+    /// applies.
+    pub(super) fn begin_run(
+        &mut self,
+        kind: PassKind,
+        reprefix: Option<ReprefixConfirm>,
+    ) -> Task<Message> {
         let label = kind.label();
         if self.ui_state.annotate_runs.job.is_some() {
             self.refuse_run(
@@ -154,11 +179,10 @@ impl Signex {
             );
             return Task::none();
         }
-        let Some(active) = self.document_state.active_path.clone() else {
+        let Some((read_stage, plan)) = self.capture_sheet_read() else {
             crate::diagnostics::log_info(format!("{label}: no sheet is open, nothing to do"));
             return Task::none();
         };
-        let plan = project_sheets::plan_project_sheets_for(&self.document_state, &active);
         let mut known: Vec<PathBuf> = plan.pages().to_vec();
         known.push(plan.root().to_path_buf());
         if self.refuse_annotate_while_project_moves(known.iter().map(PathBuf::as_path), label)
@@ -167,12 +191,7 @@ impl Signex {
             return Task::none();
         }
         let guard = self.guard_run_paths(PathOpKind::ProjectRead, &known, plan.fold());
-        let stage = Stage::Reading(ReadStage {
-            epoch: self.document_state.documents_epoch,
-            child_sheets: self.child_sheet_signature(),
-            project: self.document_state.document_project(&active).map(|p| p.id),
-            root: plan.root().to_path_buf(),
-        });
+        let stage = Stage::Reading(read_stage);
         let runs = &mut self.ui_state.annotate_runs;
         runs.generation += 1;
         let generation = runs.generation;
@@ -181,6 +200,7 @@ impl Signex {
             kind,
             guard,
             stage,
+            reprefix,
         });
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || SheetsRead(plan.assemble())),
@@ -191,6 +211,23 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// What a read of the active project must capture so its result can be
+    /// checked afterwards, and the plan the worker reads from. `None` with no
+    /// sheet open. Nothing is read here.
+    pub(super) fn capture_sheet_read(
+        &self,
+    ) -> Option<(ReadStage, project_sheets::ProjectSheetPlan)> {
+        let active = self.document_state.active_path.clone()?;
+        let plan = project_sheets::plan_project_sheets_for(&self.document_state, &active);
+        let stage = ReadStage {
+            epoch: self.document_state.documents_epoch,
+            child_sheets: self.child_sheet_signature(),
+            project: self.document_state.document_project(&active).map(|p| p.id),
+            root: plan.root().to_path_buf(),
+        };
+        Some((stage, plan))
     }
 
     /// Register `sheets` (the last one is the root) so a rename, delete or
@@ -212,7 +249,7 @@ impl Signex {
         )
     }
 
-    fn refuse_run(&mut self, label: &str, why: &str) {
+    pub(super) fn refuse_run(&mut self, label: &str, why: &str) {
         let detail = format!("{label} was not run: {why}");
         crate::diagnostics::log_warning(detail.clone());
         self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
@@ -237,7 +274,7 @@ impl Signex {
         generation: u64,
         result: &Result<SheetsRead, String>,
     ) -> Task<Message> {
-        let Some(job) = self.take_run(generation, true) else {
+        let Some(mut job) = self.take_run(generation, true) else {
             return Task::none();
         };
         let Stage::Reading(read) = &job.stage else {
@@ -259,6 +296,14 @@ impl Signex {
         let applied = match job.kind {
             PassKind::Annotate(mode) => self.apply_annotate(mode, set),
             PassKind::ResetDuplicates => self.apply_reset_duplicates(set),
+            PassKind::Reprefix => {
+                let Some(confirm) = job.reprefix.take() else {
+                    return Task::none();
+                };
+                let task = self.apply_reprefix(confirm, set);
+                let refresh = self.finish_run_view();
+                return Task::batch([task, refresh]);
+            }
         };
         self.start_writes(job.generation, job.kind, applied)
     }
@@ -268,7 +313,7 @@ impl Signex {
     /// run could hand two sheets the same designator). The returned set has
     /// every open sheet read from its live engine, so an edit made while the
     /// worker read is numbered, not overwritten.
-    fn accept_read(
+    pub(super) fn accept_read(
         &mut self,
         kind: PassKind,
         read: &ReadStage,
@@ -287,6 +332,8 @@ impl Signex {
             sheets: sheets.sheets.clone(),
             pages_outside_the_hierarchy: sheets.pages_outside_the_hierarchy.clone(),
             unreadable: sheets.unreadable.clone(),
+            absent: sheets.absent.clone(),
+            refused: sheets.refused.clone(),
             root: sheets.root.clone(),
             fold: sheets.fold,
         };
@@ -367,6 +414,7 @@ impl Signex {
             kind,
             guard,
             stage: Stage::Writing { paths, undo },
+            reprefix: None,
         });
         Task::batch([task, write_task(generation, jobs, hold)])
     }
@@ -482,7 +530,7 @@ impl Signex {
 
     /// The run is over: the preview rows are stale (disk and memory both
     /// changed), so reload them.
-    fn finish_run_view(&mut self) -> Task<Message> {
+    pub(super) fn finish_run_view(&mut self) -> Task<Message> {
         self.refresh_panel_ctx();
         self.invalidate_annotate_preview();
         self.refresh_annotate_preview()

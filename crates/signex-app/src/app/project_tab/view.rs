@@ -2,7 +2,7 @@
 //! section. Pure: `&Signex -> Element`, no mutation.
 
 use iced::widget::{Space, button, column, container, row, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::{ProjectSection, ProjectTabMsg, general, parameters};
@@ -19,7 +19,8 @@ fn section_list<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let (ts, sp) = (TypeScale::default(), Spacing::default());
-    let mut list = column![].spacing(sp.xs).padding([sp.l, sp.m]);
+    let mut list: iced::widget::Column<Element<'a, Message>> =
+        column![].spacing(sp.xs).padding([sp.l, sp.m]);
     for section in ProjectSection::ALL {
         let label = text(section.label()).size(ts.label);
         let entry = button(label)
@@ -36,13 +37,13 @@ fn section_list<'a>(
         } else {
             entry.style(crate::styles::subtle_button(tokens))
         };
-        list = list.push(entry);
+        list = list.push(entry.boxed());
     }
     container(list)
         .width(Length::Fixed(ts.body * SECTION_LIST_EMS))
         .height(Length::Fill)
         .style(crate::styles::panel_region(tokens))
-        .into()
+        .boxed()
 }
 
 impl Signex {
@@ -71,7 +72,7 @@ impl Signex {
             )
             .center(Length::Fill)
             .style(crate::styles::panel_region(tokens))
-            .into();
+            .boxed();
         };
         let selected = self
             .document_state
@@ -95,6 +96,6 @@ impl Signex {
                 .height(Length::Fill)
                 .style(crate::styles::panel_region(tokens)),
         ]
-        .into()
+        .boxed()
     }
 }

@@ -1,4 +1,4 @@
-//! Sim tab — SPICE deck editor + per-pin SPICE node mapping.
+//! Sim tab — SPICE model section + per-pin SPICE node table.
 //!
 //! Backed by the typed `SimModel` primitive bound through
 //! `ComponentRow::sim_ref`. The view operates on `state.sim`
@@ -15,19 +15,16 @@
 pub mod state;
 
 use iced::widget::{
-    Space, checkbox, column, container, pick_list, row, scrollable, text, text_editor, text_input,
+    Widget, column, container, pick_list, row, scrollable, text, text_editor, text_input,
 };
-use iced::{Border, Element, Length, Theme};
+use iced::{Element, Length};
 use signex_library::SimKind;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+use super::kit::{self, SP, TS};
 
 const SIM_KIND_OPTS: [SimKind; 4] = [
     SimKind::Spice3,
@@ -35,6 +32,25 @@ const SIM_KIND_OPTS: [SimKind; 4] = [
     SimKind::LtSpice,
     SimKind::VerilogA,
 ];
+
+/// Shown when no SPICE model is bound to the row.
+const EMPTY_MESSAGE: &str = "No SPICE model is bound to this component.";
+/// Shown in the node table while the symbol has not resolved.
+const SYMBOL_PENDING: &str = "Open the Symbol tab first to list the pins.";
+/// Shown in the node table when the symbol has no pins.
+const NO_PINS: &str = "The symbol has no pins yet.";
+/// Pin-name cell for an unnamed pin.
+const UNNAMED_PIN: &str = "\u{2014}";
+
+/// Table columns: pin number, symbol pin name, SPICE node.
+const PIN_COLUMNS: [(&str, Length); 3] = [
+    ("Pin", Length::FillPortion(1)),
+    ("Symbol", Length::FillPortion(2)),
+    ("SPICE Node", Length::FillPortion(3)),
+];
+
+/// Height of the deck editor, in lines of body text.
+const DECK_LINES: f32 = 16.0;
 
 /// Pick-list adapter so `SimKind` can sit on the iced `pick_list`
 /// without needing a `Display` impl on the public type.
@@ -58,155 +74,170 @@ impl std::fmt::Display for SimKindPick {
     }
 }
 
+/// One line of the pin/node table, as plain text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PinNodeLine {
+    number: String,
+    name: String,
+    node: String,
+}
+
+/// The table's lines, one per symbol pin in symbol order; an unnamed pin
+/// shows a dash and an unmapped pin an empty node.
+fn pin_node_lines(
+    sim: &signex_library::SimModel,
+    pins: &[signex_library::SymbolPin],
+) -> Vec<PinNodeLine> {
+    pins.iter()
+        .map(|pin| PinNodeLine {
+            number: pin.number.clone(),
+            name: if pin.name.is_empty() {
+                UNNAMED_PIN.to_string()
+            } else {
+                pin.name.clone()
+            },
+            node: sim
+                .default_node_map
+                .get(pin.number.as_str())
+                .cloned()
+                .unwrap_or_default(),
+        })
+        .collect()
+}
+
+fn event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
+    LibraryMessage::EditorEvent {
+        library_path: address.library_path.clone(),
+        table: address.table.clone(),
+        row_id: address.row_id,
+        msg,
+    }
+}
+
+/// A muted label over its control, so every field of the model card reads
+/// the same.
+fn labelled<'a>(
+    label: &'a str,
+    control: Element<'a, LibraryMessage>,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    column![
+        text(label)
+            .size(TS.caption)
+            .color(theme_ext::text_secondary(tokens))
+            .boxed(),
+        control,
+    ]
+    .spacing(SP.s)
+    .boxed()
+}
+
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let text_c = theme_ext::text_primary(tokens);
-
-    let lib_path_for_toggle = address.library_path.clone();
-    let table_for_toggle = address.table.clone();
-    let row_id = address.row_id;
-    let has_sim = state.sim.is_some();
-    let toggle = checkbox(has_sim)
-        .label("Has SPICE Model")
-        .on_toggle(move |v| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_toggle.clone(),
-            table: table_for_toggle.clone(),
-            row_id,
-            msg: EditorMsg::SimSetEnabled(v),
-        })
-        .size(TS.heading)
-        .text_size(12)
-        .spacing(6);
-
     let Some(sim) = state.sim.as_ref() else {
-        // No sim model bound — show only the toggle and a muted hint.
+        // No model bound: a header and an empty state with the one action.
+        let add = kit::primary_button(
+            "Add SPICE model",
+            Some(event(&address, EditorMsg::SimSetEnabled(true))),
+            tokens,
+        );
         let body = column![
-            row![toggle].align_y(iced::Alignment::Center),
-            Space::new().height(10),
-            text("No SPICE model bound to this component.")
-                .size(TS.body)
-                .color(muted),
-            text("Toggle \u{201C}Has SPICE Model\u{201D} to add one.")
-                .size(TS.body)
-                .color(muted),
+            kit::section_header("Model", None, tokens),
+            kit::card(kit::empty_state(EMPTY_MESSAGE, Some(add), tokens), tokens),
         ]
-        .spacing(0)
-        .width(Length::Fill);
-        return container(body)
-            .padding(14)
+        .spacing(SP.m)
+        .width(Length::Fill)
+        .boxed();
+        return scrollable(body)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(crate::styles::modal_card(tokens))
-            .into();
+            .boxed();
     };
 
-    // Header — checkbox + kind picker.
-    let lib_path_for_kind = address.library_path.clone();
-    let table_for_kind = address.table.clone();
+    let remove = kit::danger_button(
+        "Remove model",
+        Some(event(&address, EditorMsg::SimSetEnabled(false))),
+        tokens,
+    );
+
+    let kind_address = address.clone();
     let kind_picker = pick_list(
-        SIM_KIND_OPTS.map(SimKindPick),
         Some(SimKindPick(sim.kind)),
-        move |SimKindPick(k)| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_kind.clone(),
-            table: table_for_kind.clone(),
-            row_id,
-            msg: EditorMsg::SimSetKind(k),
-        },
+        SIM_KIND_OPTS.map(SimKindPick),
+        |k: &SimKindPick| k.to_string(),
     )
-    .text_size(12)
-    .padding([SP.s, SP.m]);
+    .on_select(move |SimKindPick(k)| event(&kind_address, EditorMsg::SimSetKind(k)))
+    .text_size(TS.body)
+    .padding([SP.s, SP.m])
+    .boxed();
 
-    let header_row =
-        row![toggle, Space::new().width(20), kind_picker,].align_y(iced::Alignment::Center);
-
-    // Name row.
-    let lib_path_for_name = address.library_path.clone();
-    let table_for_name = address.table.clone();
+    let name_address = address.clone();
     let name_input = text_input("LM358_DUAL", sim.name.as_str())
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_name.clone(),
-            table: table_for_name.clone(),
-            row_id,
-            msg: EditorMsg::SimSetName(s),
-        })
+        .on_input(move |s| event(&name_address, EditorMsg::SimSetName(s)))
         .padding([SP.s, SP.m])
-        .size(TS.label);
-    let name_block = column![text("Name").size(TS.caption).color(muted), name_input,].spacing(SP.s);
+        .size(TS.body)
+        .boxed();
 
     // SPICE deck — multi-line text_editor backed by state.sim_body.
     let deck: Element<'a, LibraryMessage> = if let Some(content) = state.sim_body.as_ref() {
-        let lib_path_for_deck = address.library_path.clone();
-        let table_for_deck = address.table.clone();
-        let editor_widget = text_editor(content)
+        let deck_address = address.clone();
+        text_editor(content)
             .placeholder(".SUBCKT NAME 1 2 3 4\n  …\n.ENDS")
             .padding(SP.m)
-            .size(TS.label)
-            .height(Length::Fixed(220.0))
-            .on_action(move |a| LibraryMessage::EditorEvent {
-                library_path: lib_path_for_deck.clone(),
-                table: table_for_deck.clone(),
-                row_id,
-                msg: EditorMsg::SimBodyAction(a),
-            });
-        editor_widget.into()
+            .size(TS.body)
+            .height(Length::Fixed(TS.body * DECK_LINES))
+            .on_action(move |a| event(&deck_address, EditorMsg::SimBodyAction(a)))
+            .boxed()
     } else {
-        // sim_body should have been seeded by the SelectTab(Sim) arm.
-        // This branch is the safety fallback for tabs that landed on
-        // Sim without going through SelectTab — show a passive
-        // multi-line view of whatever sim.body has.
-        text(sim.body.clone()).size(TS.body).color(text_c).into()
+        // sim_body is seeded by the SelectTab(Sim) arm; this is the
+        // safety fallback for a tab reached without it.
+        text(sim.body.clone())
+            .size(TS.body)
+            .color(theme_ext::text_primary(tokens))
+            .boxed()
     };
-    let deck_block = column![text("SPICE deck").size(TS.caption).color(muted), deck,].spacing(SP.s);
 
-    // Pin/Node map table. Defensive fallback: if `editor.symbol` is
-    // None (the symbol primitive failed to resolve, or the user
-    // landed on the Sim tab without going through SelectTab) we show
-    // a muted hint instead of crashing on an empty pin slice. The
-    // canonical lazy-load happens in
-    // `dispatch::library::handle_select_editor_tab`.
+    let model_card = kit::card(
+        column![
+            row![
+                container(labelled("Model kind", kind_picker, tokens))
+                    .width(Length::FillPortion(1))
+                    .boxed(),
+                container(labelled("Model name", name_input, tokens))
+                    .width(Length::FillPortion(2))
+                    .boxed(),
+            ]
+            .spacing(SP.m)
+            .boxed(),
+            labelled("SPICE deck", deck, tokens),
+        ]
+        .spacing(SP.m)
+        .boxed(),
+        tokens,
+    );
+
     let table: Element<'a, LibraryMessage> = match state.symbol.as_ref() {
         Some(symbol) => view_pin_node_table(sim, &symbol.pins, tokens, &address),
-        None => container(
-            text("(load Symbol tab first to populate pin/node map)")
-                .size(TS.body)
-                .color(muted),
-        )
-        .padding([6, 0])
-        .into(),
+        None => kit::empty_state(SYMBOL_PENDING, None, tokens).boxed(),
     };
-    let table_block = column![
-        text("Pin / Node Map").size(TS.caption).color(muted),
-        Space::new().height(4),
-        table,
-    ]
-    .spacing(0);
 
-    let body = scrollable(
+    scrollable(
         column![
-            header_row,
-            Space::new().height(10),
-            name_block,
-            Space::new().height(14),
-            deck_block,
-            Space::new().height(14),
-            table_block,
+            kit::section_header("Model", Some(remove), tokens),
+            model_card,
+            kit::section_header("Pin / Node Map", None, tokens),
+            table,
         ]
-        .spacing(0)
-        .width(Length::Fill),
+        .spacing(SP.m)
+        .width(Length::Fill)
+        .boxed(),
     )
     .width(Length::Fill)
-    .height(Length::Fill);
-
-    container(body)
-        .padding(14)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(crate::styles::modal_card(tokens))
-        .into()
+    .height(Length::Fill)
+    .boxed()
 }
 
 fn view_pin_node_table<'a>(
@@ -215,113 +246,43 @@ fn view_pin_node_table<'a>(
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let border = theme_ext::border_color(tokens);
-
     if pins.is_empty() {
-        return container(text("(symbol has no pins yet)").size(TS.body).color(muted))
-            .padding([6, 0])
-            .into();
+        return kit::empty_state(NO_PINS, None, tokens);
     }
 
-    let header = row![
-        text("Pin")
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::Fixed(56.0)),
-        text("Symbol")
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::FillPortion(2)),
-        text("SPICE Node")
-            .size(TS.caption)
-            .color(muted)
-            .width(Length::FillPortion(3)),
-    ]
-    .padding([SP.s, SP.m]);
-
-    let mut col = column![header].spacing(SP.xs);
-    for pin in pins {
-        col = col.push(pin_node_row(sim, pin, tokens, address));
-    }
-
-    container(col)
-        .padding(SP.s)
-        .style(move |_: &Theme| iced::widget::container::Style {
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..Default::default()
-        })
-        .width(Length::Fill)
-        .into()
-}
-
-fn pin_node_row<'a>(
-    sim: &'a signex_library::SimModel,
-    pin: &'a signex_library::SymbolPin,
-    tokens: &'a ThemeTokens,
-    address: &EditorAddress,
-) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
-
-    let buf = sim
-        .default_node_map
-        .get(pin.number.as_str())
-        .cloned()
-        .unwrap_or_default();
-
-    let pin_for_input = pin.number.clone();
-    let lib_path_for_input = address.library_path.clone();
-    let table_for_input = address.table.clone();
-    let row_id = address.row_id;
-    let input = text_input("net", &buf)
-        .padding([3, 6])
-        .size(TS.body)
-        .on_input(move |s| LibraryMessage::EditorEvent {
-            library_path: lib_path_for_input.clone(),
-            table: table_for_input.clone(),
-            row_id,
-            msg: EditorMsg::SimSetPinNode {
-                pin_number: pin_for_input.clone(),
-                value: s,
-            },
-        });
-
-    container(
-        row![
-            text(pin.number.clone())
-                .size(TS.body)
-                .color(text_c)
-                .width(Length::Fixed(56.0)),
-            text(if pin.name.is_empty() {
-                "—".to_string()
-            } else {
-                pin.name.clone()
-            })
+    let mut col: iced::widget::Column<Element<'a, LibraryMessage>> =
+        column![kit::table_header(&PIN_COLUMNS, tokens)];
+    for (index, line) in pin_node_lines(sim, pins).into_iter().enumerate() {
+        let pin_number = line.number.clone();
+        let node_address = address.clone();
+        let input = text_input("net", line.node.clone())
+            .padding([SP.xs, SP.s])
             .size(TS.body)
-            .color(muted)
-            .width(Length::FillPortion(2)),
-            container(input).width(Length::FillPortion(3)),
-        ]
-        .align_y(iced::Alignment::Center)
-        .padding([3.0, SP.m]),
-    )
-    .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(iced::Background::Color(iced::Color::from_rgba(
-            1.0, 1.0, 1.0, 0.02,
-        ))),
-        border: Border {
-            width: 1.0,
-            radius: 2.0.into(),
-            color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-        },
-        ..Default::default()
-    })
-    .into()
+            .on_input(move |s| {
+                event(
+                    &node_address,
+                    EditorMsg::SimSetPinNode {
+                        pin_number: pin_number.clone(),
+                        value: s,
+                    },
+                )
+            });
+        let cells: Vec<(Element<'a, LibraryMessage>, Length)> = vec![
+            (
+                text(line.number).size(TS.body).color(text_c).boxed(),
+                PIN_COLUMNS[0].1,
+            ),
+            (
+                text(line.name).size(TS.body).color(muted).boxed(),
+                PIN_COLUMNS[1].1,
+            ),
+            (input.boxed(), PIN_COLUMNS[2].1),
+        ];
+        col = col.push(kit::table_row(cells, index, None, tokens));
+    }
+    kit::card(col.boxed(), tokens)
 }
 
 #[cfg(test)]
@@ -377,6 +338,37 @@ mod tests {
         // module can exercise the SimSet*/SimBodyAction handlers
         // without standing up the full Signex update tree.
         crate::library::component_preview::apply_inline_edit(editor, msg);
+    }
+
+    /// One table line per pin, in symbol order; unnamed pins show a dash
+    /// and unmapped pins an empty node.
+    #[test]
+    fn pin_node_lines_follow_pins_and_node_map() {
+        let mut e = fixture_editor();
+        apply(&mut e, EditorMsg::SimSetEnabled(true));
+        apply(
+            &mut e,
+            EditorMsg::SimSetPinNode {
+                pin_number: "2".to_string(),
+                value: "GND".to_string(),
+            },
+        );
+        let pins = vec![
+            signex_library::SymbolPin::new("1", "IN"),
+            signex_library::SymbolPin::new("2", ""),
+        ];
+        let lines = pin_node_lines(e.sim.as_ref().unwrap(), &pins);
+        assert_eq!(lines.len(), pins.len());
+        assert_eq!(lines[0].name, "IN");
+        assert_eq!(lines[0].node, "");
+        assert_eq!(lines[1].name, UNNAMED_PIN);
+        assert_eq!(lines[1].node, "GND");
+    }
+
+    #[test]
+    fn pin_columns_are_pin_symbol_node() {
+        let titles: Vec<&str> = PIN_COLUMNS.iter().map(|(t, _)| *t).collect();
+        assert_eq!(titles, ["Pin", "Symbol", "SPICE Node"]);
     }
 
     /// Enable → disable round-trip clears every Sim-side field.

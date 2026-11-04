@@ -3,7 +3,7 @@
 use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::{Column, Space, button, container, row, scrollable, svg, text};
-use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
+use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -75,7 +75,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use color_field::{ColorFieldProps, color_field};
-pub use context::{PanelContext, SymbolChoiceItem};
+pub use context::{PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,
@@ -249,7 +249,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
     let content = match kind {
         // The Components panel is drawn by `components_panel::view` (the dock and the
         // detached window both route it there); nothing to show here.
-        PanelKind::Components => iced::widget::Space::new().into(),
+        PanelKind::Components => iced::widget::Space::new().boxed(),
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => view_navigator(ctx),
         PanelKind::Properties => view_properties(ctx),
@@ -279,5 +279,5 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::History => return history::view_history(ctx),
     };
 
-    panel_scrollable(content).into()
+    panel_scrollable(content).boxed()
 }

@@ -8,10 +8,8 @@ use iced::widget::button;
 use iced::{Background, Border, Color, Theme};
 use signex_types::theme::ThemeTokens;
 
-use super::ti;
 use super::tokens::{self, Overlay, composite_over};
-
-const RADIUS: f32 = 3.0;
+use super::{RADIUS, ti};
 
 fn fill(c: Color) -> Option<Background> {
     Some(Background::Color(c))
@@ -81,6 +79,7 @@ pub fn outline_button(
             width: 1.0,
             radius: RADIUS.into(),
             color: border,
+            ..Border::default()
         },
         ..button::Style::default()
     }

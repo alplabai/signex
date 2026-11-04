@@ -2,7 +2,7 @@
 //! Signex (#1402), so the state is visible before the user tries an edit.
 
 use iced::widget::{container, text};
-use iced::{Background, Border, Element, Length};
+use iced::{Background, Border, Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::Message;
@@ -26,6 +26,7 @@ pub(in crate::app::view) fn read_only_badge<'a>(tokens: &ThemeTokens) -> Element
                 color: border,
                 width: 1.0,
                 radius: 4.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         });
@@ -34,6 +35,6 @@ pub(in crate::app::view) fn read_only_badge<'a>(tokens: &ThemeTokens) -> Element
         .height(Length::Fill)
         .align_x(iced::alignment::Horizontal::Right)
         .align_y(iced::alignment::Vertical::Top)
-        .padding(8)
-        .into()
+        .padding(8.0)
+        .boxed()
 }

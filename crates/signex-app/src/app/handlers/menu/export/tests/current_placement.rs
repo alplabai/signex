@@ -488,7 +488,7 @@ fn up_hierarchy_hands_the_parent_the_placement_the_child_came_from() {
     descend_by_canvas(&mut app, 1);
     focus_tab(&mut app, &leaf);
 
-    app.ascend_to_parent_sheet();
+    app.ascend_settled();
     assert_eq!(app.active_tab_path().as_deref(), Some(mid.as_path()));
     descend_by_canvas(&mut app, 3);
 

@@ -38,7 +38,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{Space, checkbox, column, container, row, scrollable, text};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_library::RowId;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -252,7 +252,7 @@ pub fn view<'a>(
 
     // Build the drift list. Each row is checkbox + ref_des + library
     // name + version pair + bump-kind badge.
-    let mut rows: iced::widget::Column<'a, LibraryMessage> = column![].spacing(SP.xs);
+    let mut rows: iced::widget::Column<Element<'a, LibraryMessage>> = column![].spacing(SP.xs);
     for entry in &state.entries {
         let row_view = render_entry_row(entry, text_c, muted, tokens);
         rows = rows.push(row_view);
@@ -298,7 +298,7 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 fn render_entry_row<'a>(
@@ -323,7 +323,7 @@ fn render_entry_row<'a>(
     let cb: Element<'a, LibraryMessage> = checkbox(entry.selected)
         .size(TS.heading)
         .on_toggle(move |_| LibraryMessage::LibraryUpdatesToggleSelection(symbol_uuid))
-        .into();
+        .boxed();
 
     container(
         row![
@@ -356,7 +356,7 @@ fn render_entry_row<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([SP.s, SP.s])
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

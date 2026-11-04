@@ -5,6 +5,7 @@
 use super::*;
 use crate::numeric_field::{FieldNumber, parse_field_number};
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::{checkbox, text_input};
 use signex_engine::{MultiEdit, Shared};
 use signex_types::schematic::{HAlign, SCHEMATIC_PT_TO_MM};
@@ -124,7 +125,7 @@ impl MultiView<'_> {
         container(
             row![
                 property_label(label.to_string(), muted),
-                text_input(if mixed { MIXED } else { "" }, &shown)
+                text_input(if mixed { MIXED } else { "" }, shown)
                     .on_input(move |s| {
                         PanelMsg::MultiEdit(MultiEditMsg::DraftChanged(changed.clone(), s))
                     })
@@ -138,7 +139,7 @@ impl MultiView<'_> {
         )
         .padding([2, PROPERTY_ROW_PAD_X])
         .width(Length::Fill)
-        .into()
+        .boxed()
     }
 
     fn string_row<'a>(
@@ -199,7 +200,7 @@ fn flag_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 fn justify_row<'a>(
@@ -244,7 +245,7 @@ fn justify_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// The four turns a label offers, as in the single-label panel; a mixed
@@ -289,7 +290,7 @@ fn rotation_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// The multi-selection Properties body.
@@ -302,11 +303,12 @@ pub fn view_multi_selection<'a>(
     let view = MultiView {
         draft: ctx.multi_draft.as_ref(),
     };
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
     col = col.push(
         container(text("Multi-Selection").size(TS.body).color(primary))
             .padding([6.0, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(thin_sep(border_c));
     col = col.push(
@@ -315,7 +317,8 @@ pub fn view_multi_selection<'a>(
                 .size(TS.caption)
                 .color(muted),
         )
-        .padding([SP.s, SP.m]),
+        .padding([SP.s, SP.m])
+        .boxed(),
     );
     if let Some(g) = &ctx.multi_groups.symbols {
         col = col.push(section_hdr(
@@ -392,10 +395,11 @@ pub fn view_multi_selection<'a>(
                     .size(TS.caption)
                     .color(muted),
             )
-            .padding([SP.s, SP.m]),
+            .padding([SP.s, SP.m])
+            .boxed(),
         );
     }
-    scrollable(col).width(Length::Fill).into()
+    scrollable(col.boxed()).width(Length::Fill).boxed()
 }
 
 #[cfg(test)]

@@ -55,10 +55,10 @@ impl Signex {
     fn continue_paste(&mut self, request: PasteRequest) -> Task<Message> {
         match request.intent {
             PasteIntent::Paste | PasteIntent::SmartPaste | PasteIntent::Array => {
-                iced::clipboard::read().map(move |text| {
+                iced::clipboard::read_text().map(move |text| {
                     Message::Edit(EditMsg::PasteTextRead {
                         request: request.clone(),
-                        text,
+                        text: text.ok().map(|text| (*text).clone()),
                     })
                 })
             }
@@ -80,6 +80,11 @@ impl Signex {
         request: PasteRequest,
         seed: &PasteSeed,
     ) -> Task<Message> {
+        if let Some(window) = self.undocked_window_of_paste(&request) {
+            return self.run_in_window_document(window, |app| {
+                app.handle_paste_counters_seeded(request, seed)
+            });
+        }
         if request.intent == PasteIntent::ArraySeed {
             // Only the dialog that asked is released; an answer for one that
             // closed or was replaced is dropped without a word.
@@ -100,11 +105,27 @@ impl Signex {
         self.continue_paste(request)
     }
 
+    /// The undocked window a paste started in, when the main window's active
+    /// sheet is another one: its follow-ups come back untagged and finish
+    /// there (#1910).
+    fn undocked_window_of_paste(&self, request: &PasteRequest) -> Option<iced::window::Id> {
+        let path = request.path.as_deref()?;
+        if self.document_state.active_path.as_deref() == Some(path) {
+            return None;
+        }
+        // Without a canvas the stale check says so in the Messages panel.
+        self.undocked_canvas_window(path)
+    }
+
     pub(crate) fn handle_paste_text_read(
         &mut self,
         request: PasteRequest,
         text: Option<String>,
     ) -> Task<Message> {
+        if let Some(window) = self.undocked_window_of_paste(&request) {
+            return self
+                .run_in_window_document(window, |app| app.handle_paste_text_read(request, text));
+        }
         if self.paste_request_is_stale(&request) {
             return self.finish_update();
         }
@@ -167,7 +188,7 @@ impl Signex {
     pub(crate) fn mirror_copy_on_clipboard_task(&mut self, outcome: CopyOutcome) -> Task<Message> {
         match outcome {
             CopyOutcome::Carried => self.clipboard_write_task(),
-            CopyOutcome::NothingToCarry => iced::clipboard::write(String::new()),
+            CopyOutcome::NothingToCarry => iced::clipboard::write(String::new()).discard(),
             CopyOutcome::Failed => Task::none(),
         }
     }
@@ -183,14 +204,14 @@ impl Signex {
         match copied.to_clipboard_text() {
             Ok(text) => {
                 self.interaction_state.clipboard_text = Some(text.clone());
-                iced::clipboard::write(text)
+                iced::clipboard::write(text).discard()
             }
             Err(error) => {
                 self.interaction_state.clipboard_text = None;
                 crate::diagnostics::log_warning(format!(
                     "Copy: the selection could not be written to the system clipboard ({error}); the clipboard was emptied so an older copy cannot be pasted instead, and this selection can still be pasted in this window."
                 ));
-                iced::clipboard::write(String::new())
+                iced::clipboard::write(String::new()).discard()
             }
         }
     }

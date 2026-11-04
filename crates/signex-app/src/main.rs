@@ -57,8 +57,6 @@ fn main() -> iced::Result {
     // Default UI font resolves through the Preferences-panel pick. When
     // it matches a bundled family ("Roboto" / "Iosevka") iced uses the
     // embedded TTF directly; otherwise it falls back to a system font.
-    .default_font(iced::Font::with_name(Box::leak(
-        ui_font_name.into_boxed_str(),
-    )))
+    .default_font(iced::Font::with_family(ui_font_name.as_str()))
     .run()
 }

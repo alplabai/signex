@@ -31,7 +31,9 @@ impl Signex {
                 self.ui_state.about_open = false;
                 Task::none()
             }
-            OverlayMsg::CopyAboutInfo => iced::clipboard::write(crate::about::version_info_text()),
+            OverlayMsg::CopyAboutInfo => {
+                iced::clipboard::write(crate::about::version_info_text()).discard()
+            }
             OverlayMsg::OpenLink(link) => crate::about::open_link(link, |detail| {
                 Message::Overlay(OverlayMsg::LinkOpenFailed(detail))
             }),
@@ -183,48 +185,82 @@ impl Signex {
         }
     }
 
+    /// Right-click on a sheet canvas: end an armed placement, else open the
+    /// canvas context menu owned by `window` (`None` = the main window).
+    fn show_canvas_context_menu(
+        &mut self,
+        x: f32,
+        y: f32,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        // Altium convention: right-click during placement terminates
+        // the placement flow (tool-stuck OR ghost-armed OR pending
+        // power/port OR paused preview OR net-colour pen armed)
+        // instead of opening the context menu.
+        let canvas = self.interaction_state.active_canvas();
+        let placement_active = self.interaction_state.current_tool != Tool::Select
+            || canvas.ghost_label.is_some()
+            || canvas.ghost_symbol.is_some()
+            || canvas.ghost_text.is_some()
+            || canvas.placement_paused
+            || self.interaction_state.placement.is_some()
+            || self.interaction_state.pending_power.is_some()
+            || self.interaction_state.pending_port.is_some()
+            || self.ui_state.pending_net_color.is_some()
+            || self.ui_state.reorder_picker.is_some()
+            || self.ui_state.move_pick.is_some()
+            || self.ui_state.lasso_polygon.is_some();
+        if placement_active {
+            self.clear_transient_schematic_tool_state();
+            self.interaction_state.current_tool = Tool::Select;
+            // Drop any app-level armed mode too.
+            self.ui_state.pending_net_color = None;
+            self.interaction_state.active_canvas_mut().pending_net_color = None;
+            self.ui_state.reorder_picker = None;
+            self.ui_state.move_pick = None;
+            self.interaction_state
+                .active_canvas_mut()
+                .clear_overlay_cache();
+            return Task::none();
+        }
+        // A dropdown another window opened is closed, not left invisible and
+        // blocking this window's menu.
+        if self.interaction_state.active_bar_menu.is_some()
+            && self.interaction_state.active_bar_menu_window != window
+        {
+            self.interaction_state.active_bar_menu = None;
+            self.interaction_state.active_bar_menu_window = None;
+        }
+        if self.interaction_state.active_bar_menu.is_none() {
+            let world = self.cursor_world_now();
+            self.close_all_context_menus();
+            self.interaction_state.context_menu = Some(ContextMenuState {
+                x,
+                y,
+                world,
+                window,
+            });
+        }
+        Task::none()
+    }
+
     /// Context-menu subsystem handler (canvas / project-tree / tab menus +
     /// submenu hover state machine), namespaced (ADR-0001 D3).
     pub(crate) fn dispatch_context_menu_message(&mut self, msg: ContextMenuMsg) -> Task<Message> {
         match msg {
-            ContextMenuMsg::Show(x, y) => {
-                // Altium convention: right-click during placement terminates
-                // the placement flow (tool-stuck OR ghost-armed OR pending
-                // power/port OR paused preview OR net-colour pen armed)
-                // instead of opening the context menu.
-                let canvas = self.interaction_state.active_canvas();
-                let placement_active = self.interaction_state.current_tool != Tool::Select
-                    || canvas.ghost_label.is_some()
-                    || canvas.ghost_symbol.is_some()
-                    || canvas.ghost_text.is_some()
-                    || canvas.placement_paused
-                    || self.interaction_state.placement.is_some()
-                    || self.interaction_state.pending_power.is_some()
-                    || self.interaction_state.pending_port.is_some()
-                    || self.ui_state.pending_net_color.is_some()
-                    || self.ui_state.reorder_picker.is_some()
-                    || self.ui_state.move_pick.is_some()
-                    || self.ui_state.lasso_polygon.is_some();
-                if placement_active {
-                    self.clear_transient_schematic_tool_state();
-                    self.interaction_state.current_tool = Tool::Select;
-                    // Drop any app-level armed mode too.
-                    self.ui_state.pending_net_color = None;
-                    self.interaction_state.active_canvas_mut().pending_net_color = None;
-                    self.ui_state.reorder_picker = None;
-                    self.ui_state.move_pick = None;
-                    self.interaction_state
-                        .active_canvas_mut()
-                        .clear_overlay_cache();
-                    return Task::none();
-                }
-                if self.interaction_state.active_bar_menu.is_none() {
-                    let world = self.cursor_world_now();
-                    self.close_all_context_menus();
-                    self.interaction_state.context_menu = Some(ContextMenuState { x, y, world });
-                }
-                Task::none()
-            }
+            ContextMenuMsg::ScopedToWindow(window, inner) => match *inner {
+                // Hover state is global, not per document: no re-entry.
+                hover @ (ContextMenuMsg::SubmenuHover(_)
+                | ContextMenuMsg::SubmenuLeave
+                | ContextMenuMsg::SubmenuEnterPanel
+                | ContextMenuMsg::SubmenuLeavePanel) => self.dispatch_context_menu_message(hover),
+                ContextMenuMsg::Show(x, y) => self.run_in_window_document(window, |app| {
+                    app.show_canvas_context_menu(x, y, app.overlay_owner(window))
+                }),
+                other => self
+                    .run_in_window_document(window, |app| app.dispatch_context_menu_message(other)),
+            },
+            ContextMenuMsg::Show(x, y) => self.show_canvas_context_menu(x, y, None),
             ContextMenuMsg::Close => {
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
@@ -405,6 +441,11 @@ impl Signex {
             }
             AnnotateMsg::ReprefixRowsResolved { generation, result } => {
                 let task = self.handle_reprefix_rows_resolved(generation, &result);
+                self.sync_diagnostics_panel_ctx();
+                task
+            }
+            AnnotateMsg::ReprefixSheetsRead { generation, result } => {
+                let task = self.handle_reprefix_sheets_read(generation, &result);
                 self.sync_diagnostics_panel_ctx();
                 task
             }

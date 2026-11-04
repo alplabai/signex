@@ -461,7 +461,7 @@ fn a_placement_switch_closes_the_open_designator_editor_and_writes_nothing() {
     open_designator_editor(&mut app, "R555");
 
     let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
-    app.open_sheet_with_placement(child, Some(a));
+    app.open_placed_settled(child, Some(a));
     assert!(
         app.interaction_state.editing_text.is_none(),
         "editor closed"
@@ -482,7 +482,7 @@ fn a_jump_within_the_shown_placement_keeps_the_typed_text() {
     open_designator_editor(&mut app, "R557");
 
     let b = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)]);
-    app.open_sheet_with_placement(child, Some(b));
+    app.open_placed_settled(child, Some(b));
     let _ = app.update(crate::app::Message::TextEdit(
         crate::app::TextEditMsg::Submit,
     ));

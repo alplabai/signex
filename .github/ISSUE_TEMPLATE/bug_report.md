@@ -23,7 +23,7 @@ If applicable, add screenshots.
 
 **Environment**
 - OS: [e.g. Windows 11, macOS 15, Ubuntu 24.04]
-- Signex version: [e.g. v0.14.0]
+- Signex version: [e.g. v26.11.0]
 - GPU: [e.g. NVIDIA RTX 4070]
 
 **Project file**

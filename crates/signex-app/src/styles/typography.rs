@@ -46,6 +46,11 @@ pub const fn chrome_px(px_at_reference: f32) -> f32 {
     px_at_reference * DEFAULT_BASE_SIZE / REFERENCE_BASE_SIZE
 }
 
+/// iced's default relative line height (the fork's `LineHeight::default()`;
+/// 0.14 used 1.3). Chrome heights that hold one line of text derive from it;
+/// `typography_tests` ties it to the framework value.
+pub const LINE_HEIGHT: f32 = 1.375;
+
 /// Thickness, in px, of a divider rule. A line weight, not a spacing gap, so
 /// it stays 1 px whatever the base size.
 pub const HAIRLINE: f32 = 1.0;

@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 use crate::styles::{Spacing, TypeScale};
 use iced::widget::{Column, Row, Space, button, column, container, row, text};
-use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -124,10 +124,11 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
                 width: 1.0,
                 color: border_c,
                 radius: 2.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into();
+        .boxed();
 
     let swatch_button = button(
         row![
@@ -149,7 +150,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         let picker = iced_aw::ColorPicker::new(
             true,
             preview_color,
-            swatch_button,
+            swatch_button.boxed(),
             on_cancel,
             move |c: Color| (on_pick_hsv)(color_to_rgba(c)),
         );
@@ -166,7 +167,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         )
         .padding([SP.s, SP.m])
         .width(Length::Fill)
-        .into();
+        .boxed();
     }
 
     // The header row (label + swatch button) is always shown.
@@ -185,16 +186,16 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     .width(Length::Fill);
 
     if !show_palette {
-        return header.into();
+        return header.boxed();
     }
 
     // ── Inline preset palette (rendered below the row, full width) ──
     // 6 columns × 2 rows of preset swatches; each cell stretches
     // proportionally so the grid always fills the available panel
     // width (no clipping in narrow docks).
-    let mut palette_grid: Column<'a, M> = Column::new().spacing(SP.s);
+    let mut palette_grid: Column<Element<'a, M>> = Column::new().spacing(SP.s);
     for chunk in PRESETS.chunks(6) {
-        let mut r: Row<'a, M> = Row::new().spacing(SP.s);
+        let mut r: Row<Element<'a, M>> = Row::new().spacing(SP.s);
         for (_name, rgb) in chunk {
             let c = Color::from_rgb(
                 rgb[0] as f32 / 255.0,
@@ -214,22 +215,23 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
                         width: 1.0,
                         color: border_c,
                         radius: 2.0.into(),
+                        ..Border::default()
                     },
                     ..button::Style::default()
                 });
-            r = r.push(swatch_btn);
+            r = r.push(swatch_btn.boxed());
         }
-        palette_grid = palette_grid.push(r);
+        palette_grid = palette_grid.push(r.boxed());
     }
 
-    let mut palette_col: Column<'a, M> = Column::new()
+    let mut palette_col: Column<Element<'a, M>> = Column::new()
         .spacing(6)
         .padding([6.0, SP.m])
         .width(Length::Fill);
-    palette_col = palette_col.push(text("Preset Colours").size(TS.caption).color(muted));
-    palette_col = palette_col.push(palette_grid);
+    palette_col = palette_col.push(text("Preset Colours").size(TS.caption).color(muted).boxed());
+    palette_col = palette_col.push(palette_grid.boxed());
 
-    let mut action_row: Row<'a, M> = Row::new().spacing(SP.s).width(Length::Fill);
+    let mut action_row: Row<Element<'a, M>> = Row::new().spacing(SP.s).width(Length::Fill);
     action_row = action_row.push(
         button(
             text("Custom…")
@@ -239,7 +241,8 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
         .padding([SP.s, 10.0])
         .width(Length::Fill)
         .on_press(on_advanced)
-        .style(button::secondary),
+        .style(button::secondary)
+        .boxed(),
     );
     if let Some(on_clear) = on_clear {
         action_row = action_row.push(
@@ -251,10 +254,11 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
             .padding([SP.s, 10.0])
             .width(Length::Fill)
             .on_press(on_clear)
-            .style(button::secondary),
+            .style(button::secondary)
+            .boxed(),
         );
     }
-    palette_col = palette_col.push(action_row);
+    palette_col = palette_col.push(action_row.boxed());
 
     let palette_panel = container(palette_col)
         .width(Length::Fill)
@@ -264,6 +268,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
                 width: 1.0,
                 color: border_c,
                 radius: 4.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         });
@@ -271,7 +276,7 @@ pub fn color_field<'a, M: Clone + 'static>(props: ColorFieldProps<'a, M>) -> Ele
     column![header, container(palette_panel).padding([0.0, SP.m])]
         .spacing(SP.s)
         .width(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Quantise an `iced::Color` to 8-bit RGBA. Clamps each channel into

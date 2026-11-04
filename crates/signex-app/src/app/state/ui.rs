@@ -111,6 +111,9 @@ pub struct UiState {
     /// dropped when it closes (#1887). Read
     /// through [`Self::device_px_per_logical_px`].
     pub window_os_scales: std::collections::HashMap<iced::window::Id, f32>,
+    /// Size of every undocked tab window, kept so its dropdown and context
+    /// menu are placed inside it, not inside the main window (#1910).
+    pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
@@ -512,9 +515,15 @@ pub struct UiState {
     pub annotate_runs: crate::app::handlers::erc::AnnotateRuns,
     /// The Place Sheet commit waiting for the folder listing (#859).
     pub sheet_place: crate::app::handlers::canvas::SheetPlaceJobs,
-    /// Canvas descents whose child sheet is being read, by the path read (#859).
-    pub pending_descents:
-        std::collections::HashMap<std::path::PathBuf, crate::app::handlers::canvas::PendingDescent>,
+    /// Sheet opens whose file is being read, by the path read (#859).
+    pub pending_sheet_opens: std::collections::HashMap<
+        std::path::PathBuf,
+        crate::app::handlers::canvas::PendingSheetOpen,
+    >,
+    /// Counts sheet-open requests; the newest one is the navigation the user
+    /// asked for last, and an older read that lands after it must not take
+    /// the view (#1977).
+    pub sheet_open_seq: u64,
     /// Token of the newest Re-prefix to standard library lookup (#1315); a
     /// result carrying an older one is dropped.
     pub reprefix_generation: u64,

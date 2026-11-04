@@ -17,7 +17,7 @@
 //! positions the card at exactly those pixels.
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Element, Length, Padding};
+use iced::{Background, Border, Element, Length, Padding, Widget};
 
 use signex_types::theme::ThemeTokens;
 
@@ -336,19 +336,20 @@ pub fn view_context_menu<'a>(
     let card_bg = ti(tokens.panel_bg);
     let border_c = ti(tokens.border);
     let card = container(column(items).spacing(0))
-        .padding(Padding::from([4u16, 0u16]))
+        .padding(Padding::from([SP.s, 0.0]))
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(card_bg)),
             border: Border {
                 color: border_c,
                 width: 1.0,
                 radius: 4.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
         .width(MENU_WIDTH);
 
-    Some(card.into())
+    Some(card.boxed())
 }
 
 /// A command's label under the active profile; empty (no hint) when the
@@ -398,7 +399,7 @@ fn item_msg<'a>(
             }
         },
     )
-    .into()
+    .boxed()
 }
 
 fn item_indented<'a>(
@@ -412,7 +413,7 @@ fn item_indented<'a>(
     let hover_c = ti(tokens.hover);
     button(
         row![
-            iced::widget::Space::new().width(16),
+            iced::widget::Space::new().width(SP.xl),
             text(label.to_string()).size(FONT_SIZE).color(text_c),
             iced::widget::Space::new().width(Length::Fill),
             text(shortcut.to_string()).size(TS.caption).color(secondary),
@@ -438,7 +439,7 @@ fn item_indented<'a>(
             }
         },
     )
-    .into()
+    .boxed()
 }
 
 fn item_disabled<'a>(
@@ -459,7 +460,7 @@ fn item_disabled<'a>(
     )
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
-    .into()
+    .boxed()
 }
 
 fn item_submenu_header<'a>(
@@ -500,19 +501,19 @@ fn item_submenu_header<'a>(
             }
         },
     )
-    .into()
+    .boxed()
 }
 
 fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
     let c = ti(tokens.border);
-    container(iced::widget::Space::new().height(1))
-        .padding(Padding::from([4u16, 0u16]))
+    container(iced::widget::Space::new().height(crate::styles::HAIRLINE))
+        .padding(Padding::from([SP.s, 0.0]))
         .width(MENU_WIDTH)
         .style(move |_: &iced::Theme| container::Style {
             background: Some(Background::Color(c)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

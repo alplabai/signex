@@ -16,7 +16,7 @@ impl Signex {
         card: &HoverCard,
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
-        use iced::widget::{column, container, row, text};
+        use iced::widget::{Widget as _, column, container, row, text};
         use iced::{Background, Border};
 
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -26,13 +26,13 @@ impl Signex {
         let border_c = crate::styles::ti(tokens.border);
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(card.pins.len() + 3);
-        rows.push(text(card.name.clone()).size(TS.label).color(text_c).into());
+        rows.push(text(card.name.clone()).size(TS.label).color(text_c).boxed());
         if let Some(class) = &card.class {
             rows.push(
                 text(format!("Class: {class}"))
                     .size(TS.caption)
                     .color(muted_c)
-                    .into(),
+                    .boxed(),
             );
         }
         for pin in &card.pins {
@@ -42,7 +42,7 @@ impl Signex {
                     text(pin.sheet.clone()).size(TS.caption).color(muted_c),
                 ]
                 .spacing(SP.s)
-                .into(),
+                .boxed(),
             );
         }
         if card.hidden > 0 {
@@ -50,12 +50,12 @@ impl Signex {
                 text(format!("+{} more", card.hidden))
                     .size(TS.caption)
                     .color(muted_c)
-                    .into(),
+                    .boxed(),
             );
         }
         let height = CARD_PAD_H + ROW_H * rows.len() as f32;
 
-        let body = container(column(rows).spacing(2))
+        let body = container(column(rows).spacing(2).boxed())
             .padding(iced::Padding {
                 top: 8.0,
                 right: 14.0,
@@ -69,6 +69,7 @@ impl Signex {
                     color: border_c,
                     width: 1.0,
                     radius: 4.0.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             });
@@ -78,6 +79,6 @@ impl Signex {
             (CARD_W, height),
             self.card_bounds(window_id),
         );
-        super::super::view::translate::Translate::new(body, (x, y)).into()
+        super::super::translate::Translate::new(body.boxed(), (x, y)).boxed()
     }
 }

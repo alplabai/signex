@@ -3,7 +3,7 @@
 //! bar geometry reads.
 
 use iced::widget::{Space, button, container, row, svg};
-use iced::{Alignment, Background, Border, Color, Element, Length};
+use iced::{Alignment, Background, Border, Color, Element, Length, Widget};
 use signex_types::theme::ThemeId;
 
 use crate::app::{Message, WindowMsg};
@@ -75,7 +75,7 @@ pub(super) fn leading(
 ) -> Element<'static, Message> {
     if layout.is_native() {
         let (inset, _) = extents(layout, fullscreen);
-        return Space::new().width(inset).into();
+        return Space::new().width(inset).boxed();
     }
     group(&layout.leading, layout.style, pal)
 }
@@ -92,7 +92,7 @@ fn group(
 ) -> Element<'static, Message> {
     let build = |kind: &WindowButton| -> Element<'static, Message> {
         match style {
-            WindowControlsStyle::MacNative => Space::new().into(),
+            WindowControlsStyle::MacNative => Space::new().boxed(),
             WindowControlsStyle::Windows => windows_button(*kind, pal),
             WindowControlsStyle::Linux => linux_button(*kind, pal),
             WindowControlsStyle::MacDrawn => mac_drawn_button(*kind),
@@ -116,7 +116,7 @@ fn group(
     )
     .height(MENU_BAR_HEIGHT)
     .align_y(iced::alignment::Vertical::Center)
-    .into()
+    .boxed()
 }
 
 /// Close goes through the unsaved-changes guard like every other close route.
@@ -142,7 +142,7 @@ fn icon(kind: WindowButton, pal: Palette, size: f32) -> Element<'static, Message
         .width(size)
         .height(size)
         .style(move |_: &iced::Theme, _| svg::Style { color: Some(text) })
-        .into()
+        .boxed()
 }
 
 fn centered(content: Element<'static, Message>) -> Element<'static, Message> {
@@ -151,7 +151,7 @@ fn centered(content: Element<'static, Message>) -> Element<'static, Message> {
         .height(Length::Fill)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center)
-        .into()
+        .boxed()
 }
 
 fn is_hot(status: button::Status) -> bool {
@@ -181,7 +181,7 @@ fn windows_button(kind: WindowButton, pal: Palette) -> Element<'static, Message>
                 ..Default::default()
             }
         })
-        .into()
+        .boxed()
 }
 
 /// Round button with a faint resting fill, as in libadwaita headerbars.
@@ -207,7 +207,7 @@ fn linux_button(kind: WindowButton, pal: Palette) -> Element<'static, Message> {
             },
             ..Default::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Traffic-light circle (used when macOS controls are moved to the right).
@@ -238,7 +238,7 @@ fn mac_drawn_button(kind: WindowButton) -> Element<'static, Message> {
                 ..Default::default()
             }
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

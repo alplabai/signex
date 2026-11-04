@@ -89,6 +89,10 @@ impl Signex {
             file_label(path),
             file_label(&held)
         ));
+        // An open waiting on this read runs its follow-up on the tab shown.
+        if let Some(open) = self.ui_state.pending_sheet_opens.get_mut(path) {
+            open.aliased(held.clone());
+        }
         self.activate_tab_for_path(&held);
         true
     }

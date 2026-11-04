@@ -1,16 +1,17 @@
-//! Parameters tab — template-validated parameter form, retargeted at
+//! Parameters tab — template-validated parameter grid, retargeted at
 //! `state.row.parameters` (DBLib model).
 //!
-//! Renders three groups against the active class template:
-//! - **Required:** every `ParameterTemplate.required_params` slot, with
-//!   a "✗ missing" amber tag when no value is currently bound.
+//! One grid with Scope / Name / Value / Unit / Status columns, built from
+//! the shared dialog kit:
+//! - **Required:** every `ParameterTemplate.required_params` slot, with a
+//!   "Missing value" note in the status column when nothing is bound.
 //! - **Optional:** every `ParameterTemplate.optional_params` slot.
-//! - **Custom:** parameters on the row that aren't in the template.
-//!   Custom rows carry an inline `[×]` remove button.
+//! - **Custom:** parameters on the row that aren't in the template, each
+//!   with a Remove button.
 //!
-//! When no template resolves the view falls back to a "no template —
-//! populate with custom parameters" surface that only renders the
-//! custom rows + the add-new control.
+//! Below the grid, an add control (name + one button per value kind)
+//! creates custom parameters. Without a template the grid holds only
+//! custom rows.
 //!
 //! Numeric / measurement edits go through a per-row `String` buffer on
 //! the editor's `params_edit_buf`, following the
@@ -18,22 +19,122 @@
 
 use std::collections::BTreeSet;
 
-use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Border, Element, Length, Theme};
-use signex_library::{ParamKind, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation};
+use iced::widget::{Column, Widget, column, row, scrollable, text, text_input};
+use iced::{Element, Length};
+use signex_library::{
+    ParamKind, ParamMap, ParamSlot, ParamValue, ParameterTemplate, TemplateViolation,
+};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage, ParamKindMsg};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 use super::super::unit_picker::{unit_of_token, unit_picker};
+use super::kit::{self, SP, TS};
 
-/// Width of the status column: the missing badge or a slot problem.
-const STATUS_W: f32 = 170.0;
+const COLUMNS: [(&str, Length); 6] = [
+    ("Scope", Length::FillPortion(2)),
+    ("Name", Length::FillPortion(3)),
+    ("Value", Length::FillPortion(6)),
+    ("Unit", Length::FillPortion(2)),
+    ("Status", Length::FillPortion(3)),
+    ("", Length::FillPortion(2)),
+];
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// Where a grid row comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Scope {
+    Required,
+    Optional,
+    Custom,
+}
+
+impl Scope {
+    fn label(self) -> &'static str {
+        match self {
+            Scope::Required => "Required",
+            Scope::Optional => "Optional",
+            Scope::Custom => "Custom",
+        }
+    }
+}
+
+/// One grid row: a template slot or a custom parameter.
+struct RowSpec<'a> {
+    name: &'a str,
+    scope: Scope,
+    slot: Option<&'a ParamSlot>,
+}
+
+/// Grid rows in display order: required slots, optional slots, then the
+/// row's parameters that no slot names.
+fn row_specs<'a>(
+    template: Option<&'a ParameterTemplate>,
+    params: &'a ParamMap,
+) -> Vec<RowSpec<'a>> {
+    let mut specs = Vec::new();
+    let mut known = BTreeSet::new();
+    if let Some(t) = template {
+        for (slots, scope) in [
+            (&t.required_params, Scope::Required),
+            (&t.optional_params, Scope::Optional),
+        ] {
+            for slot in slots {
+                known.insert(slot.name.as_str());
+                specs.push(RowSpec {
+                    name: slot.name.as_str(),
+                    scope,
+                    slot: Some(slot),
+                });
+            }
+        }
+    }
+    for name in params.keys().filter(|k| !known.contains(k.as_str())) {
+        specs.push(RowSpec {
+            name: name.as_str(),
+            scope: Scope::Custom,
+            slot: None,
+        });
+    }
+    specs
+}
+
+/// What the status column says about a row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StatusNote {
+    Missing,
+    Problem(String),
+}
+
+fn status_note(scope: Scope, present: bool, problem: Option<&String>) -> Option<StatusNote> {
+    if scope == Scope::Required && !present {
+        return Some(StatusNote::Missing);
+    }
+    problem.map(|why| StatusNote::Problem(why.clone()))
+}
+
+/// Class summary shown beside the section title.
+fn class_label(class: &str, has_template: bool) -> String {
+    match (class, has_template) {
+        ("", _) => "no class".to_string(),
+        (class, true) => format!("class: {class}"),
+        (class, false) => format!("class: {class}, no template"),
+    }
+}
+
+/// Empty-grid message.
+fn empty_text(has_template: bool) -> &'static str {
+    if has_template {
+        "No parameters yet. Add a custom parameter below."
+    } else {
+        "No template for this class. Add custom parameters below."
+    }
+}
+
+/// A custom parameter needs a name before it can be added.
+fn can_add(new_name: &str) -> bool {
+    !new_name.trim().is_empty()
+}
 
 /// Resolve the parameter template for a preview state by walking
 /// `LibraryState.open_libraries` for the matching `library_path`, then
@@ -50,7 +151,7 @@ fn resolve_template<'a>(
     library_state.template_registry.resolve(library_id, class)
 }
 
-fn library_id_of(
+pub(super) fn library_id_of(
     state: &ComponentPreviewState,
     library_state: &LibraryState,
 ) -> Option<uuid::Uuid> {
@@ -62,7 +163,7 @@ fn library_id_of(
 }
 
 /// The short reason a slot's current value breaks its template, shown in
-/// the slot's status column. A missing required slot has its own badge.
+/// the slot's status column. A missing required slot has its own note.
 fn violation_text(v: &TemplateViolation) -> Option<(&str, String)> {
     let name = match v {
         TemplateViolation::MissingRequired { name }
@@ -97,286 +198,172 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-
     let template = resolve_template(state, library_state);
     let problems = slot_problems(state, library_state);
 
-    let header_label = match template {
-        Some(t) => format!("Parameters (class: {})", t.class),
-        None => match state.row.class.as_str() {
-            "" => "Parameters (no class)".to_string(),
-            class => format!("Parameters (class: {class}, no template)"),
-        },
-    };
+    let class_note = text(class_label(state.row.class.as_str(), template.is_some()))
+        .size(TS.body)
+        .color(theme_ext::text_secondary(tokens));
 
-    let mut body = column![
-        text(header_label).size(TS.title).color(text_c),
-        Space::new().height(10),
+    let specs = row_specs(template, &state.row.parameters);
+    let mut grid: Column<Element<'a, LibraryMessage>> =
+        column![kit::table_header(&COLUMNS, tokens)];
+    if specs.is_empty() {
+        grid = grid.push(kit::empty_state(
+            empty_text(template.is_some()),
+            None,
+            tokens,
+        ));
+    }
+    for (index, spec) in specs.iter().enumerate() {
+        grid = grid.push(param_row(
+            state,
+            spec,
+            index,
+            problems.get(spec.name),
+            tokens,
+            &address,
+        ));
+    }
+
+    let body = column![
+        kit::section_header("Parameters", Some(class_note.boxed()), tokens),
+        kit::card(grid.boxed(), tokens),
+        add_custom_card(state, tokens, &address),
     ]
-    .spacing(0)
-    .width(Length::Fill);
+    .spacing(SP.l)
+    .width(Length::Fill)
+    .boxed();
 
-    let template_keys: BTreeSet<String> = template
-        .map(|t| {
-            t.required_params
-                .iter()
-                .chain(t.optional_params.iter())
-                .map(|s| s.name.clone())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    if let Some(t) = template {
-        // ── Required ────────────────────────────────────────────────
-        if !t.required_params.is_empty() {
-            body = body.push(text("Required").size(TS.body).color(muted));
-            body = body.push(Space::new().height(6));
-            for slot in &t.required_params {
-                body = body.push(template_row(
-                    state,
-                    slot,
-                    true,
-                    problems.get(&slot.name),
-                    tokens,
-                    &address,
-                ));
-                body = body.push(Space::new().height(4));
-            }
-            body = body.push(Space::new().height(8));
-        }
-        // ── Optional ────────────────────────────────────────────────
-        if !t.optional_params.is_empty() {
-            body = body.push(text("Optional").size(TS.body).color(muted));
-            body = body.push(Space::new().height(6));
-            for slot in &t.optional_params {
-                body = body.push(template_row(
-                    state,
-                    slot,
-                    false,
-                    problems.get(&slot.name),
-                    tokens,
-                    &address,
-                ));
-                body = body.push(Space::new().height(4));
-            }
-            body = body.push(Space::new().height(8));
-        }
-    } else {
-        body = body.push(
-            text(format!(
-                "No template for class `{}` — populate with custom parameters.",
-                state.row.class.as_str()
-            ))
-            .size(TS.body)
-            .color(muted),
-        );
-        body = body.push(Space::new().height(10));
-    }
-
-    // ── Custom parameters ────────────────────────────────────────────
-    let custom_keys: Vec<&String> = state
-        .row
-        .parameters
-        .keys()
-        .filter(|k| !template_keys.contains(k.as_str()))
-        .collect();
-
-    body = body.push(text("Custom").size(TS.body).color(muted));
-    body = body.push(Space::new().height(6));
-
-    if custom_keys.is_empty() {
-        body = body.push(text("No custom parameters yet.").size(TS.body).color(muted));
-        body = body.push(Space::new().height(6));
-    } else {
-        for key in custom_keys {
-            let val = &state.row.parameters[key];
-            body = body.push(custom_row(state, key, val, tokens, &address));
-            body = body.push(Space::new().height(4));
-        }
-        body = body.push(Space::new().height(6));
-    }
-
-    // [+ Add custom parameter] row
-    body = body.push(add_custom_row(state, tokens, &address));
-
-    container(scrollable(body).width(Length::Fill).height(Length::Fill))
-        .style(crate::styles::modal_card(tokens))
-        .padding(14)
-        .into()
+    scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed()
 }
 
-/// Layout one slot row from the template — value editor + unit suffix +
-/// optional "✗ missing" badge for required-but-empty required slots.
-fn template_row<'a>(
+/// Layout one grid row: scope, name, value editor, unit, status, remove.
+fn param_row<'a>(
     state: &'a ComponentPreviewState,
-    slot: &'a ParamSlot,
-    required: bool,
+    spec: &RowSpec<'a>,
+    index: usize,
     problem: Option<&String>,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
+    let name = spec.name;
+    let value = state.row.parameters.get(name);
 
-    let label_color = if required { text_c } else { muted };
-    let present = state.row.parameters.contains_key(&slot.name);
-
-    let label = container(text(slot.name.clone()).size(TS.body).color(label_color))
-        .width(Length::FillPortion(3));
-
-    let editor_widget: Element<'a, LibraryMessage> = slot_input(
-        state,
-        &slot.name,
-        slot.kind,
-        slot.unit.clone(),
-        Some(slot),
-        tokens,
-        address,
-    );
-
-    let unit_label: Element<'a, LibraryMessage> = match (&slot.unit, slot.kind) {
-        (Some(u), ParamKind::Measurement) => container(text(u.clone()).size(TS.body).color(muted))
-            .padding([0.0, SP.m])
-            .width(Length::Fixed(60.0))
-            .into(),
-        _ => Space::new().width(Length::Fixed(60.0)).into(),
+    let (kind, unit) = match (spec.slot, value) {
+        (Some(slot), _) => (slot.kind, slot.unit.clone()),
+        (None, Some(v)) => custom_kind_and_unit(v),
+        (None, None) => (ParamKind::Text, None),
     };
 
-    let status: Element<'a, LibraryMessage> = if required && !present {
-        let amber = iced::Color::from_rgb(0.95, 0.70, 0.18);
-        container(text("\u{2717} missing").size(TS.body).color(amber))
-            .width(Length::Fixed(STATUS_W))
-            .into()
-    } else if let Some(why) = problem {
-        container(
-            text(format!("\u{2717} {why}"))
-                .size(TS.body)
-                .color(theme_ext::error_color(tokens)),
-        )
-        .width(Length::Fixed(STATUS_W))
-        .into()
+    let scope_color = if spec.scope == Scope::Required {
+        text_c
     } else {
-        Space::new().width(Length::Fixed(STATUS_W)).into()
+        muted
+    };
+    let scope_cell: Element<'a, LibraryMessage> = text(spec.scope.label())
+        .size(TS.body)
+        .color(scope_color)
+        .boxed();
+    let name_cell: Element<'a, LibraryMessage> =
+        text(name.to_string()).size(TS.body).color(text_c).boxed();
+
+    let editor = slot_input(state, name, kind, unit.clone(), spec.slot, tokens, address);
+    let unit_cell = unit_cell(spec.scope, kind, unit, name, tokens, address);
+
+    let status_cell: Element<'a, LibraryMessage> =
+        match status_note(spec.scope, value.is_some(), problem) {
+            Some(StatusNote::Missing) => text("Missing value")
+                .size(TS.body)
+                .color(theme_ext::warning_color(tokens))
+                .boxed(),
+            Some(StatusNote::Problem(why)) => text(why)
+                .size(TS.body)
+                .color(theme_ext::error_color(tokens))
+                .boxed(),
+            None => text("").size(TS.body).boxed(),
+        };
+
+    let action_cell: Element<'a, LibraryMessage> = if spec.scope == Scope::Custom {
+        kit::danger_button(
+            "Remove",
+            Some(editor_event(
+                address,
+                EditorMsg::ParamRemove {
+                    name: name.to_string(),
+                },
+            )),
+            tokens,
+        )
+    } else {
+        text("").size(TS.body).boxed()
     };
 
-    row![
-        label,
-        container(editor_widget).width(Length::FillPortion(7)),
-        unit_label,
-        status,
-    ]
-    .align_y(iced::Alignment::Center)
-    .spacing(SP.m)
-    .width(Length::Fill)
-    .into()
+    let [scope_w, name_w, value_w, unit_w, status_w, action_w] = COLUMNS.map(|(_, w)| w);
+    kit::table_row(
+        vec![
+            (scope_cell, scope_w),
+            (name_cell, name_w),
+            (editor, value_w),
+            (unit_cell, unit_w),
+            (status_cell, status_w),
+            (action_cell, action_w),
+        ],
+        index,
+        None,
+        tokens,
+    )
 }
 
-/// Layout a custom parameter row — same value editor as `template_row`
-/// but with a per-row `[×]` remove button instead of the missing badge.
-fn custom_row<'a>(
-    state: &'a ComponentPreviewState,
-    name: &'a str,
-    val: &'a ParamValue,
+fn custom_kind_and_unit(v: &ParamValue) -> (ParamKind, Option<String>) {
+    match v {
+        ParamValue::Text(_) => (ParamKind::Text, None),
+        ParamValue::Number(_) => (ParamKind::Number, None),
+        ParamValue::Bool(_) => (ParamKind::Bool, None),
+        ParamValue::Measurement { unit, .. } => (ParamKind::Measurement, Some(unit.clone())),
+    }
+}
+
+/// Unit column. A template slot fixes its unit, shown as text. No slot
+/// fixes the unit of a custom row, so it is picked, never typed; a unit
+/// string the build does not know stays a read-only label.
+fn unit_cell<'a>(
+    scope: Scope,
+    kind: ParamKind,
+    unit: Option<String>,
+    name: &str,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-
-    let kind = match val {
-        ParamValue::Text(_) => ParamKind::Text,
-        ParamValue::Number(_) => ParamKind::Number,
-        ParamValue::Bool(_) => ParamKind::Bool,
-        ParamValue::Measurement { .. } => ParamKind::Measurement,
+    let (Some(u), ParamKind::Measurement) = (unit, kind) else {
+        return text("").size(TS.body).boxed();
     };
-    let unit = match val {
-        ParamValue::Measurement { unit, .. } => Some(unit.clone()),
-        _ => None,
-    };
-
-    let label =
-        container(text(name.to_string()).size(TS.body).color(text_c)).width(Length::FillPortion(3));
-
-    let editor_widget = slot_input(state, name, kind, unit.clone(), None, tokens, address);
-
-    // No slot fixes the unit of a custom row, so it is picked, never
-    // typed. A unit string the build does not know stays a read-only label.
-    let unit_label: Element<'a, LibraryMessage> = match (unit, kind) {
-        (Some(u), ParamKind::Measurement) => match unit_of_token(&u) {
-            Ok(selected) => {
-                let lib_path = address.library_path.clone();
-                let table = address.table.clone();
-                let row_id = address.row_id;
-                let name_owned = name.to_string();
-                let allow_none = selected.is_none();
-                container(unit_picker(selected, allow_none, TS.body, move |unit| {
-                    LibraryMessage::EditorEvent {
-                        library_path: lib_path.clone(),
-                        table: table.clone(),
-                        row_id,
-                        msg: EditorMsg::ParamUnitPicked {
-                            name: name_owned.clone(),
-                            unit,
-                        },
-                    }
-                }))
-                .width(Length::Fixed(90.0))
-                .into()
-            }
-            Err(raw) => container(text(raw.to_string()).size(TS.body).color(muted))
-                .padding([0, 8])
-                .width(Length::Fixed(90.0))
-                .into(),
-        },
-        _ => Space::new().width(Length::Fixed(90.0)).into(),
-    };
-
-    let lib_path = address.library_path.clone();
-    let table = address.table.clone();
-    let row_id = address.row_id;
-    let name_owned = name.to_string();
-    let remove_btn =
-        button(container(text("\u{00D7}").size(TS.title).color(muted)).padding([0, 6]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: lib_path,
-                table,
-                row_id,
-                msg: EditorMsg::ParamRemove { name: name_owned },
-            })
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let bg = match status {
-                    iced::widget::button::Status::Hovered => {
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                    }
-                    _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
-                };
-                iced::widget::button::Style {
-                    background: Some(iced::Background::Color(bg)),
-                    text_color: muted,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: theme_ext::border_color(tokens),
+    if scope != Scope::Custom {
+        return text(u).size(TS.body).color(muted).boxed();
+    }
+    match unit_of_token(&u) {
+        Ok(selected) => {
+            let address = address.clone();
+            let name = name.to_string();
+            let allow_none = selected.is_none();
+            unit_picker(selected, allow_none, TS.body, move |unit| {
+                editor_event(
+                    &address,
+                    EditorMsg::ParamUnitPicked {
+                        name: name.clone(),
+                        unit,
                     },
-                    ..iced::widget::button::Style::default()
-                }
-            });
-
-    let status_block: Element<'a, LibraryMessage> =
-        container(remove_btn).width(Length::Fixed(110.0)).into();
-
-    row![
-        label,
-        container(editor_widget).width(Length::FillPortion(7)),
-        unit_label,
-        status_block,
-    ]
-    .align_y(iced::Alignment::Center)
-    .spacing(SP.m)
-    .width(Length::Fill)
-    .into()
+                )
+            })
+        }
+        Err(raw) => text(raw.to_string()).size(TS.body).color(muted).boxed(),
+    }
 }
 
 /// Build the kind-appropriate editor widget for one parameter cell.
@@ -424,7 +411,7 @@ fn text_cell<'a>(
     };
     let address = address.clone();
     let name = name.to_string();
-    text_input("", &value)
+    text_input("", value)
         .on_input(move |s| {
             editor_event(
                 &address,
@@ -436,7 +423,7 @@ fn text_cell<'a>(
         })
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn number_cell<'a>(
@@ -455,7 +442,7 @@ fn number_cell<'a>(
     });
     let (input_address, input_name) = (address.clone(), name.to_string());
     let (submit_address, submit_name) = (address.clone(), name.to_string());
-    text_input("", &buf)
+    text_input("", buf)
         .on_input(move |s| {
             editor_event(
                 &input_address,
@@ -471,7 +458,7 @@ fn number_cell<'a>(
         ))
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .into()
+        .boxed()
 }
 
 fn bool_cell<'a>(
@@ -494,7 +481,7 @@ fn bool_cell<'a>(
         })
         .size(TS.heading)
         .spacing(SP.s)
-        .into()
+        .boxed()
 }
 
 /// Cheap text view of a `ParamValue` for fallback rendering when the
@@ -504,95 +491,49 @@ fn display_param(v: &ParamValue) -> String {
     ParamValue::display(v)
 }
 
-/// Inline "+ Add custom parameter" row — text input + four kind buttons
-/// (Text / Number / Bool / Measurement). The kind buttons live as
-/// separate `+` buttons because adding a custom row is rare and a
-/// pick-list would be heavier than the four-pill UI.
-///
-/// The kind pills add a parameter named by the input's text
-/// (`ComponentPreviewState::new_param_name`); a blank name adds nothing.
-fn add_custom_row<'a>(
+/// Add control: a name input and one button per value kind. The buttons
+/// add a parameter named by `ComponentPreviewState::new_param_name` and
+/// stay disabled while the name is blank.
+fn add_custom_card<'a>(
     state: &'a ComponentPreviewState,
     tokens: &'a ThemeTokens,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-    let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
-
-    let lib_path = address.library_path.clone();
-    let table = address.table.clone();
-    let row_id = address.row_id;
-
-    // Static placeholder row — the Add operation requires the user to
-    // type the name into the input below and pick a kind. A single
-    // "Add" pill seeds with `Text` for now (custom-row kind switching
-    // happens via toggling in a later polish pass).
-    let pill = |label: &'static str, kind: ParamKindMsg| -> Element<'a, LibraryMessage> {
-        let lib_path = lib_path.clone();
-        let table = table.clone();
-        let kind_for_msg = kind;
-        button(container(text(label).size(TS.body).color(text_c)).padding([3, 10]))
-            .on_press(LibraryMessage::EditorEvent {
-                library_path: lib_path,
-                table,
-                row_id,
-                msg: EditorMsg::ParamAddCustom {
-                    kind: kind_for_msg.clone(),
-                },
-            })
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let bg = match status {
-                    iced::widget::button::Status::Hovered => {
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                    }
-                    _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03),
-                };
-                iced::widget::button::Style {
-                    background: Some(iced::Background::Color(bg)),
-                    text_color: text_c,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                    },
-                    ..iced::widget::button::Style::default()
-                }
-            })
-            .into()
-    };
-
     let name_input = {
-        let lib_path = address.library_path.clone();
-        let table = address.table.clone();
+        let address = address.clone();
         text_input("Parameter name", &state.new_param_name)
-            .on_input(move |s| LibraryMessage::EditorEvent {
-                library_path: lib_path.clone(),
-                table: table.clone(),
-                row_id,
-                msg: EditorMsg::ParamNewNameChanged(s),
-            })
-            .padding([3, 6])
+            .on_input(move |s| editor_event(&address, EditorMsg::ParamNewNameChanged(s)))
+            .padding([SP.s, SP.m])
             .size(TS.body)
-            .width(Length::Fixed(160.0))
+            .width(Length::FillPortion(3))
+            .boxed()
+    };
+    let enabled = can_add(&state.new_param_name);
+    let kind_button = |label: &'static str, kind: ParamKindMsg| -> Element<'a, LibraryMessage> {
+        kit::secondary_button(
+            label,
+            enabled.then(|| editor_event(address, EditorMsg::ParamAddCustom { kind })),
+            tokens,
+        )
     };
 
-    row![
-        text("[+ Add custom parameter]").size(TS.body).color(muted),
-        Space::new().width(8),
+    let controls = row![
         name_input,
-        Space::new().width(8),
-        pill("Text", ParamKindMsg::Text),
-        Space::new().width(4),
-        pill("Number", ParamKindMsg::Number),
-        Space::new().width(4),
-        pill("Bool", ParamKindMsg::Bool),
-        Space::new().width(4),
-        pill("Measurement", ParamKindMsg::Measurement(String::new())),
+        kind_button("Text", ParamKindMsg::Text),
+        kind_button("Number", ParamKindMsg::Number),
+        kind_button("Bool", ParamKindMsg::Bool),
+        kind_button("Measurement", ParamKindMsg::Measurement(String::new())),
     ]
+    .spacing(SP.m)
     .align_y(iced::Alignment::Center)
-    .spacing(0)
-    .into()
+    .boxed();
+
+    column![
+        kit::section_header("Add custom parameter", None, tokens),
+        kit::card(controls, tokens),
+    ]
+    .spacing(SP.m)
+    .boxed()
 }
 
 /// Build the validation list for a draft — wraps
@@ -752,6 +693,78 @@ mod tests {
             problem_of(&registry, "capacitor", &params, &value_slot),
             None
         );
+    }
+
+    #[test]
+    fn grid_lists_required_then_optional_then_custom() {
+        let registry = TemplateRegistry::new_with_builtins();
+        let template = registry.resolve(Uuid::nil(), "resistor").expect("template");
+        let mut params = ParamMap::new();
+        params.insert("zz_extra".into(), ParamValue::Text("x".into()));
+        let specs = row_specs(Some(template), &params);
+        let expected = template.required_params.len() + template.optional_params.len() + 1;
+        assert_eq!(specs.len(), expected);
+        let scopes: Vec<Scope> = specs.iter().map(|s| s.scope).collect();
+        let first_optional = scopes.iter().position(|s| *s == Scope::Optional);
+        let last_required = scopes.iter().rposition(|s| *s == Scope::Required);
+        if let (Some(o), Some(r)) = (first_optional, last_required) {
+            assert!(r < o);
+        }
+        assert_eq!(scopes.last(), Some(&Scope::Custom));
+        assert_eq!(specs.last().map(|s| s.name), Some("zz_extra"));
+    }
+
+    #[test]
+    fn grid_without_template_holds_only_custom_rows() {
+        let mut params = ParamMap::new();
+        params.insert("a".into(), ParamValue::Bool(true));
+        let specs = row_specs(None, &params);
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].scope, Scope::Custom);
+        assert!(row_specs(None, &ParamMap::new()).is_empty());
+    }
+
+    #[test]
+    fn template_slot_value_is_not_repeated_as_custom() {
+        let registry = TemplateRegistry::new_with_builtins();
+        let template = registry.resolve(Uuid::nil(), "resistor").expect("template");
+        let slot = template.required_params[0].name.clone();
+        let mut params = ParamMap::new();
+        params.insert(slot, ParamValue::Text("1".into()));
+        let specs = row_specs(Some(template), &params);
+        assert!(specs.iter().all(|s| s.scope != Scope::Custom));
+    }
+
+    #[test]
+    fn status_note_flags_missing_required_only() {
+        let why = "zero not allowed".to_string();
+        assert_eq!(
+            status_note(Scope::Required, false, None),
+            Some(StatusNote::Missing)
+        );
+        assert_eq!(status_note(Scope::Optional, false, None), None);
+        assert_eq!(status_note(Scope::Custom, true, None), None);
+        assert_eq!(
+            status_note(Scope::Required, true, Some(&why)),
+            Some(StatusNote::Problem(why))
+        );
+    }
+
+    #[test]
+    fn header_and_empty_texts() {
+        assert_eq!(class_label("", false), "no class");
+        assert_eq!(class_label("", true), "no class");
+        assert_eq!(class_label("resistor", true), "class: resistor");
+        assert_eq!(class_label("widget", false), "class: widget, no template");
+        assert!(empty_text(false).contains("No template"));
+        assert!(empty_text(true).starts_with("No parameters"));
+    }
+
+    #[test]
+    fn add_needs_a_name() {
+        assert!(!can_add(""));
+        assert!(!can_add("   "));
+        assert!(can_add("voltage"));
     }
 
     fn problem_of(

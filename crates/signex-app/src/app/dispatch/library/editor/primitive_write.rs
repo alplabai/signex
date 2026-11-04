@@ -84,6 +84,24 @@ impl PrimitiveWrite {
         if let Some(turn) = &self.turn {
             turn.wait();
         }
+        self.write()
+    }
+
+    /// [`Self::run`] on the UI thread: gives up when the turn does not come
+    /// within `limit`, writing nothing.
+    pub(super) fn run_within(self, limit: std::time::Duration) -> Result<PrimitiveWritten, String> {
+        if let Some(turn) = &self.turn
+            && !turn.wait_within(limit)
+        {
+            return Err(format!(
+                "{}: the library is still busy reading; the save was not made, try again",
+                self.path.display()
+            ));
+        }
+        self.write()
+    }
+
+    fn write(self) -> Result<PrimitiveWritten, String> {
         let (path, mounted) = self.route();
         let library = SaveLibrary::resolve(&path, mounted.as_deref());
         let context = WriteContext {

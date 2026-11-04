@@ -1,6 +1,6 @@
 //! Custom Iced widgets for Signex EDA.
 //!
-//! Reusable, theme-aware widgets built on stock Iced 0.14 primitives.
+//! Reusable, theme-aware widgets built on stock Iced 0.15 primitives.
 //! No Iced fork — composition only.
 
 pub mod active_bar;
@@ -34,14 +34,14 @@ pub trait PushIf<'a, M> {
     fn push_if<E: Into<Element<'a, M>>>(self, cond: bool, f: impl FnOnce() -> E) -> Self;
 }
 
-impl<'a, M: 'a> PushIf<'a, M> for Column<'a, M> {
+impl<'a, M: 'a> PushIf<'a, M> for Column<Element<'a, M>> {
     fn push_if<E: Into<Element<'a, M>>>(self, cond: bool, f: impl FnOnce() -> E) -> Self {
-        if cond { self.push(f()) } else { self }
+        if cond { self.push(f().into()) } else { self }
     }
 }
 
-impl<'a, M: 'a> PushIf<'a, M> for Row<'a, M> {
+impl<'a, M: 'a> PushIf<'a, M> for Row<Element<'a, M>> {
     fn push_if<E: Into<Element<'a, M>>>(self, cond: bool, f: impl FnOnce() -> E) -> Self {
-        if cond { self.push(f()) } else { self }
+        if cond { self.push(f().into()) } else { self }
     }
 }

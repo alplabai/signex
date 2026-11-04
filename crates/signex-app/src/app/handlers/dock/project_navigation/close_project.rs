@@ -219,7 +219,7 @@ impl Signex {
             let dir = project.dir().to_path_buf();
             self.document_state.pending_opens.cancel_under(&dir);
             self.ui_state
-                .pending_descents
+                .pending_sheet_opens
                 .retain(|path, _| !path.starts_with(&dir));
             if self
                 .ui_state
@@ -301,6 +301,7 @@ impl Signex {
             self.document_state
                 .instance_note_scopes
                 .remove(&closed_path);
+            self.document_state.forget_project_saved_state(&closed_path);
         }
 
         // A pricing walk keeps running: closing a project does not unmount its

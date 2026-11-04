@@ -414,7 +414,7 @@ impl Signex {
         doc.engines.retain(|p, _| !gone(p));
         doc.symbol_editors.retain(|p, _| !gone(p));
         doc.footprint_editors.retain(|p, _| !gone(p));
-        doc.mark_documents_clean_where(&gone);
+        doc.discard_documents_where(&gone);
         doc.document_saves.forget_where(&gone);
         if discarded > 0 {
             crate::diagnostics::log_warning(format!(
@@ -645,6 +645,11 @@ impl Signex {
             EntryPatch::Patched(bytes) => {
                 self.prune_removed_entry(&request.dialog, false);
                 if let Some(project_file) = project_file {
+                    self.document_state.note_project_bytes_on_disk(
+                        &project_file,
+                        bytes.to_vec(),
+                        true,
+                    );
                     let other_edits = self.document_state.is_document_dirty(&project_file);
                     crate::diagnostics::log_info(format!(
                         "Deleted {name}; the saved project file no longer lists it{}.",

@@ -40,6 +40,8 @@ mod browser;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
+#[cfg(test)]
+mod datasheet_open_tests;
 mod datasheet_save;
 mod deferred_close;
 mod document_options;
@@ -74,6 +76,8 @@ mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
+#[cfg(test)]
+mod component_save_point_tests;
 #[cfg(test)]
 mod save_all_cascade_tests;
 mod settings;
@@ -342,6 +346,11 @@ impl Signex {
             }
             LibraryMessage::PreviewTabResolved { readout } => {
                 self.handle_preview_tab_resolved(readout);
+                self.close_libraries_whose_writes_are_done();
+                Task::none()
+            }
+            LibraryMessage::AlternateSymbolResolved { readout } => {
+                self.handle_alternate_symbol_resolved(readout);
                 self.close_libraries_whose_writes_are_done();
                 Task::none()
             }

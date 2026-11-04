@@ -11,13 +11,13 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 impl Signex {
     /// Preview tab — top toolbar (Sheet/Colour/Pages/Output), thumb
     /// rail on the left, pan/zoom viewport on the right.
-    pub(in crate::app::view) fn view_pdf_preview_tab(
-        &self,
-        preview: &crate::app::state::PreviewState,
-    ) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_pdf_preview_tab<'a>(
+        &'a self,
+        preview: &'a crate::app::state::PreviewState,
+    ) -> Element<'a, Message> {
         use iced::widget::{
-            Space, button, checkbox, column, container, image, mouse_area, row, scrollable, text,
-            text_input,
+            Space, Widget as _, button, checkbox, column, container, image, mouse_area, row,
+            scrollable, text, text_input,
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
@@ -55,6 +55,7 @@ impl Signex {
                         color: border_c,
                         width: 1.0,
                         radius: iced::border::Radius::from(4.0),
+                        ..iced::Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 },
@@ -141,9 +142,9 @@ impl Signex {
             ]
             .spacing(SP.m)
             .align_y(iced::Alignment::Center)
-            .into()
+            .boxed()
         } else {
-            iced::widget::Space::new().height(0).into()
+            iced::widget::Space::new().height(0).boxed()
         };
 
         let toggles_row = row![
@@ -178,7 +179,8 @@ impl Signex {
         .padding([SP.m, 14.0]);
 
         // Thumb rail.
-        let mut thumbs: iced::widget::Column<'_, Message> = column![].spacing(SP.s).padding(SP.m);
+        let mut thumbs: iced::widget::Column<Element<'_, Message>> =
+            column![].spacing(SP.s).padding(SP.m);
         for (i, page) in preview.pages.iter().enumerate() {
             let selected = i == preview.selected;
             // A page not drawn yet shows an empty frame: it is rasterised when
@@ -188,7 +190,7 @@ impl Signex {
                     .content_fit(iced::ContentFit::Contain)
                     .width(120)
                     .height(85)
-                    .into(),
+                    .boxed(),
                 None => container(Space::new())
                     .width(120)
                     .height(85)
@@ -196,7 +198,7 @@ impl Signex {
                         background: Some(iced::Color::WHITE.into()),
                         ..container::Style::default()
                     })
-                    .into(),
+                    .boxed(),
             };
             let card_bg = if selected { hover_c } else { panel_bg };
             let card_border = if selected { accent_c } else { border_c };
@@ -218,11 +220,14 @@ impl Signex {
                     color: card_border,
                     width: if selected { 2.0 } else { 1.0 },
                     radius: iced::border::Radius::from(4.0),
+                    ..iced::Border::default()
                 },
                 ..container::Style::default()
             });
             thumbs = thumbs.push(
-                mouse_area(card).on_press(Message::PrintPreview(PrintPreviewMsg::SelectPage(i))),
+                mouse_area(card)
+                    .on_press(Message::PrintPreview(PrintPreviewMsg::SelectPage(i)))
+                    .boxed(),
             );
         }
         let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
@@ -246,10 +251,11 @@ impl Signex {
                     color: border_c,
                     width: 1.0,
                     radius: iced::border::Radius::from(2.0),
+                    ..iced::Border::default()
                 },
                 ..container::Style::default()
             })
-            .into()
+            .boxed()
         } else {
             let selected_page = &preview.pages[preview.selected];
             let zoom = preview.zoom;
@@ -260,17 +266,20 @@ impl Signex {
             // pixels and let the user pan around.
             // Until the selected page is drawn the viewport stays blank white.
             let img_el: Element<'_, Message> = match selected_page.handle() {
-                None => Space::new().width(Length::Fill).height(Length::Fill).into(),
+                None => Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .boxed(),
                 Some(handle) if zoom <= 1.0 => image(handle.clone())
                     .content_fit(iced::ContentFit::Contain)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .into(),
+                    .boxed(),
                 Some(handle) => image(handle.clone())
                     .content_fit(iced::ContentFit::Fill)
                     .width(Length::Fixed(scaled_w))
                     .height(Length::Fixed(scaled_h))
-                    .into(),
+                    .boxed(),
             };
             // Position the image at the pan offset. Below 1× the pan
             // is forced to (0, 0) (see the zoom handler) so the
@@ -278,7 +287,7 @@ impl Signex {
             let positioned: Element<'_, Message> = if zoom <= 1.0 {
                 img_el
             } else {
-                super::view::translate::Translate::new(img_el, preview.pan).into()
+                super::view::translate::Translate::new(img_el, preview.pan).boxed()
             };
             let surface = container(positioned)
                 .width(Length::Fill)
@@ -289,6 +298,7 @@ impl Signex {
                         color: border_c,
                         width: 1.0,
                         radius: iced::border::Radius::from(2.0),
+                        ..iced::Border::default()
                     },
                     ..container::Style::default()
                 })
@@ -314,7 +324,7 @@ impl Signex {
                     Message::PrintPreview(PrintPreviewMsg::Zoom(dy))
                 })
                 .interaction(interaction)
-                .into()
+                .boxed()
         };
 
         let zoom = preview.zoom;
@@ -351,6 +361,6 @@ impl Signex {
         column![toolbar, body_row]
             .width(Length::Fill)
             .height(Length::Fill)
-            .into()
+            .boxed()
     }
 }

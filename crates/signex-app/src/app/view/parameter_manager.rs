@@ -6,6 +6,7 @@
 //! dirty-flagged like any other schematic edit.
 
 use super::*;
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -41,7 +42,7 @@ impl Signex {
             )
             .style(crate::styles::modal_card(tokens))
             .clip(true)
-            .into();
+            .boxed();
         };
         let doc = engine.document();
 
@@ -108,7 +109,8 @@ impl Signex {
                                 ParameterManagerMsg::ParameterRemoved { key: k.clone() }
                             )),
                     ]
-                    .width(iced::Length::Fixed(140.0)),
+                    .width(iced::Length::Fixed(140.0))
+                    .boxed(),
                 );
             }
             r.padding([SP.s, SP.m])
@@ -140,7 +142,7 @@ impl Signex {
                 let sym_uuid = sym.uuid;
                 let k_str = k.clone();
                 r = r.push(
-                    text_input("", &shown)
+                    text_input("", shown)
                         .on_input(move |text| {
                             Message::ParameterManager(ParameterManagerMsg::Edit {
                                 symbol_uuid: sym_uuid,
@@ -153,7 +155,8 @@ impl Signex {
                         ))
                         .padding([SP.xs, 6.0])
                         .size(TS.body)
-                        .width(iced::Length::Fixed(140.0)),
+                        .width(iced::Length::Fixed(140.0))
+                        .boxed(),
                 );
             }
             rows_col = rows_col.push(r.padding([SP.xs, SP.m]));
@@ -177,6 +180,7 @@ impl Signex {
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border_c,
+                        ..iced::Border::default()
                     },
                     ..container::Style::default()
                 }),
@@ -186,6 +190,6 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true)
-        .into()
+        .boxed()
     }
 }

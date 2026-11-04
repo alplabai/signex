@@ -5,6 +5,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -35,7 +36,8 @@ pub fn net_numeric_row<'a>(
                     border: Border {
                         width: 1.0,
                         radius: 2.0.into(),
-                        color: input_bdr
+                        color: input_bdr,
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 }),
@@ -46,7 +48,7 @@ pub fn net_numeric_row<'a>(
     )
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
@@ -81,12 +83,13 @@ pub fn net_params_tabs<'a>(
                     width: 1.0,
                     radius: 3.0.into(),
                     color: input_bdr,
+                    ..Border::default()
                 },
                 text_color: if active { fg_active } else { fg_inactive },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
     };
     container(
         row![
@@ -99,7 +102,7 @@ pub fn net_params_tabs<'a>(
     )
     .padding([4, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Two-column Name / Value header for the Parameters (Net) table.
@@ -124,10 +127,11 @@ pub fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, Pan
             width: 1.0,
             radius: 0.0.into(),
             color: border_c,
+            ..Border::default()
         },
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 /// Empty-state row — centered muted text spanning the whole row.
@@ -148,10 +152,11 @@ pub fn empty_section_row<'a>(
             width: 1.0,
             radius: 0.0.into(),
             color: border_c,
+            ..Border::default()
         },
         ..container::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 /// Add / edit / delete toolbar at the bottom of the Parameters table.
@@ -170,11 +175,12 @@ pub fn net_params_add_bar<'a>(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_bdr,
+                    ..Border::default()
                 },
                 text_color: label_c,
                 ..iced::widget::button::Style::default()
             })
-            .into()
+            .boxed()
     };
     container(
         row![
@@ -191,7 +197,8 @@ pub fn net_params_add_bar<'a>(
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
-                    color: input_bdr
+                    color: input_bdr,
+                    ..Border::default()
                 },
                 text_color: Color::WHITE,
                 ..iced::widget::button::Style::default()
@@ -204,7 +211,7 @@ pub fn net_params_add_bar<'a>(
     )
     .padding([6, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Altium-style 3x3 justification picker with proper SVG arrow icons.
@@ -266,12 +273,13 @@ pub fn justification_grid(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_bdr,
+                    ..Border::default()
                 },
                 text_color: if active { fg_active } else { fg_inactive },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
     };
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum LabelDir {
@@ -377,7 +385,7 @@ pub fn justification_grid(
         .spacing(SP.xs),
     ]
     .spacing(SP.xs)
-    .into()
+    .boxed()
 }
 
 /// Pre-placement 3x3 justification picker. Same visual grid as the
@@ -432,12 +440,13 @@ pub fn preplacement_justification_grid(
                     width: 1.0,
                     radius: 2.0.into(),
                     color: input_bdr,
+                    ..Border::default()
                 },
                 text_color: if active { fg_active } else { fg_inactive },
                 ..iced::widget::button::Style::default()
             }
         })
-        .into()
+        .boxed()
     };
     let hl_mid = |target: HAlign| -> bool { h == target };
     iced::widget::column![
@@ -497,5 +506,5 @@ pub fn preplacement_justification_grid(
         .spacing(SP.xs),
     ]
     .spacing(SP.xs)
-    .into()
+    .boxed()
 }

@@ -7,6 +7,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -123,8 +124,8 @@ pub fn view_title_block_section<'a>(
                         row![
                             property_label(label, muted),
                             iced::widget::text_input(
-                                project_value.as_deref().unwrap_or(""),
-                                &value
+                                project_value.clone().unwrap_or_default(),
+                                value.clone()
                             )
                             .on_input(move |s| PanelMsg::TitleBlockTyping(field, s))
                             .on_submit(PanelMsg::CommitTitleBlockField(field))
@@ -136,7 +137,8 @@ pub fn view_title_block_section<'a>(
                         .align_y(iced::Alignment::Center),
                     )
                     .padding([2, PROPERTY_ROW_PAD_X])
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
                 );
             }
             c = c.push(
@@ -145,10 +147,11 @@ pub fn view_title_block_section<'a>(
                         .size(TS.caption)
                         .color(muted),
                 )
-                .padding([3.0, SP.m]),
+                .padding([3.0, SP.m])
+                .boxed(),
             );
             c
         },
     )
-    .into()
+    .boxed()
 }

@@ -249,6 +249,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "reset_schematic_designators" => Message::Annotate(AnnotateMsg::OpenResetConfirm),
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
+        "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "run_erc" => Message::Erc(ErcMsg::Run),
         "save_document" => Message::File(FileMsg::Save),
         "save_document_as" => Message::Menu(MenuMessage::SaveAs),
@@ -870,6 +871,22 @@ mod tests {
         assert!(!is_dispatchable(&update_pcb));
         assert!(matches!(
             resolve(&run_erc, &CommandArgs::none()),
+            Some(Message::Erc(ErcMsg::Run))
+        ));
+    }
+
+    /// #1991 - Design > Electrical Rules Check opens the ERC dialog through
+    /// its own id; `run_erc` (F8) keeps running ERC.
+    #[test]
+    fn open_erc_dialog_opens_the_dialog_and_run_erc_runs() {
+        let open = AppCommandId::new("open_erc_dialog").unwrap();
+        let run = AppCommandId::new("run_erc").unwrap();
+        assert!(matches!(
+            resolve(&open, &CommandArgs::none()),
+            Some(Message::Erc(ErcMsg::OpenDialog))
+        ));
+        assert!(matches!(
+            resolve(&run, &CommandArgs::none()),
             Some(Message::Erc(ErcMsg::Run))
         ));
     }

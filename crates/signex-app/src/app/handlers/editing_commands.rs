@@ -191,6 +191,9 @@ impl Signex {
             self.step_project_tab_history(project_id, true);
             return;
         }
+        if self.step_component_editor_history(true) {
+            return;
+        }
         // If the active tab is a symbol editor, delegate undo to it.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
@@ -254,6 +257,9 @@ impl Signex {
         // A Project tab redoes its own section edits (#1202).
         if let Some(project_id) = self.active_project_tab() {
             self.step_project_tab_history(project_id, false);
+            return;
+        }
+        if self.step_component_editor_history(false) {
             return;
         }
         // If the active tab is a symbol editor, delegate redo to it.

@@ -35,7 +35,7 @@
 //! from the drawing area.
 
 use iced::widget::{Space, container, text, text_input};
-use iced::{Border, Color, Element, Length, Theme};
+use iced::{Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
@@ -543,9 +543,9 @@ fn build_dimension_input<'a>(
     let selection = crate::styles::tokens::selection_tint(tokens);
     let value: String = editor.state.dimension_input.clone();
 
-    let input = text_input("0.0", &value)
+    let input = text_input("0.0", value)
         .size(TS.body)
-        .padding(SP.xs)
+        .padding(iced::Padding::new(SP.xs))
         .width(Length::Fixed(58.0))
         .style(move |_: &Theme, _| iced::widget::text_input::Style {
             background: iced::Background::Color(input_bg),
@@ -553,8 +553,8 @@ fn build_dimension_input<'a>(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border,
+                ..Border::default()
             },
-            icon: iced::Color::TRANSPARENT,
             placeholder: muted,
             value: text_c,
             selection,
@@ -567,12 +567,12 @@ fn build_dimension_input<'a>(
     container(
         iced::widget::row![
             text("mm").size(TS.caption).color(muted),
-            Space::new().width(Length::Fixed(4.0)),
+            Space::new().width(Length::Fixed(SP.s)),
             input,
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([SP.xs, SP.s])
+    .padding(iced::Padding::from([SP.xs, SP.s]))
     .width(Length::Fixed(DIM_INPUT_W))
     .style(move |_: &Theme| iced::widget::container::Style {
         background: None,
@@ -580,8 +580,9 @@ fn build_dimension_input<'a>(
             width: 0.0,
             radius: 0.0.into(),
             color: Color::TRANSPARENT,
+            ..Border::default()
         },
         ..iced::widget::container::Style::default()
     })
-    .into()
+    .boxed()
 }

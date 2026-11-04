@@ -13,7 +13,7 @@
 
 use chrono::Utc;
 use iced::widget::{Column, button, column, container, text};
-use iced::{Border, Color, Element, Length, Theme};
+use iced::{Border, Color, Element, Length, Theme, Widget};
 use signex_widgets::theme_ext;
 
 use super::{PanelContext, PanelMsg};
@@ -134,7 +134,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             panel_bg,
         ),
         HistoryRenderMode::Ready => {
-            let mut col: Column<'a, PanelMsg> = column![].spacing(6);
+            let mut col: Column<Element<'a, PanelMsg>> = column![].spacing(6);
 
             if state.dirty {
                 col = col.push(working_tree_card(primary, muted, border, panel_bg));
@@ -167,15 +167,15 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 }
             }
 
-            col.into()
+            col.boxed()
         }
     };
 
-    let body = container(inner).padding(SP.m).width(Length::Fill);
+    let body = container(inner).padding(SP.m).width(Length::Fill).boxed();
     super::panel_scrollable(body)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// Single muted card used by the empty/no-repo/loading/error states.
@@ -198,10 +198,11 @@ fn message_card<'a, M: 'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border_c,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// v0.22 Phase 8.5 — Commit-row card with a "Restore this version"
@@ -247,6 +248,7 @@ fn commit_card<'a>(
                 width: 1.0,
                 radius: 2.0.into(),
                 color: border_c,
+                ..Border::default()
             },
             text_color: muted,
             ..iced::widget::button::Style::default()
@@ -269,13 +271,15 @@ fn commit_card<'a>(
                         width: 1.0,
                         radius: 2.0.into(),
                         color: border_c,
+                        ..Border::default()
                     },
                     text_color: muted,
                     ..iced::widget::button::Style::default()
-                }),
+                })
+                .boxed(),
         );
     }
-    let footer = footer.push(restore_btn);
+    let footer = footer.push(restore_btn.boxed());
 
     let card_inner = column![
         header,
@@ -294,10 +298,11 @@ fn commit_card<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border_c,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn short_sha(full: &str) -> String {
@@ -358,8 +363,9 @@ fn working_tree_card<'a, M: 'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border_c,
+                ..Border::default()
             },
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }

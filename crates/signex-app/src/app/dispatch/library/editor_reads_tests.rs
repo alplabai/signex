@@ -217,11 +217,14 @@ fn an_alternate_symbol_picked_after_a_confirmed_reload_is_kept() {
     edit(&mut f, LifecycleState::Deprecated);
     let library_id = f.preview().row.symbol_ref.library_id;
 
-    let task = f.event(EditorMsg::ReloadConfirmed);
-    f.app.add_alternate_symbol_from_pick(
+    let pick = f.app.add_alternate_symbol_from_pick(
         f.address.clone(),
         PrimitiveRef::new(library_id, Uuid::now_v7()),
     );
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    // The pick's symbols arrive first (it holds the earlier read turn); the
+    // reload then finds the edit.
+    settle_task(&mut f.app, pick);
     settle_task(&mut f.app, task);
 
     assert_eq!(
@@ -230,6 +233,149 @@ fn an_alternate_symbol_picked_after_a_confirmed_reload_is_kept() {
         "the alternate is kept"
     );
     assert!(f.preview().dirty);
+}
+
+/// The alternate is one undo step: undoing the edit after it must not land
+/// on a row that reads clean while it still holds the unsaved alternate.
+#[test]
+fn undoing_an_edit_made_after_an_alternate_add_stays_dirty() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    settle_task(&mut f.app, pick);
+    assert_eq!(f.preview().row.alternate_symbols.len(), 1);
+    edit(&mut f, LifecycleState::Deprecated);
+
+    let preview = f.app.library.editors.get_mut(&f.address).unwrap();
+    assert!(preview.step_history(true));
+    assert_eq!(preview.row.alternate_symbols.len(), 1);
+    assert!(preview.dirty, "the alternate is not on disk");
+    assert!(preview.step_history(true), "the add itself is undoable");
+    assert!(preview.row.alternate_symbols.is_empty());
+    assert!(!preview.dirty, "back at the opened row");
+}
+
+#[test]
+fn a_failed_bind_write_leaves_the_row_dirty() {
+    let mut f = fixture();
+    f.app
+        .library
+        .editors
+        .get_mut(&f.address)
+        .unwrap()
+        .restart_history();
+    assert!(!f.preview().dirty);
+    let failure = crate::library::writes::WriteFailure {
+        reason: "read-only".into(),
+        row_changed: false,
+    };
+    let _ = f.app.preview_row_bound(f.address.clone(), Err(failure));
+    assert!(f.preview().dirty);
+    assert!(f.preview().history.is_dirty());
+}
+
+#[test]
+fn picking_an_alternate_symbol_reads_nothing_in_update() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+
+    let task = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+
+    assert_eq!(f.reads.load(Ordering::SeqCst), 0, "update only plans");
+    assert!(f.preview().row.alternate_symbols.is_empty());
+    settle_task(&mut f.app, task);
+    assert_eq!(f.preview().row.alternate_symbols.len(), 1);
+    assert!(f.reads.load(Ordering::SeqCst) >= 2, "both symbols read");
+}
+
+/// The row is edited while the two symbols are read: the pin check ran
+/// against a row that is gone, so the pick is refused out loud rather than
+/// applied.
+#[test]
+fn an_alternate_pick_is_refused_when_the_row_was_edited_while_it_was_read() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    edit(&mut f, LifecycleState::Obsolete);
+    settle_task(&mut f.app, pick);
+
+    assert!(f.preview().row.alternate_symbols.is_empty(), "not applied");
+    let why = f.preview().alternate_error.as_deref().expect("said so");
+    assert!(why.contains("edited while"), "{why}");
+    assert_eq!(f.preview().row.state, LifecycleState::Obsolete);
+}
+
+#[test]
+fn an_alternate_pick_does_not_land_on_a_preview_closed_while_it_was_read() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    // The preview is closed and reopened, as the same address, before the
+    // answer arrives: the answer belongs to the preview that was closed.
+    f.app.library.editors.remove(&f.address);
+    f.app.library.alternate_generations.clear();
+    let fresh = ComponentPreviewState::from_row(f.root.clone(), "R".into(), test_row());
+    f.app.library.editors.insert(f.address.clone(), fresh);
+    settle_task(&mut f.app, pick);
+
+    assert!(f.preview().row.alternate_symbols.is_empty());
+}
+
+#[test]
+fn an_alternate_pick_for_a_preview_closed_while_it_was_read_says_so() {
+    let needle = "Alternate symbol not added: the component preview was closed";
+    let before = crate::diagnostics::logged_count(needle);
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    // A real close also forgets the pick's generation.
+    let address = f.address.clone();
+    let close = f.app.close_component_preview(&address);
+    settle_task(&mut f.app, close);
+    settle_task(&mut f.app, pick);
+
+    assert_eq!(
+        crate::diagnostics::logged_count(needle),
+        before + 1,
+        "the closed preview is reported"
+    );
+}
+
+#[test]
+fn a_second_alternate_pick_supersedes_the_first_still_in_flight() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let first = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    let second = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+
+    settle_task(&mut f.app, first);
+    assert!(f.preview().row.alternate_symbols.is_empty(), "stale pick");
+    settle_task(&mut f.app, second);
+    assert_eq!(f.preview().row.alternate_symbols.len(), 1);
 }
 
 #[test]
@@ -316,4 +462,40 @@ fn a_close_waiting_behind_a_tab_lookup_finishes_when_it_lands() {
     let mut f = fixture();
     let task = f.event(EditorMsg::SelectTab(PreviewTab::Preview));
     assert_close_finishes_when_the_read_lands(f, task);
+}
+
+#[test]
+fn an_alternate_symbol_picked_after_the_confirm_survives_the_reload() {
+    let mut f = fixture();
+    edit(&mut f, LifecycleState::Deprecated);
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let task = f.event(EditorMsg::ReloadConfirmed);
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    settle_task(&mut f.app, task);
+    settle_task(&mut f.app, pick);
+    assert_eq!(f.preview().row.alternate_symbols.len(), 1);
+}
+
+#[test]
+fn an_alternate_pick_planned_against_another_default_symbol_is_refused() {
+    let mut f = fixture();
+    let library_id = f.preview().row.symbol_ref.library_id;
+    let pick = f.app.add_alternate_symbol_from_pick(
+        f.address.clone(),
+        PrimitiveRef::new(library_id, Uuid::now_v7()),
+    );
+    // The row's default symbol changes under the read (a reload or a rebase).
+    f.app
+        .library
+        .editors
+        .get_mut(&f.address)
+        .expect("preview")
+        .row
+        .symbol_ref = PrimitiveRef::new(library_id, Uuid::now_v7());
+    settle_task(&mut f.app, pick);
+    assert!(f.preview().row.alternate_symbols.is_empty());
+    assert!(f.preview().alternate_error.is_some());
 }

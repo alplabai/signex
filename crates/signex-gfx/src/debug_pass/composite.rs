@@ -14,6 +14,7 @@ async fn run_text_geometry_composite_smoke_pass_with(
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -89,6 +90,7 @@ async fn run_text_geometry_composite_smoke_pass_with(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         if polygon_pipeline.vertex_count() > 0 {
@@ -157,6 +159,7 @@ pub(super) async fn run_grid_overlay_text_composite_smoke_pass_with(
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         })
         .await
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
@@ -245,6 +248,7 @@ pub(super) async fn run_grid_overlay_text_composite_smoke_pass_with(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         if grid_enabled {

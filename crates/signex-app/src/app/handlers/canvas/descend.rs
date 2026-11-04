@@ -9,20 +9,7 @@ use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
 use super::super::super::*;
-
-/// A canvas descent whose child sheet is being read on a worker (#859): which
-/// sheet symbol it came through and the placement its tab will show.
-#[derive(Debug)]
-pub struct PendingDescent {
-    symbol: Uuid,
-    placement: Option<InstancePath>,
-    /// The sheet the symbol is on: a missing child is offered for creation
-    /// only while that sheet is still the focused one.
-    parent: Option<PathBuf>,
-    /// The read this descent waits for; any other completion for the path
-    /// (a stale one) must leave it alone.
-    generation: Option<u64>,
-}
+use super::sheet_open::SheetOpen;
 
 impl Signex {
     /// The canvas route (double-click, context menu, Enter on a selection):
@@ -41,93 +28,16 @@ impl Signex {
         let placement = self
             .focused_sheet_placement()
             .map(|placement| placement.child(sheet_symbol));
-        // Record under the spelling the tab is held at (#1149), not the
-        // spelling the hierarchy resolved.
-        let path = self.resolve_held_spelling_now(path);
-        if self.focus_open_sheet(&path) {
-            self.record_descent_placement(path, placement);
-            return Task::none();
-        }
-        // A rename or delete still moving the file would leave the new tab on
-        // a path that is about to vanish.
-        if let Err(refusal) = self.refuse_start_while_path_op(&path, "opened") {
-            let detail = refusal.to_string();
-            crate::diagnostics::log_warning(detail.clone());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(detail));
-            return Task::none();
-        }
-        let title = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Schematic".to_string());
-        let parent = self.active_tab_path();
-        let task = self.begin_document_read(
-            path.clone(),
-            crate::app::document_read::ReadJob::ChildSchematic { title },
-        );
-        // The read this descent rides on: the one just started, or the one
-        // already in flight for the file.
-        let generation = self.document_state.pending_opens.generation_of(&path);
-        self.ui_state.pending_descents.insert(
-            path,
-            PendingDescent {
-                symbol: sheet_symbol,
-                placement,
-                parent,
-                generation,
-            },
-        );
-        task
+        let mut open = SheetOpen::at(placement);
+        open.create_for = Some(sheet_symbol);
+        self.open_sheet(path, open)
     }
 
-    /// The read of `path` ended with the file missing: offer to create the
-    /// sheet the descent came through.
-    pub(crate) fn offer_to_create_missing_child(
+    pub(super) fn record_descent_placement(
         &mut self,
-        path: &std::path::Path,
-        generation: u64,
+        path: PathBuf,
+        placement: Option<InstancePath>,
     ) {
-        let Some(descent) = self.take_descent(path, generation) else {
-            return;
-        };
-        if descent.parent != self.active_tab_path() {
-            crate::diagnostics::log_warning(format!(
-                "Create Sheet was not offered for {}: the sheet it was entered from is no \
-                 longer the focused one",
-                path.display()
-            ));
-            return;
-        }
-        self.open_create_child_sheet_dialog(descent.symbol, true);
-    }
-
-    /// The pending descent for `path`, only when it waits for read `generation`.
-    fn take_descent(&mut self, path: &std::path::Path, generation: u64) -> Option<PendingDescent> {
-        let waits = self
-            .ui_state
-            .pending_descents
-            .get(path)
-            .is_some_and(|d| d.generation == Some(generation));
-        if waits {
-            self.ui_state.pending_descents.remove(path)
-        } else {
-            None
-        }
-    }
-
-    /// The read of `path` ended: when its tab is up, record the placement the
-    /// descent came through. Anything else (a failed or stale read) leaves
-    /// nothing to record.
-    pub(crate) fn finish_descent(&mut self, path: &std::path::Path, generation: u64) {
-        let Some(descent) = self.take_descent(path, generation) else {
-            return;
-        };
-        if self.has_tab_for(path) {
-            self.record_descent_placement(path.to_path_buf(), descent.placement);
-        }
-    }
-
-    fn record_descent_placement(&mut self, path: PathBuf, placement: Option<InstancePath>) {
         let switched = self.document_state.tab_placements.get(&path) != placement.as_ref();
         self.document_state.tab_placements.record(&path, placement);
         // Jumping within the shown placement keeps an open edit's text.
@@ -138,23 +48,6 @@ impl Signex {
         self.refresh_canvas_designators();
         // The net highlight is per placement: show it for this one.
         self.sync_net_highlight_to_canvases();
-    }
-
-    /// Open or focus `path` and make `placement` the one its tab shows. `None`
-    /// is a placement the caller could not determine: it clears a stale one
-    /// rather than leaving the tab on a different copy than the user entered.
-    /// Nothing changes when the sheet could not be opened.
-    pub(crate) fn open_sheet_with_placement(
-        &mut self,
-        path: PathBuf,
-        placement: Option<InstancePath>,
-    ) {
-        // Record under the spelling the tab is held at (#1149), not the
-        // spelling the hierarchy resolved.
-        let path = self.resolve_held_spelling_now(path);
-        if self.open_or_focus_sheet_path(path.clone()) {
-            self.record_descent_placement(path, placement);
-        }
     }
 
     /// The focused sheet's own placement: the one recorded when it was

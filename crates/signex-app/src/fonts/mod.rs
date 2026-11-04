@@ -20,7 +20,7 @@
 //! temp-directory sweep or a restart.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
 use crate::render_config::{GridStyle, PinSelectionMode};
 use signex_types::coord::Unit;
@@ -121,35 +121,14 @@ pub fn default_component_classes() -> Vec<ComponentClassEntry> {
         .collect()
 }
 
-/// Build an [`iced::Font`] that targets the given family name. iced's
-/// `Font::with_name` requires `&'static str` because the renderer
-/// caches by family name, but the Preferences panel hands us font
-/// names as runtime `String`s. The intern map below leaks one
-/// `&'static str` per unique family name ever resolved during a
-/// session — bounded by the small set of fonts a user actually picks,
-/// so the cumulative leak is negligible. Used for surfaces that need
-/// the canvas font (Iosevka by default) — e.g. the symbol hover
-/// tooltip.
+/// Build an [`iced::Font`] that targets the given family name. The Preferences
+/// panel hands us font names as runtime `String`s; iced's `Family::name`
+/// interns them in a global cache (one leaked `&'static str` per unique
+/// name, bounded by the small set of fonts a user actually picks). Used for
+/// surfaces that need the canvas font (Iosevka by default) — e.g. the symbol
+/// hover tooltip.
 pub fn iced_font_for_family(name: &str) -> iced::Font {
-    static INTERN: OnceLock<Mutex<std::collections::HashMap<String, &'static str>>> =
-        OnceLock::new();
-    let map_lock = INTERN.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
-    // `unwrap_or_else(|e| e.into_inner())` recovers from a poisoned
-    // mutex — the inner value is still valid (a HashMap of leaked
-    // names; nothing in flight here can corrupt it). Using
-    // `.unwrap()` would panic the UI thread on every subsequent
-    // tooltip render after any unrelated panic that happened to
-    // hold this lock.
-    let mut map = map_lock.lock().unwrap_or_else(|e| e.into_inner());
-    let static_name: &'static str = match map.get(name) {
-        Some(s) => s,
-        None => {
-            let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
-            map.insert(name.to_string(), leaked);
-            leaked
-        }
-    };
-    iced::Font::with_name(static_name)
+    iced::Font::with_family(iced::font::Family::name(name))
 }
 
 // ──────────────────────────────────────────────────────────────────────────

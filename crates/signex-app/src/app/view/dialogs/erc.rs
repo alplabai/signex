@@ -7,7 +7,7 @@
 
 use super::*;
 use iced::widget::{Space, column, container, row, text, text_input};
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Widget};
 
 use super::rule_editor::{RuleEditor, rule_editor};
 use super::widgets::{
@@ -66,7 +66,7 @@ impl Signex {
         .padding(MODAL_HEADER_PADDING)
         .height(MODAL_HEADER_HEIGHT)
         .style(crate::styles::modal_header_strip(tokens))
-        .into();
+        .boxed();
         let header = if draggable {
             draggable_header(
                 header_content,
@@ -124,7 +124,8 @@ impl Signex {
             scope = scope.push(
                 text(notice)
                     .size(TS.caption)
-                    .color(Color::from_rgb(0.9, 0.35, 0.35)),
+                    .color(Color::from_rgb(0.9, 0.35, 0.35))
+                    .boxed(),
             );
         }
         let mut footer = row![scope].spacing(SP.m).align_y(iced::Alignment::Center);
@@ -168,13 +169,13 @@ impl Signex {
                 ));
         }
         let footer = footer
-            .push(Space::new().width(Length::Fill))
+            .push(Space::new().width(Length::Fill).boxed())
             .push(primary_button(
                 "Run ERC",
                 Some(Message::Erc(ErcMsg::Run)),
                 border_c,
             ))
-            .push(Space::new().width(8))
+            .push(Space::new().width(8).boxed())
             .push(secondary_button(
                 "Close",
                 Message::Erc(ErcMsg::CloseDialog),
@@ -219,7 +220,7 @@ impl Signex {
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
-        dialog.into()
+        dialog.boxed()
     }
 }
 
@@ -233,7 +234,7 @@ impl Signex {
         border_c: Color,
     ) -> Element<'_, Message> {
         let Some((name, lines)) = self.pending_profile_update_lines() else {
-            return Space::new().height(0).into();
+            return Space::new().height(0).boxed();
         };
         let heading = if lines.is_empty() {
             format!(
@@ -247,7 +248,7 @@ impl Signex {
         };
         let mut list = column![text(heading).size(TS.body).color(text_c)].spacing(SP.xs);
         for line in lines {
-            list = list.push(text(line).size(TS.caption).color(text_muted));
+            list = list.push(text(line).size(TS.caption).color(text_muted).boxed());
         }
         let buttons = row![
             primary_button(
@@ -265,14 +266,14 @@ impl Signex {
         .spacing(SP.m);
         container(
             column![
-                container(iced::widget::scrollable(list)).max_height(120),
+                container(iced::widget::scrollable(list)).height(Length::Fit.max(120)),
                 buttons
             ]
             .spacing(6),
         )
         .padding([8, 14])
         .width(Length::Fill)
-        .into()
+        .boxed()
     }
 }
 
@@ -286,7 +287,7 @@ impl Signex {
         border_c: Color,
     ) -> Element<'_, Message> {
         let Some(dialog) = self.ui_state.save_profile_dialog.as_ref() else {
-            return Space::new().height(0).into();
+            return Space::new().height(0).boxed();
         };
         let mut panel = column![
             text("Save the project's ERC rules as a profile")
@@ -304,7 +305,8 @@ impl Signex {
                          the change as an update."
                     ))
                     .size(TS.caption)
-                    .color(text_muted),
+                    .color(text_muted)
+                    .boxed(),
                 )
                 .push(
                     row![
@@ -321,7 +323,8 @@ impl Signex {
                             border_c,
                         ),
                     ]
-                    .spacing(SP.m),
+                    .spacing(SP.m)
+                    .boxed(),
                 );
         } else {
             let submit = || Message::Erc(ErcMsg::ProfileSaveSubmitted);
@@ -346,13 +349,15 @@ impl Signex {
                     version_input,
                 ]
                 .spacing(SP.m)
-                .align_y(iced::Alignment::Center),
+                .align_y(iced::Alignment::Center)
+                .boxed(),
             );
             if let Some(error) = &dialog.error {
                 panel = panel.push(
                     text(error.clone())
                         .size(TS.caption)
-                        .color(Color::from_rgb(0.9, 0.35, 0.35)),
+                        .color(Color::from_rgb(0.9, 0.35, 0.35))
+                        .boxed(),
                 );
             }
             panel = panel.push(
@@ -365,9 +370,13 @@ impl Signex {
                         border_c,
                     ),
                 ]
-                .spacing(SP.m),
+                .spacing(SP.m)
+                .boxed(),
             );
         }
-        container(panel).padding([8, 14]).width(Length::Fill).into()
+        container(panel)
+            .padding([8, 14])
+            .width(Length::Fill)
+            .boxed()
     }
 }

@@ -81,6 +81,29 @@ impl Signex {
         })
     }
 
+    /// The Component editor a non-main window shows, when it shows one: its
+    /// Undo / Redo step that editor's row history, never the main window's
+    /// tab.
+    pub(super) fn window_component_editor(
+        &self,
+        window: Option<iced::window::Id>,
+    ) -> Option<crate::library::state::EditorAddress> {
+        let WindowDocument::Tab(index) = self.document_of_window(window)? else {
+            return None;
+        };
+        let tab = self
+            .document_state
+            .tabs
+            .get(index)?
+            .kind
+            .as_component_editor()?;
+        Some(crate::library::state::EditorAddress::new(
+            tab.library_path.clone(),
+            tab.table.clone(),
+            tab.row_id,
+        ))
+    }
+
     /// Close Document typed in `window`, or `None` when `window` is the main
     /// window (or names none) and the ordinary handler applies.
     ///
@@ -220,6 +243,57 @@ impl Signex {
             .iter()
             .any(|t| t.path == path && matches!(t.kind, crate::app::TabKind::Schematic))
             .then_some(window)
+    }
+
+    /// The undocked window showing `path` that has a canvas to run a
+    /// follow-up on. A window whose canvas is not there yet (or is gone)
+    /// cannot take it, and `run_in_window` would drop it without a word.
+    pub(crate) fn undocked_canvas_window(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<iced::window::Id> {
+        self.undocked_schematic_window(path)
+            .filter(|window| self.interaction_state.canvases.contains_key(window))
+    }
+
+    /// `window` when it is an undocked window, `None` for the main window or
+    /// an unknown id: the owner an overlay records when it opens (#1910).
+    pub(crate) fn overlay_owner(&self, window: iced::window::Id) -> Option<iced::window::Id> {
+        (self.ui_state.main_window_id != Some(window)
+            && self.ui_state.windows.contains_key(&window))
+        .then_some(window)
+    }
+
+    /// Drop the Active Bar dropdown and context menu that `window` opened,
+    /// when it closes or reattaches: nothing else would clear them (#1910).
+    pub(crate) fn close_overlays_owned_by(&mut self, window: iced::window::Id) {
+        let interaction = &mut self.interaction_state;
+        if interaction.active_bar_menu_window == Some(window) {
+            interaction.active_bar_menu = None;
+            interaction.active_bar_menu_window = None;
+        }
+        if interaction
+            .context_menu
+            .as_ref()
+            .is_some_and(|menu| menu.window == Some(window))
+        {
+            interaction.context_menu = None;
+            interaction.context_submenu = None;
+            interaction.pending_submenu = None;
+            interaction.submenu_launcher_hovered = None;
+            interaction.submenu_panel_hovered = false;
+            interaction.submenu_unhovered_since = None;
+        }
+    }
+
+    /// Whether an overlay opened by `owner` (see [`Self::overlay_owner`])
+    /// paints in `window`: only the window it was opened in shows it.
+    pub(crate) fn overlay_belongs_to(
+        &self,
+        owner: Option<iced::window::Id>,
+        window: iced::window::Id,
+    ) -> bool {
+        owner == self.overlay_owner(window)
     }
 
     /// [`Self::run_in_window`] for a command that reads the active tab and

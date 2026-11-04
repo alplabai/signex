@@ -80,7 +80,7 @@ impl Signex {
     /// standard 1mil…2.5mm ladder; clicking a row sends
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, text};
+        use iced::widget::{Widget as _, button, column, container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let primary = signex_widgets::theme_ext::text_primary(tokens);
         let muted = signex_widgets::theme_ext::text_secondary(tokens);
@@ -142,11 +142,12 @@ impl Signex {
                     width: 0.0,
                     radius: 0.0.into(),
                     color: iced::Color::TRANSPARENT,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::button::Style::default()
             })
             .width(iced::Length::Fill);
-            col = col.push(btn);
+            col = col.push(btn.boxed());
         }
 
         container(col)
@@ -157,24 +158,38 @@ impl Signex {
                     width: 1.0,
                     radius: 4.0.into(),
                     color: border_c,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::container::Style::default()
             })
-            .into()
+            .boxed()
     }
 
     /// The selection shape and project row key the canvas menu is built
-    /// from; the view and the row-effect tests share it.
-    pub(super) fn canvas_menu_inputs(&self) -> (CanvasSelection, Option<Vec<String>>) {
-        let canvas = self.interaction_state.active_canvas();
+    /// from; the view and the row-effect tests share it. The selection is
+    /// the one of the sheet `window_id` shows (#1910).
+    pub(super) fn canvas_menu_inputs(
+        &self,
+        window_id: iced::window::Id,
+    ) -> (CanvasSelection, Option<Vec<String>>) {
+        let canvas = self.interaction_state.canvas_for_window(window_id);
         let selection = CanvasSelection {
             has_selection: !canvas.selected.is_empty(),
             child_sheet_selected: canvas
                 .selected
                 .iter()
                 .any(|item| item.kind == signex_types::schematic::SelectedKind::ChildSheet),
-            drawing_selected: !self.selected_drawing_ids().is_empty(),
-            placed_part_selected: self.has_placed_part_selected(),
+            drawing_selected: canvas
+                .selected
+                .iter()
+                .any(|item| item.kind == signex_types::schematic::SelectedKind::Drawing),
+            placed_part_selected: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| {
+                    crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
+                        .is_some()
+                }),
         };
         // The project row's tree key, the same one the project tree's own
         // menu sends, so the action follows the project if rows reorder.
@@ -187,9 +202,12 @@ impl Signex {
 
     /// Canvas right-click menu. Resolves selection state + shortcut hints
     /// from `self`, then delegates to the pure [`canvas_menu_entries`].
-    pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_context_menu(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let (selection, project_key) = self.canvas_menu_inputs();
+        let (selection, project_key) = self.canvas_menu_inputs(window_id);
         let active_submenu = self.interaction_state.context_submenu;
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
@@ -206,7 +224,10 @@ impl Signex {
         ctx: &crate::app::TabContextMenuState,
     ) -> Element<'_, Message> {
         let Some(tab) = self.document_state.tabs.get(ctx.tab_idx) else {
-            return container(iced::widget::Space::new()).into();
+            {
+                use iced::widget::Widget as _;
+                return container(iced::widget::Space::new().boxed()).boxed();
+            }
         };
         // A tab can be undocked iff it's not already living in its own OS
         // window. Single-tab workspaces still show the row (Altium does

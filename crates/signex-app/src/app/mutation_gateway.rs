@@ -269,7 +269,7 @@ impl Signex {
         // (a wire on a locked pin) does nothing, and says so. Other commands
         // pass untouched, without a copy.
         let names_locked = engine.names_locked_item(&command);
-        let command = if names_locked || is_selection_command(&command) {
+        let command = if names_locked || command.is_selection_command() {
             let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
             match kept.pop() {
                 Some(pruned) => {
@@ -506,20 +506,6 @@ impl Signex {
         self.refresh_panel_ctx();
         true
     }
-}
-
-/// Whether `command` acts on a selection, the shape `without_locked` prunes.
-fn is_selection_command(command: &signex_engine::Command) -> bool {
-    use signex_engine::Command;
-    matches!(
-        command,
-        Command::MoveSelection { .. }
-            | Command::RotateSelection { .. }
-            | Command::MirrorSelection { .. }
-            | Command::TransformSelection { .. }
-            | Command::DeleteSelection { .. }
-            | Command::MoveEach { .. }
-    )
 }
 
 #[cfg(test)]

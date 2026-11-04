@@ -43,8 +43,8 @@
 //!   the panel).
 
 use iced::widget::svg;
-use iced::widget::{Column, Space, button, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::widget::{Column, Row, Space, button, container, text};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
@@ -163,6 +163,7 @@ pub fn tooltip_style(
             width: 1.0,
             radius: 3.0.into(),
             color: border,
+            ..Border::default()
         },
         ..container::Style::default()
     }
@@ -199,14 +200,15 @@ where
     let hover_c = crate::theme_ext::to_color(&tokens.hover);
     let accent = theme_ext::to_color(&tokens.accent);
 
-    let mut col: Column<'a, M> = Column::new().spacing(0).width(Length::Shrink);
+    let mut col: Column<Element<'a, M>> = Column::new().spacing(0).width(Length::Shrink);
     for entry in entries {
         match entry {
             DropdownEntry::Header(label) => {
                 col = col.push(
                     container(text(label).size(10).color(muted))
                         .padding([4, 12])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
             }
             DropdownEntry::Separator => {
@@ -217,7 +219,8 @@ where
                         .style(move |_: &Theme| iced::widget::container::Style {
                             background: Some(Background::Color(border_c)),
                             ..iced::widget::container::Style::default()
-                        }),
+                        })
+                        .boxed(),
                 );
             }
             DropdownEntry::Custom(element) => {
@@ -240,7 +243,7 @@ where
                 // same size so the eye doesn't jump as the pointer
                 // crosses from bar to menu) + 13 pt label + [5, 12]
                 // row padding.
-                let mut row_w = row![]
+                let mut row_w: Row<Element<'a, M>> = Row::new()
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Shrink);
@@ -251,10 +254,11 @@ where
                         svg(handle)
                             .width(20)
                             .height(20)
-                            .style(move |_: &Theme, _| icon_style(disabled, muted)),
+                            .style(move |_: &Theme, _| icon_style(disabled, muted))
+                            .boxed(),
                     );
                 } else {
-                    row_w = row_w.push(Space::new().width(Length::Fixed(20.0)));
+                    row_w = row_w.push(Space::new().width(Length::Fixed(20.0)).boxed());
                 }
                 // Label. Menu rows never wrap — a too-narrow width_hint
                 // clips rather than reflowing a label onto two lines.
@@ -262,22 +266,23 @@ where
                     text(label)
                         .size(13)
                         .color(row_text_c)
-                        .wrapping(text::Wrapping::None),
+                        .wrapping(text::Wrapping::None)
+                        .boxed(),
                 );
                 // Right-aligned cluster: shortcut + check.
-                let mut right = row![]
+                let mut right: Row<Element<'a, M>> = Row::new()
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Shrink);
                 if let Some(s) = shortcut {
-                    right = right.push(text(s).size(11).color(muted));
+                    right = right.push(text(s).size(11).color(muted).boxed());
                 }
                 if checked {
-                    right = right.push(text("\u{2713}").size(13).color(accent));
+                    right = right.push(text("\u{2713}").size(13).color(accent).boxed());
                 }
                 row_w = row_w
-                    .push(Space::new().width(Length::Fixed(20.0)))
-                    .push(right);
+                    .push(Space::new().width(Length::Fixed(20.0)).boxed())
+                    .push(right.boxed());
 
                 // Wrap in a button that triggers on_press when armed.
                 let mut btn = button(container(row_w).padding([5, 12]).width(Length::Fill))
@@ -309,10 +314,11 @@ where
                                     .style(tooltip_style(panel_bg, border_c)),
                                 iced::widget::tooltip::Position::Right,
                             )
-                            .gap(4),
+                            .gap(4)
+                            .boxed(),
                         );
                     }
-                    None => col = col.push(btn),
+                    None => col = col.push(btn.boxed()),
                 }
             }
         }
@@ -331,6 +337,7 @@ where
                 width: 1.0,
                 radius: 4.0.into(),
                 color: border_c,
+                ..Border::default()
             },
             // Drop shadow lifts the popup off the canvas — shared by every
             // editor's active-bar dropdown so the chrome reads identically.
@@ -341,7 +348,7 @@ where
             },
             ..iced::widget::container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 /// Altium-style toggle chip — used inside `DropdownEntry::Custom`
@@ -387,12 +394,13 @@ where
                 width: 1.0,
                 radius: 2.0.into(),
                 color: accent,
+                ..Border::default()
             },
             text_color: if enabled { text_on } else { text_off },
             ..button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

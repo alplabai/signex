@@ -95,6 +95,13 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::library::reprefix_lookup::ReprefixLookup, String>>,
     },
+    /// The worker read the project's sheets for the Re-prefix plan (#1756).
+    /// `generation` is the request's token; a result a newer request replaced
+    /// is dropped.
+    ReprefixSheetsRead {
+        generation: u64,
+        result: std::sync::Arc<crate::app::handlers::erc::ReprefixSheets>,
+    },
     /// Confirm on the Re-prefix list: re-plan against the state of now and
     /// apply it as one undo step.
     ReprefixConfirmed,
@@ -303,6 +310,10 @@ pub enum RemoveMsg {
 /// right-click menu, and the shared submenu hover/open state machine.
 #[derive(Debug, Clone)]
 pub enum ContextMenuMsg {
+    /// `message` came from a menu painted in the undocked window `window`:
+    /// it acts on the sheet that window shows, not on the main window's
+    /// (#1910).
+    ScopedToWindow(iced::window::Id, Box<ContextMenuMsg>),
     Show(f32, f32),
     Close,
     Action(ContextAction),

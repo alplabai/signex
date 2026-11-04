@@ -88,12 +88,13 @@ pub(super) fn view_grid<'a>(
                     width: 0.0,
                     radius: 0.0.into(),
                     color: iced::Color::TRANSPARENT,
+                    ..Default::default()
                 },
                 ..iced::widget::button::Style::default()
             });
-            r = r.push(container(header_btn).width(Length::Fixed(c.width)));
+            r = r.push(container(header_btn).width(Length::Fixed(c.width)).boxed());
         }
-        r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)));
+        r = r.push(Space::new().width(Length::Fixed(ROW_DELETE_GUTTER)).boxed());
         container(r)
             .padding([SP.xs, SP.s])
             .height(Length::Fixed(BROWSER_HEADER_HEIGHT))
@@ -105,12 +106,14 @@ pub(super) fn view_grid<'a>(
                     width: 0.0,
                     radius: 2.0.into(),
                     color: border,
+                    ..Default::default()
                 },
                 ..Default::default()
             })
     };
 
-    let mut col: Column<'a, LibraryMessage> = column![header_row].spacing(0).width(Length::Fill);
+    let mut col: Column<Element<'a, LibraryMessage>> =
+        column![header_row].spacing(0).width(Length::Fill);
 
     if rows.is_empty() {
         col = col.push(
@@ -120,7 +123,8 @@ pub(super) fn view_grid<'a>(
                     .wrapping(iced::widget::text::Wrapping::None)
                     .color(muted),
             )
-            .padding([SP.l, 6.0]),
+            .padding([SP.l, 6.0])
+            .boxed(),
         );
     } else {
         // Window: only the rows near the viewport get widgets; spacers of
@@ -128,8 +132,11 @@ pub(super) fn view_grid<'a>(
         let scroll = browser.grid_scroll;
         let window = visible_rows(scroll, rows.len());
         if window.start > 0 {
-            col = col
-                .push(Space::new().height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT)));
+            col = col.push(
+                Space::new()
+                    .height(Length::Fixed(window.start as f32 * BROWSER_ROW_HEIGHT))
+                    .boxed(),
+            );
         }
         for r in &rows[window.clone()] {
             #[cfg(test)]
@@ -162,6 +169,7 @@ pub(super) fn view_grid<'a>(
                         width: 0.0,
                         radius: (LIFECYCLE_DOT_SIZE / 2.0).into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Default::default()
                     },
                     ..Default::default()
                 });
@@ -201,7 +209,8 @@ pub(super) fn view_grid<'a>(
                                 .color(color),
                         )
                         .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width)),
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
                     );
                     continue;
                 }
@@ -217,7 +226,8 @@ pub(super) fn view_grid<'a>(
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width)),
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
                     );
                     continue;
                 }
@@ -235,7 +245,8 @@ pub(super) fn view_grid<'a>(
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width)),
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
                     );
                     continue;
                 }
@@ -269,7 +280,8 @@ pub(super) fn view_grid<'a>(
                         data_row = data_row.push(
                             container(unbound_pick_button(label, kind, address, tokens))
                                 .padding([SP.xs, SP.xs])
-                                .width(Length::Fixed(c.width)),
+                                .width(Length::Fixed(c.width))
+                                .boxed(),
                         );
                         continue;
                     }
@@ -293,7 +305,8 @@ pub(super) fn view_grid<'a>(
                                 .color(color),
                         )
                         .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width)),
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
                     );
                     continue;
                 }
@@ -310,7 +323,8 @@ pub(super) fn view_grid<'a>(
                                 .color(theme_ext::text_secondary(tokens)),
                         )
                         .padding([SP.s, 6.0])
-                        .width(Length::Fixed(c.width)),
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
                     );
                     continue;
                 }
@@ -343,7 +357,8 @@ pub(super) fn view_grid<'a>(
                     data_row = data_row.push(
                         container(cell)
                             .padding([2, 2])
-                            .width(Length::Fixed(c.width)),
+                            .width(Length::Fixed(c.width))
+                            .boxed(),
                     );
                     continue;
                 }
@@ -361,7 +376,7 @@ pub(super) fn view_grid<'a>(
                 let library_for_submit = lib_pb.clone();
                 let table_for_submit = table.to_string();
                 let column_for_submit = column_key.clone();
-                let input = text_input("", &cell_value)
+                let input = text_input("", cell_value)
                     .on_input(move |s| LibraryMessage::BrowserCellEdit {
                         library_path: library_for_input.clone(),
                         row_id,
@@ -379,7 +394,8 @@ pub(super) fn view_grid<'a>(
                 data_row = data_row.push(
                     container(input)
                         .padding([SP.xs, SP.xs])
-                        .width(Length::Fixed(c.width)),
+                        .width(Length::Fixed(c.width))
+                        .boxed(),
                 );
             }
 
@@ -397,6 +413,7 @@ pub(super) fn view_grid<'a>(
                         width: 0.0,
                         radius: 0.0.into(),
                         color: iced::Color::TRANSPARENT,
+                        ..Default::default()
                     },
                     ..Default::default()
                 });
@@ -412,21 +429,25 @@ pub(super) fn view_grid<'a>(
                 row_id,
             });
 
-            col = col.push(keyed(r.row_id, row_widget));
+            col = col.push(keyed(r.row_id, row_widget).boxed());
         }
         if window.end < rows.len() {
-            col = col.push(Space::new().height(Length::Fixed(
-                (rows.len() - window.end) as f32 * BROWSER_ROW_HEIGHT,
-            )));
+            col = col.push(
+                Space::new()
+                    .height(Length::Fixed(
+                        (rows.len() - window.end) as f32 * BROWSER_ROW_HEIGHT,
+                    ))
+                    .boxed(),
+            );
         }
     }
 
     let library_for_scroll = lib_pb.clone();
     let scroller = scrollable(col)
         .id(grid_scroll_id(&lib_pb))
-        .on_scroll(move |viewport| LibraryMessage::BrowserGridScrolled {
+        .on_scroll(move |scroll| LibraryMessage::BrowserGridScrolled {
             library_path: library_for_scroll.clone(),
-            offset_y: viewport.absolute_offset().y,
+            offset_y: scroll.viewport.absolute_offset().y,
         })
         .width(Length::Fill)
         .height(Length::Fill);
@@ -439,7 +460,7 @@ pub(super) fn view_grid<'a>(
     let scroller = keyed(
         library_key(&lib_pb),
         sense_height(
-            scroller,
+            scroller.boxed(),
             browser.grid_scroll.viewport_h,
             move |viewport_h| LibraryMessage::BrowserGridResized {
                 library_path: library_for_resize.clone(),
@@ -452,7 +473,7 @@ pub(super) fn view_grid<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .style(crate::styles::modal_card(tokens))
-        .into()
+        .boxed()
 }
 
 /// Trailing per-row delete button; asks the "Delete Selected" confirm for this row.
@@ -469,10 +490,10 @@ fn row_delete_cell<'a>(
             .height(Length::Fill)
             .center_x(Length::Fixed(ROW_DELETE_GUTTER))
             .center_y(Length::Fill)
-            .into()
+            .boxed()
     };
     if read_only {
-        return cell(Space::new().into());
+        return cell(Space::new().boxed());
     }
     let muted = theme_ext::text_secondary(tokens);
     let danger = theme_ext::error_color(tokens);
@@ -492,7 +513,7 @@ fn row_delete_cell<'a>(
             },
             ..iced::widget::button::Style::default()
         });
-    cell(btn.into())
+    cell(btn.boxed())
 }
 
 /// Warning-coloured cell button for an unbound symbol / footprint that
@@ -522,10 +543,11 @@ fn unbound_pick_button<'a>(
             width: 1.0,
             radius: 3.0.into(),
             color: warning,
+            ..Default::default()
         },
         ..iced::widget::button::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ use crate::app::state::net_nav::{HoverCard, PendingNetAction};
 
 use super::super::super::*;
 use super::index_job::IndexLookup;
-use super::target::{is_net_kind, net_of_target};
+use super::target::{is_net_kind, net_of_hover};
 
 impl Signex {
     /// Note the object under the cursor after a move. Cheap: it reads the
@@ -66,12 +66,15 @@ impl Signex {
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
                 let occurrence = self.net_occurrence(&data, &candidate.sheet);
+                let pin = self.pin_under(&candidate.sheet, &candidate.item, candidate.world);
+                let is_power = self.is_power_port(&candidate.sheet, &candidate.item);
                 let card = data.key_of(&candidate.sheet).and_then(|key| {
-                    let net = net_of_target(
+                    let net = net_of_hover(
                         &data,
                         &key,
                         &candidate.item,
-                        candidate.world,
+                        pin.as_deref(),
+                        is_power,
                         occurrence.as_ref(),
                     )?;
                     let hover = data.index.hover(net, &data.classes)?;

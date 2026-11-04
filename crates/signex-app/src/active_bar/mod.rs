@@ -3,7 +3,7 @@
 //! 13 icon buttons, each with an optional dropdown menu.
 //! Matches Altium Designer's schematic editor Active Bar exactly.
 
-use iced::widget::{button, svg, text};
+use iced::widget::{Widget, button, svg, text};
 use iced::{Background, Border, Color, Element, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
@@ -172,6 +172,10 @@ pub enum ActiveBarMsg {
     /// `index` (0..N). No-op if the index is out of range or the slot is
     /// empty. Source: shortcut buttons in the Filter dropdown.
     ApplyCustomFilter(usize),
+    /// `message` came from an overlay painted in the undocked window
+    /// `window`: it acts on the sheet that window shows, not on the main
+    /// window's (#1910).
+    ScopedToWindow(iced::window::Id, Box<ActiveBarMsg>),
 }
 
 /// Maximum number of user-defined custom filter presets exposed in the
@@ -728,10 +732,11 @@ fn bar_items(
                         width: 0.0,
                         radius: 3.0.into(),
                         color: Color::TRANSPARENT,
+                        ..Border::default()
                     },
                     ..button::Style::default()
                 })
-                .into();
+                .boxed();
         // Declared width (see `DRAW_MODE_PILL_WIDTH_PX`), not measured
         // because `slot_offsets` places every dropdown from these
         // widths — see `ActiveBarItem::Custom`. This pill sits AFTER
