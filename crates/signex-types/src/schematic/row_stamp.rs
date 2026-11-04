@@ -52,6 +52,12 @@ pub struct RowStamp {
     /// The row the values came from. A stamp whose row is not the part's
     /// current row describes nothing.
     pub row_id: Uuid,
+    /// The part's `library_version` when the stamp was taken. A build that
+    /// does not know the stamp can move the version and the values without
+    /// touching it, so a stamp is trusted only while this equals the part's
+    /// version. Absent means the stamp is not trusted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     /// Keys a later build adds.
     #[serde(flatten)]
     pub unknown: UnknownFields,
@@ -64,6 +70,7 @@ impl RowStamp {
             manufacturer: None,
             mpn: None,
             row_id,
+            version: None,
             unknown: UnknownFields::default(),
         }
     }
@@ -144,17 +151,23 @@ impl LinkStamp {
 }
 
 impl super::Symbol {
-    /// The stamp that describes this part's current row; a stamp of another
-    /// row (or a part with no row) is no stamp.
+    /// The stamp that describes this part's current row at its current
+    /// version. A stamp of another row, one taken at another version (an
+    /// older build moved the part on) or one with no version is no stamp, and
+    /// the legacy rule applies.
     pub fn valid_stamp(&self) -> Option<&RowStamp> {
-        self.library_stamp
-            .as_ref()
-            .filter(|stamp| Some(stamp.row_id) == self.row_id)
+        self.library_stamp.as_ref().filter(|stamp| {
+            Some(stamp.row_id) == self.row_id
+                && stamp.version.as_deref() == Some(self.library_version.as_str())
+        })
     }
 
-    /// Record `link` on a part: the pinned version and the stamp values.
-    /// Returns whether anything changed. A part with no row keeps no stamp.
+    /// Record `link` on a part: the pinned version and the stamp values,
+    /// the stamp tagged with that version. Returns whether anything changed.
+    /// A part with no row keeps no stamp.
     pub fn apply_link_stamp(&mut self, link: &LinkStamp) -> bool {
+        // Judged at the version the part is on now, before it moves.
+        let kept = self.valid_stamp().cloned();
         let mut changed = self.library_version != link.version;
         self.library_version.clone_from(&link.version);
         let Some(row_id) = self.row_id else {
@@ -163,16 +176,10 @@ impl super::Symbol {
         // A part with a row but no valid stamp gets one even when no value is
         // proven: it switches the legacy "version unmoved" rule off, and the
         // absent keys read as unknown (so a conflict is not cleared unasked).
-        if link.values.is_empty() && self.valid_stamp().is_some() {
-            return changed;
-        }
-        let before = self.library_stamp.clone();
-        let mut stamp = self
-            .valid_stamp()
-            .cloned()
-            .unwrap_or_else(|| RowStamp::new(row_id));
+        let mut stamp = kept.unwrap_or_else(|| RowStamp::new(row_id));
         stamp.apply(&link.values);
-        changed |= before.as_ref() != Some(&stamp);
+        stamp.version = Some(link.version.clone());
+        changed |= self.library_stamp.as_ref() != Some(&stamp);
         self.library_stamp = Some(stamp);
         changed
     }

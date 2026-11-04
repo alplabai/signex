@@ -151,15 +151,12 @@ pub(in crate::format) struct SymbolExtras {
         skip_serializing_if = "Option::is_none"
     )]
     pub(in crate::format) row_id: Option<Uuid>,
-    /// The row values the part last agreed with, a sub-table (#2004). Only
-    /// its `None` is skipped: an empty value is a value. A table that is not
-    /// a stamp loads as none and is reported (`lenient_stamp`).
-    #[serde(
-        default,
-        deserialize_with = "lenient_stamp",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub(in crate::format) library_stamp: Option<RowStamp>,
+    /// The stamp table as read, converted in `sch_rows::symbol_from_row`: a
+    /// table that is not a stamp loads as none, is reported, and stays among
+    /// the unknown keys so a save keeps it. Writing never sets this; the
+    /// stamp goes out as an unknown table (`stamp_for_write`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(in crate::format) library_stamp: Option<toml::Value>,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -234,7 +231,7 @@ impl SymbolExtras {
     }
 
     pub(in crate::format) fn from_symbol(s: &Symbol) -> Self {
-        let (typed_stamp, stamp_table) = stamp_for_write(s.library_stamp.as_ref());
+        let stamp_table = stamp_for_write(s.library_stamp.as_ref());
         SymbolExtras {
             footprint: s.footprint.clone(),
             datasheet: s.datasheet.clone(),
@@ -270,7 +267,7 @@ impl SymbolExtras {
             library_id: s.library_id,
             row_id: s.row_id,
             library_version: s.library_version.clone(),
-            library_stamp: typed_stamp,
+            library_stamp: None,
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.
@@ -481,40 +478,35 @@ where
 
 /// The stamp as it is written: a table among the unknown keys, so it sorts
 /// where a build without the field re-saves it and a re-save changes no
-/// byte (docs/architecture/snxsch-library-link.md, "Value stamp"). Should it
-/// not convert, the typed field writes it instead; it is never dropped.
-fn stamp_for_write(stamp: Option<&RowStamp>) -> (Option<RowStamp>, Option<toml::Value>) {
-    let Some(stamp) = stamp else {
-        return (None, None);
-    };
-    match toml::Value::try_from(stamp) {
-        Ok(table) => (None, Some(table)),
+/// byte (docs/architecture/snxsch-library-link.md, "Value stamp").
+fn stamp_for_write(stamp: Option<&RowStamp>) -> Option<toml::Value> {
+    match toml::Value::try_from(stamp?) {
+        Ok(table) => Some(table),
         Err(error) => {
-            tracing::warn!(target: "signex::format", "library_stamp as a plain table: {error}");
-            (Some(stamp.clone()), None)
+            tracing::warn!(target: "signex::format", "library_stamp not written: {error}");
+            None
         }
     }
 }
 
-/// Deserialize the value stamp, mapping a table that is not one (a wrong
-/// type, a `row_id` that is not a UUID) to `None` and reporting it: a
-/// malformed stamp must never make a sheet unopenable.
-fn lenient_stamp<'de, D>(de: D) -> Result<Option<RowStamp>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let Some(value) = Option::<toml::Value>::deserialize(de)? else {
-        return Ok(None);
-    };
+/// Convert the stamp table read from a file. A table that is not a stamp (a
+/// wrong type, a `row_id` that is not a UUID) is reported and put back among
+/// `unknown`, so the sheet opens and a save keeps it for a build that reads it.
+pub(in crate::format) fn stamp_from_read(
+    read: Option<toml::Value>,
+    unknown: &mut UnknownFields,
+) -> Option<RowStamp> {
+    let value = read?;
     match value.clone().try_into::<RowStamp>() {
-        Ok(stamp) => Ok(Some(stamp)),
+        Ok(stamp) => Some(stamp),
         Err(error) => {
             tracing::warn!(
                 target: "signex::format",
                 "[extras.symbols] library_stamp = {value} is not a value stamp ({error}); \
                  the symbol loads without one"
             );
-            Ok(None)
+            unknown.insert_value("library_stamp", value);
+            None
         }
     }
 }

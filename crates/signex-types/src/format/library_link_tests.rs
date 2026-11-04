@@ -190,6 +190,7 @@ fn stamped(n: u128) -> Symbol {
             footprint: Some("SOIC-8".into()),
             manufacturer: Some(String::new()),
             mpn: None,
+            version: Some("1.0.2".into()),
             ..RowStamp::new(Uuid::from_u128(0x2000 + n))
         }),
         ..linked(n)
@@ -310,7 +311,47 @@ fn a_malformed_value_stamp_loads_as_none_with_a_warning_and_the_sheet_opens() {
             "the link survives"
         );
         assert_eq!(warnings, 1, "{text}");
+        // Not ours to read, so not ours to drop: a build that reads it can.
+        assert_eq!(
+            write(&back),
+            text,
+            "the malformed stamp must survive a save"
+        );
     }
+}
+
+#[test]
+fn stamp_values_with_quotes_newlines_tabs_backslashes_and_unicode_round_trip() {
+    let nasty = "a \"q\" \\ b\nline\ttab \u{00e9}\u{4e2d}\u{1f600}";
+    let part = Symbol {
+        library_stamp: Some(RowStamp {
+            footprint: Some(nasty.into()),
+            manufacturer: Some(nasty.into()),
+            mpn: Some(nasty.into()),
+            version: Some("1.0.2".into()),
+            ..RowStamp::new(Uuid::from_u128(0x2001))
+        }),
+        ..linked(1)
+    };
+    let text = write(&sheet(vec![part.clone()]));
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_eq!(stamp_of(&back), part.library_stamp);
+    assert_eq!(write(&back), text);
+}
+
+#[test]
+fn the_stamp_version_is_written_and_a_stamp_without_one_loads_but_is_not_trusted() {
+    let text = write(&sheet(vec![stamped(1)]));
+    assert!(text.contains("version = \"1.0.2\"\n"), "{text}");
+    let unversioned = Symbol {
+        library_stamp: Some(RowStamp::new(Uuid::from_u128(0x2001))),
+        ..linked(1)
+    };
+    let text = write(&sheet(vec![unversioned.clone()]));
+    let back = SnxSchematic::parse(&text).unwrap().sheet;
+    assert_eq!(stamp_of(&back), unversioned.library_stamp);
+    assert!(back.symbols[0].valid_stamp().is_none());
+    assert_eq!(write(&back), text);
 }
 
 #[test]

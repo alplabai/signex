@@ -549,6 +549,7 @@ fn a_fan_out_mapping_never_gives_two_pins_one_uuid() {
 fn stamp(row: u128, mpn: &str) -> RowStamp {
     RowStamp {
         mpn: Some(mpn.into()),
+        version: Some("2.0".into()),
         ..RowStamp::new(Uuid::from_u128(row))
     }
 }
@@ -596,4 +597,26 @@ fn a_swap_to_a_part_with_no_library_leaves_no_stamp() {
         })
         .unwrap();
     assert_eq!(engine.document().symbols[0].library_stamp, None);
+}
+
+#[test]
+fn the_swap_tags_the_stamp_with_the_version_it_travels_with() {
+    let (mut engine, id) = engine_with_wired_pin_2();
+    let mut swap = replacement(swap_pins());
+    swap.stamp = Some(RowStamp {
+        version: Some("9.9".into()),
+        ..stamp(0xB, "NEW-MPN")
+    });
+    engine
+        .execute(Command::ChangeComponent {
+            symbol_id: id,
+            replacement: swap,
+        })
+        .unwrap();
+    let part = &engine.document().symbols[0];
+    assert_eq!(part.library_version, "2.0");
+    assert!(
+        part.valid_stamp().is_some(),
+        "the stamp matches the version"
+    );
 }

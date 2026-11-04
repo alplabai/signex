@@ -516,6 +516,7 @@ fn a_stamp_only_replace_records_an_undo_step_and_undo_restores_the_old_stamp() {
     doc.symbols[0].library_version = "1.0.0".into();
     let old = RowStamp {
         mpn: Some("OLD".into()),
+        version: Some("1.0.0".into()),
         ..RowStamp::new(row)
     };
     doc.symbols[0].library_stamp = Some(old.clone());

@@ -115,6 +115,7 @@ fn row_stamp(
         footprint: footprint.cloned(),
         manufacturer: Some(row.primary_mpn.manufacturer.clone()),
         mpn: Some(row.primary_mpn.mpn.clone()),
+        version: Some(row.version.clone()),
         ..signex_types::schematic::RowStamp::new(row.row_id)
     }
 }

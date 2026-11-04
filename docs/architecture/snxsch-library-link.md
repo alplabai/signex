@@ -59,12 +59,21 @@ footprint = "SOIC-8"        # the bound footprint's resolved NAME, not its ref
 manufacturer = "TI"         # row.primary_mpn.manufacturer
 mpn = "LM358"               # row.primary_mpn.mpn, never the alias key
 row_id = "<uuid>"           # the row the values came from; required
+version = "1.2.3"           # the part's library_version when the stamp was taken
 ```
 
 - **Absent is not empty.** A missing value key means the base is unknown;
   `""` means the row offered nothing. Only `None` is skipped on write.
-- **Valid only for its row.** A stamp whose `row_id` is not the symbol's
-  `row_id` is ignored, and the part is treated as one with no stamp.
+- **Valid only for its row and version.** A stamp whose `row_id` is not the
+  symbol's `row_id`, or whose `version` is not the symbol's `library_version`
+  (or is absent), is ignored, and the part is treated as one with no stamp
+  (the legacy rule below). A build that does not know the stamp keeps the
+  table verbatim but can still move `library_version` and the values (its own
+  Update from library, its Personal restamp); the version key is how this
+  build notices the stamp was left behind. Every stamp write goes through
+  `LinkStamp`, which tags the stamp with the version it is written with. A
+  stamp with no `version` key is not trusted: this build is the first to write
+  stamps, so no file carries one without a version.
 - **Own unknown-key bag.** Keys a later build adds survive an older one. The
   table is written among the symbol's unknown tables, which sort
   alphabetically, and its keys are sorted: so an older build that keeps it as
@@ -72,7 +81,8 @@ row_id = "<uuid>"           # the row the values came from; required
   sorts before it.
 - **No format bump**: still `snxsch/1`, as for the link. A malformed table (a
   wrong type, a `row_id` that is not a UUID) loads as no stamp with a
-  `tracing::warn!` (target `signex::format`); the sheet opens.
+  `tracing::warn!` (target `signex::format`); the sheet opens, and the raw
+  table is kept among the unknown keys so a save does not drop it.
 - **Nothing is rewritten on load**, and load does no library IO. A stamp is
   written at a stamping event: placement, Change Component, an update from
   the library or the modal's Apply, the open-time Personal restamp, and an
@@ -108,8 +118,10 @@ Answering ticks the part's entry; an answer on an unticked entry is ignored.
 open or mount until the conflict is answered.
 "Update from library" on a placed part never answers a conflict: it keeps
 `o` and also keeps the part on its old version, so the next scan lists the
-part with its conflict again. The
-open-time Personal restamp edits nothing: it advances a field's base only
+part with its conflict again. A part whose version has not moved is listed
+too when it holds a conflict (a row edited without a version bump, a
+footprint renamed under it): its entry keeps the version and only settles the
+field. The open-time Personal restamp edits nothing: it advances a field's base only
 where `o = t`, never that of a pending follow, and a part with a conflict
 keeps its old version and is offered in the modal.
 
@@ -122,7 +134,7 @@ still filled (row 8). Otherwise `b` is unknown (rows 8 and 9). A stamping
 event on a part with a row and no valid stamp writes a stamp even when it can
 prove no value (all keys absent): that switches this rule off, so an
 unanswered conflict is not read as "the row's value" and cleared. Once a valid
-stamp exists the version is no longer consulted for that part: a missing key
+stamp exists the row's version is no longer consulted for that part: a missing key
 is unknown. So an old file whose row moved and whose part differs in a
 non-empty value gets a conflict choice, asked until answered, where it used to be
 overwritten.

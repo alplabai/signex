@@ -336,7 +336,15 @@ impl Engine {
             next.library_id = replacement.library_id;
             next.row_id = replacement.row_id;
             next.library_version = replacement.library_version.clone();
-            next.library_stamp = replacement.library_id.and(replacement.stamp.clone());
+            // Tagged with the version it travels with, whatever the caller set.
+            next.library_stamp =
+                replacement
+                    .library_id
+                    .and(replacement.stamp.clone())
+                    .map(|mut stamp| {
+                        stamp.version = Some(replacement.library_version.clone());
+                        stamp
+                    });
             next.value = replacement.value.clone();
             next.footprint = replacement.footprint.clone();
             next.datasheet = replacement.datasheet.clone();

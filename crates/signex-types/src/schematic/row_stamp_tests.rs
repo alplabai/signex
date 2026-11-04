@@ -182,3 +182,72 @@ fn a_link_stamp_with_no_values_still_stamps_a_legacy_part_so_the_legacy_rule_is_
     assert!(stamp.footprint.is_none() && stamp.manufacturer.is_none() && stamp.mpn.is_none());
     assert!(!legacy.apply_link_stamp(&LinkStamp::version("1.0.1")));
 }
+
+/// The base a part's MPN has against a row at `row_version` holding `theirs`.
+fn mpn_base<'a>(part: &'a Symbol, row_version: &str, theirs: &'a str) -> Option<&'a str> {
+    let unmoved = !part.library_version.is_empty() && part.library_version == row_version;
+    base_of(part.valid_stamp(), StampField::Mpn, unmoved, value(theirs))
+}
+
+fn stamped_part(stamp_version: Option<&str>, library_version: &str) -> Symbol {
+    let row = Uuid::from_u128(7);
+    Symbol {
+        row_id: Some(row),
+        library_version: library_version.into(),
+        library_stamp: Some(RowStamp {
+            mpn: Some("A".into()),
+            version: stamp_version.map(str::to_owned),
+            ..RowStamp::new(row)
+        }),
+        ..Default::default()
+    }
+}
+
+/// An older build moved the part to the row's value B at version 2 and left
+/// the stamp (A, taken at version 1) behind. The stale stamp is not a base.
+#[test]
+fn a_stamp_taken_at_another_version_is_not_trusted() {
+    let part = stamped_part(Some("1"), "2");
+    assert!(part.valid_stamp().is_none());
+    // The part holds A, deliberately set back; the row is at B, version 2.
+    // The legacy rule reads the unmoved version: an override, kept and
+    // unflagged. The stale stamp would have read as "follows" and let an
+    // update overwrite A.
+    let base = mpn_base(&part, "2", "B");
+    assert_eq!(resolve(base, "A", value("B")), Verdict::Override);
+    // The part holds C, row B: an override too, not a spurious conflict.
+    assert_eq!(resolve(base, "C", value("B")), Verdict::Override);
+}
+
+/// Version moved in the row and the stamp matches the part's version: the
+/// stamp is the base and the conflict is real.
+#[test]
+fn a_stamp_taken_at_the_parts_version_is_the_base() {
+    let part = stamped_part(Some("1"), "1");
+    assert!(part.valid_stamp().is_some());
+    assert_eq!(
+        resolve(mpn_base(&part, "2", "B"), "X", value("B")),
+        Verdict::Conflict("B".into())
+    );
+    assert_eq!(
+        resolve(mpn_base(&part, "2", "B"), "A", value("B")),
+        Verdict::Follows("B".into())
+    );
+}
+
+#[test]
+fn a_stamp_with_no_version_is_not_trusted() {
+    assert!(stamped_part(None, "1").valid_stamp().is_none());
+}
+
+#[test]
+fn a_link_stamp_tags_the_stamp_with_its_version_and_keeps_the_values_of_a_valid_one() {
+    let mut part = stamped_part(Some("1"), "1");
+    assert!(part.apply_link_stamp(&LinkStamp::version("2")));
+    let stamp = part.valid_stamp().expect("retagged with the new version");
+    assert_eq!(stamp.mpn.as_deref(), Some("A"), "the base is kept");
+    // A stale stamp is replaced, not retagged: its values are not a base.
+    let mut stale = stamped_part(Some("1"), "2");
+    assert!(stale.apply_link_stamp(&LinkStamp::version("3")));
+    assert_eq!(stale.valid_stamp().unwrap().mpn, None);
+}

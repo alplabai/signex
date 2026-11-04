@@ -134,6 +134,12 @@ fn placement_stamps_the_row_values_with_the_version() {
     assert_eq!(s.mpn.as_deref(), Some("TWO-1"));
     assert_eq!(s.manufacturer.as_deref(), Some("Acme"));
     assert_eq!(s.footprint.as_deref(), Some(""), "the row binds none");
+    assert_eq!(
+        s.version.as_deref(),
+        Some("1.2.3"),
+        "taken at the part's version"
+    );
+    assert!(doc(&app).symbols[0].valid_stamp().is_some());
     assert_eq!(doc(&app).symbols[0].library_version, "1.2.3");
 }
 
@@ -407,4 +413,79 @@ fn a_team_mode_override_and_a_row_move_is_a_conflict_the_user_settles() {
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(mpn(&app).as_deref(), Some("MINE"), "one undo step");
     assert_eq!(doc(&app).symbols[0].library_version, "1.2.3");
+}
+
+#[test]
+fn a_conflict_on_an_unmoved_version_can_still_be_answered() {
+    let (f, mut app) = placed();
+    set_mpn(&mut app, "MINE");
+    // The row's MPN moves without a version bump (an outside edit, a Team
+    // footprint rename, an older build's update).
+    row_update(&f, "1.2.3", |row| row.primary_mpn.mpn = "LIB".into());
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "both moved: a conflict");
+    reopen(&mut app);
+    scan(&mut app);
+    let modal = app
+        .library
+        .library_updates
+        .as_ref()
+        .expect("the conflict must be askable");
+    assert_eq!(modal.entries[0].conflicts.len(), 1);
+    // Answering keeps the version and settles the field; the flag clears.
+    apply_modal(&mut app, None);
+    assert_eq!(mpn(&app).as_deref(), Some("MINE"), "kept mine");
+    assert_eq!(stamp(&app).mpn.as_deref(), Some("LIB"), "acknowledged");
+    assert_eq!(doc(&app).symbols[0].library_version, "1.2.3");
+    check_drift(&mut app);
+    assert!(!is_drifted(&app), "answering clears the drift flag");
+}
+
+#[test]
+fn use_library_value_settles_a_conflict_on_an_unmoved_version() {
+    let (f, mut app) = placed();
+    set_mpn(&mut app, "MINE");
+    row_update(&f, "1.2.3", |row| row.primary_mpn.mpn = "LIB".into());
+    scan(&mut app);
+    apply_modal(&mut app, Some(Choice::UseLibrary));
+    assert_eq!(mpn(&app).as_deref(), Some("LIB"));
+    assert_eq!(doc(&app).symbols[0].library_version, "1.2.3");
+    check_drift(&mut app);
+    assert!(!is_drifted(&app));
+}
+
+#[test]
+fn update_from_library_keeps_the_value_of_a_conflict_on_an_unmoved_version() {
+    let (f, mut app) = placed();
+    set_mpn(&mut app, "MINE");
+    row_update(&f, "1.2.3", |row| row.primary_mpn.mpn = "LIB".into());
+    check_drift(&mut app);
+    update_first(&mut app);
+    assert_eq!(mpn(&app).as_deref(), Some("MINE"), "never overwritten");
+    assert_eq!(doc(&app).symbols[0].library_version, "1.2.3");
+    check_drift(&mut app);
+    assert!(is_drifted(&app), "the conflict is still open");
+}
+
+/// An older build moved the part to the row's value and the version but left
+/// the stamp it did not know behind. The stale stamp must not read as a base.
+#[test]
+fn a_stamp_left_behind_by_an_older_build_does_not_let_an_update_overwrite_an_override() {
+    let (f, mut app) = placed();
+    // The older build updated the row to "LIB" at 1.2.4 and the part with it
+    // (value and version); the stamp still says TWO-1 at 1.2.3.
+    row_update(&f, "1.2.4", |row| row.primary_mpn.mpn = "LIB".into());
+    set_mpn(&mut app, "LIB");
+    let mut sheet = doc(&app).clone();
+    sheet.symbols[0].library_version = "1.2.4".into();
+    app.document_state
+        .active_engine_mut()
+        .unwrap()
+        .set_document(sheet);
+    // The user deliberately sets the part back to the old value.
+    set_mpn(&mut app, "TWO-1");
+    check_drift(&mut app);
+    assert!(!is_drifted(&app), "an override of an unmoved row");
+    update_first(&mut app);
+    assert_eq!(mpn(&app).as_deref(), Some("TWO-1"), "never overwritten");
 }
