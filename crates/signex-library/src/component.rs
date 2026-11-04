@@ -113,11 +113,11 @@ impl PinPadOverride {
     }
 }
 
-/// PLM-reserved fields. Inert until the Pro Release.
+/// PLM-reserved fields. Inert until Signex 365.
 ///
 /// **TSV persistence note:** as of v0.9, `PlmReserved` is dropped at write
 /// time — only `PlmReserved::default()` round-trips through the table cell encoding.
-/// Non-default payloads cause `LibraryError::Backend("...")`. The Pro Release will add
+/// Non-default payloads cause `LibraryError::Backend("...")`. Signex 365 will add
 /// dedicated columns and full round-trip.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PlmReserved {
@@ -199,7 +199,7 @@ pub struct ComponentRow {
     #[serde(default)]
     pub parameters: ParamMap,
 
-    // ── PLM-reserved (inert until the Pro Release) ─────────────────────────────────
+    // ── PLM-reserved (inert until Signex 365) ─────────────────────────────────
     #[serde(default)]
     pub plm: PlmReserved,
 

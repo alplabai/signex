@@ -53,7 +53,7 @@ have this section and drifted six versions away from reality as a result.
 | Next tag | The first CalVer release, `vYY.MM.MICRO` (or `-rc.N`), dated per §3 (the month of its first release candidate, or the month it ships if there is none). `1.0.0` final is never cut |
 | `workspace.package.version` | **1.0.0-rc.1** until the first CalVer release-prep PR sets it |
 | Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
-| Current work | Command Registry & Symbol Units milestone: 0 open issues; it shipped inside 1.0.0-rc.1. Community Preview milestone, 7 open issues as of 2026-11-04: #2031, #2021, #2004, #1972, #1952, #661 (one document model epic), #322 (the user guide). Release prep for the first CalVer release follows |
+| Current work | Command Registry & Symbol Units milestone: 0 open issues; it shipped in 1.0.0-rc.1, and its test follow-up #1727 landed after the tag and ships in the next release. Community Preview milestone, 6 open issues as of 2026-11-04: #2021, #2004, #1972, #1952, #661 (one document model epic), #322 (the user guide). Release prep for the first CalVer release follows |
 
 Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
 **shipped**. The work since v0.9 — the Apache-clean native-format
@@ -212,7 +212,7 @@ load-bearing. (v0.15.0 shipped 2026-07-23 — see §6.)
 
 | Plan | Scope | Milestone |
 |------|-------|-----------|
-| **Command Registry & Symbol Units** | Command catalog groundwork (menus read one label/shortcut table, #271), root `Message` namespacing (#162), table/settings write cost (#416), and the symbol multi-unit tail. The full Command Registry epic (#278: dispatch, palette, CLI, plugins) moved to Advanced Schematic. **Shipped in 1.0.0-rc.1**; the milestone is closed. | `Command Registry & Symbol Units` |
+| **Command Registry & Symbol Units** | Command catalog groundwork (menus read one label/shortcut table, #271), root `Message` namespacing (#162), table/settings write cost (#416), and the symbol multi-unit tail. The full Command Registry epic (#278: dispatch, palette, CLI, plugins) moved to Advanced Schematic. **Shipped in 1.0.0-rc.1; test follow-up #1727 landed after the tag and ships in the next release.** The milestone is closed. | `Command Registry & Symbol Units` |
 | Later plans | Not enumerated | *(get names when they get milestones)* |
 
 **v0.14.0 is one release, not two.** Its CHANGELOG section was written

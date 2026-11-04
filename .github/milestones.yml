@@ -13,7 +13,7 @@
 # Versioning is CalVer (YY.MM.MICRO, month unpadded) since 2026-11, so a milestone for
 # future work is identified by NAME, never by a version number: which
 # release carries it is known only when it ships. Version titles
-# ("vX.Y.Z — Name") remain only on shipped (closed) milestones.
+# ("vX.Y.Z — Name") remain only on milestones closed before 2026-11.
 #
 # Naming convention:
 #   - Title = plan name only: Title Case, unique, no version, no date.
@@ -29,10 +29,11 @@
 #   - Shipping: when the last issue closes and the work is in a release, set
 #     `state: closed` and end the description with "Shipped in YY.MM.MICRO."
 #     The title keeps the plan name; milestones closed before 2026-11 keep
-#     their version titles as history.#
+#     their version titles as history.
+#
 # Fields:
-#   title       — must match the roadmap exactly: the plan name for open
-#                 and planned milestones; "vX.Y.Z — Name" for shipped ones
+#   title       — must match the roadmap exactly: the plan name;
+#                 "vX.Y.Z — Name" only for milestones closed before 2026-11
 #   description — one line, user-facing; shown on the milestones page
 #   state       — open | closed  (closed = shipped or abandoned)
 #   aliases     — former titles to rename FROM, so a corrected title
@@ -93,7 +94,7 @@
   state: closed
 
 - title: "Command Registry & Symbol Units"
-  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail. Shipped in 1.0.0-rc.1."
+  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail. Shipped in 1.0.0-rc.1; test follow-up #1727 landed after the tag and ships in the next release."
   state: closed
   # Was "PCB Outline & Pours", inherited from the internal specs' v0.18
   # band. The issues actually assigned here are the command-registry epic

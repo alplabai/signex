@@ -32,7 +32,7 @@ impl Signex {
             MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
             MenuMessage::AnnotateBack => {
                 crate::diagnostics::log_info(
-                    "Back-annotate from PCB lands with the PCB editor (PCB Viewer plan)",
+                    "Back-annotate from PCB lands with the PCB editor (PCB Routing plan)",
                 );
                 Some(Task::none())
             }

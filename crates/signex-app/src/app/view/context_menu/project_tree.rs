@@ -164,11 +164,7 @@ impl Signex {
                     crate::app::command::is_enabled(&id, &self.command_context(None))
                 });
 
-                v.push(dd_planned(
-                    None,
-                    "Make Project Available Online...",
-                    Some("Live Collaboration"),
-                ));
+                v.push(dd_planned(None, "Make Project Available Online...", None));
                 v.push(dd_msg(
                     None,
                     "Validate Project",
@@ -238,16 +234,12 @@ impl Signex {
                     dd_disabled(None, "Explore", None)
                 });
                 v.push(DropdownEntry::Separator);
-                v.push(dd_planned(None, "Variants...", Some("Advanced Schematic")));
+                v.push(dd_planned(None, "Variants...", None));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_planned(
-                    None,
-                    "Project Packager...",
-                    Some("Advanced Output"),
-                ));
-                v.push(dd_planned(None, "Project Releaser...", Some("PLM Sync")));
+                v.push(dd_planned(None, "Project Packager...", None));
+                v.push(dd_planned(None, "Project Releaser...", None));
                 v.push(DropdownEntry::Separator);
-                v.push(dd_planned(None, "Share...", Some("Live Collaboration")));
+                v.push(dd_planned(None, "Share...", None));
                 v.push(dd_command(
                     None,
                     "open_project_options",
@@ -422,11 +414,7 @@ impl Signex {
                 } else {
                     dd_disabled(None, "Print...", None)
                 });
-                v.push(dd_planned(
-                    None,
-                    "Show Differences...",
-                    Some("Import + Git"),
-                ));
+                v.push(dd_planned(None, "Show Differences...", None));
             }
             TreeNodeRole::Container => {
                 // Source Documents / Libraries / Settings folders. Minimum
