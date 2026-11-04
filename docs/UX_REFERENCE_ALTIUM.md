@@ -47,13 +47,13 @@ to Altium behavior that professional users already have in muscle memory.
 - Panels within a dock region are **tabbed** — click a tab to switch
 - A dock region can be **collapsed** to a vertical rail showing icons and
   rotated labels; clicking a rail item expands that dock
-- Panels can be **floated** as separate windows (deferred to post-v1.0;
-  v1.0 supports docked and collapsed only)
+- Panels can be **floated** as separate windows (deferred until after the Community Preview;
+  the Community Preview supports docked and collapsed only)
 - Panel visibility is **context-aware**: schematic-only panels hide when the
   PCB editor is active, and vice versa
 - **Properties panel** (`F11`) is the most important panel — it is
   context-aware based on the current selection and should be visible by default
-- Double-clicking a panel tab undocks it to floating (post-v1.0)
+- Double-clicking a panel tab undocks it to floating (after the Community Preview)
 - Panel sizes and collapsed state persist across sessions (saved to a local
   settings file)
 
@@ -227,7 +227,7 @@ during zoom. This is the single most important detail for zoom to feel natural.
 | Ctrl+1 through Ctrl+8 | Store current selection to slot  | Both       |
 | Alt+1 through Alt+8   | Recall selection from slot       | Both       |
 
-### 4.7. PCB-Specific (v2.0+)
+### 4.7. PCB-Specific (PCB Viewer and later)
 
 | Key                | Action                              | Context    |
 |--------------------|-------------------------------------|------------|
@@ -237,7 +237,7 @@ during zoom. This is the single most important detail for zoom to feel natural.
 
 ### 4.8. Shortcut Customization
 
-Keyboard shortcuts are configurable (planned for post-v2.0). Until then, the
+Keyboard shortcuts are configurable (planned for after the PCB Viewer). Until then, the
 Altium defaults above are hardcoded. When customization ships:
 
 - A shortcut editor dialog lists all actions with current bindings
@@ -310,7 +310,7 @@ displayed coordinates are the snapped position, not the raw cursor position.
 
 These are the default layer colors used by Signex's PCB editor. They match
 Altium Designer's defaults for familiarity. Users may customize per-project
-(post-v2.0).
+(after the PCB Viewer).
 
 Layer identifiers reference the canonical `signex_types::layer::SignexLayer`
 enum (see `PCB_LAYERS_PLAN.md`).
@@ -418,7 +418,7 @@ themes are available in both Community and Pro editions.
 - The default theme is **Catppuccin Mocha** (dark, high contrast, easy on eyes)
 - The user selects a theme from View → Theme or from Preferences
 - Theme choice persists across sessions
-- Custom themes are a post-v2.0 feature; v1.0 ships only the six built-in
+- Custom themes are a post-PCB-Viewer feature; the Community Preview ships only the six built-in
   themes
 
 ### 8.3. Theme Token Structure
@@ -676,7 +676,7 @@ not exist.
   accompanies every color-coded indicator)
 - Themes include one light option (Solarized Light) for users who prefer or
   require light backgrounds
-- The high-contrast theme variant is planned for post-v2.0
+- The high-contrast theme variant is planned for after the PCB Viewer
 - Text sizes in panels use the system font size setting where possible
 
 ---

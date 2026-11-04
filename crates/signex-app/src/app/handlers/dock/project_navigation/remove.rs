@@ -287,7 +287,15 @@ impl Signex {
                 {
                     tasks.extend(self.forget_deleted_library_folders(dir, left, request.fold));
                 }
-                self.report_editors_lost_to_delete(target, request.fold);
+                // The unmount below drops dirty previews either way; an
+                // orphan only words it differently.
+                if matches!(io, DeleteIo::DeletedLibrary { .. })
+                    || (matches!(io, DeleteIo::Orphan)
+                        && crate::app::file_extension::has_extension(target, "snxlib"))
+                {
+                    let deleted = matches!(io, DeleteIo::DeletedLibrary { .. });
+                    self.report_editors_lost_to_delete(target, request.fold, deleted);
+                }
                 tasks.push(self.unmount_removed_library(&request.dialog, true));
                 self.settle_removed_entry(&request, entry);
             }

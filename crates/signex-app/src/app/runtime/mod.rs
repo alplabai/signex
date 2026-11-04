@@ -455,6 +455,19 @@ impl Signex {
         self.document_state.panel_ctx.canvas_colors = self.canvas_colors_for(theme_id);
     }
 
+    /// The schematic's visible grid, for the symbol previews. Read from the
+    /// draft style like `canvas_view_prefs`, so a Preferences live preview
+    /// and a Discard reach the preview at once.
+    pub(crate) fn sheet_grid(
+        &self,
+    ) -> crate::panels::components_panel::details::symbol_canvas::SheetGrid {
+        crate::panels::components_panel::details::symbol_canvas::SheetGrid {
+            visible: self.ui_state.grid_visible,
+            pitch_mm: self.ui_state.visible_grid_mm,
+            style: self.ui_state.preferences_draft_grid_style,
+        }
+    }
+
     /// Settings the schematic canvas renders with, read fresh from app
     /// state on every frame (#631).
     ///

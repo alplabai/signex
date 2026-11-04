@@ -758,11 +758,12 @@ impl Signex {
         let document = &self.document_state;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         for i in 0..document.dock.floating.len() {
-            if let Some(panel_widget) =
-                document
-                    .dock
-                    .view_floating_panel(i, &document.panel_ctx, &self.library)
-            {
+            if let Some(panel_widget) = document.dock.view_floating_panel(
+                i,
+                &document.panel_ctx,
+                &self.library,
+                self.sheet_grid(),
+            ) {
                 let fp = &document.dock.floating[i];
                 out.push(
                     super::translate::Translate::new(
