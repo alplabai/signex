@@ -72,8 +72,6 @@ where
     tree: &'a mut Tree,
     /// The viewport of the [`TimePickerOverlay`].
     viewport: Rectangle,
-    /// The size of the window the overlay is displayed in.
-    window: Size,
     /// The computed layout of all the elements of the [`TimePickerOverlay`].
     geometry: Geometry,
 }
@@ -179,7 +177,6 @@ where
             class,
             tree,
             viewport,
-            window,
             geometry,
         }
     }

@@ -30,8 +30,6 @@ pub struct ContextMenuOverlay<
     Theme: Catalog,
     'b: 'a,
 {
-    // The position of the element
-    position: Point,
     /// The bounds of the window the overlay is displayed in.
     window: Rectangle,
     /// The layout of the content, computed on creation.
@@ -87,7 +85,6 @@ where
         let layout = Layout::new(content_size).move_to(content_position);
 
         ContextMenuOverlay {
-            position,
             window: Rectangle::new(Point::ORIGIN, window),
             layout,
             tree,
@@ -271,7 +268,7 @@ mod tests {
 
         let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
-        assert_eq!(overlay.position, position);
+        assert_eq!(overlay.layout.bounds().position(), position);
     }
 
     #[test]
@@ -309,9 +306,9 @@ mod tests {
             &mut state3,
         );
 
-        assert_eq!(overlay1.position, Point::ORIGIN);
-        assert_eq!(overlay2.position, Point::new(500.0, 300.0));
-        assert_eq!(overlay3.position, Point::new(1000.0, 800.0));
+        assert_eq!(overlay1.layout.bounds().position(), Point::ORIGIN);
+        assert_eq!(overlay2.layout.bounds().position(), Point::new(500.0, 300.0));
+        assert_eq!(overlay3.layout.bounds().position(), Point::new(1000.0, 800.0));
     }
 
     #[test]
@@ -394,8 +391,8 @@ mod tests {
 
         let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
-        assert_eq!(overlay.position.x, -50.0);
-        assert_eq!(overlay.position.y, -100.0);
+        assert_eq!(overlay.layout.bounds().position().x, -50.0);
+        assert_eq!(overlay.layout.bounds().position().y, -100.0);
     }
 
     #[test]
@@ -409,7 +406,7 @@ mod tests {
 
         let overlay = ContextMenuOverlay::new(position, WINDOW, &(), &mut tree, content, class, &mut state);
 
-        assert_eq!(overlay.position.x, 123.456);
-        assert_eq!(overlay.position.y, 789.012);
+        assert_eq!(overlay.layout.bounds().position().x, 123.456);
+        assert_eq!(overlay.layout.bounds().position().y, 789.012);
     }
 }
