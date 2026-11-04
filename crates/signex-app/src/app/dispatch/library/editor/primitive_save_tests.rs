@@ -108,6 +108,50 @@ fn a_failed_write_reaches_the_messages_panel_and_keeps_the_draft_dirty() {
     );
 }
 
+fn rename(app: &mut Signex, path: &Path, name: &str) {
+    app.document_state
+        .symbol_editors
+        .get_mut(path)
+        .expect("editor")
+        .record_edit(None, |e| {
+            e.primitive_mut().name = name.into();
+            e.mark_dirty();
+            true
+        });
+}
+
+/// #1854: the save point a snapshot sets names content that never reached
+/// disk when the write fails; Undo back to it must not read clean.
+#[test]
+fn a_failed_write_never_leaves_undo_reading_clean() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _) = app_with_dirty_symbol(dir.path());
+    let blocker = dir.path().join("blocker");
+    std::fs::write(&blocker, b"x").expect("blocker");
+    let path = blocker.join("Lib.snxsym");
+    let editor = app
+        .document_state
+        .symbol_editors
+        .remove(&dir.path().join("Lib.snxsym"))
+        .expect("editor");
+    app.document_state
+        .symbol_editors
+        .insert(path.clone(), editor);
+
+    rename(&mut app, &path, "A");
+    let task = app.save_primitive_tab_at(&path).expect("save starts");
+    rename(&mut app, &path, "B");
+    land(&mut app, task);
+
+    let editor = app
+        .document_state
+        .symbol_editors
+        .get_mut(&path)
+        .expect("editor");
+    assert!(editor.undo());
+    assert!(editor.is_dirty(), "disk still lacks edit A");
+}
+
 #[test]
 fn an_edit_during_the_write_keeps_the_draft_dirty() {
     let dir = tempfile::tempdir().expect("tempdir");

@@ -47,8 +47,8 @@ Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Ctrl+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace
 View	menu	View	-	-	-	-	-
-View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	11111111	cmd:zoom_in_at_cursor
-View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	11111111	cmd:zoom_out_at_cursor
+View/Zoom In	item	Zoom In	zoom_in_at_cursor	Ctrl+=	ZoomIn	01100000	cmd:zoom_in_at_cursor
+View/Zoom Out	item	Zoom Out	zoom_out_at_cursor	Ctrl+-	ZoomOut	01100000	cmd:zoom_out_at_cursor
 View/Fit All	item	Fit All	zoom_to_fit	Home	ZoomFit	01100100	cmd:zoom_to_fit
 View/---	separator	-	-	-	-	-	-
 View/Toggle Grid	item	Toggle Grid	toggle_visible_grid	Shift+Ctrl+G	ToggleGrid	11111111	cmd:toggle_visible_grid
@@ -80,8 +80,8 @@ Design/Annotation/Annotate Schematics...	item	Annotate Schematics...	-	-	Annotat
 Design/Annotation/Reset Schematic Designators...	item	Reset Schematic Designators...	-	-	AnnotateReset	01000000	sch
 Design/Annotation/Reset Duplicate Schematic Designators...	item	Reset Duplicate Schematic Designators...	-	-	AnnotateResetDuplicates	01000000	sch
 Design/Annotation/---	separator	-	-	-	-	-	-
-Design/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	annotate_schematic_quietly	Alt+A	AnnotateQuietly	01001000	cmd:annotate_schematic_quietly
-Design/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01001000	cmd:force_annotate_all_schematics
+Design/Annotation/Annotate Schematics Quietly	item	Annotate Schematics Quietly	annotate_schematic_quietly	Alt+A	AnnotateQuietly	01000000	cmd:annotate_schematic_quietly
+Design/Annotation/Force Annotate All Schematics	item	Force Annotate All Schematics	force_annotate_all_schematics	Shift+Alt+A	AnnotateForceAll	01000000	cmd:force_annotate_all_schematics
 Design/Annotation/---	separator	-	-	-	-	-	-
 Design/Annotation/Back Annotate Schematics...	stub	Back Annotate Schematics...	-	-	-	00000000	never
 Design/Annotation/Number Schematic Sheets...	stub	Number Schematic Sheets...	-	-	-	00000000	never
@@ -102,7 +102,7 @@ Tools/---	separator	-	-	-	-	-	-
 Tools/New Part	item	New Part	-	-	ToolsNewPart	00010000	newpart
 Tools/Remove Part	item	Remove Part	-	-	ToolsRemovePart	00010000	removepart
 Tools/---	separator	-	-	-	-	-	-
-Tools/Document Options...	item	Document Options...	-	-	ToolsDocumentOptions	11111111	always
+Tools/Document Options...	item	Document Options...	-	-	ToolsDocumentOptions	00000000	libeditor
 Tools/---	separator	-	-	-	-	-	-
 Tools/Passive Network Calculator...	item	Passive Network Calculator...	-	-	OpenPassiveCalculator	11111111	always
 Tools/---	separator	-	-	-	-	-	-

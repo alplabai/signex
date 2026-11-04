@@ -15,6 +15,8 @@ pub(super) struct EditAttempt {
     snapshot: Option<FootprintHistorySnapshot>,
     rejections_before: u32,
     dirty_before: bool,
+    /// The save point before the message: a rejected edit gives it back.
+    point_before: crate::app::SavePoint,
     /// A sketch drag tick: when it changed nothing it is not an edit.
     is_drag_tick: bool,
     /// A message that may be refused without changing anything (deleting
@@ -61,6 +63,7 @@ impl EditAttempt {
             snapshot,
             rejections_before: editor.state.conflict.rejections(),
             dirty_before: editor.is_dirty(),
+            point_before: editor.save_point,
             is_drag_tick,
             may_be_refused: matches!(msg, FootprintEditorMsg::DeleteSilkF),
         }
@@ -69,6 +72,11 @@ impl EditAttempt {
     /// The dirty flag as it was before the message.
     pub(super) fn dirty_before(&self) -> bool {
         self.dirty_before
+    }
+
+    /// The save point as it was before the message.
+    pub(super) fn point_before(&self) -> crate::app::SavePoint {
+        self.point_before
     }
 
     /// Record the undo step, unless the edit was rejected and changed
@@ -86,7 +94,7 @@ impl EditAttempt {
         let no_op_allowed = rejected || self.is_drag_tick || self.may_be_refused;
         if no_op_allowed && editor.is_unchanged_since(&snapshot) {
             // Rows a failed cascade still owes keep the editor unsaved.
-            editor.set_dirty(self.dirty_before || !editor.cascade_owed.is_empty());
+            editor.give_back_rejected_edit(self.point_before, self.dirty_before);
             return (false, None);
         }
         (true, editor.commit_history(snapshot))

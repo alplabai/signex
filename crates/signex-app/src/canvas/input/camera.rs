@@ -39,8 +39,7 @@ impl SchematicCanvas<'_> {
             }
             // Grid + content need redraw on zoom
             return Some(
-                canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
-                    .and_capture(),
+                canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved)).and_capture(),
             );
         }
         None

@@ -8,17 +8,6 @@ impl Signex {
         msg: &MenuMessage,
     ) -> Option<Task<Message>> {
         match msg {
-            MenuMessage::Undo => Some(self.update(Message::Edit(EditMsg::Undo))),
-            MenuMessage::Redo => Some(self.update(Message::Edit(EditMsg::Redo))),
-            MenuMessage::Cut => Some(self.update(Message::Edit(EditMsg::Cut))),
-            MenuMessage::Copy => Some(self.update(Message::Edit(EditMsg::Copy))),
-            MenuMessage::Paste => Some(self.update(Message::Edit(EditMsg::Paste))),
-            MenuMessage::SmartPaste => Some(self.update(Message::Edit(EditMsg::SmartPaste))),
-            MenuMessage::Delete => Some(self.update(Message::Edit(EditMsg::DeleteSelected))),
-            MenuMessage::SelectAll => Some(self.update(Message::Selection(
-                selection_request::SelectionRequest::SelectAll,
-            ))),
-            MenuMessage::Duplicate => Some(self.update(Message::Edit(EditMsg::Duplicate))),
             MenuMessage::BringDrawingsToFront => Some(self.update(Message::Edit(
                 EditMsg::ArrangeDrawings(signex_engine::DrawingArrange::ToFront),
             ))),
@@ -31,21 +20,10 @@ impl Signex {
             MenuMessage::SendDrawingsBackward => Some(self.update(Message::Edit(
                 EditMsg::ArrangeDrawings(signex_engine::DrawingArrange::Backward),
             ))),
-            MenuMessage::Find => Some(self.update(Message::Overlay(OverlayMsg::OpenFind))),
-            MenuMessage::Replace => Some(self.update(Message::Overlay(OverlayMsg::OpenReplace))),
             MenuMessage::Annotate => Some(self.update(Message::Annotate(AnnotateMsg::OpenDialog))),
             MenuMessage::AnnotateReset => {
                 Some(self.update(Message::Annotate(AnnotateMsg::OpenResetConfirm)))
             }
-            // Alt+A shortcut-style: run incremental annotate without opening
-            // the dialog. Matches Altium "Annotate Schematics Quietly".
-            MenuMessage::AnnotateQuietly => Some(self.update(Message::Annotate(AnnotateMsg::Run(
-                signex_engine::AnnotateMode::Incremental,
-            )))),
-            // Shift+Alt+A: force reset + renumber without confirm dialog.
-            MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
-                AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber),
-            ))),
             // Reset Duplicate Designators — find references that appear on
             // more than one part across the project, reset just those to
             // `{prefix}?`. Other designators keep their current value. The
@@ -65,12 +43,6 @@ impl Signex {
                 Some(Task::none())
             }
             MenuMessage::Erc => Some(self.update(Message::Erc(ErcMsg::OpenDialog))),
-            MenuMessage::OpenParameterManager => {
-                Some(self.update(Message::ParameterManager(ParameterManagerMsg::Open)))
-            }
-            MenuMessage::ToggleAutoFocus => {
-                Some(self.update(Message::Overlay(OverlayMsg::ToggleAutoFocus)))
-            }
             _ => None,
         }
     }

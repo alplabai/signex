@@ -250,12 +250,13 @@ fn undo_that_switches_symbol_resets_part_and_viewport() {
 fn undo_after_save_keeps_the_quit_gate_armed() {
     let (mut app, path) = symbol_app();
     canvas(&mut app, &path, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
-    // What a save does: clear the editor flag and the workspace marker.
+    // What a save does: the snapshot's depth becomes the save point, the
+    // editor flag clears, and the workspace marker clears when it lands.
     app.document_state
         .symbol_editors
         .get_mut(&path)
         .unwrap()
-        .set_dirty(false);
+        .mark_saved();
     app.document_state.mark_document_clean(&path);
 
     undo(&mut app);
@@ -264,6 +265,31 @@ fn undo_after_save_keeps_the_quit_gate_armed() {
         app.document_state.is_document_dirty(&path),
         "undo re-dirties the document, so the quit gate must see it"
     );
+}
+
+/// #1854: undoing the only edit since open is the file again; redo is not.
+#[test]
+fn undo_back_to_the_opened_state_reads_clean_everywhere() {
+    let (mut app, path) = symbol_app();
+    canvas(&mut app, &path, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+    assert!(app.document_state.is_document_dirty(&path));
+
+    undo(&mut app);
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "the draft equals its file again"
+    );
+}
+
+/// #1854: the canvas Ctrl+Z path (`SymbolEditorMsg::Undo`) reads clean too.
+#[test]
+fn canvas_undo_back_to_the_opened_state_reads_clean() {
+    let (mut app, path) = symbol_app();
+    canvas(&mut app, &path, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
+    canvas(&mut app, &path, SymbolEditorMsg::Undo);
+    assert!(!app.document_state.is_document_dirty(&path));
+    canvas(&mut app, &path, SymbolEditorMsg::Redo);
+    assert!(app.document_state.is_document_dirty(&path));
 }
 
 #[test]

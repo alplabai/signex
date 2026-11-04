@@ -267,6 +267,20 @@ pub struct SymbolDeleteWarning {
     /// Nothing is confirmed in use, but some table was not read, so the
     /// symbol may still be in use.
     pub only_unknown: bool,
+    /// The closed sheets of the project are still being read from disk.
+    pub checking: bool,
     /// One line per kind of user (component rows, open sheets).
     pub lines: Vec<String>,
+}
+
+impl SymbolDeleteWarning {
+    pub fn heading(&self) -> String {
+        if self.checking && self.only_unknown {
+            format!("Checking whether symbol \"{}\" is in use", self.name)
+        } else if self.only_unknown {
+            format!("Symbol \"{}\" may still be in use", self.name)
+        } else {
+            format!("Symbol \"{}\" is still in use", self.name)
+        }
+    }
 }

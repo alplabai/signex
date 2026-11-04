@@ -564,7 +564,7 @@ impl canvas::Program<Message> for PcbCanvas {
                     )
                 {
                     return Some(
-                        canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
+                        canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved))
                             .and_capture(),
                     );
                 }
@@ -592,7 +592,7 @@ impl canvas::Program<Message> for PcbCanvas {
                             .pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
                         state.last_pan_pos = Some(cursor_pos);
                         return Some(
-                            canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
+                            canvas::Action::publish(Message::CanvasEvent(CanvasEvent::ViewMoved))
                                 .and_capture(),
                         );
                     }
