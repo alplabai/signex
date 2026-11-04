@@ -47,9 +47,9 @@ Two of them placed different features at v1.4 and v1.5. A fourth axis
 Honesty first, because the previous revision of this document did not
 have this section and drifted six versions away from reality as a result.
 
-| Fact | State (2026-10-29) |
+| Fact | State (2026-11-04) |
 |------|--------------------|
-| Latest tagged release | **v1.0.0-rc.1** (2026-10-29), the first release candidate of the Community Preview and the **last SemVer tag**. It published as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 (2026-07-23) |
+| Latest tagged release | **v1.0.0-rc.1** (2026-10-29), the first release candidate of the Community Preview and the **last SemVer tag**. It published as a GitHub pre-release (`release.yml` marks any tag with a `-` suffix as one), so `releases/latest` still points at v0.15.0 (2026-07-23) until the first stable CalVer release |
 | Next tag | The first CalVer release, `vYY.MM.MICRO` (or `-rc.N`), dated by the month it ships (§3). `1.0.0` final is never cut |
 | `workspace.package.version` | **1.0.0-rc.1** until the first CalVer release-prep PR sets it |
 | Latest CHANGELOG section | **1.0.0-rc.1** — dated 2026-10-29; the summary is the release page, the full list sits under "Detailed changes in 1.0.0-rc.1" |
@@ -86,7 +86,7 @@ v1.0.0-rc.1) keep their numbers as history.
 | `YY` | Two-digit year of the release (calver.org `YY`: year − 2000, no padding): 2026 is `26`. |
 | `MM` | Month of the release, **without zero padding** (calver.org `MM`): January 2027 is `27.1.0`, never `27.01.0`. Cargo and semver reject leading zeros, so a padded month would not parse. |
 | `MICRO` | Starts at `0` each month and increments for every release in that month, patch releases included. |
-| Release candidate | `YY.MM.MICRO-rc.N`, e.g. `26.11.0-rc.1`. |
+| Release candidate | `YY.MM.MICRO-rc.N`, e.g. `26.11.0-rc.1`. A release's version is fixed when its first release candidate is cut; the final keeps it even if it ships in a later month (`26.11.0-rc.1` → `26.11.0`). |
 | Git tag | The `v` prefix stays: `v26.11.0`, `v26.11.0-rc.1`. The `release.yml` trigger (`v[0-9]+.[0-9]+.[0-9]+` / `-*`) and `scripts/check_release_version.sh` accept this shape unchanged. |
 
 Ordering stays monotonic because every CalVer major (26 and up) is above
@@ -102,8 +102,8 @@ app reads older files by token, and an older app refuses a newer token; the
 calendar version says nothing about either.
 
 **Gates are named, not numbered.** A gate ships when the product is ready,
-not when a date passes. The Community Preview ships because users can use
-the schematic editor, not to claim a round number. The gates are the
+not when a date passes. The Community Preview ships because the schematic editor is
+production-ready and users can use it, not to claim a round number. The gates are the
 Community Preview, PCB Viewer, Community Release, Pro Release, Simulation
 and Signex 365 (§8). The stages, in order:
 
@@ -141,7 +141,7 @@ feature *can* ship, not whether it ships at all.
 | **P0** | Required for the Community Preview. Cannot ship Community without it. | Up to and including Community Preview | `tier: p0` |
 | **P1** | Required for the PCB Viewer. Professional users expect it. | Advanced Schematic through PCB Viewer | `tier: p1` |
 | **P2** | Differentiator. Drives Pro adoption.                  | PCB Routing through Pro Release | `tier: p2` |
-| **P3** | Nice-to-have. Stable core required first.             | The Pro Release band and later | `tier: p3` |
+| **P3** | Nice-to-have. Stable core required first.             | After the Pro Release (Signal AI Core onward) | `tier: p3` |
 
 **Decision rule:** if a feature is proposed for an earlier plan than
 its tier allows, the answer is "after the current target ships." This is
@@ -696,6 +696,8 @@ calendar versioning, `YY.MM.MICRO` (§3). What that changed:
   shipped versions keep their version titles.
 - **`workspace.package.version` was not bumped** (still `1.0.0-rc.1`); the
   first CalVer release-prep PR sets it.
+- The full old version → plan name map is the `aliases` field of
+  `.github/milestones.yml`.
 - Everything in §6 and in this log keeps its original version numbers as
   history.
 
