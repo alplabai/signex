@@ -60,9 +60,18 @@ impl Signex {
     /// editor message stream, undo/redo and the Properties panel so a command
     /// behaves the same from every surface.
     pub(crate) fn editor_edit_refusal(&self, path: &std::path::Path) -> Option<String> {
+        let library = self.deleting_library_name(path)?;
+        Some(format!(
+            "Library {library} is being deleted, so this edit was not applied. \
+             Try again if the delete fails."
+        ))
+    }
+
+    /// Display name of the library at `path` while a delete of it runs. A
+    /// rename keeps edits: the dirty draft moves to the new path with the
+    /// library. Only a delete discards the draft, so only it refuses.
+    fn deleting_library_name(&self, path: &std::path::Path) -> Option<String> {
         let ops = &self.document_state.pending_path_ops;
-        // A rename keeps edits: the dirty draft moves to the new path with
-        // the library. Only a delete discards the draft, so only it refuses.
         if !ops.library_rename_running()
             || !ops
                 .blocking_write(path)
@@ -70,15 +79,12 @@ impl Signex {
         {
             return None;
         }
-        let library = self
-            .library
-            .write_target_library(path, self.identity_fold_for(path))
-            .map(|lib| lib.display_name.clone())
-            .unwrap_or_else(|| path.display().to_string());
-        Some(format!(
-            "Library {library} is being deleted, so this edit was not applied. \
-             Try again if the delete fails."
-        ))
+        Some(
+            self.library
+                .write_target_library(path, self.identity_fold_for(path))
+                .map(|lib| lib.display_name.clone())
+                .unwrap_or_else(|| path.display().to_string()),
+        )
     }
 
     /// `editor_edit_refusal` for a Component Preview event: its library is the
@@ -91,6 +97,18 @@ impl Signex {
     ) -> Option<String> {
         if editor_msg_is_view_only(msg) {
             return None;
+        }
+        // The answer to a file dialog opened before the delete: name the
+        // dropped pick instead of the generic line.
+        if let EditorMsg::StepAttachResult(pick) = msg {
+            let library = self.deleting_library_name(&address.library_path)?;
+            let file = pick
+                .as_ref()
+                .map_or("The picked file", |(_, name)| name.as_str());
+            return Some(format!(
+                "{file} was not attached: library {library} is being deleted. \
+                 Pick it again if the delete fails."
+            ));
         }
         self.editor_edit_refusal(&address.library_path)
     }
@@ -182,6 +200,7 @@ fn editor_msg_is_view_only(msg: &EditorMsg) -> bool {
         | E::ReloadCancelled
         | E::SubmitForReview
         | E::SubmitForReviewNotesChanged(_)
+        // Wired to nothing in the preview (it only logs), so it writes no row or file.
         | E::SubmitForReviewConfirm
         | E::SubmitForReviewCancel
         | E::SubmitForReviewResult(_)
@@ -198,6 +217,7 @@ fn editor_msg_is_view_only(msg: &EditorMsg) -> bool {
                 | DatasheetMsg::AssetsStored { .. }
         ),
         E::SimBodyAction(action) => !action.is_edit(),
+        E::Footprint(f) => footprint_msg_is_view_only(f),
         _ => false,
     }
 }
