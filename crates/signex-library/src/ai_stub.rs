@@ -1,7 +1,7 @@
 //! Heuristic pinout extractor — datasheet PDF → guessed pin list.
 //!
 //! Per v0.9-library-plan.md §11.3 the **real** LLM-based symbol synthesis is deferred
-//! to the Signal AI plans. This module provides a deliberately dumb, deterministic stub:
+//! to Signal AI Core / Signal AI Tools (Pro Release). This module provides a deliberately dumb, deterministic stub:
 //!
 //! 1. Run [`pdf_extract::extract_text_from_mem`] over the bytes.
 //! 2. Walk the text line-by-line looking for "pinout table" rows of the

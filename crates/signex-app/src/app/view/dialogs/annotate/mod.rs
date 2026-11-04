@@ -368,7 +368,7 @@ impl Signex {
             container(scrollable(sheet_rows).height(180))
                 .style(bordered_style(border_c)),
             Space::new().height(4),
-            text("Scope / Start / Suffix columns are visual for v0.7 — multi-sheet wiring lands with Advanced Schematic.")
+            text("Scope / Start / Suffix columns are visual only — multi-sheet wiring lands with Advanced Schematic.")
                 .size(TS.caption)
                 .color(text_muted)
                 .width(Length::Fill),

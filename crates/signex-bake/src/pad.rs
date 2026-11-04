@@ -237,11 +237,11 @@ pub(crate) fn bake_one_pad(
     match &pad_attr.paste_apertures {
         PasteAperturePattern::Single => {}
         PasteAperturePattern::Grid { .. } => warnings.push(format!(
-            "pad {}: PasteAperturePattern::Grid ignored (v0.14 feature) — falling back to Single aperture",
+            "pad {}: PasteAperturePattern::Grid ignored (not supported yet) — falling back to Single aperture",
             pad_number
         )),
         PasteAperturePattern::Custom { .. } => warnings.push(format!(
-            "pad {}: PasteAperturePattern::Custom ignored (v0.14 feature) — falling back to Single aperture",
+            "pad {}: PasteAperturePattern::Custom ignored (not supported yet) — falling back to Single aperture",
             pad_number
         )),
     }
