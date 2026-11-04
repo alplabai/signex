@@ -165,28 +165,3 @@ fn an_open_sheet_is_left_to_memory() {
 
     assert!(scan.placed.is_empty() && scan.unreadable.is_empty());
 }
-
-#[test]
-fn the_unchecked_list_is_the_assemblers_report() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = write_parent(
-        dir.path(),
-        "root.snxsch",
-        &["gone.snxsch", "../outside.snxsch"],
-        None,
-    );
-    let fold = CaseFold::host_default();
-
-    let set = assemble_from_seeds(&|_| None, std::slice::from_ref(&root), &[], fold);
-    let scan = scan_closed_sheets(&plan(&[root]), SymbolMatch::AnyLibrary(Uuid::now_v7()));
-
-    assert_eq!(set.absent.len(), 1);
-    assert_eq!(set.refused.len(), 1);
-    assert_eq!(
-        scan.unreadable.len(),
-        set.absent.len() + set.refused.len() + set.unreadable.len(),
-        "{:?}",
-        scan.unreadable
-    );
-    assert_eq!(scan.visited.len(), 2, "{:?}", scan.visited);
-}

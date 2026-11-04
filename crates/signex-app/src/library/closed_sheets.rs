@@ -132,7 +132,7 @@ impl ScanPlan {
 use crate::app::project_sheets::fold_key as key;
 
 /// Read every sheet the plan reaches, children included, and collect the
-/// ones that place `target`. A sheet visited twice is read once. Each sheet
+/// ones that place `target`. A sheet reached twice is listed once. Each sheet
 /// is keyed under the key rules of the project that reached it.
 ///
 /// The hierarchy walk is the project assembler's (`assemble_from_seeds`); this
@@ -201,9 +201,14 @@ pub fn scan_closed_sheets(plan: &ScanPlan, target: SymbolMatch) -> ClosedSheetSc
             ));
         }
     }
+    // Projects with different key rules can reach the same sheet, once per
+    // rule; each sheet is listed once.
     scan.placed.sort();
+    scan.placed.dedup();
     scan.unreadable.sort();
+    scan.unreadable.dedup();
     scan.visited.sort();
+    scan.visited.dedup();
     scan
 }
 

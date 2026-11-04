@@ -228,7 +228,8 @@ pub(crate) fn fold_key(path: &Path, fold: CaseFold) -> String {
 
 /// [`load_sheet`] over an arbitrary "is it open?" lookup, so a background job
 /// can read from a snapshot of the open sheets instead of borrowing the live
-/// [`DocumentState`].
+/// [`DocumentState`]. `open` is asked immediately before the disk read: the
+/// closed-sheet scan takes its file stamps in it.
 fn load_sheet_with(
     open: &dyn Fn(&Path) -> Option<SchematicSheet>,
     path: &Path,
