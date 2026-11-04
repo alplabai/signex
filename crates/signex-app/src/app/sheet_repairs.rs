@@ -21,6 +21,14 @@ pub(crate) fn take_and_log(
     log_sheet_repairs(path, &sheet.take_load_repairs())
 }
 
+/// Take and log what loading repaired on a board (#1886). True when the
+/// board now differs from its file and can be saved, so it must open modified;
+/// a read-only (newer-minor) board only reports.
+pub(crate) fn take_and_log_board(path: &Path, board: &mut signex_types::pcb::PcbBoard) -> bool {
+    log_sheet_repairs(path, &board.take_load_repairs())
+        && board.unknown.newer_minor_source.is_none()
+}
+
 /// The one line a read-only scan of a project says about a repaired sheet.
 pub(crate) fn summary_line(path: &Path, count: usize) -> String {
     let file = path.file_name().unwrap_or_default().to_string_lossy();
@@ -89,6 +97,84 @@ mod tests {
             None,
         );
         app.document_state.is_document_dirty(&path)
+    }
+
+    /// A board parsed from a file whose two tracks share one uuid.
+    fn repaired_board(read_only: bool) -> signex_types::pcb::PcbBoard {
+        let text = "format = \"snxpcb/1\"\npcb_id = \"00000000-0000-0000-0000-000000000009\"\n";
+        let mut board = signex_types::format::SnxPcb::parse(text)
+            .expect("parses")
+            .board;
+        let track = |end_x: f64| signex_types::pcb::Segment {
+            uuid: uuid::Uuid::from_u128(7),
+            start: signex_types::pcb::Point { x: 0.0, y: 0.0 },
+            end: signex_types::pcb::Point { x: end_x, y: 0.0 },
+            width: 0.2,
+            layer: "TopCopper".into(),
+            net: 0,
+            unknown_columns: Default::default(),
+        };
+        board.segments = vec![track(1.0), track(2.0)];
+        let text = signex_types::format::SnxPcb::new(board)
+            .write_string()
+            .expect("serialise");
+        let mut board = signex_types::format::SnxPcb::parse(&text)
+            .expect("parses")
+            .board;
+        assert_eq!(board.unknown.load_repairs.len(), 1, "fixture: one repair");
+        if read_only {
+            board.unknown.newer_minor_source = Some("snxpcb/1.7".into());
+        }
+        board
+    }
+
+    #[test]
+    fn a_repaired_board_history_restore_stays_modified() {
+        let _ = crate::diagnostics::init_logging();
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from("/w/proj/history_restore_repair.snxpcb");
+        app.open_pcb_tab(
+            path.clone(),
+            "history_restore".into(),
+            repaired_board(false),
+        );
+        app.document_state.mark_document_clean(&path);
+        let idx = app.document_state.active_tab;
+        // commit = true (History restore): a clean board would be committed.
+        let _ = app.apply_reloaded(
+            idx,
+            Ok(RestoreJobDocument::Pcb(Box::new(repaired_board(false)))),
+            None,
+        );
+        assert!(app.document_state.is_document_dirty(&path));
+    }
+
+    #[test]
+    fn a_board_repaired_on_open_opens_modified_and_reports_once() {
+        let needle = "board_repair_once.snxpcb repaired on load";
+        let before = crate::diagnostics::logged_count(needle);
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from("/w/proj/board_repair_once.snxpcb");
+        app.open_pcb_tab(path.clone(), "board_repair".into(), repaired_board(false));
+        assert!(app.document_state.is_document_dirty(&path));
+        assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
+        let Some(crate::app::TabDocument::Pcb(board)) = app
+            .document_state
+            .tabs
+            .last()
+            .and_then(|tab| tab.cached_document.as_ref())
+        else {
+            panic!("a board tab");
+        };
+        assert!(board.unknown.load_repairs.is_empty());
+    }
+
+    #[test]
+    fn a_read_only_board_repaired_on_open_stays_clean() {
+        let mut app = app_workspace("/w/proj", &[]);
+        let path = std::path::PathBuf::from("/w/proj/board_ro.snxpcb");
+        app.open_pcb_tab(path.clone(), "board_ro".into(), repaired_board(true));
+        assert!(!app.document_state.is_document_dirty(&path));
     }
 
     #[test]
@@ -165,10 +251,13 @@ mod tests {
 
     #[test]
     fn repairs_are_taken_once_on_open() {
+        let needle = "taken_once.snxsch repaired on load";
+        let before = crate::diagnostics::logged_count(needle);
         let mut app = app_workspace("/w/proj", &[]);
         let path = std::path::PathBuf::from("/w/proj/taken_once.snxsch");
         app.open_schematic_tab(path.clone(), "taken_once".into(), repaired_sheet(false));
         assert!(app.document_state.is_document_dirty(&path));
+        assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
         let engine = app.document_state.engines.get(&path).expect("engine");
         assert!(engine.document().unknown.load_repairs.is_empty());
     }

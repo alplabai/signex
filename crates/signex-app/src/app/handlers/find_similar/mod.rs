@@ -90,7 +90,7 @@ impl Signex {
                 &self.interaction_state.active_canvas().designators,
                 x,
                 y,
-                self.ui_state.net_class_styles.styles(),
+                self.active_class_styles(),
             )
         });
         let selected = &self.interaction_state.active_canvas().selected;

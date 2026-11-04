@@ -16,7 +16,7 @@ use signex_sketch::{SketchError, SolveError};
 use signex_sketch::baked_kinds::BakedKind;
 
 use super::sketch_bake_fields::BakedFields;
-use super::sketch_dispatch::take_unlogged_warnings;
+use super::sketch_dispatch::take_unlogged_bake_warnings;
 use super::state::FootprintEditorState;
 
 /// Bake a successful solve into `footprint` and record it as the editor's
@@ -112,7 +112,7 @@ pub(super) fn bake_solution_with(
         // feature) are failures the user must be able to see:
         // the inspector strip is not the Messages panel.
         for warning in
-            take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+            take_unlogged_bake_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {
             crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
         }
@@ -165,13 +165,16 @@ pub(super) fn bake_solution_with(
         let remaps = BakedFields::clear_owned(footprint, &mut state.solve_warnings);
         state.remap_silk_selection(&remaps);
         for warning in
-            take_unlogged_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
+            take_unlogged_bake_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {
             crate::diagnostics::log_warning(format!("Sketch bake: {warning}"));
         }
         state.refresh_pads_from_primitive(footprint);
     }
 
+    state
+        .sketch_solve
+        .set_redundancy_owed(out.redundancy_pending);
     state.last_solve = Some(out);
     Ok(())
 }
@@ -194,6 +197,7 @@ pub(super) fn discard_failed_solve(
     // (no output), so `entity_colours` never runs; without
     // this the stale DoF colours stayed on screen.
     state.last_solve = None;
+    state.sketch_solve.clear_redundancy_owed();
     // `debug!`, not `warn!`: a drag fails on every pointer tick and a
     // warning here would flush the 200-entry Messages ring. The user hears
     // the failure once, from `report_solve_failure`.

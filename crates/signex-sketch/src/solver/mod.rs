@@ -29,6 +29,7 @@ use self::lm::{
 };
 use self::redundancy::redundant_constraint_ids;
 use self::residual::{ResolvedParams, total_residual};
+use self::state::EntityIndex;
 use self::work::WorkMeter;
 
 type LmOutcome = Result<SolveResult, Box<LmFailure>>;
@@ -73,6 +74,14 @@ impl Default for Solver {
 /// work budget and was skipped.
 pub const REDUNDANCY_SKIPPED: &str = "redundancy check skipped (budget)";
 
+/// What the redundancy pass found, run apart from the solve it belongs to.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RedundancyReport {
+    pub redundant_constraints: Vec<ConstraintId>,
+    /// [`REDUNDANCY_SKIPPED`] when the pass did not fit the budget.
+    pub warnings: Vec<String>,
+}
+
 /// Bundled output of a full [`Solver::solve`] call: the LM result,
 /// DOF colour per Point entity, the list of constraint IDs flagged
 /// over-constrained, the Jacobian at the solved state (carried
@@ -90,6 +99,10 @@ pub struct FullSolveOutput {
     /// redundancy check, when its work would exceed the budget). The
     /// solve itself succeeded; the caller shows these to the user.
     pub warnings: Vec<String>,
+    /// The redundancy pass was left out of this solve
+    /// ([`Solver::solve_deferring_redundancy`]); `redundant_constraints`
+    /// is empty until [`Solver::redundancy_report`] fills it in.
+    pub redundancy_pending: bool,
     pub jacobian: Vec<Vec<f64>>,
     /// GH #599 — the resolved parameters this solve ran with.
     /// Consumers that re-evaluate residuals against the output (the
@@ -255,6 +268,49 @@ impl Solver {
         params: &ResolvedParams,
         meter: &mut WorkMeter,
     ) -> Result<FullSolveOutput, SolveError> {
+        self.solve_inner(sketch, params, meter, true)
+    }
+
+    /// [`Solver::solve`] without the redundancy pass, for a caller that
+    /// cannot afford it where it stands (the UI thread). The output has
+    /// `redundancy_pending` set; run [`Solver::redundancy_report`] elsewhere
+    /// and merge the answer.
+    pub fn solve_deferring_redundancy(
+        &self,
+        sketch: &SketchData,
+        params: &ResolvedParams,
+    ) -> Result<FullSolveOutput, SolveError> {
+        let mut meter = WorkMeter::new(self.work_budget);
+        self.solve_inner(sketch, params, &mut meter, false)
+    }
+
+    /// The redundancy pass over a solved state, with its own work pool of
+    /// [`Solver::work_budget`]. `violated` is the solve's `over_constraints`.
+    /// Advisory like the in-solve pass: a failure reports nothing.
+    pub fn redundancy_report(
+        &self,
+        sketch: &SketchData,
+        state: &[f64],
+        index: &EntityIndex,
+        params: &ResolvedParams,
+        violated: &[ConstraintId],
+    ) -> RedundancyReport {
+        let mut meter = WorkMeter::new(self.work_budget);
+        let (redundant_constraints, warnings) =
+            redundancy_outcome(sketch, state, index, params, violated, &mut meter);
+        RedundancyReport {
+            redundant_constraints,
+            warnings,
+        }
+    }
+
+    fn solve_inner(
+        &self,
+        sketch: &SketchData,
+        params: &ResolvedParams,
+        meter: &mut WorkMeter,
+        with_redundancy: bool,
+    ) -> Result<FullSolveOutput, SolveError> {
         let result = match self.run(sketch, params, meter, false) {
             Ok(result) => result,
             Err(failure) => self.recover(sketch, params, meter, *failure)?,
@@ -274,29 +330,17 @@ impl Solver {
         let colours = entity_colours(sketch, &result, &jacobian, &result.index, params);
         let over_constraints = over_constraint_ids(sketch, &result, params);
 
-        // Advisory: a failure here must not fail a converged solve.
-        let mut warnings = Vec::new();
-        let redundant_constraints = match redundant_constraint_ids(
-            sketch,
-            &result.state,
-            &result.index,
-            params,
-            &over_constraints,
-            meter,
-        ) {
-            Ok(Some(ids)) => ids,
-            Ok(None) => {
-                warnings.push(REDUNDANCY_SKIPPED.to_string());
-                Vec::new()
-            }
-            Err(e) => {
-                tracing::warn!(
-                    target: "signex::sketch",
-                    error = %e,
-                    "redundant-constraint analysis failed; none are reported for this solve"
-                );
-                Vec::new()
-            }
+        let (redundant_constraints, warnings) = if with_redundancy {
+            redundancy_outcome(
+                sketch,
+                &result.state,
+                &result.index,
+                params,
+                &over_constraints,
+                meter,
+            )
+        } else {
+            (Vec::new(), Vec::new())
         };
 
         Ok(FullSolveOutput {
@@ -305,9 +349,34 @@ impl Solver {
             over_constraints,
             redundant_constraints,
             warnings,
+            redundancy_pending: !with_redundancy,
             jacobian,
             params: params.clone(),
         })
+    }
+}
+
+/// The redundancy pass as an advisory: a failure must not fail a converged
+/// solve, so it reports nothing, and a pass over budget reports a warning.
+fn redundancy_outcome(
+    sketch: &SketchData,
+    state: &[f64],
+    index: &EntityIndex,
+    params: &ResolvedParams,
+    violated: &[ConstraintId],
+    meter: &mut WorkMeter,
+) -> (Vec<ConstraintId>, Vec<String>) {
+    match redundant_constraint_ids(sketch, state, index, params, violated, meter) {
+        Ok(Some(ids)) => (ids, Vec::new()),
+        Ok(None) => (Vec::new(), vec![REDUNDANCY_SKIPPED.to_string()]),
+        Err(e) => {
+            tracing::warn!(
+                target: "signex::sketch",
+                error = %e,
+                "redundant-constraint analysis failed; none are reported for this solve"
+            );
+            (Vec::new(), Vec::new())
+        }
     }
 }
 

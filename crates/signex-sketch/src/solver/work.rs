@@ -20,6 +20,11 @@
 //! | one LM iteration | `(2n + 2)·m + m·n² + n³` |
 //! | row-space projection (undo pass) | `m²·n + m³` |
 //! | redundancy pass, one block of `r` rows over `d` columns | `r·d + 4·d·Σᵢ min(i, d)` |
+//!
+//! The table is not the whole cost: building the pass's rows and its
+//! union-find are not metered. The footprint editor runs the pass off the UI
+//! thread (#1685) on a fresh budget, so the units bound the pass but not its
+//! wall time.
 
 use crate::error::SolveError;
 
