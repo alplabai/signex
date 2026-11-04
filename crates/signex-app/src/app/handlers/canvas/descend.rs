@@ -191,7 +191,13 @@ impl Signex {
     /// for a referenced sheet opened directly, whose copy is unknown. Reads
     /// only state already in the Model: no file is touched.
     fn focused_sheet_placement(&self) -> Option<InstancePath> {
-        let active = self.active_tab_path()?;
+        // The sheet in view: inside a window's canvas event `active_path` is
+        // the window's sheet while `active_tab` is still the main window's.
+        let active = self
+            .document_state
+            .active_path
+            .clone()
+            .or_else(|| self.active_tab_path())?;
         if let Some(recorded) = self.document_state.tab_placements.get(&active) {
             return Some(recorded.clone());
         }
