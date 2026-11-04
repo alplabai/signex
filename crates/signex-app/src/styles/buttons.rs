@@ -79,6 +79,7 @@ pub fn outline_button(
             width: 1.0,
             radius: RADIUS.into(),
             color: border,
+            ..Border::default()
         },
         ..button::Style::default()
     }

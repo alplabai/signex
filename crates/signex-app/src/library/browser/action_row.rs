@@ -60,6 +60,7 @@ pub(super) fn view_action_row<'a>(
             width: 0.0,
             radius: 3.0.into(),
             color: iced::Color::TRANSPARENT,
+            ..Border::default()
         },
         ..iced::widget::button::Style::default()
     });
@@ -82,10 +83,11 @@ pub(super) fn view_action_row<'a>(
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border,
+                        ..Border::default()
                     },
                     ..iced::widget::button::Style::default()
                 })
-                .into()
+                .boxed()
         } else {
             container(text("Edit Details").size(BROWSER_HEADER_SIZE).color(muted))
                 .padding([SP.xs, SP.m])
@@ -97,10 +99,11 @@ pub(super) fn view_action_row<'a>(
                         width: 1.0,
                         radius: 3.0.into(),
                         color: border,
+                        ..Border::default()
                     },
                     ..Default::default()
                 })
-                .into()
+                .boxed()
         };
 
     let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected
@@ -128,10 +131,11 @@ pub(super) fn view_action_row<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::button::Style::default()
         })
-        .into()
+        .boxed()
     } else {
         // Greyed-out placeholder when no row is selected.
         container(
@@ -148,10 +152,11 @@ pub(super) fn view_action_row<'a>(
                 width: 1.0,
                 radius: 3.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..Default::default()
         })
-        .into()
+        .boxed()
     };
 
     let mut actions = row![
@@ -164,13 +169,14 @@ pub(super) fn view_action_row<'a>(
     .spacing(0)
     .align_y(iced::Alignment::Center);
     if read_only {
-        actions = actions.push(Space::new().width(SP.m)).push(
+        actions = actions.push(Space::new().width(SP.m).boxed()).push(
             text("This library ships with Signex and is not editable.")
                 .size(BROWSER_HEADER_SIZE)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
-    container(actions).padding([SP.s, SP.s]).into()
+    container(actions).padding([SP.s, SP.s]).boxed()
 }
 
 #[cfg(test)]

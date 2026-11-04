@@ -45,7 +45,7 @@
 pub mod dropdown;
 
 use iced::widget::{button, container, image, mouse_area, row, svg, text, tooltip};
-use iced::{Border, Color, Element, Length, Theme};
+use iced::{Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
@@ -284,10 +284,10 @@ where
         .width(Length::Fill)
         .align_x(iced::alignment::Horizontal::Center);
     iced::widget::Stack::new()
-        .push(backstop)
-        .push(centred_bar)
-        .push(panel_anchor)
-        .into()
+        .push(backstop.boxed())
+        .push(centred_bar.boxed())
+        .push(panel_anchor.boxed())
+        .boxed()
 }
 
 /// Render the bar.
@@ -316,6 +316,7 @@ where
                 width: 1.0,
                 radius: BAR_RADIUS.into(),
                 color: border,
+                ..Border::default()
             },
             shadow: iced::Shadow {
                 color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
@@ -324,7 +325,7 @@ where
             },
             ..iced::widget::container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 fn view_item<'a, M>(item: ActiveBarItem<M>, tokens: &'a ThemeTokens) -> Element<'a, M>
@@ -342,12 +343,12 @@ where
                     background: Some(iced::Background::Color(sep_color)),
                     ..iced::widget::container::Style::default()
                 })
-                .into()
+                .boxed()
         }
         // Pinned to the declared width so `slot_offsets` can't be lied
         // to: whatever the producer says it is, that is what draws.
         ActiveBarItem::Custom { content, width } => {
-            container(content).width(Length::Fixed(width)).into()
+            container(content).width(Length::Fixed(width)).boxed()
         }
     }
 }
@@ -390,12 +391,12 @@ where
                     Some(disabled_tint)
                 },
             })
-            .into(),
-        ActiveBarIcon::Raster(handle) => image(handle)
+            .boxed(),
+        ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
             .width(Length::Fixed(ICON_SIZE))
             .height(Length::Fixed(ICON_SIZE))
-            .into(),
-        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(glyph_color).into(),
+            .boxed(),
+        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(glyph_color).boxed(),
     };
 
     // Optional dropdown chevron in the bottom-right corner.
@@ -412,12 +413,12 @@ where
                         Some(disabled_tint)
                     },
                 })
-                .into(),
-            ActiveBarIcon::Raster(handle) => image(handle)
+                .boxed(),
+            ActiveBarIcon::Raster(handle) => image::<image::Handle>(handle)
                 .width(Length::Fixed(14.0))
                 .height(Length::Fixed(14.0))
-                .into(),
-            ActiveBarIcon::Glyph(s) => text(s.to_string()).size(10).color(glyph_color).into(),
+                .boxed(),
+            ActiveBarIcon::Glyph(s) => text(s.to_string()).size(10).color(glyph_color).boxed(),
         };
         iced::widget::Stack::new()
             .push(
@@ -425,23 +426,25 @@ where
                     .width(Length::Fixed(BTN_SIZE))
                     .height(Length::Fixed(BTN_SIZE))
                     .center_x(Length::Fixed(BTN_SIZE))
-                    .center_y(Length::Fixed(BTN_SIZE)),
+                    .center_y(Length::Fixed(BTN_SIZE))
+                    .boxed(),
             )
             .push(
                 container(indicator_el)
                     .width(Length::Fixed(BTN_SIZE))
                     .height(Length::Fixed(BTN_SIZE))
                     .align_x(iced::alignment::Horizontal::Right)
-                    .align_y(iced::alignment::Vertical::Bottom),
+                    .align_y(iced::alignment::Vertical::Bottom)
+                    .boxed(),
             )
-            .into()
+            .boxed()
     } else {
         container(raw_icon)
             .width(Length::Fixed(BTN_SIZE))
             .height(Length::Fixed(BTN_SIZE))
             .center_x(Length::Fixed(BTN_SIZE))
             .center_y(Length::Fixed(BTN_SIZE))
-            .into()
+            .boxed()
     };
 
     let selected = b.selected;
@@ -475,6 +478,7 @@ where
                     width: 0.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::button::Style::default()
             }
@@ -488,9 +492,9 @@ where
     // dropdown overlay itself is rendered separately by the
     // consumer as a Stack overlay layer.
     let interactive: Element<'a, M> = if let Some(rc) = b.on_right_press {
-        mouse_area(btn).on_right_press(rc).into()
+        mouse_area(btn).on_right_press(rc).boxed()
     } else {
-        btn.into()
+        btn.boxed()
     };
 
     let tooltip_text = b.tooltip.clone();
@@ -506,10 +510,11 @@ where
                     width: 1.0,
                     radius: 3.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::container::Style::default()
             }),
         tooltip::Position::Bottom,
     )
-    .into()
+    .boxed()
 }

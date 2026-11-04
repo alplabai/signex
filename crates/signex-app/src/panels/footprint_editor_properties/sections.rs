@@ -1,5 +1,5 @@
 use iced::widget::{Column, container, row, text, text_input};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, PanelMsg, PanelPalette,
@@ -16,12 +16,12 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 pub(super) fn view_sections<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
     unit: signex_types::coord::Unit,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
@@ -44,13 +44,16 @@ pub(super) fn view_sections<'a>(
     // Earlier (v0.17.0) the section was tucked inside the empty-
     // canvas summary which made the controls disappear the moment
     // the user clicked a pad.
-    col = col.push(props_section_header(
-        "Snap Options",
-        "fp_snap_options",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header(
+            "Snap Options",
+            "fp_snap_options",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     let snap_open = !fp_is_collapsed("fp_snap_options", collapsed_sections);
     let opts = fp.snap_options;
     if snap_open {
@@ -60,7 +63,8 @@ pub(super) fn view_sections<'a>(
         col = col.push(
             container(text("Snap targets").size(TS.caption).color(muted))
                 .padding([SP.s, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
         let snap_pill =
             |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
@@ -89,11 +93,12 @@ pub(super) fn view_sections<'a>(
                             width: 1.0,
                             radius: 2.0.into(),
                             color: input_bdr,
+                            ..Default::default()
                         },
                         ..iced::widget::button::Style::default()
                     }
                 })
-                .into()
+                .boxed()
             };
         col = col.push(
             container(
@@ -106,7 +111,8 @@ pub(super) fn view_sections<'a>(
                 .align_y(iced::Alignment::Center),
             )
             .padding([SP.xs, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         );
 
         // v0.18.14.3 — "Snapping" mode (All Layers / Current Layer /
@@ -120,7 +126,8 @@ pub(super) fn view_sections<'a>(
         col = col.push(
             container(text("Objects for snapping").size(TS.caption).color(muted))
                 .padding([6.0, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
         );
         let header = row![
             text("On/Off")
@@ -134,7 +141,12 @@ pub(super) fn view_sections<'a>(
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
-        col = col.push(container(header).padding([SP.xs, SP.m]).width(Length::Fill));
+        col = col.push(
+            container(header)
+                .padding([SP.xs, SP.m])
+                .width(Length::Fill)
+                .boxed(),
+        );
         col = col.push(super::super::thin_sep(border_c));
         let snap_rows: &[(&str, SnapOptionFlag, bool)] = &[
             (
@@ -204,7 +216,12 @@ pub(super) fn view_sections<'a>(
             ]
             .spacing(SP.s)
             .align_y(iced::Alignment::Center);
-            col = col.push(container(row_w).padding([SP.xs, SP.m]).width(Length::Fill));
+            col = col.push(
+                container(row_w)
+                    .padding([SP.xs, SP.m])
+                    .width(Length::Fill)
+                    .boxed(),
+            );
         }
 
         // Snap Distance + Axis Snap Range numeric rows.
@@ -218,7 +235,7 @@ pub(super) fn view_sections<'a>(
                         .size(TS.caption)
                         .color(muted)
                         .width(Length::Fixed(110.0)),
-                    text_input("", &format!("{value:.3}"))
+                    text_input("", format!("{value:.3}"))
                         .size(TS.caption)
                         .padding(SP.xs)
                         .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -229,8 +246,8 @@ pub(super) fn view_sections<'a>(
                                 width: 1.0,
                                 radius: 2.0.into(),
                                 color: border_c,
+                                ..Default::default()
                             },
-                            icon: iced::Color::TRANSPARENT,
                             placeholder: muted,
                             value: primary,
                             selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
@@ -242,7 +259,7 @@ pub(super) fn view_sections<'a>(
             )
             .padding([SP.xs, SP.m])
             .width(Length::Fill)
-            .into()
+            .boxed()
         };
         col = col.push(mk_num_row(
             "Snap Distance",
@@ -267,26 +284,26 @@ pub(super) fn view_sections<'a>(
     // Manager / Other) below Snap Options, only on the no-selection
     // body to mirror Altium's per-state Properties surface.
     if no_selection {
-        col = col.push(props_section_header(
-            "Grid Manager",
-            "fp_grid_manager",
-            collapsed_sections,
-            primary,
-            border_c,
-        ));
+        col = col.push(
+            props_section_header(
+                "Grid Manager",
+                "fp_grid_manager",
+                collapsed_sections,
+                primary,
+                border_c,
+            )
+            .boxed(),
+        );
         if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
             col = render_grid_manager(col, fp, primary, muted, border_c);
         }
         // Guide Manager removed in v0.13 — sketch-mode owns guides /
         // construction geometry; the standalone Guide Manager was
         // redundant.
-        col = col.push(props_section_header(
-            "Other",
-            "fp_other",
-            collapsed_sections,
-            primary,
-            border_c,
-        ));
+        col = col.push(
+            props_section_header("Other", "fp_other", collapsed_sections, primary, border_c)
+                .boxed(),
+        );
         if !fp_is_collapsed("fp_other", collapsed_sections) {
             col = render_other_section(col, fp, palette, unit);
         }
@@ -299,13 +316,16 @@ pub(super) fn view_sections<'a>(
     // inspector strip that shipped in v0.13.1.
     if fp.mode_kind == FootprintModeKind::Sketch {
         // Parameters
-        col = col.push(props_section_header(
-            "Parameters",
-            "fp_parameters",
-            collapsed_sections,
-            primary,
-            border_c,
-        ));
+        col = col.push(
+            props_section_header(
+                "Parameters",
+                "fp_parameters",
+                collapsed_sections,
+                primary,
+                border_c,
+            )
+            .boxed(),
+        );
         if !fp_is_collapsed("fp_parameters", collapsed_sections) {
             if fp.sketch_parameters.is_empty() {
                 col = col.push(
@@ -315,7 +335,8 @@ pub(super) fn view_sections<'a>(
                             .color(muted),
                     )
                     .padding([SP.xs, SP.m])
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
                 );
             } else {
                 for (name, expr) in &fp.sketch_parameters {
@@ -336,8 +357,8 @@ pub(super) fn view_sections<'a>(
                                     width: 1.0,
                                     radius: 2.0.into(),
                                     color: border_c,
+                                    ..Default::default()
                                 },
-                                icon: iced::Color::TRANSPARENT,
                                 placeholder: muted,
                                 value: primary,
                                 selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
@@ -349,19 +370,27 @@ pub(super) fn view_sections<'a>(
                     ]
                     .spacing(6)
                     .align_y(iced::Alignment::Center);
-                    col = col.push(container(row).padding([SP.xs, SP.m]).width(Length::Fill));
+                    col = col.push(
+                        container(row)
+                            .padding([SP.xs, SP.m])
+                            .width(Length::Fill)
+                            .boxed(),
+                    );
                 }
             }
         } // end if !fp_parameters collapsed
 
         // DOF / Last solve
-        col = col.push(props_section_header(
-            "DOF / Last solve",
-            "fp_dof",
-            collapsed_sections,
-            primary,
-            border_c,
-        ));
+        col = col.push(
+            props_section_header(
+                "DOF / Last solve",
+                "fp_dof",
+                collapsed_sections,
+                primary,
+                border_c,
+            )
+            .boxed(),
+        );
         if !fp_is_collapsed("fp_dof", collapsed_sections) {
             col = props_kv_row(
                 col,
@@ -417,7 +446,8 @@ pub(super) fn view_sections<'a>(
                 col = col.push(
                     container(text("(no solve yet)").size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
             }
 
@@ -437,7 +467,8 @@ pub(super) fn view_sections<'a>(
                             .color(muted),
                     )
                     .padding([SP.s, SP.m])
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
                 );
                 for row in conflicts.iter().take(conflicts::MAX_ROWS) {
                     col = col.push(conflicts::conflict_row(row));
@@ -450,33 +481,39 @@ pub(super) fn view_sections<'a>(
                                 .color(muted),
                         )
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                     );
                 }
             }
         } // end if !fp_dof collapsed
 
         // Solve warnings
-        col = col.push(props_section_header(
-            "Solve warnings",
-            "fp_solve_warnings",
-            collapsed_sections,
-            primary,
-            border_c,
-        ));
+        col = col.push(
+            props_section_header(
+                "Solve warnings",
+                "fp_solve_warnings",
+                collapsed_sections,
+                primary,
+                border_c,
+            )
+            .boxed(),
+        );
         if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
             if fp.solve_warnings.is_empty() {
                 col = col.push(
                     container(text("(none)").size(TS.caption).color(muted))
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                 );
             } else {
                 for w in fp.solve_warnings.iter().take(8) {
                     col = col.push(
                         container(text(w).size(TS.caption).color(muted))
                             .padding([SP.xs, SP.m])
-                            .width(Length::Fill),
+                            .width(Length::Fill)
+                            .boxed(),
                     );
                 }
                 if fp.solve_warnings.len() > 8 {
@@ -487,7 +524,8 @@ pub(super) fn view_sections<'a>(
                                 .color(muted),
                         )
                         .padding([SP.xs, SP.m])
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .boxed(),
                     );
                 }
             }

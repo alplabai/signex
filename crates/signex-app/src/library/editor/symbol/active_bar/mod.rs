@@ -73,6 +73,7 @@ pub fn dropdown_overlay<'a>(
     top_padding_px: u16,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::Length;
+    use iced::Widget as _;
     use iced::widget::{Space, Stack, container, mouse_area};
 
     let menu = editor.active_bar_menu?;
@@ -108,7 +109,12 @@ pub fn dropdown_overlay<'a>(
         msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CloseActiveBarMenu),
     });
 
-    Some(Stack::new().push(backstop).push(panel_anchor).into())
+    Some(
+        Stack::new()
+            .push(backstop.boxed())
+            .push(panel_anchor.boxed())
+            .boxed(),
+    )
 }
 
 /// Dropdown trigger items for the SchLib bar. Same dual-action

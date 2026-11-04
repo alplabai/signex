@@ -22,7 +22,7 @@
 //! ```
 
 use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Border, Element, Length, Theme};
+use iced::{Border, Element, Length, Theme, Widget};
 use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -221,7 +221,7 @@ fn row_button<'a>(
             ..iced::widget::button::Style::default()
         }
     })
-    .into()
+    .boxed()
 }
 
 pub fn view<'a>(
@@ -271,9 +271,9 @@ pub fn view<'a>(
 
     // Only the rows in view (plus overscan) become widgets; two spacers of
     // the skipped height keep the scrollbar and total height unchanged.
-    let mut list_col = column![].spacing(0);
+    let mut list_col: iced::widget::Column<Element<'_, LibraryMessage>> = column![].spacing(0);
     if window.start > 0 {
-        list_col = list_col.push(Space::new().height(window.start as f32 * ROW_H));
+        list_col = list_col.push(Space::new().height(window.start as f32 * ROW_H).boxed());
     }
     for item in &items[window.clone()] {
         list_col = list_col.push(match item {
@@ -281,7 +281,7 @@ pub fn view<'a>(
                 container(text(label.clone()).size(TS.body).color(muted))
                     .padding([6.0, SP.m])
                     .height(ROW_H)
-                    .into()
+                    .boxed()
             }
             ListItem::Row(summary_name, uuid, primitive_ref) => row_button(
                 summary_name,
@@ -304,7 +304,11 @@ pub fn view<'a>(
         });
     }
     if window.end < items.len() {
-        list_col = list_col.push(Space::new().height((items.len() - window.end) as f32 * ROW_H));
+        list_col = list_col.push(
+            Space::new()
+                .height((items.len() - window.end) as f32 * ROW_H)
+                .boxed(),
+        );
     }
 
     if total_visible == 0 {
@@ -320,15 +324,16 @@ pub fn view<'a>(
                 .size(TS.body)
                 .color(muted),
             )
-            .padding([14, 14]),
+            .padding([14, 14])
+            .boxed(),
         );
     }
 
     let body = container(
         scrollable(list_col)
-            .on_scroll(|viewport| {
+            .on_scroll(|scroll| {
                 LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Scrolled(
-                    viewport.absolute_offset().y,
+                    scroll.viewport.absolute_offset().y,
                 ))
             })
             .height(Length::Fill)
@@ -345,9 +350,9 @@ pub fn view<'a>(
                 .color(crate::styles::tokens::danger(tokens)),
         )
         .padding([SP.s, 14.0])
-        .into()
+        .boxed()
     } else {
-        Space::new().height(0).into()
+        Space::new().height(0).boxed()
     };
 
     let footer = container(
@@ -388,7 +393,7 @@ pub fn view<'a>(
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
-    .into()
+    .boxed()
 }
 
 /// "Copy <symbol> into library <lib>?" with its two answers, while one is
@@ -399,7 +404,7 @@ fn copy_confirm_row<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let Some(symbol) = picker.copy_confirm.as_ref() else {
-        return Space::new().height(0).into();
+        return Space::new().height(0).boxed();
     };
     let library = picker
         .target
@@ -428,7 +433,7 @@ fn copy_confirm_row<'a>(
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     } else if symbol.library.is_some() {
         row![
             secondary_btn(
@@ -443,9 +448,9 @@ fn copy_confirm_row<'a>(
             ),
         ]
         .spacing(SP.s)
-        .into()
+        .boxed()
     } else if picker.copying {
-        text("Copying…").size(TS.body).into()
+        text("Copying…").size(TS.body).boxed()
     } else {
         row![
             secondary_btn(
@@ -460,7 +465,7 @@ fn copy_confirm_row<'a>(
             ),
         ]
         .spacing(SP.s)
-        .into()
+        .boxed()
     };
     container(
         row![
@@ -473,7 +478,7 @@ fn copy_confirm_row<'a>(
         .align_y(iced::Alignment::Center),
     )
     .padding([SP.s, 14.0])
-    .into()
+    .boxed()
 }
 
 /// Case-insensitive substring test against an already-lowercased

@@ -17,7 +17,7 @@
 //! positions the card at exactly those pixels.
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Element, Length, Padding};
+use iced::{Background, Border, Element, Length, Padding, Widget};
 
 use signex_types::theme::ThemeTokens;
 
@@ -343,12 +343,13 @@ pub fn view_context_menu<'a>(
                 color: border_c,
                 width: 1.0,
                 radius: 4.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
         .width(MENU_WIDTH);
 
-    Some(card.into())
+    Some(card.boxed())
 }
 
 /// A command's label under the active profile; empty (no hint) when the
@@ -398,7 +399,7 @@ fn item_msg<'a>(
             }
         },
     )
-    .into()
+    .boxed()
 }
 
 fn item_indented<'a>(
@@ -438,7 +439,7 @@ fn item_indented<'a>(
             }
         },
     )
-    .into()
+    .boxed()
 }
 
 fn item_disabled<'a>(
@@ -459,7 +460,7 @@ fn item_disabled<'a>(
     )
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
-    .into()
+    .boxed()
 }
 
 fn item_submenu_header<'a>(
@@ -500,7 +501,7 @@ fn item_submenu_header<'a>(
             }
         },
     )
-    .into()
+    .boxed()
 }
 
 fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
@@ -512,7 +513,7 @@ fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
             background: Some(Background::Color(c)),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

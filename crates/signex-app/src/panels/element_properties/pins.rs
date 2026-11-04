@@ -4,6 +4,7 @@
 
 use super::super::*;
 use crate::styles::{Spacing, TypeScale};
+use iced::Widget;
 use iced::widget::row;
 use signex_engine::info_keys;
 use std::collections::HashMap;
@@ -68,12 +69,12 @@ pub(super) fn pin_rows(info: &[(String, String)]) -> Vec<PinRow> {
 /// The Pins section. It follows the real collapse state; a pin click opens
 /// it through `update` (`PINS_SECTION_KEY`).
 pub(super) fn push_pins_section<'a>(
-    col: Column<'a, PanelMsg>,
+    col: Column<Element<'a, PanelMsg>>,
     ctx: &PanelContext,
     muted: Color,
     primary: Color,
     border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     // The count is a cheap scan; the rows are built only if the section is open.
     let pin_count = ctx
         .selection_info
@@ -86,46 +87,50 @@ pub(super) fn push_pins_section<'a>(
     let accent = PanelPalette::from_tokens(&ctx.tokens).accent;
     let title = format!("Pins ({pin_count})");
     let info = &ctx.selection_info;
-    col.push(collapsible_section(
-        PINS_SECTION_KEY,
-        &title,
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let rows = pin_rows(info);
-            // The Net column exists only once the project net index can answer.
-            let show_net = rows.iter().any(|r| r.net.is_some());
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(table_row(
-                ["Pin", "Name", "Type", "Net", "Hidden"].map(String::from),
-                show_net,
-                muted,
-                None,
-            ));
-            c = c.push(thin_sep(border_c));
-            for pin in rows {
-                let cells = [
-                    pin.designator,
-                    pin.name,
-                    pin.electrical_type,
-                    pin.net.unwrap_or_default(),
-                    if pin.hidden {
-                        "Yes".into()
-                    } else {
-                        String::new()
-                    },
-                ];
-                let colour = if pin.focused { primary } else { muted };
-                let backdrop = pin.focused.then_some(Color {
-                    a: FOCUS_ROW_ALPHA,
-                    ..accent
-                });
-                c = c.push(table_row(cells, show_net, colour, backdrop));
-            }
-            c
-        },
-    ))
+    col.push(
+        collapsible_section(
+            PINS_SECTION_KEY,
+            &title,
+            &ctx.collapsed_sections,
+            muted,
+            border_c,
+            move || {
+                let rows = pin_rows(info);
+                // The Net column exists only once the project net index can answer.
+                let show_net = rows.iter().any(|r| r.net.is_some());
+                let mut c: Column<Element<'a, PanelMsg>> =
+                    Column::new().spacing(0).width(Length::Fill);
+                c = c.push(table_row(
+                    ["Pin", "Name", "Type", "Net", "Hidden"].map(String::from),
+                    show_net,
+                    muted,
+                    None,
+                ));
+                c = c.push(thin_sep(border_c));
+                for pin in rows {
+                    let cells = [
+                        pin.designator,
+                        pin.name,
+                        pin.electrical_type,
+                        pin.net.unwrap_or_default(),
+                        if pin.hidden {
+                            "Yes".into()
+                        } else {
+                            String::new()
+                        },
+                    ];
+                    let colour = if pin.focused { primary } else { muted };
+                    let backdrop = pin.focused.then_some(Color {
+                        a: FOCUS_ROW_ALPHA,
+                        ..accent
+                    });
+                    c = c.push(table_row(cells, show_net, colour, backdrop));
+                }
+                c
+            },
+        )
+        .boxed(),
+    )
 }
 
 fn table_row<'a>(
@@ -134,7 +139,7 @@ fn table_row<'a>(
     colour: Color,
     backdrop: Option<Color>,
 ) -> Element<'a, PanelMsg> {
-    let mut line = row![].spacing(SP.s);
+    let mut line: iced::widget::Row<Element<'a, PanelMsg>> = row![].spacing(SP.s);
     for (index, cell) in cells.into_iter().enumerate() {
         if index == 3 && !show_net {
             continue;
@@ -144,7 +149,8 @@ fn table_row<'a>(
                 .size(TS.body)
                 .color(colour)
                 .width(Length::FillPortion(COLUMN_PORTIONS[index]))
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
         );
     }
     container(line)
@@ -154,7 +160,7 @@ fn table_row<'a>(
             background: backdrop.map(Into::into),
             ..container::Style::default()
         })
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

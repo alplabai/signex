@@ -80,7 +80,7 @@ impl Signex {
     /// standard 1mil…2.5mm ladder; clicking a row sends
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
-        use iced::widget::{button, column, container, text};
+        use iced::widget::{Widget as _, button, column, container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let primary = signex_widgets::theme_ext::text_primary(tokens);
         let muted = signex_widgets::theme_ext::text_secondary(tokens);
@@ -142,11 +142,12 @@ impl Signex {
                     width: 0.0,
                     radius: 0.0.into(),
                     color: iced::Color::TRANSPARENT,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::button::Style::default()
             })
             .width(iced::Length::Fill);
-            col = col.push(btn);
+            col = col.push(btn.boxed());
         }
 
         container(col)
@@ -157,10 +158,11 @@ impl Signex {
                     width: 1.0,
                     radius: 4.0.into(),
                     color: border_c,
+                    ..iced::Border::default()
                 },
                 ..iced::widget::container::Style::default()
             })
-            .into()
+            .boxed()
     }
 
     /// The selection shape and project row key the canvas menu is built
@@ -222,7 +224,10 @@ impl Signex {
         ctx: &crate::app::TabContextMenuState,
     ) -> Element<'_, Message> {
         let Some(tab) = self.document_state.tabs.get(ctx.tab_idx) else {
-            return container(iced::widget::Space::new()).into();
+            {
+                use iced::widget::Widget as _;
+                return container(iced::widget::Space::new().boxed()).boxed();
+            }
         };
         // A tab can be undocked iff it's not already living in its own OS
         // window. Single-tab workspaces still show the row (Altium does

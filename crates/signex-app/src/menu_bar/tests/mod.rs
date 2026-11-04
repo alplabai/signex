@@ -372,7 +372,11 @@ pub(super) fn settle_answering_clipboard(app: &mut Signex, task: Task<Message>, 
                     iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Read {
                         channel,
                         ..
-                    }) => assert!(channel.send(Some(text.to_owned())).is_ok()),
+                    }) => assert!(
+                        channel
+                            .send(Ok(iced::clipboard::Content::Text(text.to_owned())))
+                            .is_ok()
+                    ),
                     _ => {}
                 }
             }

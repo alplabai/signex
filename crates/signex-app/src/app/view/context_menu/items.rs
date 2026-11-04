@@ -13,6 +13,7 @@
 
 use super::*;
 
+use iced::Widget as _;
 use iced::widget::svg::Handle;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
@@ -200,17 +201,21 @@ pub(super) fn submenu_launcher(
     let active_bg = crate::styles::ti(tokens.selection);
     let arrow_c = crate::styles::ti(tokens.text_secondary);
 
-    let mut row = iced::widget::row![]
+    let mut row: iced::widget::Row<iced::Element<'static, Message>> = iced::widget::Row::new()
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     match icon {
         Some(handle) => {
             // Launchers are never disabled: keep the icon's own colours.
-            row = row.push(iced::widget::svg(handle).width(20).height(20));
+            row = row.push(iced::widget::svg(handle).width(20).height(20).boxed());
         }
         None => {
-            row = row.push(iced::widget::Space::new().width(iced::Length::Fixed(20.0)));
+            row = row.push(
+                iced::widget::Space::new()
+                    .width(iced::Length::Fixed(20.0))
+                    .boxed(),
+            );
         }
     }
     row = row
@@ -218,13 +223,15 @@ pub(super) fn submenu_launcher(
             iced::widget::text(label.to_string())
                 .size(TS.title)
                 .color(text_c)
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
         )
-        .push(iced::widget::Space::new().width(Length::Fill))
+        .push(iced::widget::Space::new().width(Length::Fill).boxed())
         .push(
             iced::widget::text(SUBMENU_ARROW.to_string())
                 .size(SUBMENU_ARROW_SIZE)
-                .color(arrow_c),
+                .color(arrow_c)
+                .boxed(),
         );
 
     let btn = iced::widget::button(
@@ -255,7 +262,7 @@ pub(super) fn submenu_launcher(
     let element: iced::Element<'static, Message> = iced::widget::mouse_area(btn)
         .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuHover(kind)))
         .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeave))
-        .into();
+        .boxed();
     DropdownEntry::Custom(element)
 }
 

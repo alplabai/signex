@@ -42,10 +42,11 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext<'_>) -> Element<'static, Menu
     // Just the wordmark + menu roots. The caller decides how to wrap this
     // (plain strip on secondary windows, draggable chrome with window
     // controls on the borderless main window).
-    row![wordmark, mb]
-        .spacing(10)
-        .align_y(iced::Alignment::Center)
-        .into()
+    iced::advanced::Widget::_boxed(
+        row![wordmark, mb]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+    )
 }
 
 fn render_menu_bar(
@@ -82,6 +83,7 @@ fn bar_style(mc: MenuColors) -> menu_style::Style {
             width: 1.0,
             radius: 4.0.into(),
             color: mc.border,
+            ..Border::default()
         },
         menu_shadow: iced::Shadow {
             color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
@@ -93,6 +95,7 @@ fn bar_style(mc: MenuColors) -> menu_style::Style {
             width: 1.0,
             radius: 2.0.into(),
             color: mc.border,
+            ..Border::default()
         },
     }
 }
@@ -168,5 +171,7 @@ fn render_item(item: &MenuItem, mc: MenuColors) -> MenuItemView {
     .style(signex_widgets::active_bar_dropdown::tooltip_style(
         mc.hover, mc.border,
     ));
-    Item::new(iced::widget::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4))
+    Item::new(iced::advanced::Widget::_boxed(
+        iced::widget::tooltip(row, hint, iced::widget::tooltip::Position::Right).gap(4),
+    ))
 }

@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 
 use iced::widget::{Space, button, container, row, text};
-use iced::{Border, Length, Theme};
+use iced::{Border, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::styles::{Spacing, TypeScale};
@@ -72,7 +72,7 @@ pub fn mode_switcher_overlay<'a>(
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
         })
         .style(chip_style(tokens, active))
-        .into()
+        .boxed()
     };
 
     // Sketch · Pads · 3D — per user spec.
@@ -109,6 +109,7 @@ pub fn mode_switcher_overlay<'a>(
                 width: 1.0,
                 radius: 4.0.into(),
                 color: border,
+                ..Border::default()
             },
             ..iced::widget::container::Style::default()
         },
@@ -118,7 +119,7 @@ pub fn mode_switcher_overlay<'a>(
     .align_y(iced::alignment::Vertical::Top)
     .width(Length::Fill)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.18.7 — multi-footprint tab strip. Renders one button per
@@ -160,7 +161,7 @@ pub fn footprint_tabs_overlay<'a>(
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectActiveIdx(idx)),
         })
         .style(chip_style(tokens, active))
-        .into()
+        .boxed()
     };
 
     let mut tabs = row![].spacing(sp.xs).align_y(iced::Alignment::Center);
@@ -184,8 +185,8 @@ pub fn footprint_tabs_overlay<'a>(
     })
     .style(crate::styles::outline_button(tokens));
 
-    tabs = tabs.push(Space::new().width(sp.s));
-    tabs = tabs.push(add_btn);
+    tabs = tabs.push(Space::new().width(sp.s).boxed());
+    tabs = tabs.push(add_btn.boxed());
 
     // Single-footprint files with no sibling action: still render the
     // strip so "+" is reachable. The visual rhythm matches the mode
@@ -199,6 +200,7 @@ pub fn footprint_tabs_overlay<'a>(
                     width: 1.0,
                     radius: 4.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..iced::widget::container::Style::default()
             }),
@@ -208,7 +210,7 @@ pub fn footprint_tabs_overlay<'a>(
     .align_y(iced::alignment::Vertical::Top)
     .width(Length::Fill)
     .height(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// Build the Pads-mode Active Bar items.

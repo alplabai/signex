@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use iced::widget::{shader, stack};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget as _};
 use signex_gfx::scene::Scene;
 
 use super::gpu_drag::{SchematicDragShaderProgram, SchematicStaticTextLayer};
@@ -42,7 +42,7 @@ pub(crate) fn view<'a>(slot: &'a CanvasSlot, prefs: CanvasViewPrefs<'a>) -> Elem
             .width(Length::Fill)
             .height(Length::Fill),
     ]
-    .into()
+    .boxed()
 }
 
 impl SchematicCanvas<'_> {

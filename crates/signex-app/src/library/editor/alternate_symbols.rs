@@ -5,7 +5,7 @@
 //! header that opens the symbol picker. A refused add shows its reason
 //! under the table; so do label problems that save would refuse.
 
-use iced::widget::{column, text, text_input};
+use iced::widget::{Column, Widget, column, text, text_input};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -38,15 +38,16 @@ pub fn view<'a>(
         }),
         tokens,
     );
-    let mut col = column![kit::section_header("Alternate symbols", Some(add), tokens)]
-        .spacing(SP.s)
-        .width(Length::Fill);
+    let mut col: Column<Element<'a, LibraryMessage>> =
+        column![kit::section_header("Alternate symbols", Some(add), tokens)]
+            .spacing(SP.s)
+            .width(Length::Fill);
 
     let count = state.row.alternate_symbols.len();
     if count == 0 {
         col = col.push(kit::empty_state(EMPTY_MESSAGE, None, tokens));
     } else {
-        let mut table = column![kit::table_header(
+        let mut table: Column<Element<'a, LibraryMessage>> = column![kit::table_header(
             &[
                 ("Label", COLUMNS[0]),
                 ("Symbol", COLUMNS[1]),
@@ -58,7 +59,7 @@ pub fn view<'a>(
         for (idx, alt) in state.row.alternate_symbols.iter().enumerate() {
             table = table.push(alternate_row(idx, count, alt, tokens, address));
         }
-        col = col.push(kit::card(table, tokens));
+        col = col.push(kit::card(table.boxed(), tokens));
     }
 
     let issues: Vec<String> = signex_library::alternate_symbol_issues(&state.row)
@@ -66,9 +67,9 @@ pub fn view<'a>(
         .map(ToString::to_string)
         .collect();
     for problem in state.alternate_error.iter().chain(issues.iter()) {
-        col = col.push(text(problem.clone()).size(TS.body).color(warning));
+        col = col.push(text(problem.clone()).size(TS.body).color(warning).boxed());
     }
-    col.into()
+    col.boxed()
 }
 
 fn alternate_row<'a>(
@@ -116,12 +117,12 @@ fn alternate_row<'a>(
 
     kit::table_row(
         vec![
-            (label.into(), COLUMNS[0]),
+            (label.boxed(), COLUMNS[0]),
             (
                 text(format!("symbol {short}"))
                     .size(TS.body)
                     .color(muted)
-                    .into(),
+                    .boxed(),
                 COLUMNS[1],
             ),
             (actions, COLUMNS[2]),

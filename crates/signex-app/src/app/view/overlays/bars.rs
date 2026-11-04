@@ -187,6 +187,7 @@ impl Signex {
                 color: border_c,
                 width: 1.0,
                 radius: 8.0.into(),
+                ..iced::Border::default()
             },
             ..container::Style::default()
         });
@@ -196,7 +197,7 @@ impl Signex {
                 .height(Length::Fill)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
-                .into(),
+                .boxed(),
         )
     }
 
@@ -249,7 +250,8 @@ impl Signex {
             bar_has_selection,
             bar_has_net_colors,
         )
-        .map(Message::ActiveBar);
+        .map(Message::ActiveBar)
+        .boxed();
         Some(
             column![
                 iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
@@ -257,7 +259,7 @@ impl Signex {
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
-            .into(),
+            .boxed(),
         )
     }
 
@@ -284,7 +286,9 @@ impl Signex {
         let bar_items = crate::library::editor::footprint::unified_active_bar::bar_items(
             editor, theme_id, tokens,
         );
-        let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
+        let bar = signex_widgets::active_bar::view(bar_items, tokens)
+            .map(Message::Library)
+            .boxed();
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + crate::active_bar::BAR_TOP_MARGIN_PX),
@@ -292,7 +296,7 @@ impl Signex {
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
-            .into(),
+            .boxed(),
         );
         // Position the dropdown panel directly below the bar's bottom
         // edge (see the schematic mount for the 42 px derivation).
@@ -307,7 +311,7 @@ impl Signex {
                 self.ui_state.window_size.0,
             )
         {
-            out.push(overlay.map(Message::Library));
+            out.push(overlay.map(Message::Library).boxed());
         }
         out
     }
@@ -349,7 +353,7 @@ impl Signex {
                 ),
             },
         );
-        let card_msg = card.map(Message::Library);
+        let card_msg = card.map(Message::Library).boxed();
         // Conservative footprint so the card stays on screen near the
         // right / bottom edges.
         const FOOTPRINT_MENU_ROWS: usize = 12;
@@ -363,7 +367,7 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(close_msg),
-            super::super::translate::Translate::new(card_msg, (x, y)).into(),
+            super::super::translate::Translate::new(card_msg, (x, y)).boxed(),
         ]
     }
 
@@ -394,12 +398,12 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(close_msg),
-            container(card.map(Message::Library))
+            container(card.map(Message::Library).boxed())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
-                .into(),
+                .boxed(),
         ]
     }
 
@@ -431,12 +435,12 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(close_msg),
-            container(card.map(Message::Library))
+            container(card.map(Message::Library).boxed())
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
-                .into(),
+                .boxed(),
         ]
     }
 
@@ -456,7 +460,9 @@ impl Signex {
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
         let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
-        let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
+        let bar = signex_widgets::active_bar::view(bar_items, tokens)
+            .map(Message::Library)
+            .boxed();
         out.push(
             column![
                 iced::widget::Space::new().height(y_offset + 4.0),
@@ -464,7 +470,7 @@ impl Signex {
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
-            .into(),
+            .boxed(),
         );
         let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
         if let Some(overlay) = crate::library::editor::symbol::active_bar::dropdown_overlay(
@@ -473,7 +479,7 @@ impl Signex {
             tokens,
             dropdown_top,
         ) {
-            out.push(overlay.map(Message::Library));
+            out.push(overlay.map(Message::Library).boxed());
         }
         out
     }
@@ -506,7 +512,7 @@ impl Signex {
                 ),
             },
         );
-        let card_msg = card.map(Message::Library);
+        let card_msg = card.map(Message::Library).boxed();
         let place_open = menu_state.open_submenu
             == Some(crate::library::editor::symbol::state::SymbolContextSubmenu::Place);
         let (x, y) = Self::clamp_symbol_menu_position(
@@ -516,7 +522,7 @@ impl Signex {
         );
         vec![
             Self::dismiss_layer(close_msg),
-            super::super::translate::Translate::new(card_msg, (x, y)).into(),
+            super::super::translate::Translate::new(card_msg, (x, y)).boxed(),
         ]
     }
 
@@ -590,11 +596,11 @@ impl Signex {
         let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);
         Some(
             column![
-                iced::widget::Space::new().height(abs_y.max(0.0)),
+                iced::widget::Space::new().height(abs_y.max(0.0)).boxed(),
                 row![
-                    iced::widget::Space::new().width(abs_x.max(0.0)),
+                    iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
                     container(
-                        iced::widget::text_input(placeholder, &text)
+                        iced::widget::text_input(placeholder, text)
                             .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
                             .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
                             .on_submit(Message::TextEdit(TextEditMsg::Submit))
@@ -608,17 +614,19 @@ impl Signex {
                                         color: accent_c,
                                         width: 1.0,
                                         radius: 0.0.into(),
+                                        ..iced::Border::default()
                                     },
-                                    icon: text_c,
                                     placeholder: text_c,
                                     value: text_c,
                                     selection: accent_c,
                                 }
                             }),
-                    ),
-                ],
+                    )
+                    .boxed(),
+                ]
+                .boxed(),
             ]
-            .into(),
+            .boxed(),
         )
     }
 
@@ -666,7 +674,7 @@ impl Signex {
                 .width(Length::Fill)
                 .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)))
                 .style(crate::styles::menu_item(&document.panel_ctx.tokens))
-                .into()
+                .boxed()
             })
             .collect();
 
@@ -693,7 +701,7 @@ impl Signex {
         let top = (wh - popup_h - 26.0).max(0.0);
         vec![
             Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
-            super::super::translate::Translate::new(Element::from(popup), (left, top)).into(),
+            super::super::translate::Translate::new(popup.boxed(), (left, top)).boxed(),
         ]
     }
 }

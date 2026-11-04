@@ -17,11 +17,16 @@ const FULLSCREEN_EXIT_SETTLE: std::time::Duration = std::time::Duration::from_mi
 /// Extra deferred re-queries after the first, for a slow exit animation.
 const FULLSCREEN_REQUERY_RETRIES: u8 = 3;
 
+/// The logical size of the monitor containing the window, if known.
+/// iced 0.15 replaced `window::monitor_size` with `window::monitor`.
+fn monitor_size(id: iced::window::Id) -> Task<Option<iced::Size>> {
+    iced::window::monitor(id).map(|monitor| monitor.map(|data| data.size()))
+}
+
 fn query_mode(id: iced::window::Id) -> Task<Message> {
     Task::batch([
         iced::window::mode(id).map(|m| Message::Window(WindowMsg::MainWindowModeRead(m))),
-        iced::window::monitor_size(id)
-            .map(|s| Message::Window(WindowMsg::MainWindowMonitorSizeRead(s))),
+        monitor_size(id).map(|s| Message::Window(WindowMsg::MainWindowMonitorSizeRead(s))),
     ])
 }
 
@@ -43,7 +48,7 @@ fn should_requery_again(
 fn deferred_requery(id: iced::window::Id, retries_left: u8) -> Task<Message> {
     Task::future(async { tokio::time::sleep(FULLSCREEN_EXIT_SETTLE).await }).then(move |()| {
         iced::window::mode(id).then(move |mode| {
-            iced::window::monitor_size(id).then(move |monitor| {
+            monitor_size(id).then(move |monitor| {
                 iced::window::size(id)
                     .then(move |size| publish_and_rechain(id, mode, monitor, size, retries_left))
             })

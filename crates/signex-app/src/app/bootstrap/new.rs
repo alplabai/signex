@@ -732,7 +732,9 @@ pub(in crate::app) fn first_run_tour_boot(
     // only builds the app must not leave that count raised.
     (
         true,
-        iced::Task::done(()).then(|()| crate::app::dispatch::dismiss_first_run_tour_task()),
+        // `Task::done` reports zero units in the fork; `future` reports one.
+        iced::Task::future(std::future::ready(()))
+            .then(|()| crate::app::dispatch::dismiss_first_run_tour_task()),
     )
 }
 

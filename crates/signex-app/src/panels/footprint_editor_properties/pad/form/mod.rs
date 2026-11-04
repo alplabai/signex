@@ -13,7 +13,7 @@
 //! - `pad_input_row` / `pad_pick_row` / `pad_check_row` are the row-
 //!   chrome primitives; `subforms` and `pad_table` import them.
 
-use iced::widget::{Column, container, pick_list, row, text, text_input};
+use iced::widget::{Column, Widget as _, container, pick_list, row, text, text_input};
 use iced::{Color, Length, Theme};
 
 use super::super::super::{
@@ -231,7 +231,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
-            text_input(placeholder, &value)
+            text_input(placeholder, value)
                 .size(TS.caption)
                 .padding(SP.xs)
                 .style(move |_: &Theme, _| iced::widget::text_input::Style {
@@ -242,8 +242,8 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
                         width: 1.0,
                         radius: 2.0.into(),
                         color: border_c,
+                        ..Default::default()
                     },
-                    icon: iced::Color::TRANSPARENT,
                     placeholder: muted,
                     value: primary,
                     selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
@@ -255,7 +255,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     )
     .padding([SP.xs, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.20 — pick_list row for a Pad Properties field.
@@ -275,7 +275,8 @@ where
                 .size(TS.caption)
                 .color(muted)
                 .width(Length::Fixed(110.0)),
-            pick_list(options, Some(selected), on_change)
+            pick_list(Some(selected), options, |t: &T| t.to_string())
+                .on_select(on_change)
                 .text_size(10)
                 .padding([3.0, SP.m])
                 .width(Length::Fill),
@@ -285,7 +286,7 @@ where
     )
     .padding([SP.xs, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.20 — checkbox row for a Pad Properties field. Label on left,
@@ -313,7 +314,7 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
     )
     .padding([SP.xs, SP.m])
     .width(Length::Fill)
-    .into()
+    .boxed()
 }
 
 /// v0.20 — render the "Properties" section. `target` selects whether
@@ -321,26 +322,29 @@ pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
 /// specific selected pad. The pause/resume hint banner only shows
 /// for the placement form (`PadEditTarget::Next`).
 pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<iced::Element<'a, PanelMsg>>,
     values: &PadFormValues,
     target: PadEditTarget,
     placement_paused: bool,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<iced::Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
         border: border_c,
         ..
     } = palette;
-    col = col.push(props_section_header(
-        "Properties",
-        "fp_pad_properties",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header(
+            "Properties",
+            "fp_pad_properties",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pad_properties", collapsed_sections) {
         return col;
     }
@@ -355,7 +359,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
                         .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
                 )
                 .padding([SP.xs, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
             );
         } else {
             col = col.push(
@@ -365,7 +370,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
                         .color(muted),
                 )
                 .padding([SP.xs, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
             );
         }
     }
@@ -450,25 +456,28 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties
 /// v0.20 — render the "Pad Features" section: top/bottom surface
 /// treatment + testpoint flags.
 pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_features<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<iced::Element<'a, PanelMsg>>,
     values: &PadFormValues,
     target: PadEditTarget,
     palette: PanelPalette,
     collapsed_sections: &'a CollapsedSections,
-) -> Column<'a, PanelMsg> {
+) -> Column<iced::Element<'a, PanelMsg>> {
     let PanelPalette {
         muted,
         primary,
         border: border_c,
         ..
     } = palette;
-    col = col.push(props_section_header(
-        "Pad Features",
-        "fp_pad_features",
-        collapsed_sections,
-        primary,
-        border_c,
-    ));
+    col = col.push(
+        props_section_header(
+            "Pad Features",
+            "fp_pad_features",
+            collapsed_sections,
+            primary,
+            border_c,
+        )
+        .boxed(),
+    );
     if fp_is_collapsed("fp_pad_features", collapsed_sections) {
         return col;
     }
@@ -492,7 +501,8 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     col = col.push(
         container(text("Testpoint").size(TS.caption).color(muted))
             .padding([SP.m, SP.m])
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     col = col.push(pad_check_row(
         "Top Assembly",

@@ -33,7 +33,7 @@ pub mod supply;
 pub mod symbol;
 pub mod text_extent;
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, Widget, button, column, container, row, text};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
@@ -78,7 +78,7 @@ pub fn view<'a>(
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 /// The row's identity, shown once in the shell header: part number, then
@@ -125,7 +125,7 @@ fn view_header<'a>(
     )
     .padding([SP.m, SP.l])
     .style(crate::styles::modal_header_strip(tokens))
-    .into()
+    .boxed()
 }
 
 /// How many required slots of `class` have no usable value. Zero for a
@@ -185,7 +185,9 @@ fn view_tabs<'a>(
     let border = crate::styles::ti(tokens.border);
     let accent = crate::styles::ti(tokens.accent);
     let last = PreviewTab::ORDER.len().saturating_sub(1);
-    let mut row_widget = row![].spacing(0).align_y(iced::Alignment::End);
+    let mut row_widget: iced::widget::Row<Element<'_, LibraryMessage>> = iced::widget::Row::new()
+        .spacing(0)
+        .align_y(iced::Alignment::End);
     for (i, tab) in PreviewTab::ORDER.iter().enumerate() {
         let is_active = *tab == state.active_tab;
         let (fill, text_c) = if is_active {
@@ -193,11 +195,12 @@ fn view_tabs<'a>(
         } else {
             (resting_fill, theme_ext::text_secondary(tokens))
         };
-        let mut content = row![
+        let mut content: iced::widget::Row<Element<'_, LibraryMessage>> = row![
             text(tab.label())
                 .size(TS.label)
                 .color(text_c)
                 .wrapping(iced::widget::text::Wrapping::None)
+                .boxed()
         ]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
@@ -209,7 +212,7 @@ fn view_tabs<'a>(
                 tokens::readable_on(fill),
             ));
         }
-        let label = container(content).padding([SP.s, SP.l]);
+        let label = container(content.boxed()).padding([SP.s, SP.l]);
         let style = signex_widgets::tab_pill::TabPillStyle {
             fill,
             border,
@@ -218,14 +221,18 @@ fn view_tabs<'a>(
             is_last: i == last,
             accent_position: signex_widgets::tab_pill::AccentPosition::Bottom,
         };
-        let pill = signex_widgets::tab_pill::TabPill::new(label, style);
+        let pill = signex_widgets::tab_pill::TabPill::new(label.boxed(), style);
         let tab_msg = LibraryMessage::EditorEvent {
             library_path: address.library_path.clone(),
             table: address.table.clone(),
             row_id: address.row_id,
             msg: EditorMsg::SelectTab(*tab),
         };
-        row_widget = row_widget.push(iced::widget::mouse_area(pill).on_press(tab_msg));
+        row_widget = row_widget.push(
+            iced::widget::mouse_area(pill.boxed())
+                .on_press(tab_msg)
+                .boxed(),
+        );
     }
     container(row_widget)
         .padding(iced::Padding {
@@ -236,7 +243,7 @@ fn view_tabs<'a>(
         })
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
-        .into()
+        .boxed()
 }
 
 /// The fade drawn over an inert (read-only) tab.
@@ -290,7 +297,7 @@ fn view_active_tab<'a>(
         .padding(SP.l)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .boxed()
 }
 
 fn view_footer<'a>(
@@ -310,7 +317,7 @@ fn view_footer<'a>(
         .padding([SP.m, SP.l])
         .width(Length::Fill)
         .style(crate::styles::modal_footer_strip(tokens))
-        .into();
+        .boxed();
     }
 
     let event = |msg: EditorMsg| {
@@ -322,15 +329,15 @@ fn view_footer<'a>(
         })
     };
     let dirty_marker: Element<'_, LibraryMessage> = if state.dirty {
-        text("\u{2022} unsaved").size(TS.body).color(muted).into()
+        text("\u{2022} unsaved").size(TS.body).color(muted).boxed()
     } else {
-        Space::new().width(0).into()
+        Space::new().width(0.0).boxed()
     };
 
     // Offered once a save was refused because the row changed on the
     // server; discarding the working copy asks first.
     let reload: Element<'_, LibraryMessage> = if !state.stale_base {
-        Space::new().width(0).into()
+        Space::new().width(0.0).boxed()
     } else if state.reload_confirming {
         row![
             Space::new().width(SP.l),
@@ -343,7 +350,7 @@ fn view_footer<'a>(
             kit::secondary_button("Keep editing", event(EditorMsg::ReloadCancelled), tokens),
         ]
         .align_y(iced::Alignment::Center)
-        .into()
+        .boxed()
     } else {
         row![
             Space::new().width(SP.l),
@@ -353,7 +360,7 @@ fn view_footer<'a>(
                 tokens
             ),
         ]
-        .into()
+        .boxed()
     };
 
     container(
@@ -369,7 +376,7 @@ fn view_footer<'a>(
     )
     .padding([SP.m, SP.l])
     .style(crate::styles::modal_footer_strip(tokens))
-    .into()
+    .boxed()
 }
 
 /// Fill of the close button: none at rest, token overlays on hover/press.
@@ -406,11 +413,12 @@ fn close_btn<'a>(address: EditorAddress, tokens: &ThemeTokens) -> Element<'a, Li
             width: crate::styles::HAIRLINE,
             radius: crate::styles::RADIUS.into(),
             color: border,
+            ..Border::default()
         },
         text_color: text_c,
         ..button::Style::default()
     })
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]

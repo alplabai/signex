@@ -1,0 +1,55 @@
+name: Test
+on: [push, pull_request]
+jobs:
+  todo_linux:
+    name: Ubuntu Checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta]
+    steps:
+    - uses: hecrj/setup-rust-action@v2
+      with:
+        rust-version: ${{ matrix.rust }}
+    - uses: actions/checkout@master
+    - name: Install dependencies
+      run: |
+        export DEBIAN_FRONTED=noninteractive
+        sudo apt-get -qq update
+        sudo apt-get install -y libxkbcommon-dev
+    - name: Run tests
+      run: |
+        cargo test --verbose --all --lib --tests --bins
+        cargo test --verbose --all --all-features --lib --tests --bins
+
+  todo_windows:
+    name: Windows Checks
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        rust: [stable, beta]
+    steps:
+    - uses: hecrj/setup-rust-action@v2
+      with:
+        rust-version: ${{ matrix.rust }}
+    - uses: actions/checkout@master
+    - name: Run tests
+      run: |
+        cargo test --verbose --all --lib --tests --bins
+        cargo test --verbose --all --all-features --lib --tests --bins
+
+  todo_macos:
+    name: Mac OS Checks
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        rust: [stable, beta]
+    steps:
+    - uses: hecrj/setup-rust-action@v2
+      with:
+        rust-version: ${{ matrix.rust }}
+    - uses: actions/checkout@master
+    - name: Run tests
+      run: |
+        cargo test --verbose --all --lib --tests --bins
+        cargo test --verbose --all --all-features --lib --tests --bins

@@ -1,7 +1,7 @@
 //! Silk graphic geometry rows of the footprint Properties panel.
 
 use iced::widget::{Column, container, text};
-use iced::{Color, Length};
+use iced::{Color, Element, Length, Widget};
 
 use super::super::{PanelMsg, SilkKindGeometry};
 use super::pad::pad_input_row;
@@ -12,12 +12,12 @@ const TS: TypeScale = TypeScale::DEFAULT;
 
 /// The editable rows for one silk kind's own geometry.
 pub(super) fn silk_geometry_rows<'a>(
-    mut col: Column<'a, PanelMsg>,
+    mut col: Column<Element<'a, PanelMsg>>,
     kind: &'a SilkKindGeometry,
     muted: Color,
     primary: Color,
     border_c: Color,
-) -> Column<'a, PanelMsg> {
+) -> Column<Element<'a, PanelMsg>> {
     match kind {
         SilkKindGeometry::Line { from_mm, to_mm } => {
             col = col.push(pad_input_row(
@@ -107,7 +107,8 @@ pub(super) fn silk_geometry_rows<'a>(
                         .color(muted),
                 )
                 .padding([SP.s, SP.m])
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .boxed(),
             );
         }
     }

@@ -1,0 +1,105 @@
+[package]
+name = "iced_fonts"
+description = "Include fonts via feature flags in your Iced project!"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+authors.workspace = true
+
+[package.metadata.docs.rs] 
+all-features = true
+
+[workspace.package]
+version = "0.3.0"
+edition = "2024"
+license = "MIT"
+homepage = "https://iced.rs"
+repository = "https://github.com/Redhawk18/iced_fonts"
+keywords = ["gui", "iced", "fonts"]
+categories = ["gui"]
+readme = "README.md"
+authors = [ "Redhawk18" ]
+
+[features]
+default = []
+advanced_text = ["iced_fonts_macros/advanced_text"]
+bootstrap = []
+codicon = []
+devicon = []
+fontawesome = []
+lucide = []
+material = []
+nerd = []
+octicons = []
+pomicons = []
+full = [
+    "bootstrap",
+    "codicon",
+    "devicon",
+    "fontawesome",
+    "lucide",
+    "material",
+    "nerd",
+    "octicons",
+    "pomicons",
+]
+
+[workspace]
+members = ["macros"]
+
+[dev-dependencies]
+iced = "0.14"
+
+[dependencies]
+iced_fonts_macros = {path = "macros", version = "0.3.0"}
+
+iced_core.workspace = true
+iced_widget.workspace = true
+
+[workspace.dependencies]
+iced_core = "0.14" # Iced core has the text widget, which is the only one we need.
+iced_widget = "0.14" # TODO remove 
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
+ttf-parser = "0.25"
+
+[[example]]
+name = "bootstrap"
+required-features = ["bootstrap"]
+
+[[example]]
+name = "codicon"
+required-features = ["codicon"]
+
+[[example]]
+name = "custom"
+
+[[example]]
+name = "devicon"
+required-features = ["devicon"]
+
+[[example]]
+name = "fontawesome"
+required-features = ["fontawesome"]
+
+[[example]]
+name = "lucide"
+required-features = ["lucide"]
+
+[[example]]
+name = "nerd"
+required-features = ["nerd"]
+
+[[example]]
+name = "octicons"
+required-features = ["octicons"]
+
+[[example]]
+name = "pomicons"
+required-features = ["pomicons"]

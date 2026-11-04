@@ -428,11 +428,12 @@ mod shortcut_tests;
 /// Wrap a menu element in the toolbar-strip styled container used on
 /// secondary (undocked-tab) windows that keep their OS title bar.
 pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
-    container(menu)
-        .padding([0.0, SP.m])
-        .width(Length::Fill)
-        .style(styles::toolbar_strip(tokens))
-        .into()
+    iced::advanced::Widget::_boxed(
+        container(menu)
+            .padding([0.0, SP.m])
+            .width(Length::Fill)
+            .style(styles::toolbar_strip(tokens)),
+    )
 }
 
 /// Perceptual-luminance test used to pick the white/black wordmark and
@@ -459,7 +460,7 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
     let hover_bg = mc.hover;
     let border = mc.border;
     let text_c = mc.text;
-    button(text(label).size(MENU_LABEL_SIZE).color(text_c))
+    let btn = button(text(label).size(MENU_LABEL_SIZE).color(text_c))
         // Tight horizontal padding so the highlight box hugs the label —
         // Altium's root buttons don't extend far past their text. A wide
         // highlight pushes the dropdown's anchor (iced_aw uses the
@@ -480,11 +481,12 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
                     width: if lit { 1.0 } else { 0.0 },
                     radius: 2.0.into(),
                     color: border,
+                    ..Border::default()
                 },
                 ..button::Style::default()
             }
-        })
-        .into()
+        });
+    iced::advanced::Widget::_boxed(btn)
 }
 
 /// Menu row that acts as a submenu header — label on the left, right
@@ -501,7 +503,7 @@ fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage
     ]
     .spacing(SP.m)
     .align_y(iced::Alignment::Center);
-    button(r)
+    let btn = button(r)
         // Match the padding used by `menu_item_btn` so Export sits on the
         // same left/right grid as the normal leaf rows (Save, Open…).
         .padding([SP.s, SP.l])
@@ -520,13 +522,13 @@ fn submenu_item_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage
                 text_color: mc.text,
                 ..button::Style::default()
             }
-        })
-        .into()
+        });
+    iced::advanced::Widget::_boxed(btn)
 }
 
 /// Separator line between menu sections.
 fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
-    Item::new(
+    Item::new(iced::advanced::Widget::_boxed(
         container(iced::widget::Space::new())
             .height(1)
             .width(Length::Fill)
@@ -535,7 +537,7 @@ fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer
                 background: Some(Background::Color(mc.border)),
                 ..container::Style::default()
             }),
-    )
+    ))
 }
 
 /// Build a single menu item button with label + shortcut text.
@@ -553,33 +555,37 @@ fn menu_item_btn(
     // A toggle row reserves the mark column whether or not it is checked,
     // so the labels of a group line up.
     let mark = checked.map(|on| {
-        text(if on { "\u{2713}" } else { "" })
-            .size(MENU_LABEL_SIZE)
-            .color(text_c)
-            .width(Length::Fixed(14.0))
+        iced::advanced::Widget::_boxed(
+            text(if on { "\u{2713}" } else { "" })
+                .size(MENU_LABEL_SIZE)
+                .color(text_c)
+                .width(Length::Fixed(14.0)),
+        )
     });
-    let mut r = iced::widget::Row::new()
+    let mut r: iced::widget::Row<Element<'static, MenuMessage>> = iced::widget::Row::new()
         .spacing(SP.m)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     if let Some(mark) = mark {
         r = r.push(mark);
     }
-    r = r.push(
+    r = r.push(iced::advanced::Widget::_boxed(
         text(label)
             .size(MENU_LABEL_SIZE)
             .color(text_c)
             .wrapping(iced::widget::text::Wrapping::None),
-    );
+    ));
 
     if let Some(sc) = shortcut {
-        r = r.push(iced::widget::Space::new().width(Length::Fill));
-        r = r.push(
+        r = r.push(iced::advanced::Widget::_boxed(
+            iced::widget::Space::new().width(Length::Fill),
+        ));
+        r = r.push(iced::advanced::Widget::_boxed(
             text(sc)
                 .size(MENU_SHORTCUT_SIZE)
                 .color(mc.text_muted)
                 .wrapping(iced::widget::text::Wrapping::None),
-        );
+        ));
     }
 
     let hover_bg = mc.hover;
@@ -608,9 +614,9 @@ fn menu_item_btn(
     );
 
     if let Some(m) = msg {
-        btn.on_press(m).into()
+        iced::advanced::Widget::_boxed(btn.on_press(m))
     } else {
-        btn.into()
+        iced::advanced::Widget::_boxed(btn)
     }
 }
 

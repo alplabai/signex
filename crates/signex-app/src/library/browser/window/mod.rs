@@ -13,8 +13,10 @@ use std::ops::Range;
 use std::path::Path;
 
 /// Height of every data row in the grid. Rows are pinned to it so the
-/// window maths does not depend on what a cell happens to contain.
-pub(super) const BROWSER_ROW_HEIGHT: f32 = 24.0;
+/// window maths does not depend on what a cell happens to contain. One text
+/// line plus the 4 px a text cell pads above and below, the tallest cell.
+pub(super) const BROWSER_ROW_HEIGHT: f32 =
+    super::BROWSER_TEXT_SIZE * crate::styles::LINE_HEIGHT + 2.0 * 4.0;
 /// Height of the header row, which scrolls with the rows and so offsets
 /// them from the top of the scrollable content.
 pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;

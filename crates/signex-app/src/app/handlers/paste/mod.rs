@@ -55,10 +55,10 @@ impl Signex {
     fn continue_paste(&mut self, request: PasteRequest) -> Task<Message> {
         match request.intent {
             PasteIntent::Paste | PasteIntent::SmartPaste | PasteIntent::Array => {
-                iced::clipboard::read().map(move |text| {
+                iced::clipboard::read_text().map(move |text| {
                     Message::Edit(EditMsg::PasteTextRead {
                         request: request.clone(),
-                        text,
+                        text: text.ok().map(|text| (*text).clone()),
                     })
                 })
             }
@@ -188,7 +188,7 @@ impl Signex {
     pub(crate) fn mirror_copy_on_clipboard_task(&mut self, outcome: CopyOutcome) -> Task<Message> {
         match outcome {
             CopyOutcome::Carried => self.clipboard_write_task(),
-            CopyOutcome::NothingToCarry => iced::clipboard::write(String::new()),
+            CopyOutcome::NothingToCarry => iced::clipboard::write(String::new()).discard(),
             CopyOutcome::Failed => Task::none(),
         }
     }
@@ -204,14 +204,14 @@ impl Signex {
         match copied.to_clipboard_text() {
             Ok(text) => {
                 self.interaction_state.clipboard_text = Some(text.clone());
-                iced::clipboard::write(text)
+                iced::clipboard::write(text).discard()
             }
             Err(error) => {
                 self.interaction_state.clipboard_text = None;
                 crate::diagnostics::log_warning(format!(
                     "Copy: the selection could not be written to the system clipboard ({error}); the clipboard was emptied so an older copy cannot be pasted instead, and this selection can still be pasted in this window."
                 ));
-                iced::clipboard::write(String::new())
+                iced::clipboard::write(String::new()).discard()
             }
         }
     }

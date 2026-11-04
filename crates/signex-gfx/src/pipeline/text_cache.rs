@@ -247,11 +247,16 @@ mod tests {
         assert_eq!(quantise_px(quantise_px(13.3)), quantise_px(13.3));
     }
 
+    /// A font system holding only the bundled test face. cosmic-text 0.19
+    /// (pulled in by the iced fork) panics with "no default font found" when a
+    /// `Buffer` is created against a font database with no faces at all, which
+    /// cosmic-text 0.15 tolerated.
     fn empty_font_system() -> cryoglyph::FontSystem {
-        cryoglyph::FontSystem::new_with_locale_and_db(
-            "en-US".to_string(),
-            cryoglyph::fontdb::Database::new(),
-        )
+        let mut db = cryoglyph::fontdb::Database::new();
+        db.load_font_source(cryoglyph::fontdb::Source::Binary(Arc::new(
+            &include_bytes!("../../tests/fonts/Iosevka-Regular.ttf")[..],
+        )));
+        cryoglyph::FontSystem::new_with_locale_and_db("en-US".to_string(), db)
     }
 
     fn blank(fs: &mut cryoglyph::FontSystem) -> cryoglyph::Buffer {

@@ -1,7 +1,7 @@
 //! Parameters section view. Pure: reads the project, emits `ProjectTabMsg`s.
 
 use iced::widget::{button, column, container, row, text, text_input};
-use iced::{Element, Length};
+use iced::{Element, Length, Widget};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::Message;
@@ -44,13 +44,15 @@ pub(in crate::app::project_tab) fn view<'a>(
     let mut body = column![
         text("Parameters")
             .size(ts.heading)
-            .color(crate::styles::ti(tokens.text)),
+            .color(crate::styles::ti(tokens.text))
+            .boxed(),
         text("Every sheet inherits these; a sheet's own Title Block value overrides one.")
             .size(ts.label)
-            .color(crate::styles::ti(tokens.text_secondary)),
+            .color(crate::styles::ti(tokens.text_secondary))
+            .boxed(),
     ]
     .spacing(sp.l)
-    .max_width(ts.body * SECTION_MAX_EMS);
+    .width(Length::Fixed(ts.body * SECTION_MAX_EMS));
     for field in TitleBlockField::ALL {
         body = body.push(labelled(
             field.label(),
@@ -61,7 +63,8 @@ pub(in crate::app::project_tab) fn view<'a>(
     body = body.push(
         text("Custom parameters")
             .size(ts.heading)
-            .color(crate::styles::ti(tokens.text)),
+            .color(crate::styles::ti(tokens.text))
+            .boxed(),
     );
     for name in project
         .data
@@ -78,7 +81,7 @@ pub(in crate::app::project_tab) fn view<'a>(
             }));
         body = body.push(labelled(
             name,
-            row![value_input(project, name), remove]
+            row![value_input(project, name).boxed(), remove.boxed()]
                 .spacing(sp.m)
                 .align_y(iced::Alignment::Center),
             tokens,
@@ -96,6 +99,6 @@ pub(in crate::app::project_tab) fn view<'a>(
         .size(ts.label)
         .padding(sp.s)
         .width(Length::Fill);
-    body = body.push(row![new_input, add].spacing(sp.m));
-    container(body).padding([sp.xl, sp.xl]).into()
+    body = body.push(row![new_input.boxed(), add.boxed()].spacing(sp.m).boxed());
+    container(body).padding([sp.xl, sp.xl]).boxed()
 }

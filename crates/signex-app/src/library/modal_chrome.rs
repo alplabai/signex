@@ -7,8 +7,8 @@
 //! one definition built on [`crate::styles`] tokens, so a theme change
 //! reaches all of them.
 
-use iced::Element;
 use iced::widget::{button, container, text};
+use iced::{Element, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -37,7 +37,7 @@ pub(crate) fn close_x<'a>(
     )
     .on_press(message)
     .style(crate::styles::outline_button(tokens))
-    .into()
+    .boxed()
 }
 
 /// Bordered secondary footer action (Cancel, Skip, ...).
@@ -52,7 +52,7 @@ pub(crate) fn secondary_btn<'a>(
     button(container(text(label.to_string()).size(ts.body).color(text_color)).padding([sp.s, sp.l]))
         .on_press(message)
         .style(crate::styles::outline_button(tokens))
-        .into()
+        .boxed()
 }
 
 /// Accent-filled primary footer action.
@@ -78,7 +78,7 @@ pub(crate) fn primary_btn_if<'a>(
     let btn =
         button(container(text(label.to_string()).size(ts.body).color(fg)).padding([sp.s, sp.l]));
     let btn = if enabled { btn.on_press(message) } else { btn };
-    btn.style(crate::styles::accent_button(tokens)).into()
+    btn.style(crate::styles::accent_button(tokens)).boxed()
 }
 
 #[cfg(test)]
