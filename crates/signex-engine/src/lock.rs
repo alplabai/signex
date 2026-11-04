@@ -208,6 +208,31 @@ impl Engine {
             })
     }
 
+    /// Every unit of every part [`Self::part_edit_locked`] holds, in one pass
+    /// over the sheet's symbols (the footprint probe stands for every
+    /// part-sync edit). Only locked parts are grouped, so the cost follows the
+    /// number of locked parts, not the number of symbols squared.
+    #[must_use]
+    pub fn edit_locked_part_units(&self) -> std::collections::HashSet<Uuid> {
+        let mut held = std::collections::HashSet::new();
+        for symbol in &self.document.symbols {
+            if held.contains(&symbol.uuid) {
+                continue;
+            }
+            let probe = Command::UpdateSymbolFootprint {
+                symbol_id: symbol.uuid,
+                footprint: String::new(),
+            };
+            if self.locked_item_refusal(&probe).is_some() {
+                held.extend(crate::exec::change_component::placed_unit_ids(
+                    &self.document,
+                    symbol.uuid,
+                ));
+            }
+        }
+        held
+    }
+
     /// The lock of a wire, label, text note or drawing, `None` for any other
     /// kind (a symbol keeps its own `SetSymbolLocked` path).
     #[must_use]

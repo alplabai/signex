@@ -190,12 +190,13 @@ pub fn hold_back_locked(
     stamps: Vec<(Uuid, String)>,
     part_syncs: Vec<PartSync>,
 ) -> (Vec<(Uuid, String)>, Vec<PartSync>, Vec<String>) {
+    let locked = engine.edit_locked_part_units();
     let (held, kept): (Vec<PartSync>, Vec<PartSync>) = part_syncs
         .into_iter()
-        .partition(|p| engine.part_edit_locked(p.symbol));
+        .partition(|p| locked.contains(&p.symbol));
     let stamps = stamps
         .into_iter()
-        .filter(|(id, _)| !engine.part_edit_locked(*id))
+        .filter(|(id, _)| !locked.contains(id))
         .collect();
     let mut references: Vec<String> = held.into_iter().map(|p| p.reference).collect();
     references.sort();

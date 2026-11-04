@@ -159,8 +159,10 @@ mod tests {
 
         for label in ["Place", "Edit Component"] {
             let alone = natural::<()>(
+                // The size the dropdown draws its labels at.
                 iced::widget::text(label)
-                    .size(crate::styles::TypeScale::DEFAULT.body)
+                    .size(signex_widgets::active_bar::dropdown::LABEL_SIZE)
+                    .wrapping(iced::widget::text::Wrapping::None)
                     .boxed(),
                 label,
             );

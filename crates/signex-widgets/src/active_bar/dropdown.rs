@@ -49,6 +49,9 @@ use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
 
+/// Text size of a menu row label.
+pub const LABEL_SIZE: f32 = 13.0;
+
 /// One row inside the dropdown. The widget walks the slice in order
 /// so semantic grouping (section header → items → separator → next
 /// section) reads top-down at the call site.
@@ -264,7 +267,7 @@ where
                 // clips rather than reflowing a label onto two lines.
                 row_w = row_w.push(
                     text(label)
-                        .size(13)
+                        .size(LABEL_SIZE)
                         .color(row_text_c)
                         .wrapping(text::Wrapping::None)
                         .boxed(),
