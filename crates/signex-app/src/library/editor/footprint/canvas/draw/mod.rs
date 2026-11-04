@@ -7,7 +7,7 @@
 //!
 //! Layer-method modules (`impl FootprintCanvas`):
 //! - [`background`] — background fill + grid, guides, origin crosshair.
-//! - [`scene`] — silk graphics, courtyard, pads, array badges.
+//! - [`scene`] — editor wrappers over [`layers`], array badges.
 //! - [`ghosts`] — PlacePad / PlaceVia placement ghosts.
 //! - [`overlays`] — sketch reticle, select cursor mark, touching-line
 //!   / lasso ghosts, rubber-band rectangle, sketch-entity overlay.
@@ -15,6 +15,8 @@
 //! Free-function renderers (called by the layer methods above and, for
 //! a few items, by the parent `canvas` / `input` modules through the
 //! re-exports below):
+//! - [`layers`] — silk, courtyard, pads over a read-only `LayerInput`
+//!   (shared with the Components-panel preview).
 //! - [`grid`] — fine + coarse grid rendering.
 //! - [`pad`] — pad copper / hole / number + Pads-mode tool preview.
 //! - [`silk`] — silk-front + silk-back graphics renderer.
@@ -25,6 +27,7 @@
 mod background;
 mod ghosts;
 mod grid;
+mod layers;
 mod overlays;
 mod pad;
 mod scene;
@@ -37,5 +40,7 @@ mod sketch;
 // siblings and widen to `pub(in …canvas)` now that they sit one level
 // deeper, re-exported here so consumers name `draw::<item>` rather than
 // reaching into the private renderer submodules.
+pub(crate) use background::{BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_origin};
+pub(crate) use layers::{LayerInput, draw_courtyard, draw_pads, draw_silk};
 pub(in crate::library::editor::footprint::canvas) use pad::draw_pads_tool_preview;
 pub(in crate::library::editor::footprint::canvas) use sketch::{ClosedLoop, find_closed_loops};

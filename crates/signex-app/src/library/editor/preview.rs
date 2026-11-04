@@ -184,17 +184,12 @@ fn render_panes<'a>(
     );
     // Drawn with the Components panel's footprint canvas, like the symbol.
     let footprint_drawing = (!footprint_unbound)
-        .then_some(state.footprint.as_ref())
+        .then_some(state.footprint_preview.as_ref())
         .flatten()
-        .map(|fp| {
-            let primary = theme_ext::text_primary(tokens);
+        .map(|model| {
             let program =
                 crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
-                    fp.clone(),
-                    theme_ext::accent(tokens),
-                    primary,
-                    theme_ext::text_secondary(tokens),
-                    primary,
+                    model,
                 );
             iced::widget::canvas(program)
                 .width(Length::Fill)

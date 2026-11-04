@@ -1,93 +1,54 @@
-//! Footprint content layers — silk graphics, courtyard outline, pads,
-//! and the Array source-pad "+N" badges. Drawn above the backdrop and
-//! below the interaction ghosts / overlays. Extracted verbatim from
-//! `Program::draw`.
+//! Editor-side wrappers for the shared content layers (see
+//! [`super::layers`]) plus the Array source-pad "+N" badges. Drawn above
+//! the backdrop and below the interaction ghosts / overlays.
 
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
-use crate::library::editor::footprint::layers::FpLayer;
-
 use super::super::{FootprintCanvas, FootprintCanvasState};
-use super::pad::draw_pad;
-use super::silk::draw_silk_graphics;
+use super::layers::{LayerInput, draw_courtyard, draw_pads, draw_silk};
 
 impl FootprintCanvas<'_> {
-    /// v0.18.16 — silk-front + silk-back graphics.
+    /// The read-only view of the model the shared content layers draw.
+    fn layer_input(&self) -> LayerInput<'_> {
+        LayerInput {
+            pads: &self.state.pads,
+            silk_f: self.silk_f,
+            silk_b: self.silk_b,
+            visibility: self.state.layer_visibility,
+            courtyard_outline: self.state.courtyard_outline(),
+            courtyard_rect: self.state.courtyard_mm,
+            selected_pad: self.state.selected_pad,
+            selected_pads_extra: &self.state.selected_pads_extra,
+            selected_silk_f: self.state.selected_silk_f,
+        }
+    }
+
+    /// Silk-front + silk-back graphics.
     pub(in crate::library::editor::footprint::canvas) fn draw_silk_layers(
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if self.state.layer_visibility.get(FpLayer::FSilks) {
-            draw_silk_graphics(
-                frame,
-                cstate,
-                self.silk_f,
-                FpLayer::FSilks,
-                self.state.selected_silk_f,
-            );
-        }
-        if self.state.layer_visibility.get(FpLayer::BSilks) {
-            draw_silk_graphics(frame, cstate, self.silk_b, FpLayer::BSilks, None);
-        }
+        draw_silk(frame, cstate, &self.layer_input());
     }
 
-    /// Courtyard — outline-following polygon takes precedence over the
-    /// bbox rectangle when present (v0.27); fall back to the bbox for
-    /// legacy state.
+    /// Courtyard outline (or bbox fallback).
     pub(in crate::library::editor::footprint::canvas) fn draw_courtyard(
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if self.state.layer_visibility.get(FpLayer::EdgeCuts) {
-            let edge_color = FpLayer::EdgeCuts.color();
-            if let Some(outline) = self.state.courtyard_outline() {
-                if outline.len() >= 3 {
-                    let path = Path::new(|b| {
-                        let first = cstate.world_to_screen(outline[0]);
-                        b.move_to(first);
-                        for v in outline.iter().skip(1) {
-                            b.line_to(cstate.world_to_screen(*v));
-                        }
-                        b.line_to(first);
-                    });
-                    frame.stroke(
-                        &path,
-                        Stroke::default().with_width(1.5).with_color(edge_color),
-                    );
-                }
-            } else if let Some(c) = self.state.courtyard_mm {
-                let p0 = cstate.world_to_screen((c.min_x, c.min_y));
-                let p1 = cstate.world_to_screen((c.max_x, c.max_y));
-                let rect = Path::rectangle(
-                    Point::new(p0.x, p0.y),
-                    iced::Size::new(p1.x - p0.x, p1.y - p0.y),
-                );
-                frame.stroke(
-                    &rect,
-                    Stroke::default().with_width(1.5).with_color(edge_color),
-                );
-            }
-        }
+        draw_courtyard(frame, cstate, &self.layer_input());
     }
 
-    /// Pads — render last of the content layers so they sit on top.
+    /// Pads, on top of the other content layers.
     pub(in crate::library::editor::footprint::canvas) fn draw_pads_layer(
         &self,
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        for (idx, pad) in self.state.pads.iter().enumerate() {
-            if !self.state.layer_visibility.get(pad.primary_layer()) {
-                continue;
-            }
-            // v0.27 — multi-select highlight: primary OR extras.
-            let is_selected = self.state.selected_pad == Some(idx)
-                || self.state.selected_pads_extra.contains(&idx);
-            draw_pad(frame, cstate, pad, is_selected);
-        }
+        draw_pads(frame, cstate, &self.layer_input());
     }
 
     /// v0.25 — Array source-pad indicator: a "+N" badge at the

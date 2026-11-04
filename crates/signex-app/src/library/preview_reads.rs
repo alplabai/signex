@@ -86,8 +86,12 @@ impl PreviewReads {
             && state.footprint.is_none()
             && state.row.footprint_ref == Some(r)
         {
-            state.footprint =
-                report_read_failure(result, ResolvedKind::Footprint, &r, "component preview tab");
+            state.set_footprint(report_read_failure(
+                result,
+                ResolvedKind::Footprint,
+                &r,
+                "component preview tab",
+            ));
         }
         if let (Some(r), Some(result)) = (needs.sim, self.sim)
             && state.sim.is_none()

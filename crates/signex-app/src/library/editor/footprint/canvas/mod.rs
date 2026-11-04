@@ -24,6 +24,7 @@ mod draw;
 mod geometry;
 mod hit_test;
 mod input;
+mod preview_model;
 
 #[cfg(test)]
 mod tests;
@@ -34,6 +35,12 @@ mod tests;
 // which import them directly. `geometry` helpers are still used by
 // `silk_f_hit_at` below.
 use draw::draw_pads_tool_preview;
+pub(crate) use draw::{
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, draw_backdrop, draw_courtyard, draw_origin,
+    draw_pads, draw_silk,
+};
+pub use preview_model::PreviewFootprint;
+
 use geometry::{point_in_polygon, point_to_segment_dist, polygon_outline_hit};
 
 use iced::event::Event;
@@ -161,7 +168,7 @@ impl Default for FootprintCanvasState {
 }
 
 impl FootprintCanvasState {
-    fn world_to_screen(&self, world: (f64, f64)) -> Point {
+    pub(crate) fn world_to_screen(&self, world: (f64, f64)) -> Point {
         Point::new(
             world.0 as f32 * self.scale + self.offset.x,
             world.1 as f32 * self.scale + self.offset.y,
@@ -176,6 +183,17 @@ impl FootprintCanvasState {
     }
 
     fn fit_to_bounds(&mut self, world_bbox: (f64, f64, f64, f64), viewport: Rectangle) {
+        self.fit_to_bounds_min(world_bbox, viewport, MIN_SCALE);
+    }
+
+    /// [`Self::fit_to_bounds`] with a caller-chosen lower scale limit, so
+    /// a small preview box can still fit a large footprint.
+    pub(crate) fn fit_to_bounds_min(
+        &mut self,
+        world_bbox: (f64, f64, f64, f64),
+        viewport: Rectangle,
+        min_scale: f32,
+    ) {
         let (min_x, min_y, max_x, max_y) = world_bbox;
         let w = (max_x - min_x).max(1e-3);
         let h = (max_y - min_y).max(1e-3);
@@ -184,13 +202,41 @@ impl FootprintCanvasState {
         let avail_h = (viewport.height - pad * 2.0).max(1.0);
         let scale_x = avail_w / w as f32;
         let scale_y = avail_h / h as f32;
-        self.scale = scale_x.min(scale_y).clamp(MIN_SCALE, MAX_SCALE);
+        self.scale = scale_x.min(scale_y).clamp(min_scale, MAX_SCALE);
         let cx = ((min_x + max_x) / 2.0) as f32;
         let cy = ((min_y + max_y) / 2.0) as f32;
         self.offset = Point::new(
             viewport.width / 2.0 - cx * self.scale,
             viewport.height / 2.0 - cy * self.scale,
         );
+    }
+}
+
+impl FootprintCanvasState {
+    /// A fitted camera at an explicit view.
+    pub(crate) fn with_view(scale: f32, offset: Point) -> Self {
+        Self {
+            scale,
+            offset,
+            did_initial_fit: true,
+            ..Self::default()
+        }
+    }
+
+    /// Zoom by `factor` keeping the world point under `anchor` fixed;
+    /// the scale clamps to `min_scale..=MAX_SCALE`.
+    pub(crate) fn zoom_about(&mut self, anchor: Point, factor: f32, min_scale: f32) {
+        let new_scale = (self.scale * factor).clamp(min_scale, MAX_SCALE);
+        let actual = new_scale / self.scale;
+        self.offset.x = anchor.x - (anchor.x - self.offset.x) * actual;
+        self.offset.y = anchor.y - (anchor.y - self.offset.y) * actual;
+        self.scale = new_scale;
+    }
+
+    /// Shift the view by a screen-space delta.
+    pub(crate) fn pan_by(&mut self, delta: iced::Vector) {
+        self.offset.x += delta.x;
+        self.offset.y += delta.y;
     }
 }
 
