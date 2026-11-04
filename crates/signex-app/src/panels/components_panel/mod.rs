@@ -172,6 +172,10 @@ pub fn view<'a>(
             &state.components_panel,
             tokens,
             &ctx.canvas_colors,
+            details::symbol_canvas::SheetGrid {
+                pitch_mm: ctx.visible_grid_mm,
+                style: ctx.grid_style,
+            },
             ctx.device_px_per_logical_px,
         ))
         .height(Length::Fill)

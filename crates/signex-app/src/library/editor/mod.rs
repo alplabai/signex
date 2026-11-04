@@ -39,6 +39,8 @@ use signex_library::TemplateViolation;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
 
+use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
+
 use self::kit::{SP, TS};
 use super::messages::{EditorMsg, LibraryMessage};
 use super::state::{ComponentPreviewState, EditorAddress, LibraryState, PreviewTab};
@@ -58,6 +60,7 @@ pub fn view<'a>(
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     canvas_colors: &CanvasColors,
+    grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -69,6 +72,7 @@ pub fn view<'a>(
         library_state,
         tokens,
         canvas_colors,
+        grid,
         device_px_per_logical_px,
         address.clone(),
     );
@@ -259,6 +263,7 @@ fn view_active_tab<'a>(
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     canvas_colors: &CanvasColors,
+    grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -273,6 +278,7 @@ fn view_active_tab<'a>(
             library_state,
             tokens,
             canvas_colors,
+            grid,
             device_px_per_logical_px,
             address,
         ),

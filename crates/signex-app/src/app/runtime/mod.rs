@@ -26,6 +26,7 @@ impl Signex {
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
         self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
         self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
+        self.document_state.panel_ctx.grid_style = self.ui_state.preferences_draft_grid_style;
         self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
         let (visible, visible_grid_mm) = (
             self.ui_state.grid_visible,

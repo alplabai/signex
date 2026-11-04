@@ -594,6 +594,7 @@ impl Signex {
             snap_enabled: self.ui_state.snap_enabled,
             grid_size_mm: self.ui_state.grid_size_mm,
             visible_grid_mm: self.ui_state.visible_grid_mm,
+            grid_style: self.ui_state.preferences_draft_grid_style,
             // Preserve the effective (possibly live-preview) style — a
             // panel_ctx rebuild mid-Preferences must not snap the Symbol
             // Editor grid back to the committed value. Seeded from

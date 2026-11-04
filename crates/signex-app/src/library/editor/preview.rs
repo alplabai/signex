@@ -13,6 +13,8 @@ use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::theme_ext;
 
+use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
+
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 use super::kit::{self, SP, TS};
@@ -29,6 +31,7 @@ pub fn view<'a>(
     library_state: &'a LibraryState,
     tokens: &'a ThemeTokens,
     canvas_colors: &CanvasColors,
+    grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
@@ -41,6 +44,7 @@ pub fn view<'a>(
             library_state,
             tokens,
             canvas_colors,
+            grid,
             device_px_per_logical_px,
             &address,
             read_only,
@@ -181,6 +185,7 @@ fn render_panes<'a>(
     library_state: &LibraryState,
     tokens: &'a ThemeTokens,
     canvas_colors: &CanvasColors,
+    grid: SheetGrid,
     device_px_per_logical_px: f32,
     address: &EditorAddress,
     read_only: bool,
@@ -242,6 +247,7 @@ fn render_panes<'a>(
             crate::panels::components_panel::details::symbol_canvas::symbol_preview(
                 sym.to_lib_symbol(sym.name.clone()),
                 *canvas_colors,
+                grid,
                 PREVIEW_PANE_HEIGHT,
                 device_px_per_logical_px,
             )

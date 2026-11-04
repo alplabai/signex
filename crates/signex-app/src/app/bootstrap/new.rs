@@ -493,6 +493,7 @@ impl Signex {
                     snap_enabled: true,
                     grid_size_mm: 1.27,
                     visible_grid_mm: 1.27,
+                    grid_style: crate::render_config::GridStyle::Dots,
                     // Overwritten from `ui_state.symbol_grid_style` once
                     // the app value is assembled, below.
                     symbol_grid_style: crate::render_config::GridStyle::Dots,
@@ -694,6 +695,7 @@ impl Signex {
         // `render_config` global carried (canvas font/size/style) had no
         // reader in any draw path, so there is nothing left to seed.
         app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
+        app.document_state.panel_ctx.grid_style = app.ui_state.preferences_draft_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a

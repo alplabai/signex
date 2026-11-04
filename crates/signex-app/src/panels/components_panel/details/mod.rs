@@ -116,6 +116,7 @@ pub fn view<'a>(
     panel: &'a ComponentsPanelState,
     tokens: &'a ThemeTokens,
     canvas_colors: &signex_types::theme::CanvasColors,
+    grid: symbol_canvas::SheetGrid,
     device_px_per_logical_px: f32,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
@@ -184,6 +185,7 @@ pub fn view<'a>(
             symbol_canvas::symbol_preview(
                 symbol.clone(),
                 *canvas_colors,
+                grid,
                 PREVIEW_HEIGHT,
                 device_px_per_logical_px,
             )
