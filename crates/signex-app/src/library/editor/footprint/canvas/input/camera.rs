@@ -11,7 +11,7 @@ use iced::{Point, Rectangle};
 
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::{FootprintCanvas, FootprintCanvasState, MAX_SCALE, MIN_SCALE};
+use super::super::{FootprintCanvas, FootprintCanvasState, MIN_SCALE};
 
 impl FootprintCanvas<'_> {
     /// First-draw camera placement.
@@ -103,11 +103,7 @@ impl FootprintCanvas<'_> {
         if !factor.is_finite() || factor == 1.0 {
             return None;
         }
-        let new_scale = (cstate.scale * factor).clamp(MIN_SCALE, MAX_SCALE);
-        let actual_factor = new_scale / cstate.scale;
-        cstate.offset.x = cursor_pos.x - (cursor_pos.x - cstate.offset.x) * actual_factor;
-        cstate.offset.y = cursor_pos.y - (cursor_pos.y - cstate.offset.y) * actual_factor;
-        cstate.scale = new_scale;
+        cstate.zoom_about(cursor_pos, factor, MIN_SCALE);
         self.cache.clear();
         // v0.14.2: same as the panning fix — publish a
         // lightweight cursor-position message + capture so

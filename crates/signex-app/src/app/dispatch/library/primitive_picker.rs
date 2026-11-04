@@ -299,12 +299,12 @@ impl Signex {
             }
             PrimitiveKind::Footprint => {
                 state.row.footprint_ref = Some(primitive_ref);
-                state.footprint = report_read_failure(
+                state.set_footprint(report_read_failure(
                     self.library.set.resolve_footprint(&primitive_ref),
                     ResolvedKind::Footprint,
                     &primitive_ref,
                     "primitive pick",
-                );
+                ));
             }
             PrimitiveKind::Sim => {
                 state.row.sim_ref = Some(primitive_ref);

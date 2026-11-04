@@ -1,0 +1,206 @@
+//! Footprint preview: the footprint editor's own rendering (backdrop, grid,
+//! origin, silk, courtyard, pads with holes) over a read-only
+//! [`PreviewFootprint`], with its own zoom/pan camera. Fitted to the box on
+//! first show. Shared by the Components panel and the Component Preview
+//! dialog. Left-drag pans; Ctrl+wheel zooms (a plain wheel scrolls the
+//! panel around it).
+
+use iced::widget::canvas::{self, Action, Cache, Geometry};
+use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
+
+use crate::canvas::Camera;
+use crate::library::editor::footprint::canvas::{
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
+    draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pads, draw_silk,
+};
+use crate::library::editor::footprint::state::SnapOptions;
+
+/// Lowest zoom of the preview, px per mm: low enough to fit a large part
+/// into the small details box.
+const MIN_PREVIEW_SCALE: f32 = 0.5;
+
+pub struct FootprintPreview<'a> {
+    model: &'a PreviewFootprint,
+    /// Per-wheel-notch zoom factor.
+    zoom_step: f32,
+}
+
+impl<'a> FootprintPreview<'a> {
+    pub fn new(model: &'a PreviewFootprint) -> Self {
+        Self {
+            model,
+            zoom_step: Camera::zoom_step_factor(Camera::ZOOM_STEP_PERCENT_DEFAULT),
+        }
+    }
+}
+
+/// The preview's own camera and geometry cache (widget state).
+#[derive(Default)]
+pub struct PreviewState {
+    camera: FootprintCanvasState,
+    /// The footprint the camera was fitted for.
+    fitted_for: Option<(uuid::Uuid, i64)>,
+    /// Last cursor position while a drag-pan is running.
+    pan_from: Option<Point>,
+    /// Ctrl state from the last modifiers event; the wheel zooms with it.
+    ctrl_held: bool,
+    cache: Cache,
+}
+
+impl PreviewState {
+    /// Current view scale, px per mm.
+    #[cfg(test)]
+    pub fn scale(&self) -> f32 {
+        self.camera.scale
+    }
+
+    /// Current view offset, px.
+    #[cfg(test)]
+    pub fn offset(&self) -> Point {
+        self.camera.offset
+    }
+
+    fn is_fitted_for(&self, model: &PreviewFootprint) -> bool {
+        self.fitted_for == Some(model.key()) && self.camera.did_initial_fit
+    }
+}
+
+/// A camera fitted to the model's bbox in `viewport`, or the origin
+/// centred for an empty footprint.
+pub(crate) fn fitted_camera(model: &PreviewFootprint, viewport: Rectangle) -> FootprintCanvasState {
+    let mut camera = FootprintCanvasState::default();
+    match model.bbox_mm() {
+        Some(bbox) => camera.fit_to_bounds_min(bbox, viewport, MIN_PREVIEW_SCALE),
+        None => camera.offset = Point::new(viewport.width / 2.0, viewport.height / 2.0),
+    }
+    camera.did_initial_fit = true;
+    camera
+}
+
+impl<M> canvas::Program<M> for FootprintPreview<'_> {
+    type State = PreviewState;
+
+    fn update(
+        &self,
+        state: &mut PreviewState,
+        event: &iced::Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<Action<M>> {
+        let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
+        if !state.is_fitted_for(self.model) && size_ok {
+            state.camera = fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()));
+            state.fitted_for = Some(self.model.key());
+            state.pan_from = None;
+            state.cache.clear();
+        }
+        if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
+            state.ctrl_held = mods.control();
+            return None;
+        }
+        let iced::Event::Mouse(event) = event else {
+            return None;
+        };
+        match event {
+            mouse::Event::WheelScrolled { delta } => {
+                // Only Ctrl+wheel zooms; a plain wheel scrolls the panel.
+                if !state.ctrl_held {
+                    return None;
+                }
+                let anchor = cursor.position_in(bounds)?;
+                let lines = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y,
+                    mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
+                };
+                let factor = Camera::zoom_factor_for_scroll(self.zoom_step, lines);
+                if lines == 0.0 || !factor.is_finite() || factor == 1.0 {
+                    return None;
+                }
+                state.camera.zoom_about(anchor, factor, MIN_PREVIEW_SCALE);
+                state.cache.clear();
+                Some(Action::request_redraw().and_capture())
+            }
+            mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                cursor.position_in(bounds)?;
+                state.pan_from = cursor.position();
+                Some(Action::capture())
+            }
+            mouse::Event::CursorMoved { position } => {
+                let last = state.pan_from?;
+                state
+                    .camera
+                    .pan_by(Vector::new(position.x - last.x, position.y - last.y));
+                state.pan_from = Some(*position);
+                state.cache.clear();
+                Some(Action::request_redraw().and_capture())
+            }
+            mouse::Event::ButtonReleased(_) => {
+                state.pan_from.take()?;
+                Some(Action::capture())
+            }
+            mouse::Event::CursorLeft => {
+                state.pan_from = None;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn draw(
+        &self,
+        state: &PreviewState,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        // Until `update` has fitted this footprint, draw the fitted view
+        // without caching it against the stale camera.
+        let fitted = state.is_fitted_for(self.model);
+        if !fitted {
+            state.cache.clear();
+        }
+        let camera = if fitted {
+            FootprintCanvasState::with_view(state.camera.scale, state.camera.offset)
+        } else {
+            fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()))
+        };
+        let snap = SnapOptions::default();
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            let area = Rectangle::new(Point::ORIGIN, bounds.size());
+            let look = BackdropLook {
+                bg: BACKDROP_BG,
+                grid: BACKDROP_GRID,
+                sketch: false,
+                snap: &snap,
+            };
+            draw_backdrop(frame, &camera, area, look);
+            draw_origin(frame, &camera, false);
+            let layers = self.model.layer_input();
+            draw_fab(frame, &camera, self.model.fab_f());
+            draw_silk(frame, &camera, &layers);
+            draw_courtyard(frame, &camera, &layers);
+            draw_pads(frame, &camera, &layers);
+        });
+        vec![geometry]
+    }
+
+    fn mouse_interaction(
+        &self,
+        state: &PreviewState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if state.pan_from.is_some() {
+            mouse::Interaction::Grabbing
+        } else if cursor.is_over(bounds) {
+            mouse::Interaction::Grab
+        } else {
+            mouse::Interaction::None
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "footprint_canvas_tests.rs"]
+mod tests;

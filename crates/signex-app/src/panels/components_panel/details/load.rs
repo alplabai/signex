@@ -9,6 +9,7 @@ use signex_library::primitive::PrimitiveRef;
 use uuid::Uuid;
 
 use super::ComponentDetails;
+use crate::library::editor::footprint::canvas::PreviewFootprint;
 use crate::library::state::ComponentsPanelRowKey;
 
 /// The mounted adapters, shared out of the library set by library id.
@@ -62,7 +63,7 @@ pub fn load_details(
                 .and_then(|a| a.get_footprint(reference.uuid).map_err(|e| e.to_string()))
         };
         match read {
-            Ok(footprint) => Some(footprint),
+            Ok(footprint) => Some(PreviewFootprint::build(&footprint)),
             Err(why) => {
                 notes.push(format!("Footprint not available: {why}"));
                 None
