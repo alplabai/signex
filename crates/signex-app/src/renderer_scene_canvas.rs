@@ -8,7 +8,7 @@ use signex_gfx::primitive::circle::Circle;
 use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::ordered::OrderedItem;
 use signex_gfx::primitive::polygon::GpuPolygon;
-use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
+use signex_gfx::primitive::text::{TextHAlign, TextItem, TextRaster, TextVAlign};
 use signex_gfx::scene::{CPU_SCHEMATIC_DRAW_ORDER, Scene, SceneBucket};
 
 #[derive(Debug, Clone, Copy)]
@@ -158,6 +158,14 @@ impl SceneDrawOptions {
 
     fn radius_px(self, radius_mm: f32) -> f32 {
         (radius_mm * self.scale_px_per_mm).max(MIN_RADIUS_PX)
+    }
+
+    /// How `text` draws at this scale and display (the one rule the GPU
+    /// glyph pipeline reads as well).
+    pub(crate) fn text_raster(self, text: &TextItem) -> TextRaster {
+        signex_gfx::primitive::text::text_raster(
+            self.text_px(text.size_mm, text.family.as_deref()) * self.device_px_per_logical_px,
+        )
     }
 
     #[cfg(test)]
@@ -554,7 +562,68 @@ pub fn draw_rotated_texts<F>(
 ) where
     F: Fn([f32; 2]) -> Point + Copy,
 {
-    draw_text_items(frame, rotated_texts(scene), world_to_screen, options);
+    // Text past the atlas ceiling is drawn here too, as outlines: the GPU
+    // pipeline skips it (`text_raster` is the one rule both read).
+    let cpu_texts = scene
+        .texts
+        .iter()
+        .filter(|text| cpu_draws_beside_gpu(text, options));
+    draw_text_items(frame, cpu_texts, world_to_screen, options);
+}
+
+/// Whether the CPU canvas draws `text` of a GPU-mounted scene: what the
+/// glyph atlas cannot, a rotated item or one past its size ceiling.
+fn cpu_draws_beside_gpu(text: &TextItem, options: SceneDrawOptions) -> bool {
+    !text.is_axis_aligned() || options.text_raster(text) == TextRaster::Outline
+}
+
+/// Text above the glyph-atlas ceiling, drawn as filled glyph outlines so it
+/// keeps its true size at any zoom. Bold and italic are not synthesised.
+fn draw_outline_text(frame: &mut canvas::Frame, text: &TextItem, position: Point, size_px: f32) {
+    use signex_gfx::pipeline::text_measure::OutlineCmd;
+    let family = text.family_or(crate::render_config::CANVAS_FONT_FAMILY);
+    let Some(outlines) = crate::fonts::measure::text_outlines(
+        &text.content,
+        family,
+        size_px,
+        signex_gfx::primitive::text::LINE_HEIGHT_EM,
+    ) else {
+        return;
+    };
+    let pt = |p: [f32; 2]| Point::new(p[0], p[1]);
+    let path = canvas::Path::new(|b| {
+        for cmd in &outlines.cmds {
+            match *cmd {
+                OutlineCmd::Move(p) => b.move_to(pt(p)),
+                OutlineCmd::Line(p) => b.line_to(pt(p)),
+                OutlineCmd::Quad(c, p) => b.quadratic_curve_to(pt(c), pt(p)),
+                OutlineCmd::Cubic(a, c, p) => b.bezier_curve_to(pt(a), pt(c), pt(p)),
+                OutlineCmd::Close => b.close(),
+            }
+        }
+    });
+    let [w, h] = outlines.size_px;
+    let offset = iced::Vector::new(
+        match text.h_align {
+            TextHAlign::Left => 0.0,
+            TextHAlign::Center => -0.5 * w,
+            TextHAlign::Right => -w,
+        },
+        match text.v_align {
+            TextVAlign::Top => 0.0,
+            TextVAlign::Center => -0.5 * h,
+            TextVAlign::Bottom => -h,
+        },
+    );
+    let color = color_from_rgba(text.color);
+    frame.with_save(|inner| {
+        inner.translate(iced::Vector::new(position.x, position.y));
+        if !text.is_axis_aligned() {
+            inner.rotate(iced::Radians(text.rotation));
+        }
+        inner.translate(offset);
+        inner.fill(&path, color);
+    });
 }
 
 fn draw_text_items<'a, F>(
@@ -571,12 +640,15 @@ fn draw_text_items<'a, F>(
         }
 
         let size_px = options.text_px(text.size_mm, text.family.as_deref());
-        if !signex_gfx::primitive::text::is_rasterisable_text_px(
-            size_px * options.device_px_per_logical_px,
-        ) {
-            continue;
-        }
         let position = world_to_screen(text.position);
+        match options.text_raster(text) {
+            TextRaster::Skip => continue,
+            TextRaster::Outline => {
+                draw_outline_text(frame, text, position, size_px);
+                continue;
+            }
+            TextRaster::Bitmap => {}
+        }
         let draw_text = canvas::Text {
             content: text.content.clone(),
             position: Point::ORIGIN,
@@ -1124,5 +1196,42 @@ mod line_geometry_tests {
                 assert_eq!(ring, wire, "ring at {scale} px/mm, {dpr}x");
             }
         }
+    }
+
+    fn item(size_mm: f32, rotation: f32) -> TextItem {
+        TextItem {
+            content: "R1".into(),
+            size_mm,
+            rotation,
+            ..Default::default()
+        }
+    }
+
+    /// #2022 - text past the atlas ceiling is not lost on a GPU-mounted
+    /// sheet: the CPU canvas takes it, and draws it as outlines.
+    #[test]
+    fn oversize_text_goes_to_the_cpu_canvas_beside_the_gpu() {
+        let options = SceneDrawOptions {
+            scale_px_per_mm: 96.0,
+            device_px_per_logical_px: 1.0,
+            text_min_px: 0.0,
+            text_max_px: f32::INFINITY,
+        };
+        assert!(cpu_draws_beside_gpu(&item(40.0, 0.0), options), "oversize");
+        assert!(cpu_draws_beside_gpu(&item(1.27, 1.0), options), "rotated");
+        assert!(!cpu_draws_beside_gpu(&item(1.27, 0.0), options), "ordinary");
+        assert_eq!(options.text_raster(&item(40.0, 0.0)), TextRaster::Outline);
+    }
+
+    #[test]
+    fn oversize_text_has_outlines_to_draw() {
+        crate::fonts::measure::install_hermetic();
+        let outlines =
+            crate::fonts::measure::text_outlines("R1", "Iosevka", 5224.0, 1.2).expect("measurer");
+        assert!(!outlines.cmds.is_empty());
+        assert!(
+            (outlines.size_px[0] - 5224.0).abs() < 1.0,
+            "two 0.5 em glyphs wide"
+        );
     }
 }

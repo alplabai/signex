@@ -394,14 +394,14 @@ impl GlyphonTextPipeline {
         }
 
         let bounds = viewport_bounds(viewport_size_px);
-        let viewport_width = viewport_size_px[0] as f32;
-        let viewport_height = viewport_size_px[1] as f32;
 
         // Rotated items are the CPU canvas layer's to draw — see
         // `TextItem::is_axis_aligned`. Staging them here drew them unrotated.
         for text in atlas_drawable(texts) {
             let font_px = text_size_px(text, scale_px_per_mm, size_policy);
-            if !crate::primitive::text::is_rasterisable_text_px(font_px) {
+            if crate::primitive::text::text_raster(font_px)
+                != crate::primitive::text::TextRaster::Bitmap
+            {
                 continue;
             }
             let line_height_px = (font_px * LINE_HEIGHT_EM).max(1.0);
@@ -414,7 +414,9 @@ impl GlyphonTextPipeline {
             }
             let metrics = cryoglyph::Metrics::new(font_px, line_height_px);
             let attrs = attrs_for_item(text, family);
-            let wrap_px = [viewport_width, viewport_height];
+            // Sheet text is one line per source line: wrapping at the viewport would
+            // break a deep-zoom note on the GPU only.
+            let wrap_px = [super::text_measure::NO_WRAP_PX; 2];
             let key = ShapedKey::new(text, family, font_px, line_height_px, wrap_px);
             let buffer = self.shaped.get_or_shape(font_system, key, |font_system| {
                 shaped_buffer(font_system, text, metrics, &attrs, wrap_px)

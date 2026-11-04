@@ -76,6 +76,24 @@ pub fn shaped_advance_em(text: &str, family: &str) -> Option<f32> {
     Some(em)
 }
 
+/// `text` as filled glyph outlines in `family` at `px` em, or `None` before
+/// the measurer exists. For text above the glyph-atlas ceiling, which the
+/// canvas draws as shapes (#2022); not cached, such text is rare.
+pub fn text_outlines(
+    text: &str,
+    family: &str,
+    px: f32,
+    line_height_em: f32,
+) -> Option<signex_gfx::pipeline::text_measure::TextOutlines> {
+    let measurer = MEASURER.get()?;
+    Some(measurer.lock().unwrap_or_else(|e| e.into_inner()).outlines(
+        text,
+        family,
+        px,
+        line_height_em,
+    ))
+}
+
 /// The bundled faces only, so tests do not depend on the machine's fonts.
 #[cfg(test)]
 pub fn install_hermetic() {

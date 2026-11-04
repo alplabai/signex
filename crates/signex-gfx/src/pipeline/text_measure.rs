@@ -69,11 +69,126 @@ impl TextMeasurer {
             &item,
             metrics,
             &attrs,
-            [1.0e7, 1.0e7],
+            [NO_WRAP_PX, NO_WRAP_PX],
         );
         measure_text_bounds_px(&buffer)[0] / PROBE_PX
     }
 }
+
+/// One drawing command of a glyph outline, in pixels, y down.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum OutlineCmd {
+    Move([f32; 2]),
+    Line([f32; 2]),
+    Quad([f32; 2], [f32; 2]),
+    Cubic([f32; 2], [f32; 2], [f32; 2]),
+    Close,
+}
+
+/// The outlines of one shaped text: every glyph's contours positioned in the
+/// text box (origin at its top-left), and the box size.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextOutlines {
+    pub size_px: [f32; 2],
+    pub cmds: Vec<OutlineCmd>,
+}
+
+/// Collects a `ttf_parser` outline at a glyph's position and scale.
+struct GlyphPath<'a> {
+    cmds: &'a mut Vec<OutlineCmd>,
+    origin: [f32; 2],
+    scale: f32,
+}
+
+impl GlyphPath<'_> {
+    fn at(&self, x: f32, y: f32) -> [f32; 2] {
+        [
+            self.origin[0] + x * self.scale,
+            self.origin[1] - y * self.scale,
+        ]
+    }
+}
+
+impl ttf_parser::OutlineBuilder for GlyphPath<'_> {
+    fn move_to(&mut self, x: f32, y: f32) {
+        let p = self.at(x, y);
+        self.cmds.push(OutlineCmd::Move(p));
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        let p = self.at(x, y);
+        self.cmds.push(OutlineCmd::Line(p));
+    }
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        let (c, p) = (self.at(x1, y1), self.at(x, y));
+        self.cmds.push(OutlineCmd::Quad(c, p));
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        let (a, b, p) = (self.at(x1, y1), self.at(x2, y2), self.at(x, y));
+        self.cmds.push(OutlineCmd::Cubic(a, b, p));
+    }
+    fn close(&mut self) {
+        self.cmds.push(OutlineCmd::Close);
+    }
+}
+
+impl TextMeasurer {
+    /// `text` shaped in `family` at `px` em with `line_height_em` lines, as
+    /// filled glyph outlines. For text too large for a glyph atlas; single
+    /// line per source line, no wrapping.
+    pub fn outlines(
+        &mut self,
+        text: &str,
+        family: &str,
+        px: f32,
+        line_height_em: f32,
+    ) -> TextOutlines {
+        let item = TextItem {
+            content: text.to_string(),
+            family: Some(family.into()),
+            ..Default::default()
+        };
+        let attrs = attrs_for_item(&item, family);
+        let metrics = cryoglyph::Metrics::new(px, px * line_height_em);
+        let buffer = shaped_buffer(
+            &mut self.font_system,
+            &item,
+            metrics,
+            &attrs,
+            [NO_WRAP_PX, NO_WRAP_PX],
+        );
+        let size_px = measure_text_bounds_px(&buffer);
+        let mut cmds = Vec::new();
+        for run in buffer.layout_runs() {
+            for glyph in run.glyphs {
+                let origin = [
+                    glyph.x + glyph.x_offset * glyph.font_size,
+                    run.line_y + glyph.y - glyph.y_offset * glyph.font_size,
+                ];
+                self.font_system
+                    .db()
+                    .with_face_data(glyph.font_id, |data, index| {
+                        let Ok(face) = ttf_parser::Face::parse(data, index) else {
+                            return;
+                        };
+                        let upem = f32::from(face.units_per_em());
+                        if upem <= 0.0 {
+                            return;
+                        }
+                        let mut path = GlyphPath {
+                            cmds: &mut cmds,
+                            origin,
+                            scale: glyph.font_size / upem,
+                        };
+                        face.outline_glyph(ttf_parser::GlyphId(glyph.glyph_id), &mut path);
+                    });
+            }
+        }
+        TextOutlines { size_px, cmds }
+    }
+}
+
+/// A wrap width no text reaches: sheet text is never wrapped.
+pub(crate) const NO_WRAP_PX: f32 = 1.0e7;
 
 /// `sCapHeight / unitsPerEm`, falling back to the bounding box of `H`.
 fn cap_height_ratio(face: &ttf_parser::Face<'_>) -> Option<f32> {
@@ -107,6 +222,27 @@ mod tests {
         let narrow = m.advance_em("iiiiiiii", "Iosevka");
         let wide = m.advance_em("WWWWWWWW", "Iosevka");
         assert!((narrow - wide).abs() < 1e-3, "{narrow} vs {wide}");
+    }
+
+    /// Oversize text is drawn from outlines: an `H` has contours inside its
+    /// text box, scaled with the em.
+    #[test]
+    fn outlines_fill_the_text_box_and_scale_with_the_em() {
+        let mut m = measurer();
+        let small = m.outlines("H", "Iosevka", 100.0, 1.2);
+        let large = m.outlines("H", "Iosevka", 5000.0, 1.2);
+        assert!(!small.cmds.is_empty() && small.cmds.contains(&OutlineCmd::Close));
+        assert!((large.size_px[0] / small.size_px[0] - 50.0).abs() < 0.5);
+        let max_x = |o: &TextOutlines| {
+            o.cmds
+                .iter()
+                .filter_map(|c| match c {
+                    OutlineCmd::Move(p) | OutlineCmd::Line(p) => Some(p[0]),
+                    _ => None,
+                })
+                .fold(0.0_f32, f32::max)
+        };
+        assert!(max_x(&large) > 0.0 && max_x(&large) <= large.size_px[0] + 1.0);
     }
 
     #[test]

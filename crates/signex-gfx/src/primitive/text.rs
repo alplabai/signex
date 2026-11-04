@@ -43,19 +43,40 @@ impl TextSizePolicy {
 /// seen and a zero-size glyph run is not worth shaping.
 pub const MIN_VISIBLE_TEXT_DEVICE_PX: f32 = 0.5;
 
-// shortcut: fixed ceiling, not read from the device. A glyph this tall cannot
-// fit the glyph atlas (8192 px textures) with its neighbours and a file-supplied
-// size must not drive an unbounded raster; read `max_texture_dimension_2d` if
-// a real sheet ever needs more (a 100 mm text at the 48 px/mm zoom limit is
-// still under it on a 1x display).
+// shortcut: fixed ceiling, not read from the device. A bitmap glyph this tall
+// does not fit the glyph atlas (8192 px textures) with its neighbours; text
+// above it is drawn as vector outlines instead, so it keeps its true size.
+// Reachable: 100 mm text at the 48 px/mm zoom limit is about 6500 px.
 pub const MAX_RASTER_TEXT_DEVICE_PX: f32 = 4096.0;
 
-/// Whether a text of em `device_px` can and should be rasterised: finite,
-/// visible, and within the raster ceiling. The one guard of the CPU canvas
-/// and the GPU glyph pipeline; it culls, it never resizes.
-pub fn is_rasterisable_text_px(device_px: f32) -> bool {
-    device_px.is_finite()
-        && (MIN_VISIBLE_TEXT_DEVICE_PX..=MAX_RASTER_TEXT_DEVICE_PX).contains(&device_px)
+// shortcut: sanity cap on outline text, far outside any reachable size (a
+// page is at most a few metres, 48 px/mm gives about 5e5 px). A file-supplied
+// size past it is hostile data, not drawing, and is skipped.
+pub const MAX_OUTLINE_TEXT_DEVICE_PX: f32 = 1.0e6;
+
+/// How a text of a given em size is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextRaster {
+    /// Not drawn: non-finite, invisibly small, or absurdly large.
+    Skip,
+    /// Glyph bitmaps from the atlas (GPU) or the canvas text path (CPU).
+    Bitmap,
+    /// Too large for the atlas: filled vector outlines on the CPU canvas.
+    Outline,
+}
+
+/// The one rule of the CPU canvas and the GPU glyph pipeline for an em of
+/// `device_px`; it never resizes text, it only picks how (or whether) to draw.
+pub fn text_raster(device_px: f32) -> TextRaster {
+    if !device_px.is_finite()
+        || !(MIN_VISIBLE_TEXT_DEVICE_PX..=MAX_OUTLINE_TEXT_DEVICE_PX).contains(&device_px)
+    {
+        TextRaster::Skip
+    } else if device_px > MAX_RASTER_TEXT_DEVICE_PX {
+        TextRaster::Outline
+    } else {
+        TextRaster::Bitmap
+    }
 }
 
 /// Rendered em size in logical pixels for `size_mm` at `scale_px_per_mm`.
@@ -193,13 +214,22 @@ mod size_tests {
     }
 
     #[test]
-    fn the_raster_guard_culls_only_unrasterisable_sizes() {
-        assert!(is_rasterisable_text_px(1.8));
-        assert!(is_rasterisable_text_px(MAX_RASTER_TEXT_DEVICE_PX));
-        assert!(!is_rasterisable_text_px(f32::NAN));
-        assert!(!is_rasterisable_text_px(f32::INFINITY));
-        assert!(!is_rasterisable_text_px(0.1));
-        assert!(!is_rasterisable_text_px(1.0e9));
+    fn the_raster_rule_skips_only_unreachable_sizes() {
+        assert_eq!(text_raster(1.8), TextRaster::Bitmap);
+        assert_eq!(text_raster(MAX_RASTER_TEXT_DEVICE_PX), TextRaster::Bitmap);
+        assert_eq!(text_raster(5224.0), TextRaster::Outline);
+        assert_eq!(text_raster(f32::NAN), TextRaster::Skip);
+        assert_eq!(text_raster(f32::INFINITY), TextRaster::Skip);
+        assert_eq!(text_raster(0.1), TextRaster::Skip);
+        assert_eq!(text_raster(1.0e9), TextRaster::Skip);
+    }
+
+    /// 40 mm text at 96 px/mm is about 5224 px: past the atlas, still drawn.
+    #[test]
+    fn text_past_the_atlas_ceiling_is_drawn_as_an_outline_not_culled() {
+        let px = text_px_in(40.0, 96.0, TextSizePolicy::UNCLAMPED, None);
+        assert!((px - 5224.0).abs() < 5.0, "{px}");
+        assert_eq!(text_raster(px), TextRaster::Outline);
     }
 
     #[test]
@@ -207,13 +237,14 @@ mod size_tests {
         let policy = TextSizePolicy::UNCLAMPED;
         for size_mm in [f32::NAN, f32::INFINITY, 1.0e30] {
             let px = text_px_in(size_mm, 48.0, policy, None);
-            assert!(!is_rasterisable_text_px(px), "{size_mm} -> {px}");
+            assert_eq!(text_raster(px), TextRaster::Skip, "{size_mm} -> {px}");
         }
         // 1.27 mm text from fit-all to the zoom limit is always drawn.
         for scale in [0.75_f32, 1.75, 3.0, 48.0] {
-            assert!(is_rasterisable_text_px(text_px_in(
-                1.27, scale, policy, None
-            )));
+            assert_eq!(
+                text_raster(text_px_in(1.27, scale, policy, None)),
+                TextRaster::Bitmap
+            );
         }
     }
 }
