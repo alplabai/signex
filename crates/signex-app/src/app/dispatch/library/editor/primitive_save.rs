@@ -214,6 +214,7 @@ impl Signex {
         let turn = mounted_library
             .as_deref()
             .map(|library| self.library.writes.turn(library));
+        let others = self.other_library_turns(mounted_library.as_deref(), mode);
         let write = PrimitiveWrite {
             path: path.to_path_buf(),
             mounted_alias,
@@ -222,6 +223,7 @@ impl Signex {
             now,
             snapshot,
             turn,
+            others,
         };
         let guard = self
             .document_state
@@ -419,10 +421,16 @@ impl Signex {
             PostSaveRefresh::Background(tasks) => {
                 tasks.push(self.refresh_primitive_cache_for(path));
                 tasks.push(self.refresh_editors_after_cascade(path, &written.cascaded_rows));
+                for (root, rows) in &written.cascaded_elsewhere {
+                    tasks.push(self.refresh_editors_in_library(root, rows));
+                }
             }
             PostSaveRefresh::Inline => {
                 self.refresh_primitive_cache_blocking(path);
                 self.refresh_editors_after_cascade_blocking(path, &written.cascaded_rows);
+                for (root, rows) in &written.cascaded_elsewhere {
+                    self.refresh_editors_in_library_blocking(root, rows);
+                }
             }
         }
         // The editor the snapshot came from is gone: closed, discarded and
