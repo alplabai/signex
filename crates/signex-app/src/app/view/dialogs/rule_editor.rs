@@ -11,6 +11,17 @@ use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 
 use signex_erc::{PinAxis, RuleKind, Severity};
 
+use crate::styles::{TypeScale, chrome_px};
+
+const TS: TypeScale = TypeScale::DEFAULT;
+
+/// Pin-matrix geometry. The cell is wide enough for the longest axis label
+/// ("PowerOut") at caption size, and every length follows the base size.
+const CELL_W: f32 = chrome_px(52.0);
+const CELL_H: f32 = chrome_px(30.0);
+const COL_HEADER_H: f32 = chrome_px(24.0);
+const ROW_HEADER_W: f32 = chrome_px(80.0);
+
 /// What the editor shows and how a click reaches the caller.
 pub(crate) struct RuleEditor<'a, M> {
     pub tokens: &'a signex_types::theme::ThemeTokens,
@@ -43,11 +54,11 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     let mut rule_rows: Column<Element<'static, M>> = column![
         row![
             text("Rule")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(3)),
             text("Severity")
-                .size(10)
+                .size(TS.caption)
                 .color(text_muted)
                 .width(Length::FillPortion(2)),
         ]
@@ -67,7 +78,7 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
         rule_rows = rule_rows.push(
             row![
                 text(label)
-                    .size(11)
+                    .size(TS.body)
                     .color(text_c)
                     .width(Length::FillPortion(3)),
                 severity_segmented(*rule, current, border_c, text_muted, editable, on_severity),
@@ -88,8 +99,10 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
         ..container::Style::default()
     };
     let rules_pane = column![
-        text("Severity per rule").size(11).color(text_c),
-        text("Click a cell to change.").size(10).color(text_muted),
+        text("Severity per rule").size(TS.body).color(text_c),
+        text("Click a cell to change.")
+            .size(TS.caption)
+            .color(text_muted),
         Space::new().height(8),
         container(rule_rows)
             .padding(4.0)
@@ -100,9 +113,9 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
     .width(Length::FillPortion(3));
 
     let matrix_pane = column![
-        text("Pin Connection Matrix").size(11).color(text_c),
+        text("Pin Connection Matrix").size(TS.body).color(text_c),
         text("Click a cell to cycle severity.")
-            .size(10)
+            .size(TS.caption)
             .color(text_muted),
         Space::new().height(8),
         container(pin_matrix_view(tokens, pin_matrix, editable, on_pin_cell))
@@ -138,7 +151,7 @@ fn severity_segmented<M: Clone + 'static>(
             Color::from_rgba(1.0, 1.0, 1.0, 0.03)
         };
         let fg = if selected { Color::WHITE } else { text_muted };
-        button(container(text(label.to_string()).size(10).color(fg)).padding([3.0, 8.0]))
+        button(container(text(label.to_string()).size(TS.caption).color(fg)).padding([3.0, 8.0]))
             .on_press_maybe(editable.then(|| on_severity(rule, value)))
             .style(move |_: &Theme, _| button::Style {
                 background: Some(Background::Color(bg)),
@@ -201,9 +214,9 @@ fn pin_matrix_view<M: Clone + 'static>(
             Severity::Off => (Color::from_rgba(0.25, 0.70, 0.30, 0.35), "\u{00B7}"),
         };
         button(
-            container(text(ch.to_string()).size(12).color(text_c))
-                .width(40)
-                .height(30)
+            container(text(ch.to_string()).size(TS.label).color(text_c))
+                .width(CELL_W)
+                .height(CELL_H)
                 .align_x(iced::alignment::Horizontal::Center)
                 .align_y(iced::alignment::Vertical::Center),
         )
@@ -224,25 +237,25 @@ fn pin_matrix_view<M: Clone + 'static>(
     };
 
     let header_label = |label: &str| -> Element<'static, M> {
-        container(text(label.to_string()).size(10).color(text_muted))
-            .width(80)
-            .height(30)
+        container(text(label.to_string()).size(TS.caption).color(text_muted))
+            .width(ROW_HEADER_W)
+            .height(CELL_H)
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Center)
             .padding([0.0, 6.0])
             .boxed()
     };
     let col_label = |label: &str| -> Element<'static, M> {
-        container(text(label.to_string()).size(10).color(text_muted))
-            .width(40)
-            .height(24)
+        container(text(label.to_string()).size(TS.caption).color(text_muted))
+            .width(CELL_W)
+            .height(COL_HEADER_H)
             .align_x(iced::alignment::Horizontal::Center)
             .align_y(iced::alignment::Vertical::Center)
             .boxed()
     };
 
     let mut header: iced::widget::Row<Element<'static, M>> =
-        row![container(Space::new().width(80)).width(80)].spacing(0);
+        row![container(Space::new().width(ROW_HEADER_W)).width(ROW_HEADER_W)].spacing(0);
     for axis in PinAxis::ALL {
         header = header.push(col_label(axis.label()));
     }
@@ -262,4 +275,20 @@ fn pin_matrix_view<M: Clone + 'static>(
     }
 
     container(body).boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The matrix is sized in proportion to its text: a cell holds the
+    /// longest axis label ("PowerOut", about 4.8 caption heights) and the
+    /// lengths move with the type scale, not with a fixed pixel count.
+    #[test]
+    fn matrix_lengths_are_proportional_to_the_type_scale() {
+        const { assert!(CELL_W >= 4.8 * TS.caption) };
+        assert!((CELL_W / TS.body - 52.0 / 11.0).abs() < 1e-4);
+        assert!((COL_HEADER_H / TS.body - 24.0 / 11.0).abs() < 1e-4);
+        assert!((ROW_HEADER_W / TS.body - 80.0 / 11.0).abs() < 1e-4);
+    }
 }

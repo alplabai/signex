@@ -64,7 +64,7 @@ fn build<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId, windowed: bool) -> Elem
 
     let body = container(
         column![
-            text("Signex").size(20).color(text_primary),
+            text("Signex").size(TS.display).color(text_primary),
             text(format!("Version {VERSION}"))
                 .size(TS.label)
                 .color(text_primary),

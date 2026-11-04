@@ -214,3 +214,37 @@ fn above_drawings_keep_file_order_among_themselves_on_gpu_and_cpu() {
         );
     }
 }
+
+/// #1993 - the backdrop's grid dots show over the paper. `Frame::with_clip`
+/// pasted the grid ahead of the paper fill, so the opaque paper hid every dot.
+/// The adapter-free twin is `grid_order_tests::the_grid_is_painted_after_the_paper_fill`.
+#[test]
+fn the_backdrop_shows_the_grid_over_the_paper() {
+    let mut gpu = gpu();
+    let slot = slot_with(&SchematicSheet::default());
+    let overrides = Default::default();
+    let filters = Default::default();
+    let mut prefs = test_prefs(&overrides, &filters);
+    prefs.grid_visible = true;
+    let backdrop = render(
+        &mut gpu,
+        fill(gpu_mount::SchematicBackdrop::new(&slot, prefs)),
+    );
+
+    // The sheet starts at OFFSET, so pixels from 40 on are well on the paper.
+    let colors = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let paper = to_u8(colors.paper);
+    let mut off_paper = 0;
+    for y in 40..HEIGHT - 20 {
+        for x in 40..WIDTH - 20 {
+            let got = backdrop.px(x, y);
+            if (0..3).any(|c| got[c].abs_diff(paper[c]) > 3) {
+                off_paper += 1;
+            }
+        }
+    }
+    assert!(
+        off_paper > 50,
+        "only {off_paper} pixels differ from the paper: no grid is visible"
+    );
+}

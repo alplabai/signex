@@ -36,7 +36,7 @@ pub(super) fn pad_table_header<'a>(
         let portion = portions.get(i).copied().unwrap_or(1);
         row = row.push(
             text(label.to_string())
-                .size(9)
+                .size(TS.caption)
                 .color(muted)
                 .width(Length::FillPortion(portion))
                 .boxed(),

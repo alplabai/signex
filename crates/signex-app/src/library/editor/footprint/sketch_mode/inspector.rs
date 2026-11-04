@@ -200,12 +200,12 @@ fn view_warnings<'a>(
         col = col.push(text("(none)").size(TS.caption).color(muted).boxed());
     } else {
         for w in editor.state.solve_warnings.iter().take(8) {
-            col = col.push(text(w).size(9.0).color(muted).boxed());
+            col = col.push(text(w).size(TS.caption).color(muted).boxed());
         }
         if editor.state.solve_warnings.len() > 8 {
             col = col.push(
                 text(format!("… +{} more", editor.state.solve_warnings.len() - 8))
-                    .size(9.0)
+                    .size(TS.caption)
                     .color(muted)
                     .boxed(),
             );
@@ -291,7 +291,7 @@ fn view_role<'a>(
     if !is_point {
         col = col.push(
             text("Pad role applies to Points only")
-                .size(9.0)
+                .size(TS.caption)
                 .color(muted)
                 .boxed(),
         );

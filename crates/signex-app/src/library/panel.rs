@@ -34,7 +34,7 @@ use super::state::LibraryState;
 /// Default type / spacing scales; equal to the old literals at the default size.
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-const LIB_PANEL_TEXT_SIZE: f32 = 11.0;
+const LIB_PANEL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 const LIB_PANEL_ROW_PADDING: u16 = 4;
 
 /// Render the Library left-dock panel.

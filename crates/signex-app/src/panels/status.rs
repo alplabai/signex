@@ -140,7 +140,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         if !ctx.erc_results_stale {
             col = col.push(
                 text("Run ERC to populate project-wide diagnostics")
-                    .size(9)
+                    .size(TS.caption)
                     .color(theme_ext::text_secondary(&ctx.tokens))
                     .boxed(),
             );
@@ -199,7 +199,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 .style(crate::styles::menu_item(&ctx.tokens)),
             Space::new().width(4).height(Length::Shrink),
             text(focus_label)
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens)),
             Space::new().width(4).height(Length::Shrink),
             iced::widget::button(text(">").size(TS.body))
@@ -245,19 +245,19 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             row![
                 iced::widget::button(
                     row![
-                        text(sev_label).size(9).color(sev_color),
+                        text(sev_label).size(TS.caption).color(sev_color),
                         Space::new().width(4).height(Length::Shrink),
-                        text(v.rule_label.clone()).size(9).color(label_c),
+                        text(v.rule_label.clone()).size(TS.caption).color(label_c),
                         Space::new().width(6).height(Length::Shrink),
-                        text(v.message.clone()).size(9).color(detail_c),
+                        text(v.message.clone()).size(TS.caption).color(detail_c),
                         Space::new().width(6).height(Length::Shrink),
                         iced::widget::tooltip(
                             text(location_label(&v.sheet_name, v.world_x, v.world_y))
-                                .size(9)
+                                .size(TS.caption)
                                 .wrapping(iced::widget::text::Wrapping::None)
                                 .color(detail_c),
                             iced::widget::container(
-                                text(v.sheet_path.display().to_string()).size(9),
+                                text(v.sheet_path.display().to_string()).size(TS.caption),
                             )
                             .padding([SP.xs, 6.0]),
                             iced::widget::tooltip::Position::Top,
@@ -283,7 +283,7 @@ pub fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 Space::new().width(6).height(Length::Shrink),
                 iced::widget::button(
                     text(quick_fix_label)
-                        .size(9)
+                        .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
@@ -329,7 +329,7 @@ fn waive_chip<'a>(
         Space::new().width(6).height(Length::Shrink),
         iced::widget::button(
             text("Waive net")
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::text_primary(tokens))
         )
         .padding([SP.xs, SP.m])
@@ -367,12 +367,12 @@ fn waived_section<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         col = col.push(
             row![
                 text(format!("{}  net {}  ({note})", w.rule_id, w.net))
-                    .size(9)
+                    .size(TS.caption)
                     .color(muted),
                 Space::new().width(Length::Fill).height(Length::Shrink),
                 iced::widget::button(
                     text("Restore")
-                        .size(9)
+                        .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])
@@ -418,7 +418,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         );
         col = col.push(
             text("Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output")
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::text_secondary(&ctx.tokens))
                 .boxed(),
         );

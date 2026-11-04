@@ -469,7 +469,7 @@ fn keymap_recorder_control<'a>(
         column![
             row![
                 column![
-                    text("Edit Shortcut").size(15).style(iced::widget::text::base),
+                    text("Edit Shortcut").size(TS.heading).style(iced::widget::text::base),
                     text(recorder.command_label.clone())
                         .size(TS.body)
                         .style(iced::widget::text::secondary),

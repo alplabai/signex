@@ -81,14 +81,18 @@ pub(super) fn waive_chip<'a>(
     };
     row![
         Space::new().width(6).height(Length::Shrink),
-        iced::widget::button(text("Waive").size(9).color(theme_ext::text_primary(tokens)))
-            .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
-                key,
-                message: entry.message.clone(),
-                sheet: entry.sheet_path.clone(),
-            }))
-            .style(crate::styles::menu_item(tokens)),
+        iced::widget::button(
+            text("Waive")
+                .size(TS.caption)
+                .color(theme_ext::text_primary(tokens))
+        )
+        .padding([SP.xs, SP.m])
+        .on_press(PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
+            key,
+            message: entry.message.clone(),
+            sheet: entry.sheet_path.clone(),
+        }))
+        .style(crate::styles::menu_item(tokens)),
     ]
     .boxed()
 }
@@ -114,7 +118,7 @@ pub(super) fn waive_editor<'a>(
     let button = |label: &'a str, msg: ErcWaiverMsg| {
         iced::widget::button(
             text(label)
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::text_primary(&ctx.tokens)),
         )
         .padding([SP.xs, SP.m])
@@ -144,7 +148,7 @@ pub(super) fn waive_editor<'a>(
     if let Some(error) = &draft.error {
         col = col.push(
             text(error.clone())
-                .size(9)
+                .size(TS.caption)
                 .color(theme_ext::error_color(&ctx.tokens))
                 .boxed(),
         );
@@ -198,10 +202,13 @@ pub(super) fn violation_waivers_section<'a>(ctx: &'a PanelContext) -> Element<'a
         );
         col = col.push(
             row![
-                text(detail).size(9).color(color).width(Length::Fill),
+                text(detail)
+                    .size(TS.caption)
+                    .color(color)
+                    .width(Length::Fill),
                 iced::widget::button(
                     text("Restore")
-                        .size(9)
+                        .size(TS.caption)
                         .color(theme_ext::text_primary(&ctx.tokens)),
                 )
                 .padding([SP.xs, SP.m])

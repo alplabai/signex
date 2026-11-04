@@ -499,7 +499,7 @@ pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_featur
     ));
 
     col = col.push(
-        container(text("Testpoint").size(9).color(muted))
+        container(text("Testpoint").size(TS.caption).color(muted))
             .padding([SP.m, SP.m])
             .width(Length::Fill)
             .boxed(),

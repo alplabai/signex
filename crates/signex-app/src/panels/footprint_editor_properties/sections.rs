@@ -477,7 +477,7 @@ pub(super) fn view_sections<'a>(
                     col = col.push(
                         container(
                             text(format!("… +{} more", conflicts.len() - conflicts::MAX_ROWS))
-                                .size(9)
+                                .size(TS.caption)
                                 .color(muted),
                         )
                         .padding([SP.xs, SP.m])
@@ -510,7 +510,7 @@ pub(super) fn view_sections<'a>(
             } else {
                 for w in fp.solve_warnings.iter().take(8) {
                     col = col.push(
-                        container(text(w).size(9).color(muted))
+                        container(text(w).size(TS.caption).color(muted))
                             .padding([SP.xs, SP.m])
                             .width(Length::Fill)
                             .boxed(),
@@ -520,7 +520,7 @@ pub(super) fn view_sections<'a>(
                     col = col.push(
                         container(
                             text(format!("… +{} more", fp.solve_warnings.len() - 8))
-                                .size(9)
+                                .size(TS.caption)
                                 .color(muted),
                         )
                         .padding([SP.xs, SP.m])

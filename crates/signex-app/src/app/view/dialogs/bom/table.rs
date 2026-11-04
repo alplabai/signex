@@ -334,7 +334,7 @@ impl Signex {
             // fonts, and the "…" suffix never showed when our
             // estimate was too wide. iced 0.14 lacks a built-in
             // ellipsis primitive; clipping is the honest choice.
-            const CELL_TEXT_SIZE: f32 = 11.0;
+            const CELL_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
             let cell = |s: String, width: Length, _truncate_at: f32| -> Element<'_, Message> {
                 container(
                     text(s)

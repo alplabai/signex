@@ -261,7 +261,8 @@ pub fn view<'a>(
 /// keyed off it start on a pixel boundary. It is derived from the
 /// default type scale and spacing, the same constants the strip's text and
 /// padding use; the app has no runtime UI scale for it to follow.
-pub const TAB_STRIP_HEIGHT: f32 = CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT;
+pub const TAB_STRIP_HEIGHT: f32 =
+    (CLOSE_HIT_SIZE + 2.0 * SP.s + STRIP_TOP_PAD + BASELINE_HEIGHT).round();
 
 /// Padding above the pills, and the baseline line below them.
 const STRIP_TOP_PAD: f32 = 2.0;

@@ -527,7 +527,7 @@ mod layout_tests {
         let texts = lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0));
 
         let label = find(&texts, RESET).bounds;
-        let one_line = natural::<()>(iced::widget::text(RESET).size(11).boxed(), RESET);
+        let one_line = natural::<()>(iced::widget::text(RESET).size(TS.body).boxed(), RESET);
         assert!(
             label.height <= one_line.height + 0.5,
             "the button label wraps: {label:?}, one line is {one_line:?}"

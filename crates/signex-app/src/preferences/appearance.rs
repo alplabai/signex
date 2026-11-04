@@ -235,7 +235,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::checkbox(draft_pcb_gpu_render)
-                .size(16)
+                .size(TS.heading)
                 .on_toggle(PrefMsg::DraftPcbGpuRender),
         ]
         .align_y(iced::Alignment::Center)

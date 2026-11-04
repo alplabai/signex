@@ -133,20 +133,22 @@ fn derived_uuid(name: &str) -> Uuid {
 }
 
 /// The name of an object that has none.
-fn no_name<T>(_: &T) -> String {
+pub(in crate::format) fn no_name<T>(_: &T) -> String {
     String::new()
 }
 
 /// An [`Access`] for objects whose id is a plain `uuid` field.
 macro_rules! by_field {
     ($name:expr) => {
-        Access {
+        $crate::format::uuid_repair::Access {
             uuid: |x| x.uuid,
             set_uuid: |x, u| x.uuid = u,
             name: $name,
         }
     };
 }
+
+pub(in crate::format) use by_field;
 
 /// Make every object uuid on `sheet` unique, returning what was repaired
 /// (empty when nothing repeated).

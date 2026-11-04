@@ -529,15 +529,19 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         if group != last_group {
             last_group = group;
             col = col.push(
-                container(text(group.to_uppercase()).size(9).style(text_muted))
-                    .padding(iced::Padding {
-                        top: 10.0,
-                        right: 12.0,
-                        bottom: 4.0,
-                        left: 12.0,
-                    })
-                    .width(Length::Fill)
-                    .boxed(),
+                container(
+                    text(group.to_uppercase())
+                        .size(TS.caption)
+                        .style(text_muted),
+                )
+                .padding(iced::Padding {
+                    top: 10.0,
+                    right: 12.0,
+                    bottom: 4.0,
+                    left: 12.0,
+                })
+                .width(Length::Fill)
+                .boxed(),
             );
         }
         col = col.push(nav_item(item, active));

@@ -459,7 +459,7 @@ fn drawing_stroke_color_row<'a>(
                 active: bool,
                 fill_color: Color|
      -> Element<'a, PanelMsg> {
-        button(text(label).size(9))
+        button(text(label).size(TS.caption))
             .padding([3, 6])
             .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
             .style(move |_: &Theme, _| iced::widget::button::Style {

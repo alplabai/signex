@@ -218,10 +218,14 @@ pub(super) fn view_selection<'a>(
                 );
                 if !fp.selected_sketch_is_point {
                     col = col.push(
-                        container(text("Pad role applies to Points only").size(9).color(muted))
-                            .padding([0.0, SP.m])
-                            .width(Length::Fill)
-                            .boxed(),
+                        container(
+                            text("Pad role applies to Points only")
+                                .size(TS.caption)
+                                .color(muted),
+                        )
+                        .padding([0.0, SP.m])
+                        .width(Length::Fill)
+                        .boxed(),
                     );
                 }
 
@@ -284,7 +288,7 @@ pub(super) fn view_selection<'a>(
                         col = col.push(
                             container(
                                 text("From sketch: edit in Sketch mode")
-                                    .size(9)
+                                    .size(TS.caption)
                                     .color(muted),
                             )
                             .padding([SP.s, SP.m])

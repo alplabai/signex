@@ -432,6 +432,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::SketchMoveLine { .. }
         | FootprintEditorMsg::SketchResizeRoundPad { .. } => sketch::entities::apply(editor, msg),
         FootprintEditorMsg::SketchSolved { .. } => sketch::solved::apply(editor, msg),
+        FootprintEditorMsg::RedundancyChecked { .. } => sketch::redundancy::apply(editor, msg),
         FootprintEditorMsg::SketchSetRole { .. }
         | FootprintEditorMsg::SketchMakePadFromProfile
         | FootprintEditorMsg::SketchUnlinkCornerRadius { .. } => {
@@ -575,6 +576,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // #1047 — applying a finished drag solve records no undo step of
         // its own: the drag ticks that moved the sketch already did.
         | SketchSolved { .. }
+        // #1685 — the redundancy findings of a solve that already baked.
+        | RedundancyChecked { .. }
         | ToggleSelectionFilter(_)
         // Task 6 — filter preset apply/toggle/capture are UI-only
         // (they mutate `selection_filter` or the on-disk preset

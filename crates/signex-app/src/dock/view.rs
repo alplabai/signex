@@ -425,7 +425,7 @@ impl DockArea {
 }
 
 /// Font size for collapsed rail labels — every other dimension derives from this.
-const RAIL_FONT_SIZE: f32 = 12.0;
+const RAIL_FONT_SIZE: f32 = TS.label;
 /// Canvas width = text line-height after 90° rotation ≈ 1.5 × font size.
 const RAIL_CANVAS_W: f32 = RAIL_FONT_SIZE * 1.5;
 

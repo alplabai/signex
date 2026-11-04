@@ -253,14 +253,14 @@ fn body_toolbar<'a>(
         msg: PrimitiveEdit::Symbol(msg),
     };
     let button_for = |label: &'static str, active: bool, msg: SymbolEditorMsg| {
-        button(text(label).size(11).color(text_c))
+        button(text(label).size(TS.body).color(text_c))
             .padding([4, 10])
             .on_press(send(msg))
             .style(symbol_tool_button_style(active, border))
     };
     let view = editor.view();
     row![
-        text("Body").size(11).color(text_c),
+        text("Body").size(TS.body).color(text_c),
         button_for(
             "Normal",
             view.body == BodyStyle::Normal,

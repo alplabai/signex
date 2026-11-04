@@ -6,6 +6,8 @@ use super::super::*;
 use signex_types::schematic::BodyStyle;
 use std::fmt;
 
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
+
 /// Panel value: the symbol shows the normal body.
 pub(crate) const BODY_NORMAL: &str = "Normal";
 /// Panel value: the alternate body is stored and the library symbol has it.
@@ -87,7 +89,7 @@ pub(super) fn push_body_row<'a>(
             iced::widget::text::<iced::Theme>(
                 "This library symbol has no alternate (De Morgan) body",
             )
-            .size(11),
+            .size(TS.body),
             iced::widget::tooltip::Position::Bottom,
         ))),
         _ => c,

@@ -1,5 +1,6 @@
 //! Grid renderer — dot grid with configurable spacing, visibility, snap.
 
+use iced::advanced::graphics::geometry::Renderer as GeometryRenderer;
 use iced::widget::canvas;
 use iced::{Color, Point};
 
@@ -45,6 +46,11 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
     None
 }
 
+/// Fixed widths of the grid lines and crosses, in logical px (not a zoom law). A line or arm
+/// is kept off the paper edge by half of its width (#1940).
+const MINOR_GRID_LINE_PX: f32 = 0.6;
+const MAJOR_GRID_LINE_PX: f32 = 0.5;
+
 /// Draw the grid dots on a canvas frame.
 ///
 /// The grid is **zoom-adaptive**: the user's `grid_mm` is the *base* spacing,
@@ -61,8 +67,8 @@ pub fn adaptive_pitch_mm(grid_mm: f32, scale: f32, min_px: f32) -> Option<f32> {
     clippy::too_many_arguments,
     reason = "9 arguments: camera + grid metrics + page bounds + colour + glyph style + device scale, all per-frame draw inputs"
 )]
-pub fn draw_grid(
-    frame: &mut canvas::Frame,
+pub fn draw_grid<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
     camera: &Camera,
     grid_mm: f32,
     bounds: iced::Rectangle,
@@ -72,16 +78,26 @@ pub fn draw_grid(
     style: GridStyle,
     device_px_per_logical_px: f32,
 ) {
-    // #1940 - every glyph is clipped to the paper in this window's device
-    // pixels, so a dot or line straddling the edge never reaches the canvas.
-    let Some(clip) = paper_clip(camera, bounds, page_w, page_h, device_px_per_logical_px) else {
+    // #1940 - every glyph and line stays inside the paper in this window's
+    // device pixels, so none straddles the edge onto the canvas.
+    let Some(paper_bounds) = paper_clip(camera, bounds, page_w, page_h, device_px_per_logical_px)
+    else {
         return;
     };
-    frame.with_clip(clip, |frame| {
-        draw_grid_clipped(
-            frame, camera, grid_mm, bounds, clip, color, page_w, page_h, style,
-        );
-    });
+    // No `Frame::with_clip` here: iced_wgpu pastes a clipped draft's meshes
+    // ahead of the parent's pending buffer, which put the grid under the
+    // paper fill (#1993). Every glyph and line stays inside `paper_bounds`.
+    draw_grid_within(
+        frame,
+        camera,
+        grid_mm,
+        bounds,
+        paper_bounds,
+        color,
+        page_w,
+        page_h,
+        style,
+    );
 }
 
 /// The paper rectangle in screen px, shrunk inward to whole device pixels
@@ -132,14 +148,14 @@ pub(crate) fn axis_stops(lo: f32, hi: f32, step: f32) -> impl Iterator<Item = f3
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "the draw inputs of `draw_grid`, with the device scale already spent on `clip`"
+    reason = "the draw inputs of `draw_grid`, with the device scale already spent on `paper_bounds`"
 )]
-fn draw_grid_clipped(
-    frame: &mut canvas::Frame,
+fn draw_grid_within<R: GeometryRenderer>(
+    frame: &mut canvas::Frame<R>,
     camera: &Camera,
     grid_mm: f32,
     bounds: iced::Rectangle,
-    clip: iced::Rectangle,
+    paper_bounds: iced::Rectangle,
     color: Color,
     page_w: f32,
     page_h: f32,
@@ -187,8 +203,8 @@ fn draw_grid_clipped(
         return;
     }
 
-    // Half the thin stroke width, so a cross arm's end stays inside the clip.
-    const GLYPH_EDGE_SLACK: f32 = 0.3;
+    // Half the thin stroke width, so a cross arm's end stays inside the paper.
+    const GLYPH_EDGE_SLACK: f32 = MINOR_GRID_LINE_PX / 2.0;
 
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
@@ -197,16 +213,17 @@ fn draw_grid_clipped(
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
     let minor_stroke = canvas::Stroke::default()
         .with_color(dot_color)
-        .with_width(0.6);
+        .with_width(MINOR_GRID_LINE_PX);
 
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
     if matches!(style, GridStyle::Lines) {
-        let (line_x_left, line_x_right) = (clip.x, clip.x + clip.width);
-        let (line_y_top, line_y_bot) = (clip.y, clip.y + clip.height);
+        let minor_half = MINOR_GRID_LINE_PX / 2.0;
+        let (line_x_left, line_x_right) = (paper_bounds.x, paper_bounds.x + paper_bounds.width);
+        let (line_y_top, line_y_bot) = (paper_bounds.y, paper_bounds.y + paper_bounds.height);
         for wx in axis_stops(wx_min, wx_max, minor_mm) {
             let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
-            if sx >= line_x_left && sx <= line_x_right {
+            if sx - minor_half >= line_x_left && sx + minor_half <= line_x_right {
                 let line =
                     canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
                 frame.stroke(&line, minor_stroke);
@@ -214,7 +231,7 @@ fn draw_grid_clipped(
         }
         for wy in axis_stops(wy_min, wy_max, minor_mm) {
             let sy = camera.world_to_screen(Point::new(0.0, wy), bounds).y;
-            if sy >= line_y_top && sy <= line_y_bot {
+            if sy - minor_half >= line_y_top && sy + minor_half <= line_y_bot {
                 let line =
                     canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
                 frame.stroke(&line, minor_stroke);
@@ -224,16 +241,16 @@ fn draw_grid_clipped(
         for wy in axis_stops(wy_min, wy_max, minor_mm) {
             for wx in axis_stops(wx_min, wx_max, minor_mm) {
                 let screen = camera.world_to_screen(Point::new(wx, wy), bounds);
-                // The whole glyph must sit inside the paper clip, so no
+                // The whole glyph must sit inside the paper bounds, so no
                 // renderer can draw it over the canvas background.
                 let reach = match style {
                     GridStyle::SmallCrosses => cross_arm,
                     _ => dot_radius,
                 } + GLYPH_EDGE_SLACK;
-                if screen.x - reach < clip.x
-                    || screen.x + reach > clip.x + clip.width
-                    || screen.y - reach < clip.y
-                    || screen.y + reach > clip.y + clip.height
+                if screen.x - reach < paper_bounds.x
+                    || screen.x + reach > paper_bounds.x + paper_bounds.width
+                    || screen.y - reach < paper_bounds.y
+                    || screen.y + reach > paper_bounds.y + paper_bounds.height
                 {
                     continue;
                 }
@@ -276,14 +293,15 @@ fn draw_grid_clipped(
     };
     let stroke = canvas::Stroke::default()
         .with_color(major_color)
-        .with_width(0.5);
+        .with_width(MAJOR_GRID_LINE_PX);
 
-    let (line_x_left, line_x_right) = (clip.x, clip.x + clip.width);
-    let (line_y_top, line_y_bot) = (clip.y, clip.y + clip.height);
+    let (line_x_left, line_x_right) = (paper_bounds.x, paper_bounds.x + paper_bounds.width);
+    let (line_y_top, line_y_bot) = (paper_bounds.y, paper_bounds.y + paper_bounds.height);
+    let major_half = MAJOR_GRID_LINE_PX / 2.0;
 
     for mx in axis_stops(wx_min, wx_max, major_mm) {
         let sx = camera.world_to_screen(Point::new(mx, 0.0), bounds).x;
-        if sx >= line_x_left && sx <= line_x_right {
+        if sx - major_half >= line_x_left && sx + major_half <= line_x_right {
             let line = canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
             frame.stroke(&line, stroke);
         }
@@ -291,7 +309,7 @@ fn draw_grid_clipped(
 
     for my in axis_stops(wy_min, wy_max, major_mm) {
         let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
-        if sy >= line_y_top && sy <= line_y_bot {
+        if sy - major_half >= line_y_top && sy + major_half <= line_y_bot {
             let line =
                 canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
             frame.stroke(&line, stroke);
