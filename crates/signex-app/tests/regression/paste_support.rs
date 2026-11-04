@@ -92,14 +92,24 @@ pub(crate) fn actions(task: iced::Task<Message>) -> Vec<iced_runtime::Action<Mes
     })
 }
 
-/// The text a task writes to the system clipboard, if it writes any.
+/// The text a task writes to the system clipboard, if it writes any. Reading
+/// stops at the write: the fork's write action waits for an answer that needs
+/// a window, so draining the whole stream would never end.
 pub(crate) fn written_text(task: iced::Task<Message>) -> Option<String> {
-    actions(task).into_iter().find_map(|action| match action {
-        iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
-            content: iced::clipboard::Content::Text(text),
-            ..
-        }) => Some(text),
-        _ => None,
+    use futures::StreamExt;
+    let mut stream = iced_runtime::task::into_stream(task)?;
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
+                content: iced::clipboard::Content::Text(text),
+                ..
+            }) = action
+            {
+                return Some(text);
+            }
+        }
+        None
     })
 }
 
