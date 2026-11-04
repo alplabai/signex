@@ -235,7 +235,7 @@ never renames anything
   name: a missing column means the `Pad::default()` value, and an unknown or
   duplicated column is refused with `PadsTsvSchemaMismatch` (there is no
   unknown-column preservation for this table). The token stays `snxfpt/1`
-  before v1.0, so a build older than #960 refuses a newer file that carries
+  before the Community Preview, so a build older than #960 refuses a newer file that carries
   extended columns with `PadsTsvSchemaMismatch` rather than dropping them.
   Free-text cells (`net`, `template`, `template_library`) must be free of
   control characters and `'''`; a save with one is refused.

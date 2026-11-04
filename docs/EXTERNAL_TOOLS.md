@@ -43,16 +43,16 @@ missed. This file is the fix, and it is tracked by issue #306.
 
 ## 3. Domain → Chosen Tool
 
-| Domain | Tool | Licence | How it is reached | Roadmap band |
+| Domain | Tool | Licence | How it is reached | Roadmap plan |
 |--------|------|---------|-------------------|--------------|
-| Circuit simulation | **ngspice** | Mixed — Berkeley SPICE3 lineage plus other terms; consult upstream `COPYING` | FFI against `libngspice` | v4.x |
-| EM / S-parameter extraction | **OpenEMS** + **CSXCAD** | GPL-3.0 / LGPL-3.0 | **Subprocess bridge** — see §4 | v4.x |
-| FEM / thermal | **Elmer** + **GMSH** | Mixed / GPL-family; consult upstream | **Subprocess bridge** — see §4 | v4.x |
-| RF math — Touchstone, S-params, Smith chart | **scikit-rf** | BSD-3-Clause | Embedded CPython via `pyo3`, in the Design Notebook compute layer | v1.4 |
-| Control / systems math | **python-control** | BSD-3-Clause | Same compute layer | v1.4 |
-| Formula + document rendering | **typst** | Apache-2.0 | Rust crate, linked | v1.4 |
-| 3D kernel / STEP import | **OpenCascade** + **truck-modeling** | LGPL / Apache-2.0 | OpenCascade via a `step-to-gltf` conversion step; `truck-modeling` linked | v2.3 |
-| Router geometry | **rstar**, **spade**, **kurbo**, **parry2d** | MIT / Apache-2.0 | Cargo dependencies of `pcb-geom` | v2.1 |
+| Circuit simulation | **ngspice** | Mixed — Berkeley SPICE3 lineage plus other terms; consult upstream `COPYING` | FFI against `libngspice` | Simulation band |
+| EM / S-parameter extraction | **OpenEMS** + **CSXCAD** | GPL-3.0 / LGPL-3.0 | **Subprocess bridge** — see §4 | Simulation band |
+| FEM / thermal | **Elmer** + **GMSH** | Mixed / GPL-family; consult upstream | **Subprocess bridge** — see §4 | Simulation band |
+| RF math — Touchstone, S-params, Smith chart | **scikit-rf** | BSD-3-Clause | Embedded CPython via `pyo3`, in the Design Notebook compute layer | Design Notebook |
+| Control / systems math | **python-control** | BSD-3-Clause | Same compute layer | Design Notebook |
+| Formula + document rendering | **typst** | Apache-2.0 | Rust crate, linked | Design Notebook |
+| 3D kernel / STEP import | **OpenCascade** + **truck-modeling** | LGPL / Apache-2.0 | OpenCascade via a `step-to-gltf` conversion step; `truck-modeling` linked | 3D Viewer |
+| Router geometry | **rstar**, **spade**, **kurbo**, **parry2d** | MIT / Apache-2.0 | Cargo dependencies of `pcb-geom` | PCB Routing |
 | 2D constraint solving | **our own Newton-LM solver** (`crates/signex-sketch`) | Apache-2.0 | In-tree | shipped (v0.13.0) |
 
 ### Notes per domain
