@@ -12,8 +12,8 @@ use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::{
-    FillType, LibSymbol, PinLabelKind, Point, Symbol, SymbolPrimitive, effective_stroke_mm,
-    lower_pin_labels, lower_placed_symbol,
+    FillType, LibSymbol, PinLabelKind, Point, Symbol, SymbolPrimitive, lower_pin_labels,
+    lower_placed_symbol, symbol_graphic_stroke_mm,
 };
 use std::collections::HashMap;
 
@@ -31,7 +31,7 @@ pub(super) fn push_symbol_lib_graphics(
     let style = |width: f64, fill: FillType| SvgStyle {
         stroke_rgb: Some(palette.symbol_stroke),
         fill_rgb: fill_to_rgb(fill, palette.symbol_stroke, palette.symbol_fill),
-        stroke_width: (effective_stroke_mm(width) * xform.mm_to_unit) as f32,
+        stroke_width: (symbol_graphic_stroke_mm(width) * xform.mm_to_unit) as f32,
     };
     for primitive in lower_placed_symbol(lib, sym) {
         match primitive {
@@ -110,7 +110,7 @@ pub(super) fn push_symbol_lib_graphics(
                 style: SvgStyle {
                     stroke_rgb: Some(palette.pin),
                     fill_rgb: None,
-                    stroke_width: (effective_stroke_mm(width) * xform.mm_to_unit) as f32,
+                    stroke_width: (symbol_graphic_stroke_mm(width) * xform.mm_to_unit) as f32,
                 },
             }),
         }

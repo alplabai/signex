@@ -97,7 +97,7 @@ pub(super) struct SymbolSink<'a> {
 
 /// The world width a symbol stroke stored as `width` draws at (#1858).
 fn stroke_mm(width: f64) -> f32 {
-    signex_types::schematic::effective_stroke_mm(width) as f32
+    signex_types::schematic::symbol_graphic_stroke_mm(width) as f32
 }
 
 impl SymbolStyle {
