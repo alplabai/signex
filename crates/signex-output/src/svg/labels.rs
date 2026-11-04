@@ -74,24 +74,24 @@ pub(super) fn schematic_text_offset_hier(
     text: &str,
     font_size_mm: f64,
     spin: SpinStyle,
+    family: Option<&str>,
 ) -> (f64, f64) {
     let unit = label_offset_unit_mm(font_size_mm);
-    let dist = unit * 0.4
-        + (parse_signex_markup(&normalize_standard_text(text))
-            .iter()
-            .map(|seg| match seg {
-                RichSegment::Normal(t)
-                | RichSegment::Bold(t)
-                | RichSegment::Italic(t)
-                | RichSegment::Strike(t)
-                | RichSegment::Subscript(t)
-                | RichSegment::Superscript(t)
-                | RichSegment::Overbar(t) => t.chars().count(),
-                RichSegment::Link { label, .. } => label.chars().count(),
-            })
-            .sum::<usize>() as f64)
-            * unit
-            * 0.6;
+    let shown: String = parse_signex_markup(&normalize_standard_text(text))
+        .iter()
+        .map(|seg| match seg {
+            RichSegment::Normal(t)
+            | RichSegment::Bold(t)
+            | RichSegment::Italic(t)
+            | RichSegment::Strike(t)
+            | RichSegment::Subscript(t)
+            | RichSegment::Superscript(t)
+            | RichSegment::Overbar(t) => t.as_str(),
+            RichSegment::Link { label, .. } => label.as_str(),
+        })
+        .collect();
+    // The measured width, as the canvas sizes the flag body.
+    let dist = unit * 0.4 + signex_types::font::family_width_mm(&shown, family, unit);
     match spin {
         SpinStyle::Left => (-dist, 0.0),
         SpinStyle::Up => (0.0, -dist),
@@ -178,9 +178,13 @@ mod tests {
         let (big_x, big_y) = schematic_text_offset_global("input", SpinStyle::Right, 2.0 * DEFAULT);
         assert!((big_x - 2.0 * x).abs() < 1e-9 && (big_y - 2.0 * y).abs() < 1e-9);
 
-        let (hx, _) = schematic_text_offset_hier("ABCD", DEFAULT, SpinStyle::Right);
-        assert!((hx - (DEFAULT * 0.4 + 4.0 * DEFAULT * 0.6)).abs() < 1e-9);
-        let (big_hx, _) = schematic_text_offset_hier("ABCD", 2.0 * DEFAULT, SpinStyle::Right);
+        let (hx, _) = schematic_text_offset_hier("ABCD", DEFAULT, SpinStyle::Right, None);
+        assert!(
+            (hx - (DEFAULT * 0.4 + signex_types::font::family_width_mm("ABCD", None, DEFAULT)))
+                .abs()
+                < 1e-9
+        );
+        let (big_hx, _) = schematic_text_offset_hier("ABCD", 2.0 * DEFAULT, SpinStyle::Right, None);
         assert!((big_hx - 2.0 * hx).abs() < 1e-9);
 
         // Smaller than the default is still the default, as on the canvas.

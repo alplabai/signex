@@ -90,8 +90,10 @@ pub fn mm_per_em(family: Option<&str>) -> f32 {
 /// resolved by the caller to the face the renderer substitutes, so the box
 /// matches the drawn glyphs.
 pub fn family_width_mm(text: &str, family: Option<&str>, size_mm: f64) -> f64 {
-    let em = shaped_advance_em(text, family)
-        .unwrap_or_else(|| text.chars().count().max(1) as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
+    // Empty text keeps a one-glyph box so it can still be picked.
+    let probe = if text.is_empty() { "0" } else { text };
+    let em = shaped_advance_em(probe, family)
+        .unwrap_or_else(|| probe.chars().count() as f32 * BUNDLED_DEFAULT_ADVANCE_EM);
     f64::from(em) * size_mm / f64::from(mm_per_em(family))
 }
 

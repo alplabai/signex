@@ -178,11 +178,15 @@ fn a_flag_is_as_tall_as_its_capitals_say_in_every_face() {
 fn default_face_box_width_is_the_shaped_advance() {
     use signex_types::schematic::text_aabb;
     roboto_em();
-    for text in ["R101", "SYSTEM_RESET_REQUEST_N", "10k"] {
+    for text in ["R101", "SYSTEM_RESET_REQUEST_N", "10k", "e\u{301}"] {
         let size = 1.27;
         let advance_em =
             f64::from(crate::fonts::measure::shaped_advance_em(text, "Iosevka").expect("measurer"));
         let want = advance_em * size / f64::from(signex_types::font::mm_per_em(None));
+        assert!(
+            signex_types::font::shaped_advance_em(text, None).is_some(),
+            "the shaper is registered with signex-types"
+        );
         let b = text_aabb(text, size, (0.0, 0.0), 0.0, HAlign::Left, VAlign::Top, None);
         assert!((b.max_x - b.min_x - want).abs() < 1e-6, "{text}");
     }
@@ -284,4 +288,24 @@ fn the_document_default_font_remeasures_unfonted_items_through_undo_and_redo() {
     engine.redo().expect("redo");
     assert!((edge(&engine) - roboto_edge).abs() < 1e-6, "redo");
     assert_eq!(hit_at(&engine, inside_only_wider), roboto >= iosevka);
+}
+
+/// Empty text keeps a one-glyph box, as before the shaper measured text.
+#[test]
+fn empty_text_keeps_a_one_glyph_box() {
+    roboto_em();
+    let empty = text_aabb("", 1.27, (0.0, 0.0), 0.0, HAlign::Left, VAlign::Top, None);
+    let glyph = text_aabb("0", 1.27, (0.0, 0.0), 0.0, HAlign::Left, VAlign::Top, None);
+    assert!(empty.max_x - empty.min_x > 0.1);
+    assert_eq!(empty.max_x, glyph.max_x);
+}
+
+/// The default face is monospace at exactly 0.5 em, which is the advance the
+/// measure falls back to before the shaper is installed, so a flag or box in
+/// the default face is the same size on every frame (#621-class).
+#[test]
+fn the_default_face_fallback_equals_its_shaped_advance() {
+    roboto_em();
+    let shaped = crate::fonts::measure::shaped_advance_em(TEXT, "Iosevka").expect("measurer");
+    assert!((shaped - TEXT.chars().count() as f32 * 0.5).abs() < 1e-4);
 }

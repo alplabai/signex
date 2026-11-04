@@ -213,9 +213,15 @@ impl SvgRenderContext {
                 LabelType::Global => {
                     schematic_text_offset_global(&label.shape, spin, label.font_size)
                 }
-                LabelType::Hierarchical => {
-                    schematic_text_offset_hier(&label.text, label.font_size, spin)
-                }
+                LabelType::Hierarchical => schematic_text_offset_hier(
+                    &label.text,
+                    label.font_size,
+                    spin,
+                    signex_types::font::requested_family(
+                        label.font_family.as_deref(),
+                        document_family,
+                    ),
+                ),
                 LabelType::Power => (0.0, 0.0),
             };
             let (align, v_align, rot) = spin_text_style(spin);
