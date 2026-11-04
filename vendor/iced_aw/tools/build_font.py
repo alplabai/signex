@@ -23,6 +23,9 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 UPEM = 1000
 ASCENT, DESCENT = 850, -150
 STROKE = 180  # stroke width in font units
+# Fixed head-table timestamps (seconds since 1904-01-01), so a rebuild is
+# byte-identical. Built with fontTools 4.67.0.
+TIMESTAMP = 3845404800  # a fixed date in late 2025; any fixed value works
 
 
 def stroke(points, width=STROKE):
@@ -104,7 +107,7 @@ def build(out):
     fb.setupHorizontalHeader(ascent=ASCENT, descent=DESCENT)
     fb.setupNameTable(
         {
-            "copyright": "Copyright 2026 the Signex authors",
+            "copyright": "Copyright 2026 Alp Lab AI",
             "familyName": "iced_aw",
             "styleName": "Regular",
             "uniqueFontIdentifier": "iced_aw-signex",
@@ -112,10 +115,19 @@ def build(out):
             "psName": "iced_aw",
             "version": "Version 2.0",
             "licenseDescription": "Apache-2.0",
+            "licenseInfoURL": "https://www.apache.org/licenses/LICENSE-2.0",
         }
     )
-    fb.setupOS2(sTypoAscender=ASCENT, sTypoDescender=DESCENT, usWinAscent=ASCENT, usWinDescent=-DESCENT)
+    fb.setupOS2(
+        sTypoAscender=ASCENT,
+        sTypoDescender=DESCENT,
+        usWinAscent=ASCENT,
+        usWinDescent=-DESCENT,
+        fsType=0,  # installable embedding, like the font it replaces
+    )
     fb.setupPost()
+    fb.updateHead(created=TIMESTAMP, modified=TIMESTAMP)
+    fb.font.recalcTimestamp = False
     fb.save(out)
 
 

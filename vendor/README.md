@@ -22,7 +22,7 @@ strokes, so the font is Signex's own work under Apache-2.0. It replaced the Font
 upstream ships, whose glyph source (likely Entypo, CC BY 4.0) could not be confirmed (#2031).
 The codepoints, the family name `iced_aw` and the advance widths are unchanged, so the
 widgets need no change. Rebuild with `python vendor/iced_aw/tools/build_font.py`
-(needs `fonttools`) after editing a glyph.
+(needs `fonttools`; built with 4.67.0, and the output is byte-identical) after editing a glyph.
 
 `iced_fonts` ships no font files: every `include_bytes!` in its `src/lib.rs` is behind a
 feature (`bootstrap`, `codicon`, `devicon`, `fontawesome`, `lucide`, `nerd`, `octicons`,
