@@ -8,7 +8,7 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// Line height of a text row, relative to its font size (iced's default).
-const LINE_HEIGHT: f32 = 1.3;
+const LINE_HEIGHT: f32 = crate::styles::TEXT_LINE_HEIGHT;
 
 /// Gap kept between a menu and the window edge.
 pub(in crate::app::view) const EDGE_MARGIN: f32 = SP.s;

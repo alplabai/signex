@@ -266,3 +266,12 @@ fn no_text_size_literal_survives_anywhere_in_signex_app() {
         bad.join("\n")
     );
 }
+
+/// `TEXT_LINE_HEIGHT` must be what the renderer's default line height is.
+#[test]
+fn text_line_height_matches_the_iced_default() {
+    assert_eq!(
+        iced::widget::text::LineHeight::default(),
+        iced::widget::text::LineHeight::Relative(super::typography::TEXT_LINE_HEIGHT)
+    );
+}

@@ -14,7 +14,15 @@ use std::path::Path;
 
 /// Height of every data row in the grid. Rows are pinned to it so the
 /// window maths does not depend on what a cell happens to contain.
-pub(super) const BROWSER_ROW_HEIGHT: f32 = 24.0;
+///
+/// Derived from the tallest cell: one text line (`TEXT_LINE_HEIGHT`, 1.375 in
+/// the iced fork) plus 4 px of padding above and below, rounded up to a whole
+/// pixel so rows stay pixel-aligned. A test ties it to the laid-out line.
+pub(super) const BROWSER_ROW_HEIGHT: f32 = {
+    let cell = super::BROWSER_TEXT_SIZE * crate::styles::TEXT_LINE_HEIGHT + 8.0;
+    let whole = cell as u32 as f32;
+    if whole < cell { whole + 1.0 } else { whole }
+};
 /// Height of the header row, which scrolls with the rows and so offsets
 /// them from the top of the scrollable content.
 pub(super) const BROWSER_HEADER_HEIGHT: f32 = 28.0;

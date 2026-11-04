@@ -619,7 +619,7 @@ mod tests {
     /// starts on a pixel boundary.
     #[test]
     fn the_close_hit_box_fits_the_label_and_the_strip_is_whole_pixels() {
-        const LABEL_LINE_BOX: f32 = super::TAB_FONT_SIZE * 1.3;
+        const LABEL_LINE_BOX: f32 = super::TAB_FONT_SIZE * crate::styles::TEXT_LINE_HEIGHT;
         const {
             assert!(LABEL_LINE_BOX <= CLOSE_HIT_SIZE);
             assert!(CLOSE_GLYPH_SIZE <= CLOSE_HIT_SIZE);

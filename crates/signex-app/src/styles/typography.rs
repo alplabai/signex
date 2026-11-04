@@ -46,6 +46,12 @@ pub const fn chrome_px(px_at_reference: f32) -> f32 {
     px_at_reference * DEFAULT_BASE_SIZE / REFERENCE_BASE_SIZE
 }
 
+/// Line height of a text widget relative to its size: the fork's
+/// `LineHeight::default()` (1.375; iced 0.14 used 1.3). Fixed-height chrome
+/// derives from this so it follows the line box the renderer actually lays
+/// out; a test ties it to `LineHeight::default()`.
+pub const TEXT_LINE_HEIGHT: f32 = 1.375;
+
 /// Thickness, in px, of a divider rule. A line weight, not a spacing gap, so
 /// it stays 1 px whatever the base size.
 pub const HAIRLINE: f32 = 1.0;

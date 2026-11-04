@@ -15,7 +15,7 @@ pub mod typography;
 pub use buttons::{
     accent_button, hover_row, outline_button, subtle_button, subtle_button_with_rest,
 };
-pub use typography::{HAIRLINE, Spacing, TypeScale, chrome_px};
+pub use typography::{HAIRLINE, Spacing, TEXT_LINE_HEIGHT, TypeScale, chrome_px};
 
 /// Corner radius, in px, of buttons, badges and cards.
 pub const RADIUS: f32 = 3.0;
