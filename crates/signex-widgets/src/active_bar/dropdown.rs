@@ -426,6 +426,7 @@ mod tests {
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::Signex);
         let entries = vec![DropdownEntry::Item(DropdownItem::new("Place", ()))];
         let panel = view(entries, &tokens, None);
-        assert_eq!(panel.as_widget().size().width, Length::Fit);
+        use iced::advanced::Widget as _;
+        assert_eq!(panel.size().width, Length::Fit);
     }
 }

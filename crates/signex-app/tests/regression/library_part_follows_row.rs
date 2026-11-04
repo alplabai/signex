@@ -307,22 +307,34 @@ fn update_from_library_keeps_a_locked_part_drifted_and_updates_the_rest() {
     assert!(is_drifted(&app));
     click_update(&mut app, locked);
 
-    let part = |id| doc(&app).symbols.iter().find(|s| s.uuid == id).unwrap();
-    assert_eq!(part(free).footprint, "TSSOP-8", "the unlocked part updates");
-    assert_ne!(part(free).library_version, stamped);
-    assert_eq!(part(locked).footprint, "SOIC-8", "the lock holds");
+    let part = |app: &Signex, id| {
+        doc(app)
+            .symbols
+            .iter()
+            .find(|s| s.uuid == id)
+            .unwrap()
+            .clone()
+    };
     assert_eq!(
-        part(locked).library_version,
+        part(&app, free).footprint,
+        "TSSOP-8",
+        "the unlocked part updates"
+    );
+    assert_ne!(part(&app, free).library_version, stamped);
+    assert_eq!(part(&app, locked).footprint, "SOIC-8", "the lock holds");
+    assert_eq!(
+        part(&app, locked).library_version,
         stamped,
         "the locked part keeps its old stamp"
     );
+    let locked_reference = part(&app, locked).reference;
     check_drift(&mut app);
     assert!(is_drifted(&app), "the locked part is still flagged");
     let entries = signex_app::diagnostics::recent_entries();
     assert!(
         entries
             .iter()
-            .any(|e| e.message.contains("is locked") && e.message.contains(&part(locked).reference)),
+            .any(|e| e.message.contains("is locked") && e.message.contains(&locked_reference)),
         "a warning names the locked part"
     );
 }
