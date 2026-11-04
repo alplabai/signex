@@ -173,21 +173,21 @@ unused_must_use = "deny"
 # level, which scripts/check_lint_lockstep.sh now fails CI over (#570).
 
 # Signex fork of iced (upstream master + cherry-picked PRs, see FORK.md in alplabai/iced).
-# Pinned to the alplabai/iced tag iced-signex-v0.15.0-alpha.1 (commit 108a717b1).
+# Pinned to the alplabai/iced tag iced-signex-v0.15.0-alpha.2 (commit 04ca92e06).
 [patch.crates-io]
 iced_fonts = { path = "vendor/iced_fonts" }
-iced = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_core = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_futures = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_graphics = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_program = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_renderer = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_runtime = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_tiny_skia = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_wgpu = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_widget = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_winit = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
-iced_debug = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.1" }
+iced = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_core = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_futures = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_graphics = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_program = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_renderer = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_runtime = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_tiny_skia = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_wgpu = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_widget = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_winit = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
+iced_debug = { git = "https://github.com/alplabai/iced", tag = "iced-signex-v0.15.0-alpha.2" }
 
 [profile.release]
 lto = "thin"
